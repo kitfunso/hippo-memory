@@ -110,6 +110,36 @@ describe('hippo-memory/testing', () => {
   });
 });
 
+/** The module of each runtime re-export in `source`: a bare `export *` or an `export { ... }` naming at least one value. */
+function runtimeReexports(source: string): string[] {
+  const modules: string[] = [];
+  for (const m of source.matchAll(/^export\s+(type\s+)?(\*(?:\s+as\s+\w+)?|\{([^}]*)\})\s+from\s+'([^']+)'/gm)) {
+    const [, typeOnly, , names, module] = m;
+    const hasValue = names === undefined || names.split(',').some((n) => n.trim() !== '' && !n.trim().startsWith('type '));
+    if (!typeOnly && hasValue) modules.push(module);
+  }
+  return modules;
+}
+
+// A root export of a ./store/ or ./db/ function hands add-ons a folder-taking call that skips the tenant, actor and audit checks every api function applies.
+describe('package root', () => {
+  it('re-exports no value from a ./store/ or ./db/ module', () => {
+    const modules = runtimeReexports(readFileSync(resolve(REPO_ROOT, 'src', 'index.ts'), 'utf-8'));
+    expect(modules.length).toBeGreaterThan(0);
+    expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
+  });
+
+  it('sees a value re-export and ignores a type-only one', () => {
+    const source = [
+      "export { a, type B } from './store/x.js';",
+      "export type { C } from './store/y.js';",
+      "export { type D } from './db/z.js';",
+      "export * from './db/all.js';",
+    ].join('\n');
+    expect(runtimeReexports(source)).toEqual(['./store/x.js', './db/all.js']);
+  });
+});
+
 /** One line per initial letter, so a snapshot diff shows the one name that came or went. */
 function byInitial(names: readonly string[]): string {
   const lines = new Map<string, string[]>();
@@ -130,30 +160,24 @@ describe('published runtime exports', () => {
     const names = importBuiltEntry<Record<string, string[]>>(script);
     expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)]))).toMatchInlineSnapshot(`
       {
-        ".": "AUDIT_OPS
-      CARD_LEASE_MS CARD_TRANSITIONS
+        ".": "CARD_LEASE_MS CARD_TRANSITIONS
       DEFAULT_MAX_NEIGHBORS
       Layer
       MAX_HOPS
-      SNAPSHOT_AMBIENT_MAX_AGE_MS
-      WM_MAX_ENTRIES
-      addCardComment appendAuditEvent appendSessionEvent applyOutcome autoShare
-      blockCard buildSyntheticCorpus
-      calculateStrength captureError claimCard clearActiveTaskSnapshot closeTaskSnapshotsForSession completeCard computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate cosineSimilarity createCard createMemory
-      deduplicateLesson deleteEntry detectRegressions detectTemporalDirection
-      embedAll embedMemory estimateTokens explainMatch extractLessons
-      fetchGitLog formatAmbientVector formatResult
+      applyOutcome
+      buildSyntheticCorpus
+      calculateStrength captureError computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate createMemory
+      detectRegressions detectTemporalDirection
+      estimateTokens explainMatch extractLessons
+      formatAmbientVector formatResult
       generateId getEmbedding getGlobalRoot graphExpandRecall
-      heartbeatCard hybridSearch
-      importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault initGlobal initStore isCardStatus isEmbeddingAvailable isHandoffOutcome
-      listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallEntries loadSearchEntries loadSessionDecayContext
+      hybridSearch
+      importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault isCardStatus isEmbeddingAvailable isHandoffOutcome
       markRetrieved multihopSearch
-      partitionLessons promoteToGlobal
-      queryAuditEvents
-      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched runWatchedLine
-      saveActiveTaskSnapshot saveEmbeddingIndex saveSessionHandoff search searchBoth searchBothHybrid shareMemory sleep stampHandoffOutcome strengthBucket syncGlobalToLocal
-      temporalBoost textOverlap tokenize transferScore
-      wmClear wmFlush wmPush wmRead writeEntry writeSessionEndHandoff",
+      partitionLessons
+      renderAmbientSummary resolveConfidence resultToBaseline runFeatureEval
+      search sleep strengthBucket
+      temporalBoost textOverlap tokenize transferScore",
         "./json-hooks": "installJsonHooks
       readJsonFile resolveJsonHookPaths
       uninstallJsonHooks

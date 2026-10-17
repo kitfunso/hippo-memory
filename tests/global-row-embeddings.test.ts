@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { promoteToGlobal } from '../src/sharing/global-store.js';
+import { promote } from '../src/api/memories/promote.js';
 import { shareMemory, autoShare } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { initStore } from '../src/store/open.js';
@@ -14,6 +14,7 @@ import { embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { isEmbeddingAvailable } from '../src/embeddings/local.js';
 import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { loadConfig } from '../src/core/config.js';
 
@@ -78,9 +79,9 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
     disableEmbeddings(globalRoot);
-    // promoteToGlobal/shareMemory/autoShare resolve their destination via
+    // promote/shareMemory/autoShare resolve their destination via
     // getGlobalRoot(), which reads HIPPO_HOME (same isolation pattern as
-    // tests/shared.test.ts's promoteToGlobal describe block).
+    // tests/shared.test.ts's copyToGlobal describe block).
     prevHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalRoot;
   });
@@ -91,18 +92,18 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('promoteToGlobal succeeds and writes no embedding index entry', () => {
+  it('promote succeeds and writes no embedding index entry', () => {
     const entry = createMemory('deterministic no-embed promote test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
-    const promoted = promoteToGlobal(localRoot, entry.id);
-    expect(promoted.id).toMatch(/^g_/);
+    const promoted = promote(apiCtx(localRoot), entry.id);
+    expect(promoted.globalId).toMatch(/^g_/);
 
     // provider.isAvailable() is synchronous and false here (config-disabled),
     // so embedMemory's fire-and-forget call returns before any fs write,
     // no waitFor needed, the absence is observable immediately.
     const index = loadEmbeddingIndex(globalRoot);
-    expect(index[promoted.id]).toBeUndefined();
+    expect(index[promoted.globalId]).toBeUndefined();
   });
 
   it('shareMemory succeeds and writes no embedding index entry', () => {
@@ -220,17 +221,17 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('promoteToGlobal fire-and-forget embed eventually lands in the global index', async (ctx) => {
+  it('promote fire-and-forget embed eventually lands in the global index', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
-    const promoted = promoteToGlobal(localRoot, entry.id);
+    const promoted = promote(apiCtx(localRoot), entry.id);
 
     // Generous timeout: first-run model load can be slow.
     await vi.waitFor(() => {
       const index = loadEmbeddingIndex(globalRoot);
-      expect(index[promoted.id]).toBeDefined();
+      expect(index[promoted.globalId]).toBeDefined();
     }, { timeout: 30_000, interval: 250 });
   }, 35_000);
 });
@@ -283,14 +284,14 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
 });
 
 // ---------------------------------------------------------------------------
-// promoteToGlobal producer wiring (subprocess, real node process)
+// promote producer wiring (subprocess, real node process)
 // ---------------------------------------------------------------------------
 
-describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', () => {
+describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
   // Real-process counterpart of the in-process "fire-and-forget integration"
   // test above; it covers the built CLI path. Spawns real `node` subprocesses
   // (same pattern as the "hippo embed --global CLI" test above) so the actual
-  // promoteToGlobal -> embedMemory fire is exercised end-to-end: init, remember,
+  // promote -> embedMemory fire is exercised end-to-end: init, remember,
   // embed (warms the local vector + model cache), promote, then poll the
   // GLOBAL store's embedding index for the minted g_ id. A producer-wiring
   // regression (wrong root, dropped void embed call) would fail this test even
@@ -334,7 +335,7 @@ describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', 
       expect(globalId).toMatch(/^g_/);
 
       if (isEmbeddingAvailable()) {
-        // Bounded poll (<=60s): promoteToGlobal's embed fire is best-effort
+        // Bounded poll (<=60s): promote's embed fire is best-effort
         // fire-and-forget, but `execFileSync` only returns once the `promote`
         // subprocess has fully exited, and that process has no explicit
         // process.exit() call on the success path (cli.ts's main() returns

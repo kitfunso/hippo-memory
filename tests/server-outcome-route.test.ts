@@ -19,7 +19,7 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { remember } from '../src/api/index.js';
@@ -78,7 +78,7 @@ describe('POST /v1/outcome', () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'last-recall-mem-1' });
     const m2 = await remember(ctx, { content: 'last-recall-mem-2' });
-    const idx = loadIndex(home);
+    const idx = loadLastRecall(home);
     idx.last_retrieval_ids = [m1.id, m2.id];
     saveIndex(home, idx);
 
@@ -177,7 +177,7 @@ describe('POST /v1/outcome', () => {
     // 'default' caller cannot see it.
     const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'tenant-b-secret-id' });
-    const idx = loadIndex(home);
+    const idx = loadLastRecall(home);
     idx.last_retrieval_ids = [tenantBMem.id];
     saveIndex(home, idx);
 

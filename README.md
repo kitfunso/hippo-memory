@@ -298,7 +298,7 @@ hippo recall "data pipeline" --why --limit 5
 
 Input enters the buffer. Important things get encoded into episodic memory. During "sleep," related episodes are merged into one semantic memory, by word overlap. Weak memories decay and disappear.
 
-The store is SQLite (`.hippo/hippo.db`). The markdown files are mirrors written after each change. `index.json` is no longer refreshed by writes, deletes or recalls: it is written only when you call `rebuildIndex()` from the package, so a copy an older version left on disk goes stale. Read the store through the CLI, the MCP server or the HTTP API.
+The store is SQLite (`.hippo/hippo.db`). The markdown files are mirrors written after each change. `index.json` is no longer refreshed by writes, deletes or recalls, so a copy an older version left on disk goes stale. Read the store through the CLI, the MCP server or the HTTP API.
 
 ```mermaid
 flowchart TD

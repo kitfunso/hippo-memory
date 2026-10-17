@@ -16,7 +16,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { remember, outcomeForLastRecall } from '../src/api/index.js';
 import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -40,7 +40,7 @@ async function seedMemory(home: string, content: string, tenantId = 'default'): 
 }
 
 function seedLastRetrievalIds(home: string, ids: string[]): void {
-  const idx = loadIndex(home);
+  const idx = loadLastRecall(home);
   idx.last_retrieval_ids = ids;
   saveIndex(home, idx);
 }

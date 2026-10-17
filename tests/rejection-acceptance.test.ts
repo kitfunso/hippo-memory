@@ -24,7 +24,6 @@ import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js'
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadEveryTenantEntries } from '../src/store/entry-reads.js';
-import { rebuildIndex } from '../src/store/index-and-stats.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -194,26 +193,13 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
   });
 });
 
-describe('case 4: rebuild resurrection pin', () => {
-  it('a stale markdown mirror of a rejected raw row is skipped on rebuildIndex, not resurrected', async () => {
+describe('case 4: legacy-mirror resurrection pin', () => {
+  it('a stale markdown mirror of a rejected raw row is skipped when the emptied store opens, not resurrected', async () => {
     const home = tmpHome();
     try {
       initStore(home);
 
-      // Sentinel row so `memories` never drops to zero once rawEntry is
-      // archived below. bootstrapLegacyStore (run from every initStore()
-      // prologue, including the ones inside readEntry/rebuildIndex) only
-      // scans legacy mirrors when memoryCount === 0 — without this sentinel,
-      // the store would re-enter that path on every subsequent open as long
-      // as the stale mirror sits on disk, each time re-running (and
-      // re-auditing) the guard skip. The sentinel isolates the assertion to
-      // rebuildIndex's own dedicated per-row guard loop, which is what this
-      // test targets.
-      const sentinel = createMemory('unrelated sentinel entry keeps memories non-empty', {
-        layer: Layer.Episodic,
-      });
-      writeEntry(home, sentinel);
-
+      // Rejecting the only row empties `memories`, the one state in which bootstrapLegacyStore scans the mirrors.
       const rawContent = 'raw transcript content later rejected and archived';
       const rawEntry = createMemory(rawContent, { layer: Layer.Episodic, kind: 'raw' });
       writeEntry(home, rawEntry);
@@ -239,7 +225,7 @@ describe('case 4: rebuild resurrection pin', () => {
         closeHippoDb(dbBefore);
       }
 
-      rebuildIndex(home);
+      initStore(home);
 
       // Value stays absent — the guard skipped the stale-mirror re-insert.
       expect(readEntry(home, rawEntry.id)).toBeNull();
@@ -726,7 +712,7 @@ describe('autoShare per-candidate rejection containment', () => {
       initStore(globalRoot);
       // autoShare -> shareMemory resolves its destination via
       // getGlobalRoot()/HIPPO_HOME (same pattern as shared.test.ts's
-      // promoteToGlobal describe block).
+      // copyToGlobal describe block).
       process.env.HIPPO_HOME = globalRoot;
 
       const rejectedContent = 'never re-share this specific finding to the global store again';

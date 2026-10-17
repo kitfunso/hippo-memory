@@ -107,7 +107,7 @@ describe('server HTTP routes — memories', () => {
     const body = await jsonAs<{ ok: boolean; sourceId: string; globalId: string }>(res);
     expect(body.ok).toBe(true);
     expect(body.sourceId).toBe(id);
-    // promoteToGlobal mints a fresh id on the global store; prefix is 'g_'.
+    // copyToGlobal mints a fresh id on the global store; prefix is 'g_'.
     expect(body.globalId).toMatch(/^g_/);
   });
 

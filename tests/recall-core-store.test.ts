@@ -11,7 +11,7 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteStore, type HippoStore, type LastRecallWrites, type RecallWrites } from '../src/store/index.js';
-import { loadIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { outcomeForLastRecall } from '../src/api/index.js';
 import { withSqliteAllowed } from '../src/db/index.js';
 import { adminActor } from '../src/api/index.js';
@@ -90,13 +90,13 @@ describe('retrieve with the CLI ranking core', () => {
   it('leaves the last-recall marker on the previous recall when a later recall shows nothing', async () => {
     const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
     await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
-    const marked = loadIndex(hippoRoot);
+    const marked = loadLastRecall(hippoRoot);
     expect([...marked.last_retrieval_ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
 
     const empty = await retrieve(ctx, { query: 'zzqqxx nomatch', cliCore: cliCore() });
 
     expect(empty.results).toEqual([]);
-    const after = loadIndex(hippoRoot);
+    const after = loadLastRecall(hippoRoot);
     expect(after.last_retrieval_ids).toEqual(marked.last_retrieval_ids);
     expect(after.last_trace_id).toBe(marked.last_trace_id);
     const outcome = await outcomeForLastRecall(ctx, true);

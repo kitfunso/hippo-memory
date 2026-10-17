@@ -25,7 +25,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { loadIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -56,20 +56,20 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       await remember(ctx, { content: 'recall-divergence-target-2 also matches' });
 
       // Snapshot: index.last_retrieval_ids starts empty.
-      const before = loadIndex(home).last_retrieval_ids ?? [];
+      const before = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(before).toEqual([]);
 
       // api.recall — should NOT mutate.
       const recallResult = await retrieve(ctx, { query: 'target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
-      const afterRecall = loadIndex(home).last_retrieval_ids ?? [];
+      const afterRecall = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(afterRecall).toEqual(before);
       expect(afterRecall).toEqual([]);
 
       // api.getContext — SHOULD mutate. (getContext opts use `q`, not `query`.)
       const ctxResult = await getContext(ctx, { q: 'target', budget: 1000 });
       expect(ctxResult.entries.length).toBeGreaterThan(0);
-      const afterContext = loadIndex(home).last_retrieval_ids ?? [];
+      const afterContext = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(afterContext.length).toBeGreaterThan(0);
       expect(afterContext).not.toEqual(before);
     } finally {
@@ -91,7 +91,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       await retrieve(ctx, { query: 'batched-C', limit: 5 });
 
       // last_retrieval_ids must remain empty — none of the recalls wrote it.
-      const idx = loadIndex(home);
+      const idx = loadLastRecall(home);
       expect(idx.last_retrieval_ids ?? []).toEqual([]);
     } finally {
       restore();

@@ -2,11 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { type HippoIndex } from '../src/store/rows.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
-import { loadIndex, saveIndex, rebuildIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { rejectValue } from '../src/trust/reject-flow.js';
 
@@ -22,9 +21,9 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// Pins the write-path-cost fix: index.json is written by exactly one path, rebuildIndex.
+// Pins the write-path-cost fix: no hippo path writes index.json.
 // Each write site gets its own test so re-adding a writeIndexMirror to any one turns it red.
-describe('index.json is written only by rebuildIndex', () => {
+describe('index.json is written by no hippo path', () => {
   it('writeEntry leaves no index.json', () => {
     writeEntry(root, createMemory('writeEntry leaves index.json alone'));
     expect(fs.existsSync(indexPath())).toBe(false);
@@ -44,7 +43,7 @@ describe('index.json is written only by rebuildIndex', () => {
 
   it('saveIndex leaves no index.json', () => {
     writeEntry(root, createMemory('saveIndex leaves index.json alone'));
-    saveIndex(root, loadIndex(root));
+    saveIndex(root, loadLastRecall(root));
     expect(fs.existsSync(indexPath())).toBe(false);
   });
 
@@ -64,25 +63,11 @@ describe('index.json is written only by rebuildIndex', () => {
     const toDelete = createMemory('sentinel delete');
     writeEntry(root, toDelete);
     deleteEntry(root, toDelete.id);
-    saveIndex(root, loadIndex(root));
+    saveIndex(root, loadLastRecall(root));
     const toReject = createMemory('sentinel reject');
     writeEntry(root, toReject);
     rejectValue({ hippoRoot: root, tenantId: toReject.tenant_id, actor: 'test', reason: 'sentinel', memoryId: toReject.id });
 
     expect(fs.readFileSync(indexPath(), 'utf8')).toBe(sentinel);
-  });
-
-  it('rebuildIndex writes index.json and its entries match loadIndex', () => {
-    writeEntry(root, createMemory('rebuildIndex writes the mirror'));
-    expect(fs.existsSync(indexPath())).toBe(false);
-
-    const rebuilt = rebuildIndex(root);
-    expect(fs.existsSync(indexPath())).toBe(true);
-
-    // SAFETY: this file was just written by rebuildIndex via writeIndexMirror(hippoRoot, HippoIndex).
-    const onDisk = JSON.parse(fs.readFileSync(indexPath(), 'utf8')) as HippoIndex;
-    const expectedKeys = Object.keys(loadIndex(root).entries).sort();
-    expect(Object.keys(onDisk.entries).sort()).toEqual(expectedKeys);
-    expect(Object.keys(rebuilt.entries).sort()).toEqual(expectedKeys);
   });
 });

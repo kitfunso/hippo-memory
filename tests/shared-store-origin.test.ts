@@ -7,9 +7,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { rebuildIndex } from '../src/store/index-and-stats.js';
 import { stampOriginProjectForImport } from '../src/store/entry-row.js';
-import { promoteToGlobal, getGlobalRoot } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { shareMemory } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { BadRequestError } from '../src/core/api-errors.js';
@@ -105,7 +105,7 @@ describe('shared store origin stamp', () => {
     for (const { store } of layouts(true)) {
       const entry = { ...createMemory('the handbook lives in the wiki under ops'), origin_project: null };
       writeEntry(store, entry);
-      const promoted = promoteToGlobal(store, entry.id);
+      const promoted = copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
       expect(promoted.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(promoted.source)).toBeNull();
@@ -120,7 +120,7 @@ describe('shared store origin stamp', () => {
     for (const { store, folderStamp } of layouts(false)) {
       const entry = { ...createMemory('the handbook lives in the wiki under ops'), origin_project: null };
       writeEntry(store, entry);
-      const promoted = promoteToGlobal(store, entry.id);
+      const promoted = copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
       expect(promoted.source).toBe(`promoted:${store}`);
       const shared = shareMemory(store, entry.id, { force: true, skipEmbed: true });
@@ -148,7 +148,7 @@ describe('shared store origin stamp', () => {
     }
   });
 
-  it('a flagged NULL row comes back NULL when rebuildIndex reads its markdown mirror', () => {
+  it('a flagged NULL row comes back NULL when the emptied store opens and reads its markdown mirror', () => {
     for (const { store } of layouts(true)) {
       const entry = { ...createMemory('the on-call rota changes on mondays'), origin_project: null };
       writeEntry(store, entry);
@@ -158,7 +158,7 @@ describe('shared store origin stamp', () => {
       } finally {
         closeHippoDb(db);
       }
-      rebuildIndex(store);
+      initStore(store);
       expect(originOf(store, entry.id)).toBeNull();
     }
   });

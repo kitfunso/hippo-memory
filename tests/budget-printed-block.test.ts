@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
@@ -167,7 +167,7 @@ describe('hippo context', () => {
     const shown = shownNotes(block(await hippo(['context', 'postgres', 'rollback', '--budget', '400']))).map((c) => ids.get(c)!);
     expect(shown.length).toBeLessThan(NOTES);
     for (const id of ids.values()) expect(retrievalCount(id)).toBe(shown.includes(id) ? 1 : 0);
-    expect([...loadIndex(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
+    expect([...loadLastRecall(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
   });
 
   it('skips an entry that alone exceeds the budget and keeps filling, with or without a query', async () => {
@@ -203,7 +203,7 @@ describe('hippo recall', () => {
     const shown = shownNotes(block(await hippo(['recall', 'postgres rollback', '--budget', '400']))).map((c) => ids.get(c)!);
     expect(shown.length).toBeLessThan(NOTES);
     for (const id of ids.values()) expect(retrievalCount(id)).toBe(shown.includes(id) ? 1 : 0);
-    expect([...loadIndex(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
+    expect([...loadLastRecall(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
   });
 
   it('keeps its --min-results floor for an entry larger than the whole budget, and says so in the header', async () => {

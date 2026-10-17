@@ -7,7 +7,7 @@ import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { resolveTenantId } from './tenant.js';
 
-export const WM_MAX_ENTRIES = 20;
+const WM_MAX_ENTRIES = 20;
 
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -187,14 +187,4 @@ export function wmClear(hippoRoot: string, opts?: {
     const result = db.prepare(`DELETE FROM working_memory ${where}`).run(...params);
     return Number(result.changes ?? 0);
   }, openStore);
-}
-
-/** Flush working memory after session end: same as wmClear, but marks the session-boundary discard of ephemeral state.
- * Returns the count flushed. */
-export function wmFlush(hippoRoot: string, opts?: {
-  scope?: string;
-  sessionId?: string;
-  tenantId?: string;
-}): number {
-  return wmClear(hippoRoot, opts);
 }

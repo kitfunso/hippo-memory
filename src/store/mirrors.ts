@@ -193,7 +193,7 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
 }
 
 // Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror
-// is the resurrection channel bootstrapLegacyStore/rebuildIndex guard against.
+// is the resurrection channel bootstrapLegacyStore guards against.
 export function removeEntryMirrors(hippoRoot: string, id: string): void {
   for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]) {
     const file = path.join(layerDir(hippoRoot, layer), `${id}.md`);
@@ -251,8 +251,7 @@ export function purgeMirrorBestEffort(
   }
 }
 
-/** Derive the current `HippoIndex` from SQLite. Exported for `rebuildIndex`
- *  (the only index.json writer) and the longmemeval benchmark. */
+/** Derive the current `HippoIndex` from SQLite. Exported for the longmemeval benchmark. */
 export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   // SAFETY: rows' shape matches the seven columns named in the SELECT below.
   const rows = db
@@ -331,8 +330,7 @@ export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStat
   };
 }
 
-/** Write the `index.json` mirror file for an already-derived index. Exported for
- *  `rebuildIndex` (the only index.json writer) and the longmemeval benchmark. */
+/** Write the `index.json` mirror file for an already-derived index. Exported for the longmemeval benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   mirrorBestEffort('index.json', () =>
     overwriteInPlace(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2)),

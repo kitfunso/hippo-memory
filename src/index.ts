@@ -47,47 +47,6 @@ export { tokenize, textOverlap } from './util/tokenize.js';
 export { markRetrieved } from './core/memory.js';
 export { multihopSearch } from './search/multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph/recall.js';
-export { initStore } from './store/open.js';
-export { writeEntry } from './store/entry-writes.js';
-export { loadAllEntries, readEntry } from './store/entry-reads.js';
-export { deleteEntry } from './store/delete-and-batch.js';
-export { loadSearchEntries, loadRecallEntries, type RecallSearchEntriesOptions } from './store/search-rows.js';
-export { loadIndex, rebuildIndex, loadSessionDecayContext, SessionDecayContext } from './store/index-and-stats.js';
-export {
-  saveActiveTaskSnapshot,
-  loadActiveTaskSnapshot,
-  loadFreshActiveTaskSnapshot,
-  SNAPSHOT_AMBIENT_MAX_AGE_MS,
-  closeTaskSnapshotsForSession,
-  clearActiveTaskSnapshot,
-  appendSessionEvent,
-  listSessionEvents,
-  type ContinuityKey,
-} from './store/sessions.js';
-export { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from './store/conflicts.js';
-export {
-  saveSessionHandoff,
-  loadLatestHandoff,
-  loadHandoffById,
-  stampHandoffOutcome,
-  writeSessionEndHandoff,
-} from './store/handoffs.js';
-export {
-  createCard,
-  loadCard,
-  listCards,
-  loadCardDeps,
-  loadCardRuns,
-  loadCardComments,
-  claimCard,
-  heartbeatCard,
-  blockCard,
-  reviewCard,
-  completeCard,
-  reclaimExpiredCards,
-  addCardComment,
-  loadLatestHandoffForCard,
-} from './store/cards.js';
 
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './core/handoff.js';
@@ -118,37 +77,13 @@ export { strengthBucket } from './consolidate/dedupe.js';
 
 // Feature 1: Embedding search
 export { isEmbeddingAvailable, getEmbedding } from './embeddings/local.js';
-export { cosineSimilarity } from './store/embeddings/index.js';
-export { embedMemory, embedAll } from './search/embed-memories.js';
-export { loadEmbeddingIndex, saveEmbeddingIndex } from './store/vector-index.js';
 
 // Feature 2: Auto-learn from errors
-export {
-  captureError,
-  extractLessons,
-  partitionLessons,
-  deduplicateLesson,
-  runWatched,
-  runWatchedLine,
-  type RunWatchedOptions,
-  fetchGitLog,
-} from './learn/autolearn.js';
+export { captureError, extractLessons, partitionLessons } from './learn/autolearn.js';
 
 // Feature 3: Cross-agent shared memory
-export { getGlobalRoot, initGlobal, promoteToGlobal } from './sharing/global-store.js';
-export { searchBoth, searchBothHybrid, HybridSearchOptions } from './sharing/search-both.js';
-export { syncGlobalToLocal } from './sharing/global-sync.js';
-export { transferScore, shareMemory, listPeers, autoShare } from './sharing/share.js';
-
-// Feature 5: Working memory
-export {
-  wmPush,
-  wmRead,
-  wmClear,
-  wmFlush,
-  WorkingMemoryItem,
-  WM_MAX_ENTRIES,
-} from './store/working-memory.js';
+export { getGlobalRoot } from './sharing/global-store.js';
+export { transferScore } from './sharing/share.js';
 
 // Feature 4: Memory importers
 export {
@@ -185,13 +120,3 @@ export {
   formatAmbientVector,
   AmbientState,
 } from './core/ambient.js';
-export {
-  appendAuditEvent,
-  queryAuditEvents,
-  listAuditEventsAfter,
-  AUDIT_OPS,
-  type AuditEvent,
-  type AuditOp,
-  type QueryAuditOpts,
-  type ListAuditAfterOpts,
-} from './store/audit.js';

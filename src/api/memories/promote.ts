@@ -11,7 +11,7 @@ import type { StoreContext } from '../types.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
- * audit event so intent stays distinct. promoteToGlobal reads via `readEntry` with no tenant filter and keeps the
+ * audit event so intent stays distinct. copyToGlobal reads via `readEntry` with no tenant filter and keeps the
  * entry's existing tenantId on the global side. */
 export interface PromoteResult {
   ok: true;
@@ -23,7 +23,7 @@ export function promote(
   id: string,
 ): PromoteResult {
   const { promotion } = requireGroup(ctx.store, 'localFiles');
-  // promoteToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
+  // copyToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
   // archiveRaw's not-found wording (no leak about whether the id exists in another tenant).
   const reach = promotion.reach(id);
   if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {

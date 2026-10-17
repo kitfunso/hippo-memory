@@ -283,12 +283,6 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
   }, openStore);
 }
 
-/** Returns this card's parent and child ids from card_deps. */
-export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
-  assertTenantId('loadCardDeps', tenantId);
-  return onHandle(hippoRoot, (db) => loadCardDepsAt(db, tenantId, id), openStore);
-}
-
 export function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
   // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
   const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
@@ -318,12 +312,6 @@ export function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: strin
   return rows.map(rowToCardRun);
 }
 
-/** Returns this card's comments, most recent first. */
-export function loadCardComments(hippoRoot: string, tenantId: string, id: string): CardComment[] {
-  assertTenantId('loadCardComments', tenantId);
-  return onHandle(hippoRoot, (db) => loadCardCommentsAt(db, tenantId, id), openStore);
-}
-
 export function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
   // SAFETY: rows' shape matches CardCommentRow.
   const rows = db.prepare(`
@@ -331,12 +319,6 @@ export function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: s
     FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
   `).all(tenantId, id) as CardCommentRow[];
   return rows.map(rowToCardComment);
-}
-
-/** Read side of the card <-> handoff round trip: the newest handoff filed against this card. */
-export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, cardId: string): SessionHandoff | null {
-  assertTenantId('loadLatestHandoffForCard', tenantId);
-  return onHandle(hippoRoot, (db) => loadLatestHandoffForCardAt(db, tenantId, cardId), openStore);
 }
 
 export function loadLatestHandoffForCardAt(

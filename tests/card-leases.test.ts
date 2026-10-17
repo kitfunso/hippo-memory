@@ -10,17 +10,16 @@ import {
   createCard,
   loadCard,
   loadCardRuns,
-  loadCardComments,
   claimCard,
   heartbeatCard,
   blockCard,
   reviewCard,
   completeCard,
   reclaimExpiredCards,
-  loadLatestHandoffForCard,
 } from '../src/store/cards.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { CARD_LEASE_MS } from '../src/core/card.js';
+import { cardDetailOf } from './_helpers/card-detail.js';
 
 let root: string;
 
@@ -171,7 +170,7 @@ describe('refusals', () => {
 });
 
 describe('sweep', () => {
-  it('reclaims running cards with a passed or NULL lease, in id order, and leaves everything else alone', () => {
+  it('reclaims running cards with a passed or NULL lease, in id order, and leaves everything else alone', async () => {
     const passed = createCard(root, 'default', { title: 'T4 passed' });
     const future = createCard(root, 'default', { title: 'T4 future' });
     const nullLease = createCard(root, 'default', { title: 'T4 null' });
@@ -211,7 +210,7 @@ describe('sweep', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-1', summary: 'before sweep', nextAction: undefined, artifacts: [], cardId: passed.id,
     });
-    const handoffBefore = loadLatestHandoffForCard(root, 'default', passed.id);
+    const handoffBefore = (await cardDetailOf(root, 'default', passed.id))?.handoff;
 
     const reclaimed = reclaimExpiredCards(root, 'default');
     expect(reclaimed).toHaveLength(2);
@@ -238,8 +237,9 @@ describe('sweep', () => {
     expect(loadCard(root, 'default', shelvedCard.id)?.status).toBe('shelved');
     expect(loadCard(root, 'tenant2', otherTenant.id)?.status).toBe('running');
 
-    expect(loadLatestHandoffForCard(root, 'default', passed.id)).toEqual(handoffBefore);
-    expect(loadCardComments(root, 'default', passed.id)).toEqual([]);
+    const after = await cardDetailOf(root, 'default', passed.id);
+    expect(after?.handoff).toEqual(handoffBefore);
+    expect(after?.comments).toEqual([]);
   });
 });
 

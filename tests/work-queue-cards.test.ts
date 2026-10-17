@@ -11,15 +11,12 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   createCard,
   loadCard,
-  loadCardDeps,
   loadCardRuns,
   claimCard,
   blockCard,
   reviewCard,
   completeCard,
   addCardComment,
-  loadCardComments,
-  loadLatestHandoffForCard,
 } from '../src/store/cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../src/core/card.js';
@@ -28,7 +25,7 @@ import { runInProcess } from './_helpers/run-in-process.js';
 import { handleCard } from '../src/cli/card.js';
 import { parseArgs } from '../src/cli.js';
 import { COMMANDS } from '../src/cli/verbs.js';
-import * as packageEntry from '../src/index.js';
+import { cardDetailOf } from './_helpers/card-detail.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
@@ -138,11 +135,11 @@ describe('test 4: createCard initial status', () => {
     expect(child.status).toBe('ready');
   });
 
-  it('a repeated dependsOn id is recorded once', () => {
+  it('a repeated dependsOn id is recorded once', async () => {
     const parent = createCard(root, 'default', { title: 'Parent' });
     const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id, parent.id] });
     expect(child.status).toBe('backlog');
-    expect(loadCardDeps(root, 'default', child.id).parents).toEqual([parent.id]);
+    expect((await cardDetailOf(root, 'default', child.id))?.deps.parents).toEqual([parent.id]);
   });
 });
 
@@ -327,15 +324,15 @@ describe('test 7c: a parent completing while createCard waits for the write lock
 });
 
 describe('test 8: completeCard from a non-review status returns null and touches nothing', () => {
-  it('leaves card_deps and card_runs untouched', () => {
+  it('leaves card_deps and card_runs untouched', async () => {
     const parent = createCard(root, 'default', { title: 'Still backlog' });
     const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
 
-    const before = loadCardDeps(root, 'default', child.id);
+    const before = (await cardDetailOf(root, 'default', child.id))?.deps;
     const result = completeCard(root, 'default', parent.id, 'success');
     expect(result).toBeNull();
 
-    const after = loadCardDeps(root, 'default', child.id);
+    const after = (await cardDetailOf(root, 'default', child.id))?.deps;
     expect(after).toEqual(before);
     expect(loadCardRuns(root, 'default', parent.id)).toEqual([]);
     expect(loadCard(root, 'default', parent.id)?.status).toBe('ready');
@@ -406,8 +403,8 @@ describe('Fix A: completeCard shelves a non-success outcome and releases no chil
   });
 });
 
-describe('test 9: loadLatestHandoffForCard', () => {
-  it('round-trips a handoff saved with a matching cardId and ignores others', () => {
+describe('test 9: the latest handoff filed against a card', () => {
+  it('round-trips a handoff saved with a matching cardId and ignores others', async () => {
     const card = createCard(root, 'default', { title: 'Handoff target' });
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-1', summary: 'wrong card', nextAction: undefined, artifacts: [], cardId: 'other-card',
@@ -419,7 +416,7 @@ describe('test 9: loadLatestHandoffForCard', () => {
       version: 1, sessionId: 'sess-3', summary: 'right card', nextAction: undefined, artifacts: [], cardId: card.id,
     });
 
-    const handoff = loadLatestHandoffForCard(root, 'default', card.id);
+    const handoff = (await cardDetailOf(root, 'default', card.id))?.handoff;
     expect(handoff?.summary).toBe('right card');
     expect(handoff?.constraints).toEqual([]);
   });
@@ -673,7 +670,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   });
 });
 
-describe('test 11: the card verb is wired through the flag parser, the command table and the package entry', () => {
+describe('test 11: the card verb is wired through the flag parser and the command table', () => {
   it('`card create` with a repeated --depends-on reaches the card verb and records every parent', async () => {
     initStore(root);
     const a = createCard(root, 'default', { title: 'A' });
@@ -684,11 +681,7 @@ describe('test 11: the card verb is wired through the flag parser, the command t
 
     expect(run.status, run.stderr).toBe(0);
     const child = /Created card (\S+)/.exec(run.stdout)?.[1] ?? '';
-    expect(loadCardDeps(root, 'default', child).parents.sort()).toEqual([a.id, b.id].sort());
-  });
-
-  it('the package entry exports the store createCard', () => {
-    expect(packageEntry.createCard).toBe(createCard);
+    expect((await cardDetailOf(root, 'default', child))?.deps.parents.sort()).toEqual([a.id, b.id].sort());
   });
 });
 
@@ -706,18 +699,18 @@ describe('test 12: unknown dependsOn pre-check', () => {
 });
 
 describe('test 13: addCardComment checks the card belongs to the caller\'s tenant', () => {
-  it('throws unknown card id for a foreign-tenant card and for a missing id; happy path still works', () => {
+  it('throws unknown card id for a foreign-tenant card and for a missing id; happy path still works', async () => {
     const card = createCard(root, 'default', { title: 'Commented' });
 
     expect(() => addCardComment(root, 'tenant2', card.id, 'x', 'y')).toThrow(`unknown card id: ${card.id}`);
     expect(() => addCardComment(root, 'default', 'nope', 'x', 'y')).toThrow('unknown card id: nope');
 
-    expect(loadCardComments(root, 'default', card.id)).toEqual([]);
-    expect(loadCardComments(root, 'tenant2', card.id)).toEqual([]);
+    expect((await cardDetailOf(root, 'default', card.id))?.comments).toEqual([]);
+    expect(await cardDetailOf(root, 'tenant2', card.id)).toBeNull();
 
     const comment = addCardComment(root, 'default', card.id, 'x', 'y');
     expect(comment.body).toBe('y');
-    expect(loadCardComments(root, 'default', card.id)).toHaveLength(1);
+    expect((await cardDetailOf(root, 'default', card.id))?.comments).toHaveLength(1);
   });
 });
 
@@ -792,17 +785,17 @@ describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their in
     expect(loadCardRuns(root, 'default', card.id)).toEqual([]);
   });
 
-  it('blockCard throws for an empty reason and leaves the card running with no comment', () => {
+  it('blockCard throws for an empty reason and leaves the card running with no comment', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     claimCard(root, 'default', card.id, 'r1');
     expect(() => blockCard(root, 'default', card.id, '')).toThrow('reason must not be empty');
     expect(loadCard(root, 'default', card.id)?.status).toBe('running');
-    expect(loadCardComments(root, 'default', card.id)).toEqual([]);
+    expect((await cardDetailOf(root, 'default', card.id))?.comments).toEqual([]);
   });
 
-  it('addCardComment throws for an empty body and adds no comment', () => {
+  it('addCardComment throws for an empty body and adds no comment', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     expect(() => addCardComment(root, 'default', card.id, 'author', '')).toThrow('body must not be empty');
-    expect(loadCardComments(root, 'default', card.id)).toEqual([]);
+    expect((await cardDetailOf(root, 'default', card.id))?.comments).toEqual([]);
   });
 });

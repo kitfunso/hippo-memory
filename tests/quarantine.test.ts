@@ -17,7 +17,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { shareMemory, autoShare } from '../src/sharing/share.js';
-import { promoteToGlobal } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import * as api from '../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -190,8 +190,8 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     expect(() => shareMemory(home, id, { force: true })).toThrow(/quarantine/i);
   });
 
-  it('promoteToGlobal refuses a quarantined row', () => {
-    expect(() => promoteToGlobal(home, id)).toThrow(/quarantined/);
+  it('copyToGlobal refuses a quarantined row', () => {
+    expect(() => copyToGlobal(home, id)).toThrow(/quarantined/);
   });
 
   it('a deleted quarantined memory drops out of the pending queue but keeps its history', async () => {

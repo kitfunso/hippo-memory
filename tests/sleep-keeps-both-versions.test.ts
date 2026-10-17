@@ -22,7 +22,7 @@ import { totalTally } from '../src/agent-memories/report.js';
 import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/sharing/share.js';
 import { getGlobalRoot, initGlobal } from '../src/sharing/global-store.js';
-import { searchBoth, searchBothHybrid } from '../src/sharing/search-both.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromText } from '../src/capture/extract.js';
 import { computeSalience } from '../src/core/salience.js';
@@ -611,7 +611,6 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_NEW);
     const contents = (rs: { entry: MemoryEntry }[]): string[] => rs.map((r) => r.entry.content).sort();
 
-    expect(contents(searchBoth('dev server port', root, getGlobalRoot()))).toEqual([LONG_NEW, LONG_OLD].sort());
     expect(contents(await searchBothHybrid('dev server port', root, getGlobalRoot()))).toEqual([LONG_NEW, LONG_OLD].sort());
   });
 

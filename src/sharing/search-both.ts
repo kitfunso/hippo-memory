@@ -5,7 +5,6 @@ import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
 import { loadSearchEntries, loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../core/recall-scope.js';
-import { search } from '../search/bm25-search.js';
 import { folderVectorSource, hybridSearch } from '../search/hybrid.js';
 import { fitBudget } from '../search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from '../core/search-types.js';
@@ -28,74 +27,6 @@ export interface SearchOptions {
   minResults?: number;
   /** Tenant scope for both stores. Undefined = no filter (legacy single-tenant). */
   tenantId?: string;
-}
-
-/** Search both local and global stores and merge: local results are boosted 1.2x to prefer project context.
- *  Returns results sorted by adjusted score within the combined token budget. */
-export function searchBoth(
-  query: string,
-  localRoot: string,
-  globalRoot: string,
-  options: SearchOptions = {}
-): SearchResult[] {
-  const { budget = DEFAULT_RECALL_BUDGET, now = evalNow(), minResults, tenantId } = options;
-  const effectiveMin = minResults ?? 1;
-
-  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
-  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
-
-  if (localEntries.length === 0 && globalEntries.length === 0) return [];
-
-  // Search each store with full budget, then blend
-  const localResults = search(query, localEntries, { budget, now, minResults });
-  const globalResults = search(query, globalEntries, { budget, now, minResults });
-
-  const deduped = dedupeByContent(tagLocalAndGlobal(localResults, globalResults));
-
-  // PLAIN stable score sort on purpose: both inputs are deterministically ordered,
-  // and an exact tie keeps the LOCAL result ahead of the global one (concat order).
-  deduped.sort((a, b) => compareScoresDesc(a.score, b.score));
-
-  // Apply combined token budget (guarantee at least minResults items)
-  const results: typeof deduped = [];
-  let usedTokens = 0;
-
-  for (let i = 0; i < deduped.length; i++) {
-    if (results.length >= effectiveMin && usedTokens + deduped[i].tokens > budget) continue;
-    usedTokens += deduped[i].tokens;
-    results.push(deduped[i]);
-  }
-
-  return results;
-}
-
-function tagLocalAndGlobal(
-  localResults: SearchResult[],
-  globalResults: SearchResult[],
-): Array<SearchResult & { isGlobal: boolean }> {
-  // Tag global results. Local memories get a configurable priority bump.
-  return [
-    ...localResults.map((r) => ({
-      ...r,
-      isGlobal: false,
-      score: r.score * DEFAULT_LOCAL_BUMP,
-      breakdown: r.breakdown
-        ? { ...r.breakdown, sourceBump: DEFAULT_LOCAL_BUMP, final: r.breakdown.final * DEFAULT_LOCAL_BUMP }
-        : undefined,
-    })),
-    ...globalResults.map((r) => ({ ...r, isGlobal: true })),
-  ];
-}
-
-function dedupeByContent<T extends SearchResult>(tagged: T[]): T[] {
-  // Remove duplicates by content (local/global IDs differ after promote/share)
-  const seen = new Set<string>();
-  return tagged.filter((r) => {
-    const key = duplicateKey(r.entry.content);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 export interface HybridSearchOptions extends SearchOptions {
@@ -134,7 +65,7 @@ export interface HybridSearchOptions extends SearchOptions {
 }
 
 /** Hybrid search across both local and global stores, using embeddings when available.
- *  Async version of searchBoth that calls hybridSearch instead of search. */
+ *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
   localRoot: string,
@@ -235,8 +166,8 @@ export async function rankBothStores(
     return true;
   });
 
-  // PLAIN stable score sort on purpose -- see searchBoth above;
-  // same rationale (deterministic inputs + stability; local-first on ties).
+  // PLAIN stable score sort on purpose: both inputs are deterministically ordered, and an exact tie keeps the LOCAL
+  // result ahead of the global one (concat order).
   deduped.sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return fitBudget(deduped, budget, minResults ?? 1, cost);

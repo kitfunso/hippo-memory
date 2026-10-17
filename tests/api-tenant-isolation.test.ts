@@ -72,7 +72,7 @@ describe('api tenant isolation', () => {
       closeHippoDb(db);
     }
 
-    // The global root must NOT have a copy. promoteToGlobal must never have
+    // The global root must NOT have a copy. copyToGlobal must never have
     // run because the tenant pre-check throws before it does.
     const gdb = openHippoDb(globalHome);
     try {

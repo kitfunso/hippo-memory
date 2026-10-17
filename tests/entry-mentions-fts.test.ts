@@ -4,11 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
 import { DatabaseSync } from '../src/db/sqlite.js';
 import { getMeta, setMeta } from '../src/db/meta.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { deduplicateLesson } from '../src/learn/autolearn.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 
 const CONTENTS = [
@@ -18,15 +16,6 @@ const CONTENTS = [
   'Plain ascii note about deploys and retries',
   'journal_mode WAL needs the express-js adapter',
   'Unrelated sentence about lunch',
-];
-const LESSONS = [
-  'Use the café cache for sessions',
-  'cafe cache sessions',
-  'Straße cache invalidation',
-  'naive approach with cache-key',
-  'deploys and retries note',
-  'journal_mode WAL express-js adapter',
-  '!!! ???',
 ];
 const TARGETS = ['café', 'Straße', 'cache-key', 'express-js', 'journal_mode', 'naïve approach', 'ascii'];
 
@@ -45,17 +34,6 @@ describe('loadEntriesMentioning on the FTS path', () => {
     for (const content of CONTENTS) writeEntry(root, createMemory(content, { tags: ['Ops'] }));
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
-
-  it('finds every near-duplicate the full read finds, with and without FTS5', () => {
-    const everyRow = loadAllEntries(root, 'default');
-    for (const lesson of LESSONS) {
-      const expected = deduplicateLesson(everyRow, lesson, 0.3);
-      expect(deduplicateLesson(root, lesson, 0.3)).toBe(expected);
-      setFts(root, '0');
-      expect(deduplicateLesson(root, lesson, 0.3)).toBe(expected);
-      setFts(root, '1');
-    }
-  });
 
   it('matches the same rows for invalidation on both paths', () => {
     for (const from of TARGETS) {

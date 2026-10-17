@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getGlobalRoot, promoteToGlobal } from '../src/sharing/global-store.js';
-import { searchBoth } from '../src/sharing/search-both.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -71,10 +71,10 @@ describe('getGlobalRoot', () => {
 });
 
 // ---------------------------------------------------------------------------
-// initGlobal / promoteToGlobal
+// initGlobal / copyToGlobal
 // ---------------------------------------------------------------------------
 
-describe('promoteToGlobal', () => {
+describe('copyToGlobal', () => {
   let localRoot: string;
   let globalRoot: string;
   let prevHippoHome: string | undefined;
@@ -82,7 +82,7 @@ describe('promoteToGlobal', () => {
   beforeEach(() => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
-    // promoteToGlobal() resolves its destination via getGlobalRoot(), which
+    // copyToGlobal() resolves its destination via getGlobalRoot(), which
     // reads HIPPO_HOME. Without this override it writes into the developer's
     // real ~/.hippo store. Point it at the temp global store for isolation.
     prevHippoHome = process.env.HIPPO_HOME;
@@ -101,13 +101,13 @@ describe('promoteToGlobal', () => {
 
     // HIPPO_HOME is pointed at a temp global store in beforeEach, so this
     // promote lands in that temp store, not the developer's real ~/.hippo.
-    const promoted = promoteToGlobal(localRoot, entry.id);
+    const promoted = copyToGlobal(localRoot, entry.id);
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe(entry.content);
   });
 
   it('throws when ID does not exist in local store', () => {
-    expect(() => promoteToGlobal(localRoot, 'nonexistent_id')).toThrow();
+    expect(() => copyToGlobal(localRoot, 'nonexistent_id')).toThrow();
   });
 
   it('honors opts.tenantId for cross-tenant isolation (v1.11.0 residue)', () => {
@@ -117,14 +117,14 @@ describe('promoteToGlobal', () => {
     writeEntry(localRoot, b);
 
     // Promoting tenant-a's entry with opts.tenantId='tenant-a' succeeds.
-    const promoted = promoteToGlobal(localRoot, a.id, { tenantId: 'tenant-a' });
+    const promoted = copyToGlobal(localRoot, a.id, { tenantId: 'tenant-a' });
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe('tenant-a content');
 
     // Promoting tenant-a's entry with opts.tenantId='tenant-b' throws —
-    // readEntry returns null on a cross-tenant lookup, and promoteToGlobal
+    // readEntry returns null on a cross-tenant lookup, and copyToGlobal
     // then surfaces 'Memory not found'.
-    expect(() => promoteToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).toThrow(/Memory not found/);
+    expect(() => copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).toThrow(/Memory not found/);
   });
 });
 
@@ -173,85 +173,5 @@ describe('syncGlobalToLocal', () => {
     const nonexistent = path.join(os.tmpdir(), 'hippo-no-global-' + Date.now());
     const count = syncGlobalToLocal(localRoot, nonexistent);
     expect(count).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// searchBoth
-// ---------------------------------------------------------------------------
-
-describe('searchBoth', () => {
-  let localRoot: string;
-  let globalRoot: string;
-
-  beforeEach(() => {
-    localRoot = makeTmpStore();
-    globalRoot = makeTmpStore();
-  });
-
-  afterEach(() => {
-    cleanUp(localRoot, globalRoot);
-  });
-
-  it('returns results from both local and global stores', () => {
-    const local = createMemory('local cache refresh error pipeline data');
-    const global = createMemory('global cache refresh error pipeline data');
-    writeEntry(localRoot, local);
-    writeEntry(globalRoot, global);
-
-    const results = searchBoth('cache refresh', localRoot, globalRoot, { budget: 10000 });
-    expect(results.length).toBe(2);
-  });
-
-  it('local results have higher effective scores (1.2x boost)', () => {
-    // Identical content in both stores - local should score higher
-    const content = 'cache refresh pipeline error data';
-    const local = createMemory(content);
-    const global = { ...createMemory(content), id: 'global_' + Date.now() };
-
-    writeEntry(localRoot, local);
-    writeEntry(globalRoot, global);
-
-    const results = searchBoth('cache refresh', localRoot, globalRoot, { budget: 10000 });
-    expect(results.length).toBeGreaterThan(0);
-
-    // Find local and global result
-    const localResult = results.find((r) => r.entry.id === local.id);
-    const globalResult = results.find((r) => r.entry.id === global.id);
-
-    if (localResult && globalResult) {
-      expect(localResult.score).toBeGreaterThan(globalResult.score);
-    }
-  });
-
-  it('returns empty when no matches in either store', () => {
-    const local = createMemory('completely unrelated content about python');
-    writeEntry(localRoot, local);
-
-    const results = searchBoth('xyzzy foobar qux', localRoot, globalRoot, { budget: 10000 });
-    expect(results.length).toBe(0);
-  });
-
-  it('deduplicates by ID, preferring local', () => {
-    // Same ID written to both stores
-    const entry = createMemory('shared unique content cache');
-    writeEntry(localRoot, entry);
-    writeEntry(globalRoot, entry);
-
-    const results = searchBoth('cache content', localRoot, globalRoot, { budget: 10000 });
-    const ids = results.map((r) => r.entry.id);
-    const uniqueIds = new Set(ids);
-    expect(uniqueIds.size).toBe(ids.length);
-  });
-
-  it('respects token budget across merged results', () => {
-    for (let i = 0; i < 5; i++) {
-      writeEntry(localRoot, createMemory('cache refresh pipeline error data ' + 'x'.repeat(100) + ` ${i}`));
-      writeEntry(globalRoot, createMemory('cache refresh pipeline error data ' + 'x'.repeat(100) + ` g${i}`));
-    }
-
-    const results = searchBoth('cache refresh', localRoot, globalRoot, { budget: 200 });
-    const total = results.reduce((sum, r) => sum + r.tokens, 0);
-    expect(total).toBeLessThanOrEqual(200);
   });
 });
