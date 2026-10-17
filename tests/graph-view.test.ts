@@ -22,6 +22,7 @@ import {
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
@@ -30,7 +31,7 @@ const T = 'default';
 async function seedGraph(home: string, tenant = T): Promise<void> {
   await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
   await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, { decisionText: 'We adopt RetryPolicy across all services' });
-  await extractGraph(objectsAt(home), home, tenant);
+  await extractGraph(sqliteStore(home), tenant);
 }
 
 describe('graph-view: buildGraphModel (real DB)', () => {
@@ -40,7 +41,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('1. maps entities -> nodes and relations -> edges', async () => {
     await seedGraph(home);
-    const m = buildGraphModel(home, T);
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T);
     expect(m.nodes).toHaveLength(2);
     expect(m.nodes.some((n) => n.type === 'policy' && n.name === 'RetryPolicy')).toBe(true);
     expect(m.nodes.some((n) => n.type === 'decision')).toBe(true);
@@ -51,7 +52,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('2. --entity focus returns the match + its 1-hop neighbours + edges among them', async () => {
     await seedGraph(home);
-    const m = buildGraphModel(home, T, { entity: 'RetryPolicy' });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'RetryPolicy' });
     // RetryPolicy + the decision that references it.
     expect(m.nodes).toHaveLength(2);
     expect(m.nodes.some((n) => n.name === 'RetryPolicy')).toBe(true);
@@ -60,19 +61,19 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('3. unknown --entity yields an empty model', async () => {
     await seedGraph(home);
-    const m = buildGraphModel(home, T, { entity: 'NoSuchThing' });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'NoSuchThing' });
     expect(m.nodes).toHaveLength(0);
     expect(m.edges).toHaveLength(0);
   });
 
-  it('4. empty store -> empty model, truncated false', () => {
-    const m = buildGraphModel(home, T);
+  it('4. empty store -> empty model, truncated false', async () => {
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T);
     expect(m).toEqual({ nodes: [], edges: [], truncated: false });
   });
 
   it('5. truncated flag set when a loader hits its limit', async () => {
     await seedGraph(home);
-    const m = buildGraphModel(home, T, { limit: 1 }); // 2 entities, limit 1 -> truncated
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { limit: 1 }); // 2 entities, limit 1 -> truncated
     expect(m.truncated).toBe(true);
     expect(m.nodes.length).toBeLessThanOrEqual(1);
   });
@@ -80,7 +81,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   it('6. dangling edges (endpoint outside the node set) are dropped', async () => {
     await seedGraph(home);
     // limit 1 keeps 1 entity; the references edge's other endpoint is excluded -> dropped.
-    const m = buildGraphModel(home, T, { limit: 1 });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { limit: 1 });
     for (const e of m.edges) {
       const ids = new Set(m.nodes.map((n) => n.id));
       expect(ids.has(e.from) && ids.has(e.to)).toBe(true);
@@ -94,8 +95,8 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'FocusPol', policyText: 'the focus policy' });
     for (let i = 0; i < 6; i++) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: `Filler${i}`, policyText: 'x' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'We adopt FocusPol across every service now' });
-    await extractGraph(objectsAt(home), home, T);
-    const m = buildGraphModel(home, T, { entity: 'FocusPol', limit: 2 });
+    await extractGraph(sqliteStore(home), T);
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'FocusPol', limit: 2 });
     expect(m.nodes.some((n) => n.name === 'FocusPol')).toBe(true); // found despite limit 2
     expect(m.edges.length).toBeGreaterThanOrEqual(1); // its references edge is present
     const ids = new Set(m.nodes.map((n) => n.id));
@@ -106,8 +107,8 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolA', policyText: 'PolA works closely with PolB' });
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolB', policyText: 'a standalone policy' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB across the org now' });
-    await extractGraph(objectsAt(home), home, T);
-    const m = buildGraphModel(home, T, { entity: 'Adopt PolA and PolB across the org now' });
+    await extractGraph(sqliteStore(home), T);
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Adopt PolA and PolB across the org now' });
     const nameById = new Map(m.nodes.map((n) => [n.id, n.name]));
     // PolA --references--> PolB connects two NEIGHBOURS (neither is the focus decision);
     // it would be missing if only focus-touching edges were loaded.
@@ -119,8 +120,8 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('17. focus on a name shared by many entities is capped to the limit (codex P2)', async () => {
     for (let i = 0; i < 8; i++) await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { customer: 'Acme', note: `note ${i}` });
-    await extractGraph(objectsAt(home), home, T);
-    const m = buildGraphModel(home, T, { entity: 'Acme', limit: 3 });
+    await extractGraph(sqliteStore(home), T);
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Acme', limit: 3 });
     expect(m.nodes.length).toBeLessThanOrEqual(3); // 8 same-name entities capped to 3
     expect(m.truncated).toBe(true);
   });
@@ -128,10 +129,10 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   it('18. focus truncation is reported when the neighbour scan hits the cap (codex P2)', async () => {
     for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     // limit 3: the decision references 4 policies; one 1-hop neighbour cannot fit,
     // so the model must report truncated (not silently omit a neighbour).
-    const m = buildGraphModel(home, T, { entity: 'Adopt PolA and PolB and PolC and PolD now', limit: 3 });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Adopt PolA and PolB and PolC and PolD now', limit: 3 });
     expect(m.nodes.length).toBeLessThanOrEqual(3);
     expect(m.truncated).toBe(true);
   });
@@ -234,7 +235,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
     await seedGraph(home, T);
     // A separate tenant's graph in the same store must NOT leak to the default caller.
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'tenantB', { policyName: 'TenantBOnlyPolicy', policyText: 'x' });
-    await extractGraph(objectsAt(home), home, 'tenantB');
+    await extractGraph(sqliteStore(home), 'tenantB');
 
     const res = await fetch(`${handle.url}/v1/graph`);
     expect(res.status).toBe(200);
@@ -263,7 +264,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
   it('19. accepts a valid entity name longer than 256 chars (codex P2)', async () => {
     const longName = 'Adopt ' + 'X'.repeat(300); // ~306 chars, within MAX_ENTITY_NAME_LEN (512)
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: longName });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     const res = await fetch(`${handle.url}/v1/graph?entity=${encodeURIComponent(longName)}`);
     expect(res.status).toBe(200); // not a 400 length rejection
     // SAFETY: GET /v1/graph is served by this app's own route handler

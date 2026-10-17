@@ -1,6 +1,6 @@
 // Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its
 // relations hang on.
-import { loadStoredGraph } from '../store/graph-reads.js';
+import type { GraphReads } from '../store/port.js';
 import type {
   DesiredEntity,
   DesiredGraph,
@@ -127,6 +127,10 @@ export function diffGraph(stored: StoredGraph, desired: DesiredGraph): GraphOp[]
  * Ops that turn the stored graph into `desired`, in apply order; read outside any write lock, so the apply re-checks
  * each op against what changed since. Keeps the lowest id per natural key.
  */
-export function readGraphDelta(hippoRoot: string, tenantId: string, desired: DesiredGraph): GraphOp[] {
-  return diffGraph(loadStoredGraph(hippoRoot, tenantId, memoryIdsOf(desired)), desired);
+export async function readGraphDelta(
+  graphReads: Pick<GraphReads, 'storedGraph'>,
+  tenantId: string,
+  desired: DesiredGraph,
+): Promise<GraphOp[]> {
+  return diffGraph(await graphReads.storedGraph(tenantId, memoryIdsOf(desired)), desired);
 }

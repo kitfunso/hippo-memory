@@ -15,12 +15,11 @@ import {
   type NaturalKey,
 } from './delta.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
-import { SLEEP_DB_WAIT_MS } from '../db/index.js';
 import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
-import type { Objects } from '../store/port.js';
+import { requireGroup, type HippoStore, type Objects } from '../store/port.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { escapeRegex } from '../util/escape.js';
 
@@ -343,10 +342,12 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
-export async function extractGraph(objects: Objects, hippoRoot: string, tenantId: string): Promise<ExtractResult> {
+export async function extractGraph(store: HippoStore, tenantId: string): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
+  // The rebuild's write lock is hippo.db's own, so it reaches the folder only through the local files.
+  const { hippoRoot } = requireGroup(store, 'localFiles');
   // Loaded first: opening a second connection under the rebuild's BEGIN IMMEDIATE dead-locks ('database is locked').
-  const derived = deriveGraph(await loadGraphSources(objects, tenantId));
+  const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
   const skipped = rebuildGraphUnderLock(hippoRoot, tenantId, memoryIdsOf(derived), (stored) =>
     diffGraph(stored, derived),
@@ -357,28 +358,21 @@ export async function extractGraph(objects: Objects, hippoRoot: string, tenantId
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
 export async function extractGraphChunked(
-  objects: Objects,
-  hippoRoot: string,
+  store: HippoStore,
   tenantId: string,
   budget: WriteBudget = WRITE_BUDGET,
 ): Promise<ExtractResult> {
   assertTenantId('extractGraphChunked', tenantId);
-  const derived = deriveGraph(await loadGraphSources(objects, tenantId));
-  const ops = readGraphDelta(hippoRoot, tenantId, derived);
+  const { hippoRoot } = requireGroup(store, 'localFiles');
+  const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
+  const ops = await readGraphDelta(store.graphReads, tenantId, derived);
   let next = 0;
   let skipped = 0;
   let committedAt = 0;
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
     const from = next;
-    // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE
-    // a hook's write could otherwise fail.
-    const chunk = applyGraphOps(hippoRoot, tenantId, ops, {
-      from,
-      holdMs: budget.holdMs,
-      clock: budget.clock,
-      busyWaitMs: SLEEP_DB_WAIT_MS,
-    });
+    const chunk = applyGraphOps(hippoRoot, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock });
     committedAt = budget.clock();
     next = chunk.next;
     skipped += chunk.skipped;

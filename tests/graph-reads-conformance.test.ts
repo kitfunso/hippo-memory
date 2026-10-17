@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import type { AuditEvent } from '../src/store/audit.js';
 import type { ScopeActor } from '../src/core/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../src/store/port.js';
-import type { Entity, Relation } from '../src/store/graph-rows.js';
+import type { Entity, Relation, StoredGraph } from '../src/store/graph-rows.js';
 import {
   BULK_TENANT, HELD_SCOPE, inMemoryGraphReadsStore, MANY, seededAt, seedGraphRows, SOLO_TENANT, type SeededGraph,
 } from './_helpers/in-memory-graph-reads-store.js';
@@ -281,5 +281,21 @@ describe('GraphReads walk reads', () => {
     expect(perBatch).toEqual([[first, e.tailA], [last, e.tailB]]);
     expect(repeated).toEqual([[first, e.tailA]]);
     expect([otherTenant, zero, none]).toEqual([[], [], []]);
+  });
+});
+
+describe('GraphReads.storedGraph', () => {
+  it("reads the tenant's rows in id order and the kind of each memory asked, whichever tenant holds it", async () => {
+    const { e, memories } = g;
+    const [inA, inB, unknown] = await answers<StoredGraph>([
+      (r) => r.storedGraph(TENANT_A, [memories.team, 'mem_gb', 'mem_never_written']), (r) => r.storedGraph(TENANT_B, []),
+      (r) => r.storedGraph('nobody', [memories.held]),
+    ]);
+    expect(inA.entities.map((row) => row.id)).toEqual([e.hub, e.spoke1, e.spoke2, e.secret, e.mine, e.twinHeld, e.twinOpen, e.lone, e.shared, e.anchored]);
+    expect(inA.relations.map((row): Edge => [row.from_entity_id, row.to_entity_id])).toEqual([...newest.relations].reverse());
+    expect(inA.kinds).toEqual(new Map([[memories.team, 'distilled'], ['mem_gb', 'distilled']]));
+    expect(inB.entities.map((row) => row.id)).toEqual([e.sharedB, e.otherB]);
+    expect(inB.kinds).toEqual(new Map());
+    expect(unknown).toEqual({ kinds: new Map([[memories.held, 'distilled']]), entities: [], relations: [] });
   });
 });

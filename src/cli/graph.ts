@@ -7,13 +7,11 @@ import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
-import { objectsOf } from '../api/objects/objects.js';
 import { cliApiContext } from './api-context.js';
 import { openInBrowser } from './open-browser.js';
 
 async function graphExtract(hippoRoot: string, tenantId: string): Promise<void> {
-  const ctx = cliApiContext(hippoRoot, tenantId);
-  const result = await extractGraph(objectsOf(ctx), hippoRoot, tenantId);
+  const result = await extractGraph(cliApiContext(hippoRoot, tenantId).store, tenantId);
   const byType = Object.entries(result.byType)
     .map(([t, n]) => `${t} ${n}`)
     .join(', ');
@@ -28,8 +26,11 @@ async function graphExtract(hippoRoot: string, tenantId: string): Promise<void> 
   }
 }
 
-function graphShow(hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags): void {
-  const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
+async function graphShow(
+  hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags,
+): Promise<void> {
+  const { graphReads } = cliApiContext(hippoRoot, tenantId).store;
+  const model = await buildGraphModel(graphReads, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
   if (flags['json']) {
     console.log(JSON.stringify(model, null, 2));
     return;
@@ -60,12 +61,15 @@ function graphShow(hippoRoot: string, tenantId: string, entity: string | undefin
   }
 }
 
-function graphView(hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags): void {
+async function graphView(
+  hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags,
+): Promise<void> {
   const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {
     fail("graph view: --format must be 'html' or 'canvas'");
   }
-  const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
+  const { graphReads } = cliApiContext(hippoRoot, tenantId).store;
+  const model = await buildGraphModel(graphReads, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
   const defaultOut = format === 'canvas' ? 'hippo-graph.canvas' : 'hippo-graph.html';
   const out = stringFlag(flags, 'out') ?? defaultOut;

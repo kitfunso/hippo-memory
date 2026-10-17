@@ -6,9 +6,10 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { buildGraphModel } from '../src/graph/view.js';
-import { canReadScope } from '../src/core/recall-scope.js';
+import type { ScopeActor } from '../src/core/recall-scope.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
@@ -24,16 +25,13 @@ function mem(home: string, text: string, scope: string | null): MemoryEntry {
   return m;
 }
 
-function readerFor(owner: string): (scope: string | null) => boolean {
-  return (scope) => scope === null || canReadScope({ role: 'member', owner }, scope);
-}
 
 const names = (m: { nodes: { name: string }[] }): string[] => m.nodes.map((n) => n.name).sort();
 
 describe('graph-view personal scope', () => {
   let home: string;
-  const alice = readerFor('alice');
-  const bob = readerFor('bob');
+  const alice: ScopeActor = { role: 'member', owner: 'alice' };
+  const bob: ScopeActor = { role: 'member', owner: 'bob' };
 
   beforeEach(async () => {
     home = makeRoot('graphview-scope');
@@ -48,23 +46,23 @@ describe('graph-view personal scope', () => {
   });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
-  it('A sees its own entity and the edge to it; B sees neither; a NULL-memory entity stays for both', () => {
-    const a = buildGraphModel(home, T, { canRead: alice });
+  it('A sees its own entity and the edge to it; B sees neither; a NULL-memory entity stays for both', async () => {
+    const a = await buildGraphModel(sqliteStore(home).graphReads, T, { reader: alice });
     expect(names(a)).toEqual(['ANCHORED', 'PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
 
-    const b = buildGraphModel(home, T, { canRead: bob });
+    const b = await buildGraphModel(sqliteStore(home).graphReads, T, { reader: bob });
     expect(names(b)).toEqual(['ANCHORED', 'TEAM']);
     expect(b.edges).toHaveLength(0);
   });
 
-  it('focus on a hidden name is empty for B, and B focusing a neighbour does not reach it', () => {
-    const a = buildGraphModel(home, T, { entity: 'PRIV-A', canRead: alice });
+  it('focus on a hidden name is empty for B, and B focusing a neighbour does not reach it', async () => {
+    const a = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: alice });
     expect(names(a)).toEqual(['PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
 
-    expect(buildGraphModel(home, T, { entity: 'PRIV-A', canRead: bob })).toEqual({ nodes: [], edges: [], truncated: false });
-    const viaTeam = buildGraphModel(home, T, { entity: 'TEAM', canRead: bob });
+    expect(await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: bob })).toEqual({ nodes: [], edges: [], truncated: false });
+    const viaTeam = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'TEAM', reader: bob });
     expect(names(viaTeam)).toEqual(['TEAM']);
     expect(viaTeam.edges).toHaveLength(0);
   });

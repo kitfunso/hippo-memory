@@ -4,9 +4,8 @@
  *  Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import { readFileSync } from 'node:fs';
-import { withGraphReadSnapshot } from '../store/graph-reads.js';
-import { graphViewRows } from '../store/graph-view-rows.js';
-import type { GraphRows } from '../store/port.js';
+import type { ScopeActor } from '../core/recall-scope.js';
+import type { GraphReads, GraphRows } from '../store/port.js';
 import type { EntityType, RelationType } from '../store/graph-rows.js';
 
 const DEFAULT_LAYOUT_ITERATIONS = 300;
@@ -37,16 +36,13 @@ export const DEFAULT_VIEW_LIMIT = 500;
  * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop
  * neighbours.
  *  Dangling edges (an endpoint outside the node set) are always dropped. */
-export function buildGraphModel(
-  hippoRoot: string,
+export async function buildGraphModel(
+  graphReads: Pick<GraphReads, 'graphRows'>,
   tenantId: string,
-  opts: { entity?: string; limit?: number; canRead?: (scope: string | null) => boolean } = {},
-): GraphModel {
+  opts: { entity?: string; limit?: number; reader?: ScopeActor } = {},
+): Promise<GraphModel> {
   const limit = opts.limit ?? DEFAULT_VIEW_LIMIT;
-  // One read snapshot, so a concurrent graph rebuild cannot make the model mix old entity ids with new relation ids.
-  return withGraphReadSnapshot(hippoRoot, (db) =>
-    graphModelOf(graphViewRows(hippoRoot, db, tenantId, { entity: opts.entity, limit, canRead: opts.canRead })),
-  );
+  return graphModelOf(await graphReads.graphRows(tenantId, { entity: opts.entity, limit, reader: opts.reader }));
 }
 
 /** The reply model of the rows a store read: an edge with an endpoint outside the node set is dropped. */

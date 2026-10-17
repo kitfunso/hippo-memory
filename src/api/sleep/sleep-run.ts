@@ -9,8 +9,7 @@ import { computeAmbientState } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import type { Context, StoreContext } from '../types.js';
-import { objectsOf } from '../objects/objects.js';
-import { requireGroup, type Consolidation, type LocalFiles, type Objects } from '../../store/port.js';
+import { requireGroup, type Consolidation, type HippoStore, type LocalFiles } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
@@ -26,7 +25,7 @@ export interface SleepPhases {
   computeAmbientState: typeof computeAmbientState;
   configOf: typeof configOf;
   loadPendingExtractionTenants: (store: Consolidation) => DirtyTenantSnapshot['dirtyTenants'];
-  extractGraph: (objects: Objects, hippoRoot: string, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (store: HippoStore, tenantId: string) => ExtractResult | Promise<ExtractResult>;
 }
 
 const DEFAULT_SLEEP_PHASES: SleepPhases = {
@@ -303,7 +302,7 @@ async function rebuildDirtyTenant(
   result: SleepResult,
 ): Promise<void> {
   try {
-    const ext = await phases.extractGraph(objectsOf(ctx), ctx.hippoRoot, dirty.tenantId);
+    const ext = await phases.extractGraph(ctx.store, dirty.tenantId);
     // Count the rebuild as soon as it succeeds — it happened regardless of
     // the drain-mark below.
     rebuilt.tenants += 1;

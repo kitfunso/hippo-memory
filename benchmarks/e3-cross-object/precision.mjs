@@ -47,7 +47,7 @@ intended.add('audit-svc=>DataRetention');
 await decRef('the team is retrying flaky steps', 'd-retry', null);   // "retry" not a name; "retrying" != RetryBudget
 await decRef('we refactored the core scheduler module', 'd-core', null); // "core" the generic word -> FALSE if it matches the "Core" customer
 
-const r = await extractGraph(objects, home, T);
+const r = await extractGraph(sqliteStore(home), T);
 const ents = loadEntities(home, T, { limit: 1000 });
 const nameById = new Map(ents.map((e) => [e.id, e.name]));
 const edges = loadRelations(home, T, { limit: 1000 }).filter((x) => x.relType === 'references');

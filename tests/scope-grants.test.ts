@@ -20,6 +20,7 @@ import { consolidate } from '../src/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
@@ -295,7 +296,7 @@ describe('graph view carries no private receipt text', () => {
     writeEntry(home, { ...createMemory('testrepo release notes went out today', { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: null });
 
     await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'testrepo');
-    await extractGraph(objectsAt(home), home, 'default');
+    await extractGraph(sqliteStore(home), 'default');
 
     const res = await fetch(`${handle.url}/v1/graph`, { headers: { authorization: `Bearer ${member.plaintext}` } });
     expect(res.status).toBe(200);

@@ -75,6 +75,7 @@ const READS: readonly Read[] = [
   read('graphReads.entitiesForMemories', async (s) => s.graphReads.entitiesForMemories(TENANT, (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId]))), /memoryId: '[^']+'/),
   read('graphReads.entitiesByIds', (s) => s.graphReads.entitiesByIds(TENANT, Array.from({ length: 50 }, (_, i) => i + 1)), 'RetryPolicy'),
   read('graphReads.neighborRelations', async (s) => s.graphReads.neighborRelations(TENANT, (await graphEntities(s)).map((e) => e.id), { limit: 50 }), /relType: '[^']+'/),
+  read('graphReads.storedGraph', async (s) => s.graphReads.storedGraph(TENANT, (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId]))), /=> '[a-z]+'/),
   read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
   read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
   read('objects.objectIdByMemory', async (s) => s.objects.objectIdByMemory(TENANT, 'decision', 'active', (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? ''), /^[1-9][0-9]*$/),
