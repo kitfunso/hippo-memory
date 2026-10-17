@@ -10,6 +10,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../core/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../store/port.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Policy, PolicyStatus } from '../core/object-types.js';
 
@@ -116,7 +117,7 @@ export function savePolicy(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SavePolicyOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Policy> {
   return saveObject(objects, POLICY, { baseHalfLifeDays, tenantId, actor }, opts);
 }
@@ -126,7 +127,7 @@ export function closePolicy(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Policy> {
   return closeObject(objects, POLICY, tenantId, id, actor);
 }

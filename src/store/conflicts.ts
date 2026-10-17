@@ -14,6 +14,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 import { placeholders } from '../util/sql.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -467,12 +468,7 @@ function selectConflictRow(
       `).get(conflictId)) as MemoryConflictRow | undefined;
 }
 
-function weakenConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
-  // Halve the loser's half-life (weakens it over time)
-  db.prepare(
-    `UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') ` +
-      `WHERE id = ?${t.scope.memScope}`,
-  ).run(t.loserId, ...t.scope.memArgs);
+function emptyRemoval(): LoserRemoval {
   return {
     loserRemoved: false,
     loserWasRaw: false,
@@ -482,30 +478,32 @@ function weakenConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemov
   };
 }
 
+function weakenConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
+  // Halve the loser's half-life (weakens it over time)
+  db.prepare(
+    `UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') ` +
+      `WHERE id = ?${t.scope.memScope}`,
+  ).run(t.loserId, ...t.scope.memArgs);
+  return emptyRemoval();
+}
+
 function removeConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
   // Removal is kind-aware: a bare DELETE on a raw loser fires the append-only trigger, so use the same helpers as the
   // reject verb.
   // loserRemoved / loserWasRaw drive the conflicts_with_json skip below and the post-commit mirror purge.
-  const removal: LoserRemoval = {
-    loserRemoved: false,
-    loserWasRaw: false,
-    rejectedDigest: undefined,
-    // Same-tenant duplicates of the loser's content that rejectLoserValue also removes; kept apart from loserId so
-    // audit and mirror purge cover all of them.
-    extraRemovedIds: [],
-    extraRemovedRawIds: [],
-  };
+  // extraRemoved* hold same-tenant duplicates of the loser that rejectLoserValue also removes, kept apart from loserId
+  // so audit and mirror purge cover them.
+  const removal = emptyRemoval();
   const { loserId, opts } = t;
 
-  // SAFETY: loserRow's shape matches the four columns named in the
-  // SELECT above.
+  // SAFETY: loserRow's shape matches the four columns named in the SELECT below.
   const loserRow = db
     .prepare(`SELECT kind, content, tenant_id, scope FROM memories WHERE id = ?${t.scope.memScope}`)
     .get(loserId, ...t.scope.memArgs) as
     { kind: string; content: string; tenant_id: string; scope: string | null } | undefined;
 
   if (loserRow) {
-    const actor = opts?.rejectedBy ?? 'cli';
+    const actor = opts?.rejectedBy ?? CLI_ACTOR;
     const reason = opts?.reason ?? `resolveConflict ${t.conflictId}: kept ${t.keepId}`;
 
     if (opts?.rejectLoserValue) {
@@ -674,7 +672,7 @@ function auditConflictResolve(
   audit(db, 'conflict_resolve', {
     targetId: t.keepId,
     metadata: { ...conflictResolveMeta },
-    actor: t.opts?.rejectedBy ?? 'cli',
+    actor: t.opts?.rejectedBy ?? CLI_ACTOR,
     tenantId,
   });
 }

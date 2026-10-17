@@ -2,6 +2,7 @@
 
 import type * as api from '../api/index.js';
 import { renderAmbientSummary } from '../core/ambient.js';
+import { plural } from '../util/format.js';
 
 /**
  * The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them without a console spy.
@@ -72,7 +73,7 @@ function sleepShareAndGraphLines(result: api.SleepResult): string[] {
   if (result.graph && result.graph.tenants > 0) {
     const { tenants, entities, relations } = result.graph;
     lines.push(
-      `\nGraph: rebuilt ${tenants} tenant${tenants === 1 ? '' : 's'} (${entities} entities, ${relations} relations).`,
+      `\nGraph: rebuilt ${plural(tenants, 'tenant')} (${entities} entities, ${relations} relations).`,
     );
   }
   return lines;

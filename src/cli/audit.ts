@@ -12,6 +12,8 @@ import { requireInit, resolveAuthRoot } from './shared.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
+import { plural } from '../util/format.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 // Audit log subcommands (`hippo audit list`)
 
@@ -67,7 +69,7 @@ async function cmdAuditList(hippoRoot: string, tenantId: string, flags: CliFlags
 
   const ctx: api.StoreContext = {
     ...cliApiContext(root, tenantId),
-    actor: { subject: 'cli', role: 'admin' },
+    actor: { subject: CLI_ACTOR, role: 'admin' },
   };
   const events = await api.auditList(ctx, { op, since, limit });
 
@@ -110,7 +112,7 @@ async function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliF
   }
   const verb = dryRun ? 'would delete' : 'deleted';
   console.log(
-    `audit prune: ${verb} ${result.count} row${result.count === 1 ? '' : 's'} for tenant "${tenantId}" with ts < ${result.cutoff}`,
+    `audit prune: ${verb} ${plural(result.count, 'row')} for tenant "${tenantId}" with ts < ${result.cutoff}`,
   );
   if (dryRun) {
     console.log('(dry-run; re-run without --dry-run to actually delete)');

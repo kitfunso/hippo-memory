@@ -2,7 +2,7 @@
 
 import type { DescendantOrigin, SummaryDescendants } from '../../store/port.js';
 import { estimateTokens } from '../../util/token-text.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
 import { passesScopeFilterForRecall, personalScopeOf } from '../../core/recall-scope.js';
 import { classifyOriginProject } from '../../core/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
@@ -93,7 +93,7 @@ export async function drillDown(
 }
 
 function isDrillable(row: MemoryEntry): boolean {
-  return (row.dag_level ?? 0) >= 2;
+  return (row.dag_level ?? 0) >= DAG_LEVEL.topic;
 }
 
 function drillResult(

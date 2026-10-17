@@ -14,6 +14,8 @@ import { appendAuditEvent } from './audit.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
+import { plural } from '../util/format.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
@@ -211,7 +213,7 @@ export function closePrediction(
   tenantId: string,
   id: number,
   opts: ClosePredictionOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Prediction {
   assertTenantId('closePrediction', tenantId);
   if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
@@ -407,7 +409,7 @@ export function computePredictionBaserate(
   hippoRoot: string,
   tenantId: string,
   classTag: string,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
   /** False skips the predict_baserate audit so that channel only records deliberate
    *  baserate calls, not every recall the planning-fallacy orchestrator inspects. */
   emitAudit: boolean = true,
@@ -493,7 +495,7 @@ export function predictionBaserateOf(classTag: string, rows: readonly BaserateRo
   const ratioPart = meanRatio !== null
     ? `averaged ${meanRatio.toFixed(2)}x actual`
     : 'no ratio-eligible rows (all estimates were 0)';
-  const summary = `Last ${nClosed} estimate${nClosed === 1 ? '' : 's'} in class ${classTag} ${ratioPart} (MAE ` +
+  const summary = `Last ${plural(nClosed, 'estimate')} in class ${classTag} ${ratioPart} (MAE ` +
   `${mae.toFixed(2)}).`;
 
   return {

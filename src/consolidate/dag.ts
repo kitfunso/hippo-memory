@@ -1,4 +1,4 @@
-import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
+import { createMemory, DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import type { Consolidation, LocalFiles } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
@@ -106,7 +106,7 @@ function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: 
     layer: Layer.Semantic,
     tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
     confidence: 'inferred',
-    dagLevel: 2,
+    dagLevel: DAG_LEVEL.topic,
     tenantId: home.tenantId,
     scope: home.scope,
     baseHalfLifeDays: home.baseHalfLifeDays,
@@ -167,7 +167,7 @@ export async function buildDag(
   const { baseHalfLifeDays } = opts;
 
   const unparented = facts.filter(
-    (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
+    (f) => f.dag_level === DAG_LEVEL.extracted && !f.dag_parent_id && f.tags.includes('extracted'),
   );
 
   for (const [, tenantFacts] of partitionFactsByTenant(unparented)) {
@@ -346,7 +346,7 @@ function createProfileEntry(summary: string, cluster: FactCluster, home: Partiti
     layer: Layer.Semantic,
     tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
     confidence: 'inferred',
-    dagLevel: 3,
+    dagLevel: DAG_LEVEL.entity,
     tenantId: home.tenantId,
     scope: home.scope,
     baseHalfLifeDays: home.baseHalfLifeDays,
@@ -425,7 +425,7 @@ export async function buildEntityProfiles(
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
   const unparented = l2Summaries.filter(
-    (s) => s.dag_level === 2 && !s.dag_parent_id,
+    (s) => s.dag_level === DAG_LEVEL.topic && !s.dag_parent_id,
   );
 
   for (const [, tenantL2s] of partitionFactsByTenant(unparented)) {

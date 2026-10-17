@@ -16,6 +16,7 @@ import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStor
 import { printAgentImport } from './print.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
+import { plural } from '../util/format.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
 export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
@@ -112,7 +113,7 @@ async function cmdSleepCore(
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) {
       console.log(
-        `Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`,
+        `Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`,
       );
     }
     repairProjectTagsOnce(hippoRoot, tenantId);

@@ -9,3 +9,8 @@ export function pct(fraction: number): string {
 export function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
+
+/** "1 note", "3 notes"; pass `many` for an irregular plural such as memory and memories. */
+export function plural(n: number, one: string, many: string = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}

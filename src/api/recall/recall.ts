@@ -6,7 +6,7 @@ import { recallScopeFilter } from '../../store/search-rows.js';
 import type { ContinuityKey } from '../../store/sessions.js';
 import { estimateTokens } from '../../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../core/handoff.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
 import type { RecallTraceInput } from '../../store/recall-trace.js';
 import type { ActiveGoals, GoalRecallLogRow } from '../../store/goals.js';
 import { boostByGoals, type GoalStackBoostOptions } from '../../search/goal-boost.js';
@@ -26,7 +26,6 @@ import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
 import type { PlanningFallacyEvidence } from '../../store/planning-fallacy-evidence.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from './finish.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../../core/recall-scope.js';
 import type {
@@ -40,13 +39,19 @@ import { type Context, type StoreContext, ownerOrSubject, RecallContractError } 
 import {
   anchoringRows,
   availabilityRows,
+  biasHintEnabled,
   callerOf,
+  detectAnchoring,
+  hashQueryText,
   recallAuditMetadata,
   recallAuditRow,
+  recallLead,
+  recordShownRecall,
   strengthenOf,
+  type AnchoringHint,
+  type ShownList,
 } from './finish.js';
 import { retrieveWithCliCore } from './request.js';
-import { recallLead, recordShownRecall, type ShownList } from './finish.js';
 
 const DEFAULT_RECALL_LIMIT = 10;
 
@@ -123,16 +128,16 @@ async function retrieveBand(
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
   const plan = planRecall(ctx, opts, candidates, own);
-  const reads = await readRecall(store, ctx, opts, plan);
+  const reads = await readRecall(ctx, store, opts, plan);
   const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
-  await finishBandRecall(store, ctx, opts, writes, result.results.map((r) => r.id));
+  await finishBandRecall(ctx, store, opts, writes, result.results.map((r) => r.id));
   return result;
 }
 
 /** The one recall write: the caller's leading audit rows go first, and the ids shown are the ones strengthened. */
 async function finishBandRecall(
-  store: HippoStore,
   ctx: Context,
+  store: HippoStore,
   opts: RecallOptions,
   writes: RecallWrites,
   shownIds: readonly string[],
@@ -204,7 +209,7 @@ async function retrieveFromStore(
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
   const bandOpts = { ...opts, suppressRecallTrace: true };
   const plan = planRecall(ctx, bandOpts, window, own);
-  const reads = await readRecall(store, ctx, bandOpts, plan, goals);
+  const reads = await readRecall(ctx, store, bandOpts, plan, goals);
   const { result, writes } = composeRecall(ctx, bandOpts, { windowSize, all: window, plan, reads, auditBand: false });
   const shown = show(
     { ranked, pool: withVectorCandidates(pool, ranked), droppedByScope: loaded.length - pool.length },
@@ -212,8 +217,8 @@ async function retrieveFromStore(
   );
   const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, ranked);
   await finishBandRecall(
-    store,
     ctx,
+    store,
     opts,
     {
       goalLog: [...rankedLog, ...writes.goalLog],
@@ -374,8 +379,8 @@ function planRecall(ctx: Context, opts: RecallOptions, all: MemoryEntry[], own: 
 
 /** The plan's reads through the store; `goals` already read by the caller skips that read. */
 async function readRecall(
-  store: HippoStore,
   ctx: Context,
+  store: HippoStore,
   opts: RecallOptions,
   plan: RecallPlan,
   goals?: ActiveGoals | null,
@@ -570,7 +575,7 @@ function overflowGroups(window: CandidateWindow, limit: number): Map<string, Mem
   for (const e of window.entries.slice(limit)) {
     const parentId = e.dag_parent_id;
     if (!parentId) continue;
-    if ((e.dag_level ?? 0) > 1) continue;
+    if ((e.dag_level ?? 0) > DAG_LEVEL.extracted) continue;
     const list = overflowByParent.get(parentId) ?? [];
     list.push(e);
     overflowByParent.set(parentId, list);

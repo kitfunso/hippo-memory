@@ -16,6 +16,7 @@ import { onHandle, openStore } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/dormant-memories.test.ts pins it to the schema. */
@@ -112,14 +113,14 @@ function deleteTargetRow(
     audit(db, 'forget', {
       targetId: id,
       metadata: opts?.reason ? { reason: opts.reason } : undefined,
-      actor: opts?.actor ?? 'cli',
+      actor: opts?.actor ?? CLI_ACTOR,
       tenantId: row.tenant_id,
     });
   }
   // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
-    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID, opts?.actor ?? 'cli');
+    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID, opts?.actor ?? CLI_ACTOR);
   }
   return { tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, dagParentId: row.dag_parent_id ?? null };
 }

@@ -3,6 +3,7 @@ import { resolveTenantId } from './tenant.js';
 import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import type { JsonValue } from '../util/json.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export interface AuditOptions {
   readonly targetId?: string;
@@ -14,7 +15,7 @@ export interface AuditOptions {
 /** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth,
  * and a failed audit write shows up as missing rows. */
 export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions = {}): void {
-  const { targetId, metadata, actor = 'cli', tenantId } = options;
+  const { targetId, metadata, actor = CLI_ACTOR, tenantId } = options;
   try {
     appendAuditEvent(db, {
       tenantId: tenantId ?? resolveTenantId({}),

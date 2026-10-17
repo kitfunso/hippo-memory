@@ -8,6 +8,7 @@ import { fail } from './exit.js';
 import { loadConfig } from '../core/config.js';
 import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 function printBriefRow(b: briefsModule.ProjectBrief): void {
   console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
@@ -34,7 +35,11 @@ async function briefRefresh(
       return;
     }
     const { defaultHalfLifeDays: baseHalfLifeDays } = loadConfig(hippoRoot);
-    const created = await briefsModule.refreshedBrief(objects, { baseHalfLifeDays, tenantId, actor: 'cli' }, repoRaw);
+    const created = await briefsModule.refreshedBrief(
+      objects,
+      { baseHalfLifeDays, tenantId, actor: CLI_ACTOR },
+      repoRaw,
+    );
     console.log(`Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`);
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);

@@ -1,5 +1,6 @@
 // What a sync did, per tool, and the one line a command prints about it (plan design 11).
 import { AGENT_MEMORY_TOOLS, type ToolId } from '../core/agent-memory-tools.js';
+import { plural } from '../util/format.js';
 import type { Scope } from './types.js';
 
 export interface Tally {
@@ -108,8 +109,6 @@ export function totalTally(report: ImportReport): Tally {
   for (const t of report.tools) addTally(total, t.tally);
   return total;
 }
-
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
 const TALLY_WORDS = {
   imported: 'new',

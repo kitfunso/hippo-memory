@@ -11,6 +11,7 @@ import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
 import { fail } from './exit.js';
 import { loadConfig } from '../core/config.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 
@@ -53,7 +54,7 @@ async function incidentResolve(objects: Objects, tenantId: string, args: string[
   if (!resolutionRaw?.trim()) {
     fail('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
   }
-  const resolved = await incidentsModule.resolveOpenIncident(objects, tenantId, id, resolutionRaw, 'cli');
+  const resolved = await incidentsModule.resolveOpenIncident(objects, tenantId, id, resolutionRaw, CLI_ACTOR);
   console.log(`Incident #${resolved.id} resolved.`);
 }
 
@@ -108,7 +109,7 @@ async function incidentCreate(
     context,
     linkedMemoryIds,
     extraTags: incidentPathTags,
-  }, 'cli');
+  }, CLI_ACTOR);
 
   console.log(`Incident recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);

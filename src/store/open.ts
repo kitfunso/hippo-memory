@@ -22,6 +22,7 @@ import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
 import { isJsonObject, type JsonValue } from '../util/json.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export function initStore(hippoRoot: string): void {
   closeHippoDb(openStore(hippoRoot));
@@ -133,7 +134,7 @@ export function importLegacyEntries(
         audit(db, 'reject_refusal', {
           targetId: err.entryId,
           metadata: { digest: err.digest, reason: err.reason },
-          actor: 'cli',
+          actor: CLI_ACTOR,
           tenantId: err.tenantId,
         });
         continue;

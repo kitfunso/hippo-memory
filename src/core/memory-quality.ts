@@ -1,4 +1,4 @@
-import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from './memory.js';
+import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, DAG_LEVEL, type MemoryEntry } from './memory.js';
 import { heldTexts } from '../util/same-text.js';
 
 export const STOP_WORDS = new Set([
@@ -217,7 +217,7 @@ export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;
   return AUTOMATIC_SOURCES.has(entry.source) || entry.source.startsWith(COMPACTION_SOURCE_PREFIX)
     || (COPY_SOURCE.test(entry.source) && entry.tags.some((tag) => AUTOMATIC_TAGS.has(tag)))
-    || entry.extracted_from !== null || entry.dag_level >= 1 || BUNDLE_HEADER.test(entry.content);
+    || entry.extracted_from !== null || entry.dag_level >= DAG_LEVEL.extracted || BUNDLE_HEADER.test(entry.content);
 }
 
 /**

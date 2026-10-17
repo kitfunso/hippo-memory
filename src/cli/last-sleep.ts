@@ -9,6 +9,7 @@ import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { printError } from './output.js';
 import { type CliFlags, type CommandContext } from './flag-values.js';
 import { hookStoreRoot } from './hook-runtime.js';
+import { plural } from '../util/format.js';
 
 const SLEEP_FAILED = '[hippo] sleep failed: ';
 const FAILURE_CHARS = 120;
@@ -25,7 +26,7 @@ export function sleepProblems(logText: string, bad: number): string | null {
     failed === undefined
       ? ''
       : `the last sleep failed (${truncateCodePointSafe(failed.slice(SLEEP_FAILED.length).trim(), FAILURE_CHARS)})`,
-    errors === 0 ? '' : `${errors} error${errors === 1 ? '' : 's'} while saving waiting compaction summaries`,
+    errors === 0 ? '' : `${plural(errors, 'error')} while saving waiting compaction summaries`,
     bad === 0 ? '' : `${bad} compaction ${bad === 1 ? 'summary' : 'summaries'} set aside as .bad`,
   ].filter((part) => part !== '');
   return parts.length === 0 ? null : `Hippo: ${parts.join('; ')}. Run hippo doctor for details.`;

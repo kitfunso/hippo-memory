@@ -1,5 +1,5 @@
 import { envAnthropicApiKey, envDagRebuildCap } from '../util/env.js';
-import { Layer, type MemoryEntry } from '../core/memory.js';
+import { DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../core/memory-quality.js';
@@ -93,7 +93,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
 async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepLlm): Promise<void> {
   const extractedFacts = run.survivors.filter(
-    (e) => e.tags.includes('extracted') && e.dag_level === 1 && !e.superseded_by && isReusable(e),
+    (e) => e.tags.includes('extracted') && e.dag_level === DAG_LEVEL.extracted && !e.superseded_by && isReusable(e),
   );
   if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
   try {

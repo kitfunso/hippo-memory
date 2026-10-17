@@ -10,6 +10,7 @@ import type { LocalFiles } from '../store/port.js';
 import {
   runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
 } from '../store/sqlite/store.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
@@ -45,7 +46,7 @@ export function cliApiContext(hippoRoot: string, tenantId: string): StoreContext
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = loadConfig(hippoRoot);
-  return { hippoRoot, tenantId, actor: adminActor('cli'), store, reach: sqliteReach(hippoRoot, store), config };
+  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach: sqliteReach(hippoRoot, store), config };
 }
 
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */

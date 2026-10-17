@@ -27,6 +27,8 @@ import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
+import { plural } from '../util/format.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 const REJECTED_DIGEST_LIST_CHARS = 16;
@@ -59,7 +61,7 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
     updated = r.applied;
   }
 
-  console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
+  console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${plural(updated, 'memory', 'memories')}`);
 }
 
 // Shared between the forget dispatch and cmdForget so the message can't drift.
@@ -326,7 +328,7 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
     fail('Usage: hippo unreject <digest-or-prefix>');
   }
 
-  const outcome = unrejectValue(root, tenantId, digestOrPrefix, 'cli');
+  const outcome = unrejectValue(root, tenantId, digestOrPrefix, CLI_ACTOR);
   if (outcome.status === 'not_found') {
     fail(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
   }

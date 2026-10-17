@@ -4,6 +4,7 @@ import type { DatabaseSyncLike } from '../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../db/index.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export interface ArchiveOptions {
   reason: string;
@@ -66,7 +67,7 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
   try {
     appendAuditEvent(db, {
       tenantId: String(row.tenant_id ?? DEFAULT_TENANT_ID),
-      actor: opts.who || 'cli',
+      actor: opts.who || CLI_ACTOR,
       op: 'archive_raw',
       targetId: id,
       metadata: { reason: opts.reason },
@@ -95,7 +96,7 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         db,
         String(row.dag_parent_id),
         String(row.tenant_id ?? DEFAULT_TENANT_ID),
-        opts.who || 'cli',
+        opts.who || CLI_ACTOR,
       );
     }
     // afterArchive hook: connector idempotency markers (e.g. slack_event_log) must commit atomically with the archive,
