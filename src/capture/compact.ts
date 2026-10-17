@@ -14,7 +14,7 @@ import {
   type CaptureInput,
   type HookRuntime,
 } from '../core/capture-contract.js';
-import { errorMessage, log as logger, errorFields } from '../util/log.js';
+import { errorCode, errorMessage, log as logger, errorFields } from '../util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
@@ -56,8 +56,12 @@ function isReadableFile(filePath: string): boolean {
   try {
     fs.accessSync(filePath, fs.constants.R_OK);
     return true;
-  } catch {
-    return false; // missing and unreadable both mean "no file" to the caller
+  } catch (err) {
+    // A missing file is the expected miss; a permission or I/O fault is told, then the caller still skips the file.
+    if (errorCode(err) !== 'ENOENT') {
+      logger.warn(`cannot read ${filePath}: ${errorMessage(err)}`, errorFields(err));
+    }
+    return false;
   }
 }
 

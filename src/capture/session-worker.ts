@@ -64,6 +64,9 @@ function holderAlive(lock: string): boolean {
 
 type Take = 'taken' | 'held' | 'unusable';
 
+// The error that made a lock unusable, kept so the one warning can name its errno.
+const unusableCause = new Map<string, unknown>();
+
 // SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the lock; an atomic
 // link-based take if that shows up.
 function takeSessionLock(lock: string): Take {
@@ -73,12 +76,16 @@ function takeSessionLock(lock: string): Take {
       heldHere.add(lock);
       return 'taken';
     } catch (err) {
-      if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) return 'unusable';
+      if (errorCode(err) !== 'EEXIST') {
+        unusableCause.set(lock, err);
+        return 'unusable';
+      }
       if (holderAlive(lock)) return 'held';
     }
     try {
       fs.rmSync(lock, { force: true });
-    } catch {
+    } catch (err) {
+      unusableCause.set(lock, err);
       return 'unusable';
     }
   }
@@ -91,7 +98,12 @@ const warnedLocks = new Set<string>();
 function warnUnusableLockOnce(lock: string): void {
   if (warnedLocks.has(lock)) return;
   warnedLocks.add(lock);
-  logger.warn(`session worker: lock ${lock} cannot be created or cleared, so the work runs without it`);
+  const cause = unusableCause.get(lock);
+  const why = cause === undefined ? '' : ` (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)})`;
+  logger.warn(
+    `session worker: lock ${lock} cannot be created or cleared${why}, so the work runs without it`,
+    cause === undefined ? undefined : errorFields(cause),
+  );
 }
 
 function releaseSessionLock(lock: string): void {

@@ -29,6 +29,17 @@ export type SleepReply<R = SleepResult> =
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
 const CHILD_ENTRY = fileURLToPath(new URL('../../dist/server/sleep-child.js', import.meta.url));
 
+/** The shape check for what crosses the IPC channel; the result's own fields are the API's to define. */
+export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
+  if (typeof message !== 'object' || message === null || !('ok' in message)) return false;
+  if (message.ok === true) return 'result' in message && typeof message.result === 'object' && message.result !== null;
+  return (
+    message.ok === false &&
+    'busy' in message && typeof message.busy === 'boolean' &&
+    'message' in message && typeof message.message === 'string'
+  );
+}
+
 function failureOf<R>(reply: SleepReply<R> | undefined, code: number | null, signal: NodeJS.Signals | null): Error {
   if (!reply || reply.ok) return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
   // A lock the child could not get is the same retryable 503 an in-process sleep gave.
@@ -48,6 +59,7 @@ function runInChild<R>(job: SleepJob): Promise<R> {
     });
     let reply: SleepReply<R> | undefined;
     let timedOut = false;
+    let malformed = false;
     // SIGKILL because the child is inside synchronous SQLite work
     // and cannot run a handler; the OS drops its write lock.
     const timer = setTimeout(() => {
@@ -55,9 +67,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
       child.kill('SIGKILL');
     }, deadlineMs);
     child.once('message', (message) => {
-      // SAFETY: sleep-child.ts is the only writer on this channel and sends exactly one SleepReply for the job it was
-      // given.
-      reply = message as SleepReply<R>;
+      if (isSleepReply<R, typeof message>(message)) reply = message;
+      else malformed = true;
     });
     child.once('error', (err) => {
       clearTimeout(timer);
@@ -74,6 +85,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
             `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`,
           ),
         );
+      } else if (malformed) {
+        reject(new Error(`sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`));
       } else if (reply?.ok) resolve(reply.result);
       else reject(failureOf(reply, code, signal));
     });
