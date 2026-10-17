@@ -324,7 +324,7 @@ async function expandGraph(
   ctx: RankRecallCtx, opts: RankRecallOptions, graph: RecallGraphHops, state: RankState,
 ): Promise<void> {
   if (graph.hops <= 0) return;
-  // Expansion both adds neighbours and evicts weak base rows, so compare id sets: a net count would hide both.
+  // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
   state.results = await graphExpandRecall(state.results, {
     hops: graph.hops,

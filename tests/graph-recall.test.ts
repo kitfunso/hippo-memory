@@ -104,7 +104,7 @@ describe('graph-recall engine', () => {
   it('respects the per-hop maxNeighbors fanout cap', async () => {
     const seed = mem(home, T, 'seed');
     const es = ent(home, T, seed, 'S');
-    const neighbours = ['nn1', 'nn2', 'nn3', 'nn4', 'nn5'].map((n) => {
+    const neighbors = ['nn1', 'nn2', 'nn3', 'nn4', 'nn5'].map((n) => {
       const m = mem(home, T, n);
       const e = ent(home, T, m, n);
       insertRelationAt(home, T, { fromEntityId: es, toEntityId: e, relType: 'supersedes', memoryId: seed.id });
@@ -114,8 +114,8 @@ describe('graph-recall engine', () => {
       hops: 1, store: sqliteStore(home), tenantId: T, budget: 100000, maxNeighbors: 2, includeSuperseded: true,
     });
     expect(out.filter((r) => r.graphVia).length).toBe(2);
-    // sanity: all 5 neighbours exist, only 2 surfaced
-    expect(neighbours).toHaveLength(5);
+    // sanity: all 5 neighbors exist, only 2 surfaced
+    expect(neighbors).toHaveLength(5);
   });
 
   it('drops a reached SUPERSEDED memory unless --include-superseded', async () => {
@@ -224,7 +224,7 @@ describe('graph-recall engine', () => {
     const big = mem(home, T, 'x'.repeat(8000)); // ~2000 tokens
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, big, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    // Budget already nearly consumed by the base entry; the big neighbour overflows it.
+    // Budget already nearly consumed by the base entry; the big neighbor overflows it.
     // includeSuperseded so the exclusion under test is the BUDGET, not the superseded-endpoint drop.
     const out = await graphExpandRecall([sr(a, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 10, includeSuperseded: true });
     expect(out.map((r) => r.entry.id)).not.toContain(big.id);
@@ -237,7 +237,7 @@ describe('graph-recall engine', () => {
     const base = [sr(a, 1.0), sr(b, 0.9)]; // b already returned lexically -> it is a seed too
     const out = await graphExpandRecall(base, { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(out.filter((r) => r.entry.id === b.id)).toHaveLength(1);
-    expect(out.find((r) => r.entry.id === b.id)!.graphVia).toBeUndefined(); // already-present neighbour left as-is
+    expect(out.find((r) => r.entry.id === b.id)!.graphVia).toBeUndefined(); // already-present neighbor left as-is
   });
 
   it('never reaches another tenant\'s entity', async () => {

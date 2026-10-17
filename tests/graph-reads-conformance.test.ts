@@ -183,7 +183,7 @@ describe('GraphReads.graphRows from a name', () => {
       ids([e.hub, e.shared], [sharedHub!], true),
       ids([e.hub, e.secret, e.shared], [sharedHub!, hubSecret!], true),
       ids([e.hub, e.spoke2, e.secret, e.shared], [sharedHub!, hubSecret!, hubSpoke2!], true),
-      // Every neighbour fits, and the relations among them come back exactly limit long.
+      // Every neighbor fits, and the relations among them come back exactly limit long.
       ids(aroundHub.entities, aroundHub.relations, true),
       ids(aroundHub.entities, aroundHub.relations, false),
       ids(aroundHub.entities, aroundHub.relations, false),

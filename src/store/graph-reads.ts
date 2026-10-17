@@ -120,7 +120,7 @@ export function loadRelations(
 }
 
 /** Chunk size for IN-list queries: well under SQLite's 999-bound-variable default
- *  (leaves headroom for the tenant_id param + the doubled list in neighbour lookups). */
+ *  (leaves headroom for the tenant_id param + the doubled list in neighbor lookups). */
 export const IN_LIST_CHUNK = 400;
 
 /** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped,
@@ -153,7 +153,7 @@ export function loadEntitiesByIds(
   }
 }
 
-/** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbour query for multi-hop traversal,
+/** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for multi-hop traversal,
  * one query for the whole frontier (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?`
  * rejects a fraction). */
 export function loadNeighborRelations(

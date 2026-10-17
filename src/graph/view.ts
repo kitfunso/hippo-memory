@@ -34,7 +34,7 @@ export const DEFAULT_VIEW_LIMIT = 500;
 
 /**
  * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop
- * neighbours.
+ * neighbors.
  *  Dangling edges (an endpoint outside the node set) are always dropped. */
 export async function buildGraphModel(
   graphReads: Pick<GraphReads, 'graphRows'>,
