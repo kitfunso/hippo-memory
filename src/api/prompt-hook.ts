@@ -24,14 +24,13 @@ import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, ledgerReachOf, ledgerRoot, type LedgerReach } from './ledger-db.js';
+import { bookLedgerTurn, ledgerFiles, ledgerLastSent, ledgerReachOf, type LedgerReach } from './ledger-db.js';
 import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../store/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
-import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
 import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
@@ -53,13 +52,14 @@ export interface DeliveryStart {
 export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): DeliveryRecorder | null {
   try {
     // The same store the token ledger writes to, so its config governs both.
-    const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
-    if (root === null || !configAtRoot(ctx, root).deliveryLedger.enabled) return null;
+    const reach = ledgerReachOf(ctx);
+    const files = ledgerFiles(reach);
+    if (files === null || !configAtRoot(ctx, files.hippoRoot).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
-      root,
-      storeHash: blockHash(realpathOrResolve(root)),
-      // ledgerRoot falls back to the global root only when the primary is not initialized.
-      writeStore: root !== ctx.hippoRoot || ctx.reach?.isGlobal === true ? 'global' : 'local',
+      ledger: files.ledger,
+      storeHash: blockHash(realpathOrResolve(files.hippoRoot)),
+      // ledgerFiles falls back to the global store only when the primary is not initialized.
+      writeStore: files !== reach.local || ctx.reach?.isGlobal === true ? 'global' : 'local',
       tenantId: ctx.tenantId,
       stdinText: start.stdinText,
       envSessionId: start.envSessionId,
@@ -80,8 +80,8 @@ export function startToolFailureRecorder(
   start: Omit<DeliveryStart, 'eventType'>,
 ): DeliveryRecorder | null {
   try {
-    const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
-    if (root === null || realpathOrResolve(root) !== realpathOrResolve(ctx.hippoRoot)) return null;
+    const files = ledgerFiles(ledgerReachOf(ctx));
+    if (files === null || realpathOrResolve(files.hippoRoot) !== realpathOrResolve(ctx.hippoRoot)) return null;
     return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
   } catch (error) {
     log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
@@ -94,7 +94,7 @@ export function startToolFailureRecorder(
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
   if (rec === null) return;
   try {
-    rec.flush(write ?? ((input) => writeDeliveryEventAtRoot(rec.root, input)));
+    rec.flush(write ?? ((input) => rec.ledger.writeDeliveryEvent(input)));
   } catch (error) {
     log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
   }
@@ -260,9 +260,9 @@ function skipUnchangedStatic(
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
-  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, view.reach);
+  const last = ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
-  bookLedgerTurn(hippoRoot, {
+  bookLedgerTurn({
     uses: [{
       tenantId: view.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
       items: staticCount, tokens: estimateTokens(staticBlock), hash: staticHash,
@@ -290,7 +290,6 @@ function recordAdditionalContextRows(
     items: part.items, tokens: estimateTokens(part.text), hash: blockHash(part.text),
   });
   bookLedgerTurn(
-    view.hippoRoot,
     {
       uses: [
         ...(staticPart.text ? [row(staticPart, surface)] : []),

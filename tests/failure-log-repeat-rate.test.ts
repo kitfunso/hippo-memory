@@ -7,6 +7,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/store/failure-log.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
+import { failureTarget } from './_helpers/failure-target.js';
 import { failureSignature, lessonFromFailure } from '../src/capture/failure-reading.js';
 import { blockHash } from '../src/util/token-text.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
@@ -51,6 +52,12 @@ function rejectLesson(root: string, text: string): void {
     rejectedAt: new Date().toISOString(),
     normalizedChars: normalizeValueForRejection(text).length,
   }));
+}
+
+async function capturedInOrder(home: string, payloads: readonly JsonValue[]): Promise<string[]> {
+  const outcomes: string[] = [];
+  for (const p of payloads) outcomes.push(await captureToolFailure(failureTarget(home), p));
+  return outcomes;
 }
 
 describe('repeat-error rate', () => {
@@ -126,7 +133,7 @@ describe('capture-error logs every failure, never its text', () => {
     home = makeRoot('failure-capture');
   });
 
-  it('logs each outcome with its session, tool and routine rule, and only hashes of the error', () => {
+  it('logs each outcome with its session, tool and routine rule, and only hashes of the error', async () => {
     const error = 'Exit code 1\nError: connect ECONNREFUSED db.internal.example:5432 as deploy_user';
     const payloads: JsonValue[] = [
       { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'npm test' }, error },
@@ -136,7 +143,7 @@ describe('capture-error logs every failure, never its text', () => {
       { session_id: 's2', tool_name: 'Bash', error: 'short' },
       { session_id: ' ', tool_name: 'Edit', error: 'String to replace not found in file.' },
     ];
-    expect(payloads.map((p) => captureToolFailure(home, 'default', p))).toEqual([
+    expect(await capturedInOrder(home, payloads)).toEqual([
       'stored', 'duplicate', 'skipped-routine', 'skipped-interrupt', 'skipped-invalid', 'stored',
     ]);
     const rows = logRows(home);
@@ -158,7 +165,7 @@ describe('capture-error logs every failure, never its text', () => {
     withDb(home, (db) => expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ rated: 2, repeats: 1 }));
   });
 
-  it('keeps a finer detail hash that tells apart failures the lesson text merges', () => {
+  it('keeps a finer detail hash that tells apart failures the lesson text merges', async () => {
     const silent = (command: string) => ({ session_id: 's1', tool_name: 'Bash', tool_input: { command }, error: 'Exit code 1 (no output)' });
     const banner = `Error: ${'build banner line '.repeat(12)}`;
     const payloads: JsonValue[] = [
@@ -167,7 +174,7 @@ describe('capture-error logs every failure, never its text', () => {
       { session_id: 's1', tool_name: 'Bash', error: `${banner}missing semicolon` },
       { session_id: 's1', tool_name: 'Bash', error: `${banner}type mismatch` },
     ];
-    expect(payloads.map((p) => captureToolFailure(home, 'default', p))).toEqual(['stored', 'duplicate', 'stored', 'duplicate']);
+    expect(await capturedInOrder(home, payloads)).toEqual(['stored', 'duplicate', 'stored', 'duplicate']);
     const [a, b, c, d] = logRows(home);
     expect(b!.sig_hash).toBe(a!.sig_hash);
     expect(b!.detail_hash).not.toBe(a!.detail_hash);
@@ -175,10 +182,10 @@ describe('capture-error logs every failure, never its text', () => {
     expect(d!.detail_hash).not.toBe(c!.detail_hash);
   });
 
-  it('logs a failure as store-failed when storing it throws, and still throws', () => {
+  it('logs a failure as store-failed when storing it throws, and still throws', async () => {
     const payload = { session_id: 's1', tool_name: 'Bash', error: 'Exit code 2\nerror TS2304: Cannot find name foo' };
     rejectLesson(home, lessonFromFailure(payload).text!);
-    expect(() => captureToolFailure(home, 'default', payload)).toThrow(RejectedValueError);
+    await expect(captureToolFailure(failureTarget(home), payload)).rejects.toThrow(RejectedValueError);
     expect(logRows(home).map((r) => [r.session_id, r.outcome, r.sig_hash !== null])).toEqual([['s1', 'store-failed', true]]);
     withDb(home, (db) => expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ total: 1, rated: 1 }));
   });
@@ -187,8 +194,8 @@ describe('capture-error logs every failure, never its text', () => {
     expect(blockHash(failureSignature('Bash: Exit code 2 src/a.ts(12,3): error TS2304: Cannot find name foo'))).toBe('19e1075d4670c921');
   });
 
-  it('caps the session id and tool name it keeps', () => {
-    captureToolFailure(home, 'default', { session_id: 's'.repeat(500), tool_name: 't'.repeat(500), error: 'Exit code 1\nError: something real broke' });
+  it('caps the session id and tool name it keeps', async () => {
+    await captureToolFailure(failureTarget(home), { session_id: 's'.repeat(500), tool_name: 't'.repeat(500), error: 'Exit code 1\nError: something real broke' });
     const [row] = logRows(home);
     expect([row!.session_id!.length, row!.tool!.length]).toEqual([128, 128]);
   });

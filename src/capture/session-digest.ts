@@ -14,7 +14,7 @@ import { RejectedValueError } from '../core/api-errors.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isInitialized } from '../core/project-identity.js';
 import { writeEntry } from '../store/entry-writes.js';
-import { loadLiveContentsBySourceAndTag } from '../store/entry-reads.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
 import { isSyntheticMessage } from '../store/token-ledger.js';
@@ -565,8 +565,8 @@ export interface DigestOutcome {
  * handoff, never this session's own.
  */
 function injectedTexts(hippoRoot: string, opts: SessionDigestOptions): string[] {
-  const digests = loadLiveContentsBySourceAndTag(
-    hippoRoot,
+  // Sync, since the session-end hook counts this run's statements; the hook's root is this path's composition root.
+  const digests = sqliteSyncStore(hippoRoot).contextReads.liveContentsBySourceAndTag(
     opts.tenantId,
     SESSION_DIGEST_TAG,
     SESSION_DIGEST_TAG,

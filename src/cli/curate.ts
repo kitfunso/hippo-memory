@@ -10,7 +10,7 @@ import { isGitRepo } from '../learn/autolearn.js';
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories/memories.js';
 import * as client from './client.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliStore } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -240,7 +240,7 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
 
 // reject / rejections / unreject
 
-export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleReject({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   // Store resolution mirrors `hippo remember`: --global writes to the
   // global store, otherwise the local store (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
@@ -264,7 +264,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   }
 
   try {
-    const result = api.rejectOnHost(cliApiContext(root, tenantId), {
+    const result = await api.rejectOnHost(cliApiContext(root, tenantId), {
       reason,
       memoryId: valueFlag === undefined ? memoryId : undefined,
       value: valueFlag,
@@ -275,7 +275,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   }
 }
 
-function printRejected(result: ReturnType<typeof api.rejectOnHost>, reason: string): void {
+function printRejected(result: Awaited<ReturnType<typeof api.rejectOnHost>>, reason: string): void {
   const digestPrefix = result.digest.slice(0, DIGEST_DISPLAY_CHARS);
   const preview = truncateWithEllipsis(result.content, CONTENT_PREVIEW_CHARS);
   console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
@@ -295,9 +295,9 @@ function printRejected(result: ReturnType<typeof api.rejectOnHost>, reason: stri
   }
 }
 
-export function handleRejections({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleRejections({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const rows = listRejectionsForTenant(root, tenantId);
+  const rows = await listRejectionsForTenant(cliStore(root), tenantId);
 
   if (flags['json']) {
     console.log(JSON.stringify({ rejections: rows }, null, 2));
@@ -321,14 +321,14 @@ export function handleRejections({ hippoRoot, tenantId, flags }: CommandContext)
   }
 }
 
-export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const digestOrPrefix = (args[0] ?? '').trim();
   if (!digestOrPrefix) {
     fail('Usage: hippo unreject <digest-or-prefix>');
   }
 
-  const outcome = unrejectValue(root, tenantId, digestOrPrefix, CLI_ACTOR);
+  const outcome = await unrejectValue(cliStore(root), tenantId, digestOrPrefix, CLI_ACTOR);
   if (outcome.status === 'not_found') {
     fail(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
   }

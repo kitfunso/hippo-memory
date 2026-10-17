@@ -111,7 +111,7 @@ export function shareMemory(
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
   // the whole index per call.
   if (!options.skipEmbed) {
-    void embedMemory(to.hippoRoot, globalEntry);
+    void embedMemory(to, globalEntry);
   }
 
   return globalEntry;
@@ -307,7 +307,7 @@ export function autoShare(
   const shared = shareCandidates(local.hippoRoot, to, candidates, options.stats);
 
   if (shared.length > 0) {
-    void embedAll(to.hippoRoot).catch((err) => logEmbedAllFailure('autoShare', err));
+    void embedAll(to).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;

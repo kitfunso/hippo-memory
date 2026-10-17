@@ -2,7 +2,6 @@
  *  (decisions, policies, customer_notes, project_briefs). Writes go through the src/store/graph-writes.ts
  *  consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
-import { applyGraphOps, rebuildGraphUnderLock } from '../store/graph-apply.js';
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
 import type { EntityType, SourceObjectType, SourceObjectRef } from '../store/graph-rows.js';
 import {
@@ -344,14 +343,12 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
  *  Returns the derived counts and which types hit the per-type cap. */
 export async function extractGraph(store: HippoStore, tenantId: string): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
-  // The rebuild's write lock is hippo.db's own, so it reaches the folder only through the local files.
-  const { hippoRoot } = requireGroup(store, 'localFiles');
+  // The rebuild's write lock is hippo.db's own, so it runs only through the local files.
+  const { graphRebuild } = requireGroup(store, 'localFiles');
   // Loaded first: opening a second connection under the rebuild's BEGIN IMMEDIATE dead-locks ('database is locked').
   const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
-  const skipped = rebuildGraphUnderLock(hippoRoot, tenantId, memoryIdsOf(derived), (stored) =>
-    diffGraph(stored, derived),
-  );
+  const skipped = graphRebuild.rebuild(tenantId, memoryIdsOf(derived), (stored) => diffGraph(stored, derived));
   return resultOf(derived, skipped);
 }
 
@@ -363,7 +360,7 @@ export async function extractGraphChunked(
   budget: WriteBudget = WRITE_BUDGET,
 ): Promise<ExtractResult> {
   assertTenantId('extractGraphChunked', tenantId);
-  const { hippoRoot } = requireGroup(store, 'localFiles');
+  const { graphRebuild } = requireGroup(store, 'localFiles');
   const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
   const ops = await readGraphDelta(store.graphReads, tenantId, derived);
   let next = 0;
@@ -372,7 +369,7 @@ export async function extractGraphChunked(
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
     const from = next;
-    const chunk = applyGraphOps(hippoRoot, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock });
+    const chunk = graphRebuild.applyOps(tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock });
     committedAt = budget.clock();
     next = chunk.next;
     skipped += chunk.skipped;

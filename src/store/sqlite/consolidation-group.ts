@@ -3,9 +3,7 @@ import { recordAuditEventsRowByRow, reportAuditWriteFailure } from '../audit.js'
 import { replaceDetectedConflicts } from '../conflicts.js';
 import { commitInChunks, deleteEntriesOneByOne, failedUnitOf, memoriesBackingObjects } from '../delete-and-batch.js';
 import { expireDormantBefore } from '../dormant.js';
-import {
-  loadEveryTenantEntries, loadAllEntriesWithBase, loadCurrentDistilledEntries, loadEntriesPage,
-} from '../entry-reads.js';
+import { loadAllEntriesWithBase, loadCurrentDistilledEntries, loadEntriesPage } from '../entry-reads.js';
 import { ftsDrift } from '../entry-row.js';
 import { writeEntriesTogether, writeEntry } from '../entry-writes.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../graph-queue.js';
@@ -49,7 +47,6 @@ export function sqliteConsolidation(hippoRoot: string): Consolidation {
       return failed.length;
     },
     reportAuditFailure: (op, reason) => reportAuditWriteFailure(op, reason),
-    allEntries: () => loadEveryTenantEntries(hippoRoot),
     entriesPage: (page) => loadEntriesPage(hippoRoot, undefined, page),
     currentDistilledEntries: () => loadCurrentDistilledEntries(hippoRoot),
     deleteOneByOne: (targets, opts) => deleteEntriesOneByOne(hippoRoot, targets, opts),

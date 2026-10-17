@@ -6,6 +6,7 @@ import { adminActor, ForbiddenError, invalidateMemories, rejectOnHost, remember 
 import { readEntry } from '../src/store/entry-reads.js';
 import { handleInvalidate, handleReject } from '../src/cli/curate.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -24,7 +25,7 @@ describe('the CLI curate verbs go through src/api', () => {
     const run = await runInProcess(() => handleReject({ hippoRoot: root, tenantId: 'default', args: [id], flags: { reason: 'wrong day' } }));
     expect(run.status).toBe(0);
     expect(readEntry(root, id, 'default')).toBeNull();
-    expect(listRejectionsForTenant(root, 'default').map((row) => row.rejectedBy)).toEqual([adminActor('cli').subject]);
+    expect((await listRejectionsForTenant(sqliteStore(root), 'default')).map((row) => row.rejectedBy)).toEqual([adminActor('cli').subject]);
   });
 
   it('hippo invalidate weakens the matching row through the api', async () => {
@@ -38,17 +39,17 @@ describe('the CLI curate verbs go through src/api', () => {
   it('rejectOnHost reports every removed row and refuses a caller who is not the host admin', async () => {
     const text = 'the nightly export runs at four in the morning';
     const id = (await remember(cli(), { content: text })).id;
-    const result = rejectOnHost(cli(), { memoryId: id, reason: 'wrong time' });
+    const result = await rejectOnHost(cli(), { memoryId: id, reason: 'wrong time' });
     expect(result).toMatchObject({ content: text, removedIds: [id], successorIds: [], dormantSuccessorIds: [] });
     expect(readEntry(root, id, 'default')).toBeNull();
     const member = apiCtx(root, 'default', { subject: 'api_key:hk_m', role: 'member' });
-    expect(() => rejectOnHost(member, { value: 'anything else', reason: 'x' })).toThrow(ForbiddenError);
+    await expect(rejectOnHost(member, { value: 'anything else', reason: 'x' })).rejects.toThrow(ForbiddenError);
   });
 
   it('rejectOnHost keeps the personal refusal for a personal row by id', async () => {
     const owner: FullContext = apiCtx(root, 'default', { subject: 'api_key:hk_a', role: 'member', owner: 'a' });
     const id = (await remember(owner, { content: 'my own reminder about the dentist', personal: true })).id;
-    expect(() => rejectOnHost(cli(), { memoryId: id, reason: 'x' })).toThrow("Personal memories can't be rejected. Use forget to remove it.");
+    await expect(rejectOnHost(cli(), { memoryId: id, reason: 'x' })).rejects.toThrow("Personal memories can't be rejected. Use forget to remove it.");
   });
 
   it('invalidateMemories weakens only the context tenant', async () => {

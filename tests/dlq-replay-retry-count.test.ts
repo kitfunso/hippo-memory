@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
+import { parkInDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry as replayGitHub } from '../src/connectors/github/dlq.js';
 import { slackDlq, replayDlqEntry as replaySlack } from '../src/connectors/slack/dlq.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -12,8 +12,8 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
 
   const countOf = (items: { id: number; retryCount: number }[], id: number): number =>
     items.find((i) => i.id === id)?.retryCount ?? -1;
-  const githubCount = (id: number): number => countOf(listDlq(githubDlq, root, { tenantId: 'default' }), id);
-  const slackCount = (id: number): number => countOf(listDlq(slackDlq, root, { tenantId: 'default' }), id);
+  const githubCount = (id: number): number => countOf(sqliteSyncStore(root).connectorEvents.deadLetters('github', 'default', 100), id);
+  const slackCount = (id: number): number => countOf(sqliteSyncStore(root).connectorEvents.deadLetters('slack', 'default', 100), id);
 
   it('unparseable payload', async () => {
     const g = await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: 'x{', error: 'e', eventName: null, deliveryId: null, installationId: null, repoFullName: null });

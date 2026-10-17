@@ -1,7 +1,6 @@
 // A hook whose delivery recorder cannot start skips the ledger with one leveled warn line and still returns null.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { startDeliveryRecorder, startToolFailureRecorder } from '../src/api/prompt-hook.js';
 import { adminActor } from '../src/api/types.js';
@@ -15,9 +14,10 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
 
   it('returns null and writes one warn line with a space after the colon', () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    // A number where a root path belongs: path.join throws on it, which is the start-up failure under test.
+    // A number where a root path belongs, for the context and its store: path.join throws on it, which is the start-up
+    // failure under test.
     const badRoot: string = JSON.parse('42');
-    const ctx = { hippoRoot: badRoot, store: sqliteStore(os.tmpdir()), tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false } };
+    const ctx = { hippoRoot: badRoot, store: sqliteStore(badRoot), tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false } };
     expect(startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined })).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+ errorClass=\w+ stack=.*\n$/);

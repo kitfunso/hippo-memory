@@ -7,7 +7,7 @@ import {
   getMeta,
 } from '../db/index.js';
 import { log } from '../util/log.js';
-import type { HippoIndex, LegacyStats } from './rows.js';
+import type { HippoIndex } from './rows.js';
 import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { onHandle, openStore } from './open.js';
 import { DAY_MS } from '../util/time.js';
@@ -87,12 +87,6 @@ export function updateStatsUnlessBusy(
   }
 }
 
-export function loadStats(hippoRoot: string): LegacyStats {
-  return onHandle(hippoRoot, (db) => {
-    return buildStatsFromDb(db);
-  }, openStore);
-}
-
 export function appendConsolidationRun(
   hippoRoot: string,
   run: { timestamp: string; decayed: number; merged: number; removed: number }
@@ -110,15 +104,13 @@ export function appendConsolidationRun(
 }
 
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
-export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
-  return onHandle(hippoRoot, (db) => {
-    const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
-    const row = db.prepare(
-      `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
-         AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
-    ).get<{ n: number }>(tenantId, dayAgo);
-    return row.n;
-  }, openStore);
+export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, now: Date): number {
+  const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
+  const row = db.prepare(
+    `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
+       AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
+  ).get<{ n: number }>(tenantId, dayAgo);
+  return row.n;
 }
 
 /** Session decay context: the data needed for session-based and adaptive decay. */

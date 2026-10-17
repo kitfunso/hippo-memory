@@ -22,6 +22,7 @@ import { COMPACTION_MEMORY_TAG } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { summaryWith } from './_helpers/compaction-hooks.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let tmp: string;
@@ -201,7 +202,7 @@ const ITEM = 'The billing service drains its queue before every deploy.';
 
 function compact(store: string, cwd: string | null): void {
   const payload = { sessionId: `s-${cwd === null ? 'none' : 'cwd'}`, trigger: 'auto', cwd, transcriptPath: null, compactSummary: summaryWith([ITEM]) };
-  expect(saveCompaction(store, payload, () => undefined).written).toBe(1);
+  expect(saveCompaction(sqliteSyncStore(store).localFiles, payload, () => undefined).written).toBe(1);
 }
 
 const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>

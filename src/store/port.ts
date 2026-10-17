@@ -9,6 +9,7 @@ import type { QualityRepairResult } from './quality-repair.js';
 import type { LocalFiles } from './port/local-files.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
+import type { RawRefRow } from './entry-reads.js';
 import type { Entity, Relation, StoredGraph } from './graph-rows.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
 import type { SessionHandoff } from '../core/handoff.js';
@@ -182,6 +183,14 @@ export interface ContextReads {
   /** As `loadAmbientTallies`: one aggregate over the live, unarchived
    * rows `filter` admits, less other projects' secret-tagged rows. */
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
+  /** The tenant's `limit` newest rows, oldest first. */
+  newestEntries(tenantId: string, limit: number): Promise<MemoryEntry[]>;
+  /** computeSchemaFit of `content` and `tags` against the tenant's newest 2,000 rows. */
+  schemaFit(tenantId: string, content: string, tags: readonly string[]): Promise<number>;
+  /** Contents of the tenant's live, unextracted rows from `source` tagged `tag`, less one session's, by created, id. */
+  liveContentsBySourceAndTag(tenantId: string, source: string, tag: string, exceptSessionId: string): Promise<string[]>;
+  /** The tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
+  rawRowsUnderRef(tenantId: string, refPrefix: string): Promise<RawRefRow[]>;
 }
 
 export interface EntryWrite {
@@ -620,6 +629,8 @@ export type {
   ArtifactArchive,
   ConnectorDeadLetter,
   ConnectorEvents,
+  DeadLetterConnector,
+  DeadLetterRows,
 } from './connectors/event-log.js';
 
 /** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
@@ -628,12 +639,12 @@ export interface VectorViews {
   storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
 }
 
-export type { AgentImport, Consolidation, ContainerTx, ImportTarget, LocalFiles } from './port/local-files.js';
+export type {
+  AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, Ledger, LocalFiles,
+} from './port/local-files.js';
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {
-  /** Every memory of the tenant, in `loadAllEntries` order. */
-  tenantEntries(tenantId: string): Promise<MemoryEntry[]>;
   /** The ids of every memory a typed object row names, in any tenant; an automatic pass never deletes one. */
   objectBackedIds(): Promise<Set<string>>;
   /** Deletes each removal's row with its own forget row, leaving a pinned, raw, kept or object-backing row; resolves to
@@ -658,6 +669,8 @@ export interface LessonWrites {
   /** Content, source and origin of the tenant's rows holding any of `words`, among the rows a team member or
    * `ownScope`'s owner may touch. */
   textsHoldingWords(tenantId: string, words: readonly string[], ownScope: string | null): Promise<HeldText[]>;
+  /** Contents of the tenant's team-visible rows tagged `tag`; with `origins`, only those projects' and user-global. */
+  contentsWithTag(tenantId: string, tag: string, origins?: readonly string[]): Promise<string[]>;
   /** Writes each entry in one transaction; a rejected value writes
    * its refusal row and is skipped. Resolves to the ids written. */
   writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;

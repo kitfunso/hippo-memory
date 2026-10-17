@@ -1,10 +1,8 @@
-// One hook or context turn's token-ledger work by store root: each call opens hippo.db, runs on one connection and
-// closes it.
-import { isSqliteBusy, noteStoreBusy } from '../db/index.js';
+// One hook or context turn's token-ledger work on one hippo.db handle, and the rule for a row that did not land.
+import { isSqliteBusy, noteStoreBusy, type DatabaseSyncLike } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { DeliveryEventInput } from './delivery-recorder.js';
-import { lastSentState, recordTokenUse, type LastSent, type TokenSurface, type TokenUse } from './token-ledger.js';
-import { onHandle } from './open.js';
+import { recordTokenUse, type TokenUse } from './token-ledger.js';
 import { ensurePilotArm, hashArm, readPilotArm, type PilotArm } from './pilot-arm.js';
 import { writeDeliveryEventOnHandle } from './recall-trace.js';
 
@@ -51,49 +49,33 @@ export interface LedgerTurn {
   readonly delivery?: (write: DeliveryWrite) => void;
 }
 
-/** Books a turn's token rows, then its delivery event, on one connection. */
-export function recordLedgerTurn(hippoRoot: string, turn: LedgerTurn): void {
+/** Books a turn's token rows, then its delivery event, on `db`. */
+export function recordLedgerTurnAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
   const { onRowError } = turn;
-  onHandle(hippoRoot, (db) => {
-    for (const use of turn.uses) {
-      if (onRowError === undefined) {
-        recordTokenUse(db, use);
-        continue;
-      }
-      try {
-        recordTokenUse(db, use);
-      } catch (error) {
-        onRowError(error);
-      }
+  for (const use of turn.uses) {
+    if (onRowError === undefined) {
+      recordTokenUse(db, use);
+      continue;
     }
-    turn.delivery?.((input) => writeDeliveryEventOnHandle(db, input));
-  });
-}
-
-/** Books one token row in the store at `hippoRoot`. */
-export function recordTokensAt(hippoRoot: string, use: TokenUse): void {
-  onHandle(hippoRoot, (db) => recordTokenUse(db, use));
-}
-
-/** What the session last sent on `surface`, or null, as lastSentState reads it. */
-export function lastSentOnSurface(
-  hippoRoot: string, tenantId: string, sessionId: string | null | undefined, surface: TokenSurface,
-): LastSent | null {
-  return onHandle(hippoRoot, (db) => lastSentState(db, tenantId, sessionId, surface));
+    try {
+      recordTokenUse(db, use);
+    } catch (error) {
+      onRowError(error);
+    }
+  }
+  turn.delivery?.((input) => writeDeliveryEventOnHandle(db, input));
 }
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
-export function pilotArmOnRoot(
-  hippoRoot: string,
+export function pilotArmAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
   rateBp: number,
   opts: { write: boolean; ownTenantOnly?: boolean },
 ): PilotArm {
   const { ownTenantOnly } = opts;
-  return onHandle(hippoRoot, (db) =>
-    opts.write
-      ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
-      : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : undefined) ?? hashArm(sessionId, rateBp)),
-  );
+  return opts.write
+    ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
+    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : undefined) ?? hashArm(sessionId, rateBp));
 }

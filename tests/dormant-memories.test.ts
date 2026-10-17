@@ -16,7 +16,7 @@ import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
-import { loadStats } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { saveDecision } from '../src/objects/decisions.js';
 import { openIncident } from '../src/objects/incidents.js';
 import { saveProcess } from '../src/objects/processes.js';
@@ -472,7 +472,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
     await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
     expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([[ids[0], 'test', { dormant: true }]]);
     // Counted like forget and archiveRaw (review finding on PR #227).
-    expect(Number(loadStats(home).total_forgotten)).toBe(1);
+    expect(Number(sqliteSyncStore(home).reports.stats().total_forgotten)).toBe(1);
   });
 });
 

@@ -38,7 +38,7 @@ export function compactResumeForCaller(ctx: Context, req: CallerCompactResumeReq
     return { stdout: '' };
   }
   const text = compactResumeText(snapshot, sessionTrail(ctx, snapshot.session_id));
-  bookTokenUse(ctx.hippoRoot, {
+  bookTokenUse({
     tenantId: ctx.tenantId,
     sessionId: req.sessionId,
     surface: 'compact_resume',

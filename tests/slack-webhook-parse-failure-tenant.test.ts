@@ -16,8 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { listDlq } from '../src/connectors/dlq.js';
-import { slackDlq } from '../src/connectors/slack/dlq.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const SECRET = 'shhh';
@@ -43,7 +42,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
   });
 
   function rowsByTenant(tenant: string) {
-    return listDlq(slackDlq, root, { tenantId: tenant });
+    return sqliteStore(root).connectorEvents.deadLetters('slack', tenant, 100);
   }
 
   it('parse failure with known team_id routes DLQ to the mapped tenant (not HIPPO_TENANT)', async () => {
@@ -75,9 +74,9 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     expect([200, 400]).toContain(res.status);
 
     // DLQ row should be tenant='acme', NOT tenant='deployment-default'.
-    expect(rowsByTenant('acme')).toHaveLength(1);
-    expect(rowsByTenant('deployment-default')).toHaveLength(0);
-    const row = rowsByTenant('acme')[0]!;
+    expect(await rowsByTenant('acme')).toHaveLength(1);
+    expect(await rowsByTenant('deployment-default')).toHaveLength(0);
+    const row = (await rowsByTenant('acme'))[0]!;
     expect(row.error).toBe('invalid JSON');
     expect(row.bucket).toBe('parse_error');
     expect(row.teamId).toBe('T_ACME');
@@ -108,9 +107,9 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
       body: badBody,
     });
 
-    expect(rowsByTenant('__unroutable__')).toHaveLength(1);
-    expect(rowsByTenant('deployment-default')).toHaveLength(0);
-    expect(rowsByTenant('other-tenant')).toHaveLength(0);
+    expect(await rowsByTenant('__unroutable__')).toHaveLength(1);
+    expect(await rowsByTenant('deployment-default')).toHaveLength(0);
+    expect(await rowsByTenant('other-tenant')).toHaveLength(0);
   });
 
   it('parse failure with un-extractable team_id (totally garbage body) lands as __unroutable__', async () => {
@@ -129,9 +128,9 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
       body: badBody,
     });
 
-    expect(rowsByTenant('__unroutable__')).toHaveLength(1);
+    expect(await rowsByTenant('__unroutable__')).toHaveLength(1);
     // Critical: NOT the deployment tenant.
-    expect(rowsByTenant('deployment-default')).toHaveLength(0);
+    expect(await rowsByTenant('deployment-default')).toHaveLength(0);
   });
 
   it('single-workspace install (slack_workspaces empty): parse failure still routes via env fallback', async () => {
@@ -153,6 +152,6 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     });
 
     // Empty slack_workspaces → resolveTenantForSlackTeam returns HIPPO_TENANT.
-    expect(rowsByTenant('single-deployment')).toHaveLength(1);
+    expect(await rowsByTenant('single-deployment')).toHaveLength(1);
   });
 });

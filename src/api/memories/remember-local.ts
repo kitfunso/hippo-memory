@@ -6,7 +6,6 @@
 import { configOf } from '../config-of.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../core/memory.js';
 import { computeSalience, type SalienceResult } from '../../core/salience.js';
-import { loadNewestEntries, schemaFitInStore } from '../../store/candidates.js';
 import { embedMemory, type EmbedOutcome } from '../../search/embed-memories.js';
 import { errorMessage, log } from '../../util/log.js';
 import { getMemory } from './memories.js';
@@ -65,7 +64,7 @@ async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise
   // still loads them all.
   const window = Math.trunc(salience.recentWindow);
   const recent = Number.isSafeInteger(window) && window >= 1
-    ? loadNewestEntries(ctx.hippoRoot, ctx.tenantId, window)
+    ? await ctx.store.contextReads.newestEntries(ctx.tenantId, window)
     : await ctx.store.lessonWrites.tenantEntries(ctx.tenantId);
   return computeSalience(input.content, [...input.tags], recent, {
     recentWindow: salience.recentWindow,
@@ -86,7 +85,8 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 /** Best-effort and slow (a model load or a network call), so the
  * caller is not held for it; a row left out of the index is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
-  return embedMemory(ctx.hippoRoot, entry, undefined, undefined, configOf(ctx).embeddings).then((outcome) => {
+  const local = requireGroup(ctx.store, 'localFiles');
+  return embedMemory(local, entry, undefined, configOf(ctx).embeddings).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
         `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,
@@ -102,7 +102,7 @@ export async function rememberLocally(
   ctx: Context,
   input: LocalRememberInput,
 ): Promise<LocalRememberOutcome> {
-  const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
+  const schemaFit = await ctx.store.contextReads.schemaFit(ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = await salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
   const startedWeak =

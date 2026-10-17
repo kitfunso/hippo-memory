@@ -38,7 +38,8 @@ export async function runRememberTool(
   // Auto-sleep runs on hippo.db, so another store skips it.
   const allowed = hasGroup(store, 'localFiles') && ctx.autoSleep !== false;
   const run = ctx.autoSleepRunner;
-  if (run !== undefined) startAutoSleepIfDue(hippoRoot, tenantId, config.autoSleep, allowed, run);
+  const gate = { hippoRoot, tenantId, config: config.autoSleep, allowed };
+  if (run !== undefined) await startAutoSleepIfDue(store, gate, run);
 
   const tagStr = result.tags.join(', ') || 'none';
   const warnings = (result.warnings ?? []).map((w) => `\nWarning: ${w}`).join('');

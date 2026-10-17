@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
+import { failureTarget } from './_helpers/failure-target.js';
 import { failureHash, failureReport, lessonFromFailure } from '../src/capture/failure-reading.js';
 import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -52,8 +53,8 @@ const PAYLOADS: Array<[string, JsonValue]> = [
 ];
 
 describe('failureReport', () => {
-  it.each(PAYLOADS)('%s: matches the row the local failure log writes', (_name, payload) => {
-    captureToolFailure(root, 'default', payload);
+  it.each(PAYLOADS)('%s: matches the row the local failure log writes', async (_name, payload) => {
+    await captureToolFailure(failureTarget(root), payload);
     const rows = logRows();
     expect(rows).toHaveLength(1);
     const report = failureReport(payload);
@@ -72,13 +73,13 @@ describe('failureReport', () => {
     expect(JSON.stringify(report)).not.toContain(LONG_TAIL);
   });
 
-  it('scrubs the text for sharing before it cuts it, so a mask longer than what it hides still fits in 200', () => {
+  it('scrubs the text for sharing before it cuts it, so a mask longer than what it hides still fits in 200', async () => {
     const error = `mail to a@b.co and /root/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`;
     const report = failureReport({ tool_name: 'Bash', error });
     expect(report.text).toBe(`Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(0, 200));
     // Only what leaves the machine is masked: the local reading and the detail hash are as before.
     expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toContain('a@b.co');
-    captureToolFailure(root, 'default', { tool_name: 'Bash', error });
+    await captureToolFailure(failureTarget(root), { tool_name: 'Bash', error });
     expect(report.detail_hash).toBe(logRows()[0]?.detail_hash);
   });
 

@@ -337,58 +337,45 @@ export function loadTextsHoldingWords(
 
 /** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before
  * it. */
-export function loadNewestEntries(hippoRoot: string, tenantId: string, limit: number): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
-    ).all(tenantId, limit) as MemoryRow[];
-    return rows.reverse().map(rowToEntry);
-  }, openStore);
+export function newestEntriesAt(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
+  // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db.prepare(
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
+  ).all(tenantId, limit) as MemoryRow[];
+  return rows.reverse().map(rowToEntry);
 }
 
 function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
   for (const row of rows) yield row.content;
 }
 
-/** How many of a tenant's newest rows schemaFitInStore reads; older rows no longer move the fit. */
+/** How many of a tenant's newest rows schemaFitAt reads; older rows no longer move the fit. */
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
 /** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate
  * and texts stream one column, so no row is loaded. */
-export function schemaFitInStore(
-  hippoRoot: string,
-  tenantId: string,
-  content: string,
-  tags: readonly string[],
-): number {
+export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
   const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // One read transaction, so the row count and the texts come from the same snapshot.
-      return withReadSnapshot(db, () => {
-        // SAFETY: rows' shape matches the two columns named in the SELECT.
-        const groups = db
-          .prepare(`SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`)
-          .all(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Array<{ tags_json: string | null; n: number }>;
-        let rows = 0;
-        const tagCounts = new Map<string, number>();
-        for (const group of groups) {
-          rows += group.n;
-          for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
-        }
-        // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out;
-        // a stored per-tenant tag and token tally is the upgrade.
-        // SAFETY: the SELECT names exactly the one column read.
-        const texts = db
-          .prepare(`SELECT content FROM (${newest})`)
-          .iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{ content: string }>;
-        return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
-      });
-    },
-    openStore,
-  );
+  // One read transaction, so the row count and the texts come from the same snapshot.
+  return withReadSnapshot(db, () => {
+    // SAFETY: rows' shape matches the two columns named in the SELECT.
+    const groups = db
+      .prepare(`SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`)
+      .all(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Array<{ tags_json: string | null; n: number }>;
+    let rows = 0;
+    const tagCounts = new Map<string, number>();
+    for (const group of groups) {
+      rows += group.n;
+      for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
+    }
+    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out;
+    // a stored per-tenant tag and token tally is the upgrade.
+    // SAFETY: the SELECT names exactly the one column read.
+    const texts = db
+      .prepare(`SELECT content FROM (${newest})`)
+      .iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{ content: string }>;
+    return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
+  });
 }
 
 export interface SourceTally {
@@ -543,22 +530,20 @@ function tallyStatusRows(
 
 /** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is
  * built. */
-export function loadStatusCounts(hippoRoot: string, now: Date, atRiskBelow: number): StatusCounts {
-  return onHandle(hippoRoot, (db) => {
-    // One read transaction, so the row tallies and the two counts describe the same store.
-    return withReadSnapshot(db, () => {
-      // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
-      // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
-      const rows = db.prepare(
-        `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
-      ).iterate() as Iterable<StatusRow>;
-      const tallies = tallyStatusRows(rows, now, atRiskBelow);
-      // SAFETY: one row whose columns are the two aliases named below.
-      const counts = db.prepare(`SELECT
-        (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
-        (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
-      ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
-      return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
-    });
-  }, openStore);
+export function statusCountsAt(db: DatabaseSyncLike, now: Date, atRiskBelow: number): StatusCounts {
+  // One read transaction, so the row tallies and the two counts describe the same store.
+  return withReadSnapshot(db, () => {
+    // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
+    // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
+    const rows = db.prepare(
+      `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
+    ).iterate() as Iterable<StatusRow>;
+    const tallies = tallyStatusRows(rows, now, atRiskBelow);
+    // SAFETY: one row whose columns are the two aliases named below.
+    const counts = db.prepare(`SELECT
+      (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
+      (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
+    ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
+    return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
+  });
 }

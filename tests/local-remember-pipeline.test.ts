@@ -7,10 +7,9 @@ import {
   type LocalRememberInput, type LocalRememberOutcome,
 } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
-import { schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadStats } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { RejectedValueError } from '../src/core/api-errors.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
@@ -32,7 +31,7 @@ function store(config?: MakeRootOptions['config']): FullContext {
   return apiCtx(hippoRoot, 'default', adminActor('cli'));
 }
 
-const counted = (ctx: FullContext): number => Number(loadStats(ctx.hippoRoot).total_remembered);
+const counted = (ctx: FullContext): number => Number(sqliteSyncStore(ctx.hippoRoot).reports.stats().total_remembered);
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {
@@ -85,8 +84,8 @@ describe('rememberLocally', () => {
     const ctx = store();
     for (const n of [1, 2, 3]) seed(ctx, `the billing service sends invoice batch ${n}`, ['billing']);
     const stored = ['billing', 'path:acme', 'scope:eng'];
-    const typedFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, TEXT, ['billing']);
-    const storedFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, TEXT, stored);
+    const typedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
+    const storedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
     expect(typedFit).not.toBe(storedFit);
     expect(storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true })).schema_fit).toBe(typedFit);
     const other = store();

@@ -52,22 +52,19 @@ export async function reject(ctx: Context, opts: RejectOptions): Promise<RejectR
       throw new NotFoundError(`memory not found: ${opts.memoryId}`);
     }
   }
-  const result = applyReject(ctx, opts);
+  const result = await applyReject(ctx, opts);
   return { digest: result.digest, removedIds: result.removedIds };
 }
 
 /** `hippo reject` on the host: every row it removed and the rows that kept their other texts. A personal row by id
  * answers with the personal refusal rather than reject's not-found, as the operator can see that row. */
-export function rejectOnHost(ctx: Context, opts: RejectOptions): RejectFlowResult {
+export async function rejectOnHost(ctx: Context, opts: RejectOptions): Promise<RejectFlowResult> {
   requireHostAdmin(ctx, 'Rejecting with the removal report');
   return applyReject(ctx, opts);
 }
 
-function applyReject(ctx: Context, opts: RejectOptions): RejectFlowResult {
-  // SHORTCUT: the tombstone write is hippo.db only, as the port has no rejection group; one when a served store needs
-  // reject.
-  return rejectValue({
-    hippoRoot: ctx.hippoRoot,
+function applyReject(ctx: Context, opts: RejectOptions): Promise<RejectFlowResult> {
+  return rejectValue(ctx.store, {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     reason: opts.reason,
@@ -79,8 +76,8 @@ function applyReject(ctx: Context, opts: RejectOptions): RejectFlowResult {
 
 /** Deletes a tombstone by exact digest or unambiguous prefix, restoring writability (the only v1 escape hatch); throws
  * on blank, no match or several. */
-export function unreject(ctx: Context, digestOrPrefix: string) {
-  const outcome = unrejectValue(ctx.hippoRoot, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
+export async function unreject(ctx: Context, digestOrPrefix: string) {
+  const outcome = await unrejectValue(ctx.store, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
   if (outcome.status === 'not_found') {
     throw new NotFoundError(`no rejected value matches: ${digestOrPrefix}`);
   }

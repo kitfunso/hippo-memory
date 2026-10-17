@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadCorrectionEntries, loadRawEntries } from '../src/store/report-reads.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { buildCorrectionLatency } from '../src/api/correction-latency.js';
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import { physicsEnergyText } from '../src/cli/status.js';
@@ -43,7 +43,7 @@ function seed(): void {
 describe('status report reads', () => {
   it('builds the same correction-latency report from the narrow read as from every row', () => {
     seed();
-    const narrow = loadCorrectionEntries(root);
+    const narrow = sqliteSyncStore(root).reports.correctionEntries();
     expect(narrow.length).toBeLessThan(loadAllEntries(root, 'default').length);
     const report = buildCorrectionLatency(narrow);
     expect(report).toEqual(buildCorrectionLatency(loadAllEntries(root, 'default')));
@@ -53,7 +53,7 @@ describe('status report reads', () => {
 
   it('builds the same provenance report from the raw rows as from every row', () => {
     seed();
-    const report = buildProvenanceCoverage(loadRawEntries(root));
+    const report = buildProvenanceCoverage(sqliteSyncStore(root).reports.rawEntries());
     expect(report).toEqual(buildProvenanceCoverage(loadAllEntries(root, 'default')));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);

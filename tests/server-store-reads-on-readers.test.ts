@@ -16,6 +16,8 @@ import { FAKE_NOW, freshStore, SESSION, TENANT } from './_helpers/recall-golden-
 import { cleanups, holdWriteLock, mirrorFiles, patientStore, undoAll } from './_helpers/store-worker-server.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { loadConfig } from '../src/core/config.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 type Served = HippoStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -65,6 +67,10 @@ const READS: readonly Read[] = [
   read('contextReads.unfinishedHandoff', (s) => s.contextReads.unfinishedHandoff(TENANT, CENTURY_MS, null), 'handoff after the canary'),
   read('contextReads.contextCandidates', (s) => s.contextReads.contextCandidates(TENANT, { cap: 5, now: NOW }), 'mem_p_pinned'),
   read('contextReads.ambientTallies', (s) => s.contextReads.ambientTallies(TENANT, { currentProject: [], now: NOW }), /tagCounts: Map\(\d+\) \{/),
+  read('contextReads.newestEntries', (s) => s.contextReads.newestEntries(TENANT, 3), /id: 'mem_/),
+  read('contextReads.schemaFit', (s) => s.contextReads.schemaFit(TENANT, PLAIN, ['deploy']), /^(0(\.\d+)?|1)$/),
+  read('contextReads.liveContentsBySourceAndTag', (s) => s.contextReads.liveContentsBySourceAndTag(TENANT, 'cli', 'deploy', SESSION), PLAIN),
+  read('contextReads.rawRowsUnderRef', (s) => s.contextReads.rawRowsUnderRef(TENANT, 'vault:golden:'), 'vault:golden:rollout.md'),
   read('predictions.predictionById', (s) => s.predictions.predictionById(TENANT, 1), 'deploy-duration'),
   read('predictions.listPredictions', (s) => s.predictions.listPredictions(TENANT, { limit: 5 }), 'deploy-duration'),
   read('dagReads.sessionRawEntries', (s) => s.dagReads.sessionRawEntries({ tenantId: TENANT, sessionId: SESSION, cap: 10 }), 'mem_x_raw'),
@@ -148,6 +154,9 @@ describe('a read the op table places on a reader thread', () => {
     const root = copy();
     // The shared seed has no skill, and the skill read must find one.
     await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { skillName: 'rollback', instructions: 'page the owner, then revert' });
+    // Nor a raw row under an artifact ref; its id sorts last, so the backfill read's first page keeps its rows.
+    const raw = createMemory('raw vault note on the rollout', { kind: 'raw', artifactRef: 'vault:golden:rollout.md', tenantId: TENANT });
+    writeEntry(root, { ...raw, id: 'mem_z_vault' });
     onWorkers = workerSqliteStore(root);
     inProcess = sqliteStore(root);
   });

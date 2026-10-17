@@ -8,7 +8,8 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { flushStatsMirrors } from '../src/store/mirrors.js';
-import { loadLastRecall, loadStats, updateStats } from '../src/store/index-and-stats.js';
+import { loadLastRecall, updateStats } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import {
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
@@ -64,9 +65,9 @@ describe('store initialization', () => {
 
     expect(loadLastRecall(tmpDir).last_retrieval_ids).toEqual(['mem_legacy_alpha', 'mem_legacy_beta']);
 
-    // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
+    // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = loadStats(tmpDir) as {
+    const stats = sqliteSyncStore(tmpDir).reports.stats() as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;
@@ -194,9 +195,9 @@ describe('stats tracking', () => {
 
     updateStats(tmpDir, { remembered: 2, recalled: 1, forgotten: 1 });
 
-    // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
+    // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
-    const stats = loadStats(tmpDir) as {
+    const stats = sqliteSyncStore(tmpDir).reports.stats() as {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;

@@ -4,7 +4,6 @@ import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { configOf } from '../api/config-of.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../util/compaction-items.js';
-import { saveCallerItems } from '../store/compaction-caller.js';
 import { scrubCompactionItems } from './compaction-record.js';
 import { log } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
@@ -23,8 +22,9 @@ export interface CallerItemsResult {
   readonly written: number;
 }
 
-/** Busy throws, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred here. */
-export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsRequest): CallerItemsResult {
+/** Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred
+ * here. */
+export async function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsRequest): Promise<CallerItemsResult> {
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
   // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's growth.
@@ -33,20 +33,16 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
   }
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
-  const written = saveCallerItems(
-    ctx.hippoRoot,
-    ctx.tenantId,
-    {
-      sessionId: req.sessionId,
-      trigger: req.trigger,
-      requestId: req.requestId,
-      project: req.project.name,
-      items: scrubCompactionItems(req.items),
-      owner: key.owner,
-      origins: key.project,
-      baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
-    },
-    (message) => log.info(`post-compact: ${message}`),
-  );
+  const { written, notes } = await ctx.store.compactions.saveCallerItems(ctx.tenantId, {
+    sessionId: req.sessionId,
+    trigger: req.trigger,
+    requestId: req.requestId,
+    project: req.project.name,
+    items: scrubCompactionItems(req.items),
+    owner: key.owner,
+    origins: key.project,
+    baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
+  });
+  for (const note of notes) log.info(`post-compact: ${note}`);
   return { written };
 }

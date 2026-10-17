@@ -1,9 +1,7 @@
-// Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from
-// src/store/pilot-arm.ts.
+// Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from its Ledger.
 import type { HippoConfig } from '../core/config.js';
 import { configAtRoot } from './config-of.js';
-import { ledgerRoot, onLedgerRoot, type LedgerReach } from './ledger-db.js';
-import { pilotArmOnRoot } from '../store/ledger-turn.js';
+import { ledgerFiles, onLedger, type LedgerReach } from './ledger-db.js';
 import { hashArm, type PilotArm } from '../store/pilot-arm.js';
 
 export interface SessionArmOptions {
@@ -23,13 +21,11 @@ export function sessionPilotArm(
   hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean, opts: SessionArmOptions,
 ): PilotArm | null {
   if (sessionId === undefined || sessionId.trim() === '') return null;
-  const root = ledgerRoot(hippoRoot, opts.reach);
-  if (root === null) return null;
-  const rate = configAtRoot({ hippoRoot, config: opts.config }, root).pilot.holdoutRateBp;
+  const files = ledgerFiles(opts.reach);
+  if (files === null) return null;
+  const rate = configAtRoot({ hippoRoot, config: opts.config }, files.hippoRoot).pilot.holdoutRateBp;
   if (rate <= 0) return null;
   const { ownTenantOnly } = opts;
-  const arm = onLedgerRoot(hippoRoot, opts.reach, (at) =>
-    pilotArmOnRoot(at, tenantId, sessionId, rate, { write, ownTenantOnly }),
-  );
+  const arm = onLedger(opts.reach, (ledger) => ledger.pilotArm(tenantId, sessionId, rate, { write, ownTenantOnly }));
   return arm ?? hashArm(sessionId, rate);
 }
