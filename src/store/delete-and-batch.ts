@@ -1,7 +1,7 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry } from '../core/memory.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
-import { AUTO_DELETABLE_SQL } from './rule-sql.js';
+import { AUTO_DELETABLE, type SqlFragment } from './rule-sql.js';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard } from './rejection.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -33,9 +33,12 @@ export const MEMORY_BACKED_TABLES = [
 
 /** Deleting a memory that backs an object nulls the object's link, and no restore can repair it, so no automatic pass
  * may. */
-const AUTOMATIC_DELETE_SQL = `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map(
-  (t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`,
-).join('')}`;
+const AUTOMATIC_DELETE: SqlFragment = {
+  sql: `${AUTO_DELETABLE.sql}${MEMORY_BACKED_TABLES.map(
+    (t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`,
+  ).join('')}`,
+  params: AUTO_DELETABLE.params,
+};
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing
  * from an older schema is skipped. */
@@ -71,9 +74,9 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
 }
 
 /** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes RawAppendOnlyError. */
-function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, id: string, tenantId: string): number {
+function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, params: readonly string[]): number {
   try {
-    return Number(db.prepare(sql).run(id, tenantId).changes ?? 0);
+    return Number(db.prepare(sql).run(...params).changes ?? 0);
   } catch (cause) {
     throw isRawTriggerAbort(cause) ? new RawAppendOnlyError(cause) : cause;
   }
@@ -107,10 +110,10 @@ function deleteTargetRow(
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
   const { id, tenant_id: tenantId } = row;
-  const guard = opts?.automatic ? ` AND ${AUTOMATIC_DELETE_SQL}` : '';
+  const guard = opts?.automatic ? AUTOMATIC_DELETE : null;
   // The tenant is in the WHERE so the DELETE itself cannot reach a row the read did not.
-  const sql = `DELETE FROM memories WHERE id = ? AND tenant_id = ?${guard}`;
-  if (deleteMemoryRow(db, sql, id, tenantId) === 0) return null;
+  const sql = `DELETE FROM memories WHERE id = ? AND tenant_id = ?${guard ? ` AND ${guard.sql}` : ''}`;
+  if (deleteMemoryRow(db, sql, [id, tenantId, ...(guard?.params ?? [])]) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
     audit(db, 'forget', {
@@ -395,9 +398,13 @@ function selectAutoDeletableRows(
   const rows = db
     .prepare(
       `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders(ids.length)}) AND ` +
-      `${AUTOMATIC_DELETE_SQL}`,
+      `${AUTOMATIC_DELETE.sql}`,
     )
-    .all(...ids) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
+    .all(...ids, ...AUTOMATIC_DELETE.params) as Array<{
+      id: string;
+      dag_parent_id: string | null;
+      tenant_id: string | null;
+    }>;
   for (const row of rows) {
     if (row.dag_parent_id) {
       dirty.parents.add(row.dag_parent_id);
