@@ -1,22 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-provenance-cli-'));
+  tmpDir = makeRoot('provenance-cli', { init: false });
   hippoDir = path.join(tmpDir, '.hippo');
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 interface RunResult {

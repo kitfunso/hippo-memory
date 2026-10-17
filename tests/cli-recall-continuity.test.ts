@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { handleRecall } from '../src/cli/recall.js';
 import { resetSessionRings } from '../src/api/recall/finish.js';
@@ -10,12 +8,13 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cli-recall-cont-'));
+  tmpDir = makeRoot('cli-recall-cont', { init: false });
   hippoDir = path.join(tmpDir, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
   resetSessionRings('cli');
@@ -23,7 +22,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 /** `hippo recall <query> [--continuity] [--json]`, run in this process against the temp store. */

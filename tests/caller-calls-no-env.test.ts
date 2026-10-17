@@ -1,7 +1,6 @@
 // The five caller calls key every row on ctx.tenantId and the body's project, never HIPPO_TENANT or the folder the server runs in.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -17,6 +16,7 @@ import {
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
 } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TENANT = 'acme-tenant';
 const ENV_TENANT = 'env-tenant';
@@ -36,7 +36,7 @@ let root: string;
 let startCwd: string;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-caller-no-env-'));
+  dir = makeRoot('caller-no-env', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   vi.stubEnv('HIPPO_TENANT', ENV_TENANT);
   _resetProjectIdentityCacheForTests();
@@ -56,7 +56,6 @@ afterEach(() => {
   process.chdir(startCwd);
   vi.unstubAllEnvs();
   _resetSharedStoreCacheForTests();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {

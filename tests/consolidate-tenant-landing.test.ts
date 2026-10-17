@@ -15,10 +15,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
@@ -26,79 +24,70 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.
 import { consolidate } from '../src/index.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-
-function tmpHome(prefix: string = 'hippo-consolidate-tenant-landing-'): string {
-  return mkdtempSync(join(tmpdir(), prefix));
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('merge pass partitions by tenant before clustering', () => {
   it('two tenants with byte-identical overlapping episodic content produce two separate merged rows, each in its own source tenant, never mixed into one', async () => {
-    const home = tmpHome();
-    try {
-      initStore(home);
-      // Disable replay: it independently rehearses survivors and would
-      // confound nothing here, but matches house convention for merge tests.
-      writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+    const home = makeRoot('consolidate-tenant-landing');
+    // Disable replay: it independently rehearses survivors and would
+    // confound nothing here, but matches house convention for merge tests.
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
-      // Deliberately IDENTICAL text pair in both tenants. textOverlap has no
-      // tenant awareness, so before the fix all 4 entries clustered together
-      // (identical text => maximum overlap) into ONE row with
-      // "[Consolidated pattern from 4 related memories]" landing in
-      // 'default'. After the fix, tenant partition happens first: each
-      // tenant's own 2 entries cluster on their own into a
-      // "[Consolidated from 2 related memories]" row in that tenant.
-      const shortText = 'rotate the staging tls certificates before expiry';
-      const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
+    // Deliberately IDENTICAL text pair in both tenants. textOverlap has no
+    // tenant awareness, so before the fix all 4 entries clustered together
+    // (identical text => maximum overlap) into ONE row with
+    // "[Consolidated pattern from 4 related memories]" landing in
+    // 'default'. After the fix, tenant partition happens first: each
+    // tenant's own 2 entries cluster on their own into a
+    // "[Consolidated from 2 related memories]" row in that tenant.
+    const shortText = 'rotate the staging tls certificates before expiry';
+    const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
 
-      const aShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
-      const aLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
-      const bShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
-      const bLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
-      writeEntry(home, aShort);
-      writeEntry(home, aLong);
-      writeEntry(home, bShort);
-      writeEntry(home, bLong);
+    const aShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
+    const aLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
+    const bShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
+    const bLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
+    writeEntry(home, aShort);
+    writeEntry(home, aLong);
+    writeEntry(home, bShort);
+    writeEntry(home, bLong);
 
-      const result = await consolidate(home, { dryRun: false });
+    const result = await consolidate(home, { dryRun: false });
 
-      // Two separate 2-entry merges, not one 4-entry merge.
-      expect(result.semanticCreated).toBe(2);
-      expect(result.merged).toBe(4);
+    // Two separate 2-entry merges, not one 4-entry merge.
+    expect(result.semanticCreated).toBe(2);
+    expect(result.merged).toBe(4);
 
-      const allAfter = loadEveryTenantEntries(home);
-      const semanticRows = allAfter.filter((e) => e.layer === Layer.Semantic);
-      expect(semanticRows).toHaveLength(2);
+    const allAfter = loadEveryTenantEntries(home);
+    const semanticRows = allAfter.filter((e) => e.layer === Layer.Semantic);
+    expect(semanticRows).toHaveLength(2);
 
-      const byTenant = new Map(semanticRows.map((e) => [e.tenant_id, e]));
-      expect(byTenant.has('tenant-a')).toBe(true);
-      expect(byTenant.has('tenant-b')).toBe(true);
-      expect(byTenant.has('default')).toBe(false);
+    const byTenant = new Map(semanticRows.map((e) => [e.tenant_id, e]));
+    expect(byTenant.has('tenant-a')).toBe(true);
+    expect(byTenant.has('tenant-b')).toBe(true);
+    expect(byTenant.has('default')).toBe(false);
 
-      // Both directions: neither row is the 4-way "pattern from 4" bulleted
-      // form a cross-tenant cluster would have produced.
-      for (const row of semanticRows) {
-        expect(row.content).toContain('[Consolidated from 2 related memories, newest first]');
-        expect(row.content).not.toContain('pattern from 4');
-      }
-
-      // Sources demoted (not deleted) under their OWN tenant — cross-check
-      // no source crossed into the other tenant's row.
-      const aSources = allAfter.filter((e) => e.tenant_id === 'tenant-a' && e.layer === Layer.Episodic);
-      const bSources = allAfter.filter((e) => e.tenant_id === 'tenant-b' && e.layer === Layer.Episodic);
-      expect(aSources).toHaveLength(2);
-      expect(bSources).toHaveLength(2);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
+    // Both directions: neither row is the 4-way "pattern from 4" bulleted
+    // form a cross-tenant cluster would have produced.
+    for (const row of semanticRows) {
+      expect(row.content).toContain('[Consolidated from 2 related memories, newest first]');
+      expect(row.content).not.toContain('pattern from 4');
     }
+
+    // Sources demoted (not deleted) under their OWN tenant — cross-check
+    // no source crossed into the other tenant's row.
+    const aSources = allAfter.filter((e) => e.tenant_id === 'tenant-a' && e.layer === Layer.Episodic);
+    const bSources = allAfter.filter((e) => e.tenant_id === 'tenant-b' && e.layer === Layer.Episodic);
+    expect(aSources).toHaveLength(2);
+    expect(bSources).toHaveLength(2);
   });
 });
 
 describe('trace pass lands in the resolved tenant and stays idempotent there', () => {
   it('an auto-promoted trace lands in HIPPO_TENANT (not default), and a second sleep does not regenerate it', async () => {
-    const home = tmpHome();
+    const home = makeRoot('consolidate-tenant-landing');
     const prevTenant = process.env.HIPPO_TENANT;
     try {
-      initStore(home);
       process.env.HIPPO_TENANT = 'tenant-x';
 
       const sid = 'test-session-tenant-x';
@@ -137,36 +126,30 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
     } finally {
       if (prevTenant === undefined) delete process.env.HIPPO_TENANT;
       else process.env.HIPPO_TENANT = prevTenant;
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });
 
 describe('extract.ts storeExtractedFacts has the same defect, folded in', () => {
   it('extracted facts inherit the source entry tenant instead of stamping default', () => {
-    const home = tmpHome();
-    try {
-      initStore(home);
-      const source = createMemory('Alice prefers dark mode and vim keybindings', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Episodic,
-        tenantId: 'tenant-extract',
-      });
-      writeEntry(home, source);
+    const home = makeRoot('consolidate-tenant-landing');
+    const source = createMemory('Alice prefers dark mode and vim keybindings', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      tenantId: 'tenant-extract',
+    });
+    writeEntry(home, source);
 
-      const facts: ExtractedFact[] = [
-        { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
-      ];
-      const stored = storeExtractedFacts(sqliteSyncStore(home).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const facts: ExtractedFact[] = [
+      { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
+    ];
+    const stored = storeExtractedFacts(sqliteSyncStore(home).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
 
-      expect(stored).toHaveLength(1);
-      expect(stored[0]!.tenant_id).toBe('tenant-extract');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.tenant_id).toBe('tenant-extract');
 
-      const persisted = loadEveryTenantEntries(home).find((e) => e.id === stored[0]!.id);
-      expect(persisted).toBeDefined();
-      expect(persisted!.tenant_id).toBe('tenant-extract');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    const persisted = loadEveryTenantEntries(home).find((e) => e.id === stored[0]!.id);
+    expect(persisted).toBeDefined();
+    expect(persisted!.tenant_id).toBe('tenant-extract');
   });
 });

@@ -1,7 +1,5 @@
 // autoShare above the neutral score reads only rows that carry a score signal or a never-share mark, and picks the same rows.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { autoShare } from '../src/sharing/share.js';
@@ -15,6 +13,7 @@ import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
@@ -26,7 +25,7 @@ let root: string;
 let origHippoHome: string | undefined;
 
 beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), 'hippo-autoshare-prefilter-'));
+  tmp = makeRoot('autoshare-prefilter', { init: false });
   origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = join(tmp, 'global');
   initStore(getGlobalRoot());
@@ -37,7 +36,6 @@ beforeEach(() => {
 afterEach(() => {
   if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
   else delete process.env.HIPPO_HOME;
-  rmSync(tmp, { recursive: true, force: true });
 });
 
 function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [], tenantId = 'default'): string {

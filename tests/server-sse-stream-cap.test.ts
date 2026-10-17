@@ -2,14 +2,11 @@
 // when keyless) gets a bounded number of concurrent streams; a closed stream frees its slot.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface OpenStream {
   status: number;
@@ -50,8 +47,7 @@ describe('/mcp/stream concurrent stream cap', () => {
 
   beforeEach(async () => {
     process.env.MCP_SSE_MAX_STREAMS = '2';
-    root = mkdtempSync(join(tmpdir(), 'hippo-sse-cap-'));
-    initStore(root);
+    root = makeRoot('sse-cap');
     handle = await serve({ hippoRoot: root, port: 0 });
   });
 
@@ -60,7 +56,6 @@ describe('/mcp/stream concurrent stream cap', () => {
     await handle.stop();
     if (savedMax === undefined) delete process.env.MCP_SSE_MAX_STREAMS;
     else process.env.MCP_SSE_MAX_STREAMS = savedMax;
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('answers 429 to the stream past the cap and frees a slot when a stream closes', async () => {

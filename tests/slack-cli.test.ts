@@ -1,12 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { parkInDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -21,12 +20,7 @@ describe('hippo slack CLI', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-cli-'));
-    initStore(join(root, '.hippo'));
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeStore('slack-cli').base;
   });
 
   it('hippo slack dlq list prints DLQ rows', async () => {

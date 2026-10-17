@@ -1,14 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   wmPush,
   wmRead,
   wmClear,
 } from '../src/store/working-memory.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The store's per-scope cap; a literal here so a change to it fails these tests on purpose.
 const WM_MAX_ENTRIES = 20;
@@ -16,12 +13,7 @@ const WM_MAX_ENTRIES = 20;
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-wm-test-'));
-  initStore(tmpDir);
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('wm-test');
 });
 
 describe('schema migration', () => {

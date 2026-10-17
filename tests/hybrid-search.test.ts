@@ -10,13 +10,12 @@ import { mmrRerank } from '../src/search/rerank.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
-import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import { HASHED_DIM, hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,9 +28,8 @@ const roots: string[] = [];
 
 /** A real store whose provider is the local hashed-embedding server, holding exactly `vectors`. */
 function vectorRoot(vectors: Record<string, readonly number[]>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hybrid-'));
+  const root = makeRoot('hybrid');
   roots.push(root);
-  initStore(root);
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }));
   const db = openHippoDb(root);
   try {

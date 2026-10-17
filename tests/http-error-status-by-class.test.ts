@@ -1,7 +1,6 @@
 // The HTTP status of a failed request follows the error's class, never its message, and an untyped error never shows its text.
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -69,7 +68,6 @@ describe('typed errors from real domain paths keep their status and message', ()
 
   afterAll(async () => {
     await handle.stop();
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('BadRequestError -> 400: content under the minimum length', async () => {
@@ -120,7 +118,7 @@ describe('an untyped error is a 500 that hides its text', () => {
   beforeAll(async () => {
     // A directory where the database file should be makes SQLite fail with its own, untyped error. It is made
     // before serve starts because a running server holds the file open, and Windows refuses to delete an open file.
-    home = mkdtempSync(join(tmpdir(), 'hippo-error-class-'));
+    home = makeRoot('error-class', { init: false });
     mkdirSync(join(home, 'hippo.db'));
     // No key can be minted in a store that will not open, so a resolver vouches for an admin on the admin-only audit route.
     handle = await serve({ hippoRoot: home, port: 0, authResolver: () => ({ tenantId: 'default', subject: 'ops', role: 'admin' }) });
@@ -128,7 +126,6 @@ describe('an untyped error is a 500 that hides its text', () => {
 
   afterAll(async () => {
     await handle.stop();
-    rmSync(home, { recursive: true, force: true });
   });
 
   afterEach(() => {

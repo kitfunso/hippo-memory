@@ -1,16 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot, clearActiveTaskSnapshot } from '../src/store/sessions.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-snapshot-tenant-'));
-});
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('snapshot-tenant', { init: false });
 });
 
 describe('task_snapshot tenant isolation', () => {

@@ -1,9 +1,5 @@
 // The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadCorrectionEntries, loadRawEntries } from '../src/store/report-reads.js';
@@ -13,16 +9,12 @@ import { physicsEnergyText } from '../src/cli/status.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-status-reads-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  root = makeRoot('status-reads');
 });
 
 function at(entry: MemoryEntry, iso: string): MemoryEntry {

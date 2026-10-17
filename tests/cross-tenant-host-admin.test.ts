@@ -1,11 +1,9 @@
 // Cross-tenant actions need a host admin: a tenant's own admin key stops at its tenant. Real server, real SQLite.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { adminActor } from '../src/api/index.js';
@@ -71,8 +69,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await handle.stop();
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
-  rmSync(globalHome, { recursive: true, force: true });
 });
 
 describe('member keys stop at the audit route', () => {
@@ -119,15 +115,10 @@ describe('host admin is unchanged', () => {
 
   it('marks the CLI actor as host admin and lets the CLI sleep', () => {
     expect(adminActor('cli').hostAdmin).toBe(true);
-    const project = mkdtempSync(join(tmpdir(), 'hippo-host-admin-cli-'));
-    try {
-      initStore(join(project, '.hippo'));
-      const env = { ...process.env, HIPPO_HOME: globalHome, HIPPO_TENANT: 'acme' };
-      const res = spawnSync('node', [CLI, 'sleep', '--dry-run'], { cwd: project, env, encoding: 'utf-8' });
-      expect(res.status, res.stderr).toBe(0);
-    } finally {
-      rmSync(project, { recursive: true, force: true });
-    }
+    const project = makeStore('host-admin-cli').base;
+    const env = { ...process.env, HIPPO_HOME: globalHome, HIPPO_TENANT: 'acme' };
+    const res = spawnSync('node', [CLI, 'sleep', '--dry-run'], { cwd: project, env, encoding: 'utf-8' });
+    expect(res.status, res.stderr).toBe(0);
   });
 });
 

@@ -17,14 +17,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import { makeStore } from './_helpers/make-root.js';
 
 function makeRawMemory(id: string, content: string, tenantId = 'default'): MemoryEntry {
   return {
@@ -64,20 +61,16 @@ function makeRawMemory(id: string, content: string, tenantId = 'default'): Memor
 }
 
 describe('loadSearchEntries defensive kind!=archived filter', () => {
-  let root: string;
   let hippoRoot: string;
   let db: DatabaseSyncLike;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-archived-filter-'));
-    hippoRoot = join(root, '.hippo');
-    initStore(hippoRoot);
+    ({ root: hippoRoot } = makeStore('archived-filter'));
     db = openHippoDb(hippoRoot);
   });
 
   afterEach(() => {
     closeHippoDb(db);
-    rmSync(root, { recursive: true, force: true });
   });
 
   function poisonToArchived(id: string): void {

@@ -1,18 +1,18 @@
 /** `hippo capture --file` through the CLI entry: bullets under a spec heading become spec memories, and the refusals. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
 beforeEach(() => {
-  cwd = mkdtempSync(join(tmpdir(), 'hippo-capture-cli-'));
+  cwd = makeRoot('capture-cli', { init: false });
   mkdirSync(join(cwd, 'global-hippo'));
   vi.stubEnv('HIPPO_HOME', join(cwd, 'global-hippo'));
   vi.stubEnv('HIPPO_TENANT', 'default');
@@ -22,7 +22,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(cwd, { recursive: true, force: true });
 });
 
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.

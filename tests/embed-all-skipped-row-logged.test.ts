@@ -1,14 +1,11 @@
 // A provider's empty row is a per-item failure it already swallowed; embedAll must name the memory it left out.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../src/embeddings/provider.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Embeds every text except the ones marked unembeddable, which get the `[]` a local provider returns on a per-item failure. */
 function partialProvider(): EmbeddingProvider {
@@ -24,13 +21,11 @@ function partialProvider(): EmbeddingProvider {
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-skip-'));
-  initStore(root);
+  root = makeRoot('embed-skip');
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('embedAll with a row the provider could not embed', () => {

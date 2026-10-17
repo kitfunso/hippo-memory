@@ -1,10 +1,8 @@
 /** Sleep in a store shared by projects (the global store) never blends, dedups or conflicts two projects' memories. */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
@@ -17,14 +15,13 @@ import { storeExtractedFacts } from '../src/learn/extract.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-sleep-origin-'));
-  initStore(home);
+  home = makeRoot('sleep-origin');
   writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 });
-afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 const fetcher = (text: string) => vi.fn<typeof fetch>(async () => new Response(
   JSON.stringify({ content: [{ text }] }), { status: 200, headers: { 'content-type': 'application/json' } },

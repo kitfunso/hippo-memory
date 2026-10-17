@@ -1,19 +1,17 @@
 // Recall strengthening updates the live row's four retrieval columns, never a stale copy.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 
 function newRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-strengthen-'));
+  const root = makeRoot('strengthen');
   roots.push(root);
-  initStore(root);
   return root;
 }
 

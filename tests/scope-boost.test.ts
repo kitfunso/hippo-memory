@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -28,14 +26,11 @@ async function runHippo(args: string[], env: Record<string, string> = {}): Promi
 }
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-scope-boost-'));
-  hippoDir = path.join(tmpDir, '.hippo');
-  initStore(hippoDir);
+  ({ base: tmpDir, root: hippoDir } = makeStore('scope-boost'));
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe('scope boost scoring', () => {

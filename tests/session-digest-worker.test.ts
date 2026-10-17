@@ -1,10 +1,9 @@
 // End to end through bin/hippo.js: the session-end workers write the digest, and context prints the handoff or the digest, never both.
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { sessionDigestId } from '../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { initStore } from '../src/store/open.js';
@@ -12,6 +11,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
@@ -26,7 +26,7 @@ let log: string;
 let env: NodeJS.ProcessEnv;
 
 beforeEach(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-worker-'));
+  tmp = makeRoot('digest-worker', { init: false });
   repo = path.join(tmp, 'repo');
   const home = path.join(tmp, 'home');
   fs.mkdirSync(repo);
@@ -40,10 +40,6 @@ beforeEach(async () => {
   env.PATH = (process.env.PATH ?? '').split(path.delimiter).filter((dir) => !/[\\/]npm[\\/]?$/i.test(dir)).join(path.delimiter);
   Object.assign(env, { HIPPO_HOME: path.join(tmp, 'global'), HOME: home, USERPROFILE: home, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' });
   expect((await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn'])).status).toBe(0);
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 // In process unless `spawned`: the first worker case and the concurrent pair run real children, the rest read rows and bytes.

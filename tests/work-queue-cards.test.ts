@@ -1,8 +1,7 @@
 // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md), tests 1,2,4-12.
 // Test 3 (self-heal parity) lives in tests/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
-import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
+import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
@@ -27,6 +26,7 @@ import { parseArgs } from '../src/cli.js';
 import { COMMANDS } from '../src/cli/verbs.js';
 import { cardDetailOf } from './_helpers/card-detail.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
@@ -50,11 +50,7 @@ function countRows(db: DatabaseSyncLike, table: string): number {
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-w2a-cards-'));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  root = makeRoot('w2a-cards', { init: false });
 });
 
 describe('test 1: fresh store, single open', () => {
@@ -464,7 +460,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   }
 
   async function setupCliHome() {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-w2a-cli-'));
+    const home = makeRoot('w2a-cli', { init: false });
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
     const env = { HIPPO_HOME: globalDir };
@@ -498,7 +494,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   });
 
   it('test 12: an unknown --depends-on id exits 1 with the missing-parent message on stderr', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-w2a-cli-'));
+    const home = makeRoot('w2a-cli', { init: false });
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     try {
       initStore(join(home, '.hippo'));

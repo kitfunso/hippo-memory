@@ -3,8 +3,7 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   COMPACTION_MEMORY_TAG,
@@ -18,6 +17,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { getContext, retrieve } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -56,7 +56,7 @@ function enablePromptRecall(root: string): void {
 
 beforeEach(() => {
   _resetAblationCacheForTests();
-  tmpRoot = mkdtempSync(join(tmpdir(), 'hippo-own-session-'));
+  tmpRoot = makeRoot('own-session', { init: false });
   local = join(tmpRoot, 'local', '.hippo');
   const globalRoot = join(tmpRoot, 'global');
   mkdirSync(local, { recursive: true });
@@ -70,7 +70,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   _resetAblationCacheForTests();
-  rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('own-session compaction items in recent context', () => {
@@ -174,25 +173,18 @@ describe('explicit recall is not filtered', () => {
   });
 
   it('hippo recall returns them even when the calling session id is the items own', () => {
-    const cliTmp = mkdtempSync(join(tmpdir(), 'hippo-own-session-cli-'));
-    try {
-      const store = join(cliTmp, '.hippo');
-      mkdirSync(store, { recursive: true });
-      initStore(store);
-      const wanted = seedThree(store);
+    const { base: cliTmp, root: store } = makeStore('own-session-cli');
+    const wanted = seedThree(store);
 
-      const out = execFileSync(process.execPath, [HIPPO_JS, 'recall', 'ledger export dry run', '--json'], {
-        env: { ...process.env, HIPPO_HOME: join(cliTmp, 'global'), HIPPO_SESSION_ID: OWN },
-        cwd: cliTmp,
-        input: JSON.stringify({ session_id: OWN }),
-        encoding: 'utf8',
-      });
+    const out = execFileSync(process.execPath, [HIPPO_JS, 'recall', 'ledger export dry run', '--json'], {
+      env: { ...process.env, HIPPO_HOME: join(cliTmp, 'global'), HIPPO_SESSION_ID: OWN },
+      cwd: cliTmp,
+      input: JSON.stringify({ session_id: OWN }),
+      encoding: 'utf8',
+    });
 
-      // SAFETY: `hippo recall --json` prints one object whose results each carry an id.
-      const found = (JSON.parse(out) as { results: Array<{ id: string }> }).results.map((r) => r.id);
-      expect(found.sort()).toEqual(wanted.sort());
-    } finally {
-      rmSync(cliTmp, { recursive: true, force: true });
-    }
+    // SAFETY: `hippo recall --json` prints one object whose results each carry an id.
+    const found = (JSON.parse(out) as { results: Array<{ id: string }> }).results.map((r) => r.id);
+    expect(found.sort()).toEqual(wanted.sort());
   });
 });

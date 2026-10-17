@@ -1,22 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('schema v13: DAG fields', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-'));
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    hippoRoot = makeRoot('dag');
   });
 
   it('stores dag_level and dag_parent_id', () => {

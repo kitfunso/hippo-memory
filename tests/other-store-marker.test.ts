@@ -1,5 +1,5 @@
 // A hippo root holding the other-store marker refuses every hippo.db open, from the CLI as from a request, and never creates the file.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,6 +20,7 @@ import { repairAutomaticMemories } from '../src/store/quality-repair.js';
 import * as serverEntry from '../src/server.js';
 import * as storeKit from '../src/entry/store-kit.js';
 import { initStore } from '../src/store/open.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const CLI = join(dirname(dirname(fileURLToPath(import.meta.url))), 'dist', 'cli.js');
 
@@ -40,12 +41,8 @@ function refusal(open: () => DatabaseSyncLike): OtherStoreFolderError {
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-marker-'));
+  root = makeRoot('marker', { init: false });
   marker = join(root, OTHER_STORE_MARKER);
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
 });
 
 describe('the other-store marker', () => {

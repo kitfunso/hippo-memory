@@ -4,7 +4,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -15,6 +14,7 @@ import { getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PROJECT = 'proj-a';
 
@@ -35,7 +35,7 @@ function ids(result: { entries: Array<{ entry: { id: string } }> }) {
 
 beforeEach(() => {
   _resetAblationCacheForTests();
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pinned-load-'));
+  tmpRoot = makeRoot('pinned-load', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
@@ -49,7 +49,6 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.HIPPO_HOME;
   _resetAblationCacheForTests();
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('pinned-only context loads a slice, not the corpus', () => {

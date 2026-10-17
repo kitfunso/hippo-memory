@@ -16,18 +16,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import {
   createMemory,
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/core/memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
 import { markRetrieved } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Trap categories — each has a lesson and 2-3 task instances
@@ -214,8 +211,7 @@ interface SimResult {
  *   - hippo: starts empty, learns from each trap hit, memories strengthen through use
  */
 function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[] {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hippo-eval-${mode}-`));
-  initStore(tmpDir);
+  const tmpDir = makeRoot(`eval-${mode}`);
 
   // For static mode: pre-load all lessons
   if (mode === 'static') {
@@ -280,7 +276,6 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
     }
   }
 
-  fs.rmSync(tmpDir, { recursive: true, force: true });
   return results;
 }
 

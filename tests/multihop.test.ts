@@ -1,24 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { multihopSearch } from '../src/search/multihop.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('multihopSearch', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-multihop-'));
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    hippoRoot = makeRoot('multihop');
   });
 
   it('chains retrieval to answer multi-hop questions', () => {

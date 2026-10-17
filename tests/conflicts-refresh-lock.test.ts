@@ -2,15 +2,13 @@
 // another writer set after that read.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { stageWinner } from './_helpers/race-winner.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface StatementProto {
   run(...params: unknown[]): object;
@@ -35,9 +33,8 @@ afterEach(() => {
 
 /** A store of `n` rows, all copies of one written row, so the seeding costs one statement. */
 function bulkStore(n: number): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-conflict-lock-'));
+  const root = makeRoot('conflict-lock');
   roots.push(root);
-  initStore(root);
   writeEntry(root, { ...createMemory('the deploy runs on Tuesdays'), id: 'mem_bulk_0' });
   const db = openHippoDb(root);
   try {

@@ -3,7 +3,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -14,6 +13,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PROJECT = 'proj-a';
 
@@ -44,7 +44,7 @@ function enablePromptRecall(root: string, overrides: Partial<HippoConfig['pinned
 
 beforeEach(() => {
   _resetAblationCacheForTests();
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-prompt-recall-'));
+  tmpRoot = makeRoot('prompt-recall', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   const globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
@@ -58,7 +58,6 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.HIPPO_HOME;
   _resetAblationCacheForTests();
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('getContext prompt recall (api-level)', () => {
@@ -278,16 +277,12 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
   let globalDir: string;
 
   beforeEach(() => {
-    cliTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-prompt-recall-cli-'));
+    cliTmp = makeRoot('prompt-recall-cli', { init: false });
     hippoDir = path.join(cliTmp, '.hippo');
     globalDir = path.join(cliTmp, 'global');
     fs.mkdirSync(hippoDir, { recursive: true });
     initStore(hippoDir);
     enablePromptRecall(hippoDir);
-  });
-
-  afterEach(() => {
-    fs.rmSync(cliTmp, { recursive: true, force: true });
   });
 
   // No origin_project override: the CLI derives it from cwd's own basename,

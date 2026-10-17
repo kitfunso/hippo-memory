@@ -6,7 +6,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadConfig } from '../src/core/config.js';
@@ -15,6 +14,7 @@ import { mcpActor } from '../src/mcp/protocol.js';
 import { runLearnTool } from '../src/mcp/memory-tools.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Both suites run git in child processes.
 vi.setConfig({ testTimeout: 30_000 });
@@ -74,8 +74,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
 
   beforeEach(() => {
     repoDir = initRepo();
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-role-store-'));
-    initStore(hippoRoot);
+    hippoRoot = makeRoot('role-store');
     originalCwd = process.cwd();
     process.chdir(repoDir);
   });
@@ -83,7 +82,6 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
   afterEach(() => {
     process.chdir(originalCwd);
     fs.rmSync(repoDir, { recursive: true, force: true });
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   it('refuses an HTTP-MCP context with no role, so it cannot run the admin-only tool', async () => {
@@ -114,8 +112,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
   beforeEach(() => {
     // The server's checkout sits on a feature branch, so the git auto-detect would query for its name.
     repoDir = initRepo(['checkout', '-q', '-b', 'zebra-migration']);
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-role-ctx-'));
-    initStore(hippoRoot);
+    hippoRoot = makeRoot('role-ctx');
     writeEntry(hippoRoot, createMemory('zebra migration runbook lives in the ops wiki', { tenantId: 'default' }));
     writeEntry(hippoRoot, createMemory('quarterly invoices are filed under finance', { tenantId: 'default' }));
     originalCwd = process.cwd();
@@ -125,7 +122,6 @@ describe('hippo_context reads the server git state only for stdio or a host admi
   afterEach(() => {
     process.chdir(originalCwd);
     fs.rmSync(repoDir, { recursive: true, force: true });
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   it("lists a remote member's rows by strength, with no query from the server's branch", async () => {

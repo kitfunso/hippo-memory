@@ -5,15 +5,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { parseOlderThanFlag } from '../src/cli/audit-prune.js';
 import { pruneAuditLog, computeCutoff } from '../src/api/auth/audit.js';
 import { adminActor } from '../src/api/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function seedAuditRow(
   db: DatabaseSyncLike,
@@ -79,14 +76,12 @@ describe('pruneAuditLog', () => {
   let db: DatabaseSyncLike;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-audit-prune-'));
-    initStore(root);
+    root = makeRoot('audit-prune');
     db = openHippoDb(root);
   });
 
   afterEach(() => {
     closeHippoDb(db);
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('deletes rows older than the cutoff and preserves newer ones', async () => {

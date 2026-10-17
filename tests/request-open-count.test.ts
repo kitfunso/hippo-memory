@@ -2,10 +2,8 @@
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
@@ -13,6 +11,7 @@ import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { cliStdioHost } from '../src/cli/api-context.js';
 import { retrieve, remember } from '../src/api/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;
@@ -70,12 +69,12 @@ async function call(method: string, path: string, body?: CallBody): Promise<void
 const recallOverMcp = { jsonrpc: '2.0' as const, id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'rollback plan' } } };
 
 beforeAll(async () => {
-  tmp = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-request-open-count-')));
-  root = join(tmp, 'store');
+  const made = makeStore('request-open-count');
+  tmp = realpathSync.native(made.base);
+  root = realpathSync.native(made.root);
   priorHome = process.env.HIPPO_HOME;
   // A global store left by another file in this worker would add its own open to every recall.
   process.env.HIPPO_HOME = join(tmp, 'global');
-  initStore(root);
   const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
   writeEntry(root, createMemory('the postgres migration needs a rollback plan and a dry run', opts));
   writeEntry(root, createMemory('deploy windows are Tuesday and Thursday afternoons only', opts));
@@ -94,7 +93,6 @@ afterAll(async () => {
   for (const spy of spies) spy.mockRestore();
   if (priorHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = priorHome;
-  rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('store opens per request', () => {

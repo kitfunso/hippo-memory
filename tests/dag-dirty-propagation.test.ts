@@ -7,11 +7,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
@@ -22,6 +18,7 @@ import { invalidateMatching } from '../src/learn/invalidation.js';
 import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });
@@ -35,11 +32,7 @@ function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
 describe('child-write dirty-flag propagation', () => {
   let hippoRoot: string;
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e2-'));
-    initStore(hippoRoot);
-  });
-  afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    hippoRoot = makeRoot('dag-e2');
   });
 
   it('test #1: invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', () => {

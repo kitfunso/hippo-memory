@@ -1,13 +1,10 @@
 // A reverse proxy on the same host makes every outside caller look like loopback, so a proxied request must not get no-key admin.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['Forwarded', 'for=203.0.113.7;proto=https'],
@@ -40,9 +37,7 @@ function send(path: string, headers: Record<string, string> = {}): Promise<numbe
 beforeEach(async () => {
   savedLevel = process.env.HIPPO_LOG;
   delete process.env.HIPPO_LOG;
-  home = mkdtempSync(join(tmpdir(), 'hippo-proxied-loopback-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('proxied-loopback');
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'proxied-loopback' }).plaintext;
@@ -54,7 +49,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
   if (savedLevel === undefined) delete process.env.HIPPO_LOG;
   else process.env.HIPPO_LOG = savedLevel;
 });

@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SECRET = 'github-webhook-secret';
 
@@ -153,8 +150,7 @@ describe('POST /v1/connectors/github/events', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-gh-route-'));
-    initStore(root);
+    root = makeRoot('gh-route');
     process.env.GITHUB_WEBHOOK_SECRET = SECRET;
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
@@ -163,7 +159,6 @@ describe('POST /v1/connectors/github/events', () => {
     delete process.env.GITHUB_WEBHOOK_SECRET;
     delete process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS;
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('1. valid signature + issues.opened → 200, memory ingested', async () => {

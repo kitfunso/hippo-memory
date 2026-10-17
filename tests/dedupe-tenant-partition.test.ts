@@ -22,25 +22,13 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember } from '../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../src/consolidate/dedupe.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
-
-function tmpHome(prefix: string) {
-  const home = mkdtempSync(join(tmpdir(), prefix));
-  initStore(home);
-  return {
-    home,
-    restore: () => rmSync(home, { recursive: true, force: true }),
-  };
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function ctxFor(home: string, tenantId: string): FullContext {
   return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
@@ -67,107 +55,95 @@ const SHARED_CONTENT =
 
 describe('deduplicateStore tenant partition', () => {
   it('(a) byte-identical content in tenant-a and tenant-b removes nothing; both rows survive', async () => {
-    const { home, restore } = tmpHome('hippo-dedupe-tenant-a-');
-    try {
-      const a = await remember(ctxFor(home, 'tenant-a'), { content: SHARED_CONTENT });
-      const b = await remember(ctxFor(home, 'tenant-b'), { content: SHARED_CONTENT });
+    const home = makeRoot('dedupe-tenant-a');
+    const a = await remember(ctxFor(home, 'tenant-a'), { content: SHARED_CONTENT });
+    const b = await remember(ctxFor(home, 'tenant-b'), { content: SHARED_CONTENT });
 
-      const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(home));
 
-      expect(result.removed).toBe(0);
-      expect(result.pairs).toEqual([]);
+    expect(result.removed).toBe(0);
+    expect(result.pairs).toEqual([]);
 
-      const all = loadEveryTenantEntries(home);
-      expect(all.length).toBe(2);
-      const tenantAEntries = loadAllEntries(home, 'tenant-a');
-      const tenantBEntries = loadAllEntries(home, 'tenant-b');
-      expect(tenantAEntries.map((e) => e.id)).toEqual([a.id]);
-      expect(tenantBEntries.map((e) => e.id)).toEqual([b.id]);
-    } finally {
-      restore();
-    }
+    const all = loadEveryTenantEntries(home);
+    expect(all.length).toBe(2);
+    const tenantAEntries = loadAllEntries(home, 'tenant-a');
+    const tenantBEntries = loadAllEntries(home, 'tenant-b');
+    expect(tenantAEntries.map((e) => e.id)).toEqual([a.id]);
+    expect(tenantBEntries.map((e) => e.id)).toEqual([b.id]);
   });
 
   it('(b) duplicates within EACH of two tenants: exactly one removal per tenant, survivor per the total order in each', async () => {
-    const { home, restore } = tmpHome('hippo-dedupe-tenant-b-');
-    try {
-      // tenant-a: CONTENT_A weak, CONTENT_B strong -> CONTENT_B survives.
-      const aWeak = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
-      const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
-      setStrength(home, aWeak.id, 0.5);
-      setStrength(home, aStrong.id, 1.0);
+    const home = makeRoot('dedupe-tenant-b');
+    // tenant-a: CONTENT_A weak, CONTENT_B strong -> CONTENT_B survives.
+    const aWeak =await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
+    const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
+    setStrength(home, aWeak.id, 0.5);
+    setStrength(home, aStrong.id, 1.0);
 
-      // tenant-b: CONTENT_B weak, CONTENT_A strong -> CONTENT_A survives.
-      // Deliberately the mirror image of tenant-a's pair, so a leaked
-      // cross-tenant comparison (all four rows are pairwise duplicates)
-      // would produce a different removal count and different survivors
-      // than the per-tenant-correct result asserted below.
-      const bWeak = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
-      const bStrong = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
-      setStrength(home, bWeak.id, 0.5);
-      setStrength(home, bStrong.id, 1.0);
+    // tenant-b: CONTENT_B weak, CONTENT_A strong -> CONTENT_A survives.
+    // Deliberately the mirror image of tenant-a's pair, so a leaked
+    // cross-tenant comparison (all four rows are pairwise duplicates)
+    // would produce a different removal count and different survivors
+    // than the per-tenant-correct result asserted below.
+    const bWeak = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
+    const bStrong = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
+    setStrength(home, bWeak.id, 0.5);
+    setStrength(home, bStrong.id, 1.0);
 
-      const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(home));
 
-      expect(result.removed).toBe(2);
-      expect(result.pairs.length).toBe(2);
+    expect(result.removed).toBe(2);
+    expect(result.pairs.length).toBe(2);
 
-      const tenantAPair = result.pairs.find((p) => p.removed === aWeak.id);
-      expect(tenantAPair).toBeDefined();
-      expect(tenantAPair?.kept).toBe(aStrong.id);
-      expect(tenantAPair?.keptContent).toBe(CONTENT_B);
+    const tenantAPair = result.pairs.find((p) => p.removed === aWeak.id);
+    expect(tenantAPair).toBeDefined();
+    expect(tenantAPair?.kept).toBe(aStrong.id);
+    expect(tenantAPair?.keptContent).toBe(CONTENT_B);
 
-      const tenantBPair = result.pairs.find((p) => p.removed === bWeak.id);
-      expect(tenantBPair).toBeDefined();
-      expect(tenantBPair?.kept).toBe(bStrong.id);
-      expect(tenantBPair?.keptContent).toBe(CONTENT_A);
+    const tenantBPair = result.pairs.find((p) => p.removed === bWeak.id);
+    expect(tenantBPair).toBeDefined();
+    expect(tenantBPair?.kept).toBe(bStrong.id);
+    expect(tenantBPair?.keptContent).toBe(CONTENT_A);
 
-      const tenantAEntries = loadAllEntries(home, 'tenant-a');
-      expect(tenantAEntries.map((e) => e.id)).toEqual([aStrong.id]);
-      const tenantBEntries = loadAllEntries(home, 'tenant-b');
-      expect(tenantBEntries.map((e) => e.id)).toEqual([bStrong.id]);
-    } finally {
-      restore();
-    }
+    const tenantAEntries = loadAllEntries(home, 'tenant-a');
+    expect(tenantAEntries.map((e) => e.id)).toEqual([aStrong.id]);
+    const tenantBEntries = loadAllEntries(home, 'tenant-b');
+    expect(tenantBEntries.map((e) => e.id)).toEqual([bStrong.id]);
   });
 
   it('(c) dryRun parity: two-tenant dryRun pairs equal what a subsequent real run deletes', async () => {
-    const { home, restore } = tmpHome('hippo-dedupe-tenant-c-');
-    try {
-      const aWeak = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
-      const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
-      setStrength(home, aWeak.id, 0.5);
-      setStrength(home, aStrong.id, 1.0);
+    const home = makeRoot('dedupe-tenant-c');
+    const aWeak = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
+    const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
+    setStrength(home, aWeak.id, 0.5);
+    setStrength(home, aStrong.id, 1.0);
 
-      const bWeak = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
-      const bStrong = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
-      setStrength(home, bWeak.id, 0.5);
-      setStrength(home, bStrong.id, 1.0);
+    const bWeak = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
+    const bStrong = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
+    setStrength(home, bWeak.id, 0.5);
+    setStrength(home, bStrong.id, 1.0);
 
-      const dry = deduplicateStore(sqliteConsolidation(home), { dryRun: true });
-      const real = deduplicateStore(sqliteConsolidation(home), { dryRun: false });
+    const dry = deduplicateStore(sqliteConsolidation(home), { dryRun: true });
+    const real = deduplicateStore(sqliteConsolidation(home), { dryRun: false });
 
-      expect(dry.removed).toBe(2);
-      expect(real.removed).toBe(2);
+    expect(dry.removed).toBe(2);
+    expect(real.removed).toBe(2);
 
-      const sortByRemoved = (p: DedupPair[]) =>
-        [...p].sort((x, y) => x.removed.localeCompare(y.removed));
-      expect(sortByRemoved(dry.pairs).map((p) => p.removed)).toEqual(
-        sortByRemoved(real.pairs).map((p) => p.removed),
-      );
-      expect(sortByRemoved(dry.pairs).map((p) => p.removedContent)).toEqual(
-        sortByRemoved(real.pairs).map((p) => p.removedContent),
-      );
-      expect(sortByRemoved(dry.pairs).map((p) => p.keptContent)).toEqual(
-        sortByRemoved(real.pairs).map((p) => p.keptContent),
-      );
+    const sortByRemoved = (p: DedupPair[]) =>
+      [...p].sort((x, y) => x.removed.localeCompare(y.removed));
+    expect(sortByRemoved(dry.pairs).map((p) => p.removed)).toEqual(
+      sortByRemoved(real.pairs).map((p) => p.removed),
+    );
+    expect(sortByRemoved(dry.pairs).map((p) => p.removedContent)).toEqual(
+      sortByRemoved(real.pairs).map((p) => p.removedContent),
+    );
+    expect(sortByRemoved(dry.pairs).map((p) => p.keptContent)).toEqual(
+      sortByRemoved(real.pairs).map((p) => p.keptContent),
+    );
 
-      const tenantAEntries = loadAllEntries(home, 'tenant-a');
-      expect(tenantAEntries.map((e) => e.id)).toEqual([aStrong.id]);
-      const tenantBEntries = loadAllEntries(home, 'tenant-b');
-      expect(tenantBEntries.map((e) => e.id)).toEqual([bStrong.id]);
-    } finally {
-      restore();
-    }
+    const tenantAEntries = loadAllEntries(home, 'tenant-a');
+    expect(tenantAEntries.map((e) => e.id)).toEqual([aStrong.id]);
+    const tenantBEntries = loadAllEntries(home, 'tenant-b');
+    expect(tenantBEntries.map((e) => e.id)).toEqual([bStrong.id]);
   });
 });

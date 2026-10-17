@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { dlqAccess, type DlqColumn, type DlqTable } from '../src/store/connectors/dlq.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Row = Record<string, string | number | null>;
 type Insert = Record<string, string | null>;
@@ -22,13 +19,11 @@ describe('dlq identifier guard', () => {
   // SAFETY: deliberately outside the union, to prove the runtime check holds when the types are bypassed.
   const badTable = 'slack_dlq; DROP TABLE memories' as DlqTable;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-dlq-guard-'));
-    initStore(root);
+    root = makeRoot('dlq-guard');
     db = openHippoDb(root);
   });
   afterEach(() => {
     closeHippoDb(db);
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('accepts the real tables and columns', () => {

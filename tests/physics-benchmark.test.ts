@@ -8,15 +8,11 @@
  * This isolates the physics scoring logic from embedding model quality.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import {
   type MemoryEntry
 } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
@@ -29,6 +25,7 @@ import {
 } from '../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // A benchmark: 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
 vi.setConfig({ testTimeout: 60_000 });
@@ -105,8 +102,7 @@ function seed(
 }
 
 beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-physics-bench-'));
-  initStore(tmpDir);
+  tmpDir = makeRoot('physics-bench');
 
   // ── FRED cluster (3 tightly clustered memories) ──────────────────────
   seed('fred_cache_drop',
@@ -284,10 +280,6 @@ beforeAll(() => {
     closeHippoDb(db);
   }
 }, 30_000);
-
-afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
-});
 
 // ---------------------------------------------------------------------------
 // Metric helpers

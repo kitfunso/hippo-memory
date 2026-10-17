@@ -1,13 +1,10 @@
 // Pins the status and error text of every HTTP route, plus one literal field per route's valid reply, so a dispatch change cannot move a reply.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from '../src/core/memory.js';
 import type { ServerHandle } from '../src/server.js';
 import { serveAsAdmin } from './_helpers/admin-server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Json = string | number | boolean | null | Json[] | JsonObject;
 interface JsonObject { [key: string]: Json }
@@ -194,12 +191,8 @@ describe('HTTP route status table: status and error text per route', () => {
   const created: Record<string, number> = {};
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-route-parity-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    initStore(home);
-    globalHome = mkdtempSync(join(tmpdir(), 'hippo-route-parity-global-'));
-    mkdirSync(join(globalHome, '.hippo'), { recursive: true });
-    initStore(globalHome);
+    home = makeRoot('route-parity');
+    globalHome = makeRoot('route-parity-global');
     savedHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     for (const [key, content, kind] of [
@@ -224,8 +217,6 @@ describe('HTTP route status table: status and error text per route', () => {
     else process.env.HIPPO_V1_RPS = savedRps;
     if (savedHippoHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = savedHippoHome;
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   const call = (c: Call): Promise<Reply> => send(handle.url, c);
@@ -449,9 +440,7 @@ describe('HTTP route status table: status and error text per route', () => {
 
 describe('HTTP route status table under the rate limiter', () => {
   it('throttles /v1 and /mcp but never /health or other paths', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-route-parity-rl-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    initStore(home);
+    const home = makeRoot('route-parity-rl');
     const saved = process.env.HIPPO_V1_RPS;
     process.env.HIPPO_V1_RPS = '0.5';
     const handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
@@ -461,7 +450,6 @@ describe('HTTP route status table under the rate limiter', () => {
       await handle.stop();
       if (saved === undefined) delete process.env.HIPPO_V1_RPS;
       else process.env.HIPPO_V1_RPS = saved;
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

@@ -1,9 +1,7 @@
 // A recall waits a bounded time for its query vector: a stalled API provider costs one budget, then BM25 ranks alone and one line says why.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
@@ -20,6 +18,7 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_h
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -33,9 +32,8 @@ let stderr: MockInstance<typeof process.stderr.write>;
 const dirs: string[] = [];
 
 function seedStore(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-query-embed-budget-'));
+  const root = makeRoot('query-embed-budget');
   dirs.push(root);
-  initStore(root);
   writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }));
   const index: Record<string, number[]> = {};
   for (const [content, vector] of [[LEXICAL, hashedVector(LEXICAL)], [VECTOR_ONLY, hashedVector(QUERY)]] as const) {

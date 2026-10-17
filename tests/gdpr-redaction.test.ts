@@ -1,8 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   openHippoDb,
   closeHippoDb,
@@ -13,6 +10,7 @@ import {
 import { remember, archiveRaw, retrieve } from '../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface RedactedArchivePayload {
   redacted: boolean;
@@ -79,11 +77,7 @@ describe('GDPR Path A redaction + migration v20', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-v039-gdpr-'));
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('v039-gdpr', { init: false });
   });
 
   it('1. schema v20: getCurrentSchemaVersion() returns 20', () => {

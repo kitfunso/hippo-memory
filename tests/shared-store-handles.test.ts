@@ -1,21 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
+import { makeStore } from './_helpers/make-root.js';
 
 let tmp: string;
 let root: string;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-shared-handles-'));
-  root = path.join(tmp, '.hippo');
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  ({ base: tmp, root } = makeStore('shared-handles'));
 });
 
 describe('withSharedStoreHandles', () => {

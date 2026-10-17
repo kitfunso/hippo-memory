@@ -1,15 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { slackEventSeenAt as hasSeenEvent, markSlackEventSeenAt as markEventSeen, slackEventMemoryAt as lookupMemoryByEvent } from '../src/store/connectors/slack.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('slack idempotency', () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-slack-idem-')); initStore(root); });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  beforeEach(() => { root = makeRoot('slack-idem');  });
 
   it('hasSeenEvent returns false then true after marking', () => {
     const db = openHippoDb(root);

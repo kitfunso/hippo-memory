@@ -18,15 +18,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-df3-cjk-'));
-  initStore(home);
+  const home = makeRoot('df3-cjk');
   const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-df3-cjk-global-'));
   const origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalTmp;

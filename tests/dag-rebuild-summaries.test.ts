@@ -7,11 +7,7 @@
  * race-loser no-op (E3 MED #5), cap hard-ceiling clamping (E3 R2 must-fix).
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import {
   loadAllDirtySummaries,
@@ -25,6 +21,7 @@ import { consolidate } from '../src/index.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The cap cases seed up to 75 rows and marks in a real store, so their time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -126,12 +123,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e3-'));
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    hippoRoot = makeRoot('dag-e3');
   });
 
   it('test #1: happy path — 1 dirty summary + 3 children → content updated, audit emitted, FTS synced', async () => {

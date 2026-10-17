@@ -8,18 +8,17 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../src/cli/github.js';
 import type { JsonValue } from '../src/util/json.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -71,14 +70,11 @@ describe('hippo github CLI', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-github-cli-'));
-    hippoRoot = join(root, '.hippo');
-    initStore(hippoRoot);
+    ({ base: root, root: hippoRoot } = makeStore('github-cli'));
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('backfill without --repo exits 2 with usage', () => {

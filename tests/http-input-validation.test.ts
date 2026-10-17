@@ -3,14 +3,11 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { request } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import type { JsonValue } from '../src/util/json.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -40,8 +37,7 @@ async function created(path: string, body: Body, key: string): Promise<number> {
 const long = (n: number): string => 'x'.repeat(n + 1);
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-http-validation-'));
-  initStore(home);
+  home = makeRoot('http-validation');
   const db = openHippoDb(home);
   try {
     token = createApiKey(db, { tenantId: 'default', label: 'validation', role: 'admin' }).plaintext;
@@ -64,7 +60,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('HTTP input validation', () => {

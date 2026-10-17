@@ -26,8 +26,7 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -38,6 +37,7 @@ import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
@@ -138,7 +138,6 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
   let home: string;
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (home) rmSync(home, { recursive: true, force: true });
   });
 
   // The graph fix has to be proven by EXECUTION, with a real edge. Two
@@ -150,7 +149,7 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     // Same root convention as makeEnv: the store ROOT is the .hippo directory
     // itself. initStore(home) with a bare dir leaves cwd/.hippo uninitialized
     // and the CLI exits "No .hippo directory found".
-    home = mkdtempSync(join(tmpdir(), 'c5-graph-'));
+    home = makeRoot('c5-graph', { init: false });
     const root = join(home, '.hippo');
     const globalRoot = join(home, 'global-hippo');
     mkdirSync(globalRoot, { recursive: true });

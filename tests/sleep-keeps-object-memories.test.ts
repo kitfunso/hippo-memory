@@ -2,8 +2,7 @@
 // also calls) leaves a memory that backs a decision, incident or other object in place: deleting it would null the object's link.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sleep } from '../src/api/index.js';
 import { auditMemories } from '../src/core/memory-audit.js';
@@ -12,7 +11,6 @@ import { saveDecision } from '../src/objects/decisions.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { openIncident } from '../src/objects/incidents.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry, memoriesBackingObjects } from '../src/store/delete-and-batch.js';
@@ -20,13 +18,13 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 
 function newRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-object-memories-'));
+  const root = makeRoot('object-memories');
   roots.push(root);
-  initStore(root);
   writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));
   return root;
 }

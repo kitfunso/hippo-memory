@@ -12,10 +12,9 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
@@ -34,6 +33,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const T = 'default';
 
@@ -44,10 +44,7 @@ interface TestCtx {
 }
 
 function newCtx(): TestCtx {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-hook-'));
-  const hippoRoot = join(tmpDir, '.hippo');
-  mkdirSync(hippoRoot, { recursive: true });
-  initStore(hippoRoot);
+  const { base: tmpDir, root: hippoRoot } = makeStore('sleep-hook');
   // Per-test HIPPO_HOME isolation (autoShare phase calls initGlobal()).
   const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-hook-global-'));
   const origHome = process.env.HIPPO_HOME;

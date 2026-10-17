@@ -1,19 +1,19 @@
 /** `hippo import --markdown` and `--vault` through the CLI entry: dedup on re-import, vault deletion sync, and the refusals. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
 let hippoRoot: string;
 beforeEach(() => {
-  cwd = mkdtempSync(join(tmpdir(), 'hippo-import-cli-'));
+  cwd = makeRoot('import-cli', { init: false });
   mkdirSync(join(cwd, 'global-hippo'));
   hippoRoot = join(cwd, '.hippo');
   initStore(hippoRoot);
@@ -25,7 +25,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(cwd, { recursive: true, force: true });
 });
 
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.

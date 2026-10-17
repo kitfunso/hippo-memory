@@ -1,12 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion } from '../src/db/index.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { dumpSchema } from './_helpers/schema-dump.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Frozen copy of migration v1's DDL: the oldest store shape a user can still have on disk.
 const V1_DDL = `
@@ -31,7 +29,7 @@ describe('upgrading a populated v1 store to the latest schema', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-upgrade-v1-'));
+    root = makeRoot('upgrade-v1', { init: false });
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
     const old = new DatabaseSync(getHippoDbPath(root));
     old.exec(V1_DDL);
@@ -45,8 +43,6 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     old.prepare(`INSERT INTO consolidation_runs (timestamp, decayed, merged, removed) VALUES ('2025-02-01T00:00:00.000Z', 4, 2, 1)`).run();
     old.close();
   });
-
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('migrates to the latest version with every row and field intact', () => {
     const db = openHippoDb(root);

@@ -13,11 +13,10 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { writeRecallTrace, recordTraceOutcome } from '../src/store/recall-trace.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Row shapes mirror the recall_traces / recall_trace_results /
 // recall_trace_outcomes tables created in src/db/index.ts (openHippoDb migration).
@@ -66,7 +65,7 @@ function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 }
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-helper-'));
+  const home = makeRoot('recall-trace-helper', { init: false });
   return {
     home,
     restore: () => rmSync(home, { recursive: true, force: true }),

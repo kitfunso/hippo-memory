@@ -1,30 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { authCreate, type Context } from '../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../src/entry/store-kit.js';
 import { validateApiKey } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordStatements } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // hippo-enterprise's `key create --store` mints through this subpath export.
 describe('hippo-memory/server exports authCreate', () => {
   it('mints a key into the named store for the given tenant and role', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-server-auth-create-'));
+    const root = makeRoot('server-auth-create', { init: false });
+    const ctx: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: 'acme', actor: { subject: 'addon:install', role: 'admin', hostAdmin: true } };
+    const minted = await authCreate(ctx, { label: 'first-admin', role: 'admin' });
+    expect(minted.tenantId).toBe('acme');
+    expect(minted.role).toBe('admin');
+    const db = openHippoDb(root);
     try {
-      const ctx: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: 'acme', actor: { subject: 'addon:install', role: 'admin', hostAdmin: true } };
-      const minted = await authCreate(ctx, { label: 'first-admin', role: 'admin' });
-      expect(minted.tenantId).toBe('acme');
-      expect(minted.role).toBe('admin');
-      const db = openHippoDb(root);
-      try {
-        expect(validateApiKey(db, minted.plaintext)).toMatchObject({ valid: true, tenantId: 'acme', role: 'admin' });
-      } finally {
-        closeHippoDb(db);
-      }
+      expect(validateApiKey(db, minted.plaintext)).toMatchObject({ valid: true, tenantId: 'acme', role: 'admin' });
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      closeHippoDb(db);
     }
   });
 

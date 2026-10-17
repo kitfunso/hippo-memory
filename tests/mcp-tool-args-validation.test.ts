@@ -1,13 +1,11 @@
 // tools/call arguments are checked against the tool's inputSchema before the tool runs.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { validateToolArgs, type ToolInputSchema } from '../src/mcp/tool-args.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -28,9 +26,7 @@ describe('MCP tool argument validation', () => {
   let prevHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-mcp-args-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    initStore(home);
+    home = makeRoot('mcp-args');
     prevHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(home, '.hippo-global');
   });
@@ -38,7 +34,6 @@ describe('MCP tool argument validation', () => {
   afterEach(() => {
     if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = prevHippoHome;
-    rmSync(home, { recursive: true, force: true });
   });
 
   async function call(name: string, args: Wire): Promise<ToolReply> {

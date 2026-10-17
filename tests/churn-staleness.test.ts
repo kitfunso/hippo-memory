@@ -3,7 +3,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import {
@@ -25,6 +24,7 @@ import * as api from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -106,14 +106,12 @@ describe('detectChurnStale', () => {
   const project = 'churntestproj';
 
   beforeEach(() => {
-    repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-repo-'));
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-store-'));
-    initStore(hippoRoot);
+    repoDir = makeRoot('churn-repo', { init: false });
+    hippoRoot = makeRoot('churn-store');
     initGitRepo(repoDir);
   });
 
   afterEach(() => {
-    fs.rmSync(repoDir, { recursive: true, force: true });
     fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
@@ -422,8 +420,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-outcome-'));
-    initStore(hippoRoot);
+    hippoRoot = makeRoot('churn-outcome');
   });
 
   afterEach(() => {
@@ -491,9 +488,8 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('ranks a churn-stale entry below an identical untagged one in physicsSearch', async () => {
-    const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-physics-'));
+    const hippoRoot = makeRoot('churn-physics');
     try {
-      initStore(hippoRoot);
       const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const stale = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
       writeEntry(hippoRoot, plain);
@@ -519,9 +515,8 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('keeps the penalty when a churn-stale hit is alone in the physics pool (pool normalisation)', async () => {
-    const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-pool-'));
+    const hippoRoot = makeRoot('churn-pool');
     try {
-      initStore(hippoRoot);
       const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const stale = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
       writeEntry(hippoRoot, plain);
@@ -556,9 +551,8 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('sinks a churn-stale row in the default api.recall path (no search scorer)', async () => {
-    const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-recall-'));
+    const hippoRoot = makeRoot('churn-recall');
     try {
-      initStore(hippoRoot);
       const stale = createMemory('zephyr zephyr zephyr gearbox', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
       const b = createMemory('zephyr gearbox notes with a few more words', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const c = createMemory('zephyr gearbox notes with many many more padding words here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
@@ -587,8 +581,7 @@ describe('config.churnStaleness', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-config-'));
-    initStore(hippoRoot);
+    hippoRoot = makeRoot('churn-config');
   });
 
   afterEach(() => {
@@ -645,18 +638,13 @@ describe('hippo invalidate --churn (CLI)', () => {
   let env: NodeJS.ProcessEnv;
 
   beforeEach(async () => {
-    repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-cli-repo-'));
-    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-cli-global-'));
+    repoDir = makeRoot('churn-cli-repo', { init: false });
+    globalRoot = makeRoot('churn-cli-global', { init: false });
     initGitRepo(repoDir);
     fs.writeFileSync(path.join(repoDir, 'k.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     await runCli(repoDir, ['init', '--no-hooks', '--no-schedule', '--no-learn'], env);
-  });
-
-  afterEach(() => {
-    fs.rmSync(repoDir, { recursive: true, force: true });
-    fs.rmSync(globalRoot, { recursive: true, force: true });
   });
 
   it('rejects --churn combined with a pattern', async () => {
@@ -719,18 +707,13 @@ describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
   let env: NodeJS.ProcessEnv;
 
   beforeEach(async () => {
-    repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-sleep-repo-'));
-    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-sleep-global-'));
+    repoDir = makeRoot('churn-sleep-repo', { init: false });
+    globalRoot = makeRoot('churn-sleep-global', { init: false });
     initGitRepo(repoDir);
     fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     await runCli(repoDir, ['init', '--no-hooks', '--no-schedule', '--no-learn'], env);
-  });
-
-  afterEach(() => {
-    fs.rmSync(repoDir, { recursive: true, force: true });
-    fs.rmSync(globalRoot, { recursive: true, force: true });
   });
 
   function setupChurnMemory(hippoRoot: string): string {

@@ -4,13 +4,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { request, type Server } from 'node:http';
-import { initStore } from '../src/store/open.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const TOKEN = 'test-dashboard-token-0123456789';
 
@@ -21,10 +20,7 @@ describe('dashboard local access token', () => {
   let port: number;
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-dash-token-'));
-    hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    ({ base: home, root: hippoRoot } = makeStore('dash-token'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     server = serveDashboard(hippoRoot, 0, TOKEN);
     port = await boundPort(server);
@@ -34,7 +30,6 @@ describe('dashboard local access token', () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     server = undefined;
     vi.unstubAllEnvs();
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('refuses the API and the page without the token', async () => {

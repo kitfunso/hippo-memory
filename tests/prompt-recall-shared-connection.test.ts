@@ -3,7 +3,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
@@ -13,6 +12,7 @@ import { getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
@@ -35,7 +35,7 @@ function enablePromptRecall(root: string) {
 
 beforeEach(() => {
   _resetAblationCacheForTests();
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-f4-recall-connection-'));
+  tmpRoot = makeRoot('f4-recall-connection', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
@@ -49,7 +49,6 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.HIPPO_HOME;
   _resetAblationCacheForTests();
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('prompt recall reuses the ambient load connection', () => {

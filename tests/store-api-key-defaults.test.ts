@@ -1,15 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, DEFAULT_KEY_TTL_DAYS, readApiKeyRecord } from '../src/store/auth.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-key-defaults-'));
+  home = makeRoot('key-defaults', { init: false });
 });
-afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 describe('store createApiKey defaults', () => {
   it('mints a member key that expires, matching the API layer', () => {

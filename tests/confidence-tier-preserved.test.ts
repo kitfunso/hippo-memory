@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { consolidate } from '../src/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -9,18 +8,15 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { markRetrieved } from '../src/core/memory.js';
 import { sampleForReplay } from '../src/consolidate/replay.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-confidence-tier-'));
+  tmpDir = makeRoot('confidence-tier', { init: false });
   // replay picking this test's own fixtures would confound the assertions
   // on stored confidence, so disable it via the store's own config file.
   fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['confidence'] }): MemoryEntry {

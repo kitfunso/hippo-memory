@@ -1,9 +1,7 @@
 // Objects answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same refusals and the same audit rows,
 // and on hippo.db a write whose audit row fails keeps nothing.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { cpSync, rmSync } from 'node:fs';
 import { listAuditEventsAfter, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
@@ -15,6 +13,7 @@ import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } f
 import { inMemoryObjectsStore } from './_helpers/in-memory-objects-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';
@@ -687,71 +686,59 @@ describe("hippo.db's Objects writes are one transaction each", () => {
   }
 
   it.each(CASES)('a $kind save or close whose audit row is refused keeps no row, no mirror, no successor link, no closed status and no audit row', async (c) => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-objects-atomic-'));
-    try {
-      cpSync(fixture.dir, root, { recursive: true });
-      const store = sqliteStore(root);
-      const { objects } = store;
-      const first = saving(c, 1);
-      await objects.saveObject(TENANT_A, c.kind, first.save);
-      refuseAuditOps(root, [createOp(c.kind), closeOp(c.kind)]);
-      const fresh = saving(c, 2, { at: T2 });
-      const successor = saving(c, 3, { at: T2, supersedesId: 1 });
-      const before = auditRowsAt(root);
+    const root = makeRoot('objects-atomic', { init: false });
+    cpSync(fixture.dir, root, { recursive: true });
+    const store = sqliteStore(root);
+    const { objects } = store;
+    const first = saving(c, 1);
+    await objects.saveObject(TENANT_A, c.kind, first.save);
+    refuseAuditOps(root, [createOp(c.kind), closeOp(c.kind)]);
+    const fresh = saving(c, 2, { at: T2 });
+    const successor = saving(c, 3, { at: T2, supersedesId: 1 });
+    const before = auditRowsAt(root);
 
-      await expect(objects.saveObject(TENANT_A, c.kind, fresh.save)).rejects.toThrow('audit row refused');
-      await expect(objects.saveObject(TENANT_A, c.kind, successor.save)).rejects.toThrow('audit row refused');
-      await expect(objects.closeObject(TENANT_A, c.kind, 1, { from: ['active'], actor: ACTOR, at: T3 })).rejects.toThrow('audit row refused');
+    await expect(objects.saveObject(TENANT_A, c.kind, fresh.save)).rejects.toThrow('audit row refused');
+    await expect(objects.saveObject(TENANT_A, c.kind, successor.save)).rejects.toThrow('audit row refused');
+    await expect(objects.closeObject(TENANT_A, c.kind, 1, { from: ['active'], actor: ACTOR, at: T3 })).rejects.toThrow('audit row refused');
 
-      expect(await objects.listObjects(TENANT_A, c.kind, { limit: 10 })).toEqual([rowOf(c, 1, first)]);
-      expect(await store.entriesByIds([first.save.mirror.id, fresh.save.mirror.id, successor.save.mirror.id], TENANT_A)).toMatchObject([{ id: first.save.mirror.id }]);
-      expect(auditRowsAt(root)).toEqual(before);
-      await store.close();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    expect(await objects.listObjects(TENANT_A, c.kind, { limit: 10 })).toEqual([rowOf(c, 1, first)]);
+    expect(await store.entriesByIds([first.save.mirror.id, fresh.save.mirror.id, successor.save.mirror.id], TENANT_A)).toMatchObject([{ id: first.save.mirror.id }]);
+    expect(auditRowsAt(root)).toEqual(before);
+    await store.close();
   });
 
   it('an incident with more links than one lookup chunk is checked across chunks and names the first unheld link', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-objects-links-'));
-    try {
-      cpSync(fixture.dir, root, { recursive: true });
-      const store = sqliteStore(root);
-      const { objects } = store;
-      const first = opening(1);
-      await objects.openIncident(TENANT_A, first.open);
-      const held = Array.from({ length: 1200 }, () => mirrorIdOf(first));
-      const late = [...held.slice(0, 1100), 'mem_missing_late', 'mem_missing_later', ...held.slice(1100)];
+    const root = makeRoot('objects-links', { init: false });
+    cpSync(fixture.dir, root, { recursive: true });
+    const store = sqliteStore(root);
+    const { objects } = store;
+    const first = opening(1);
+    await objects.openIncident(TENANT_A, first.open);
+    const held = Array.from({ length: 1200 }, () => mirrorIdOf(first));
+    const late = [...held.slice(0, 1100), 'mem_missing_late', 'mem_missing_later', ...held.slice(1100)];
 
-      expect(await objects.openIncident(TENANT_A, opening(2, { at: T2, links: late }).open)).toEqual({ refused: 'unlinked', memoryId: 'mem_missing_late' });
-      expect(await objects.openIncident(TENANT_A, opening(3, { at: T2, links: held }).open)).toMatchObject({ status: 'open' });
-      await store.close();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    expect(await objects.openIncident(TENANT_A, opening(2, { at: T2, links: late }).open)).toEqual({ refused: 'unlinked', memoryId: 'mem_missing_late' });
+    expect(await objects.openIncident(TENANT_A, opening(3, { at: T2, links: held }).open)).toMatchObject({ status: 'open' });
+    await store.close();
   });
 
   it('an incident open or resolve whose audit row is refused keeps no row, no mirror, no resolved status and no audit row', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-objects-atomic-'));
-    try {
-      cpSync(fixture.dir, root, { recursive: true });
-      const store = sqliteStore(root);
-      const { objects } = store;
-      const first = opening(1);
-      await objects.openIncident(TENANT_A, first.open);
-      refuseAuditOps(root, ['incident_open', 'incident_resolve']);
-      const second = opening(2, { at: T2, links: [mirrorIdOf(first)] });
-      const before = auditRowsAt(root);
+    const root = makeRoot('objects-atomic', { init: false });
+    cpSync(fixture.dir, root, { recursive: true });
+    const store = sqliteStore(root);
+    const { objects } = store;
+    const first = opening(1);
+    await objects.openIncident(TENANT_A, first.open);
+    refuseAuditOps(root, ['incident_open', 'incident_resolve']);
+    const second = opening(2, { at: T2, links: [mirrorIdOf(first)] });
+    const before = auditRowsAt(root);
 
-      await expect(objects.openIncident(TENANT_A, second.open)).rejects.toThrow('audit row refused');
-      await expect(objects.resolveIncident(TENANT_A, 1, { text: 'fixed', actor: ACTOR, at: T3 })).rejects.toThrow('audit row refused');
+    await expect(objects.openIncident(TENANT_A, second.open)).rejects.toThrow('audit row refused');
+    await expect(objects.resolveIncident(TENANT_A, 1, { text: 'fixed', actor: ACTOR, at: T3 })).rejects.toThrow('audit row refused');
 
-      expect(await objects.listObjects(TENANT_A, 'incident', { limit: 10 })).toEqual([incidentOf(1, first)]);
-      expect(await store.entriesByIds([mirrorIdOf(first), mirrorIdOf(second)], TENANT_A)).toMatchObject([{ id: mirrorIdOf(first) }]);
-      expect(auditRowsAt(root)).toEqual(before);
-      await store.close();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    expect(await objects.listObjects(TENANT_A, 'incident', { limit: 10 })).toEqual([incidentOf(1, first)]);
+    expect(await store.entriesByIds([mirrorIdOf(first), mirrorIdOf(second)], TENANT_A)).toMatchObject([{ id: mirrorIdOf(first) }]);
+    expect(auditRowsAt(root)).toEqual(before);
+    await store.close();
   });
 });

@@ -1,23 +1,13 @@
 // A request scope owns one handle per store; code that outlives the scope, or runs beside it, never gets or closes that handle.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { openHippoDb, closeHippoDb, noteStoreBusy, runWithRequestStores, currentRequestStores, outsideRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
+import { makeStore } from './_helpers/make-root.js';
 
-let tmp: string;
 let root: string;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-request-stores-'));
-  root = path.join(tmp, '.hippo');
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  ({ root } = makeStore('request-stores'));
 });
 
 const busyTimeout = (db: DatabaseSyncLike): number => Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout);

@@ -1,14 +1,13 @@
 // An audit store that will not open during sleep's rescue audit is a warn line with the error class, not a debug line nobody sees.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { consolidate } from '../src/index.js';
 import { calculateStrength, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -30,9 +29,8 @@ function condemned(content: string): MemoryEntry {
 
 describe('sleep rescue audit', () => {
   it('warns with the error class when the audit store will not open, and still reports the unaudited rescues', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-rescue-audit-'));
+    const root = makeRoot('rescue-audit');
     roots.push(root);
-    initStore(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false } }));
     writeEntriesTogether(root, [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemned('w'.repeat(len))));
     // The sleep-count write lands just before the rescue audit; stamping the store for a newer binary there makes the audit's open refuse.

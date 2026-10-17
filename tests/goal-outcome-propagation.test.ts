@@ -1,14 +1,11 @@
 // tests/goal-outcome-propagation.test.ts
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
@@ -46,10 +43,8 @@ function setStrength(root: string, memoryId: string, strength: number) {
 describe('completeGoal lifespan-windowed propagation', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-b3-out-'));
-    initStore(root);
+    root = makeRoot('b3-out');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('outcome >= 0.7 boosts memories recalled within the goal lifespan', async () => {
     const m = await remember(ctx(root), { content: 'lesson', tags: ['rfx'] });

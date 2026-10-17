@@ -1,6 +1,6 @@
 // W1 handoff envelope (trajectories/01M2BQTM4AGFVMYY7G2XV5G7WY/plan.md), tests 1-6.
 // Real temp SQLite stores throughout; no mocked DB.
-import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +19,7 @@ import { getContext, adminActor } from '../src/api/index.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface ColumnInfo {
   name: string;
@@ -66,11 +67,7 @@ const PRE_W1_SESSION_HANDOFFS_DDL = `
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-w1-handoff-'));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  root = makeRoot('w1-handoff', { init: false });
 });
 
 describe('test 1: fresh store, single open', () => {

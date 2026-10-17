@@ -2,7 +2,6 @@
 // Drives the built CLI while a child process holds the write lock.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync, type ChildProcess } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
@@ -11,6 +10,7 @@ import { createMemory } from '../src/core/memory.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../src/db/index.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from './_helpers/store-write-lock.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -32,7 +32,7 @@ function runHook(args: string[], input: string) {
 }
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hook-busy-'));
+  tmp = makeRoot('hook-busy', { init: false });
   projectDir = path.join(tmp, 'proj');
   localRoot = path.join(projectDir, '.hippo');
   fs.mkdirSync(projectDir, { recursive: true });
@@ -44,7 +44,6 @@ beforeEach(() => {
 afterEach(async () => {
   await releaseStoreWriteLock(holder);
   holder = null;
-  fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe('context hook while another process holds the store write lock', () => {

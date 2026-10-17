@@ -1,13 +1,12 @@
 // serve({ routes }): an add-on mounts POST /v1 routes behind core's auth and JSON parsing, and cannot shadow a core route.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApiKey } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import type { JsonValue } from '../src/util/json.js';
-import { initStore } from '../src/store/open.js';
 import { HttpError, serve, type AddonCall, type AddonRoute, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ECHO = '/v1/x-echo';
 
@@ -19,8 +18,7 @@ let calls: AddonCall[] = [];
 beforeEach(() => {
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
-  root = mkdtempSync(join(tmpdir(), 'hippo-addon-routes-'));
-  initStore(root);
+  root = makeRoot('addon-routes');
   const db = openHippoDb(root);
   try {
     apiKey = createApiKey(db, { tenantId: 'tenant-x', label: 'addon-test' }).plaintext;
@@ -34,7 +32,6 @@ afterEach(async () => {
   await handle?.stop();
   handle = null;
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
 });
 
 /** An add-on route that records every call it gets and answers with `reply`. */

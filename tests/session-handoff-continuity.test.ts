@@ -1,7 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { initStore } from '../src/store/open.js';
 import {
   appendSessionEvent,
@@ -18,15 +15,12 @@ import {
 } from '../src/db/index.js';
 import { rowToSessionHandoff } from '../src/core/handoff.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pr2-test-'));
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('pr2-test', { init: false });
 });
 
 describe('schema v5+v6 migration', () => {

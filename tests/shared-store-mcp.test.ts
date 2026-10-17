@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -15,6 +14,7 @@ import { TOOLS } from '../src/mcp/tools.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
 const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve', 'hippo_peers'];
@@ -58,7 +58,7 @@ function repoWithOneFix(): string {
 }
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-shared-mcp-'));
+  tmp = makeRoot('shared-mcp', { init: false });
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
@@ -70,7 +70,6 @@ afterEach(async () => {
   if (origHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('MCP writes on a shared store', () => {

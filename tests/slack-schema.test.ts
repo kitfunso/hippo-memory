@@ -1,9 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Row shape of a SQLite `PRAGMA table_info(...)` result. */
 interface TableInfoRow {
@@ -18,10 +15,8 @@ interface TableInfoRow {
 describe('schema v17 — slack ingestion tables', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-schema-'));
-    initStore(root);
+    root = makeRoot('slack-schema');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('creates slack_event_log with PRIMARY KEY on event_id', () => {
     const db = openHippoDb(root);

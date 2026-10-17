@@ -1,25 +1,16 @@
 // updateStats read-modify-wrote all three meta counters with no transaction and
 // wrote all three back, so concurrent writers lost increments and clobbered
 // counters they had not touched (store/index-and-stats.ts atomic-increment fix).
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { initStore } from '../src/store/open.js';
 import { loadStats } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
-
-afterEach(() => {
-  try {
-    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // best-effort cleanup only
-  }
-});
 
 // The workers must exercise the shipped updateStats, not a copy of it, so they
 // import the build output.
@@ -52,8 +43,7 @@ function runWorkers(specs: ReadonlyArray<{ field: string; iterations: number }>)
 
 describe('updateStats under concurrent writers', () => {
   it('every increment to one counter lands', async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-stats-race-'));
-    initStore(root);
+    root = makeRoot('stats-race');
 
     await runWorkers([
       { field: 'remembered', iterations: 40 },
@@ -75,8 +65,7 @@ describe('updateStats under concurrent writers', () => {
   }, 60_000);
 
   it('a write to one counter does not roll back another', async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-stats-clobber-'));
-    initStore(root);
+    root = makeRoot('stats-clobber');
 
     await runWorkers([
       { field: 'remembered', iterations: 60 },

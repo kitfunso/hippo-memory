@@ -1,16 +1,16 @@
 // initStore + a second openHippoDb was two connections per loader; openStore
 // runs init on the one connection the caller keeps. Real SQLite store, no mocks.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire, syncBuiltinESMExports } from 'module';
-import { initStore, openStore } from '../src/store/open.js';
+import { openStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
@@ -21,12 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-f3-openstore-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  root = makeRoot('f3-openstore');
 });
 
 /** Counts distinct connection objects (`this`) any `.prepare()` call was made on. */

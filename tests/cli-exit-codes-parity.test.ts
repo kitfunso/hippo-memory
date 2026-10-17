@@ -1,12 +1,12 @@
 // Pins stdout, stderr and the exit status of failing `hippo` invocations across the verb files on a real store, so a change
 // to how a verb stops its command cannot move a byte or a code. The cases in SPAWNED run the built CLI; the rest run it in process.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeStore } from './_helpers/make-root.js';
 
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const FETCH_UNAUTHORISED = resolve(__dirname, '_helpers', 'fetch-unauthorised.cjs').split(sep).join('/');
@@ -85,9 +85,7 @@ let usage = '';
 const codes = new Set<number | null>();
 
 beforeAll(() => {
-  store = mkdtempSync(join(tmpdir(), 'hippo-exit-parity-store-'));
-  mkdirSync(join(store, '.hippo'));
-  initStore(join(store, '.hippo'));
+  store = makeStore('exit-parity-store').base;
   bare = mkdtempSync(join(tmpdir(), 'hippo-exit-parity-bare-'));
   home = mkdtempSync(join(tmpdir(), 'hippo-exit-parity-home-'));
 });

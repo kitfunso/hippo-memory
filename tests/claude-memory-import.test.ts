@@ -1,7 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { execFileSync } from 'child_process';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
@@ -9,14 +8,13 @@ import { initStore } from '../src/store/open.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(importProjectMemories(hippoRoot, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } })).imported;
 
-const made: string[] = [];
 const tmp = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-claude-memory-'));
-  made.push(dir);
+  const dir = makeRoot('claude-memory', { init: false });
   return dir;
 };
 // Claude Code's own rule for a project folder name, hash included.
@@ -45,10 +43,6 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 const contents = (hippoRoot: string) => loadEveryTenantEntries(hippoRoot).map((e) => e.content).join('\n');
-
-afterEach(() => {
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
-});
 
 describe('the project pass reads only the Claude Code memory of the store project', () => {
   it('imports its own project folder and no other project', () => {

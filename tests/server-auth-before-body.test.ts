@@ -2,12 +2,9 @@
 // the credential before it reads. The two webhook routes take no API key, so they check the signing secret and the signature headers first.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { connect } from 'node:net';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Sends headers that promise a 2 MB body plus a few bytes of it, never the rest, and resolves with the status line. */
 function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): Promise<string> {
@@ -66,8 +63,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-auth-before-body-'));
-    initStore(root);
+    root = makeRoot('auth-before-body');
     handle = await serve({ hippoRoot: root, port: 0 });
   });
 
@@ -77,7 +73,6 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
-    rmSync(root, { recursive: true, force: true });
   });
 
   it.each([

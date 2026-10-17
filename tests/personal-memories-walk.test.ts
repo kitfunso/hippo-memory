@@ -2,7 +2,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as api from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
@@ -27,6 +26,7 @@ import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const A_SCOPE = 'personal:private:oid-a';
 const B_SCOPE = 'personal:private:oid-b';
@@ -137,7 +137,7 @@ function restoreEnv(name: keyof typeof origEnv): void {
 }
 
 beforeAll(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-personal-walk-'));
+  tmp = makeRoot('personal-walk', { init: false });
   // File-wide, not per test: the one server reads both at boot and on every request.
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   process.env.HIPPO_V1_RPS = '0'; // every call comes from one address, so the per-address limiter would cut the walk short
@@ -173,7 +173,6 @@ afterAll(async () => {
   restoreEnv('HIPPO_V1_RPS');
   _resetSharedStoreCacheForTests();
   _resetProjectIdentityCacheForTests();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('personal memories walk (plan lane T)', () => {

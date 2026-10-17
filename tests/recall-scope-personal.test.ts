@@ -1,8 +1,5 @@
 // Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { HttpError } from '../src/util/http-util.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
@@ -11,7 +8,7 @@ import {
   passesScopeFilterForRecall, personalScopeOf, ScopeForbiddenError, type ScopeActor,
 } from '../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { initStore } from '../src/store/open.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const A_SCOPE = 'personal:private:a';
 const B_SCOPE = 'personal:private:b';
@@ -105,8 +102,7 @@ describe('HttpError Retry-After', () => {
   let handle: ServerHandle;
 
   beforeAll(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-retry-after-'));
-    initStore(root);
+    root = makeRoot('retry-after');
     handle = await serve({
       hippoRoot: root, host: '127.0.0.1', port: 0, routes: [
         { path: '/v1/x-slow', handler: async () => { throw new HttpError(429, 'slow down', 7); } },
@@ -117,7 +113,6 @@ describe('HttpError Retry-After', () => {
 
   afterAll(async () => {
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   async function post(path: string): Promise<Response> {

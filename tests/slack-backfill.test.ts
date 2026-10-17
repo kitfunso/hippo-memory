@@ -1,23 +1,18 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { backfillChannel, type SlackHistoryFetcher } from '../src/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('backfillChannel', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-bf-'));
-    initStore(root);
+    root = makeRoot('slack-bf');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('paginates, ingests, and persists the cursor', async () => {
     const fetcher: SlackHistoryFetcher = async ({ cursor }) => {

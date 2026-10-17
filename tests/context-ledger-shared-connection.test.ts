@@ -1,14 +1,14 @@
 // the static and recall token-ledger rows each opened their own connection
 // via withLedgerDb. Drives the built CLI, no mocks.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -45,7 +45,7 @@ function enablePromptRecall(root: string) {
 }
 
 beforeEach(() => {
-  cliTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-f5-ledger-conn-'));
+  cliTmp = makeRoot('f5-ledger-conn', { init: false });
   hippoDir = path.join(cliTmp, '.hippo');
   globalDir = path.join(cliTmp, 'global');
   fs.mkdirSync(hippoDir, { recursive: true });
@@ -54,10 +54,6 @@ beforeEach(() => {
   preloadPath = path.join(cliTmp, 'f5-preload.mjs');
   fs.writeFileSync(preloadPath, PRELOAD_SRC);
   logPath = path.join(cliTmp, 'f5-conn.log');
-});
-
-afterEach(() => {
-  fs.rmSync(cliTmp, { recursive: true, force: true });
 });
 
 describe('the static and recall ledger rows share one connection', () => {

@@ -24,14 +24,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SECRET = 'shhh-test-secret';
 
@@ -102,8 +99,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-multi-ws-'));
-    initStore(root);
+    root = makeRoot('multi-ws');
     process.env.SLACK_SIGNING_SECRET = SECRET;
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
@@ -112,7 +108,6 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     delete process.env.SLACK_SIGNING_SECRET;
     delete process.env.HIPPO_TENANT;
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   function entriesByTenant(tenantId: string) {

@@ -12,13 +12,10 @@
  * must no-op rather than crash and block all later migrations.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; the row shape is guaranteed
@@ -46,12 +43,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-v27-heal-'));
-    initStore(root);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('v27-heal');
   });
 
   function simulatePartialV16State(): void {

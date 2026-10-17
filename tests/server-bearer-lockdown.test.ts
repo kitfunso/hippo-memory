@@ -2,14 +2,13 @@
 // /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
 // the route table so a new route missing buildContextWithAuth/requireAuth fails here.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { routeLabel } from '../src/server/route-table.js';
 import { V1_ROWS } from './_helpers/v1-route-rows.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -108,8 +107,7 @@ describe('server Bearer lockdown', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-lockdown-'));
-    initStore(root);
+    root = makeRoot('lockdown');
     process.env.HIPPO_REQUIRE_AUTH = '1';
     // '0' disables the default limiter (20 rps/burst 40), which would
     // 429 the ~120 /v1 requests this file sends.
@@ -121,7 +119,6 @@ describe('server Bearer lockdown', () => {
     delete process.env.HIPPO_REQUIRE_AUTH;
     delete process.env.HIPPO_V1_RPS;
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('every non-public row of the live route table answers 401 to a request with no credential', async () => {

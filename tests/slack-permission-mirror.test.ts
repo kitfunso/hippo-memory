@@ -1,22 +1,17 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { retrieve } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('slack permission mirroring', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-perm-'));
-    initStore(root);
+    root = makeRoot('slack-perm');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('private-channel content does not leak when querying public scope', async () => {
     await ingestMessage(ctx(root), {

@@ -1,12 +1,12 @@
 // Transcript text naming a network host never reaches the filesystem: existsSync on \\host opens an SMB connection.
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _setDigestExistsProbeForTests, recordSessionDigest, type DigestEdit } from '../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];
@@ -16,7 +16,7 @@ let repo: string;
 let hippoRoot: string;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-net-'));
+  tmp = makeRoot('digest-net', { init: false });
   fs.mkdirSync(path.join(tmp, 'repo', 'src'), { recursive: true });
   repo = fs.realpathSync.native(path.join(tmp, 'repo'));
   hippoRoot = path.join(repo, '.hippo');
@@ -32,7 +32,6 @@ beforeEach(() => {
 afterEach(() => {
   _setDigestExistsProbeForTests(null);
   vi.unstubAllEnvs();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 const touched = (): string[] => probes.filter((p) => HOST.test(p));

@@ -1,16 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OTHER_STORE_MARKER, withUnmigratedDb } from '../src/db/open.js';
 import { OtherStoreFolderError } from '../src/util/sqlite-blocked.js';
 import { initStore } from '../src/store/open.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-unmigrated-'));
+  root = makeRoot('unmigrated', { init: false });
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe('withUnmigratedDb', () => {
   it('throws the missing-store message when hippo.db does not exist', () => {

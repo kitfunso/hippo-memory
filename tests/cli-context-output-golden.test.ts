@@ -1,8 +1,7 @@
 // Pins `hippo context` stdout, stderr and exit code across its three formats and the per-prompt hook path,
 // in process, so a split of renderContext that changes a byte fails here. Ids and timestamps are masked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -11,6 +10,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/c
 import { handleContext } from '../src/cli/context.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root = '';
 let store = '';
@@ -20,7 +20,7 @@ function seeded(content: string, id: string, opts: Partial<Parameters<typeof cre
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-context-golden-'));
+  root = makeRoot('context-golden', { init: false });
   store = join(root, 'local');
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');

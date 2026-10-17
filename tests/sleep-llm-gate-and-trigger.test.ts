@@ -3,26 +3,24 @@
 // honours the configured half-life.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
 import { consolidate } from '../src/index.js';
 import { remember } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];
 const FAKE_AWS_KEY = 'AKIA' + 'X'.repeat(16);
 
 function newRoot(configJson?: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-h3-'));
+  const root = makeRoot('h3');
   roots.push(root);
-  initStore(root);
   if (configJson) writeFileSync(join(root, 'config.json'), configJson);
   return root;
 }

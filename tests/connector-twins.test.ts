@@ -1,10 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { adminActor } from '../src/api/index.js';
-import { initStore } from '../src/store/open.js';
 import { githubEventRecord } from '../src/store/connectors/github.js';
 import { slackEventRecord } from '../src/store/connectors/slack.js';
 import { parkInDlq, replayParked } from '../src/connectors/dlq.js';
@@ -14,16 +10,15 @@ import { rememberWithEventLog } from '../src/connectors/ingest.js';
 import { isJsonObject, type JsonValue } from '../src/util/json.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
   let root: string;
   let ctx: FullContext;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-connector-twins-'));
-    initStore(root);
+    root = makeRoot('connector-twins');
     ctx = apiCtx(root, 'default', adminActor('connector:test'));
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   const gh = { connector: 'github', idempotencyKey: 'k1', deliveryId: 'd1', eventName: 'issues' } as const;
   const sl = { connector: 'slack', eventId: 'Ev1' } as const;

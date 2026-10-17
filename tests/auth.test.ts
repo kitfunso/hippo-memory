@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, validateApiKey, revokeApiKey, listApiKeys } from '../src/store/auth.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('auth', () => {
   it('createApiKey returns plaintext exactly once and stores hash', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
+    const home = makeRoot('auth');
     const db = openHippoDb(home);
     try {
       const { keyId, plaintext } = createApiKey(db, { tenantId: 'default', label: 'cli' });
@@ -23,24 +21,22 @@ describe('auth', () => {
       expect(row.key_hash.length).toBeGreaterThan(20);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('validateApiKey: rejects unknown plaintext', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
+    const home = makeRoot('auth');
     const db = openHippoDb(home);
     try {
       const ctx = validateApiKey(db, 'hk_aaaaaaaaaaaaaaaaaaaaaaaa.deadbeef');
       expect(ctx.valid).toBe(false);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('revokeApiKey: revoked keys fail validation', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
+    const home = makeRoot('auth');
     const db = openHippoDb(home);
     try {
       const { keyId, plaintext } = createApiKey(db, { tenantId: 'default' });
@@ -49,12 +45,11 @@ describe('auth', () => {
       expect(ctx.valid).toBe(false);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('listApiKeys excludes revoked when active=true', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
+    const home = makeRoot('auth');
     const db = openHippoDb(home);
     try {
       const a = createApiKey(db, { tenantId: 'default', label: 'a' });
@@ -66,7 +61,6 @@ describe('auth', () => {
       expect(all.length).toBe(2);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

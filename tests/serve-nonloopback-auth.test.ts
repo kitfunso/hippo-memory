@@ -18,10 +18,6 @@
 // itself, not its parent.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { log } from '../src/util/log.js';
@@ -34,8 +30,7 @@ describe('serve() non-loopback host guard', () => {
   const savedAllowCleartext = process.env.HIPPO_ALLOW_CLEARTEXT;
 
   beforeEach(() => {
-    hippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-nla-')), '.hippo');
-    initStore(hippoRoot);
+    hippoRoot = makeStore('nla').root;
     delete process.env.HIPPO_REQUIRE_AUTH;
     delete process.env.HIPPO_ALLOW_CLEARTEXT;
   });
@@ -52,7 +47,6 @@ describe('serve() non-loopback host guard', () => {
     }
     if (savedAllowCleartext === undefined) delete process.env.HIPPO_ALLOW_CLEARTEXT;
     else process.env.HIPPO_ALLOW_CLEARTEXT = savedAllowCleartext;
-    rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   it('rejects a non-loopback bind without HIPPO_REQUIRE_AUTH', async () => {
@@ -166,6 +160,7 @@ describe('serve() non-loopback host guard', () => {
 // client address. Unset (the default), the socket address keys the bucket.
 import { clientIpForRateLimit } from '../src/server.js';
 import type { IncomingMessage } from 'node:http';
+import { makeStore } from './_helpers/make-root.js';
 
 function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10.0.0.9'): IncomingMessage {
   // SAFETY: clientIpForRateLimit reads only headers and socket.remoteAddress (src/server.ts), the two fields set here.

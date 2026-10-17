@@ -14,11 +14,7 @@
  *     model id reports a reindex is needed exactly once.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
 import {
   embeddingInputText,
@@ -27,6 +23,7 @@ import {
   saveStoredEmbeddingModel,
   EMBEDDING_MODEL_META_KEY,
 } from '../src/store/embeddings/index.js';
+import { makeStore } from './_helpers/make-root.js';
 
 describe('embeddingInputText', () => {
   it('excludes tags starting with path: but keeps other tags', () => {
@@ -68,17 +65,10 @@ describe('embeddingInputText', () => {
 });
 
 describe('reindex identity consistency', () => {
-  let root: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-embed-identity-'));
-    hippoRoot = join(root, '.hippo');
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('embed-identity'));
   });
 
   it('a store saved via saveStoredEmbeddingModel reports no reindex needed for the same model', () => {

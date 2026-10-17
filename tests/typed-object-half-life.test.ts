@@ -2,7 +2,6 @@
 // configured default half-life, never faster than an ordinary memory. Real stores, no mocks.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { readEntry } from '../src/store/entry-reads.js';
@@ -18,13 +17,14 @@ import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const dirs: string[] = [];
 afterEach(() => {
   while (dirs.length) fs.rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 function store(config: Partial<HippoConfig> | undefined): string {
-  const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-typed-hl-')), '.hippo');
+  const root = path.join(makeRoot('typed-hl', { init: false }), '.hippo');
   dirs.push(path.dirname(root));
   initStore(root);
   if (config) fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify(config));

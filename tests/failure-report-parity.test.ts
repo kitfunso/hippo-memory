@@ -1,13 +1,12 @@
 // A failure read with no store must hash like the local failure log, or repeat counts split between a laptop and its server.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
 import { failureHash, failureReport, lessonFromFailure } from '../src/capture/failure-reading.js';
 import type { JsonValue } from '../src/util/json.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface LogRow {
   tool: string | null;
@@ -21,7 +20,7 @@ let dir: string;
 let root: string;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-failure-report-'));
+  dir = makeRoot('failure-report', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   root = path.join(dir, '.hippo');
   initStore(root);
@@ -29,7 +28,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function logRows(): LogRow[] {

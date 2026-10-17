@@ -1,13 +1,10 @@
 // An MCP tool that throws an untyped error must not hand its internal text to the client; typed API errors keep theirs.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
 import { NotFoundError } from '../src/core/api-errors.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface RpcReply {
   id: number;
@@ -36,9 +33,7 @@ async function callTool(name: string, args: Record<string, string>, requestId?: 
 }
 
 beforeEach(async () => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-mcp-redact-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('mcp-redact');
   handle = await serve({ hippoRoot: home, port: 0 });
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
@@ -46,7 +41,6 @@ beforeEach(async () => {
 afterEach(async () => {
   stderr.mockRestore();
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('POST /mcp error replies', () => {

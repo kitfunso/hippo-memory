@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { handleEmbed } from '../src/cli/maintenance.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
 function localProvider(opts: { available?: boolean; loadError?: string; vector?: number[] }): EmbeddingProvider {
@@ -31,9 +31,8 @@ let stderr: string[];
 const savedCache = process.env.HIPPO_MODEL_CACHE;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-load-'));
+  root = makeRoot('embed-load');
   emptyCache = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty-model-cache-'));
-  initStore(root);
   writeEntry(root, createMemory('the deploy runbook lives in the ops wiki', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
   stderr = [];
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
@@ -50,7 +49,6 @@ afterEach(() => {
   process.exitCode = undefined;
   if (savedCache === undefined) delete process.env.HIPPO_MODEL_CACHE;
   else process.env.HIPPO_MODEL_CACHE = savedCache;
-  fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(emptyCache, { recursive: true, force: true });
 });
 

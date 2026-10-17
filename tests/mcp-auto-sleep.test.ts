@@ -1,13 +1,12 @@
 // MCP auto-sleep: a remember that lands while a sleep runs on the same store must not start a second one.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { currentRequestStores, runWithRequestStores, type RequestStores } from '../src/db/index.js';
 import { sleepRuns } from './_helpers/sleep-runs.js';
 import { cliStdioHost } from '../src/cli/api-context.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 
@@ -26,9 +25,8 @@ function remember(hippoRoot: string, text: string) {
 
 describe('MCP auto-sleep', () => {
   it('runs one sleep per store at a time, and the next once that one settles', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-mcp-autosleep-'));
+    const root = makeRoot('mcp-autosleep');
     roots.push(root);
-    initStore(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
     // A sleep sends each new episodic memory to fact extraction, so holding that reply keeps the sleep running.
     const sent: string[] = [];
@@ -53,9 +51,8 @@ describe('MCP auto-sleep', () => {
   });
 
   it("runs in its own open scope, not the tool call's, with the caller's lock wait", async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-mcp-autosleep-scope-'));
+    const root = makeRoot('mcp-autosleep-scope');
     roots.push(root);
-    initStore(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
     const seen: { scope: RequestStores | undefined; open: boolean }[] = [];
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');

@@ -1,15 +1,13 @@
 // Under a store other than hippo.db, a route that needs hippo.db's local files answers 501 and no request opens or creates hippo.db.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../src/db/index.js';
 import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { TOOLS } from '../src/mcp/tools.js';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore } from '../src/entry/store-kit.js';
 import { OBJECT_ROW, V1_ROWS } from './_helpers/v1-route-rows.js';
@@ -18,6 +16,7 @@ import { inMemoryObjectsStore, type InMemoryObjectsStore } from './_helpers/in-m
 import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
 import { HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords, type InMemoryQuarantineStore } from './_helpers/in-memory-quarantine-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** A V1_ROWS key as a request line, each :param slot filled with 1. */
 const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
@@ -102,7 +101,7 @@ describe('serve() under a store that is not hippo.db', () => {
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
-    root = mkdtempSync(join(tmpdir(), 'hippo-other-store-'));
+    root = makeRoot('other-store', { init: false });
     handle = await serve({
       hippoRoot: root, port: 0, store: stubStore(root, base), routes: [
         { path: '/v1/x-addon', handler: async () => { addonRuns += 1; return {}; } },
@@ -116,7 +115,6 @@ describe('serve() under a store that is not hippo.db', () => {
   afterAll(async () => {
     await handle.stop();
     vi.unstubAllEnvs();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('answers 501 on the /v1 routes that need local files, and never runs the handler', async () => {
@@ -593,14 +591,13 @@ describe('serve() under another store reads its folder as shared, though no conf
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
-    root = mkdtempSync(join(tmpdir(), 'hippo-other-store-shared-'));
+    root = makeRoot('other-store-shared', { init: false });
     handle = await serve({ hippoRoot: root, port: 0, store: stubStore(root, base) });
   });
 
   afterAll(async () => {
     await handle.stop();
     vi.unstubAllEnvs();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('keys an MCP recall\'s continuity to the caller\'s owner and project', async () => {
@@ -624,15 +621,13 @@ describe('a StoreBusyError on the hippo.db path', () => {
   let handle: ServerHandle;
 
   beforeAll(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-store-busy-'));
-    initStore(root);
+    root = makeRoot('store-busy');
     const busyKeys: HippoStore = { ...sqliteStore(root), findApiKey: async () => { throw new StoreBusyError(); } };
     handle = await serve({ hippoRoot: root, port: 0, store: busyKeys });
   });
 
   afterAll(async () => {
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('is a 503 with Retry-After on a /v1 route and on POST /mcp', async () => {

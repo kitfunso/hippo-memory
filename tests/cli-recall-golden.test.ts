@@ -14,6 +14,7 @@ import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -110,7 +111,7 @@ function normalize(text: string, home: string): string {
 interface FreshStore { home: string; env: NodeJS.ProcessEnv }
 
 function freshStore(c: Pick<Case, 'global'>): FreshStore {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-golden-'));
+  const home = makeRoot('golden', { init: false });
   cpSync(template, join(home, '.hippo'), { recursive: true });
   const globalRoot = join(home, 'global-hippo');
   if (c.global) seedGlobal(globalRoot);

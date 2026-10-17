@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serializeEntry } from '../src/core/markdown.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let storeRoot: string;
 
 beforeEach(() => {
-  storeRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mirror-rebuild-')), '.hippo');
+  storeRoot = path.join(makeRoot('mirror-rebuild', { init: false }), '.hippo');
   fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
 });
 

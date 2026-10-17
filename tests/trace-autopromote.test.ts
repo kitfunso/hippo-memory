@@ -1,7 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { consolidate } from '../src/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -9,15 +6,12 @@ import { appendSessionEvent } from '../src/store/sessions.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-autotrace-'));
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('autotrace', { init: false });
 });
 
 describe('consolidate auto-promote: session -> trace', () => {

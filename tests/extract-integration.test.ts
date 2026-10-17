@@ -1,25 +1,17 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect } from 'vitest';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { storeExtractedFacts, ExtractedFact } from '../src/learn/extract.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 
 function setup(): string {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-extract-int-'));
-  initStore(tmpDir);
+  tmpDir = makeRoot('extract-int');
   return tmpDir;
 }
-
-afterEach(() => {
-  if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
-});
 
 describe('storeExtractedFacts', () => {
   it('creates Semantic entries linked to source via extracted_from', () => {
