@@ -1,11 +1,10 @@
 // Pins each MCP tool's reply text on a seeded store, including the early-return and refusal lines, so the per-tool dispatch cannot drift.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -40,9 +39,7 @@ function masked(s: string): string {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-mcp-tool-text-'));
-  root = join(home, '.hippo');
-  initStore(root);
+  ({ base: home, root } = makeStore('mcp-tool-text'));
   writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: false } }), 'utf8');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   vi.stubEnv('ANTHROPIC_API_KEY', '');
@@ -53,7 +50,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('MCP tool reply text', () => {

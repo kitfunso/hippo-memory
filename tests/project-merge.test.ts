@@ -1,8 +1,7 @@
 /** `hippo projects` merge and repair: fold an old worktree name into its repo, set aside copies, re-tag sleep's user-global merges, reversibly. */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -13,16 +12,16 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/inde
 import { listDormantSnapshots } from '../src/store/dormant.js';
 import { listProjectNames, mergeProjectNames, repairProjectNames } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let db: DatabaseSyncLike;
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-project-merge-'));
+  home = makeRoot('project-merge', { init: false });
   initStore(home);
 });
 afterEach(() => {
   closeHippoDb(db);
-  rmSync(home, { recursive: true, force: true });
 });
 
 const T = 'default';

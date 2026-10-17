@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repairAutomaticMemories } from '../src/store/quality-repair.js';
@@ -23,6 +22,7 @@ import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memo
 import { loadConfig } from '../src/core/config.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -30,10 +30,8 @@ const FRAGMENT = 'if the build fails';
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-quality-repair-'));
-  initStore(root);
+  root = makeRoot('quality-repair');
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 function seedIn(store: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = { ...createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic }), ...extra };
@@ -258,14 +256,13 @@ describe('hippo audit repair', () => {
   let global: string;
   let env: NodeJS.ProcessEnv;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'hippo-repair-cli-'));
+    dir = makeRoot('repair-cli', { init: false });
     local = join(dir, '.hippo');
     global = join(dir, 'global');
     initStore(local);
     initStore(global);
     env = { ...process.env, HIPPO_HOME: global, HOME: dir, USERPROFILE: dir };
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
   const cli = (...args: string[]) => spawnSync(process.execPath, [HIPPO_JS, 'audit', 'repair', ...args], { cwd: dir, env, encoding: 'utf8' });
   // The preview case reads bytes only, so it runs in process; the busy-store case keeps the child, a lock held by another process.
   const cliIn = (...args: string[]) => runCliAs(['audit', 'repair', ...args], { cwd: dir, env });

@@ -1,13 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../src/store/auth.js';
 import { log } from '../src/util/log.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // v0.39 commit 5 — Server hardening regressions:
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
@@ -30,8 +27,7 @@ describe('server hardening', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-v039-server-'));
-    initStore(root);
+    root = makeRoot('v039-server');
   });
 
   afterEach(async () => {
@@ -42,7 +38,6 @@ describe('server hardening', () => {
     delete process.env.SLACK_SIGNING_SECRET;
     delete process.env.MCP_SSE_MAX_AGE_SEC;
     delete process.env.MCP_SSE_HEARTBEAT_MS;
-    try { rmSync(root, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
   // ---- Fix 5.3: SSE max-age closes stream ------------------------------

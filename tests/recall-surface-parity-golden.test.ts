@@ -2,8 +2,7 @@
 // over one store, so each difference in docs/recall-surface-differences.md is visible here and moves only on purpose.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -23,6 +22,7 @@ import {
 import type { CliFlags } from '../src/cli/flag-values.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Surface = 'cli' | 'mcp' | 'http';
 const SURFACES: readonly Surface[] = ['cli', 'mcp', 'http'];
@@ -344,7 +344,7 @@ describe('shared store recall, MCP vs HTTP', () => {
   it('MCP hippo_recall shows only the named repo; HTTP GET /v1/memories returns both repos', async () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    const home = mkdtempSync(join(tmpdir(), 'hippo-parity-shared-'));
+    const home = makeRoot('parity-shared', { init: false });
     const root = join(home, 'store');
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     _resetSharedStoreCacheForTests();
@@ -369,7 +369,6 @@ describe('shared store recall, MCP vs HTTP', () => {
       await handle?.stop();
       vi.unstubAllEnvs();
       _resetSharedStoreCacheForTests();
-      rmSync(home, { recursive: true, force: true });
     }
   }, 60_000);
 });

@@ -2,7 +2,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { assemble, retrieve } from '../src/api/index.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -25,6 +24,7 @@ import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TENANT = 'default';
 const SESSION = 'two-repo-session';
@@ -101,7 +101,7 @@ const HIDDEN_FROM_ACME = (): string[] => [ids.beta, ids.none, ids.other, ids.bob
 const HIDDEN_FROM_BETA = (): string[] => [ids.acme, ids.none, ids.other, ids.bob];
 
 beforeAll(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-two-repo-'));
+  tmp = makeRoot('two-repo', { init: false });
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   process.env.HIPPO_V1_RPS = '0';
   process.env.OPENAI_API_KEY = 'test-key-not-real';
@@ -186,7 +186,6 @@ afterAll(async () => {
   for (const [name, value] of Object.entries(origEnv)) restoreEnv(name, value);
   _resetSharedStoreCacheForTests();
   _resetProjectIdentityCacheForTests();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('MCP on a shared store with two repos', () => {

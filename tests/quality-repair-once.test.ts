@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repairAutomaticMemories, repairQualityOnce } from '../src/store/quality-repair.js';
 import { initStore } from '../src/store/open.js';
@@ -11,6 +10,7 @@ import { getMeta } from '../src/db/meta.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';
@@ -29,10 +29,8 @@ function flag(store: string): string {
 describe('repairQualityOnce', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-quality-once-'));
-    initStore(root);
+    root = makeRoot('quality-once');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('sets aside certain defects on the first run only, and never a person\'s words', () => {
     const bad = seed(root, CUT);
@@ -101,14 +99,13 @@ describe('the upgrade runs the repair once', () => {
   let global: string;
   let env: NodeJS.ProcessEnv;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'hippo-quality-once-cli-'));
+    dir = makeRoot('quality-once-cli', { init: false });
     local = join(dir, '.hippo');
     global = join(dir, 'global');
     initStore(local);
     initStore(global);
     env = { ...process.env, HIPPO_HOME: global, HOME: dir, USERPROFILE: dir, APPDATA: join(dir, 'AppData', 'Roaming'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
   // In process, so coverage sees sleep and the daily runner; the runner's own steps still start real children.
   const cli = (...args: string[]) => runCliAs(args, { cwd: dir, env });
 

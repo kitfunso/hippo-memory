@@ -2,8 +2,7 @@
 
 import type { StoreContext } from '../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -20,6 +19,7 @@ import type { CliCoreRecall } from '../src/api/recall/types.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
 import { apiCtx, type FullContext } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let hippoRoot: string;
@@ -45,7 +45,7 @@ function recallRowsInHippoDb(): number {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-recall-core-store-'));
+  home = makeRoot('recall-core-store', { init: false });
   hippoRoot = join(home, '.hippo');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   initStore(hippoRoot);
@@ -56,7 +56,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('retrieve with the CLI ranking core', () => {

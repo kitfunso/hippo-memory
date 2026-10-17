@@ -1,8 +1,7 @@
 /** `hippo projects` through the CLI entry: list project names, merge one into another, and the refusals. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -11,12 +10,13 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
 let hippoRoot: string;
 beforeEach(() => {
-  cwd = mkdtempSync(join(tmpdir(), 'hippo-projects-cli-'));
+  cwd = makeRoot('projects-cli', { init: false });
   hippoRoot = join(cwd, '.hippo');
   mkdirSync(join(cwd, 'global-hippo'));
   initStore(hippoRoot);
@@ -28,7 +28,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(cwd, { recursive: true, force: true });
 });
 
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.

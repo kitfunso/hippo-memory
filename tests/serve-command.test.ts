@@ -1,11 +1,10 @@
 // `hippo serve` in process on port 0: process.on/once and exit are stubbed, so its SIGTERM handler stops it without ending the worker.
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { handleServe } from '../src/cli/serve.js';
-import { initStore } from '../src/store/open.js';
 import { fire, recordListeners, stubExit, type Listener } from './_helpers/process-stubs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface Pidfile {
   readonly url: string;
@@ -17,8 +16,7 @@ let exit: MockInstance;
 let printed: string[];
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'hippo-serve-cmd-'));
-  initStore(dir);
+  dir = makeRoot('serve-cmd');
   listeners = recordListeners(process, 'on', 'once');
   exit = stubExit();
   printed = [];
@@ -28,7 +26,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = undefined;
-  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe('hippo serve, in process', () => {

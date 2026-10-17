@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -11,6 +11,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpRoot: string;
 
@@ -23,12 +24,8 @@ function makeProjectStore(projectName: string): string {
 }
 
 beforeEach(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-origin-'));
+  tmpRoot = makeRoot('origin', { init: false });
   _resetProjectIdentityCacheForTests();
-});
-
-afterEach(() => {
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('writeEntry origin stamping (v39)', () => {

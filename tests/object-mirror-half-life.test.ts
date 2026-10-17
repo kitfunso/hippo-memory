@@ -1,9 +1,7 @@
 // A typed object's mirror memory is stored as it was before the Objects store group took the save: on the flat half-life until the typed
 // migration has run and on the configured default after, with the strength the decay function gives the stored row.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { loadConfig } from '../src/core/config.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -15,8 +13,9 @@ import { saveProcess } from '../src/objects/processes.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { saveSkill } from '../src/objects/skills.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { initStore, TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
+import { TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const FROZEN = new Date('2026-03-01T12:00:00.000Z');
 const TENANT = 'acme';
@@ -32,9 +31,8 @@ afterEach(() => {
 
 /** A fresh store has the typed migration marked done; `migrated: false` takes the mark away, as a store made before the migration has it. */
 function storeWith(migrated: boolean): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-mirror-half-life-'));
+  const root = makeRoot('mirror-half-life');
   roots.push(root);
-  initStore(root);
   if (migrated) return root;
   const db = openHippoDb(root);
   try {

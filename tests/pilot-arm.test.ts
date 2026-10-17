@@ -1,9 +1,7 @@
 // CD11 units: config parsing, the arm helpers, the consumer's arm query, ledger readers and doctor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { loadConfig } from '../src/core/config.js';
 import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db/index.js';
 import { bookTokenUse } from '../src/api/ledger-db.js';
@@ -12,6 +10,7 @@ import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/store
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/util/json.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import { makeStore } from './_helpers/make-root.js';
 
 let tmp: string;
 let root: string;
@@ -19,17 +18,13 @@ let db: DatabaseSyncLike;
 const SINCE = '2000-01-01T00:00:00.000Z';
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pilot-unit-'));
-  root = path.join(tmp, '.hippo');
-  fs.mkdirSync(root, { recursive: true });
-  initStore(root);
+  ({ base: tmp, root } = makeStore('pilot-unit'));
   db = openHippoDb(root);
 });
 
 afterEach(() => {
   closeHippoDb(db);
   vi.restoreAllMocks();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 const writeConfig = (pilot: JsonValue): void => fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ pilot }));

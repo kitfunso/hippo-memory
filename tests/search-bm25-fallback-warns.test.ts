@@ -1,15 +1,14 @@
 // When hybrid search drops to BM25 only for a fixable reason, it says so once per process.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { hybridSearch } from '../src/entry/folder-search.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
@@ -25,8 +24,7 @@ function fallbackLines(): string[] {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-bm25-fallback-'));
-  initStore(root);
+  root = makeRoot('bm25-fallback');
   useModel('m');
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = 'test-key-not-real';
@@ -39,7 +37,6 @@ afterEach(() => {
   stderrSpy.mockRestore();
   if (savedKey === undefined) delete process.env[KEY_ENV];
   else process.env[KEY_ENV] = savedKey;
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('hybridSearch BM25 fallback', () => {

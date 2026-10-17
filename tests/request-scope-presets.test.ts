@@ -1,11 +1,9 @@
 // The composition roots' request scopes carry the lock wait each root had before they moved into the store layer.
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { currentRequestStores, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { runDetachedSqliteRequest, runSqliteRequest } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true }); });
@@ -18,9 +16,8 @@ describe('runSqliteRequest presets', () => {
   });
 
   it('a hook scope drops its handles to no wait once one wait runs out; a server scope does not', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-scope-preset-'));
+    const root = makeRoot('scope-preset');
     roots.push(root);
-    initStore(root);
     const waitAfterNoteBusy = (preset: 'hook' | 'server'): Promise<number> =>
       runSqliteRequest(() => {
         const scope = currentRequestStores()!;

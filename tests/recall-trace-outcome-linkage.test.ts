@@ -13,16 +13,15 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
@@ -41,14 +40,13 @@ type RecallTraceRow = { id: number };
 type RecallTraceOutcomeRow = { outcome: string; memory_ids_json: string };
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-outcome-'));
-  initStore(home);
+  const home = makeRoot('recall-trace-outcome');
   return { home, restore: () => rmSync(home, { recursive: true, force: true }) };
 }
 
 describe('outcome linkage E2E (CLI recall -> outcome)', () => {
   it('a cmdRecall-style flow followed by `hippo outcome --good` writes a recall_trace_outcomes row referencing the recall trace', async () => {
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-outcome-linkage-'));
+    const hippoRoot = makeRoot('cli-outcome-linkage', { init: false });
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     try {
       await hippo(hippoRoot, 'init', '--no-hooks', '--no-schedule', '--no-learn');
@@ -76,7 +74,6 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
       }
     } finally {
       vi.unstubAllEnvs();
-      rmSync(hippoRoot, { recursive: true, force: true });
     }
   });
 });

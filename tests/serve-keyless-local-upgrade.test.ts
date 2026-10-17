@@ -1,14 +1,13 @@
 // What a user sees after upgrading: `hippo serve` says the key rule at start, and a routed CLI write with no key fails with the fix in its text.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 import { HIPPO_BIN, hippoOut, hippoRun } from './_helpers/spawn-hippo.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH', 'HIPPO_API_KEY'];
 const KEY_REQUIRED_LINE =
@@ -72,15 +71,12 @@ function rememberActors(): string[] {
 }
 
 beforeEach(() => {
-  workspace = mkdtempSync(join(tmpdir(), 'hippo-keyless-upgrade-'));
-  mkdirSync(join(workspace, '.hippo'), { recursive: true });
-  initStore(join(workspace, '.hippo'));
+  workspace = makeStore('keyless-upgrade').base;
   stops = [];
 });
 
 afterEach(async () => {
   for (const stop of stops) await stop();
-  rmSync(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 describe('hippo serve says its key rule at start', () => {

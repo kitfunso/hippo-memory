@@ -2,8 +2,7 @@
 // decayed away or made dormant. The tag alone is not enough, since merge copies source tags onto rows sourced 'consolidation'.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-tools.js';
 import {
@@ -11,7 +10,6 @@ import {
 } from '../src/core/memory.js';
 import { AUTO_DELETABLE_SQL } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
@@ -24,6 +22,7 @@ import { NO_MERGE_TAGS } from '../src/sharing/share.js';
 import { forget, listDormant, sleep, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -40,9 +39,8 @@ const FAKE_KEY = 'sk-ant-' + 'a'.repeat(40);
 const roots: string[] = [];
 
 function newRoot(configJson?: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-keep-rule-'));
+  const root = makeRoot('keep-rule');
   roots.push(root);
-  initStore(root);
   if (configJson) writeFileSync(join(root, 'config.json'), configJson);
   return root;
 }

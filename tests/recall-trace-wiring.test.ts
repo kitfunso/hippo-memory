@@ -20,7 +20,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -30,6 +29,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { runCli } from '../src/cli.js';
 import { resetSessionRings } from '../src/api/recall/finish.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const INIT = ['init', '--no-hooks', '--no-schedule', '--no-learn'];
 
@@ -52,8 +52,7 @@ function disableEmbeddings(storeDir: string) {
 }
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-wiring-'));
-  initStore(home);
+  const home = makeRoot('recall-trace-wiring');
   const origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = home;
   return {

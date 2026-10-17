@@ -1,13 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember as apiRemember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Minimal fetch-Response-shaped result so the assertions below (res.status,
 // await res.text(), await res.json()) did not need to change when the
@@ -111,9 +108,7 @@ describe('server concurrency — recall + write under single-writer', () => {
   it(
     'handles 10 readers x 50 GETs + 50 writes with no SQLite locked errors',
     async () => {
-      const home = mkdtempSync(join(tmpdir(), 'hippo-srv-conc-'));
-      mkdirSync(join(home, '.hippo'), { recursive: true });
-      initStore(home);
+      const home = makeRoot('srv-conc');
 
       // Pre-seed 100 memories spanning a small pool of search terms so
       // recall queries land hits.
@@ -246,7 +241,6 @@ describe('server concurrency — recall + write under single-writer', () => {
         }
       } finally {
         await handle.stop();
-        rmSync(home, { recursive: true, force: true });
         if (prevRps === undefined) delete process.env.HIPPO_V1_RPS;
         else process.env.HIPPO_V1_RPS = prevRps;
       }

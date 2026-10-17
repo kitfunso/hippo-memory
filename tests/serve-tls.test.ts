@@ -2,15 +2,14 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { initStore } from '../src/store/open.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const CLI_PATH = join(process.cwd(), 'dist', 'cli.js');
 const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
@@ -102,10 +101,7 @@ describe('hippo serve over TLS', () => {
   });
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-serve-tls-'));
-    hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    ({ base: home, root: hippoRoot } = makeStore('serve-tls'));
     certPath = join(home, 'test-only-cert.pem');
     keyPath = join(home, 'test-only-key.pem');
     writeFileSync(certPath, pair.cert);

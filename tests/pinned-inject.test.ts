@@ -9,18 +9,18 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runCli } from '../src/cli.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pinned-'));
+  tmpDir = makeRoot('pinned', { init: false });
   hippoDir = path.join(tmpDir, '.hippo');
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 /** `hippo <args>` run in this process from `cwd` with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
@@ -174,10 +174,9 @@ describe('hippo context --pinned-only', () => {
     // We stand up a tmp GLOBAL with a pinned memory, point cwd at a fresh
     // tmpdir that has NO local .hippo/, and expect the global memory to show
     // up in the additional-context payload.
-    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-global-'));
+    const globalDir = makeRoot('global');
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fresh-cwd-'));
     try {
-      initStore(globalDir);
       const pinned = createMemory('REGRESSION GUARD: no local hippo should still deliver pinned content', { pinned: true });
       writeEntry(globalDir, pinned);
 
@@ -191,7 +190,6 @@ describe('hippo context --pinned-only', () => {
       // And must NOT have auto-created .hippo in freshCwd (would pollute user's dirs).
       expect(fs.existsSync(path.join(freshCwd, '.hippo'))).toBe(false);
     } finally {
-      fs.rmSync(globalDir, { recursive: true, force: true });
       fs.rmSync(freshCwd, { recursive: true, force: true });
     }
   });
@@ -199,7 +197,7 @@ describe('hippo context --pinned-only', () => {
   it('exits cleanly when both local AND global are empty (pinned-only, fresh cwd)', async () => {
     // Variant of the regression test: no local, no global pinned memories,
     // hook must produce empty stdout (not an error).
-    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty-'));
+    const globalDir = makeRoot('empty', { init: false });
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cwd-'));
     try {
       // Do NOT init globalDir — it's just an empty path.
@@ -207,7 +205,6 @@ describe('hippo context --pinned-only', () => {
       expect(out.trim()).toBe('');
       expect(fs.existsSync(path.join(freshCwd, '.hippo'))).toBe(false);
     } finally {
-      fs.rmSync(globalDir, { recursive: true, force: true });
       fs.rmSync(freshCwd, { recursive: true, force: true });
     }
   });

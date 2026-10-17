@@ -2,8 +2,7 @@
 // Ids are random per seed, so rows are named by label.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -18,6 +17,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -39,7 +39,7 @@ interface StoreConfig {
 }
 
 function makeHome(config?: StoreConfig): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-ranking-'));
+  const home = makeRoot('mcp-ranking', { init: false });
   mkdirSync(join(home, '.hippo'), { recursive: true });
   if (config) writeFileSync(join(home, 'config.json'), JSON.stringify(config), 'utf8');
   initStore(home);

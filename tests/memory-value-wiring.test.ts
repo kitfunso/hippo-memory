@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 
 import { consolidate } from '../src/index.js';
 import { initStore } from '../src/store/open.js';
@@ -38,6 +38,7 @@ import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/consolidate
 
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
 import { mulberry32 } from './_helpers/property.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Each case seeds a real store and runs a full sleep on it, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -52,10 +53,7 @@ const SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-wiring-test
 
 let dir: string;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(SCRATCH_ROOT, 'case-'));
-});
-afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
+  dir = makeRoot('case', { init: false });
 });
 afterAll(() => {
   fs.rmSync(SCRATCH_ROOT, { recursive: true, force: true });
@@ -793,47 +791,40 @@ describe('(h) scale characterization', () => {
     );
     expect(cycle1ByIdMeta.size).toBeGreaterThan(0);
 
-    const dirMutated = fs.mkdtempSync(path.join(SCRATCH_ROOT, 'case-'));
-    try {
-      initStore(dirMutated);
-      enableMemoryValue(dirMutated, { replay: { count: 0 }, autoTraceCapture: false });
+    const dirMutated = makeRoot('case');
+    enableMemoryValue(dirMutated, { replay: { count: 0 }, autoTraceCapture: false });
 
-      const tenantBIds = new Set(loaded.filter((e) => e.tenant_id === tenantBId).map((e) => e.id));
-      const dropCount = Math.floor(tenantBIds.size * 0.4);
-      expect(dropCount).toBeGreaterThan(0);
-      let droppedForMutated = 0;
-      const seedForMutated = loaded.filter((e) => {
-        if (e.tenant_id === tenantBId && droppedForMutated < dropCount) {
-          droppedForMutated++;
-          return false;
-        }
-        return true;
-      });
-      batchWriteAndDelete(dirMutated, seedForMutated, []);
-
-      await consolidate(dirMutated, { now: NOW });
-
-      const mutatedEvents = auditRescueRows(dirMutated, tenantAId);
-      // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
-      // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
-      // rescue-audit write site).
-      const mutatedByIdMeta = new Map(
-        mutatedEvents
-          .filter(hasStringTargetId)
-          .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
-      );
-
-      expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());
-      for (const [id, meta1] of cycle1ByIdMeta) {
-        const meta2 = mutatedByIdMeta.get(id);
-        expect(meta2, `tenant A rescue metadata missing in the tenant-B-mutated store for ${id}`).toBeDefined();
-        expect(meta2!.rank).toBe(meta1.rank);
-        expect(meta2!.totalNonPinned).toBe(meta1.totalNonPinned);
-        expect(meta2!.keepN).toBe(meta1.keepN);
-        expect(meta2!.score).toBe(meta1.score);
+    expect(dropCount).toBeGreaterThan(0);
+    let droppedForMutated = 0;
+    const seedForMutated = loaded.filter((e) => {
+      if (e.tenant_id === tenantBId && droppedForMutated < dropCount) {
+        droppedForMutated++;
+        return false;
       }
-    } finally {
-      fs.rmSync(dirMutated, { recursive: true, force: true });
+      return true;
+    });
+    batchWriteAndDelete(dirMutated, seedForMutated, []);
+
+    await consolidate(dirMutated, { now: NOW });
+
+    const mutatedEvents = auditRescueRows(dirMutated, tenantAId);
+    // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
+    // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
+    // rescue-audit write site).
+    const mutatedByIdMeta = new Map(
+      mutatedEvents
+        .filter(hasStringTargetId)
+        .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
+    );
+
+    expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());
+    for (const [id, meta1] of cycle1ByIdMeta) {
+      const meta2 = mutatedByIdMeta.get(id);
+      expect(meta2, `tenant A rescue metadata missing in the tenant-B-mutated store for ${id}`).toBeDefined();
+      expect(meta2!.rank).toBe(meta1.rank);
+      expect(meta2!.totalNonPinned).toBe(meta1.totalNonPinned);
+      expect(meta2!.keepN).toBe(meta1.keepN);
+      expect(meta2!.score).toBe(meta1.score);
     }
   }, 60_000);
 });
@@ -865,73 +856,66 @@ function parseRemovedIds(details: string[]): Set<string> {
 // ---------------------------------------------------------------------------
 describe('(i) dry-run parity', () => {
   it('dry-run preview decisions match a real run on a cloned store', async () => {
-    const dirDry = fs.mkdtempSync(path.join(SCRATCH_ROOT, 'case-'));
-    const dirReal = fs.mkdtempSync(path.join(SCRATCH_ROOT, 'case-'));
-    try {
-      initStore(dirDry);
-      initStore(dirReal);
-      enableMemoryValue(dirDry);
-      enableMemoryValue(dirReal);
+    const dirDry = makeRoot('case');
+    const dirReal = makeRoot('case');
+    enableMemoryValue(dirDry);
+    enableMemoryValue(dirReal);
 
-      const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-      const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ti' }));
-      for (const e of built) {
-        writeEntry(dirDry, e);
-        writeEntry(dirReal, e); // identical ids in both stores — a true clone
-      }
+    const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+    const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ti' }));
+    for (const e of built) {
+      writeEntry(dirDry, e);
+      writeEntry(dirReal, e); // identical ids in both stores — a true clone
+    }
 
-      const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
-      const expectedRescued = new Set(sortedByLen.slice(0, 3).map((e) => e.id));
-      const expectedDeleted = new Set(sortedByLen.slice(3).map((e) => e.id));
+    const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
+    const expectedRescued = new Set(sortedByLen.slice(0, 3).map((e) => e.id));
+    const expectedDeleted = new Set(sortedByLen.slice(3).map((e) => e.id));
 
-      const dryResult = await consolidate(dirDry, { dryRun: true, now: NOW });
-      const realResult = await consolidate(dirReal, { now: NOW });
+    const dryResult = await consolidate(dirDry, { dryRun: true, now: NOW });
+    const realResult = await consolidate(dirReal, { now: NOW });
 
-      expect(dryResult.dryRun).toBe(true);
-      expect(dryResult.removed).toBe(realResult.removed);
-      expect(dryResult.decayed).toBe(realResult.decayed);
-      expect(dryResult.removed).toBe(expectedDeleted.size);
+    expect(dryResult.dryRun).toBe(true);
+    expect(dryResult.removed).toBe(realResult.removed);
+    expect(dryResult.decayed).toBe(realResult.decayed);
+    expect(dryResult.removed).toBe(expectedDeleted.size);
 
-      // F7: parity by IDS, not just counts — parse the rescued/removed
-      // entry ids out of both runs' details and assert set equality.
-      const dryRescuedIds = parseRescuedIds(dryResult.details);
-      const realRescuedIds = parseRescuedIds(realResult.details);
-      expect(dryRescuedIds).toEqual(realRescuedIds);
-      expect(dryRescuedIds).toEqual(expectedRescued);
+    // F7: parity by IDS, not just counts — parse the rescued/removed
+    // entry ids out of both runs' details and assert set equality.
+    const dryRescuedIds = parseRescuedIds(dryResult.details);
+    const realRescuedIds = parseRescuedIds(realResult.details);
+    expect(dryRescuedIds).toEqual(realRescuedIds);
+    expect(dryRescuedIds).toEqual(expectedRescued);
 
-      const dryRemovedIds = parseRemovedIds(dryResult.details);
-      const realRemovedIds = parseRemovedIds(realResult.details);
-      expect(dryRemovedIds).toEqual(realRemovedIds);
-      expect(dryRemovedIds).toEqual(expectedDeleted);
+    const dryRemovedIds = parseRemovedIds(dryResult.details);
+    const realRemovedIds = parseRemovedIds(realResult.details);
+    expect(dryRemovedIds).toEqual(realRemovedIds);
+    expect(dryRemovedIds).toEqual(expectedDeleted);
 
-      // Dry-run: store untouched, zero audit rows.
-      expect(loadEveryTenantEntries(dirDry).length).toBe(built.length);
-      expect(auditRescueRows(dirDry, 'ti').length).toBe(0);
+    // Dry-run: store untouched, zero audit rows.
+    expect(loadEveryTenantEntries(dirDry).length).toBe(built.length);
+    expect(auditRescueRows(dirDry, 'ti').length).toBe(0);
 
-      // Real run: expected deletes gone, expected rescues present, audit rows match.
-      const realIds = new Set(loadEveryTenantEntries(dirReal).map((e) => e.id));
-      for (const id of expectedRescued) expect(realIds.has(id)).toBe(true);
-      for (const id of expectedDeleted) expect(realIds.has(id)).toBe(false);
+    // Real run: expected deletes gone, expected rescues present, audit rows match.
+    const realIds = new Set(loadEveryTenantEntries(dirReal).map((e) => e.id));
+    for (const id of expectedRescued) expect(realIds.has(id)).toBe(true);
+    for (const id of expectedDeleted) expect(realIds.has(id)).toBe(false);
 
-      const rescueLines = realResult.details.filter((l) => l.includes('🛟'));
-      expect(rescueLines).toHaveLength(3);
-      for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ti, top 3\)$/);
+    const rescueLines = realResult.details.filter((l) => l.includes('🛟'));
+    expect(rescueLines).toHaveLength(3);
+    for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ti, top 3\)$/);
 
-      const events = auditRescueRows(dirReal, 'ti');
-      expect(events.length).toBe(3);
-      expect(new Set(events.map((e) => e.targetId))).toEqual(expectedRescued);
-      for (const ev of events) {
-        // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as exactly { rank, totalNonPinned, keepN, score }.
-        const meta = ev.metadata as { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
-        expect(meta.totalNonPinned).toBe(10);
-        expect(meta.keepN).toBe(3);
-        expect(meta.rank).toBeGreaterThanOrEqual(1);
-        expect(meta.rank!).toBeLessThanOrEqual(3);
-        expect(meta.score).toBeTypeOf('number');
-      }
-    } finally {
-      fs.rmSync(dirDry, { recursive: true, force: true });
-      fs.rmSync(dirReal, { recursive: true, force: true });
+    const events = auditRescueRows(dirReal, 'ti');
+    expect(events.length).toBe(3);
+    expect(new Set(events.map((e) => e.targetId))).toEqual(expectedRescued);
+    for (const ev of events) {
+      // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as exactly { rank, totalNonPinned, keepN, score }.
+      const meta = ev.metadata as { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
+      expect(meta.totalNonPinned).toBe(10);
+      expect(meta.keepN).toBe(3);
+      expect(meta.rank).toBeGreaterThanOrEqual(1);
+      expect(meta.rank!).toBeLessThanOrEqual(3);
+      expect(meta.score).toBeTypeOf('number');
     }
   });
 });

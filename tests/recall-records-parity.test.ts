@@ -2,8 +2,7 @@
 // the recalled counter, the token ledger row and the session ring. The bookkeeping may move; none of this may change with it.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -21,6 +20,7 @@ import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seedTemplates, SESSION, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../src/cli/flag-values.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Surface = 'http' | 'cli';
 const SURFACES: readonly Surface[] = ['http', 'cli'];
@@ -104,7 +104,7 @@ function seedContinuity(root: string): void {
 
 /** A store with no memory in it and no global store beside it. */
 function emptyStore(): Store {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-records-empty-'));
+  const home = makeRoot('records-empty', { init: false });
   const root = join(home, 'store');
   initStore(root);
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));

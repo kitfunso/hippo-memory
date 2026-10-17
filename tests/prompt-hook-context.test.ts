@@ -2,7 +2,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
@@ -19,6 +18,7 @@ import { HIPPO_PINNED_INJECT_COMMAND } from '../src/hooks/shared.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const REPO = path.resolve(__dirname, '..');
 // The command Claude Code runs on every prompt, so a change to its flags fails the parity case below.
@@ -37,7 +37,7 @@ let tmp: string;
 const origHome = process.env.HIPPO_HOME;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-prompt-hook-'));
+  tmp = makeRoot('prompt-hook', { init: false });
   // An empty global store on both sides, so neither the CLI nor the call mixes in a real one.
   process.env.HIPPO_HOME = path.join(tmp, 'global');
 });
@@ -45,7 +45,6 @@ beforeEach(() => {
 afterEach(() => {
   if (origHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = origHome;
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 /** A project folder with its own `.hippo` store; a rate writes the store's pilot config. */

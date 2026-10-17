@@ -2,16 +2,13 @@ import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } fr
 import { refineSemanticMemory, refineStore } from '../src/cli/refine-llm.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tmpStore(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-refine-'));
-  initStore(dir);
+  const dir = makeRoot('refine');
   return dir;
 }
 function cleanup(dir: string): void { fs.rmSync(dir, { recursive: true, force: true }); }

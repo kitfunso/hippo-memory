@@ -1,7 +1,6 @@
 // The token ledger is SQLite-only, so a hook on a store that is not hippo.db must not create one under hippoRoot.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { adminActor } from '../src/api/index.js';
 import { promptHookContext } from '../src/server.js';
@@ -9,15 +8,12 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmp: string;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-nonsqlite-'));
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  tmp = makeRoot('ledger-nonsqlite', { init: false });
 });
 
 describe('promptHookContext on a store that is not SQLite', () => {

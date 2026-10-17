@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
 import { strengthBucket } from '../src/consolidate/dedupe.js';
 import { initStore } from '../src/store/open.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -59,7 +59,7 @@ describe('package entry re-exports sleep', () => {
   });
 
   it('runs a Context that carries no store on hippo.db under its root', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-entry-sleep-'));
+    const home = makeRoot('entry-sleep', { init: false });
     const origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = home;
     try {
@@ -68,7 +68,6 @@ describe('package entry re-exports sleep', () => {
       expect(result.dryRun).toBe(true);
       expect(result.active).toBe(0);
     } finally {
-      rmSync(home, { recursive: true, force: true });
       if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
       else delete process.env.HIPPO_HOME;
     }

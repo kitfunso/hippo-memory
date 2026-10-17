@@ -1,12 +1,12 @@
 // The stdio loop in process: stdin's listeners are captured and fed frames, stdout is read, and exit is stubbed.
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { startStdioLoop } from '../src/mcp/stdio.js';
 import { cliStdioHost } from '../src/cli/api-context.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from './_helpers/process-stubs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface Reply {
   readonly id: number | string | null;
@@ -21,7 +21,7 @@ let written: string[];
 let exit: MockInstance;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'hippo-mcp-stdio-'));
+  dir = makeRoot('mcp-stdio', { init: false });
   mkdirSync(join(dir, 'project'));
   priorHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = join(dir, 'global');
@@ -40,7 +40,6 @@ afterEach(() => {
   process.exitCode = undefined;
   if (priorHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = priorHome;
-  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function feed(...frames: string[]): void {

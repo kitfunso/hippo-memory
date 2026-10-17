@@ -2,11 +2,7 @@
 // Reading it put the tier back to 'observed', so one recall undid the
 // invalidation while the 'invalidated' tag stayed on the row.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -15,6 +11,7 @@ import { invalidateMatching } from '../src/learn/invalidation.js';
 import { remember, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 
@@ -23,13 +20,7 @@ function ctx() {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-invalidation-recall-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-});
-
-afterEach(() => {
-  rmSync(home, { recursive: true, force: true });
+  home = makeRoot('invalidation-recall');
 });
 
 describe('a deliberate stale tier survives being read', () => {

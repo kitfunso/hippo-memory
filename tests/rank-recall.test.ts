@@ -1,10 +1,6 @@
 // rankRecall in process: what it ranks, what it hands back for the caller to write, where haltBefore stops it, and its re-rank stages.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -14,8 +10,8 @@ import { loadConfig } from '../src/core/config.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
+import { makeStore } from './_helpers/make-root.js';
 
-let home: string;
 let hippoRoot: string;
 
 function seeded(content: string, id: string, extra: Partial<MemoryEntry> = {}, opts: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
@@ -55,18 +51,12 @@ const ctx = (): RankRecallCtx => ({ store: sqliteStore(hippoRoot), config: loadC
 
 describe('rankRecall', () => {
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-rank-recall-'));
-    hippoRoot = join(home, '.hippo');
-    initStore(hippoRoot);
+    ({ root: hippoRoot } = makeStore('rank-recall'));
     writeEntry(hippoRoot, seeded('deploy pipeline uses blue green rollout', 'mem_rank_plain'));
     writeEntry(hippoRoot, seeded('private deploy token rotation', 'mem_rank_private', {}, { scope: 'slack:private:C1' }));
     writeEntry(hippoRoot, seeded('deploy target was the old cluster', 'mem_rank_old', { superseded_by: 'mem_rank_plain' }));
     writeEntry(hippoRoot, seeded('deploy goal work on the runner', 'mem_rank_goal', {}, { tags: ['goal-alpha'] }));
     writeEntry(hippoRoot, seeded('deploy trace: promoted the canary', 'mem_rank_trace', {}, { layer: Layer.Trace, traceOutcome: 'success' }));
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
   });
 
   // Private and superseded rows are excluded in SQL, so they are pre-candidate: neither counted nor dropped.
@@ -108,13 +98,7 @@ describe('rankRecall re-rank stages', () => {
   const rank = (extra: Partial<RankRecallOptions> = {}) => rankRecall(ctx(), opts(extra));
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-rank-rerank-'));
-    hippoRoot = join(home, '.hippo');
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('rank-rerank'));
   });
 
   it('evcAdaptive puts the newest of several near-duplicate hits first', async () => {

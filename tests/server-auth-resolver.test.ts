@@ -7,7 +7,6 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -19,6 +18,7 @@ import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db/index.js';
 import { listAuditEventsAfter } from '../src/store/audit.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const EXT = 'ext.good';
 const GOOD: ResolvedBearer = { tenantId: 'ext-tenant', subject: 'user-1', role: 'member', scopes: [] };
@@ -118,8 +118,7 @@ function del(path: string, token: string): Promise<Response> {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-auth-resolver-'));
-  initStore(home);
+  home = makeRoot('auth-resolver');
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'resolver-test', role: 'admin' });
@@ -137,7 +136,6 @@ afterEach(async () => {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('auth resolver acceptance', () => {

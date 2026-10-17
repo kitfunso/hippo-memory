@@ -7,7 +7,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { detectSecret, redactSecretsStrict } from '../src/util/secret-detect.js';
 import { initStore } from '../src/store/open.js';
@@ -24,6 +23,7 @@ import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-
 import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
@@ -183,7 +183,7 @@ describe('producer + sync vetoes (real stores)', () => {
   const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
   beforeEach(() => {
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-'));
+    tmpRoot = makeRoot('secret', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
     initStore(projA);
@@ -200,7 +200,6 @@ describe('producer + sync vetoes (real stores)', () => {
     } else {
       delete process.env.HIPPO_HOME;
     }
-    fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
   it('shareMemory refuses a secret row even with force', () => {

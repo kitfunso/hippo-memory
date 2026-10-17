@@ -1,15 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db/index.js';
 import { v14 } from '../src/db/migrations/v14.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('memory envelope: kind column, delete and update guards, raw_archive, round-trip', () => {
   it('getCurrentSchemaVersion matches the constant in src/db/migrations/index.ts', () => {
@@ -17,7 +15,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('fresh db migrates to the latest version', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
     closeHippoDb(db);
@@ -25,7 +23,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('memories table has kind column with default distilled', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     // SAFETY: PRAGMA table_info always returns rows with these column names.
     const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; dflt_value: string | null }>;
@@ -37,7 +35,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('rejects kind value outside the allowed set', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     expect(() =>
       db.prepare(
@@ -49,7 +47,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('rejects UPDATE that sets kind to a value outside the allowed set', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('u1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
@@ -60,7 +58,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('CRITICAL REGRESSION: DELETE on kind=raw aborts via trigger', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('r1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','raw')`,
@@ -73,7 +71,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('DELETE on kind=distilled proceeds normally', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('d1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
@@ -86,7 +84,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it.each(['scope', 'owner', 'artifact_ref'])('memories table has nullable %s column', (col) => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     // SAFETY: PRAGMA table_info always returns rows with these column names.
     const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; notnull: number }>;
@@ -98,7 +96,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('backfills kind=superseded for rows with superseded_by set, kind=distilled otherwise', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     // The v14→v15 NULL guard means we cannot null out kind in app code to simulate
     // pre-A3 state (the trigger aborts). Instead, drop the triggers, simulate, re-run
@@ -124,7 +122,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('raw_archive table exists with required columns', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     // SAFETY: PRAGMA table_info always returns rows with a name column.
     const cols = db.prepare(`PRAGMA table_info(raw_archive)`).all() as Array<{ name: string }>;
@@ -135,8 +133,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('createMemory accepts envelope fields and round-trips through SQLite', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-mem-'));
-    initStore(home);
+    const home = makeRoot('mem');
     const e = createMemory('slack message ingested', {
       layer: Layer.Episodic,
       kind: 'raw',
@@ -160,8 +157,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('createMemory defaults envelope fields when not provided', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-mem-'));
-    initStore(home);
+    const home = makeRoot('mem');
     const e = createMemory('some distilled fact', { layer: Layer.Episodic });
     expect(e.kind).toBe('distilled');
     expect(e.scope).toBeNull();
@@ -179,7 +175,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
 
   // v15 hardening: NULL-kind bypass closure + raw_archive uniqueness
   it('v15: rejects INSERT with kind=NULL (closes the v14 NULL bypass)', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     expect(() =>
       db.prepare(
@@ -191,7 +187,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('v15: rejects UPDATE that sets kind=NULL', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('upd1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
@@ -202,7 +198,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   });
 
   it('v15: raw_archive (memory_id, archived_at) is unique', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const home = makeRoot('a3');
     const db = openHippoDb(home);
     const ts = '2026-04-29T12:00:00.000Z';
     db.prepare(

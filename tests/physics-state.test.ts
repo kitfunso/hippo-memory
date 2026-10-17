@@ -1,9 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import {
   loadPhysicsState,
   savePhysicsState,
@@ -16,6 +12,7 @@ import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '.
 import type { PhysicsParticle } from '../src/core/physics.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,12 +21,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-physics-test-'));
-  initStore(tmpDir);
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('physics-test');
 });
 
 const NOW = new Date('2026-01-15T12:00:00Z');
