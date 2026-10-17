@@ -13,7 +13,7 @@ import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
-import { isLoopbackHost } from '../util/net.js';
+import { parseOutboundUrl } from '../util/net.js';
 
 const RAY_ID_MAX_CHARS = 64;
 
@@ -62,23 +62,7 @@ function checkHeaderSafe(name: string, token: string): void {
 export function resolveClefRoute(model: ClefModel): ClefRoute {
   const endpoint = envClefEndpoint();
   if (endpoint) {
-    let parsed: URL;
-    try {
-      parsed = new URL(endpoint);
-    } catch {
-      throw new Error('HIPPO_CLEF_ENDPOINT is not a valid URL');
-    }
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      throw new Error('HIPPO_CLEF_ENDPOINT must be an http or https URL');
-    }
-    // fetch echoes a URL with credentials in its error text, which reaches stderr.
-    if (parsed.username || parsed.password) {
-      throw new Error('HIPPO_CLEF_ENDPOINT must not embed credentials; set HIPPO_CLEF_ENDPOINT_TOKEN');
-    }
-    // Plain http would put the token and the memory text on the wire, so only the local machine may use it.
-    if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
-      throw new Error('HIPPO_CLEF_ENDPOINT must use https unless it is on this machine');
-    }
+    const parsed = parseOutboundUrl(endpoint, 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN');
     const endpointToken = envClefEndpointToken();
     if (endpointToken) checkHeaderSafe('HIPPO_CLEF_ENDPOINT_TOKEN', endpointToken);
     return { url: parsed.href, token: endpointToken, backend: 'private-endpoint' };
