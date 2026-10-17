@@ -29,7 +29,7 @@ export type DeliveryRejectReason =
  * and hashes the store's resolved root. */
 export const DELIVERY_LEDGER_VERSION = 4;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
-export const DELIVERY_REJECTED_ROW_CAP = 16;
+const DELIVERY_REJECTED_ROW_CAP = 16;
 
 // Deeper stages were closer to being sent, so the row cap keeps them first.
 const STAGE_DEPTH: ReadonlyMap<DeliveryStage, number> = new Map<DeliveryStage, number>([

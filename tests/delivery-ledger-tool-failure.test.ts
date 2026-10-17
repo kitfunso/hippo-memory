@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { initStore } from '../src/store/open.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from '../src/store/delivery-recorder.js';
-import { writeDeliveryEvent } from '../src/store/recall-trace.js';
+import { writeDeliveryEventOnHandle } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
@@ -301,7 +301,7 @@ describe('lesson links and the ledger loss window', () => {
       sectionsDropped: 0, budgetTokens: 0, selectedTokens: 0, injectedTokens: 0, staticHash: null, recallHash: null, emittedHash: null,
       elapsedMs: 1, toolUseId: 'toolu_race', failureId: num(log[0].id), candidates: [],
     };
-    expect(withDb(p, (db) => writeDeliveryEvent(db, input))).not.toBeNull();
+    expect(withDb(p, (db) => writeDeliveryEventOnHandle(db, input))).not.toBeNull();
     const ev = events('tf13');
     expect(ev.map(callKey)).toEqual([['tool-failure', 1, null, 'toolu_race'], ['tool-failure', null, ev[0].id, 'toolu_race']]);
     const lesson = String(lessons()[0].id);

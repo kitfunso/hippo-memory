@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { apiKeyVerifyStats, createApiKey, verifyApiKeyCached, type ApiKeyRecord, type CreateApiKeyResult } from '../src/store/auth.js';
+import { _readApiKeyVerifyStatsForTests, createApiKey, verifyApiKeyCached, type ApiKeyRecord, type CreateApiKeyResult } from '../src/store/auth.js';
 import { ownerOrSubject, type Actor } from '../src/api/index.js';
 import { ownerOrSubject as exportedOwnerOrSubject, serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../src/server.js';
 import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
@@ -85,9 +85,9 @@ describe('Actor.owner', () => {
     const key = mint('alice@corp.example');
     const store = sqliteStore(home);
     expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
-    const before = apiKeyVerifyStats().scryptRuns;
+    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
     expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
-    expect(apiKeyVerifyStats().scryptRuns).toBe(before);
+    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
   });
 
   it('store record with no ownerSubject reads as no owner', async () => {

@@ -118,7 +118,7 @@ function enforceDepthCapWithinTx(
   }
 }
 
-export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
+function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
   const id = `g_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
   const createdAt = new Date().toISOString();
   let policyId: string | null = null;

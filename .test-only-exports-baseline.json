@@ -1,5 +1,5 @@
 {
-  "count": 32,
+  "count": 25,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
     "src/capture/extract.ts:extractFromText",
@@ -24,14 +24,7 @@
     "src/mcp/request.ts:recordMcpTokens",
     "src/search/path-context.ts:PATH_BOOST_WEIGHT",
     "src/server/server-detect.ts:removePidfile",
-    "src/store/auth.ts:apiKeyVerifyStats",
-    "src/store/delivery-recorder.ts:DELIVERY_REJECTED_ROW_CAP",
-    "src/store/embeddings/index.ts:EMBED_TEXT_FORMAT",
-    "src/store/embeddings/index.ts:resolveIndexedEmbeddingModel",
     "src/store/failure-log.ts:failuresBySession",
-    "src/store/goals.ts:pushGoalWithDb",
-    "src/store/recall-trace.ts:DELIVERY_LEDGER_RETENTION_DAYS",
-    "src/store/recall-trace.ts:readDeliveryEvents",
-    "src/store/recall-trace.ts:writeDeliveryEvent"
+    "src/store/recall-trace.ts:readDeliveryEvents"
   ]
 }

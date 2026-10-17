@@ -147,7 +147,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
 
 /** Pruned on write, counted back from the event's ts capped at the real clock, so a far-future fake time spares real
  * rows. */
-export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
+const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
 /** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire
@@ -381,7 +381,7 @@ function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: 
 
 /** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a
  * transaction on `db`. */
-export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   try {
     return withWriteScope(db, 'write_delivery_event', () => {
       // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.

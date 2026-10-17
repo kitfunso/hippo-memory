@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
-  apiKeyVerifyStats,
+  _readApiKeyVerifyStatsForTests,
   createApiKey,
   verifyApiKeyCached,
   VerifiedKeyCache,
@@ -18,9 +18,9 @@ import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Scrypt runs and store lookups made by `fn` alone. */
 async function counted<T>(fn: () => Promise<T>) {
-  const before = apiKeyVerifyStats();
+  const before = _readApiKeyVerifyStatsForTests();
   const value = await fn();
-  const after = apiKeyVerifyStats();
+  const after = _readApiKeyVerifyStatsForTests();
   return { value, scrypt: after.scryptRuns - before.scryptRuns, dbOpen: after.storeLookups - before.storeLookups };
 }
 
@@ -146,10 +146,10 @@ describe('verified API key cache', () => {
 
   it('a throw from the bound refuses before scrypt runs, and the next check derives as if it never happened', async () => {
     const key = mint();
-    const before = apiKeyVerifyStats().scryptRuns;
+    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
     await expect(verifyApiKeyCached(key.plaintext, sqliteStore(home), () => { throw new Error('gate shut'); })).rejects.toThrow('gate shut');
     await expect(verifyApiKeyCached(key.plaintext, sqliteStore(home), async () => { throw new Error('queue full'); })).rejects.toThrow('queue full');
-    expect(apiKeyVerifyStats().scryptRuns).toBe(before);
+    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
     expect(await counted(() => verify(key.plaintext))).toMatchObject({ scrypt: 1 });
   });
 
@@ -256,9 +256,9 @@ describe('bearer requests through the server', () => {
   it('a repeat request skips scrypt, and a revoke through the API is a 401 on the very next request', async () => {
     const key = mint('member');
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
-    const before = apiKeyVerifyStats().scryptRuns;
+    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
-    expect(apiKeyVerifyStats().scryptRuns).toBe(before);
+    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
 
     const revoked = await fetch(`${handle.url}/v1/auth/keys/${key.keyId}`, {
       method: 'DELETE',

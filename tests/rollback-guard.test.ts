@@ -7,40 +7,30 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../src/db/index.js';
-import { pushGoalWithDb } from '../src/store/goals.js';
+import { openHippoDb, closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../src/db/index.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 describe('guarded rollback', () => {
   it('surfaces the original error, not the rollback complaint, when a transaction is already discarded', () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-rollback-guard-'));
-    try {
-      initStore(root);
-      const db = openHippoDb(root);
+    withProbeDb((db) => {
+      // SAFETY: PRAGMA page_count always returns one row shaped { page_count }; read at runtime, never hardcode.
+      const { page_count: pageCount } = db.prepare('PRAGMA page_count').get() as { page_count: number };
+      db.exec(`PRAGMA max_page_count = ${pageCount + 2}`);
+
+      let thrown: unknown;
       try {
-        // SAFETY: PRAGMA page_count always returns one row shaped { page_count }; read at runtime, never hardcode.
-        const { page_count: pageCount } = db.prepare('PRAGMA page_count').get() as { page_count: number };
-        db.exec(`PRAGMA max_page_count = ${pageCount + 2}`);
-
-        let thrown: unknown;
-        try {
-          pushGoalWithDb(db, { sessionId: 's1', tenantId: 't1', goalName: 'x'.repeat(1_000_000) });
-        } catch (err) {
-          thrown = err;
-        }
-
-        expect(thrown).toBeInstanceOf(Error);
-        // SAFETY: the toBeInstanceOf(Error) check above guarantees this cast.
-        const message = (thrown as Error).message;
-        expect(message).toMatch(/disk is full/);
-        expect(message).not.toMatch(/cannot rollback/);
-      } finally {
-        closeHippoDb(db);
+        withWriteScope(db, 'probe', () => addProbe(db, 'x'.repeat(1_000_000)));
+      } catch (err) {
+        thrown = err;
       }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+
+      expect(thrown).toBeInstanceOf(Error);
+      // SAFETY: the toBeInstanceOf(Error) check above guarantees this cast.
+      const message = (thrown as Error).message;
+      expect(message).toMatch(/disk is full/);
+      expect(message).not.toMatch(/cannot rollback/);
+    });
   });
 
   it('flags zero unguarded rollback sites on an error path under src/', () => {

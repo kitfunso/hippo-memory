@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { apiKeyVerifyStats, createApiKey } from '../src/store/auth.js';
+import { _readApiKeyVerifyStatsForTests, createApiKey } from '../src/store/auth.js';
 import { serve, type ServeOpts } from '../src/server.js';
 import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -109,7 +109,7 @@ const OK: Reply = { status: 200, retryAfter: null, refusal: null };
 const UNAUTHORISED: Reply = { status: 401, retryAfter: null, refusal: { error: 'invalid api key' } };
 /** The `n`th well-formed wrong secret for `key`'s id. */
 const wrongSecret = (key: string, n: number): string => `${key.slice(0, key.indexOf('.'))}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n % 26).repeat(32)}`;
-const scryptRuns = (): number => apiKeyVerifyStats().scryptRuns;
+const scryptRuns = (): number => _readApiKeyVerifyStatsForTests().scryptRuns;
 
 describe('key derivation bounds', () => {
   it('refuses one address its sixth wrong secret for a key id without deriving, while the right secret passes from another address', async () => {
