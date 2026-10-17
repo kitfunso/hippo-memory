@@ -246,6 +246,11 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_memories_decay_key",
+      "sql": "CREATE INDEX idx_memories_decay_key ON memories(tenant_id, pinned, (julianday(last_retrieved) + 2.0 * half_life_days * (CASE WHEN COALESCE(outcome_positive, 0) = 0 AND COALESCE(outcome_negative, 0) = 0 THEN 1.0 ELSE 1.0 + 0.5 * (COALESCE(outcome_positive, 0) - COALESCE(outcome_negative, 0)) / (COALESCE(outcome_positive, 0) + COALESCE(outcome_negative, 0) + 1.0) END))) WHERE pinned >= 0",
+      "type": "index",
+    },
+    {
       "name": "idx_memories_extracted_from",
       "sql": "CREATE INDEX idx_memories_extracted_from ON memories(extracted_from) WHERE extracted_from IS NOT NULL",
       "type": "index",
@@ -2095,6 +2100,6 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
   ],
-  "userVersion": 56,
+  "userVersion": 60,
 }
 `;
