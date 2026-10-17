@@ -6,14 +6,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { installJsonHooks } from '../hooks/json-hooks.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
-import { loadConfig } from '../core/config.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
 import { initMemoryStore } from '../api/store-init.js';
 import { isInitialized } from '../core/project-identity.js';
 import { listMemories } from '../api/memories/memories.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
@@ -89,7 +88,7 @@ async function learnScannedRepo(
     added = result.added;
     lowInfo = result.lowInfo;
   }
-  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, { configAt: loadConfig, machine }));
+  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, cliSyncOptions(repoHippo, machine)));
   return { added, lowInfo };
 }
 
@@ -157,7 +156,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
   if (learn) {
-    mergeReports(agentImport, importUserMemories(globalRoot, { configAt: loadConfig, machine }));
+    mergeReports(agentImport, importUserMemories(globalRoot, cliSyncOptions(globalRoot, machine)));
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
@@ -177,7 +176,7 @@ function initGlobalOnly(flags: CliFlags): void {
     console.log('Initialized global Hippo store at', globalRoot);
   }
   if (!flags['no-learn']) {
-    printAgentImport(importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine() }));
+    printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine())));
   }
 }
 
@@ -233,7 +232,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (!alreadyExists && learn && !flags['global']) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (learn) printAgentImport(importForStore(hippoRoot, { configAt: loadConfig, machine: currentMachine() }));
+  if (learn) printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, currentMachine())));
 }
 
 /**

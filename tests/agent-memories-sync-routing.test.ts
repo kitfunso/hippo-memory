@@ -24,6 +24,7 @@ import {
 } from './_helpers/agent-memories-world.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';
@@ -39,7 +40,7 @@ afterEach(() => {
 });
 
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
-const opts = () => ({ configAt: loadConfig, machine: w.machine });
+const opts = () => ({ configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
   const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), origin_project: origin };

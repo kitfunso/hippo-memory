@@ -24,6 +24,7 @@ import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -123,7 +124,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     const memDir = path.join(home, '.claude', 'projects', project, 'memory');
     fs.mkdirSync(memDir, { recursive: true });
     fs.writeFileSync(path.join(memDir, 'lesson.md'), '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n');
-    return added(root, () => importProjectMemories(root, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } }));
+    return added(root, () => importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } }));
   }],
   ['capture', (root) => {
     const file = path.join(tmp(), 'session.txt');

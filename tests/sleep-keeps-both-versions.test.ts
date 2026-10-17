@@ -34,6 +34,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -567,7 +568,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
 
-    const imported = (): number => totalTally(importProjectMemories(root, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } })).imported;
+    const imported = (): number => totalTally(importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } })).imported;
     expect(imported()).toBe(1);
     expect(imported()).toBe(0);
   });

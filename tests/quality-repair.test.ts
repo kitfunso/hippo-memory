@@ -21,6 +21,7 @@ import { apiCtx, type FullContext } from './_helpers/api-ctx.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -244,7 +245,7 @@ describe('recoverable automatic memory quality repair', () => {
       writeEntry(world.local, bad);
       expect(repairAutomaticMemories(world.local, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
-      importForStore(world.local, { configAt: loadConfig, machine: world.machine });
+      importForStore(world.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: world.machine });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
     } finally { closeWorld(world); }
   });

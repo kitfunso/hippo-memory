@@ -45,7 +45,7 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
-import { cliApiContext, cliLedgerReach } from './api-context.js';
+import { cliApiContext, cliLedgerReach, cliSyncOptions } from './api-context.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -679,11 +679,8 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
     logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
     // Passed in, since src/capture/ importing the sync would close an import cycle.
     afterSave: (transcriptPath, cwd, log) => {
-      const report = importSessionFolder(store, transcriptPath, cwd, {
-        machine: currentMachine(),
-        configAt: loadConfig,
-        busyWaitMs: COMPACTION_DB_WAIT_MS,
-      });
+      const sync = cliSyncOptions(store, currentMachine(), { busyWaitMs: COMPACTION_DB_WAIT_MS });
+      const report = importSessionFolder(store, transcriptPath, cwd, sync);
       const summary = summaryLine(report);
       if (summary !== null) log(summary);
       for (const warning of report.warnings) log(`agent memories: ${warning}`);

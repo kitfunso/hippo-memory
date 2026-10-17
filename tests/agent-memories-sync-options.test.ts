@@ -17,6 +17,7 @@ import {
   writeConfig, type World,
 } from './_helpers/agent-memories-world.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 30_000 });
@@ -38,7 +39,7 @@ beforeEach(() => {
 afterEach(() => closeWorld(w));
 
 const withEnv = (env: Machine['env']): Machine => ({ ...w.machine, env });
-const sync = (extra: Partial<SyncOptions> = {}): ImportReport => importForStore(w.local, { configAt: loadConfig, machine: w.machine, ...extra });
+const sync = (extra: Partial<SyncOptions> = {}): ImportReport => importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine, ...extra });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
 describe('agent memory sync: options, time and reporting', () => {
@@ -48,10 +49,10 @@ describe('agent memory sync: options, time and reporting', () => {
     codexSummary(w, BULLET);
 
     for (const off of ['', 'none', ' NONE ']) {
-      expect(tally(importForStore(w.local, { configAt: loadConfig, machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }) })).imported).toBe(0);
+      expect(tally(importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }) })).imported).toBe(0);
     }
     expect(tally(sync()).imported).toBe(0);
-    const report = importForStore(w.local, { configAt: loadConfig, machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }) });
+    const report = importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }) });
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([1, 1]);
     expect(report.warnings.filter((line) => line.includes('"nosuchtool"'))).toHaveLength(2);
   });
@@ -63,7 +64,7 @@ describe('agent memory sync: options, time and reporting', () => {
 
     expect(tally(sync()).imported).toBe(0);
     expect(isInitialized(w.global)).toBe(false);
-    expect(tally(importForStore(w.global, { configAt: loadConfig, machine: w.machine })).imported).toBe(1);
+    expect(tally(importForStore(w.global, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine })).imported).toBe(1);
     expect(liveTexts(w.global)).toEqual([USER_NOTE]);
   });
 
@@ -118,12 +119,12 @@ describe('agent memory sync: options, time and reporting', () => {
     const alt = join(w.home, 'alt-claude');
     const altMachine = withEnv({ CLAUDE_CONFIG_DIR: alt });
     note(join(alt, 'projects', claudeFolderName(w.project), 'memory'), 'alt.md', B);
-    importForStore(w.local, { configAt: loadConfig, machine: altMachine });
+    importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: altMachine });
     note(dir, 'deploy.md', A);
     sync();
 
     expect(sync({ dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
-    expect(importForStore(w.local, { configAt: loadConfig, machine: altMachine, dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
+    expect(importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: altMachine, dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
   });
 
   it('summaryLine names what moved, and is null when nothing did', () => {
