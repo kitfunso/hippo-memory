@@ -12,6 +12,7 @@ import { runDoctor } from '../../src/doctor.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, ftsRowCounts, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
+import { reproveStoreSchema } from '../../src/db/connect.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -71,6 +72,12 @@ function withDb(fn: (db: DatabaseSyncLike) => void): void {
   }
 }
 
+/** withDb for damage another process would do: this process has proven the schema, so it must be asked to look again. */
+function withOutOfBandDamage(fn: (db: DatabaseSyncLike) => void): void {
+  withDb(fn);
+  reproveStoreSchema(root);
+}
+
 function userVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA user_version returns one row with one integer column.
   return Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);
@@ -89,7 +96,7 @@ describe('store open fast path', () => {
   });
 
   it('every CREATE the slow path runs names an object in the required list, and every listed object is created', () => {
-    withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
+    withOutOfBandDamage((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
 
     const created = new Set(openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])));
 
@@ -142,7 +149,7 @@ describe('store open fast path', () => {
   });
 
   it('repairs a dropped continuity table and a dropped index', () => {
-    withDb((db) => {
+    withOutOfBandDamage((db) => {
       db.exec('DROP TABLE card_comments');
       db.exec('DROP INDEX idx_memory_quarantine_status');
     });
@@ -156,7 +163,7 @@ describe('store open fast path', () => {
   });
 
   it('takes the slow path and restores a missing meta default key', () => {
-    withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'total_recalled'`).run());
+    withOutOfBandDamage((db) => db.prepare(`DELETE FROM meta WHERE key = 'total_recalled'`).run());
 
     expect(openAndClose().some((sql) => DDL.test(sql))).toBe(true);
     withDb((db) => expect(getMeta(db, 'total_recalled', 'missing')).toBe('0'));

@@ -9,16 +9,18 @@ import { embedMemory } from '../../search/embed-memories.js';
 import {
   extractInvalidationTarget,
   invalidateMatching,
+  invalidationMatcher,
   invalidateMatchingAmong,
   type InvalidationOptions,
   type InvalidationResult,
   type InvalidationTarget,
 } from '../../learn/invalidation.js';
-import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry } from '../../core/memory.js';
+import { createMemory, Layer, schemaFitFrom, type MemoryEntry, type SchemaFitSource } from '../../core/memory.js';
 import { extractPathTags } from '../../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../core/recall-scope.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../../util/same-text.js';
+import { duplicateKey, heldTextKeys, longestWord, storedTextKeys } from '../../util/same-text.js';
 import { requireGroup, type LessonWrites } from '../../store/port.js';
+import { memoryPages } from '../memories/memories.js';
 import type { Context } from '../types.js';
 
 /** How a surface writes what it learns. */
@@ -45,7 +47,12 @@ export interface LearnOptions {
   repoPath: string;
   days: number;
   profile: LearnProfile;
+  /** Rows read per page of the tenant scan; defaults to TENANT_PAGE_ROWS. */
+  pageRows?: number;
 }
+
+// A page bounds what one read holds, so a large tenant never sits in memory as rows.
+const TENANT_PAGE_ROWS = 500;
 
 export interface LearnResult {
   /** `no-commits`: an empty git log; `no-lessons`: a log with no lesson-shaped subject. */
@@ -115,23 +122,16 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   for (const entry of landed) void embedMemory(target, entry, undefined, embeddings);
 }
 
-/** The duplicate keys a batch skips: every readable row's with
- * `existing`, else only the rows holding a lesson's longest word. */
-async function knownKeys(
-  ctx: Context,
-  writes: LessonWrites,
-  lessons: readonly string[],
-  existing: readonly MemoryEntry[] | undefined,
-): Promise<Set<string>> {
-  return storedTextKeys(
-    existing ?? (await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor))),
-  );
+/** The keys of the rows holding a lesson's longest word, the only rows that can be its copy. */
+async function knownKeys(ctx: Context, writes: LessonWrites, lessons: readonly string[]): Promise<Set<string>> {
+  const held = await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor));
+  return storedTextKeys(held);
 }
 
 interface LessonMemoryInputs {
   readonly tenantId: string;
   readonly config: HippoConfig;
-  readonly fitSource: ReturnType<typeof schemaFitSourceOf> | undefined;
+  readonly fitSource: SchemaFitSource | undefined;
   readonly pathTags: readonly string[];
 }
 
@@ -150,6 +150,39 @@ function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMe
   return entry;
 }
 
+interface TenantScan {
+  /** The rows a lesson's migration target can weaken; every lesson written this batch joins them. */
+  readonly live: MemoryEntry[];
+  readonly fitSource: SchemaFitSource;
+  /** Duplicate keys of what the caller can read. */
+  readonly keys: Set<string>;
+}
+
+/** One pass over the tenant in pages: keeps the rows `targets` match, and from the rows the caller can read only the
+ * tag counts, texts and duplicate keys that scoring a lesson needs. */
+async function scanTenant(
+  ctx: Context,
+  targets: readonly InvalidationTarget[],
+  pageRows: number,
+): Promise<TenantScan> {
+  const matches = invalidationMatcher(targets);
+  const live: MemoryEntry[] = [];
+  const tagCounts = new Map<string, number>();
+  const contents: string[] = [];
+  const keys = new Set<string>();
+  for await (const page of memoryPages(ctx.store, ctx.tenantId, pageRows)) {
+    for (const entry of page) {
+      if (matches(entry)) live.push(entry);
+      // Learn is host-admin only, so it reads what an admin can.
+      if (entry.scope != null && !canReadScope(ctx.actor, entry.scope)) continue;
+      for (const tag of entry.tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+      contents.push(entry.content);
+      for (const key of heldTextKeys(entry)) keys.add(key);
+    }
+  }
+  return { live, fitSource: { rows: contents.length, tagCounts, contents }, keys };
+}
+
 async function writeLessons(
   ctx: Context,
   lessons: readonly string[],
@@ -160,16 +193,14 @@ async function writeLessons(
   const { profile } = opts;
   const store = ctx.store;
   const writes = store.lessonWrites;
-  // One read serves the batch: invalidation matches against `live`,
-  // which follows every write below, as a reload per lesson did.
-  const live = profile.full ? await writes.tenantEntries(tenantId) : [];
-  // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is
-  // host-admin only, so both read what an admin can.
-  const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
-  // Each lesson is scored against `existing` as it was before the batch, so its tag counts and texts are read once.
-  const fitSource = existing && schemaFitSourceOf(existing);
+  // One pass serves the batch: invalidation matches against `live`, which follows every write below. Schema fit needs
+  // every readable row, and each lesson is scored against them as they were before the batch.
+  const targets = profile.full ? lessons.flatMap((lesson) => extractInvalidationTarget(lesson) ?? []) : [];
+  const scan = profile.full ? await scanTenant(ctx, targets, opts.pageRows ?? TENANT_PAGE_ROWS) : undefined;
+  const live = scan?.live ?? [];
+  const fitSource = scan?.fitSource;
   const batch: LessonBatch = {
-    ctx, writes, live, keys: await knownKeys(ctx, writes, lessons, existing), full: profile.full,
+    ctx, writes, live, keys: scan?.keys ?? await knownKeys(ctx, writes, lessons), full: profile.full,
     counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
   };
   const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];

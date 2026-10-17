@@ -13,7 +13,7 @@ import {
   type MemoryEntry,
 } from '../core/memory.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories/memories.js';
+import { getMemory, listMemoriesByIds } from '../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -359,15 +359,16 @@ function traceStats(entry: MemoryEntry) {
 async function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
-  const parentPreviews: { id: string; content: string }[] = [];
-  for (const pid of parents) {
-    const p = (await getMemory(cliApiContext(hippoRoot, tenantId), pid))
-      ?? (isInitialized(globalRoot) ? await getMemory(cliApiContext(globalRoot, tenantId), pid) : null);
-    parentPreviews.push({
-      id: pid,
-      content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)',
-    });
+  const local = parents.length === 0 ? [] : await listMemoriesByIds(cliApiContext(hippoRoot, tenantId), parents);
+  const found = new Map(local.map((p) => [p.id, p]));
+  const missing = parents.filter((pid) => !found.has(pid));
+  if (missing.length > 0 && isInitialized(globalRoot)) {
+    for (const p of await listMemoriesByIds(cliApiContext(globalRoot, tenantId), missing)) found.set(p.id, p);
   }
+  const parentPreviews = parents.map((pid) => {
+    const p = found.get(pid);
+    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
+  });
 
   // Open conflicts involving this memory.
   const openIn = (root: string) =>

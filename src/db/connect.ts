@@ -4,7 +4,7 @@ import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
-import { type OpenFacts, runMigrations } from './migrate.js';
+import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
 
 export function getHippoDbPath(hippoRoot: string): string {
@@ -30,6 +30,8 @@ export function oncePerStore(hippoRoot: string, name: string, step: () => void):
 
 // Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs.
 function createStoreFilesOwnerOnly(hippoRoot: string): void {
+  // A stat, not a failed exclusive open, is what an existing store costs on every connection.
+  if (fs.existsSync(getHippoDbPath(hippoRoot))) return;
   fs.mkdirSync(hippoRoot, { recursive: true, mode: 0o700 });
   try {
     fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
@@ -53,6 +55,30 @@ function archiveTop(db: DatabaseSyncLike): number {
   // SAFETY: MAX over the integer key returns one row with one column, null for an empty table.
   const row = db.prepare('SELECT MAX(id) AS top FROM raw_archive').get() as { top: number | null } | undefined;
   return Number(row?.top ?? 0);
+}
+
+const SCHEMA_STEP = 'schema';
+
+/** Makes the next connection to this store prove its schema again; `hippo init` calls it because it is the explicit ask
+ * to set a store up. */
+export function reproveStoreSchema(hippoRoot: string): void {
+  settledSteps.get(storeKey(hippoRoot))?.delete(SCHEMA_STEP);
+}
+
+// Once this process has proven a store's schema, a new connection re-reads only the two version stamps and the binary
+// floor: a migration by another process moves a stamp and sends the open down the full path.
+function settleSchema(db: DatabaseSyncLike, hippoRoot: string, busyWaitMs: number): OpenFacts | null {
+  if (settledSteps.get(storeKey(hippoRoot))?.has(SCHEMA_STEP)) {
+    const settled = settledStoreFacts(db);
+    if (settled) {
+      // An older binary can still write embeddings.json beside a store this process has proven.
+      importLegacyVectors(db, hippoRoot);
+      return settled;
+    }
+  }
+  const facts = runMigrations(db, hippoRoot, busyWaitMs);
+  oncePerStore(hippoRoot, SCHEMA_STEP, () => undefined);
+  return facts;
 }
 
 /**
@@ -79,7 +105,7 @@ export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot))}`);
     db.exec('PRAGMA foreign_keys = ON');
-    const facts = runMigrations(db, hippoRoot, busyWaitMs);
+    const facts = settleSchema(db, hippoRoot, busyWaitMs);
     // Orphan mirrors of archived raw rows go here; a filesystem failure must not block the open.
     try {
       sweepArchivedMirrorsIfDue(hippoRoot, db, facts?.archiveTop);
