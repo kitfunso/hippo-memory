@@ -113,7 +113,7 @@ describe('embedding model configuration', () => {
       const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
       const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
-      const { hybridSearch } = await import('../src/search/hybrid.js');
+      const { hybridSearch } = await import('../src/entry/folder-search.js');
       const { createMemory } = await import('../src/core/memory.js');
 
       // The provider is built from the configured model (real resolver, no
@@ -159,7 +159,7 @@ describe('embedding model configuration', () => {
 
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
       const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
-      const { hybridSearch } = await import('../src/search/hybrid.js');
+      const { hybridSearch } = await import('../src/entry/folder-search.js');
       const { createMemory } = await import('../src/core/memory.js');
 
       // Real staleness: the cached index was built under a DIFFERENT model
@@ -186,7 +186,7 @@ describe('embedding model configuration', () => {
 
       const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
-      const { hybridSearch } = await import('../src/search/hybrid.js');
+      const { hybridSearch } = await import('../src/entry/folder-search.js');
       const { createMemory } = await import('../src/core/memory.js');
 
       // In sync (no reindex needed) but genuinely empty: no embeddings.json

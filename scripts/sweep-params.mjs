@@ -22,6 +22,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { runEval } from '../dist/eval/eval.js';
 import { isInitialized } from '../dist/core/project-identity.js';
+import { sqliteStore } from '../dist/store/index.js';
 import { loadConfig } from '../dist/core/config.js';
 
 const CORPUS_PATH = process.argv.find((a) => a.endsWith('.json') && !a.startsWith('--'))
@@ -97,8 +98,9 @@ for (let i = 0; i < combos.length; i++) {
   while (true) {
     try {
       summary = await runEval(cases, [], {
-        hippoRoot,
-        globalRoot,
+        stores: isInitialized(globalRoot)
+          ? { local: sqliteStore(hippoRoot), global: sqliteStore(globalRoot) }
+          : undefined,
         mmr: c.mmr,
         mmrLambda: c.lambda,
         embeddingWeight: c.emb,

@@ -6,7 +6,7 @@ import { MemoryEntry } from '../core/memory.js';
 import { recallScopeFilter } from '../store/search-rows.js';
 import { requireGroup, type HippoStore } from '../store/port.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../core/recall-scope.js';
-import { folderVectorSource, hybridSearch } from '../search/hybrid.js';
+import { configuredVectorSource, hybridSearch } from '../search/hybrid.js';
 import { fitBudget } from '../search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from '../core/search-types.js';
 import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
@@ -120,7 +120,8 @@ export async function searchBothHybrid(
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
 export function localFilesVectorSource(store: HippoStore): VectorSource | undefined {
-  return folderVectorSource({ hippoRoot: requireGroup(store, 'localFiles').hippoRoot, store });
+  const { hippoRoot } = requireGroup(store, 'localFiles');
+  return hippoRoot ? configuredVectorSource(store, hippoRoot) : undefined;
 }
 
 /** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */

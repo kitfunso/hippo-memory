@@ -10,7 +10,7 @@ import {
 } from '../store/sqlite/store.js';
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
-function cliStore(hippoRoot: string): HippoStore & StoreGroups {
+export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   return sqliteStore(hippoRoot);
 }
 

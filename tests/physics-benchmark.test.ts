@@ -19,8 +19,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { hybridSearch } from '../src/search/hybrid.js';
-import { physicsSearch } from '../src/search/physics-search.js';
+import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {

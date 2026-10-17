@@ -11,8 +11,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
-import { hybridSearch } from '../src/search/hybrid.js';
-import { physicsSearch } from '../src/search/physics-search.js';
+import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
 import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import type { SearchResult } from '../src/core/search-types.js';
 

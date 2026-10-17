@@ -23,7 +23,7 @@ import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
 import { DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
-import { sqliteStore, type HippoStore } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 
 export interface HybridSearchOptions {
   budget?: number;
@@ -81,17 +81,23 @@ export interface HybridSearchOptions {
   queryEmbedDeadline?: AbortSignal;
 }
 
+/** hybridSearch's options once the caller names its stores; the folder fields belong to the published wrapper. */
+export type HybridRankOptions = Omit<HybridSearchOptions, 'hippoRoot' | 'embeddings' | 'store'> & {
+  /** The global store the graph stream also walks; the published wrapper opens it from `graphStream.globalRoot`. */
+  graphGlobal?: HippoStore;
+};
+
 // Share of the blended score that cosine takes.
 export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
 
 /**
- * BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency
- * otherwise.
+ * BM25 blended with cosine similarity when `source` holds vectors and a provider is available, BM25 * strength *
+ * recency otherwise.
  */
 export async function hybridSearch(
   query: string,
   entries: MemoryEntry[],
-  options: HybridSearchOptions = {},
+  options: HybridRankOptions = {},
 ): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
@@ -100,7 +106,7 @@ export async function hybridSearch(
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  const source = options.source ?? folderVectorSource(options);
+  const { source } = options;
   const arm = await resolveVectorArm(query, pool, source, options);
   // A prepared corpus covers the caller's entries only, so rows the vector arm added force a rebuild.
   const corpus = (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
@@ -133,31 +139,18 @@ export function vectorSourceOf({ store, config }: {
   return { store, provider: () => resolveEmbeddingProvider(config.embeddings) };
 }
 
-/**
- * hippo.db under `hippoRoot` when the caller passed no store: the folder default lives on the exported entries, never
- * inside the vector arm.
- */
-export function folderVectorSource({
-  hippoRoot, store, embeddings,
-}: Pick<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>): VectorSource | undefined {
-  if (!hippoRoot) return undefined;
-  return {
-    store: store ?? sqliteStore(hippoRoot),
-    provider: () => resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings)),
-  };
+/** The vectors `store` holds, embedded by the provider that `embeddings`, else the config under `hippoRoot`, names. */
+export function configuredVectorSource(
+  store: HippoStore, hippoRoot: string, embeddings?: EmbeddingsConfig,
+): VectorSource {
+  return { store, provider: () => resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings)) };
 }
 
-// The published GraphStreamOptions names the global store by folder, so it opens there.
-function graphStoresOf(source: VectorSource | undefined, options: HybridSearchOptions): FusionInput['graph'] {
-  if (!source) return undefined;
-  const globalRoot = options.graphStream?.globalRoot;
-  return {
-    store: source.store,
-    global: globalRoot && globalRoot !== options.hippoRoot ? sqliteStore(globalRoot) : undefined,
-  };
+function graphStoresOf(source: VectorSource | undefined, options: HybridRankOptions): FusionInput['graph'] {
+  return source && { store: source.store, global: options.graphGlobal };
 }
 
-function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridSearchOptions): BoostContext {
+function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridRankOptions): BoostContext {
   return {
     now,
     pathTags: extractPathTags(process.cwd()),
@@ -173,7 +166,7 @@ async function orderHybrid(
   query: string,
   scored: SearchResult[],
   arm: VectorArm,
-  options: HybridSearchOptions,
+  options: HybridRankOptions,
 ): Promise<SearchResult[]> {
   const mmrLambda = options.mmrLambda ?? DEFAULT_MMR_LAMBDA;
   const applyMmr = (options.mmr ?? true) && arm.useEmbeddings && scored.length > 1 && mmrLambda < 1;

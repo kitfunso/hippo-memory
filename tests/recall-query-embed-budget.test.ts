@@ -12,7 +12,7 @@ import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { retrieve } from '../src/api/index.js';
-import { physicsSearch } from '../src/search/physics-search.js';
+import { physicsSearch } from '../src/entry/folder-search.js';
 import { embedQueryBy } from '../src/search/vector.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';

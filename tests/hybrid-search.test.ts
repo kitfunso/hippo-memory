@@ -4,7 +4,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
-import { hybridSearch } from '../src/search/hybrid.js';
+import { hybridSearch } from '../src/entry/folder-search.js';
 import { search } from '../src/search/bm25-search.js';
 import { mmrRerank } from '../src/search/rerank.js';
 import type { SearchResult } from '../src/core/search-types.js';

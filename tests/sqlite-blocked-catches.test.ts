@@ -12,8 +12,7 @@ import { strengthenRetrieved } from '../src/store/entry-writes.js';
 import { embeddingModelRequiresReindex } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { sqliteStore } from '../src/store/index.js';
-import { physicsSearch } from '../src/search/physics-search.js';
-import { folderVectorSource } from '../src/search/hybrid.js';
+import { physicsSearch, folderVectorSource } from '../src/entry/folder-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 

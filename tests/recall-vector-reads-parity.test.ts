@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { serve } from '../src/server.js';
 import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
-import { folderVectorSource, hybridSearch } from '../src/search/hybrid.js';
+import { folderVectorSource, hybridSearch } from '../src/entry/folder-search.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { markSharedStore } from '../src/core/config.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';

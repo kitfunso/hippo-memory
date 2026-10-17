@@ -4,9 +4,11 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
 import { listMemories } from '../api/memories/memories.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliStore } from './api-context.js';
 import { loadConfig } from '../core/config.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
+import { isInitialized } from '../core/project-identity.js';
+import { folderVectorSource } from '../entry/folder-search.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
 import {
   runFeatureEval,
@@ -85,8 +87,8 @@ async function runCorpusEval(
     : numberFlag(flags, 'local-bump') ?? loadConfig(hippoRoot).search.localBump;
 
   return runEval(cases, entries, {
-    hippoRoot,
-    globalRoot,
+    stores: isInitialized(globalRoot) ? { local: cliStore(hippoRoot), global: cliStore(globalRoot) } : undefined,
+    source: folderVectorSource({ hippoRoot }),
     mmr: !flags['no-mmr'],
     mmrLambda: numberFlag(flags, 'mmr-lambda'),
     embeddingWeight: numberFlag(flags, 'embedding-weight'),

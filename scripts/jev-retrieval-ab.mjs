@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { hybridSearch } from '../dist/search/hybrid.js';
+import { hybridSearch } from '../dist/index.js';
 import { buildCorpus } from '../dist/search/bm25.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
 

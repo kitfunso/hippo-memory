@@ -23,7 +23,7 @@ import {
   rebuildDirtySummaries,
 } from '../src/consolidate/dag.js';
 import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../src/api/index.js';
-import { hybridSearch } from '../src/search/hybrid.js';
+import { hybridSearch } from '../src/entry/folder-search.js';
 import { isDagSummary } from '../src/search/boosts.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
