@@ -76,6 +76,12 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_peers', toolOn('localFiles', runPeersTool)],
 ]);
 
+/** A call of a tool on hippo.db's local files, which a server runs on its own thread: that group has no worker. */
+export function callsLocalFilesTool(req: McpRequest): boolean {
+  const name = req.params?.name;
+  return req.method === 'tools/call' && isJsonString(name) && TOOL_HANDLERS.get(name)?.storeReady === 'localFiles';
+}
+
 /** A call with no context yet (tools/list on stdio) lists every tool. */
 function runsOn(store: HippoStore | undefined, toolName: string): boolean {
   const group = TOOL_HANDLERS.get(toolName)?.storeReady;

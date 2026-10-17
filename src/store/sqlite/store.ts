@@ -232,8 +232,14 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
 /** The composition roots reach the request scope through the adapter's one entry. */
 export { runDetachedSqliteRequest, runSqliteRequest } from './request-scope.js';
 
-/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag). */
-export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boolean): StoreReach {
+/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
+ * `openGlobal` builds the global store, which a server keeps on threads of its own. */
+export function sqliteReach(
+  hippoRoot: string,
+  store: HippoStore,
+  shared?: boolean,
+  openGlobal: (root: string) => HippoStore = sqliteStore,
+): StoreReach {
   const other = hasGroup(store, 'localFiles') ? undefined : store;
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
@@ -244,7 +250,7 @@ export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boole
     shared: sharedStore,
   };
   if (!canReadGlobal) return reach;
-  return { ...reach, global: { root: globalRoot, store: sqliteStore(globalRoot) } };
+  return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
 }
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as

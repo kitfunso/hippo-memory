@@ -206,6 +206,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'server/server-db-connection.test.ts',
   'server/server-detect.test.ts',
   'server/server-hardening.test.ts',
+  'server/server-host-routes-off-loop.test.ts',
   'server/server-key-derivation-bounds.test.ts',
   'server/server-keyless-local-default.test.ts',
   'server/server-lifecycle.test.ts',

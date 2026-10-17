@@ -98,7 +98,7 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
 
 type AuthOptions = Pick<
   ResolvedServeOptions,
-  'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'
+  'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'globalStores' | 'callerLimiter'
 > &
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
@@ -304,7 +304,7 @@ function keylessLocalActor(): Actor {
 
 function contextFor(id: BearerIdentity | null, opts: AuthOptions): Context {
   // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = sqliteReach(opts.hippoRoot, opts.store);
+  const reach = sqliteReach(opts.hippoRoot, opts.store, undefined, opts.globalStores.open);
   // loadConfig caches by file mtime, so each request still sees an edit made while the server runs.
   const config = loadConfig(opts.hippoRoot);
   if (id !== null) {

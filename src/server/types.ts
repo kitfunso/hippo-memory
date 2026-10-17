@@ -4,6 +4,7 @@ import type { Context } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
+import type { GlobalStores } from '../store/sqlite/worker-store.js';
 
 export interface ServerHandle {
   port: number;
@@ -88,6 +89,8 @@ export interface ServeOpts {
 
 export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
+  /** The operator's global store a request reaches beside `store`. */
+  globalStores: GlobalStores;
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
   offLoop: <T>(run: () => T) => T;
   publicJsonBodies: ReadonlyMap<string, string>;

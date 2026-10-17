@@ -131,6 +131,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'GET',
     pattern: '/v1/recall/drill/:id',
     auth: 'caller',
+    loop: 'off',
     handler: handleDrillRecall,
   },
   {
@@ -165,12 +166,14 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/outcome',
     auth: 'caller',
+    loop: 'off',
     handler: handleApplyOutcome,
   },
   {
     method: 'GET',
     path: '/v1/context',
     auth: 'caller',
+    loop: 'off',
     handler: handleGetContext,
   },
   {
@@ -178,6 +181,7 @@ export const V1_ROUTES: readonly Route[] = [
     path: '/v1/sleep',
     auth: 'host-admin-local',
     storeReady: 'localFiles',
+    loop: 'off',
     handler: handleSleep,
   },
   {
@@ -534,12 +538,14 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/connectors/slack/events',
     auth: 'webhook-signature',
+    loop: 'off',
     handler: webhook(handleSlackEventsWebhook),
   },
   {
     method: 'POST',
     path: '/v1/connectors/github/events',
     auth: 'webhook-signature',
+    loop: 'off',
     handler: webhook(handleGitHubEventsWebhook),
   },
 ];
@@ -626,6 +632,34 @@ export async function dispatchAddonRoute(
   noteAccess(req, { tenant: ctx.tenantId });
   const body = await parseJsonBody(req, ctx);
   sendJson(res, 200, await route.handler({ ctx, body }));
+  return true;
+}
+
+/** A route outside /v1 and the add-ons; `loop: 'off'` fences its store work from the server thread as a V1 row's. */
+export interface HostRoute {
+  readonly method: string;
+  readonly path: string;
+  readonly loop?: 'off';
+}
+
+/** Each runs where boot.ts places it around the rate limit and the request scope. */
+export const HOST_ROUTES = {
+  health: { method: 'GET', path: '/health', loop: 'off' },
+  ready: { method: 'GET', path: '/ready', loop: 'off' },
+  mcp: { method: 'POST', path: '/mcp', loop: 'off' },
+  mcpStream: { method: 'GET', path: '/mcp/stream', loop: 'off' },
+} as const satisfies Readonly<Record<string, HostRoute>>;
+
+/** Runs `handle` when the request is `route`'s, in the fence its row names; false when it is another route. */
+export async function dispatchHostRoute(
+  { req, opts }: RouteRequest,
+  request: { readonly method: string; readonly path: string },
+  route: HostRoute,
+  handle: () => Promise<void>,
+): Promise<boolean> {
+  if (request.method !== route.method || request.path !== route.path) return false;
+  noteAccess(req, { route: route.path });
+  await (route.loop === 'off' ? opts.offLoop(handle) : handle());
   return true;
 }
 

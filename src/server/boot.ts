@@ -6,7 +6,7 @@ import { isStoreBusy } from '../store/busy.js';
 import {
   createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder,
 } from '../store/sqlite/held-connection.js';
-import { workerSqliteStore } from '../store/sqlite/worker-store.js';
+import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -37,7 +37,6 @@ import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
 import {
   accessRouteOf,
   logRequestFailure,
-  noteAccess,
   openRequest,
   parseRequest,
   rejectEncodedSlash,
@@ -46,7 +45,9 @@ import {
 } from './request.js';
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
-import { dispatchAddonRoute, dispatchPublicJson, dispatchV1Route } from './route-table.js';
+import {
+  dispatchAddonRoute, dispatchHostRoute, dispatchPublicJson, dispatchV1Route, HOST_ROUTES,
+} from './route-table.js';
 import type { RateLimitSpec, ResolvedServeOptions, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
@@ -85,27 +86,19 @@ async function handleRequest(
   // it.
   if (path === '/mcp') res.setHeader(MCP_PROJECT_SCOPED_HEADER, '1');
 
-  if (method === 'GET' && path === '/health') {
-    noteAccess(req, { route: path });
-    sendHealth(req, res, startedAt);
-    return;
-  }
-  if (method === 'GET' && path === '/ready') {
-    noteAccess(req, { route: path });
-    await sendReady(res, opts.store);
-    return;
-  }
+  const routeRequest: RouteRequest = { req, res, opts, query };
+  const request = { method, path };
+  const { health, ready, mcpStream } = HOST_ROUTES;
+  if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, startedAt))) return;
+  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store))) return;
 
   enforceRateLimit(req, path, limiter);
 
-  const routeRequest: RouteRequest = { req, res, opts, query };
   if (await dispatchScopedRoute(routeRequest, method, path)) return;
 
   // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so the key check and
   // every heartbeat wait that long. Store-ready: the stream only authenticates, through the port.
-  if (method === 'GET' && path === '/mcp/stream') {
-    noteAccess(req, { route: path });
-    await handleMcpStream(req, res, opts, streamSlots);
+  if (await dispatchHostRoute(routeRequest, request, mcpStream, () => handleMcpStream(req, res, opts, streamSlots))) {
     return;
   }
 
@@ -113,23 +106,14 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/**
- * Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public
- * JSON, add-on routes and POST /mcp.
- */
+/** Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public
+ * JSON, add-on routes and POST /mcp. */
 async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
-  const { req, res, opts } = r;
-
   // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
-  if (method === 'POST' && path === '/mcp') {
-    noteAccess(req, { route: path });
-    await handleMcpPost(req, res, opts);
-    return true;
-  }
-  return false;
+  return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () => handleMcpPost(r.req, r.res, r.opts));
 }
 
 function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
@@ -465,6 +449,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
     await stopListening(opts, server, inflight, startedAt);
     // The store's worker threads close their connections first, so the held one is still SQLite's last.
     if (!opts.store) await served.store.close();
+    await served.globalStores.close();
     await holder.release();
   };
 
@@ -496,6 +481,7 @@ function servedOptsFor(
     routes,
     publicJsonBodies,
     store,
+    globalStores: globalStoresFor(store),
     offLoop: offLoopFor(store),
     callerLimiter,
     failedAuthLimiter,

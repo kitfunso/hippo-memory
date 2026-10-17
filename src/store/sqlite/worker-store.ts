@@ -77,44 +77,101 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-/** `sqliteStore` with the worker-backed methods in place of its in-process ones; close() closes `executor` and resolves
- * once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock wait. */
+type RecallAndWriteGroups = Pick<
+  StoreGroups,
+  | 'keyAudit' | 'keyWrites' | 'keyGrants' | 'vectorWrites' | 'entryWrites' | 'contextReads' | 'predictions'
+  | 'dagReads' | 'auditLog' | 'quarantine' | 'graphReads' | 'objects' | 'lastRecall' | 'connectorWrites'
+  | 'connectorEvents'
+>;
+
+function recallAndWriteGroups(executor: SqliteExecutor, inProcess: StoreGroups): RecallAndWriteGroups {
+  const ops = WORKER_OPS;
+  return {
+    keyAudit: onWorkers(executor, 'keyAudit', ops.keyAudit, inProcess.keyAudit),
+    keyWrites: onWorkers(executor, 'keyWrites', ops.keyWrites, inProcess.keyWrites),
+    keyGrants: onWorkers(executor, 'keyGrants', ops.keyGrants, inProcess.keyGrants),
+    vectorWrites: onWorkers(executor, 'vectorWrites', ops.vectorWrites, inProcess.vectorWrites),
+    entryWrites: onWorkers(executor, 'entryWrites', ops.entryWrites, inProcess.entryWrites),
+    contextReads: onWorkers(executor, 'contextReads', ops.contextReads, inProcess.contextReads),
+    predictions: onWorkers(executor, 'predictions', ops.predictions, inProcess.predictions),
+    dagReads: onWorkers(executor, 'dagReads', ops.dagReads, inProcess.dagReads),
+    auditLog: onWorkers(executor, 'auditLog', ops.auditLog, inProcess.auditLog),
+    quarantine: onWorkers(executor, 'quarantine', ops.quarantine, inProcess.quarantine),
+    graphReads: onWorkers(executor, 'graphReads', ops.graphReads, inProcess.graphReads),
+    objects: onWorkers(executor, 'objects', ops.objects, inProcess.objects),
+    lastRecall: onWorkers(executor, 'lastRecall', ops.lastRecall, inProcess.lastRecall),
+    connectorWrites: onWorkers(executor, 'connectorWrites', ops.connectorWrites, inProcess.connectorWrites),
+    connectorEvents: onWorkers(executor, 'connectorEvents', ops.connectorEvents, inProcess.connectorEvents),
+  };
+}
+
+type SessionAndAdminGroups = Pick<
+  StoreGroups,
+  | 'auditMaintenance' | 'lessonWrites' | 'sessions' | 'cards' | 'goals' | 'conflicts' | 'dormant' | 'reports'
+  | 'rejections' | 'failureLog' | 'compactions'
+>;
+
+function sessionAndAdminGroups(executor: SqliteExecutor, inProcess: StoreGroups): SessionAndAdminGroups {
+  const ops = WORKER_OPS;
+  return {
+    auditMaintenance: onWorkers(executor, 'auditMaintenance', ops.auditMaintenance, inProcess.auditMaintenance),
+    lessonWrites: onWorkers(executor, 'lessonWrites', ops.lessonWrites, inProcess.lessonWrites),
+    sessions: onWorkers(executor, 'sessions', ops.sessions, inProcess.sessions),
+    cards: onWorkers(executor, 'cards', ops.cards, inProcess.cards),
+    goals: onWorkers(executor, 'goals', ops.goals, inProcess.goals),
+    conflicts: onWorkers(executor, 'conflicts', ops.conflicts, inProcess.conflicts),
+    dormant: onWorkers(executor, 'dormant', ops.dormant, inProcess.dormant),
+    reports: onWorkers(executor, 'reports', ops.reports, inProcess.reports),
+    rejections: onWorkers(executor, 'rejections', ops.rejections, inProcess.rejections),
+    failureLog: onWorkers(executor, 'failureLog', ops.failureLog, inProcess.failureLog),
+    compactions: onWorkers(executor, 'compactions', ops.compactions, inProcess.compactions),
+  };
+}
+
+/** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
+ * resolves once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock
+ * wait. */
 export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
 ): HippoStore & StoreGroups {
   const inProcess = sqliteStore(hippoRoot);
-  const {
-    keyAudit,
-    keyWrites,
-    vectorWrites,
-    entryWrites,
-    contextReads,
-    predictions,
-    dagReads,
-    auditLog,
-    quarantine,
-    graphReads,
-    objects,
-  } = WORKER_OPS;
   const store: HippoStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(executor, inProcess.vectors),
-    keyAudit: onWorkers(executor, 'keyAudit', keyAudit, inProcess.keyAudit),
-    keyWrites: onWorkers(executor, 'keyWrites', keyWrites, inProcess.keyWrites),
-    vectorWrites: onWorkers(executor, 'vectorWrites', vectorWrites, inProcess.vectorWrites),
-    entryWrites: onWorkers(executor, 'entryWrites', entryWrites, inProcess.entryWrites),
-    contextReads: onWorkers(executor, 'contextReads', contextReads, inProcess.contextReads),
-    predictions: onWorkers(executor, 'predictions', predictions, inProcess.predictions),
-    dagReads: onWorkers(executor, 'dagReads', dagReads, inProcess.dagReads),
-    auditLog: onWorkers(executor, 'auditLog', auditLog, inProcess.auditLog),
-    quarantine: onWorkers(executor, 'quarantine', quarantine, inProcess.quarantine),
-    graphReads: onWorkers(executor, 'graphReads', graphReads, inProcess.graphReads),
-    objects: onWorkers(executor, 'objects', objects, inProcess.objects),
+    ...recallAndWriteGroups(executor, inProcess),
+    ...sessionAndAdminGroups(executor, inProcess),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };
   offLoopStores.add(store);
   return store;
+}
+
+/** The operator's global stores a server opens beside its own, closed with it. */
+export interface GlobalStores {
+  readonly open: (root: string) => HippoStore;
+  readonly close: () => Promise<void>;
+}
+
+/** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
+ * thread; each is built at first use, since the global store can appear while the server runs. */
+export function globalStoresFor(served: HippoStore): GlobalStores {
+  if (!runsOffLoop(served)) return { open: sqliteStore, close: async () => {} };
+  const opened = new Map<string, HippoStore>();
+  return {
+    open(root) {
+      const known = opened.get(root);
+      if (known !== undefined) return known;
+      const made = workerSqliteStore(root);
+      opened.set(root, made);
+      return made;
+    },
+    async close() {
+      const closing = [...opened.values()];
+      opened.clear();
+      await Promise.all(closing.map((store) => store.close()));
+    },
+  };
 }
