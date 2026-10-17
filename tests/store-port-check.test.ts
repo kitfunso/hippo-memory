@@ -20,6 +20,7 @@ type Counts = {
   txLiterals: number;
   tenantResolvesInCli: number;
   storeImportsInCli: number;
+  storeImportsInDomain: number;
   handleHoldersOutside: number;
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
@@ -45,6 +46,7 @@ const zero: Counts = {
   txLiterals: 0,
   tenantResolvesInCli: 0,
   storeImportsInCli: 0,
+  storeImportsInDomain: 0,
   handleHoldersOutside: 0,
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
@@ -62,6 +64,7 @@ function withFixture(files: Record<string, string>, baseline: Partial<Counts> | 
     writeFileSync(join(root, p), text);
   };
   try {
+    write('layers.json', JSON.stringify({ folders: { consolidate: 'domain', trust: 'domain', cli: 'surface' } }));
     for (const [p, text] of Object.entries(files)) write(p, text);
     if (baseline) write(BASELINE, JSON.stringify({ ...zero, ...baseline }));
     // SAFETY: the script only ever writes the Counts shape to the baseline.
@@ -343,6 +346,14 @@ describe('check-store-port.mjs', () => {
       expect(r.stderr).not.toContain('sqliteOnly POST /x');
       expect(run('--update').status).toBe(1);
       expect(baseline().sqliteOnlyRoutesList).toEqual(['POST /x']);
+    });
+  });
+
+  it('counts a store import from a domain folder that layers.json marks, outside the first three', () => {
+    const files = { 'src/trust/a.ts': "import { openHippoDb } from '../db/busy.js';\nexport const f = openHippoDb;\n" };
+    withFixture(files, { storeImportsInDomain: 0 }, ({ run }) => {
+      expect(list(run).storeImportsInDomain).toBe('1');
+      expect(run().stderr).toContain('storeImportsInDomain: 0 -> 1');
     });
   });
 

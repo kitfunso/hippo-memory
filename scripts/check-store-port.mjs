@@ -4,7 +4,7 @@
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
-// storeImportsInDomain counts value imports, re-exports and import() calls from src/consolidate, src/agent-memories and src/learn into src/store or src/db: domain code reaches hippo.db through the port.
+// storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
@@ -158,7 +158,8 @@ function countStoreImports(file, sf) {
     reachesDataLayer(file, s.moduleSpecifier.text) && !(s.importClause && namesOnlyTypes(s.importClause))).length;
 }
 
-const isDomain = (f) => /^src\/(consolidate|agent-memories|learn)\//.test(f);
+const DOMAIN = Object.entries(JSON.parse(readFileSync('layers.json', 'utf8')).folders).filter(([, layer]) => layer === 'domain').map(([folder]) => `src/${folder}/`);
+const isDomain = (f) => DOMAIN.some((d) => f.startsWith(d));
 const isValueImport = (s) => ts.isImportDeclaration(s) && !(s.importClause && namesOnlyTypes(s.importClause));
 const isValueReexport = (s) => ts.isExportDeclaration(s) && !s.isTypeOnly &&
   !(s.exportClause && ts.isNamedExports(s.exportClause) && s.exportClause.elements.every((e) => e.isTypeOnly));
