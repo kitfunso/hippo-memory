@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { authCreate } from '../src/server.js';
-import { sqliteStore, StoreBusyError, type HippoDbContext, type HippoStore } from '../src/entry/store-kit.js';
+import { authCreate, type Context } from '../src/server.js';
+import { sqliteStore, StoreBusyError, type HippoStore } from '../src/entry/store-kit.js';
 import { validateApiKey } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordStatements } from './_helpers/count-statements.js';
@@ -10,7 +10,7 @@ import { makeRoot } from './_helpers/make-root.js';
 describe('hippo-memory/server exports authCreate', () => {
   it('mints a key into the named store for the given tenant and role', async () => {
     const root = makeRoot('server-auth-create', { init: false });
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'acme', actor: { subject: 'addon:install', role: 'admin', hostAdmin: true } };
+    const ctx: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: 'acme', actor: { subject: 'addon:install', role: 'admin', hostAdmin: true } };
     const minted = await authCreate(ctx, { label: 'first-admin', role: 'admin' });
     expect(minted.tenantId).toBe('acme');
     expect(minted.role).toBe('admin');

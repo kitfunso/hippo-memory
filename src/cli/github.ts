@@ -2,7 +2,7 @@
  * The dispatcher in cli.ts re-exports handleGitHub. */
 
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
-import { adminActor, type StoreContext } from '../api/index.js';
+import { adminActor, type Context } from '../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
@@ -97,7 +97,7 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Fla
   const sinceFlag = flags['since'];
   const sinceIso = isFlagString(sinceFlag) ? sinceFlag : undefined;
 
-  const ctx: StoreContext = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
+  const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
   try {
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
@@ -197,7 +197,7 @@ export async function cmdGitHubDlqReplay(
     throw new CliExit(1);
   }
   const force = flags['force'] === true;
-  const ctx: StoreContext = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
+  const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
   const result = await replayDlqEntry(ctx, id, {
     force,

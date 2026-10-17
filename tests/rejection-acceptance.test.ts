@@ -178,7 +178,7 @@ describe('case 4: legacy-mirror resurrection pin', () => {
     const home = makeRoot('rejection-acceptance');
 
     // Rejecting the only row empties `memories`, the one state in which bootstrapLegacyStore scans the mirrors.
-    const rawContent ='raw transcript content later rejected and archived';
+    const rawContent = 'raw transcript content later rejected and archived';
     const rawEntry = createMemory(rawContent, { layer: Layer.Episodic, kind: 'raw' });
     writeEntry(home, rawEntry);
 
@@ -309,12 +309,12 @@ describe('case 6: reject removes a value from recall, permanently', () => {
     const wContent = 'do not use the deprecated zynthkey rotation script for staging credentials';
     const remembered = await api.remember(ctx(home), { content: wContent });
 
-    const before = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
+    const before = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
     expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
 
     await api.reject(ctx(home), { memoryId: remembered.id, reason: 'staging creds process changed' });
 
-    const afterReject = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
+    const afterReject = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
     expect(afterReject.results.some((r) => r.content === wContent)).toBe(false);
 
     let caught: unknown;
@@ -325,7 +325,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
     }
     expect(caught).toBeInstanceOf(RejectedValueError);
 
-    const afterReattempt = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
+    const afterReattempt = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
     expect(afterReattempt.results.some((r) => r.content === wContent)).toBe(false);
   });
 });
@@ -456,7 +456,7 @@ describe('capture dry-run tombstone accuracy', () => {
     // Digit signal so audit.ts's isContentWorthStoring specificity gate
     // (hasNoSpecificity) doesn't filter these before they ever reach the
     // rejection guard — same fixture-construction rule as case 1 above.
-    const rejectedContent ='use bearer tokens for outbound api calls to port 8443';
+    const rejectedContent = 'use bearer tokens for outbound api calls to port 8443';
     await api.reject(ctx(home), { value: rejectedContent, reason: 'pre-emptive dry-run capture tombstone' });
 
     const fixturePath = join(home, 'capture-dryrun-fixture.txt');

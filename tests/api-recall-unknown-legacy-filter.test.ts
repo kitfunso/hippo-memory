@@ -68,7 +68,7 @@ describe('recall: default-deny on unknown:legacy', () => {
     writeEntry(root, makeWithScope('legacy-row beta', 'unknown:legacy'));
     writeEntry(root, makeWithScope('public-row beta', null));
 
-    const r = await retrieve(ctxFor(root), { query: 'beta', scope: 'unknown:legacy' });
+    const r = await retrieve(ctxFor(root), { query: 'beta', filter: { scope: 'unknown:legacy' } });
     const contents = r.results.map((it) => it.content);
     expect(contents).toContain('legacy-row beta');
     expect(contents).not.toContain('public-row beta');
@@ -82,7 +82,7 @@ describe('recall: default-deny on unknown:legacy', () => {
     writeEntry(root, makeWithScope('public-row gamma', null));
     writeEntry(root, makeWithScope('legacy-row gamma', 'unknown:legacy'));
 
-    const r = await retrieve(ctxFor(root), { query: 'gamma', scope: '' });
+    const r = await retrieve(ctxFor(root), { query: 'gamma', filter: { scope: '' } });
     const contents = r.results.map((it) => it.content);
     expect(contents).toContain('public-row gamma');
     expect(contents).not.toContain('legacy-row gamma');

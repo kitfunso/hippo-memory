@@ -1,10 +1,11 @@
-import type { StoreContext } from '../api/index.js';
+import type { Context } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { hasGroup, type StoreGroup, type HippoStore } from '../store/index.js';
 import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE, type WebhookRequest } from '../util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
+import { routeLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
@@ -575,7 +576,7 @@ export function routeMatches(route: Route, method: string, path: string): ((r: R
 async function passAuthGate(
   route: Exclude<Route, { auth: 'webhook-signature' }>,
   { req, opts }: RouteRequest,
-): Promise<StoreContext> {
+): Promise<Context> {
   const label = routeLabel(route);
   // Defence in depth, not the boundary: a socket address says where a request came from, never who sent it.
   if (route.auth === 'host-admin-local' && !isLoopback(req.socket.remoteAddress)) {
@@ -596,18 +597,18 @@ export function routeLabel(route: Route): string {
   return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/').replaceAll('(\\d+)', ':id');
 }
 
+const findV1Route = routeLookup(V1_ROUTES, routeMatches);
+
 /** Run the first /v1 route whose method and path match. */
 export async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
-  for (const route of V1_ROUTES) {
-    const run = routeMatches(route, method, path);
-    if (run === null) continue;
-    noteAccess(r.req, { route: routeLabel(route) });
-    // Only a store with worker threads has moved the route's SQLite
-    // work; under any other the handler still opens hippo.db itself.
-    await (route.loop === 'off' ? r.opts.offLoop(() => run(r)) : run(r));
-    return true;
-  }
-  return false;
+  const match = findV1Route(method, path);
+  if (match === null) return false;
+  const { route, run } = match;
+  noteAccess(r.req, { route: routeLabel(route) });
+  // Only a store with worker threads has moved the route's SQLite
+  // work; under any other the handler still opens hippo.db itself.
+  await (route.loop === 'off' ? r.opts.offLoop(() => run(r)) : run(r));
+  return true;
 }
 
 /** Core authenticates and parses before the handler runs, so an

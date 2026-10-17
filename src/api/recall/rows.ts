@@ -12,7 +12,7 @@ import { fitBudget } from '../../search/finalize.js';
 import type { ContinuityBlock } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
 import { loadSearchEntries } from '../../store/search-rows.js';
-import type { Context, StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../graph/recall.js';
 
@@ -60,7 +60,7 @@ export function scopeHiddenCount(
 
 /** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
 export async function loadCliRecallContinuity(
-  ctx: StoreContext,
+  ctx: Context,
   setting: CliRecallSetting,
   wanted: boolean,
 ): Promise<ContinuityBlock> {

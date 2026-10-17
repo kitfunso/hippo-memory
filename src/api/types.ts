@@ -26,18 +26,17 @@ export interface Context {
   hippoRoot: string;
   tenantId: string;
   actor: Actor;
-  store?: HippoStore;
+  /** Built by a composition root; every api function reads and writes storage only through it. */
+  readonly store: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an integrator's store. */
   reach?: StoreReach;
   /** Set by a composition root per command or request; absent, the api reads the store's config.json. */
   config?: HippoConfig;
 }
 
-export type HippoDbContext = Context & { store?: undefined };
-
-/** A Context whose store a composition root already built; every
- * api function that reads or writes the store takes this. */
-export type StoreContext = Context & { readonly store: HippoStore };
+/** Held only for src/dashboard/dashboard-actions.ts, which another session owns;
+ * delete it when that file says Context. */
+export type StoreContext = Context;
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
  * callers build Actor from the api_keys row instead. */

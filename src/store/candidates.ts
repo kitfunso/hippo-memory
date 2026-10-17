@@ -8,6 +8,8 @@ import {
   schemaFitFrom,
 } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
+import { isOutcomeSlowAblated } from '../core/ablation.js';
+import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../db/decay-key.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
@@ -177,11 +179,13 @@ export interface ContextCandidateFilter {
   now: Date;
 }
 
-// calculateStrength's decay exponent with its reward factor, pins first: the strongest rows, without scoring each one
-// in JS. A function, not a constant, so the outcome-slow ablation is read per query as strengthSql reads it.
+// calculateStrength's decay exponent with its reward factor: the strongest rows, without scoring each one in JS. A
+// function, not a constant, so the outcome-slow ablation is read per query as strengthSql reads it.
+const decayExponentSql = (): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
+    / (half_life_days * ${rewardFactorSql()}) END`;
+
 const decayRankSql = (): string => `pinned DESC,
-  CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
-    / (half_life_days * ${rewardFactorSql()}) END ASC NULLS LAST,
+  ${decayExponentSql()} ASC NULLS LAST,
   id ASC`;
 
 export interface ContextRowsWhere {
@@ -212,26 +216,59 @@ export function contextRowsWhere(
   return { where, params };
 }
 
+const RANK_COLUMNS = 'id, pinned, half_life_days, last_retrieved, outcome_positive, outcome_negative';
+
+// The `cap` best of the pinned rows and the unpinned rows the v60 key puts within DECAY_KEY_HALF_LIVES; nothing unless
+// every unpinned winner is within it too, since then each row left out has decayed further and the rank is the scan's.
+function decayKeySubsetSql(whereSql: string): string {
+  const arm = (extra: string): string => `SELECT ${RANK_COLUMNS} FROM memories WHERE ${whereSql} AND ${extra}`;
+  // pinned is 0 or 1 (entry-row.ts), so the two arms hold every pinned row and every unpinned row with a key.
+  return `WITH top AS MATERIALIZED (
+      SELECT id, pinned, ${decayExponentSql()} AS d FROM (
+        ${arm(`pinned = 1 AND ${DECAY_KEY_WHERE}`)}
+        UNION ALL
+        ${arm(`pinned = 0 AND half_life_days > 0 AND ${DECAY_KEY_WHERE} AND ${DECAY_KEY_SQL} >= julianday(?) - ?`)}
+      ) ORDER BY pinned DESC, d ASC NULLS LAST, id ASC LIMIT ?
+    )
+    SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT id FROM top)
+      AND (SELECT COUNT(*) FROM top) = ?
+      AND NOT EXISTS (SELECT 1 FROM top WHERE pinned = 0 AND (d IS NULL OR d > ?))
+    ORDER BY created ASC, id ASC`;
+}
+
+function decayKeySubsetRows(db: DatabaseSyncLike, rows: ContextRowsWhere, cap: number, now: string): MemoryRow[] {
+  const whereSql = rows.where.join(' AND ');
+  const bound = [now, ...rows.params, ...rows.params, now, DECAY_KEY_SLACK_DAYS, cap, cap, DECAY_KEY_HALF_LIVES];
+  // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  return db.prepare(decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
+}
+
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
 export function loadContextCandidates(
   hippoRoot: string,
   tenantId: string,
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
-  const { where, params } = contextRowsWhere(tenantId, filter);
+  const rowsWhere = contextRowsWhere(tenantId, filter);
+  const { params } = rowsWhere;
   const cap = Math.max(0, Math.trunc(filter.cap));
-  const whereSql = where.join(' AND ');
+  const whereSql = rowsWhere.where.join(' AND ');
+  const now = filter.now.toISOString();
   return onHandle(
     hippoRoot,
     (db) => {
+      // Stops one row past the cap, so a large tenant is not walked to be counted.
       // SAFETY: the count row has the one column named.
       const matched = (
-        db.prepare(`SELECT COUNT(*) AS n FROM memories WHERE ${whereSql}`).get(...params) as { n: number }
+        db.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
+          .get(...params, cap + 1) as { n: number }
       ).n;
       // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
-      // SHORTCUT: past the cap the rank still scans the tenant; a stored decay rank column needs a schema migration,
-      // held until one is approved.
       const ranked = matched > cap;
+      // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could
+      // not prove itself, and the scan below ranks the tenant.
+      const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
+      if (bySubset.length > 0) return bySubset.map(rowToEntry);
       const sql = ranked
         ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
         SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
@@ -239,7 +276,7 @@ export function loadContextCandidates(
         : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
       // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries
       // ids only.
-      const rows = db.prepare(sql).all(...params, ...(ranked ? [filter.now.toISOString(), cap] : [])) as MemoryRow[];
+      const rows = db.prepare(sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
       return rows.map(rowToEntry);
     },
     openStore,

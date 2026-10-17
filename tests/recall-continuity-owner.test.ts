@@ -46,8 +46,8 @@ describe('continuity on a shared store', () => {
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa', summary: 'alice handoff' }, { owner: 'alice', project: ['p'] });
     const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), { owner: 'bob', project: ['p'] });
-    const forA = (await retrieve(ctx('alice'), { query: 'anything', includeContinuity: true, project: P })).continuity;
-    const forB = (await retrieve(ctx('bob'), { query: 'anything', includeContinuity: true, project: P })).continuity;
+    const forA = (await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })).continuity;
+    const forB = (await retrieve(ctx('bob'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })).continuity;
     expect(forA?.activeSnapshot?.id).toBe(a.id);
     expect(forA?.sessionHandoff?.summary).toBe('alice handoff');
     expect(forB?.activeSnapshot?.id).toBe(b.id);
@@ -66,8 +66,8 @@ describe('continuity on a shared store', () => {
     }
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
     writeEntry(home, createMemory('the deploy script lives in ops/deploy.sh'));
-    expect((await retrieve(ctx('alice'), { query: 'deploy', includeContinuity: true, project: P })).continuity?.activeSnapshot?.id).toBe(a.id);
-    expect((await retrieve(ctx('alice'), { query: 'deploy', includeContinuity: true })).continuity).toEqual(EMPTY);
+    expect((await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true }, filter: { project: P } })).continuity?.activeSnapshot?.id).toBe(a.id);
+    expect((await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true } })).continuity).toEqual(EMPTY);
 
     const db = openHippoDb(home);
     const key = (() => { try { return createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'alice' }); } finally { closeHippoDb(db); } })();
@@ -103,7 +103,7 @@ describe('continuity on a local store', () => {
     saveActiveTaskSnapshot(home, 'default', snap('older task', 's0'));
     const newest = saveActiveTaskSnapshot(home, 'default', snap('local task', 's1'));
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'local handoff' });
-    const block = (await retrieve(ctx('alice'), { query: 'anything', includeContinuity: true })).continuity;
+    const block = (await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true } })).continuity;
     expect(block?.activeSnapshot?.id).toBe(newest.id);
     expect(block?.sessionHandoff?.summary).toBe('local handoff');
   });

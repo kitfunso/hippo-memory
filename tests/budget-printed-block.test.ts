@@ -229,7 +229,7 @@ describe('MCP recall and context', () => {
 });
 
 describe('assemble and drill', () => {
-  const ctx: Context = { hippoRoot: '', tenantId: 'default', actor: { subject: 'test:budget', role: 'admin' } };
+  const ctx: Omit<Context, 'hippoRoot' | 'store'> = { tenantId: 'default', actor: { subject: 'test:budget', role: 'admin' } };
   const sid = 'sess-budget-window';
   const line = (i: number): string => `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;
 

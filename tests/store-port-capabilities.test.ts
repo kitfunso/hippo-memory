@@ -1,6 +1,6 @@
 // What a store can do is the groups it sets: audit and learn run on hippo.db's stores, and a store without local files
 // gets neither sleep nor an unfenced hippo.db.
-import type { StoreContext } from '../src/api/types.js';
+import type { Context } from '../src/api/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -40,7 +40,7 @@ function rootWithConfig(label: string): string {
   return root;
 }
 
-const ctxOn = (root: string, store: HippoStore): StoreContext => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store });
+const ctxOn = (root: string, store: HippoStore): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store });
 
 describe.each([
   ['sqliteStore', sqliteStore],

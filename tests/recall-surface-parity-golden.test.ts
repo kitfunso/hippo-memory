@@ -261,7 +261,8 @@ describe('recall surface parity goldens', () => {
       const result = await retrieve(
         apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }),
         {
-          query: 'deploy', limit: 50, mode: 'physics', sessionId: SESSION, keepHeldCopies: true, suppressAvailabilityHint: true,
+          query: 'deploy', window: { limit: 50 }, mode: 'physics', boost: { sessionId: SESSION },
+          filter: { keepHeldCopies: true }, hints: { suppressAvailabilityHint: true },
           showRanked: ({ ranked }) => {
             rankedScore = ranked.find((r) => r.entry.id === 'mem_p_goal')?.score ?? 0;
             return { ids: ranked.map((r) => r.entry.id), audit: [] };

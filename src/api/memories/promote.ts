@@ -7,7 +7,7 @@ import { createSuccessor, type Layer, type MemoryEntry } from '../../core/memory
 import { embedMemory } from '../../search/embed-memories.js';
 import { configOf } from '../config-of.js';
 import { requireGroup } from '../../store/index.js';
-import type { StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -19,7 +19,7 @@ export interface PromoteResult {
   globalId: string;
 }
 export function promote(
-  ctx: StoreContext,
+  ctx: Context,
   id: string,
 ): PromoteResult {
   const local = requireGroup(ctx.store, 'localFiles');
@@ -59,7 +59,7 @@ export interface SupersedeOverrides {
   pinned?: boolean;
 }
 export async function supersede(
-  ctx: StoreContext,
+  ctx: Context,
   oldId: string,
   newContent: string,
   overrides: SupersedeOverrides = {},
@@ -87,7 +87,7 @@ export async function supersede(
 }
 
 /** The tenant-scoped row to supersede; another tenant's id, or someone else's personal row, reads as not found. */
-function assertSupersedable(ctx: StoreContext, oldId: string, old: MemoryEntry | null): MemoryEntry {
+function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null): MemoryEntry {
   if (!old || !canTouchScope(ctx.actor, old.scope ?? null)) {
     throw new NotFoundError(`Memory not found: ${oldId}`);
   }
@@ -113,7 +113,7 @@ export interface ArchiveRawResult {
   archivedAt: string;
 }
 export async function archiveRaw(
-  ctx: StoreContext,
+  ctx: Context,
   id: string,
   reason: string,
   opts: ArchiveRawOptions = {},

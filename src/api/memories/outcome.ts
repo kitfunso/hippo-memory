@@ -3,7 +3,7 @@
 import { personalScopeOf } from '../../core/recall-scope.js';
 import { HttpError } from '../../util/http-util.js';
 import { requireGroup } from '../../store/index.js';
-import type { StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped,
  *  so a stale id never fails the call. `appliedIds` holds only the ids applied:
@@ -15,7 +15,7 @@ export interface OutcomeResult {
 /** `opts.traceId` links the outcome to the recall trace it judges. Only outcomeForLastRecall sends one: explicit ids
  * may follow no recall at all. */
 export async function outcome(
-  ctx: StoreContext,
+  ctx: Context,
   ids: ReadonlyArray<string>,
   good: boolean,
   opts?: { traceId?: number },
@@ -38,7 +38,7 @@ export interface OutcomeForLastRecallResult {
   applied: number;
   ids: string[];
 }
-export async function outcomeForLastRecall(ctx: StoreContext, good: boolean): Promise<OutcomeForLastRecallResult> {
+export async function outcomeForLastRecall(ctx: Context, good: boolean): Promise<OutcomeForLastRecallResult> {
   const lastRecall = ctx.store.lastRecall;
   // Its own 501 text, since a client of such a store can still
   // apply the outcome by sending the ids its recall returned.

@@ -1,5 +1,4 @@
-// Sleep reads the store twice (before consolidation, after it) and keeps no deep copy: the
-// "as loaded" copy of a row is rebuilt from the row that was read.
+// Sleep keeps no deep copy of the store: the "as loaded" copy of a row is rebuilt from the row that was read.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -9,7 +8,6 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads.js';
 import { runSleep } from '../src/api/sleep/sleep-run.js';
-import type { Consolidation } from '../src/store/port.js';
 import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -72,8 +70,8 @@ describe('loadAllEntriesWithBase', () => {
   });
 });
 
-describe('sleep reads the store once after consolidation', () => {
-  it('reuses the audit load for the ambient summary, less the rows the audit deleted', async () => {
+describe('sleep after consolidation', () => {
+  it('gives the ambient summary of the rows the audit left', async () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-one-copy-home-'));
     roots.push(home);
     vi.stubEnv('HIPPO_HOME', home);
@@ -85,15 +83,9 @@ describe('sleep reads the store once after consolidation', () => {
     const junk = createMemory('nope');
     writeEntry(root, junk);
 
-    let loads = 0;
-    const counting = (store: Consolidation) => {
-      loads++;
-      return store.allEntries();
-    };
-    const result = await runSleep(ctxFor(root), { noShare: true }, { loadAllEntries: counting });
+    const result = await runSleep(ctxFor(root), { noShare: true });
 
     expect(result.audit?.errorsRemoved).toBe(1);
-    expect(loads).toBe(1);
     const after = loadAllEntries(root, 'default');
     expect(after.some((e) => e.id === junk.id)).toBe(false);
     expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.superseded_by)));

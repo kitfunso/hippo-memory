@@ -348,7 +348,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       }
     }
 
-    const withScope = await retrieve(ctx, { query: privateMarker, scope: SCOPE_PRIVATE });
+    const withScope = await retrieve(ctx, { query: privateMarker, filter: { scope: SCOPE_PRIVATE } });
     expect(withScope.results.length).toBeGreaterThan(0);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
 
@@ -402,7 +402,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234'))).toBe(false);
     const canaryScoped = await retrieve(ctx, {
       query: 'cross-scope-canary-payload-1234',
-      scope: 'acme:private:demo',
+      filter: { scope: 'acme:private:demo' },
     });
     expect(canaryScoped.results.length).toBeGreaterThan(0);
   });

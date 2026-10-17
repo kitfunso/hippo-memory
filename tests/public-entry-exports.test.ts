@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
 import { strengthBucket } from '../src/consolidate/dedupe.js';
 import { initStore } from '../src/store/open.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,13 +59,13 @@ describe('package entry re-exports sleep', () => {
     expect('adminActor' in entry).toBe(false);
   });
 
-  it('runs a Context that carries no store on hippo.db under its root', async () => {
+  it('runs a Context on the hippo.db its store reads', async () => {
     const home = makeRoot('entry-sleep', { init: false });
     const origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = home;
     try {
       initStore(home);
-      const result = await entry.sleep({ hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
+      const result = await entry.sleep({ hippoRoot: home, store: sqliteStore(home), tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
       expect(result.dryRun).toBe(true);
       expect(result.active).toBe(0);
     } finally {
@@ -83,11 +84,12 @@ describe('package entry re-exports sleep', () => {
     expect(out.admin).toBe(false);
     // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
-    // The published signature takes the public Context, which may carry no store.
-    expect(dts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
+    expect(dts).toMatch(/^export \{ sleep, type SleepOpts, type SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
+    const sleepDts = readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8');
+    // The published signature takes the public Context, whose store is required.
+    expect(sleepDts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
-    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
+    expect(sleepDts).not.toMatch(/__phases|SleepPhases/);
   });
 });
 

@@ -57,7 +57,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       expect(before).toEqual([]);
 
       // api.recall — should NOT mutate.
-      const recallResult = await retrieve(ctx, { query: 'target', limit: 5 });
+      const recallResult = await retrieve(ctx, { query: 'target', window: { limit: 5 } });
       expect(recallResult.results.length).toBeGreaterThan(0);
       const afterRecall = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(afterRecall).toEqual(before);
@@ -83,9 +83,9 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       await remember(ctx, { content: 'batched-C' });
 
       // SDK pattern: batch many recall calls in a row.
-      await retrieve(ctx, { query: 'batched-A', limit: 5 });
-      await retrieve(ctx, { query: 'batched-B', limit: 5 });
-      await retrieve(ctx, { query: 'batched-C', limit: 5 });
+      await retrieve(ctx, { query: 'batched-A', window: { limit: 5 } });
+      await retrieve(ctx, { query: 'batched-B', window: { limit: 5 } });
+      await retrieve(ctx, { query: 'batched-C', window: { limit: 5 } });
 
       // last_retrieval_ids must remain empty — none of the recalls wrote it.
       const idx = loadLastRecall(home);

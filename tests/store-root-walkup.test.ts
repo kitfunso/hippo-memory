@@ -216,7 +216,7 @@ describe('CLI end to end', () => {
     try {
       const direct = await retrieve(
         apiCtx(globalStore, 'default', adminActor('test')),
-        { query: 'projectless-orbit', includeContinuity: true },
+        { query: 'projectless-orbit', window: { includeContinuity: true } },
       );
       expect(direct.continuity?.activeSnapshot?.task).toBe('Foreign global active task');
       expect(direct.continuity?.sessionHandoff?.summary).toBe('Foreign global handoff summary');

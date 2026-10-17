@@ -282,25 +282,26 @@ function run() {
     const t0 = Date.now();
     const stats = simulate(state.particles, ctx);
     const tickMs = Date.now() - t0;
+    const energy = computeSystemEnergy(state.particles, config.G_memory);
 
     rows.push([
       tick,
       Date.now() - started,
       stats.particleCount,
-      stats.energy.kinetic.toFixed(6),
-      stats.energy.potential.toFixed(6),
-      stats.energy.total.toFixed(6),
+      energy.kinetic.toFixed(6),
+      energy.potential.toFixed(6),
+      energy.total.toFixed(6),
       stats.avgVelocityMagnitude.toFixed(6),
       stats.maxVelocityMagnitude.toFixed(6),
       stats.substepsRun,
     ]);
 
     if (VERBOSE || tick % Math.max(1, Math.floor(TICKS / 20)) === 0) {
-      console.error(`  tick ${tick}/${TICKS}: n=${stats.particleCount}, E=${stats.energy.total.toFixed(3)} (K ${stats.energy.kinetic.toFixed(3)}, P ${stats.energy.potential.toFixed(3)}), |v|_max=${stats.maxVelocityMagnitude.toFixed(4)} [${tickMs}ms]`);
+      console.error(`  tick ${tick}/${TICKS}: n=${stats.particleCount}, E=${energy.total.toFixed(3)} (K ${energy.kinetic.toFixed(3)}, P ${energy.potential.toFixed(3)}), |v|_max=${stats.maxVelocityMagnitude.toFixed(4)} [${tickMs}ms]`);
     }
 
     // Detect divergence early
-    if (!Number.isFinite(stats.energy.total)) {
+    if (!Number.isFinite(energy.total)) {
       console.error(`  DIVERGENCE at tick ${tick}: non-finite energy`);
       break;
     }

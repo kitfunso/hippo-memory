@@ -27,7 +27,7 @@ describe('slack permission mirroring', () => {
       eventId: 'EvPriv',
     });
 
-    const pubResults = await retrieve(ctx(root), { query: 'secret', scope: 'slack:public:CPUB' });
+    const pubResults = await retrieve(ctx(root), { query: 'secret', filter: { scope: 'slack:public:CPUB' } });
     expect(pubResults.results.some((r) => r.content.includes('private secret'))).toBe(false);
     expect(pubResults.results.some((r) => r.content.includes('public secret'))).toBe(true);
   });
@@ -61,7 +61,7 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CPUB', user: 'U1', text: 'beta', ts: '1.1' },
       eventId: 'EvPubB',
     });
-    const r = await retrieve(ctx(root), { query: 'beta', scope: 'slack:public:CDOES_NOT_EXIST' });
+    const r = await retrieve(ctx(root), { query: 'beta', filter: { scope: 'slack:public:CDOES_NOT_EXIST' } });
     expect(r.results).toHaveLength(0);
   });
 
@@ -77,7 +77,7 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CSHARED', user: 'U1', text: 'tenantB secret', ts: '3.3' },
       eventId: 'EvShared',
     });
-    const r = await retrieve(ctxA(root), { query: 'secret', scope: 'slack:private:CSHARED' });
+    const r = await retrieve(ctxA(root), { query: 'secret', filter: { scope: 'slack:private:CSHARED' } });
     expect(r.results).toHaveLength(0);
   });
 });

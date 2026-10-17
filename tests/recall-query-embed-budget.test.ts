@@ -47,7 +47,7 @@ function seedStore(): string {
 }
 
 async function recall(root: string): Promise<string[]> {
-  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), { query: QUERY, mode: 'hybrid', limit: 20 });
+  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), { query: QUERY, mode: 'hybrid', window: { limit: 20 } });
   return reply.results.map((r) => r.content);
 }
 

@@ -7,7 +7,7 @@ import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
-import type { StoreContext } from '../../api/index.js';
+import type { Context } from '../../api/index.js';
 import type { HippoStore } from '../../store/index.js';
 import { resolveTenantId } from '../../store/tenant.js';
 import {
@@ -142,7 +142,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
     resolvedTenant = resolveTenantId({});
   }
-  const ctx: StoreContext = {
+  const ctx: Context = {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
@@ -175,7 +175,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
 
 async function dispatchSlackEvent(
   d: SignedSlackRequest,
-  ctx: StoreContext,
+  ctx: Context,
   body: JsonValue & SlackEventEnvelope,
 ): Promise<void> {
   const { res } = d;

@@ -106,7 +106,7 @@ describe('rankRecall in physics mode with asOf', () => {
     query: 'deploy pipeline',
     budget: 100_000,
     cost: (r) => r.tokens,
-    limit: 10,
+    window: { limit: 10 },
     includeSuperseded: false,
     asOf: CUT,
     explicitScope: null,

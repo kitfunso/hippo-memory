@@ -115,7 +115,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'explicit-trace-opt-target' });
-      const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', limit: 5 });
+      const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', window: { limit: 5 } });
       expect(recallResult.results.length).toBeGreaterThan(0);
 
       const db = openHippoDb(home);
@@ -193,7 +193,7 @@ describe('storage overhead smoke (success criterion 3)', () => {
       // One handle for the 100 recalls: each fresh open repeats the pragmas and migration check, which is not what this measures.
       await withSharedStoreHandles(async () => {
         for (let i = 0; i < 100; i++) {
-          await retrieve(ctx, { query: 'storage-smoke-target', limit: 10 });
+          await retrieve(ctx, { query: 'storage-smoke-target', window: { limit: 10 } });
         }
       });
       const after = dbSizeBytes();

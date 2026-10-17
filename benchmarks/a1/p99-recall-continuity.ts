@@ -188,7 +188,7 @@ async function measure(
   for (let i = 0; i < warmup; i++) {
     await apiRetrieve(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
-      { query: queries[i % queries.length]!, includeContinuity },
+      { query: queries[i % queries.length]!, window: { includeContinuity } },
     );
   }
 
@@ -198,7 +198,7 @@ async function measure(
     const t0 = performance.now();
     await apiRetrieve(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
-      { query: q, includeContinuity },
+      { query: q, window: { includeContinuity } },
     );
     samples.push(performance.now() - t0);
   }

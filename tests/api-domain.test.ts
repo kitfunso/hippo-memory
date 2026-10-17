@@ -1,6 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { withStore } from '../src/store/sqlite/store.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
@@ -99,7 +99,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
     );
 
     const result = promote(
-      withStore({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } }),
+      { hippoRoot: home, store: sqliteStore(home), tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } },
       id,
     );
     expect(result.ok).toBe(true);

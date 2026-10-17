@@ -45,7 +45,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = await retrieve(ctx, { query: 'auth', limit: 10, sessionId });
+    const result = await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId } });
     const ids = result.results.map((r) => r.id);
     expect(ids).toContain(goalMatch.id);
     expect(ids).toContain(unrelated.id);
@@ -56,7 +56,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   it('writes a goal_recall_log row when sessionId set AND the boosted memory is local', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    await retrieve(ctx, { query: 'auth', limit: 10, sessionId });
+    await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId } });
     const db = openHippoDb(hippoRoot);
     try {
       const count = countRows(
@@ -80,9 +80,8 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
 
     const result = await retrieve(ctx, {
       query: 'auth',
-      limit: 10,
-      sessionId,
-      goalTag: 'pin-this',
+      window: { limit: 10 },
+      boost: { sessionId, goalTag: 'pin-this' },
     });
     expect(result.results.some((r) => r.id === goalMatch.id)).toBe(true);
     expect(result.results.some((r) => r.id === unrelated.id)).toBe(true);
@@ -103,7 +102,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   it('omitting sessionId preserves v1.7.3 behaviour (no boost, no log)', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    await retrieve(ctx, { query: 'auth', limit: 10 }); // no sessionId
+    await retrieve(ctx, { query: 'auth', window: { limit: 10 } }); // no sessionId
     const db = openHippoDb(hippoRoot);
     try {
       const count = countRows(

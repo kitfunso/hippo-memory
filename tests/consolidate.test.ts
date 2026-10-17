@@ -514,7 +514,7 @@ describe('Physics pass', () => {
 
     expect(result.physicsSimulated).toBe(3);
     expect(result.details).toContain(
-      `  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}, energy ${stats.energy.total.toFixed(4)}`,
+      `  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}`,
     );
     const stored = new Map(storedParticles().map((p) => [p.memoryId, p]));
     for (const want of expected) {

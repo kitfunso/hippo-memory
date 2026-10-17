@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   archiveRaw, authCreate, authCreateSelf, authListRows, authRevoke, forget, outcome, outcomeForLastRecall, remember, supersede,
-  type Actor, type StoreContext,
+  type Actor, type Context,
 } from '../src/api/index.js';
 import { mapApiError } from '../src/api/error-reply.js';
 import { rememberLocally } from '../src/api/memories/remember-local.js';
@@ -113,7 +113,7 @@ describe('every api write function answers through a Promise', () => {
 
 describe('a store without the lastRecall group', () => {
   // Its entryWrites group answers, so the refusal can only come from the missing lastRecall group.
-  function refusal(call: (ctx: StoreContext) => Promise<object>): Promise<Error | null> {
+  function refusal(call: (ctx: Context) => Promise<object>): Promise<Error | null> {
     const root = seededRoot();
     const { store } = inMemoryEntryWritesStore(root);
     return call({ hippoRoot: root, tenantId: ACME, actor: HOST, store }).then(() => null, (err: Error) => err);

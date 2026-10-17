@@ -84,7 +84,7 @@ describe('GET /v1/memories counts toward total_recalled', () => {
     await httpRecall('q=alpha&limit=10');
     expect(totalRecalled()).toBe(3);
 
-    const direct = await retrieve(ctx(), { query: 'alpha', limit: 10 });
+    const direct = await retrieve(ctx(), { query: 'alpha', window: { limit: 10 } });
     expect(direct.results.length).toBe(3);
     expect(totalRecalled()).toBe(3);
   });

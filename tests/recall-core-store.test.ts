@@ -1,6 +1,6 @@
 // The CLI ranking core writes through the store the context carries, and the port names no SQLite code.
 
-import type { StoreContext } from '../src/api/types.js';
+import type { Context } from '../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +28,7 @@ function cliCore(): CliCoreRecall {
   const config = loadConfig(hippoRoot);
   return {
     rank: {
-      budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
+      budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     },
     show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
@@ -73,7 +73,7 @@ describe('retrieve with the CLI ranking core', () => {
         },
       },
     };
-    const ctx: StoreContext = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
+    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
 

@@ -116,7 +116,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     withEmbeddings(s);
     const res = await retrieve(
       apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }),
-      { query: QUERY, mode: 'hybrid', limit: 20 },
+      { query: QUERY, mode: 'hybrid', window: { limit: 20 } },
     );
     expect(labels(s, res.results.map((r) => r.id))).toEqual(EXPECTED.retrieveHybrid);
   });

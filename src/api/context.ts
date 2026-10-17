@@ -49,7 +49,7 @@ import {
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
 import { tokenPurse } from './recall/render.js';
-import { type Context, type StoreContext, ownerOrSubject } from './types.js';
+import { type Context, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -174,7 +174,7 @@ interface TaskSections {
  * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
  * events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
-  ctx: StoreContext,
+  ctx: Context,
   opts: ContextOptions = {},
 ): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
@@ -548,7 +548,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
 }
 
 // Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.
-async function traceEmptyContext(ctx: StoreContext, opts: ContextOptions, plan: ContextPlan): Promise<void> {
+async function traceEmptyContext(ctx: Context, opts: ContextOptions, plan: ContextPlan): Promise<void> {
   // No snapshot in this branch, so the caller's own id is the only session to stamp.
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -574,7 +574,7 @@ interface RecordedRetrieval {
 
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
-  ctx: StoreContext,
+  ctx: Context,
   opts: ContextOptions,
   plan: ContextPlan,
   selected: ContextResultEntry[],

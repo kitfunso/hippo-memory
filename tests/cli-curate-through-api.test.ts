@@ -2,7 +2,7 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, ForbiddenError, invalidateMemories, rejectOnHost, remember, type HippoDbContext } from '../src/api/index.js';
+import { adminActor, ForbiddenError, invalidateMemories, rejectOnHost, remember } from '../src/api/index.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { handleInvalidate, handleReject } from '../src/cli/curate.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
@@ -41,7 +41,7 @@ describe('the CLI curate verbs go through src/api', () => {
     const result = rejectOnHost(cli(), { memoryId: id, reason: 'wrong time' });
     expect(result).toMatchObject({ content: text, removedIds: [id], successorIds: [], dormantSuccessorIds: [] });
     expect(readEntry(root, id, 'default')).toBeNull();
-    const member: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_m', role: 'member' } };
+    const member = apiCtx(root, 'default', { subject: 'api_key:hk_m', role: 'member' });
     expect(() => rejectOnHost(member, { value: 'anything else', reason: 'x' })).toThrow(ForbiddenError);
   });
 

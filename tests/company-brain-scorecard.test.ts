@@ -174,7 +174,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
 
     const onResult = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'continuity', includeContinuity: true },
+      { query: 'continuity', window: { includeContinuity: true } },
     );
     expect(onResult.continuity).toBeDefined();
     const block = onResult.continuity!;
