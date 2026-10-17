@@ -303,9 +303,18 @@ jobs:
         run: |
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+      # EXPERIMENT: record which disk backs each drive and whether Defender scans it.
+      - name: Disk and Defender state
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          Get-Volume | Format-Table DriveLetter,FileSystemLabel,Size,SizeRemaining -AutoSize | Out-String -Width 200
+          Get-PhysicalDisk | Format-Table DeviceId,FriendlyName,MediaType,BusType,Size -AutoSize | Out-String -Width 200
+          Get-MpComputerStatus | Format-List RealTimeProtectionEnabled,AntivirusEnabled
+          (Get-MpPreference).ExclusionPath
+          "TEMP=$env:TEMP cores=$env:NUMBER_OF_PROCESSORS"
       - name: Vitest
-        # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
-        run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        run: npx vitest run --shard=${{ matrix.shard }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
 

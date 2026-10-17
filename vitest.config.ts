@@ -1,5 +1,5 @@
 import { mkdtempSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { availableParallelism, homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
 import { PROCESS_TESTS } from './tests/_process-tests.js';
@@ -46,9 +46,9 @@ export const EVAL_TESTS = [
 ].map((name) => `tests/token-eval-${name}.test.ts`);
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
-// GitHub's Windows runners stall their D: temp disk for up to two minutes at 10 ms a write (#903), so a unit test
-// there gets the process tests' budget.
-const UNIT_MS = process.env.GITHUB_ACTIONS === 'true' && process.platform === 'win32' ? 30_000 : 5_000;
+const UNIT_MS = 5_000;
+// EXPERIMENT arm 1: GitHub's Windows runner has 4 vCPUs, so six workers queue store writes on one disk.
+const GH_WINDOWS = process.env.GITHUB_ACTIONS === 'true' && process.platform === 'win32';
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 export { PROCESS_TESTS };
 
@@ -72,7 +72,7 @@ export default defineConfig({
     },
     globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts'],
     // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
-    maxWorkers: 6,
+    maxWorkers: GH_WINDOWS ? Math.min(6, availableParallelism()) : 6,
     coverage: {
       // CLI output checks run in process through runCliAs, so plain v8 sees that code without following spawned children.
       provider: 'v8',
