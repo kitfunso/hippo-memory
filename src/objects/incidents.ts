@@ -48,7 +48,12 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
 };
 
 /** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new mirror starts on. */
-function incidentOpen(baseHalfLifeDays: number, tenantId: string, opts: SaveIncidentOptions, actor: string): IncidentOpen {
+function incidentOpen(
+  baseHalfLifeDays: number,
+  tenantId: string,
+  opts: SaveIncidentOptions,
+  actor: string,
+): IncidentOpen {
   assertTenantId('saveIncident', tenantId);
   if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
   const at = new Date().toISOString();

@@ -98,7 +98,11 @@ function rowToPrediction(row: PredictionRow): Prediction {
 }
 
 /** The memory row that mirrors a claim into recall, built here alone so every store keeps the same row for it. */
-export function predictionMirror(tenantId: string, claim: SavePredictionOptions, baseHalfLifeDays: number): MemoryEntry {
+export function predictionMirror(
+  tenantId: string,
+  claim: SavePredictionOptions,
+  baseHalfLifeDays: number,
+): MemoryEntry {
   return createMemory(claim.claimText, {
     tags: ['prediction', claim.classTag],
     layer: Layer.Semantic,

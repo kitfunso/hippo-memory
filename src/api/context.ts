@@ -270,7 +270,10 @@ function globalSource(ctx: Context): ContextSource {
 }
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
-function entryPricer(cost: ContextOptions['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
+function entryPricer(
+  cost: ContextOptions['cost'],
+  currentProject: ContextPlan['currentProject'],
+): ContextPlan['price'] {
   return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number =>
     cost
       ? cost.entry({
@@ -429,7 +432,11 @@ async function loadTaskSections(
   return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left: left() };
 }
 
-function ambientAdmission(opts: ContextOptions, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
+function ambientAdmission(
+  opts: ContextOptions,
+  plan: ContextPlan,
+  shownHandoff: SessionHandoff | null,
+): ContextAdmission {
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
     // A printed handoff already carries the session's closing message, which its digest would print a second time.

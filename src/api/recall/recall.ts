@@ -249,7 +249,12 @@ function withVectorCandidates(pool: MemoryEntry[], ranked: RankedResults): Memor
   return [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
 }
 
-function shownAuditAndTrace(ctx: StoreContext, opts: RecallOptions, shownIds: readonly string[], ranked: RankedResults) {
+function shownAuditAndTrace(
+  ctx: StoreContext,
+  opts: RecallOptions,
+  shownIds: readonly string[],
+  ranked: RankedResults,
+) {
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
   const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shownIds.length));
   const trace = opts.suppressRecallTrace

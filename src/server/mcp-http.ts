@@ -95,7 +95,11 @@ function mcpContextFor(
   return mcpCtx;
 }
 
-export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOptions): Promise<void> {
+export async function handleMcpPost(
+  req: IncomingMessage,
+  res: ServerResponse,
+  opts: ResolvedServeOptions,
+): Promise<void> {
   // Same Context the /v1/* routes use, so tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor;
   // else executeTool walks from cwd and reads HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
   const ctx = await buildContextWithAuth(req, opts);

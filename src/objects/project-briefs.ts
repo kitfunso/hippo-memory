@@ -236,7 +236,11 @@ function briefDigest(normalizedRepo: string, receipts: readonly BriefReceipt[]):
 }
 
 /** The version a refresh saves: a successor of the repo's active brief when it has one, else a first version. */
-function refreshWrite(normalizedRepo: string, digest: BriefDigest, active: ProjectBrief | null): SaveProjectBriefOptions {
+function refreshWrite(
+  normalizedRepo: string,
+  digest: BriefDigest,
+  active: ProjectBrief | null,
+): SaveProjectBriefOptions {
   return {
     repo: normalizedRepo,
     summary: digest.markdown,
