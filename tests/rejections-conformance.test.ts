@@ -35,9 +35,12 @@ let baseline: Side;
 function seed(dir: string): Seeded {
   const a = (content: string, extra: Parameters<typeof createMemory>[1] = {}): MemoryEntry => createMemory(content, { tenantId: TENANT_A, ...extra });
   const summary = a('summary of the launch plan', { dagLevel: 2 });
+  const note = a(SHARED);
+  // A second later, since removal runs oldest first and two rows of one millisecond fall back to their random ids.
+  const copy = { ...a('The Launch date is  MARCH third'), created: new Date(Date.parse(note.created) + 1000).toISOString() };
   const rows = {
-    note: a(SHARED),
-    copy: a('The Launch date is  MARCH third'),
+    note,
+    copy,
     raw: a('raw slack line: deploy freeze starts friday', { kind: 'raw' }),
     merged: a('Merged notes\n\n- the office moves in june\n- badges are reissued in july', { source: 'consolidation' }),
     child: a('launch comms are drafted by marketing', { dagParentId: summary.id }),
