@@ -5,63 +5,35 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { stripComments } from './lib/source-text.mjs';
+import ts from 'typescript';
+import { isTsSource, readFacts } from './lib/ts-facts.mjs';
 
-const THROW_EXIT_1 = /^\s*;\s*throw\s+new\s+CliExit\(\s*1\s*\)\s*;?/;
-const OPEN_TO_CLOSE = { '(': ')', '[': ']', '{': '}' };
+const isCall = (stmt, name) => ts.isExpressionStatement(stmt) && ts.isCallExpression(stmt.expression) && ts.isIdentifier(stmt.expression.expression) && stmt.expression.expression.text === name;
 
-/** Index just past the string or template literal that starts at text[i]. `${...}` code inside a template is skipped by bracket match. */
-function skipQuoted(text, i) {
-  const quote = text[i];
-  for (let j = i + 1; j < text.length; j++) {
-    if (text[j] === '\\') j++;
-    else if (text[j] === quote) return j + 1;
-    else if (quote === '`' && text[j] === '$' && text[j + 1] === '{') j = matchClose(text, j + 1);
-  }
-  return text.length;
-}
-
-/** Index of the bracket that closes the one at text[open], stepping over strings. */
-function matchClose(text, open) {
-  let depth = 0;
-  for (let i = open; i < text.length; i++) {
-    const c = text[i];
-    if (c === "'" || c === '"' || c === '`') i = skipQuoted(text, i) - 1;
-    else if (c in OPEN_TO_CLOSE) depth++;
-    else if (c === ')' || c === ']' || c === '}') {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return text.length;
-}
-
-/**
- * Finds each `printError(...)` whose next statement is `throw new CliExit(1)`.
- * @param {string} code source text with its comments already blanked
- * @returns {{ start: number, end: number }[]} offsets into the text: the printError call, and the end of the throw
- */
-export function failPairs(code) {
-  const pairs = [];
-  for (const m of code.matchAll(/\bprintError\(/g)) {
-    // A braceless `for (...) printError(x);` or `if (c) printError(x);` leaves the throw unconditional, so it is no pair.
-    const prev = code.slice(0, m.index).trimEnd().slice(-1);
-    if (prev !== '' && !';{}:'.includes(prev)) continue;
-    const close = matchClose(code, m.index + m[0].length - 1);
-    const next = THROW_EXIT_1.exec(code.slice(close + 1));
-    if (next) pairs.push({ start: m.index, end: close + 1 + next[0].length });
-  }
-  return pairs;
-}
+/** `throw new CliExit(1)` as a statement. */
+const isThrowExit1 = (stmt) => {
+  const e = ts.isThrowStatement(stmt) ? stmt.expression : null;
+  return e !== null && ts.isNewExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === 'CliExit' && e.arguments?.length === 1 && ts.isNumericLiteral(e.arguments[0]) && e.arguments[0].text === '1';
+};
 
 /**
  * Returns the 1-based line numbers of the printError calls that a hand-written throw follows.
+ * A braceless `if (c) printError(x);` is no pair, since the throw after it is unconditional.
  * @param {string} text
  * @returns {number[]}
  */
 export function failPairLines(text) {
-  const code = stripComments(text);
-  return failPairs(code).map(({ start }) => code.slice(0, start).split('\n').length);
+  const { sourceFile } = readFacts(text);
+  const lines = [];
+  const visit = (n) => {
+    const list = ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseOrDefaultClause(n) ? n.statements : [];
+    list.forEach((stmt, i) => {
+      if (isCall(stmt, 'printError') && list[i + 1] && isThrowExit1(list[i + 1])) lines.push(sourceFile.getLineAndCharacterOfPosition(stmt.getStart(sourceFile)).line + 1);
+    });
+    ts.forEachChild(n, visit);
+  };
+  visit(sourceFile);
+  return lines.sort((a, b) => a - b);
 }
 
 function listSourceFiles(dir) {
@@ -69,7 +41,7 @@ function listSourceFiles(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...listSourceFiles(p));
-    else if (/\.(?:ts|mts|cts)$/.test(name) && !name.endsWith('.d.ts')) out.push(p);
+    else if (isTsSource(name)) out.push(p);
   }
   return out;
 }

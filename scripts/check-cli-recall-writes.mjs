@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { stripComments } from './lib/source-text.mjs';
+import { isTsSource, readFacts } from './lib/ts-facts.mjs';
 
 /** The ranking core and the writers only a recall uses. No CLI file may name one. */
 export const RECALL_ONLY = [
@@ -54,9 +54,13 @@ export const STORE_WRITER_EXCEPTIONS = {};
  */
 export function namedOnLines(text, names) {
   const wanted = new Set(names);
-  return stripComments(text)
-    .split('\n')
-    .flatMap((line, i) => [...new Set(line.match(/[A-Za-z_$][\w$]*/g) ?? [])].filter((id) => wanted.has(id)).map((name) => ({ line: i + 1, name })));
+  const seen = new Set();
+  return readFacts(text).identifiers.flatMap(({ name, line }) => {
+    const key = `${line}	${name}`;
+    if (!wanted.has(name) || seen.has(key)) return [];
+    seen.add(key);
+    return [{ line, name }];
+  });
 }
 
 function listSourceFiles(dir) {
@@ -64,7 +68,7 @@ function listSourceFiles(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...listSourceFiles(p));
-    else if (/\.(?:ts|mts|cts)$/.test(name) && !name.endsWith('.d.ts')) out.push(p);
+    else if (isTsSource(name)) out.push(p);
   }
   return out;
 }
