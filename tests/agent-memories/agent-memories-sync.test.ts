@@ -2,24 +2,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { restoreDormant } from '../src/api/index.js';
-import { stageSupersedeWinner } from './_helpers/supersede-now.js';
-import { consolidate } from '../src/index.js';
-import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
-import type { ImportReport } from '../src/agent-memories/report.js';
-import { insertDormantRow } from '../src/store/dormant.js';
-import { Layer, type MemoryEntry } from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
-import { removeEntryMirrors } from '../src/store/mirrors.js';
-import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
+import { restoreDormant } from '../../src/api/index.js';
+import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
+import { consolidate } from '../../src/index.js';
+import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../../src/agent-memories/sync.js';
+import type { ImportReport } from '../../src/agent-memories/report.js';
+import { insertDormantRow } from '../../src/store/dormant.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
+import { removeEntryMirrors } from '../../src/store/mirrors.js';
+import { deleteEntryRowInTx, writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import {
   agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
   tally, toolTally, withDb, type World,
-} from './_helpers/agent-memories-world.js';
-import { loadConfig } from '../src/core/config.js';
-import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
+} from '../_helpers/agent-memories-world.js';
+import { loadConfig } from '../../src/core/config.js';
+import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 
 
 const DEPLOY = 'Run the schema check before this service deploys.';

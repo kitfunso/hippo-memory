@@ -4,27 +4,27 @@ import childProcess, { spawnSync } from 'node:child_process';
 import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
-import { restoreDormant } from '../src/api/index.js';
-import { gitLayout } from '../src/agent-memories/git.js';
-import { containerId, containerPrefix } from '../src/agent-memories/source.js';
-import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../src/agent-memories/sync.js';
-import { repairProjectNames } from '../src/api/objects/projects.js';
-import { cliApiContext } from '../src/cli/api-context.js';
-import type { ImportReport } from '../src/agent-memories/report.js';
-import { createMemory, type MemoryEntry } from '../src/core/memory.js';
-import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
-import { autoShare } from '../src/sharing/share.js';
-import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { restoreDormant } from '../../src/api/index.js';
+import { gitLayout } from '../../src/agent-memories/git.js';
+import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
+import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../../src/agent-memories/sync.js';
+import { repairProjectNames } from '../../src/api/objects/projects.js';
+import { cliApiContext } from '../../src/cli/api-context.js';
+import type { ImportReport } from '../../src/agent-memories/report.js';
+import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
+import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
+import { autoShare } from '../../src/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
 import {
   agentRows, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, toolTally,
   userNotes, withDb, writeConfig, type World,
-} from './_helpers/agent-memories-world.js';
-import { loadConfig } from '../src/core/config.js';
-import { sharingStores } from './_helpers/sharing-stores.js';
-import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
+} from '../_helpers/agent-memories-world.js';
+import { loadConfig } from '../../src/core/config.js';
+import { sharingStores } from '../_helpers/sharing-stores.js';
+import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';

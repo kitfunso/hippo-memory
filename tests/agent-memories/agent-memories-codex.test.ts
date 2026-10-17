@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { createHash } from 'node:crypto';
-import { codexAdapter } from '../src/agent-memories/codex.js';
-import type { AdapterContext } from '../src/agent-memories/types.js';
+import { codexAdapter } from '../../src/agent-memories/codex.js';
+import type { AdapterContext } from '../../src/agent-memories/types.js';
 
 const made: string[] = [];
 const tmp = () => {

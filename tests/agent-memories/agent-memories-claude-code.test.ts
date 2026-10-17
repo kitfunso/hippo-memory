@@ -3,9 +3,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { claudeCodeAdapter, claudeFolderName, claudeTranscriptListing, transcriptNotesProject } from '../src/agent-memories/claude-code.js';
-import type { AdapterContext, Container } from '../src/agent-memories/types.js';
-import type { JsonObject } from '../src/store/working-memory.js';
+import { claudeCodeAdapter, claudeFolderName, claudeTranscriptListing, transcriptNotesProject } from '../../src/agent-memories/claude-code.js';
+import type { AdapterContext, Container } from '../../src/agent-memories/types.js';
+import type { JsonObject } from '../../src/store/working-memory.js';
 
 const made: string[] = [];
 const tmp = () => {

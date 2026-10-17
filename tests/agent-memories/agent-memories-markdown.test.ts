@@ -2,7 +2,7 @@
  * Markdown item splitter for agents that keep memory in one file: bullets and paragraphs are items, headings are context.
  */
 import { describe, it, expect } from 'vitest';
-import { splitMarkdownItems, slugHeading } from '../src/agent-memories/markdown.js';
+import { splitMarkdownItems, slugHeading } from '../../src/agent-memories/markdown.js';
 
 const lines = (...parts: string[]): string => parts.join('\n');
 const texts = (markdown: string): string[] => splitMarkdownItems(markdown).map((item) => item.text);

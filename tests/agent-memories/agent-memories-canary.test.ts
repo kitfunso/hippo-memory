@@ -4,15 +4,15 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { claudeFolderName } from '../src/agent-memories/claude-code.js';
-import { sanitizeCwd } from '../src/agent-memories/qwen-code.js';
-import { AGENT_MEMORY_TOOLS } from '../src/core/agent-memory-tools.js';
-import { initStore } from '../src/store/open.js';
-import { isInitialized } from '../src/core/project-identity.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
+import { sanitizeCwd } from '../../src/agent-memories/qwen-code.js';
+import { AGENT_MEMORY_TOOLS } from '../../src/core/agent-memory-tools.js';
+import { initStore } from '../../src/store/open.js';
+import { isInitialized } from '../../src/core/project-identity.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
 import {
   closeWorld, codexSummary, distUrl, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, type World,
-} from './_helpers/agent-memories-world.js';
+} from '../_helpers/agent-memories-world.js';
 
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
