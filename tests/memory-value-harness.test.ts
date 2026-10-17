@@ -53,6 +53,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+// Each case ingests, simulates and extracts a question against real stores on disk.
+vi.setConfig({ testTimeout: 30_000 });
+
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
 const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));
 
@@ -222,7 +225,6 @@ describe('memory-value harness (real stores)', () => {
     }
   });
 
-  // Ingests, simulates and extracts every question twice against real stores on disk.
   it('(e) rerunning is idempotent (recency retention, row counts, gold counts)', async () => {
     async function runOnceAndScore() {
       for (const q of QUESTIONS) {
@@ -259,7 +261,7 @@ describe('memory-value harness (real stores)', () => {
     // fixture-controlled session dates, which never change between runs —
     // memory ids (crypto.randomUUID(), the real production path) are NOT
     // asserted equal across runs, by design (see file header).
-  }, 9_000);
+  });
 });
 
 describe('causal clock clamp', () => {

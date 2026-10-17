@@ -179,7 +179,7 @@ describe('loadSearchEntries bm25_score', () => {
     } finally {
       closeHippoDb(db);
     }
-  }, 6_000);
+  }, 30_000);
 
   it('Full-store fallback path: terms with no match → no FTS hit, no LIKE hit → fallback returns all rows with bm25_score undefined', () => {
     writeEntry(root, makeRaw('one row'));

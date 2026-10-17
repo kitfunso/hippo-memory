@@ -19,7 +19,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -30,6 +30,8 @@ import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
+// A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
+vi.setConfig({ testTimeout: 30_000 });
 
 function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });

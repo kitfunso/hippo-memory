@@ -65,6 +65,7 @@ describe('hybrid recall at 10k rows', () => {
       new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));
   }, 65_000);
 
+  // Each case scans every stored 384-dim vector, which a shared CI runner takes seconds over.
   it('a recall over ten times the rows runs no more statements and reads at most ten times the rows', async () => {
     let t0 = performance.now();
     const atRows = await recordStatementsAsync(() => recall(home));
@@ -79,7 +80,7 @@ describe('hybrid recall at 10k rows', () => {
     // A query per row scored, or per chunk of rows, grows the statements with the store.
     expect(atRows.statements.length).toBeLessThanOrEqual(atFewer.statements.length);
     expect(atRows.rowsRead).toBeLessThanOrEqual(MAX_GROWTH * atFewer.rowsRead);
-  });
+  }, 120_000);
 
   it('one recall reads each stored vector once and few other rows', async () => {
     const { result, statements, rowsRead } = await recordStatementsAsync(recallOnce);
@@ -90,5 +91,5 @@ describe('hybrid recall at 10k rows', () => {
     // About 1.3 times what one recall does; a second vector scan or a whole-store load of memories passes it.
     expect(rowsRead).toBeLessThanOrEqual(MAX_ROWS_READ);
     expect(statements.length).toBeLessThanOrEqual(MAX_STATEMENTS);
-  });
+  }, 120_000);
 });

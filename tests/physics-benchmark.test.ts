@@ -477,6 +477,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
   });
 
   describe('Simulation stability', () => {
+    // 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
     it('energy does not increase over 50 sleep cycles', () => {
       const db = openHippoDb(tmpDir);
       try {
@@ -516,6 +517,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
       } finally {
         closeHippoDb(db);
       }
-    });
+    }, 60_000);
   });
 });

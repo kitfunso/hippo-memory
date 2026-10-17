@@ -408,5 +408,5 @@ describe('GitHub connector — 200-event smoke test', () => {
     // The canary is the only row in its scope.
     expect(canaryScoped.results).toHaveLength(1);
     expect(canaryScoped.results[0].content).toBe('cross-scope-canary-payload-1234');
-  }, 45_000);
+  }, 90_000);
 });

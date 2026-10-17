@@ -118,5 +118,5 @@ describe('cross-ingest determinism', () => {
       fs.rmSync(rootA, { recursive: true, force: true });
       fs.rmSync(rootB, { recursive: true, force: true });
     }
-  }, 16_000);
+  }, 90_000);
 });

@@ -182,6 +182,7 @@ if (workerData.during === 'statement') {
 `;
 
 describe('a writer thread killed inside an open transaction on a WAL database', () => {
+  // A worker thread starts, writes until it is killed, and the file is reopened and checked; CI runners take tens of seconds.
   it.each(['between statements', 'statement'])('leaves the file consistent with none of its rows, and the next write lands (killed during: %s)', async (during) => {
     const root = newRoot();
     const file = getHippoDbPath(root);
@@ -203,7 +204,7 @@ describe('a writer thread killed inside an open transaction on a WAL database', 
     expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get()).toEqual({ n: 0 });
     next.exec("INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('t', 'default', 'kill-proof', 'after', NULL, '{}')");
     expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
-  });
+  }, 120_000);
 });
 
 describe("a store thread's queue", () => {

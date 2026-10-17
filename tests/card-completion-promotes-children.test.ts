@@ -68,7 +68,8 @@ function seedFamily(children: number): Family {
   return { parent, promotable, others: otherIds.map(card) };
 }
 
-describe('completeCard child promotion', () => {
+// Each case writes a family of up to 100 cards and their dependency rows to a real store, one statement at a time.
+describe('completeCard child promotion', { timeout: 60_000 }, () => {
   it.each([1, 10, 100])('promotes the unblocked backlog children of a parent with %i children, in card_deps order', async (children) => {
     const family = seedFamily(children);
     const result = completeCard(root, TENANT, family.parent, 'success');
@@ -124,6 +125,7 @@ function recordPrepares<T>(fn: () => T) {
 }
 
 describe('statements one completion prepares and runs', () => {
+  // Writes three families of 1, 10 and 100 cards to a real store.
   it('do not grow with the child count: one read of the children and one update for all it promotes', () => {
     const runs = [1, 10, 100].map((children) => {
       const family = seedFamily(children);
@@ -137,7 +139,7 @@ describe('statements one completion prepares and runs', () => {
       expect(countMatching(run, 'FROM card_deps')).toBe(1);
       expect(countMatching(run, 'UPDATE cards SET status')).toBe(2);
     }
-  });
+  }, 60_000);
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);

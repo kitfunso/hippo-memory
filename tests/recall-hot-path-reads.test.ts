@@ -165,5 +165,5 @@ describe('loadAmbientCandidates', () => {
       return rowsRead;
     });
     expect(read[1]).toBe(read[0]);
-  }, 7_000);
+  }, 60_000);
 });

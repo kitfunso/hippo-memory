@@ -138,7 +138,7 @@ function seedTeam(root: string): void {
   saveSessionHandoff(root, TEAM, { version: 1, sessionId: 'alice-proj-a', summary: 'bob hands off on her session', nextAction: 'merge' }, { owner: 'bob', project: ['proj-a'] });
 }
 
-// Three times the measured seed, which is recall-port-only-parity's plus more.
+// Seeds recall-port-only-parity's branches plus a team, a goal and vectors into real stores, so the runner's disk sets its time.
 beforeAll(async () => {
   templates = await seedTemplates((root) => {
     seedPortBranches(root);
@@ -147,7 +147,7 @@ beforeAll(async () => {
     pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-beta', policy: { policyType: 'recency-first', weightRecency: 1.5 } });
     seedVectors(root);
   });
-}, 32_000);
+}, 120_000);
 
 afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });

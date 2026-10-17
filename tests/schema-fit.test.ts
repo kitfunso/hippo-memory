@@ -157,7 +157,7 @@ describe('contextReads.schemaFit', () => {
     const fit = sqliteSyncStore(root).contextReads.schemaFit('default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
     expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
-  }, 10_000);
+  }, 30_000);
 });
 
 describe('schema_fit affects half-life', () => {

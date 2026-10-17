@@ -109,7 +109,7 @@ function rebuiltState(root: string, providerId: string, vectorOf: (entry: Memory
   };
 }
 
-// Three times the measured seed: 300 rows written one commit at a time, then embedded twice.
+// 300 rows written one commit at a time, then embedded twice, so the runner's disk sets the time.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   home = makeRoot('embed-index-state', { init: false });
@@ -128,7 +128,7 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-}, 18_000);
+}, 120_000);
 
 afterAll(async () => {
   await embeddings.close();

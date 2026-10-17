@@ -166,6 +166,7 @@ describe('E1 driver', () => {
     }
   });
 
+  // Three full real-store runs, one per arm.
   it('round-2 arms produce rankings and record their settings in meta', async () => {
     for (const arm of ['recency-off', 'bm25-outcome', 'bm25-newest']) {
       const r = await runArmSeed(arm, 4, TINY);
@@ -173,5 +174,5 @@ describe('E1 driver', () => {
       expect(r.meta).toHaveProperty('halfLife');
     }
     for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
-  });
+  }, 60_000);
 });

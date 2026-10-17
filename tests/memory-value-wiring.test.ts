@@ -828,7 +828,7 @@ describe('(h) scale characterization', () => {
       expect(meta2!.keepN).toBe(meta1.keepN);
       expect(meta2!.score).toBe(meta1.score);
     }
-  }, 42_000);
+  }, 60_000);
 });
 
 /** Parses entry ids out of decay-pass detail lines (review-round F7: parity

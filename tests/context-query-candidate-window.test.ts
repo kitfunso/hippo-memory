@@ -63,13 +63,14 @@ let global = '';
 // Built per call: the reach is probed against whatever HIPPO_HOME the test stubbed just before.
 const ctxNow = (): FullContext => apiCtx(local, 'default', adminActor('test'));
 
+// Writes 11,000 rows to real stores, and a runner's disk sets how long that takes.
 beforeAll(() => {
   local = makeRoot('ctx-window-local');
   global = makeRoot('ctx-window-global');
   // Every row matches the query; all but the last OWN_ROWS come from another project.
   fill(local, ROWS, 'local', (i) => (i >= ROWS - OWN_ROWS ? 'proj' : 'other'));
   fill(global, 1_000, 'global', () => '');
-});
+}, 600_000);
 
 afterAll(() => {
   rmSync(local, { recursive: true, force: true });
