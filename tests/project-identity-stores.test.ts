@@ -21,6 +21,7 @@ import { initStore } from '../src/store/open.js';
 import { closeWorld, ctxFor, liveRows, note, openWorld, projectNotes, toolTally, withDb, type World } from './_helpers/agent-memories-world.js';
 import { loadConfig } from '../src/core/config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 30_000 });
@@ -64,7 +65,7 @@ function compaction(id: string, origin: string, cwd: string): void {
 }
 
 const texts = (r: Awaited<ReturnType<typeof getContext>>): string[] => r.entries.map((e) => e.entry.content);
-const sync = (cwd: string) => importAtSessionEnd(cwd, undefined, { configAt: loadConfig, machine: w.machine });
+const sync = (cwd: string) => importAtSessionEnd(cwd, undefined, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
 const prefixFor = (cwd: string, origin: string): string =>
   containerPrefix('claude-code', containerId(projectNotes(w, cwd), 'project', process.platform, origin));
 

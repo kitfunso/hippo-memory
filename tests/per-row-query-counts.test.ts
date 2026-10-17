@@ -220,7 +220,7 @@ describe('invalidateMatching', () => {
       const root = freshRoot('qc-invalidate');
       seed(root, rows(n, 'invalidate', { tags: ['oldlib'] }));
       const target = { from: 'oldlib', to: null, type: 'removal' as const };
-      const { result, statements } = recordStatements(() => invalidateMatching(root, target, 'default'));
+      const { result, statements } = recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default'));
       expect(result.invalidated).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -249,7 +249,7 @@ describe('detectChurnStale', () => {
     const counts = SIZES.map((n) => {
       const root = freshRoot('qc-churn');
       seed(root, rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', origin_project: 'qcproj' }));
-      const { result, statements } = recordStatements(() => detectChurnStale(root, repo, { tenantId: 'default', projectName: 'qcproj' }));
+      const { result, statements } = recordStatements(() => detectChurnStale(sqliteSyncStore(root).localFiles.learning, repo, { tenantId: 'default', projectName: 'qcproj' }));
       expect(result.marked).toBe(n);
       return { opens: countMatching(statements, STORE_OPEN), reads: countMatching(statements, ROW_READ) };
     });

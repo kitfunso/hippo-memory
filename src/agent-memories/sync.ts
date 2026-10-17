@@ -12,8 +12,6 @@ import {
 } from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import type { AgentImport, ImportTarget } from '../store/port/agent-import.js';
-// The one store import: these entries are the import's composition root for the SQLite store.
-import { sqliteAgentImport } from '../store/sqlite/agent-import.js';
 import { syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
@@ -65,6 +63,8 @@ export interface SyncOptions {
   readonly dryRun?: boolean;
   /** How long a busy store is waited on before its containers are skipped. */
   readonly busyWaitMs?: number;
+  /** Opens each target store; the caller's, so this module never builds a store adapter. */
+  readonly agentImport: AgentImport;
 }
 
 interface Pass {
@@ -97,7 +97,6 @@ export function importForStore(hippoRoot: string, opts: SyncOptions): ImportRepo
 export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
   return runPass(
-    sqliteAgentImport,
     {
       scope: 'project',
       target: hippoRoot,
@@ -116,7 +115,6 @@ export function importProjectMemories(hippoRoot: string, opts: SyncOptions): Imp
 export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
   return runPass(
-    sqliteAgentImport,
     {
       scope: 'user',
       target: resolveGlobalRootDir(),
@@ -136,7 +134,7 @@ export function importUserMemories(invokingRoot: string, opts: SyncOptions): Imp
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
-  const report = runPass(sqliteAgentImport, {
+  const report = runPass({
     scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false,
     ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
   }, opts);
@@ -160,7 +158,7 @@ export function importSessionFolder(
   const own = isGlobalStoreRoot(hippoRoot) || project.name === resolveProjectIdentity(path.dirname(hippoRoot)).name;
   const target = own ? hippoRoot : resolveGlobalRootDir();
   const ctx = context(opts.machine, {});
-  return runPass(sqliteAgentImport, {
+  return runPass({
     scope: 'project', target, invoking: hippoRoot, legacy: false, ...projectOrigins(project), handover: false,
     list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
   }, opts);
@@ -223,7 +221,8 @@ function knownTools(ids: readonly string[], where: string, warnings: string[]): 
   return out;
 }
 
-function runPass(ai: AgentImport, pass: Pass, opts: SyncOptions): ImportReport {
+function runPass(pass: Pass, opts: SyncOptions): ImportReport {
+  const ai = opts.agentImport;
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) => listSafely(a, pass, report));

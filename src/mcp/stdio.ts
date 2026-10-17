@@ -14,7 +14,8 @@ import {
   type McpResponse,
 } from './protocol.js';
 import { resolveTenantId } from '../store/tenant.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { initStore } from '../store/open.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -125,8 +126,8 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
  * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
 function createGlobalStoreOnFirstRun(): string {
-  initGlobal();
   const root = getGlobalRoot();
+  initStore(root);
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
   );

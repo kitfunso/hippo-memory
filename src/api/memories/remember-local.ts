@@ -12,6 +12,7 @@ import { errorMessage, log } from '../../util/log.js';
 import { getMemory } from './memories.js';
 import { remember } from './remember.js';
 import type { StoreContext } from '../types.js';
+import { requireGroup } from '../../store/port.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 
@@ -166,7 +167,7 @@ export async function extractRememberedFacts(
       },
     });
     if (found.length > 0) {
-      storeExtractedFacts(ctx.hippoRoot, entry, found, defaultHalfLifeDays);
+      storeExtractedFacts(requireGroup(ctx.store, 'localFiles').learning, entry, found, defaultHalfLifeDays);
       facts = found.length;
     }
   } catch (cause) {

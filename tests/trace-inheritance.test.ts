@@ -18,7 +18,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { hybridSearch } from '../src/search/hybrid.js';
+import { hybridSearch } from '../src/entry/folder-search.js';
 import { sampleForReplay } from '../src/consolidate/replay.js';
 import { savePhysicsState, loadPhysicsState } from '../src/db/physics-state.js';
 import { initializeParticle } from '../src/core/physics.js';

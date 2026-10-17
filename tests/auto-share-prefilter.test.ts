@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { autoShare } from '../src/sharing/share.js';
-import { initGlobal } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
@@ -29,7 +29,7 @@ beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'hippo-autoshare-prefilter-'));
   origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = join(tmp, 'global');
-  initGlobal();
+  initStore(getGlobalRoot());
   root = join(tmp, 'proj', '.hippo');
   initStore(root);
 });

@@ -25,6 +25,7 @@ import { listPeers } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { embedAll } from '../src/search/embed-memories.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,7 +98,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     const result = invalidateMatching(
-      hippoRoot,
+      sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: 'REST', to: 'GraphQL', type: 'migration' },
       'tenant-a',
     );
@@ -319,7 +320,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     // No tenantId arg → host-wide behaviour (current/pre-1.12.1)
-    const result = invalidateMatching(hippoRoot, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
     expect(result.invalidated).toBe(2);
   });
 
@@ -473,7 +474,7 @@ describe('invalidate onlyId', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'tenant B private memory', { tags: ['private'] });
 
     const result = invalidateMatching(
-      hippoRoot,
+      sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: `id:${bId}`, to: null, type: 'removal' },
       'tenant-a',
       { onlyId: bId },

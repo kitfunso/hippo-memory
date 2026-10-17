@@ -71,7 +71,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
     try {
       const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError });
       if (facts.length > 0) {
-        extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts, run.config.defaultHalfLifeDays).length;
+        extractedCount += storeExtractedFacts(run.learning, candidate, facts, run.config.defaultHalfLifeDays).length;
       }
     } catch (err) {
       report(errorMessage(err));

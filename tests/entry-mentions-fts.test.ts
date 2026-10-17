@@ -8,6 +8,7 @@ import { DatabaseSync } from '../src/db/sqlite.js';
 import { getMeta, setMeta } from '../src/db/meta.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const CONTENTS = [
   'Use the café cache for sessions',
@@ -38,18 +39,18 @@ describe('loadEntriesMentioning on the FTS path', () => {
   it('matches the same rows for invalidation on both paths', () => {
     for (const from of TARGETS) {
       const target = { from, to: null, type: 'removal' as const };
-      const viaFts = invalidateMatching(root, target, undefined, { dryRun: true });
+      const viaFts = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { dryRun: true });
       setFts(root, '0');
-      const viaLike = invalidateMatching(root, target, undefined, { dryRun: true });
+      const viaLike = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { dryRun: true });
       setFts(root, '1');
       expect(viaFts.targets.slice().sort()).toEqual(viaLike.targets.slice().sort());
     }
-    const hit = invalidateMatching(root, { from: 'café', to: null, type: 'removal' }, undefined, { dryRun: true });
+    const hit = invalidateMatching(sqliteSyncStore(root).localFiles.learning, { from: 'café', to: null, type: 'removal' }, undefined, { dryRun: true });
     expect(hit.targets).toHaveLength(1);
   });
 
   it('matches an exact tag through the tags column', () => {
-    const result = invalidateMatching(root, { from: 'ops', to: null, type: 'removal' }, undefined, { dryRun: true });
+    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, { from: 'ops', to: null, type: 'removal' }, undefined, { dryRun: true });
     expect(result.targets).toHaveLength(CONTENTS.length);
   });
 });

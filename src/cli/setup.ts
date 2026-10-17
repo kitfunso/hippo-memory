@@ -43,6 +43,7 @@ import {
 import { isInitialized } from '../core/project-identity.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
+import { cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactionsAt } from '../capture/compaction-record.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -56,7 +57,6 @@ import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../util/escape.js';
 import { fail } from './exit.js';
-import { loadConfig } from '../core/config.js';
 
 // Hook install/uninstall
 
@@ -441,7 +441,7 @@ export function handleSetup({ flags }: CommandContext): void {
 
   if (!flags['no-learn']) {
     console.log('');
-    const imported = importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine(), dryRun });
+    const imported = importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine(), { dryRun }));
     printAgentImport(imported, dryRun ? '[dry-run] ' : '');
   }
 
@@ -560,7 +560,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     }
     await repairQualityOnceAt(globalRoot, tenantId);
   }
-  printAgentImport(importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine() }), '');
+  printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine())), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   if (workspaces.length === 0) {

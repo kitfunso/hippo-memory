@@ -24,6 +24,7 @@ import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../src/core/session-dige
 import { apiCtx } from './_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';
 
@@ -176,7 +177,7 @@ describe('sharing', () => {
     write('s1', scan(REPLY));
     const [digest] = digests();
     expect(neverAutoShareTags([digest])).toEqual([SESSION_DIGEST_TAG]);
-    const [fact] = storeExtractedFacts(hippoRoot, digest, [
+    const [fact] = storeExtractedFacts(sqliteSyncStore(hippoRoot).localFiles.learning, digest, [
       { content: 'The uploader retries with backoff when the storage token expires.', tags: ['topic:upload'], valence: 'neutral' },
     ], DEFAULT_HALF_LIFE_DAYS);
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);

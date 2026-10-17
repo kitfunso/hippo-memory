@@ -1,5 +1,4 @@
 import type { Learning } from '../store/port/learning.js';
-import { localFilesAt } from './roots.js';
 import type { HippoStore } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
@@ -90,16 +89,6 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  * Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
 export function invalidateMatching(
-  hippoRoot: string,
-  target: InvalidationTarget,
-  tenantId?: string,
-  options?: InvalidationOptions,
-): InvalidationResult {
-  return invalidateIn(localFilesAt(hippoRoot).learning, target, tenantId, options);
-}
-
-/** invalidateMatching on the memories `learning` holds. */
-function invalidateIn(
   learning: Learning,
   target: InvalidationTarget,
   tenantId?: string,
@@ -575,15 +564,8 @@ function recordChurnEvidence(
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
  * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export function detectChurnStale(
-  hippoRoot: string,
-  repoRoot: string,
-  opts: DetectChurnStaleOptions,
+  learning: Learning, repoRoot: string, opts: DetectChurnStaleOptions,
 ): ChurnStaleResult {
-  return detectChurnIn(localFilesAt(hippoRoot).learning, repoRoot, opts);
-}
-
-/** detectChurnStale on the memories `learning` holds. */
-function detectChurnIn(learning: Learning, repoRoot: string, opts: DetectChurnStaleOptions): ChurnStaleResult {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 

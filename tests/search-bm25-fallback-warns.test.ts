@@ -8,7 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
-import { hybridSearch } from '../src/search/hybrid.js';
+import { hybridSearch } from '../src/entry/folder-search.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';

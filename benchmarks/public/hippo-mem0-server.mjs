@@ -43,7 +43,7 @@ const { createMemory } = await distImport('core/memory.js');
 const { initStore } = await distImport('store/open.js');
 const { loadAllEntries } = await distImport('store/entry-reads.js');
 const { batchWriteAndDelete } = await distImport('store/delete-and-batch.js');
-const { hybridSearch } = await distImport('search/hybrid.js');
+const { hybridSearch } = await distImport('index.js');
 const { embedMemory } = await distImport('store/embeddings/index.js');
 const { isEmbeddingAvailable } = await distImport('embeddings/local.js');
 

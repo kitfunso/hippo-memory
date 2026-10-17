@@ -1,6 +1,5 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../core/memory.js';
-import type { LocalFiles } from '../store/port/local-files.js';
-import { localFilesAt } from './roots.js';
+import type { Learning } from '../store/port/learning.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import {
@@ -118,14 +117,7 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
 export function storeExtractedFacts(
-  hippoRoot: string, source: MemoryEntry, facts: ExtractedFact[], baseHalfLifeDays: number,
-): MemoryEntry[] {
-  return storeFacts(localFilesAt(hippoRoot), source, facts, baseHalfLifeDays);
-}
-
-/** storeExtractedFacts into the store `files` names. */
-function storeFacts(
-  files: LocalFiles, source: MemoryEntry, facts: ExtractedFact[], baseHalfLifeDays: number,
+  learning: Learning, source: MemoryEntry, facts: ExtractedFact[], baseHalfLifeDays: number,
 ): MemoryEntry[] {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
@@ -146,7 +138,7 @@ function storeFacts(
     // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
     // (reject_refusal), so skip and count.
     try {
-      files.learning.writeEntry(entry);
+      learning.writeEntry(entry);
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejected++;

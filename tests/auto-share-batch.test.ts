@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { autoShare } from '../src/sharing/share.js';
-import { getGlobalRoot, initGlobal } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -21,7 +21,7 @@ describe('autoShare batching', () => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-autoshare-batch-'));
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The first open migrates the store, which would count as writes in whichever call comes first.
-    initGlobal();
+    initStore(getGlobalRoot());
   });
 
   afterEach(() => {

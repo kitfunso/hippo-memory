@@ -4,8 +4,8 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
-import { sqliteStore } from '../store/index.js';
-import { isInitialized } from '../core/project-identity.js';
+import type { VectorSource } from '../search/vector.js';
+import type { HippoStore } from '../store/index.js';
 
 // Generous so metrics are not truncated.
 const DEFAULT_EVAL_BUDGET = 100_000;
@@ -51,11 +51,12 @@ export interface RunEvalOptions {
   embeddingWeight?: number;
   /** Max returned results per case. Larger than K-at-10 so metrics stay honest. */
   budget?: number;
-  hippoRoot?: string;
-  /** When set and initialized, eval runs through searchBothHybrid so global
-   *  memories are in scope. Otherwise only the `entries` list is searched. */
-  globalRoot?: string;
-  /** Multiplier for local-over-global results when globalRoot is in play. */
+  /** Where the vector arm reads when `entries` rank alone; BM25 only when unset. */
+  source?: VectorSource;
+  /** When set, eval runs through searchBothHybrid so global memories are in scope. Otherwise only the `entries` list
+   *  is searched. */
+  stores?: { local: HippoStore; global: HippoStore };
+  /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now?: Date;
 }
@@ -110,12 +111,8 @@ export async function runEval(
   const start = Date.now();
   const results: EvalCaseResult[] = [];
 
-  const useBothStores = Boolean(
-    options.globalRoot && options.hippoRoot && isInitialized(options.globalRoot)
-  );
-
   for (const c of cases) {
-    const ranked = await rankForCase(c.query, entries, options, useBothStores);
+    const ranked = await rankForCase(c.query, entries, options);
     const returnedIds = ranked.map((r) => r.entry.id);
     results.push({
       case: c,
@@ -143,11 +140,12 @@ export async function runEval(
   };
 }
 
-/** One case's ranking: across the local and global stores when `useBothStores`, else over `entries` alone. */
-function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions, useBothStores: boolean) {
+/** One case's ranking: across the local and global stores when `stores` is set, else over `entries` alone. */
+function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions) {
   const budget = options.budget ?? DEFAULT_EVAL_BUDGET;
-  return useBothStores
-    ? searchBothHybrid(query, sqliteStore(options.hippoRoot!), sqliteStore(options.globalRoot!), {
+  const { stores } = options;
+  return stores
+    ? searchBothHybrid(query, stores.local, stores.global, {
         budget,
         now: options.now,
         embeddingWeight: options.embeddingWeight,
@@ -158,7 +156,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
     : hybridSearch(query, entries, {
         budget,
         now: options.now,
-        hippoRoot: options.hippoRoot,
+        source: options.source,
         embeddingWeight: options.embeddingWeight,
         mmr: options.mmr,
         mmrLambda: options.mmrLambda,

@@ -1,7 +1,9 @@
 import { type StoreContext, adminActor } from '../api/index.js';
+import type { Machine, SyncOptions } from '../agent-memories/sync.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
 import { runConsolidation } from '../consolidate/sleep.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
 import type { LocalFiles } from '../store/port.js';
@@ -10,13 +12,26 @@ import {
 } from '../store/sqlite/store.js';
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
-function cliStore(hippoRoot: string): HippoStore & StoreGroups {
+export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   return sqliteStore(hippoRoot);
 }
 
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
 export function cliLocalFiles(hippoRoot: string): LocalFiles {
   return sqliteSyncStore(hippoRoot).localFiles;
+}
+
+/** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
+export function cliInitGlobal(): void {
+  cliLocalFiles(getGlobalRoot()).sharing.ensureFiles();
+}
+
+/** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the SQLite
+ * adapter. */
+export function cliSyncOptions(
+  hippoRoot: string, machine: Machine, extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
+): SyncOptions {
+  return { configAt: loadConfig, machine, agentImport: cliLocalFiles(hippoRoot).agentImport, ...extra };
 }
 
 /** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */

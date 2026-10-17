@@ -25,6 +25,7 @@ import { appendSessionEvent } from '../src/store/sessions.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { consolidate } from '../src/index.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 function tmpHome(prefix: string = 'hippo-consolidate-tenant-landing-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -156,7 +157,7 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
       const facts: ExtractedFact[] = [
         { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
       ];
-      const stored = storeExtractedFacts(home, source, facts, DEFAULT_HALF_LIFE_DAYS);
+      const stored = storeExtractedFacts(sqliteSyncStore(home).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
 
       expect(stored).toHaveLength(1);
       expect(stored[0]!.tenant_id).toBe('tenant-extract');

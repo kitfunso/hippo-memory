@@ -8,7 +8,7 @@ import { embedCoverage, embedMissingMemories } from '../api/embeddings.js';
 import { captureError, runWatched, runWatchedLine } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { AUTO_SHARE_MIN_SCORE, shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
 import { syncGlobalToLocal } from '../sharing/global-sync.js';
 import {
@@ -23,7 +23,7 @@ import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api/index.js';
 import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
-import { cliApiContext, cliLocalFiles } from './api-context.js';
+import { cliApiContext, cliInitGlobal, cliLocalFiles, cliSyncOptions } from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
@@ -41,7 +41,6 @@ import {
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
-import { loadConfig } from '../core/config.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -199,7 +198,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   if (flags['agents']) return importAgentMemories(hippoRoot, useGlobal, dryRun);
 
   if (useGlobal) {
-    initGlobal();
+    cliInitGlobal();
   } else {
     requireInit(hippoRoot);
   }
@@ -314,7 +313,7 @@ function printFileImportSummary(
 }
 
 function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: boolean): void {
-  const opts = { configAt: loadConfig, machine: currentMachine(), dryRun };
+  const opts = cliSyncOptions(hippoRoot, currentMachine(), { dryRun });
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
   const report = useGlobal || isInitialized(hippoRoot)
     ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)

@@ -31,8 +31,8 @@ import { embedMemory } from '../dist/search/embed-memories.js';
 import { loadConfig } from '../dist/core/config.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/embeddings/local.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
-import { hybridSearch } from '../dist/search/hybrid.js';
-import { physicsSearch } from '../dist/search/physics-search.js';
+import { hybridSearch } from '../dist/index.js';
+import { physicsSearch } from '../dist/entry/store-kit.js';
 import { buildCorpus } from '../dist/search/bm25.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../dist/core/physics-config.js';
 

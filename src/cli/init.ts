@@ -6,18 +6,17 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { installJsonHooks } from '../hooks/json-hooks.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
-import { loadConfig } from '../core/config.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
 import { initMemoryStore } from '../api/store-init.js';
 import { isInitialized } from '../core/project-identity.js';
 import { listMemories } from '../api/memories/memories.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
@@ -89,7 +88,7 @@ async function learnScannedRepo(
     added = result.added;
     lowInfo = result.lowInfo;
   }
-  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, { configAt: loadConfig, machine }));
+  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, cliSyncOptions(repoHippo, machine)));
   return { added, lowInfo };
 }
 
@@ -107,7 +106,7 @@ function installScanHooks(repos: readonly string[]): void {
 function initGlobalFirst(): string {
   const globalRoot = getGlobalRoot();
   if (!isInitialized(globalRoot)) {
-    initGlobal();
+    cliInitGlobal();
     console.log(`Initialized global store at ${globalRoot}\n`);
   }
   return globalRoot;
@@ -157,7 +156,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
   if (learn) {
-    mergeReports(agentImport, importUserMemories(globalRoot, { configAt: loadConfig, machine }));
+    mergeReports(agentImport, importUserMemories(globalRoot, cliSyncOptions(globalRoot, machine)));
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
@@ -173,11 +172,11 @@ function initGlobalOnly(flags: CliFlags): void {
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
   } else {
-    initGlobal();
+    cliInitGlobal();
     console.log('Initialized global Hippo store at', globalRoot);
   }
   if (!flags['no-learn']) {
-    printAgentImport(importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine() }));
+    printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine())));
   }
 }
 
@@ -233,7 +232,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (!alreadyExists && learn && !flags['global']) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (learn) printAgentImport(importForStore(hippoRoot, { configAt: loadConfig, machine: currentMachine() }));
+  if (learn) printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, currentMachine())));
 }
 
 /**

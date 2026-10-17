@@ -12,7 +12,7 @@ import type { HippoStore, VectorReads } from '../store/index.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
-import { folderVectorSource, hybridSearch } from './hybrid.js';
+import { hybridSearch } from './hybrid.js';
 import { currentEntries } from './as-of.js';
 import {
   embedQueryBy,
@@ -54,6 +54,12 @@ export interface PhysicsSearchOptions {
   store?: HippoStore;
 }
 
+/** physicsSearch's options once the caller names its store; the folder fields belong to the published wrapper. */
+export type PhysicsRankOptions = Omit<PhysicsSearchOptions, 'hippoRoot' | 'store'> & {
+  /** Where vectors and particles are read; without one nothing ranks. */
+  source?: VectorSource;
+};
+
 interface PhysicsPools {
   entries: MemoryEntry[];
   particles: PhysicsParticle[];
@@ -66,27 +72,20 @@ interface PhysicsScoring {
   summary: SummaryScoring;
 }
 
-/** Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through
- * hybridSearch.
- *  Reads hippo.db under `hippoRoot` when no store is passed. Published from hippo-memory/store-kit. */
+/**
+ * Scores memories by gravity, momentum and cluster amplification on the store `source` names; rows without physics
+ * state rank through hybridSearch.
+ */
 export async function physicsSearch(
   query: string,
   entries: MemoryEntry[],
-  options: PhysicsSearchOptions = {},
-): Promise<SearchResult[]> {
-  const source = entries.length > 0 ? folderVectorSource(options) : undefined;
-  return source ? physicsSearchIn(source, query, entries, options) : [];
-}
-
-/** physicsSearch on the store the caller names, so a caller holding its request's store never falls back to
- * hippo.db. */
-export async function physicsSearchIn(
-  source: VectorSource, query: string, entries: MemoryEntry[], options: PhysicsSearchOptions = {},
+  options: PhysicsRankOptions = {},
 ): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
-  if (entries.length === 0) return [];
+  const { source } = options;
+  if (entries.length === 0 || !source) return [];
   const { store } = source;
   const hybrid = { ...options, source };
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.

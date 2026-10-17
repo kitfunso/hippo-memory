@@ -41,9 +41,9 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
-  const store = sqliteSyncStore(root).localFiles.consolidation;
+  const { learning, consolidation: store } = sqliteSyncStore(root).localFiles;
   return {
-    hippoRoot: root, store, now: new Date('2026-01-03T00:00:00.000Z'), dryRun: false, config: loadConfig(root), decayOpts: {},
+    learning, store, now: new Date('2026-01-03T00:00:00.000Z'), dryRun: false, config: loadConfig(root), decayOpts: {},
     result: newConsolidationResult(false), all: entries, retirable: () => false, tombstones: store.tombstoneChecks(false),
     survivors: entries, pendingWrites: [], pendingDeletes: [], pendingDormant: [], units: [],
   };

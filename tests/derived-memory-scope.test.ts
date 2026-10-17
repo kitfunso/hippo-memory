@@ -287,7 +287,7 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
       const facts: ExtractedFact[] = [
         { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
       ];
-      const stored = storeExtractedFacts(home, source, facts, DEFAULT_HALF_LIFE_DAYS);
+      const stored = storeExtractedFacts(sqliteSyncStore(home).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
 
       expect(stored).toHaveLength(1);
       expect(stored[0]!.scope).toBe('slack:private:C1');

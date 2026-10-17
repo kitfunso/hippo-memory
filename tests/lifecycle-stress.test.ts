@@ -26,7 +26,7 @@ import { embedMemory } from '../src/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../src/embeddings/local.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
-import { physicsSearch } from '../src/search/physics-search.js';
+import { physicsSearch } from '../src/entry/folder-search.js';
 import { consolidate } from '../src/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 

@@ -12,6 +12,7 @@ import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { Layer } from '../src/core/memory.js';
 import { assessAutomaticMemory } from '../src/core/memory-quality.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observed' } as const;
 let root: string;
@@ -63,7 +64,7 @@ describe('quality at automatic derivation boundaries', () => {
   it('writes complete extracted facts while refusing returned fragments per fact', () => {
     const source = createMemory('A discussion about the production migration deployment ordering.');
     writeEntry(root, source);
-    const facts = storeExtractedFacts(root, source, [
+    const facts = storeExtractedFacts(sqliteSyncStore(root).localFiles.learning, source, [
       { content: 'Found local migration files to be', tags: [], valence: 'neutral' },
       { content: 'Production migration files must exclude test schema setup because sorted filenames control application order.', tags: [], valence: 'neutral' },
       { content: 'succeeds (inserts or updates)', tags: [], valence: 'neutral' },

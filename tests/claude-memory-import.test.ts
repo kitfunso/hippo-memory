@@ -8,9 +8,10 @@ import { totalTally } from '../src/agent-memories/report.js';
 import { initStore } from '../src/store/open.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
-  totalTally(importProjectMemories(hippoRoot, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } })).imported;
+  totalTally(importProjectMemories(hippoRoot, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } })).imported;
 
 const made: string[] = [];
 const tmp = () => {

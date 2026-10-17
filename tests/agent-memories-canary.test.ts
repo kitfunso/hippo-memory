@@ -19,10 +19,11 @@ const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
 const { importForStore, importAtSessionEnd, currentMachine } = await import(syncUrl);
 const { homedir } = await import('node:os');
 const { loadConfig } = await import(new URL('../core/config.js', syncUrl).href);
+const { sqliteAgentImport } = await import(new URL('../store/sqlite/agent-import.js', syncUrl).href);
 const machine = mode === 'negative' ? { home: cleanHome, env: {}, platform: process.platform }
   : mode === 'env' ? currentMachine() : { home: homedir(), env: {}, platform: process.platform };
-const warnings = [...importForStore(root, { configAt: loadConfig, machine }).warnings];
-if (mode === 'negative') warnings.push(...importAtSessionEnd(storeless, undefined, { configAt: loadConfig, machine }).warnings);
+const warnings = [...importForStore(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine }).warnings];
+if (mode === 'negative') warnings.push(...importAtSessionEnd(storeless, undefined, { configAt: loadConfig, agentImport: sqliteAgentImport, machine }).warnings);
 process.stdout.write(JSON.stringify({ warnings }));
 `;
 const CLEAN_PROJECT = 'Clean project note for the injected machine.';

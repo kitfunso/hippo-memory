@@ -17,6 +17,7 @@ import { join } from 'node:path';
 const [, , syncUrl, root, home, barrier, index, total] = process.argv;
 const { importForStore } = await import(syncUrl);
 const { loadConfig } = await import(new URL('../core/config.js', syncUrl).href);
+const { sqliteAgentImport } = await import(new URL('../store/sqlite/agent-import.js', syncUrl).href);
 mkdirSync(barrier, { recursive: true });
 const arrivedAt = Date.now();
 writeFileSync(join(barrier, 'ready-' + index), '');
@@ -26,7 +27,7 @@ while (!everyoneHere()) {
   if (Date.now() - arrivedAt > 20000) throw new Error('barrier timed out: the other workers never started');
   Atomics.wait(pause, 0, 0, 2);
 }
-const report = importForStore(root, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } });
+const report = importForStore(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } });
 const imported = report.tools.reduce((n, t) => n + t.tally.imported, 0);
 process.stdout.write(JSON.stringify({ imported, warnings: report.warnings, arrivedAt, doneAt: Date.now() }));
 `;

@@ -21,7 +21,7 @@ import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
 import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/sharing/share.js';
-import { getGlobalRoot, initGlobal } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromTexts } from '../src/capture/extract.js';
@@ -34,6 +34,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -567,7 +568,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
 
-    const imported = (): number => totalTally(importProjectMemories(root, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } })).imported;
+    const imported = (): number => totalTally(importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } })).imported;
     expect(imported()).toBe(1);
     expect(imported()).toBe(0);
   });
@@ -595,7 +596,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
   it('autoShare', () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
-    initGlobal();
+    initStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);
@@ -606,7 +607,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
   it('search across the local and global stores', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
-    initGlobal();
+    initStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);

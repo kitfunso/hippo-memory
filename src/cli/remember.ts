@@ -21,10 +21,10 @@ import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { extractPathTags } from '../search/path-context.js';
 import { detectScope } from '../core/active-scope.js';
 import { assertClientScope } from '../core/recall-scope.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
@@ -129,7 +129,7 @@ async function cmdRemember(
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
   if (useGlobal) {
-    initGlobal();
+    cliInitGlobal();
   } else {
     requireInit(hippoRoot);
   }

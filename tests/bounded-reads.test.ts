@@ -12,7 +12,7 @@ import { invalidateMatching } from '../src/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../src/consolidate/dag.js';
 import { countAllMemories } from '../src/api/memories/memories.js';
 import { adminActor } from '../src/api/types.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const roots: string[] = [];
@@ -54,7 +54,7 @@ describe('invalidateMatching without onlyId', () => {
     const { root, hits } = seeded(50);
     const expected = new Set([hits.half.id, hits.tagOnly.id]);
     const order = loadAllEntries(root, 'default').map((e) => e.id).filter((id) => expected.has(id));
-    const result = invalidateMatching(root, target, 'default');
+    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default');
     expect(result.targets).toEqual(order);
     expect(result.skippedPinned).toEqual([hits.pinned.id]);
     const after = loadAllEntries(root, 'default').filter((e) => e.tags.includes('invalidated')).map((e) => e.id).sort();
@@ -65,13 +65,13 @@ describe('invalidateMatching without onlyId', () => {
     const root = newRoot('bounded-invalidate-fold');
     const kelvin = memory('Kappa value drifted');
     writeEntriesTogether(root, [...padding(5), kelvin]);
-    expect(invalidateMatching(root, { from: 'kappa', to: null, type: 'removal' }, 'default', { dryRun: true }).targets).toEqual([kelvin.id]);
+    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, { from: 'kappa', to: null, type: 'removal' }, 'default', { dryRun: true }).targets).toEqual([kelvin.id]);
   });
 
   it('reads the same rows however many rows cannot match', () => {
     const read = [10, 200].map((n) => {
       const { root } = seeded(n);
-      return recordStatements(() => invalidateMatching(root, target, 'default', { dryRun: true })).rowsRead;
+      return recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { dryRun: true })).rowsRead;
     });
     expect(read[1]).toBe(read[0]);
   });
