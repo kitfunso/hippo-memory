@@ -1,0 +1,151 @@
+// A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
+// Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
+import { realpathSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { serve, type AddonRoute, type ServerHandle } from '../../src/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
+import { cliStdioHost } from '../../src/cli/api-context.js';
+import { retrieve, remember } from '../../src/api/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { makeStore } from '../_helpers/make-root.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+interface Connection { location(): string | null }
+type ConnectionMethod = (this: Connection, ...args: never[]) => void;
+
+const require = createRequire(import.meta.url);
+// SAFETY: node:sqlite has no bundled types; exec and prepare are plain methods on DatabaseSync.prototype.
+const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: { prototype: Record<'exec' | 'prepare', ConnectionMethod> } };
+
+const seen = new WeakSet<Connection>();
+const opened: string[] = [];
+
+function countConnections(): Array<{ mockRestore(): void }> {
+  return (['exec', 'prepare'] as const).map((method) => {
+    const original = DatabaseSync.prototype[method];
+    return vi.spyOn(DatabaseSync.prototype, method).mockImplementation(function (this: Connection, ...args: never[]) {
+      if (!seen.has(this)) {
+        seen.add(this);
+        opened.push(this.location() ?? '');
+      }
+      return original.apply(this, args);
+    });
+  });
+}
+
+let tmp: string;
+let root: string;
+let server: ServerHandle;
+let spies: Array<{ mockRestore(): void }>;
+
+/** Connections opened while `fn` ran, per store: `local`, `global`, or the file path. */
+async function opensDuring(fn: () => Promise<void>): Promise<Record<string, number>> {
+  const start = opened.length;
+  await fn();
+  const counts: Record<string, number> = {};
+  for (const file of opened.slice(start)) {
+    const label = resolve(dirname(file)) === resolve(root) ? 'local' : file;
+    counts[label] = (counts[label] ?? 0) + 1;
+  }
+  return counts;
+}
+
+interface CallBody { readonly content?: string; readonly text?: string; readonly jsonrpc?: '2.0' }
+
+async function call(method: string, path: string, body?: CallBody): Promise<void> {
+  const res = await fetch(`${server.url}${path}`, {
+    method,
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  await res.text();
+  expect(res.status).toBeLessThan(300);
+}
+
+const recallOverMcp = { jsonrpc: '2.0' as const, id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'rollback plan' } } };
+
+beforeAll(async () => {
+  const made = makeStore('request-open-count');
+  tmp = realpathSync.native(made.base);
+  root = realpathSync.native(made.root);
+  // A global store left by another file in this worker would add its own open to every recall.
+  vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
+  const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
+  writeEntry(root, createMemory('the postgres migration needs a rollback plan and a dry run', opts));
+  writeEntry(root, createMemory('deploy windows are Tuesday and Thursday afternoons only', opts));
+  spies = countConnections();
+  // Boot opens the held connection, so every count below is the requests' own.
+  // An add-on route that runs two api helpers, as a hook route does.
+  const addon: AddonRoute = { path: '/v1/test/remember-then-recall', handler: async ({ ctx }) => {
+    await remember(ctx, { content: 'the release train leaves every second Wednesday' });
+    return { total: (await retrieve(ctx, { query: 'release train' })).total };
+  } };
+  server = await serve({ hippoRoot: root, port: 0, routes: [addon] });
+});
+
+afterAll(async () => {
+  await server.stop();
+  for (const spy of spies) spy.mockRestore();
+});
+
+describe('store opens per request', () => {
+  it("POST /v1/memories opens no connection on the server thread, its write running on the store's writer thread", async () => {
+    expect(await opensDuring(() => call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }))).toEqual({});
+  });
+
+  it("GET /v1/memories (recall) opens no connection on the server thread, its reads running on the store's reader threads", async () => {
+    expect(await opensDuring(() => call('GET', '/v1/memories?q=rollback%20plan'))).toEqual({});
+  });
+
+  it('MCP hippo_recall over POST /mcp opens no connection on the server thread', async () => {
+    expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({});
+  });
+
+  it('an add-on route that runs two api helpers opens no connection on the server thread', async () => {
+    expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({});
+  });
+
+  it('concurrent recalls and a write among them open no connection on the server thread', async () => {
+    const requests = async () => void await Promise.all([
+      call('GET', '/v1/memories?q=rollback'),
+      call('GET', '/v1/memories?q=deploy'),
+      call('POST', '/mcp', recallOverMcp),
+      call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
+    ]);
+    expect(await opensDuring(requests)).toEqual({});
+  });
+
+  it("POST /v1/decisions and GET /v1/decisions open no connection on the server thread, a typed object's work running on the store's threads", async () => {
+    const requests = async () => {
+      await call('POST', '/v1/decisions', { text: 'every migration gets a dry run first' });
+      await call('GET', '/v1/decisions');
+    };
+    expect(await opensDuring(requests)).toEqual({});
+  });
+});
+
+describe('stdio MCP tool calls', () => {
+  it('interleaved calls each open and close their own handle, in the scope the stdio host gives each frame', async () => {
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, store: sqliteStore(root) };
+    const reply = (id: number, query: string) =>
+      cliStdioHost.runRequest(() =>
+        handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx));
+    let replies: Array<McpResponse | null> = [];
+    const counts = await opensDuring(async () => {
+      replies = await Promise.all([reply(1, 'rollback'), reply(2, 'deploy'), reply(3, 'staging')]);
+    });
+    expect(counts).toEqual({ local: 3 });
+    for (const r of replies) expect(r?.error).toBeUndefined();
+  });
+});

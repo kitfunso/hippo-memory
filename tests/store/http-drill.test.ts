@@ -1,0 +1,153 @@
+/**
+ * HTTP `GET /v1/recall/drill/:id` — surface check for v1.5.0 drillDown.
+ *
+ * Verifies: 200 with summary + children for a real summary, 404 for an
+ * unknown id, 404 for a leaf id, 400 on bad query params.
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+function safeRmSync(p: string): void {
+  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+}
+
+let home: string;
+let handle: ServerHandle;
+
+beforeEach(async () => {
+  home = makeRoot('http-drill');
+  handle = await serve({ hippoRoot: home, port: 0 });
+});
+
+afterEach(async () => {
+  await handle.stop();
+  safeRmSync(home);
+});
+
+describe('GET /v1/recall/drill/:id', () => {
+  it('200 with summary + children for a real level-2 summary', async () => {
+    const summary: MemoryEntry = createMemory('topic alpha rollup http', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      tags: ['dag-summary'],
+      confidence: 'inferred',
+      dagLevel: 2,
+    });
+    summary.descendant_count = 3;
+    writeEntry(home, summary);
+    for (let i = 0; i < 3; i++) {
+      writeEntry(home, createMemory(`alpha detail event ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+        confidence: 'observed',
+        dagLevel: 1,
+        dagParentId: summary.id,
+      }));
+    }
+
+    const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}`);
+    expect(res.status).toBe(200);
+    // SAFETY: GET /v1/recall/drill's response body is fixed by the handler
+    // in src/server.ts and checked by the assertions immediately below.
+    const body = await res.json() as {
+      summary: { id: string; descendantCount: number };
+      children: Array<{ id: string; content: string }>;
+      totalChildren: number;
+      truncated: boolean;
+    };
+    expect(body.summary.id).toBe(summary.id);
+    expect(body.summary.descendantCount).toBe(3);
+    expect(body.children.length).toBe(3);
+    expect(body.totalChildren).toBe(3);
+    expect(body.truncated).toBe(false);
+  });
+
+  it('404 for an unknown id', async () => {
+    const res = await fetch(`${handle.url}/v1/recall/drill/m_does_not_exist`);
+    expect(res.status).toBe(404);
+  });
+
+  it('422 for a leaf id (distinguishable from missing)', async () => {
+    const leaf = createMemory('plain leaf body', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      confidence: 'observed',
+      dagLevel: 0,
+    });
+    writeEntry(home, leaf);
+    const res = await fetch(`${handle.url}/v1/recall/drill/${leaf.id}`);
+    expect(res.status).toBe(422);
+  });
+
+  it('400 on bad limit', async () => {
+    const summary: MemoryEntry = createMemory('any summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+    });
+    writeEntry(home, summary);
+    const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=0`);
+    expect(res.status).toBe(400);
+  });
+
+  it('400 past the list ceiling in the words the list routes use, and 200 at it', async () => {
+    const summary: MemoryEntry = createMemory('any summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+    });
+    writeEntry(home, summary);
+    const over = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1001`);
+    expect(over.status).toBe(400);
+    expect(await over.json()).toMatchObject({ error: 'limit must be a positive integer <= 1000' });
+    expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1000`)).status).toBe(200);
+    expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=2.5`)).status).toBe(200);
+  });
+
+  it('400 on bad budget', async () => {
+    const summary: MemoryEntry = createMemory('any summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+    });
+    writeEntry(home, summary);
+    const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=-1`);
+    expect(res.status).toBe(400);
+  });
+
+  it('400 on fractional depth', async () => {
+    const res = await fetch(`${handle.url}/v1/recall/drill/m_does_not_exist?depth=1.5`);
+    expect(res.status).toBe(400);
+  });
+
+  it('budget truncates and sets truncated=true', async () => {
+    const summary: MemoryEntry = createMemory('topic budget', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+    });
+    writeEntry(home, summary);
+    for (let i = 0; i < 8; i++) {
+      writeEntry(home, createMemory(`detail row content ${i} `.repeat(15), {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic, dagLevel: 1, dagParentId: summary.id, confidence: 'observed',
+      }));
+    }
+    const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=80`);
+    expect(res.status).toBe(200);
+    // SAFETY: GET /v1/recall/drill's response body is fixed by the handler
+    // in src/server.ts and checked by the assertions immediately below.
+    const body = await res.json() as { children: unknown[]; truncated: boolean };
+    expect(body.truncated).toBe(true);
+    expect(body.children.length).toBeLessThan(8);
+  });
+});

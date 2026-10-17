@@ -1,0 +1,240 @@
+/**
+ * Token ledger (ROADMAP TE0), cache-stable hook rendering (TE1) and
+ * inject-only-on-change for the per-prompt hook (TE2).
+ *
+ * Real SQLite, the built CLI, a real HTTP server on port 0. No mocks.
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { Layer } from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { recordTokenUse, lastSentState, shouldSkipUnchanged, summarizeTokenUse } from '../../src/store/token-ledger.js';
+import { hookPayloadSessionId } from '../../src/util/hook-payload.js';
+import { blockHash } from '../../src/util/token-text.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { handleMcpRequest } from '../../src/mcp/server.js';
+import { hippoOut } from '../_helpers/spawn-hippo.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { makeRoot, makeStore } from '../_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
+  const db = openHippoDb(root);
+  try {
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+describe('token ledger helpers', () => {
+  let home: string;
+  beforeEach(() => {
+    home = makeRoot('ledger');
+  });
+
+  it('tracks the last injected block per session and surface, and resets', async () => {
+    withDb(home, (db) => {
+      expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 2, tokens: 100, hash: 'aaa' });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'aaa' });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's2', surface: 'hook', event: 'inject', items: 1, tokens: 40, hash: 'bbb' });
+      expect(lastSentState(db, 'default', 's1', 'hook')).toEqual({ hash: 'aaa', skipsSince: 1 });
+      expect(lastSentState(db, 'default', 's1', 'context')).toBeNull();
+      expect(lastSentState(db, 'other', 's1', 'hook')).toBeNull();
+      expect(lastSentState(db, 'default', null, 'hook')).toBeNull();
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'reset', items: 0, tokens: 0 });
+      expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
+    });
+  });
+
+  it('skips an unchanged block until refreshTurns consecutive skips', async () => {
+    expect(shouldSkipUnchanged(null, 'h', 10)).toBe(false);
+    expect(shouldSkipUnchanged({ hash: 'x', skipsSince: 0 }, 'h', 10)).toBe(false);
+    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 0 }, 'h', 10)).toBe(true);
+    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 9 }, 'h', 10)).toBe(true);
+    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 10 }, 'h', 10)).toBe(false);
+    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 500 }, 'h', 0)).toBe(true);
+  });
+
+  it('summarizes sent and skipped tokens per surface and prunes old rows', async () => {
+    withDb(home, (db) => {
+      const old = new Date(Date.now() - 200 * 86_400_000).toISOString();
+      recordTokenUse(db, { tenantId: 'default', sessionId: 'old', surface: 'recall', event: 'inject', items: 1, tokens: 999, now: old });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 2, tokens: 100, hash: 'a' });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'a' });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'a' });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's2', surface: 'recall', event: 'inject', items: 3, tokens: 300 });
+      recordTokenUse(db, { tenantId: 'other', surface: 'recall', event: 'inject', items: 3, tokens: 7777 });
+
+      // SAFETY: COUNT(*) aggregate row.
+      const oldRows = db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = 'old'`).get() as { n: number };
+      expect(Number(oldRows.n)).toBe(0);
+
+      const since = new Date(Date.now() - 86_400_000).toISOString();
+      const summary = summarizeTokenUse(db, 'default', since);
+      expect(summary.surfaces.map((s) => s.surface)).toEqual(['hook', 'recall']);
+      const hook = summary.surfaces[0]!;
+      expect(hook).toMatchObject({ injected: 1, tokens: 100, skipped: 2, tokensAvoided: 200, sessions: 1 });
+      expect(summary.totalTokens).toBe(400);
+      expect(summary.totalTokensAvoided).toBe(200);
+      expect(summary.meanTokensPerSession).toBe(200);
+    });
+  });
+
+  it('reads the session id from a hook payload', async () => {
+    expect(hookPayloadSessionId(JSON.stringify({ session_id: 'abc' }))).toBe('abc');
+    expect(hookPayloadSessionId(JSON.stringify({ session_id: 'abc', source: 'startup' }), 'compact')).toBeNull();
+    expect(hookPayloadSessionId(JSON.stringify({ session_id: 'abc', source: 'compact' }), 'compact')).toBe('abc');
+    expect(hookPayloadSessionId('not json')).toBeNull();
+    expect(hookPayloadSessionId(JSON.stringify({ session_id: '  ' }))).toBeNull();
+    expect(hookPayloadSessionId(JSON.stringify(['x']))).toBeNull();
+    expect(hookPayloadSessionId(undefined)).toBeNull();
+    expect(blockHash('same')).toBe(blockHash('same'));
+    expect(blockHash('same')).not.toBe(blockHash('diff'));
+  });
+});
+
+describe('per-prompt hook: stable rendering and inject only on change', () => {
+  const PIN = 'NEVER force-push to master because it rewrites shared history';
+  let tmpDir: string;
+  let hippoDir: string;
+
+  beforeEach(() => {
+    ({ base: tmpDir, root: hippoDir } = makeStore('hook-dedup'));
+    writeEntry(hippoDir, createMemory(PIN, { pinned: true, layer: Layer.Episodic }));
+  });
+
+  // In process unless `spawned`, with hippoOut's throw on a non-zero exit; the first case pins the hook in a real child.
+  async function run(args: string[], stdin = '', spawned = false): Promise<string> {
+    const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(tmpDir, 'global') };
+    delete env.HIPPO_SESSION_ID;
+    delete env.CLAUDE_CODE_SESSION_ID;
+    if (spawned) return hippoOut(args, { env, cwd: tmpDir, input: stdin });
+    const r = await runCliAs(args, { env, cwd: tmpDir, input: stdin });
+    if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+    return r.stdout;
+  }
+  const HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
+  const payload = (sessionId: string): string => JSON.stringify({ session_id: sessionId, prompt: 'hi' });
+
+  it('renders without the live strength percentage', async () => {
+    const out = await run(HOOK, payload('s1'), true);
+    const text = JSON.parse(out).hookSpecificOutput.additionalContext;
+    expect(text).toContain('NEVER force-push to master');
+    expect(text).not.toMatch(/\(\d+%\)/);
+  });
+
+  it('sends the block once per session, skips repeats, and resends after compaction', async () => {
+    expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
+    expect((await run(HOOK, payload('s1'))).trim()).toBe('');
+    expect((await run(HOOK, payload('s1'))).trim()).toBe('');
+    // A different session gets its own copy.
+    expect(await run(HOOK, payload('s2'))).toContain('NEVER force-push');
+    // Compaction drops earlier injections: the next prompt sends again.
+    await run(['compact-resume'], JSON.stringify({ session_id: 's1', source: 'compact' }));
+    expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
+    expect((await run(HOOK, payload('s1'))).trim()).toBe('');
+
+    const summary = JSON.parse(await run(['tokens', '--json']));
+    const hook = summary.surfaces.find((s: { surface: string }) => s.surface === 'hook');
+    expect(hook.injected).toBe(3);
+    expect(hook.skipped).toBe(3);
+    // Each skipped block holds the pin's text; its confidence label and date, which read the clock, make up the rest.
+    expect(hook.tokensAvoided).toBeGreaterThanOrEqual(3 * Math.ceil(PIN.length / 4));
+    expect(hook.tokensAvoided).toBe((hook.tokens / 3) * 3);
+  });
+
+  it('resends a changed block at once', async () => {
+    expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
+    writeEntry(hippoDir, createMemory('ALWAYS run the migration dry-run before deploying', { pinned: true, layer: Layer.Episodic }));
+    const out = await run(HOOK, payload('s1'));
+    expect(out).toContain('ALWAYS run the migration dry-run');
+  });
+
+  it('resends an unchanged block every refreshTurns skips', async () => {
+    writeFileSync(join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { refreshTurns: 2 } }), 'utf8');
+    const sent: boolean[] = [];
+    for (let i = 0; i < 6; i++) sent.push((await run(HOOK, payload('s1'))).trim() !== '');
+    expect(sent).toEqual([true, false, false, true, false, false]);
+  });
+
+  it('always sends with skipUnchanged off, or without a payload session id', async () => {
+    expect(await run(HOOK)).toContain('NEVER force-push');
+    expect(await run(HOOK)).toContain('NEVER force-push');
+    writeFileSync(join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { skipUnchanged: false } }), 'utf8');
+    expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
+    expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
+  });
+
+  it('keeps the strength percentage in the human markdown output', async () => {
+    expect(await run(['context', '--pinned-only'])).toMatch(/\(\d+%\)/);
+  });
+
+  it('records CLI context and recall in the ledger', async () => {
+    await run(['context', 'force-push']);
+    await run(['recall', 'force-push']);
+    const summary = JSON.parse(await run(['tokens', '--json']));
+    const surfaces = summary.surfaces.map((s: { surface: string }) => s.surface);
+    expect(surfaces).toContain('context');
+    expect(surfaces).toContain('recall');
+    // Context and recall each print the pin's text inside formatting whose wording the renderer owns.
+    expect(summary.totalTokens).toBeGreaterThanOrEqual(2 * Math.ceil(PIN.length / 4));
+    expect(await run(['tokens'])).toContain('Memory text handed to agents');
+  });
+});
+
+describe('ledger on the HTTP and MCP surfaces', () => {
+  const NOTE = 'the zanzibar gateway needs the legacy auth header';
+  let home: string;
+  let globalHome: string;
+
+  beforeEach(() => {
+    home = makeRoot('ledger-http');
+    globalHome = makeRoot('ledger-global', { init: false });
+    vi.stubEnv('HIPPO_HOME', globalHome);
+    writeEntry(home, createMemory(NOTE, { layer: Layer.Episodic }));
+  });
+
+  function surfaces(): Record<string, number> {
+    return withDb(home, (db) => {
+      const since = new Date(Date.now() - 86_400_000).toISOString();
+      return Object.fromEntries(summarizeTokenUse(db, 'default', since).surfaces.map((s) => [s.surface, s.tokens]));
+    });
+  }
+
+  it('records HTTP recall and context', async () => {
+    const handle: ServerHandle = await serve({ hippoRoot: home, port: 0 });
+    try {
+      expect((await fetch(`${handle.url}/v1/memories?q=zanzibar`)).status).toBe(200);
+      expect((await fetch(`${handle.url}/v1/context?q=zanzibar`)).status).toBe(200);
+    } finally {
+      await handle.stop();
+    }
+    const got = surfaces();
+    // Recall books the bare text of its one result, 49 characters at four per token.
+    expect(got.http_recall).toBe(13);
+    // Context prices the printed line around the same text, so it costs more; the label and date read the clock.
+    expect(got.http_context).toBeGreaterThan(13);
+  });
+
+  it('records MCP recall', async () => {
+    await handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+    );
+    // The tool's text holds the note itself inside headings whose wording the formatter owns.
+    expect(surfaces().mcp_recall).toBeGreaterThanOrEqual(Math.ceil(NOTE.length / 4));
+  });
+});

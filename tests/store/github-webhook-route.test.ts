@@ -1,0 +1,552 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createHmac } from 'node:crypto';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+const SECRET = 'github-webhook-secret';
+
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own webhook route responses, whose
+  // JSON shape is fixed by the handler in src/server.ts and checked by the
+  // assertions immediately following each call site.
+  return (await res.json()) as T;
+}
+
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string): T {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get() as T;
+}
+
+function sign(body: string, secret: string = SECRET): string {
+  return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
+}
+
+function postWebhook(
+  port: number,
+  body: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  return fetch(`http://127.0.0.1:${port}/v1/connectors/github/events`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body,
+  });
+}
+
+function defaultHeaders(body: string, eventName: string, deliveryId: string) {
+  return {
+    'x-hub-signature-256': sign(body),
+    'x-github-event': eventName,
+    'x-github-delivery': deliveryId,
+  };
+}
+
+interface IssueBodyOptions {
+  action?: string;
+  number?: number;
+  installationId?: number | null;
+  repoFullName?: string;
+}
+
+interface GitHubIssueEventPayload {
+  action: string;
+  issue: { number: number; title: string; body: string; user: { login: string; id: number } };
+  repository: { full_name: string; private: boolean; owner: { login: string }; name: string };
+  sender: { login: string; id: number };
+  installation?: { id: number };
+}
+
+function issueBody(opts: IssueBodyOptions = {}): string {
+  const obj: GitHubIssueEventPayload = {
+    action: opts.action ?? 'opened',
+    issue: {
+      number: opts.number ?? 42,
+      title: 'Bug',
+      body: 'broken',
+      user: { login: 'alice', id: 1 },
+    },
+    repository: {
+      full_name: opts.repoFullName ?? 'acme/repo',
+      private: false,
+      owner: { login: 'acme' },
+      name: 'repo',
+    },
+    sender: { login: 'alice', id: 1 },
+  };
+  if (opts.installationId !== null) {
+    obj.installation = { id: opts.installationId ?? 99 };
+  }
+  return JSON.stringify(obj);
+}
+
+function issueCommentBody(action: 'created' | 'edited' | 'deleted' = 'created'): string {
+  return JSON.stringify({
+    action,
+    issue: { number: 42 },
+    comment: {
+      id: 999,
+      body: 'I can repro',
+      user: { login: 'bob', id: 2 },
+    },
+    repository: {
+      full_name: 'acme/repo',
+      private: false,
+      owner: { login: 'acme' },
+      name: 'repo',
+    },
+    sender: { login: 'bob', id: 2 },
+    installation: { id: 99 },
+  });
+}
+
+function pullRequestBody(): string {
+  return JSON.stringify({
+    action: 'opened',
+    pull_request: {
+      number: 7,
+      title: 'Fix',
+      body: 'patches the bug',
+      user: { login: 'carol', id: 3 },
+    },
+    repository: {
+      full_name: 'acme/repo',
+      private: false,
+      owner: { login: 'acme' },
+      name: 'repo',
+    },
+    sender: { login: 'carol', id: 3 },
+    installation: { id: 99 },
+  });
+}
+
+function prReviewCommentBody(action: 'created' | 'deleted' = 'created'): string {
+  return JSON.stringify({
+    action,
+    pull_request: { number: 7 },
+    comment: {
+      id: 12345,
+      body: 'nit',
+      user: { login: 'dave', id: 4 },
+    },
+    repository: {
+      full_name: 'acme/repo',
+      private: false,
+      owner: { login: 'acme' },
+      name: 'repo',
+    },
+    sender: { login: 'dave', id: 4 },
+    installation: { id: 99 },
+  });
+}
+
+describe('POST /v1/connectors/github/events', () => {
+  let root: string;
+  let handle: ServerHandle;
+
+  beforeEach(async () => {
+    root = makeRoot('gh-route');
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+  });
+
+  afterEach(async () => {
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS', undefined);
+    await handle.stop();
+  });
+
+  it('1. valid signature + issues.opened → 200, memory ingested', async () => {
+    const body = issueBody();
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-1'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ ok: boolean; status: string; memoryId: string }>(res);
+    expect(json.ok).toBe(true);
+    expect(json.status).toBe('ingested');
+
+    const entries = loadAllEntries(root, 'default');
+    const ghRow = entries.find((e) => e.tags.includes('source:github') && e.kind === 'raw');
+    expect(ghRow).toBeDefined();
+    expect(ghRow!.artifact_ref).toBe('github://acme/repo/issue/42');
+  });
+
+  it('2. valid signature + issue_comment.created → 200, memory ingested', async () => {
+    const body = issueCommentBody('created');
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issue_comment', 'd-2'));
+    expect(res.status).toBe(200);
+    const entries = loadAllEntries(root, 'default');
+    const ghRow = entries.find(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
+    );
+    expect(ghRow).toBeDefined();
+  });
+
+  it('3. valid signature + pull_request.opened → 200, memory ingested', async () => {
+    const body = pullRequestBody();
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'pull_request', 'd-3'));
+    expect(res.status).toBe(200);
+    const entries = loadAllEntries(root, 'default');
+    const ghRow = entries.find(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/pull/7',
+    );
+    expect(ghRow).toBeDefined();
+  });
+
+  it('4. valid signature + pull_request_review_comment.created → 200, memory ingested', async () => {
+    const body = prReviewCommentBody('created');
+    const res = await postWebhook(
+      handle.port,
+      body,
+      defaultHeaders(body, 'pull_request_review_comment', 'd-4'),
+    );
+    expect(res.status).toBe(200);
+    const entries = loadAllEntries(root, 'default');
+    const ghRow = entries.find(
+      (e) =>
+        e.kind === 'raw' &&
+        e.artifact_ref === 'github://acme/repo/pull/7/review_comment/12345',
+    );
+    expect(ghRow).toBeDefined();
+  });
+
+  it('5. bad signature → 401', async () => {
+    const body = issueBody();
+    const res = await postWebhook(handle.port, body, {
+      'x-hub-signature-256': 'sha256=deadbeef',
+      'x-github-event': 'issues',
+      'x-github-delivery': 'd-5',
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('6. missing x-hub-signature-256 header → 401', async () => {
+    const body = issueBody();
+    const res = await postWebhook(handle.port, body, {
+      'x-github-event': 'issues',
+      'x-github-delivery': 'd-6',
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('7. missing GITHUB_WEBHOOK_SECRET env → 404', async () => {
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
+    try {
+      const body = '{}';
+      const res = await postWebhook(handle.port, body, {
+        'x-hub-signature-256': 'sha256=anything',
+        'x-github-event': 'ping',
+        'x-github-delivery': 'd-7',
+      });
+      expect(res.status).toBe(404);
+    } finally {
+      vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    }
+  });
+
+  it('8. ping event → 200 with {pong: true}, no memory', async () => {
+    const body = JSON.stringify({ zen: 'Speak like a human.', hook_id: 1 });
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'ping', 'd-8'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ pong: boolean }>(res);
+    expect(json.pong).toBe(true);
+    const entries = loadAllEntries(root, 'default');
+    expect(entries.filter((e) => e.tags.includes('source:github')).length).toBe(0);
+  });
+
+  it('9. issue_comment.deleted → archives previously-ingested comment', async () => {
+    // First, ingest a comment.
+    const createBody = issueCommentBody('created');
+    const createRes = await postWebhook(
+      handle.port,
+      createBody,
+      defaultHeaders(createBody, 'issue_comment', 'd-9a'),
+    );
+    expect(createRes.status).toBe(200);
+    const beforeRaws = loadAllEntries(root, 'default').filter(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
+    );
+    expect(beforeRaws.length).toBe(1);
+
+    // Now delete it.
+    const delBody = issueCommentBody('deleted');
+    const delRes = await postWebhook(
+      handle.port,
+      delBody,
+      defaultHeaders(delBody, 'issue_comment', 'd-9b'),
+    );
+    expect(delRes.status).toBe(200);
+    const json = await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes);
+    expect(json.status).toBe('archived');
+    expect(json.archivedCount).toBe(1);
+
+    const afterRaws = loadAllEntries(root, 'default').filter(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
+    );
+    expect(afterRaws.length).toBe(0);
+  });
+
+  it('10. unknown installation in multi-tenant install → DLQ unroutable + 200', async () => {
+    // Seed github_installations with a different installation_id (multi-tenant).
+    const db = openHippoDb(root);
+    try {
+      db.prepare(
+        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
+      ).run('77', 'tenant-other', new Date().toISOString());
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const body = issueBody({ installationId: 12345 }); // unknown
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-10'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ status: string }>(res);
+    expect(json.status).toBe('dlq');
+
+    const db2 = openHippoDb(root);
+    try {
+      const row = queryOne<{ bucket: string }>(
+        db2,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect(row.bucket).toBe('unroutable');
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+
+  it('11. PAT-mode webhook with no repo mapping → DLQ unroutable + 200', async () => {
+    // Seed github_installations non-empty so PAT-mode falls through to repo lookup.
+    const db = openHippoDb(root);
+    try {
+      db.prepare(
+        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
+      ).run('77', 'tenant-other', new Date().toISOString());
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const body = issueBody({ installationId: null, repoFullName: 'unknown/repo' });
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-11'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ status: string }>(res);
+    expect(json.status).toBe('dlq');
+
+    const db2 = openHippoDb(root);
+    try {
+      const row = queryOne<{ bucket: string }>(
+        db2,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect(row.bucket).toBe('unroutable');
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+
+  it('12. PAT-mode webhook with repo mapping → ingested under mapped tenant', async () => {
+    // Seed both routing tables: installations is non-empty (forces multi-tenant
+    // mode) and repositories has a mapping for the inbound repo.
+    const db = openHippoDb(root);
+    try {
+      db.prepare(
+        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
+      ).run('77', 'tenant-other', new Date().toISOString());
+      db.prepare(
+        `INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`,
+      ).run('acme/repo', 'tenant-a', new Date().toISOString());
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const body = issueBody({ installationId: null });
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-12'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ status: string }>(res);
+    expect(json.status).toBe('ingested');
+
+    const db2 = openHippoDb(root);
+    try {
+      const row = queryOne<{ tenant_id: string }>(
+        db2,
+        `SELECT tenant_id FROM memories WHERE artifact_ref = 'github://acme/repo/issue/42' AND kind = 'raw'`,
+      );
+      expect(row.tenant_id).toBe('tenant-a');
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+
+  it('13. JSON parse error with valid signature → DLQ parse_error + 200', async () => {
+    const body = 'not-json';
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-13'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ status: string }>(res);
+    expect(json.status).toBe('dlq');
+
+    const db = openHippoDb(root);
+    try {
+      const row = queryOne<{ bucket: string }>(
+        db,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect(row.bucket).toBe('parse_error');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('14. replay with same body but different delivery UUID → dedup via idempotency_key', async () => {
+    const body = issueBody();
+    const res1 = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14a'));
+    expect(res1.status).toBe(200);
+    const j1 = await jsonAs<{ status: string }>(res1);
+    expect(j1.status).toBe('ingested');
+
+    const res2 = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14b-DIFFERENT-UUID'));
+    expect(res2.status).toBe(200);
+    const j2 = await jsonAs<{ status: string }>(res2);
+    expect(['duplicate', 'skipped_duplicate']).toContain(j2.status);
+
+    const rows = loadAllEntries(root, 'default').filter(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42',
+    );
+    expect(rows.length).toBe(1);
+  });
+
+  it('14b. a signed delivery sent again under the same X-GitHub-Delivery is refused with 409; a new id passes', async () => {
+    const issueRows = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref?.startsWith('github://acme/repo/issue/'));
+    const first = issueBody({ number: 50 });
+    expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'))).status).toBe(200);
+
+    const replay = await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'));
+    expect({ status: replay.status, body: await replay.json() }).toEqual({ status: 409, body: { error: 'duplicate X-GitHub-Delivery' } });
+    const other = issueBody({ number: 51 });
+    expect((await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay'))).status).toBe(409);
+    expect(issueRows().map((e) => e.artifact_ref)).toEqual(['github://acme/repo/issue/50']);
+
+    const fresh = await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay-next'));
+    expect({ status: fresh.status, status_field: (await jsonAs<{ status: string }>(fresh)).status }).toEqual({ status: 200, status_field: 'ingested' });
+    expect(issueRows().map((e) => e.artifact_ref).sort()).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
+  });
+
+  it('14d. the same delivery replayed after a restart, which forgets every claimed id, is a stored duplicate with no new rows', async () => {
+    const issueRows = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/53');
+    const body = issueBody({ number: 53 });
+    expect((await jsonAs<{ status: string }>(await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart')))).status).toBe('ingested');
+    await handle.stop();
+    // A fresh module graph is a fresh process's memory: the in-memory claim on d-restart is gone.
+    vi.resetModules();
+    const restarted: typeof import('../../src/server.js') = await import('../../src/server.js');
+    handle = await restarted.serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    const replay = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart'));
+    expect({ status: replay.status, body: await jsonAs<{ status: string }>(replay) }).toMatchObject({ status: 200, body: { status: 'duplicate' } });
+    expect(issueRows()).toHaveLength(1);
+  });
+
+  it('14c. a bad signature never claims a delivery id, so the signed delivery under that id still lands', async () => {
+    const body = issueBody({ number: 52 });
+    const forged = await postWebhook(handle.port, body, { ...defaultHeaders(body, 'issues', 'd-forged-first'), 'x-hub-signature-256': 'sha256=deadbeef' });
+    expect(forged.status).toBe(401);
+    expect((await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-forged-first'))).status).toBe(200);
+  });
+
+  it('15. unhandled event type with valid signature → DLQ unhandled + 200', async () => {
+    const body = JSON.stringify({
+      action: 'created',
+      discussion: { number: 1 },
+      repository: { full_name: 'acme/repo', owner: { login: 'acme' }, name: 'repo' },
+    });
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'discussion', 'd-15'));
+    expect(res.status).toBe(200);
+    const json = await jsonAs<{ status: string }>(res);
+    expect(json.status).toBe('dlq');
+
+    const db = openHippoDb(root);
+    try {
+      const row = queryOne<{ bucket: string }>(
+        db,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect(row.bucket).toBe('unhandled');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('16. issues.deleted → parked for manual review, the ingested issue stays', async () => {
+    const openBody = issueBody();
+    const openRes = await postWebhook(handle.port, openBody, defaultHeaders(openBody, 'issues', 'd-16a'));
+    expect(openRes.status).toBe(200);
+
+    const delBody = issueBody({ action: 'deleted' });
+    const delRes = await postWebhook(handle.port, delBody, defaultHeaders(delBody, 'issues', 'd-16b'));
+    expect(delRes.status).toBe(200);
+    expect(await jsonAs<{ ok: boolean; status: string }>(delRes)).toEqual({ ok: true, status: 'dlq' });
+
+    const db = openHippoDb(root);
+    try {
+      const row = queryOne<Record<string, string>>(
+        db,
+        `SELECT bucket, error, event_name, delivery_id, tenant_id, installation_id, repo_full_name, raw_payload
+           FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect({ ...row }).toEqual({
+        bucket: 'unhandled',
+        error: 'issues.deleted requires manual review',
+        event_name: 'issues',
+        delivery_id: 'd-16b',
+        tenant_id: 'default',
+        installation_id: '99',
+        repo_full_name: 'acme/repo',
+        raw_payload: delBody,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+    const issueRows = loadAllEntries(root, 'default').filter(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42',
+    );
+    expect(issueRows.length).toBe(1);
+  });
+
+  it('17. pull_request_review_comment.deleted → archives the previously-ingested review comment', async () => {
+    const artifactRef = 'github://acme/repo/pull/7/review_comment/12345';
+    const liveRaws = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+    const createBody = prReviewCommentBody('created');
+    const createRes = await postWebhook(
+      handle.port,
+      createBody,
+      defaultHeaders(createBody, 'pull_request_review_comment', 'd-17a'),
+    );
+    expect(createRes.status).toBe(200);
+    expect(liveRaws().length).toBe(1);
+
+    const delBody = prReviewCommentBody('deleted');
+    const delRes = await postWebhook(
+      handle.port,
+      delBody,
+      defaultHeaders(delBody, 'pull_request_review_comment', 'd-17b'),
+    );
+    expect(delRes.status).toBe(200);
+    expect(await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes))
+      .toEqual({ ok: true, status: 'archived', archivedCount: 1 });
+    expect(liveRaws().length).toBe(0);
+
+    // Nothing was parked: the delete was handled, not left for an operator.
+    const db = openHippoDb(root);
+    try {
+      expect(queryOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM github_dlq`).n).toBe(0);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+});

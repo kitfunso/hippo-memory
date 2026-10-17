@@ -1,0 +1,468 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import {
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  loadActiveTaskSnapshot,
+  listSessionEvents,
+} from '../../src/store/sessions.js';
+import { saveSessionHandoff, loadLatestHandoff } from '../../src/store/handoffs.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
+import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
+import { estimateTokens } from '../../src/util/token-text.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+let tmpDir: string;
+
+beforeEach(() => {
+  tmpDir = makeRoot('company-brain', { init: false });
+});
+
+interface ResumeScorecard {
+  coverage: number;
+  distilledTokens: number;
+  rawTranscriptTokens: number;
+  text: string;
+  signals: Record<string, boolean>;
+}
+
+function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScorecard {
+  const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
+  const handoff = loadLatestHandoff(hippoRoot, 'default', sessionId);
+  const events = listSessionEvents(hippoRoot, 'default', { session_id: sessionId, limit: 12 });
+
+  const signals = {
+    task: Boolean(snapshot?.task?.trim()),
+    snapshotSummary: Boolean(snapshot?.summary?.trim()),
+    nextStep: Boolean(snapshot?.next_step?.trim()),
+    handoffSummary: Boolean(handoff?.summary?.trim()),
+    nextAction: Boolean(handoff?.nextAction?.trim()),
+    artifacts: Boolean(handoff?.artifacts?.length),
+    eventTrail: events.length > 0,
+  };
+
+  const covered = Object.values(signals).filter(Boolean).length;
+  const coverage = covered / Object.keys(signals).length;
+
+  const eventTrail = events
+    .slice(-1)
+    .map((event) => {
+      const preview = event.content.split(/\s+/).slice(0, 4).join(' ');
+      return `${event.event_type}: ${preview}`;
+    });
+
+  const parts: string[] = [];
+
+  if (snapshot) {
+    parts.push(`Task: ${snapshot.task}`);
+    parts.push(`Summary: ${snapshot.summary}`);
+    parts.push(`Next: ${snapshot.next_step}`);
+  }
+
+  if (handoff) {
+    parts.push(`Handoff: ${handoff.summary}`);
+    if (handoff.nextAction) {
+      parts.push(`Action: ${handoff.nextAction}`);
+    }
+    if ((handoff.artifacts ?? []).length > 0) {
+      parts.push(`Artifacts: ${(handoff.artifacts ?? []).join(', ')}`);
+    }
+  }
+
+  if (eventTrail.length > 0) {
+    parts.push(`Recent: ${eventTrail.join(' | ')}`);
+  }
+
+  const text = parts.join('\n');
+  const rawTranscript = events.map((event) => event.content).join('\n');
+
+  return {
+    coverage,
+    distilledTokens: estimateTokens(text),
+    rawTranscriptTokens: estimateTokens(rawTranscript),
+    text,
+    signals,
+  };
+}
+
+function appendVerboseTrail(hippoRoot: string, sessionId: string): void {
+  const steps = [
+    'Read the production deploy notes, compared the current branch state, and traced the failing path through the session continuity code while checking whether the latest snapshot should replace the stale branch summary.',
+    'Confirmed that the current task is to ship the measurement-first plan, identified the open blocker around handoff visibility, and noted that the raw event trail is too noisy to replay verbatim for a fresh agent.',
+    'Checked the review notes, compared the older session handoff against the active branch work, and wrote down that the next action should be opening the PR only after the continuity scorecard is green.',
+    'Verified that the important artefacts are the measurement doc, the roadmap note, and the scorecard test, while the surrounding chat text is mostly orientation overhead that should not be replayed in full.',
+    'Summarised the blocker as missing handoff visibility in the default resume path and recorded that the current branch is ready for review once the scorecard confirms complete resume coverage.',
+    'Captured that the likely follow-up implementation slice is continuity-first context assembly rather than broad ingestion or graph work because the repo can measure continuity now.',
+  ];
+
+  steps.forEach((content, index) => {
+    appendSessionEvent(hippoRoot, 'default', {
+      session_id: sessionId,
+      event_type: index === 0 ? 'session_start' : 'note',
+      content,
+      source: 'test',
+    });
+  });
+}
+
+describe('Company Brain continuity scorecard scaffold', () => {
+  it('shows full resume coverage only after continuity objects are present', () => {
+    initStore(tmpDir);
+    const sessionId = 'sess-company-brain';
+
+    appendVerboseTrail(tmpDir, sessionId);
+
+    const baseline = buildResumeScorecard(tmpDir, sessionId);
+    expect(baseline.coverage).toBeLessThan(1);
+    expect(baseline.signals.eventTrail).toBe(true);
+    expect(baseline.signals.task).toBe(false);
+
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'Ship the Company Brain measurement tranche',
+      summary: 'Docs are updated and the continuity scorecard is the only code scaffold in scope.',
+      next_step: 'Run the scorecard test, then verify the baseline red tests stayed unchanged.',
+      session_id: sessionId,
+      source: 'test',
+    });
+
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1,
+      sessionId,
+      summary: 'Measurement plan is ready for review.',
+      nextAction: 'Open the PR after verifying the continuity scorecard and build output.',
+      artifacts: ['docs/plans/2026-04-28-company-brain-measurement.md', 'tests/company-brain-scorecard.test.ts'],
+    });
+
+    const featureOn = buildResumeScorecard(tmpDir, sessionId);
+    expect(featureOn.coverage).toBeGreaterThan(baseline.coverage);
+    expect(featureOn.coverage).toBe(1);
+    // The six trail steps joined by newlines are 1204 characters, at four per token.
+    expect(featureOn.rawTranscriptTokens).toBe(301);
+    expect(featureOn.distilledTokens).toBeLessThan(featureOn.rawTranscriptTokens * 0.45);
+  });
+
+  it('recall(includeContinuity=true) hits the same scorecard signals via the public API', async () => {
+    const { retrieve } = await import('../../src/api/index.js');
+    initStore(tmpDir);
+    const sessionId = 'sess-recall-scorecard';
+
+    appendVerboseTrail(tmpDir, sessionId);
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'Continuity-first recall scorecard regression',
+      summary: 'Validate that recall path matches the scorecard helper.',
+      next_step: 'Assert distilled tokens stay below 45 percent of raw events.',
+      session_id: sessionId,
+      source: 'test',
+    });
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1,
+      sessionId,
+      summary: 'Mid-tranche handoff for the scorecard test.',
+      nextAction: 'Land Task 5 of the continuity-first plan.',
+      artifacts: ['docs/plans/2026-05-03-continuity-first-recall.md'],
+    });
+
+    const baseline = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
+      { query: 'continuity' },
+    );
+    expect(baseline.continuity).toBeUndefined();
+    expect(baseline.continuityTokens).toBeUndefined();
+
+    const onResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
+      { query: 'continuity', window: { includeContinuity: true } },
+    );
+    expect(onResult.continuity).toBeDefined();
+    const block = onResult.continuity!;
+
+    // Same six scorecard signals derived from the recall path.
+    const signals = {
+      task: Boolean(block.activeSnapshot?.task?.trim()),
+      snapshotSummary: Boolean(block.activeSnapshot?.summary?.trim()),
+      nextStep: Boolean(block.activeSnapshot?.next_step?.trim()),
+      handoffSummary: Boolean(block.sessionHandoff?.summary?.trim()),
+      nextAction: Boolean(block.sessionHandoff?.nextAction?.trim()),
+      artifacts: Boolean(block.sessionHandoff?.artifacts?.length),
+      eventTrail: block.recentSessionEvents.length > 0,
+    };
+    const covered = Object.values(signals).filter(Boolean).length;
+    const coverage = covered / Object.keys(signals).length;
+    expect(coverage).toBe(1);
+
+    // Token budget: continuityTokens reports the FULL payload (snapshot + handoff +
+    // every event's content). Callers needing a tight resume packet should truncate
+    // event content themselves before display. This test measures the scorecard's
+    // 45% gate against the *displayable* distillation that a caller would actually
+    // use (snapshot + handoff + 1 event preview), not the raw payload.
+    const rawEvents = listSessionEvents(tmpDir, 'default', { session_id: sessionId, limit: 12 });
+    const rawTranscriptTokens = estimateTokens(rawEvents.map((e) => e.content).join('\n'));
+    const lastEvent = block.recentSessionEvents.at(-1);
+    const lastPreview = lastEvent
+      ? `${lastEvent.event_type}: ${lastEvent.content.split(/\s+/).slice(0, 4).join(' ')}`
+      : '';
+    const distilledParts = [
+      `Task: ${block.activeSnapshot!.task}`,
+      `Summary: ${block.activeSnapshot!.summary}`,
+      `Next: ${block.activeSnapshot!.next_step}`,
+      `Handoff: ${block.sessionHandoff!.summary}`,
+      `Action: ${block.sessionHandoff!.nextAction}`,
+      `Artifacts: ${(block.sessionHandoff!.artifacts ?? []).join(', ')}`,
+      `Recent: ${lastPreview}`,
+    ];
+    const distilledTokens = estimateTokens(distilledParts.join('\n'));
+    // 1204 characters of trail; 384 of distilled parts, whose preview is the oldest-first trail's last step.
+    expect(rawTranscriptTokens).toBe(301);
+    expect(distilledTokens).toBe(96);
+    expect(distilledTokens).toBeLessThan(rawTranscriptTokens * 0.45);
+
+    // Sanity: the unfiltered continuityTokens IS larger than the displayable
+    // distillation (because it includes full event content). This documents the
+    // design: recall returns the full payload, callers shape it for display.
+    expect(onResult.continuityTokens!).toBeGreaterThan(distilledTokens);
+  });
+
+  it('uses the matching session handoff instead of a stale one from another session', () => {
+    initStore(tmpDir);
+    const currentSession = 'sess-current';
+
+    appendVerboseTrail(tmpDir, currentSession);
+
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'Resume the current branch cleanly',
+      summary: 'Current session is about the continuity-first slice.',
+      next_step: 'Use the current-session handoff, not the stale one.',
+      session_id: currentSession,
+      source: 'test',
+    });
+
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1,
+      sessionId: 'sess-old',
+      summary: 'Old branch handoff',
+      nextAction: 'Ship the stale branch',
+      artifacts: ['src/stale.ts'],
+    });
+
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1,
+      sessionId: currentSession,
+      summary: 'Current branch handoff',
+      nextAction: 'Open the PR for the current branch',
+      artifacts: ['src/current.ts'],
+    });
+
+    const scorecard = buildResumeScorecard(tmpDir, currentSession);
+    expect(scorecard.text).toContain('Open the PR for the current branch');
+    expect(scorecard.text).not.toContain('Ship the stale branch');
+  });
+});
+
+describe('Company Brain provenance coverage scorecard', () => {
+  it('drops below 1.0 when any raw receipt is missing owner or artifact_ref', () => {
+    initStore(tmpDir);
+
+    writeEntry(
+      tmpDir,
+      createMemory('slack message from keith about the brand voice', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        owner: 'user:keith',
+        artifactRef: 'slack://team/eng/1714500000.001',
+        source: 'slack',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('github PR body for the envelope migration', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        owner: 'agent:hippo',
+        artifactRef: 'gh://hippo/hippo-memory/pull/42',
+        source: 'github',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('legacy distilled memory predating the envelope work', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'distilled',
+        source: 'cli',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('raw row from a misconfigured connector with no envelope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        source: 'broken-connector',
+      }),
+    );
+
+    const entries = loadAllEntries(tmpDir, 'default');
+    const coverage = buildProvenanceCoverage(entries);
+
+    expect(coverage.rawTotal).toBe(3);
+    expect(coverage.rawWithEnvelope).toBe(2);
+    expect(coverage.coverage).toBeCloseTo(2 / 3, 5);
+    expect(coverage.coverage).toBeLessThan(1);
+    expect(coverage.gaps).toHaveLength(1);
+    expect(coverage.gaps[0].missing.sort()).toEqual(['artifact_ref', 'owner']);
+
+    const distilledIds = entries.filter((e) => e.kind === 'distilled').map((e) => e.id);
+    const distilledLeak = coverage.gaps.some((g) => distilledIds.includes(g.id));
+    expect(distilledLeak).toBe(false);
+  });
+
+  it('reaches the 100% gate once every raw receipt carries owner and artifact_ref', () => {
+    initStore(tmpDir);
+
+    writeEntry(
+      tmpDir,
+      createMemory('slack message ingest with full envelope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        owner: 'user:keith',
+        artifactRef: 'slack://team/eng/1714500001.002',
+        source: 'slack',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('github PR body with full envelope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        owner: 'agent:hippo',
+        artifactRef: 'gh://hippo/hippo-memory/pull/43',
+        source: 'github',
+      }),
+    );
+
+    const coverage = buildProvenanceCoverage(loadAllEntries(tmpDir, 'default'));
+
+    expect(coverage.rawTotal).toBe(2);
+    expect(coverage.coverage).toBe(1);
+    expect(coverage.gaps).toHaveLength(0);
+  });
+});
+
+describe('Company Brain correction-latency scorecard', () => {
+  it('returns an empty report when no supersessions exist', () => {
+    const a = createMemory('belief: pricing tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const report = buildCorrectionLatency([a]);
+    expect(report.count).toBe(0);
+    expect(report.manualCount).toBe(0);
+    expect(report.extractionCount).toBe(0);
+    expect(report.p50Ms).toBeNull();
+    expect(report.p95Ms).toBeNull();
+    expect(report.maxMs).toBeNull();
+    expect(report.pairs).toEqual([]);
+  });
+
+  it('flags direct supersedes as manual with zero measurable latency', () => {
+    const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    oldEntry.created = '2026-04-01T00:00:00.000Z';
+    const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    newEntry.created = '2026-04-02T00:00:00.000Z';
+    oldEntry.superseded_by = newEntry.id;
+
+    const report = buildCorrectionLatency([oldEntry, newEntry]);
+
+    expect(report.count).toBe(1);
+    expect(report.manualCount).toBe(1);
+    expect(report.extractionCount).toBe(0);
+    expect(report.p50Ms).toBeNull();
+    expect(report.pairs[0].via).toBe('manual');
+    expect(report.pairs[0].latencyMs).toBe(0);
+  });
+
+  it('measures extraction-driven latency from receipt to supersession', () => {
+    const rawReceipt = createMemory('slack: pricing tier moved to 120 today', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      kind: 'raw',
+      owner: 'user:keith',
+      artifactRef: 'slack://team/eng/1714600100.001',
+    });
+    rawReceipt.created = '2026-04-01T10:00:00.000Z';
+
+    const oldFact = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    oldFact.created = '2026-03-15T00:00:00.000Z';
+
+    const newFact = createMemory('belief: tier is 120', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      extractedFrom: rawReceipt.id,
+    });
+    newFact.created = '2026-04-01T10:30:00.000Z';
+    oldFact.superseded_by = newFact.id;
+
+    const report = buildCorrectionLatency([rawReceipt, oldFact, newFact]);
+
+    expect(report.count).toBe(1);
+    expect(report.extractionCount).toBe(1);
+    expect(report.manualCount).toBe(0);
+    expect(report.pairs[0].via).toBe('extraction');
+    expect(report.pairs[0].latencyMs).toBe(30 * 60 * 1000);
+    expect(report.p50Ms).toBe(30 * 60 * 1000);
+    expect(report.maxMs).toBe(30 * 60 * 1000);
+  });
+
+  it('skips pairs with malformed timestamps so NaN never reaches percentiles', () => {
+    const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    oldEntry.created = '2026-04-01T00:00:00.000Z';
+    const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    newEntry.created = 'not-a-date';
+    oldEntry.superseded_by = newEntry.id;
+
+    const report = buildCorrectionLatency([oldEntry, newEntry]);
+    expect(report.count).toBe(0);
+    expect(report.p50Ms).toBeNull();
+  });
+
+  it('handles dangling superseded_by pointers without throwing', () => {
+    const oldEntry = createMemory('belief points at a missing successor', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    oldEntry.superseded_by = 'mem-does-not-exist';
+
+    const report = buildCorrectionLatency([oldEntry]);
+    expect(report.count).toBe(0);
+    expect(report.pairs).toEqual([]);
+  });
+
+  it('computes p50/p95/max across multiple extraction-driven corrections', () => {
+    const entries: MemoryEntry[] = [];
+    const baseRaw = '2026-04-01T00:00:00.000Z';
+    const lagsMin = [5, 10, 15, 20, 25, 30, 60, 120, 300, 600];
+
+    lagsMin.forEach((lagMin, i) => {
+      const raw = createMemory(`raw receipt ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        owner: 'user:keith',
+        artifactRef: `slack://team/eng/${i}`,
+      });
+      raw.created = baseRaw;
+
+      const oldFact = createMemory(`belief ${i} v1`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      oldFact.created = '2026-03-01T00:00:00.000Z';
+
+      const newFact = createMemory(`belief ${i} v2`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extractedFrom: raw.id });
+      newFact.created = new Date(
+        new Date(baseRaw).getTime() + lagMin * 60 * 1000,
+      ).toISOString();
+      oldFact.superseded_by = newFact.id;
+
+      entries.push(raw, oldFact, newFact);
+    });
+
+    const report = buildCorrectionLatency(entries);
+
+    expect(report.extractionCount).toBe(10);
+    expect(report.maxMs).toBe(600 * 60 * 1000);
+    expect(report.p50Ms).toBe(((25 + 30) / 2) * 60 * 1000);
+    expect(report.p95Ms).toBeGreaterThan(300 * 60 * 1000);
+    expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);
+  });
+});
