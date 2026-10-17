@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -27,6 +26,7 @@ import {
 import { isSubagentPayload } from '../src/util/hook-payload.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
@@ -100,8 +100,9 @@ function scratch(root: string) {
   return { env, proj, globalRoot: join(root, 'global') };
 }
 
-function hippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
-  return hippoRun(args, { cwd, env, input });
+// In process unless `spawned`: the first worker and compact-resume cases pin each verb in a real child.
+async function hippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string, spawned = false): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return spawned ? hippoRun(args, { cwd, env, input }) : runCliAs(args, { cwd, env, input });
 }
 
 describe('model calls in a transcript', () => {
@@ -138,7 +139,7 @@ describe('model calls in a transcript', () => {
     await expect(readApiCalls(join(dir, 'missing.jsonl'))).rejects.toThrow();
   });
 
-  it('carries a block through the later calls up to the next compaction', () => {
+  it('carries a block through the later calls up to the next compaction', async () => {
     const calls: ApiCall[] = [
       { at: 100, compactions: 0 }, { at: 200, compactions: 0 }, { at: 300, compactions: 0 },
       { at: 400, compactions: 1 }, { at: 500, compactions: 1 },
@@ -161,7 +162,7 @@ describe('recordRereads', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('books one row per surface, replaces them on a second pass, and leaves TE2 state alone', () => {
+  it('books one row per surface, replaces them on a second pass, and leaves TE2 state alone', async () => {
     const calls: ApiCall[] = [
       { at: minute(1), compactions: 0 }, { at: minute(2), compactions: 0 }, { at: minute(3), compactions: 0 },
       { at: minute(6), compactions: 1 }, { at: minute(7), compactions: 1 },
@@ -195,7 +196,7 @@ describe('recordRereads', () => {
     });
   });
 
-  it("dates each row at its UTC day's last re-read or send, and keeps an empty row on the day of a send nothing re-read", () => {
+  it("dates each row at its UTC day's last re-read or send, and keeps an empty row on the day of a send nothing re-read", async () => {
     const calls: ApiCall[] = [
       { at: minute(1) - DAY, compactions: 0 }, { at: minute(2) - DAY, compactions: 0 },
       { at: minute(3), compactions: 0 }, { at: minute(4), compactions: 1 },
@@ -215,7 +216,7 @@ describe('recordRereads', () => {
     expect(rereadStamps(root)).toEqual([['hook', iso(minute(2) - DAY)], ['hook', iso(minute(3.5))], ['hook_recall', iso(minute(4.5))]]);
   });
 
-  it("books no re-reads for CLI, MCP and HTTP rows, which a sub-agent's calls book under its parent's session id", () => {
+  it("books no re-reads for CLI, MCP and HTTP rows, which a sub-agent's calls book under its parent's session id", async () => {
     const calls: ApiCall[] = [{ at: minute(1), compactions: 0 }, { at: minute(2), compactions: 0 }];
     const others: TokenSurface[] = ['context', 'recall', 'mcp_recall', 'mcp_context', 'http_recall', 'http_context', 'http_assemble'];
     withDb(root, (db) => {
@@ -242,14 +243,14 @@ describe('__session-end-worker counts re-reads', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
-  function worker(transcript: string): string {
+  async function worker(transcript: string, spawned = false): Promise<string> {
     const log = join(root, 'session-end.log');
-    const result = hippo(['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION], proj, env);
+    const result = await hippo(['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION], proj, env, undefined, spawned);
     expect(result.status).toBe(0);
     return readFileSync(log, 'utf8');
   }
 
-  it('books both stores, logs the total, and a second pass leaves the same totals', () => {
+  it('books both stores, logs the total, and a second pass leaves the same totals', async () => {
     const sent = minute(0);
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', sent, 100));
     withDb(globalRoot, (db) => book(db, 'hook_recall', 'inject', sent, 30));
@@ -257,7 +258,7 @@ describe('__session-end-worker counts re-reads', () => {
     writeFileSync(transcript, [1, 2, 3].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n');
 
     for (let pass = 0; pass < 2; pass++) {
-      expect(worker(transcript)).toContain(`re-read 260 tokens over 3 model calls for session ${SESSION}`);
+      expect(await worker(transcript, pass === 0)).toContain(`re-read 260 tokens over 3 model calls for session ${SESSION}`);
       expect(ledgerRows(join(proj, '.hippo'), `event = 'reread'`)).toEqual([
         { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 2, tokens: 200 },
       ]);
@@ -267,37 +268,37 @@ describe('__session-end-worker counts re-reads', () => {
     }
   });
 
-  it('still logs the count in a project with no store of its own, and no longer exits early', () => {
+  it('still logs the count in a project with no store of its own, and no longer exits early', async () => {
     rmSync(join(proj, '.hippo'), { recursive: true, force: true });
     const sent = minute(0);
     withDb(globalRoot, (db) => book(db, 'hook', 'inject', sent, 100));
     const transcript = join(root, `${SESSION}.jsonl`);
     writeFileSync(transcript, [1, 2].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n');
     const log = join(root, 'session-end.log');
-    const result = hippo(['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION], proj, env);
+    const result = await hippo(['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION], proj, env);
     expect(result.status).toBe(0);
     const text = readFileSync(log, 'utf8');
     expect(text).not.toContain('No hippo store at');
     expect(text).toContain(`re-read 100 tokens over 2 model calls for session ${SESSION}`);
   });
 
-  it('dates re-reads by the day their calls happened, so hippo tokens --days 1 counts only the recent day', () => {
+  it('dates re-reads by the day their calls happened, so hippo tokens --days 1 counts only the recent day', async () => {
     const sent = minute(0) - 2 * DAY;
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', sent, 100));
     const transcript = join(root, `${SESSION}.jsonl`);
     const calls = [callLine('m1', sent + 60_000), callLine('m2', sent + 120_000), callLine('m3', Date.now() - 60_000)];
     writeFileSync(transcript, calls.join('\n') + '\n');
     for (let pass = 0; pass < 2; pass++) {
-      expect(worker(transcript)).toContain(`re-read 200 tokens over 3 model calls for session ${SESSION}`);
+      expect(await worker(transcript)).toContain(`re-read 200 tokens over 3 model calls for session ${SESSION}`);
     }
-    const tokens = (days: string): TokenSummary => JSON.parse(hippo(['tokens', '--days', days, '--json'], proj, env).stdout);
-    expect(tokens('1')).toMatchObject({ totalTokens: 0, totalTokensReread: 100, hookSessions: 1, rereadSessions: 1 });
-    expect(tokens('7')).toMatchObject({ totalTokens: 100, totalTokensReread: 200, hookSessions: 1, rereadSessions: 1 });
+    const tokens = async (days: string): Promise<TokenSummary> => JSON.parse((await hippo(['tokens', '--days', days, '--json'], proj, env)).stdout);
+    expect(await tokens('1')).toMatchObject({ totalTokens: 0, totalTokensReread: 100, hookSessions: 1, rereadSessions: 1 });
+    expect(await tokens('7')).toMatchObject({ totalTokens: 100, totalTokensReread: 200, hookSessions: 1, rereadSessions: 1 });
   });
 
-  it('logs one line and books nothing when the transcript cannot be read', () => {
+  it('logs one line and books nothing when the transcript cannot be read', async () => {
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', Date.now() - 60_000, 100));
-    const lines = worker(join(root, 'missing.jsonl')).split('\n').filter((line) => line.includes('re-read'));
+    const lines = (await worker(join(root, 'missing.jsonl'))).split('\n').filter((line) => line.includes('re-read'));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('skip re-read count: cannot read the transcript');
     expect(ledgerRows(join(proj, '.hippo'), `event = 'reread'`)).toEqual([]);
@@ -317,7 +318,7 @@ describe('compact-resume books the block it prints', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
-  it('prints the same bytes as before and books them under the payload session id', () => {
+  it('prints the same bytes as before and books them under the payload session id', async () => {
     const store = join(proj, '.hippo');
     initStore(store);
     const snapshot = saveActiveTaskSnapshot(store, 'default', {
@@ -337,7 +338,7 @@ describe('compact-resume books the block it prints', () => {
       `- [${event.created_at}] (note) chose a token bucket`, '', '',
     ].join('\n');
 
-    const result = hippo(['compact-resume'], proj, env, payload);
+    const result = await hippo(['compact-resume'], proj, env, payload, true);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(expected);
     expect(ledgerRows(store, `surface = 'compact_resume'`)).toEqual([
@@ -345,12 +346,12 @@ describe('compact-resume books the block it prints', () => {
     ]);
   });
 
-  it('books into the global store when the project has none, and creates no project store', () => {
+  it('books into the global store when the project has none, and creates no project store', async () => {
     initStore(globalRoot);
     saveActiveTaskSnapshot(globalRoot, 'default', {
       task: 'global task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: SESSION,
     });
-    const result = hippo(['compact-resume'], proj, env, payload);
+    const result = await hippo(['compact-resume'], proj, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('global task');
     expect(ledgerRows(globalRoot, `surface = 'compact_resume'`)).toEqual([
@@ -359,15 +360,15 @@ describe('compact-resume books the block it prints', () => {
     expect(existsSync(join(proj, '.hippo'))).toBe(false);
   });
 
-  it('prints nothing and creates no store when there is none', () => {
-    const result = hippo(['compact-resume'], proj, env, payload);
+  it('prints nothing and creates no store when there is none', async () => {
+    const result = await hippo(['compact-resume'], proj, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
     expect(existsSync(join(proj, '.hippo'))).toBe(false);
     expect(existsSync(join(globalRoot, 'hippo.db'))).toBe(false);
   });
 
-  it('still prints the snapshot when a trail row cannot be read, and says why on stderr', () => {
+  it('still prints the snapshot when a trail row cannot be read, and says why on stderr', async () => {
     const store = join(proj, '.hippo');
     initStore(store);
     const snapshot = saveActiveTaskSnapshot(store, 'default', {
@@ -388,7 +389,7 @@ describe('compact-resume books the block it prints', () => {
       '### Next step', snapshot.next_step, '', '',
     ].join('\n');
 
-    const result = hippo(['compact-resume'], proj, env, payload);
+    const result = await hippo(['compact-resume'], proj, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(expected);
     expect(result.stderr).toContain('hippo compact-resume: trail skipped:');
@@ -397,25 +398,25 @@ describe('compact-resume books the block it prints', () => {
     ]);
   });
 
-  it('prints nothing on a broken store and says why on stderr', () => {
+  it('prints nothing on a broken store and says why on stderr', async () => {
     const store = join(proj, '.hippo');
     initStore(store);
     writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
     for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
-    const result = hippo(['compact-resume'], proj, env, payload);
+    const result = await hippo(['compact-resume'], proj, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('hippo compact-resume: skipped:');
   });
 
-  it('reports the skip reason through the logger, so HIPPO_LOG=error silences it', () => {
+  it('reports the skip reason through the logger, so HIPPO_LOG=error silences it', async () => {
     const store = join(proj, '.hippo');
     initStore(store);
     writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
     for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
-    const loud = hippo(['compact-resume'], proj, env, payload);
+    const loud = await hippo(['compact-resume'], proj, env, payload);
     expect(loud.stderr).toContain('[hippo] warn: hippo compact-resume: skipped:');
-    const quiet = hippo(['compact-resume'], proj, { ...env, HIPPO_LOG: 'error' }, payload);
+    const quiet = await hippo(['compact-resume'], proj, { ...env, HIPPO_LOG: 'error' }, payload);
     expect([quiet.status, quiet.stdout]).toEqual([0, '']);
     expect(quiet.stderr).not.toContain('compact-resume');
   });
@@ -438,7 +439,7 @@ describe("a sub-agent's hooks", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
-  it('tells a sub-agent payload by agent_id alone, since an --agent session also sends agent_type', () => {
+  it('tells a sub-agent payload by agent_id alone, since an --agent session also sends agent_type', async () => {
     expect(isSubagentPayload(sub())).toBe(true);
     expect(isSubagentPayload(main())).toBe(false);
     expect(isSubagentPayload(main({ agent_type: 'Explore' }))).toBe(false);
@@ -447,46 +448,46 @@ describe("a sub-agent's hooks", () => {
     expect(isSubagentPayload(undefined)).toBe(false);
   });
 
-  it("books a sub-agent's hook block under no session and never skips it as a repeat of the parent's", () => {
+  it("books a sub-agent's hook block under no session and never skips it as a repeat of the parent's", async () => {
     writeEntry(store, createMemory('NEVER force-push to master because it rewrites shared history', { pinned: true, layer: Layer.Episodic }));
     const parentEnv = { ...env, CLAUDE_CODE_SESSION_ID: SESSION };
-    expect(hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' })).stdout).toContain('NEVER force-push');
-    expect(hippo(HOOK, proj, parentEnv, sub({ prompt: 'hi' })).stdout).toContain('NEVER force-push');
+    expect((await hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' }))).stdout).toContain('NEVER force-push');
+    expect((await hippo(HOOK, proj, parentEnv, sub({ prompt: 'hi' }))).stdout).toContain('NEVER force-push');
     expect(ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id IS NULL`)).toHaveLength(1);
     expect(ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id = '${SESSION}'`)).toHaveLength(1);
     expect(ledgerRows(store, `event = 'skip'`)).toEqual([]);
     // Control: the parent's own repeat still skips.
-    expect(hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' })).stdout.trim()).toBe('');
+    expect((await hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' }))).stdout.trim()).toBe('');
   });
 
-  it("shows a sub-agent its parent's task snapshot past the 72-hour bound, as the parent sees it", () => {
+  it("shows a sub-agent its parent's task snapshot past the 72-hour bound, as the parent sees it", async () => {
     writeEntry(store, createMemory('NEVER force-push to master because it rewrites shared history', { pinned: true, layer: Layer.Episodic }));
     saveActiveTaskSnapshot(store, 'default', { task: 'parent task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: SESSION });
     withDb(store, (db) => db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY)));
-    expect(hippo(HOOK, proj, env, sub({ prompt: 'hi' })).stdout).toContain('parent task');
+    expect((await hippo(HOOK, proj, env, sub({ prompt: 'hi' }))).stdout).toContain('parent task');
     // Control: another session's hook still gets the pin but no longer sees the stale snapshot.
-    const other = hippo(HOOK, proj, env, main({ session_id: 'other', prompt: 'hi' })).stdout;
+    const other = (await hippo(HOOK, proj, env, main({ session_id: 'other', prompt: 'hi' }))).stdout;
     expect(other).toContain('NEVER force-push');
     expect(other).not.toContain('parent task');
   });
 
-  it("restores nothing into a sub-agent that compacts, though the parent's snapshot matches its session id", () => {
+  it("restores nothing into a sub-agent that compacts, though the parent's snapshot matches its session id", async () => {
     saveActiveTaskSnapshot(store, 'default', { task: 'parent task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: SESSION });
-    const result = hippo(['compact-resume'], proj, env, sub({ source: 'compact' }));
+    const result = await hippo(['compact-resume'], proj, env, sub({ source: 'compact' }));
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
     expect(ledgerRows(store, `surface = 'compact_resume'`)).toEqual([]);
     // Control: the parent's own compaction restores it.
-    expect(hippo(['compact-resume'], proj, env, main({ source: 'compact' })).stdout).toContain('parent task');
+    expect((await hippo(['compact-resume'], proj, env, main({ source: 'compact' }))).stdout).toContain('parent task');
   });
 
-  it("leaves the parent's inject-only-on-change state alone when a sub-agent compacts", () => {
+  it("leaves the parent's inject-only-on-change state alone when a sub-agent compacts", async () => {
     withDb(store, (db) => book(db, 'hook', 'inject', Date.now() - 60_000, 100));
-    expect(hippo(['pre-compact'], proj, env, sub({ hook_event_name: 'PreCompact' })).status).toBe(0);
-    expect(hippo(['compact-resume'], proj, env, sub({ source: 'compact' })).status).toBe(0);
+    expect((await hippo(['pre-compact'], proj, env, sub({ hook_event_name: 'PreCompact' }))).status).toBe(0);
+    expect((await hippo(['compact-resume'], proj, env, sub({ source: 'compact' }))).status).toBe(0);
     expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toEqual({ hash: 'h1', skipsSince: 0 });
     // Control: the parent's own compaction resets it.
-    hippo(['compact-resume'], proj, env, main({ source: 'compact' }));
+    await hippo(['compact-resume'], proj, env, main({ source: 'compact' }));
     expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toBeNull();
   });
 });
@@ -513,13 +514,13 @@ describe('re-read reports', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
-  it('hippo tokens shows re-reads per surface, in total and with coverage, in text and JSON', () => {
-    const json = JSON.parse(hippo(['tokens', '--json'], proj, env).stdout);
+  it('hippo tokens shows re-reads per surface, in total and with coverage, in text and JSON', async () => {
+    const json = JSON.parse((await hippo(['tokens', '--json'], proj, env)).stdout);
     expect(json).toMatchObject({ totalTokens: 180, totalTokensReread: 250, sessions: 4, hookSessions: 2, rereadSessions: 1 });
     expect(json.surfaces.map((s: { surface: string; tokensReread: number }) => [s.surface, s.tokensReread]))
       .toEqual([['hook', 200], ['compact_resume', 50], ['recall', 0]]);
 
-    const text = hippo(['tokens'], proj, env).stdout;
+    const text = (await hippo(['tokens'], proj, env)).stdout;
     expect(text).toContain('(estimated tokens, characters / 4)');
     expect(text).toMatch(/surface\s+sent\s+tokens\s+skipped\s+saved\s+re-read\n/);
     expect(text).toMatch(/compact_resume\s+1\s+50\s+0\s+0\s+50\n/);
@@ -531,7 +532,7 @@ describe('re-read reports', () => {
     expect(text).toContain("Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.");
   });
 
-  it('hippo doctor reports tokens sent and re-read', () => {
+  it('hippo doctor reports tokens sent and re-read', async () => {
     const tokens = runDoctor({ cwd: proj, home: join(root, 'home'), version: 'test' }).checks.find((c) => c.id === 'tokens');
     expect(tokens?.detail).toBe('3 memory blocks sent to agents in 7 days, about 180 tokens sent and 250 re-read by later model calls (hippo tokens for detail)');
   });

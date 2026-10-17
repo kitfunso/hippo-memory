@@ -11,7 +11,8 @@ import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
-import { hippo, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';
+import { hippo, hippoIn, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';
+import type { InProcessResult } from './run-in-process.js';
 
 interface Json { [key: string]: JsonValue }
 
@@ -225,6 +226,14 @@ export function seed(root: string, content: string, extra: Partial<MemoryEntry> 
 export function fire(p: Project, sessionId: string, prompt: string, opts: RunOptions & { args?: string[] } = {}): SpawnSyncReturns<string> {
   const { args = PROMPT_HOOK, ...run } = opts;
   const r = hippo(p, args, { ...run, input: promptPayload(sessionId, prompt) });
+  expect(r.status).toBe(0);
+  return r;
+}
+
+/** `fire` run through runCli in this process. */
+export async function fireIn(p: Project, sessionId: string, prompt: string, opts: RunOptions & { args?: string[] } = {}): Promise<InProcessResult> {
+  const { args = PROMPT_HOOK, ...run } = opts;
+  const r = await hippoIn(p, args, { ...run, input: promptPayload(sessionId, prompt) });
   expect(r.status).toBe(0);
   return r;
 }

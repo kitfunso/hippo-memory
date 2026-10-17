@@ -41,8 +41,7 @@ function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
     particles.length < stored.length ? ` (the ${particles.length} most recently recalled of ${stored.length})` : '';
   result.details.push(
     `  ⚛️  physics: ${stats.particleCount} particles${capped}, ` +
-    `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}, ` +
-    `energy ${stats.energy.total.toFixed(STATS_DECIMALS)}`
+    `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}`
   );
 }
 

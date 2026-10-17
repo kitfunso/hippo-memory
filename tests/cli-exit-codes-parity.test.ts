@@ -1,16 +1,19 @@
-// Pins stdout, stderr and the exit status of failing `hippo` invocations across the verb files, on the built CLI
-// and a real store, so a change to how a verb stops its command cannot move a byte or a code.
+// Pins stdout, stderr and the exit status of failing `hippo` invocations across the verb files on a real store, so a change
+// to how a verb stops its command cannot move a byte or a code. The cases in SPAWNED run the built CLI; the rest run it in process.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const FETCH_UNAUTHORISED = resolve(__dirname, '_helpers', 'fetch-unauthorised.cjs').split(sep).join('/');
 const FAILING_COMMAND = ['--', 'node', '-e', 'process.exit(3)'];
 const SPAWN_TIMEOUT_MS = 60_000;
+// Each exit code once through the real entry, the preload a child reads from NODE_OPTIONS, and serve, which arms process handlers.
+const SPAWNED = new Set(['version', 'unknown verb', 'dry-run on a verb without one', 'github backfill refused by the server', 'watch of a failing command', 'serve with one TLS file']);
 
 interface Case {
   readonly name: string;
@@ -87,7 +90,10 @@ beforeAll(() => {
   initStore(join(store, '.hippo'));
   bare = mkdtempSync(join(tmpdir(), 'hippo-exit-parity-bare-'));
   home = mkdtempSync(join(tmpdir(), 'hippo-exit-parity-home-'));
-  usage = hippoRun(['help'], { cwd: bare, env: childEnv(), timeout: SPAWN_TIMEOUT_MS }).stdout;
+});
+
+beforeAll(async () => {
+  usage = (await runCliAs(['help'], { cwd: bare, env: childEnv() })).stdout;
 });
 
 afterAll(() => {
@@ -111,8 +117,9 @@ function masked(text: string): string {
   return out;
 }
 
-function run(c: Case) {
-  const r = hippoRun(c.args, { cwd: c.cwd === 'store' ? store : bare, env: childEnv(c.env), input: '', timeout: SPAWN_TIMEOUT_MS });
+async function run(c: Case) {
+  const opts = { cwd: c.cwd === 'store' ? store : bare, env: childEnv(c.env), input: '' };
+  const r = SPAWNED.has(c.name) ? hippoRun(c.args, { ...opts, timeout: SPAWN_TIMEOUT_MS }) : await runCliAs(c.args, opts);
   codes.add(r.status);
   // The usage text grows with every verb; `hippo help` prints it, so only its presence is pinned here.
   const stdout = usage.length > 0 ? r.stdout.replace(usage, '<the text of hippo help>\n') : r.stdout;
@@ -120,10 +127,10 @@ function run(c: Case) {
 }
 
 describe('hippo exit codes and output of failing invocations (built CLI)', () => {
-  it.each(CASES)('$name', (c) => {
-    const r = run(c);
+  it.each(CASES)('$name', async (c) => {
+    const r = await run(c);
     expect(`$ hippo ${c.args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr}`).toMatchSnapshot();
-  }, SPAWN_TIMEOUT_MS * 2);
+  }, SPAWN_TIMEOUT_MS);
 
   // Reads what the cases above recorded, so it holds only on a whole-file run.
   it('covers every exit code a verb hands to the entry', () => {

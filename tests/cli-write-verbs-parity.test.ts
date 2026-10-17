@@ -1,5 +1,5 @@
-// Pins what `hippo remember`, `hippo supersede` and `hippo trace record` store, audit and print on the built CLI with no server,
-// so moving their writes behind the api layer cannot change a row or a byte.
+// Pins what `hippo remember`, `hippo supersede` and `hippo trace record` store, audit and print with no server, so moving
+// their writes behind the api layer cannot change a row or a byte. One case per verb spawns the built CLI; the rest run it in process.
 import { afterAll, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,9 +9,11 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-const CASE_MS = 180_000;
+// A spawned case starts the built CLI up to four times, each a few seconds on a loaded Windows box; 60 s is twice that.
+const SPAWNED_CASE_MS = 60_000;
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session or a server for the child, so the developer's shell cannot change a row.
 const DROPPED_ENV = ['HIPPO_TENANT', 'HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL', 'HIPPO_SESSION_ID', 'HIPPO_API_KEY', 'HIPPO_REQUIRE_SERVER', 'HIPPO_STRICT_OWNER'];
@@ -55,14 +57,27 @@ class Store {
   private readonly transcript: string[] = [];
   private auditMark = 0;
 
-  constructor(config?: StoreConfig) {
+  private constructor(private readonly spawned: boolean) {
     bases.push(this.base);
     mkdirSync(this.cwd, { recursive: true });
     for (const key of DROPPED_ENV) delete this.env[key];
-    const init = hippoRun(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: this.cwd, env: this.env, timeout: SPAWN_MS });
+  }
+
+  /** A store made by `hippo init`; `spawned` runs every command of the case through the built CLI. */
+  static async open(config?: StoreConfig, spawned = false): Promise<Store> {
+    const s = new Store(spawned);
+    const init = await s.exec(['init', '--no-hooks', '--no-schedule', '--no-learn']);
     expect(init.status, init.stderr).toBe(0);
-    if (config) this.mergeConfig(config);
-    this.settle();
+    if (config) s.mergeConfig(config);
+    s.settle();
+    return s;
+  }
+
+  private async exec(args: string[]): Promise<{ status: number | null; stdout: string; stderr: string }> {
+    if (!this.spawned) return runCliAs(args, { cwd: this.cwd, env: this.env });
+    const r = hippoRun(args, { cwd: this.cwd, env: this.env, timeout: SPAWN_MS });
+    expect(r.error, `spawn ${args.join(' ')}`).toBeUndefined();
+    return r;
   }
 
   private mergeConfig(config: StoreConfig): void {
@@ -76,9 +91,8 @@ class Store {
     this.auditMark = Number(query(this.root, 'SELECT COALESCE(MAX(id), 0) AS n FROM audit_log')[0]!['n']);
   }
 
-  run(...args: string[]): void {
-    const r = hippoRun(args, { cwd: this.cwd, env: this.env, timeout: SPAWN_MS });
-    expect(r.error, `spawn ${args.join(' ')}`).toBeUndefined();
+  async run(...args: string[]): Promise<void> {
+    const r = await this.exec(args);
     this.transcript.push(`$ hippo ${args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr.replace(NODE_WARNING, '')}`);
   }
 
@@ -132,44 +146,44 @@ const REMEMBER_FLAGS: ReadonlyArray<[string, string[]]> = [
 ];
 
 describe('hippo remember (built CLI, no server)', () => {
-  it.each(REMEMBER_FLAGS)('%s', (_label, flags) => {
-    const s = new Store();
-    s.run('remember', 'the billing service retries a failed charge three times', ...flags);
+  it.each(REMEMBER_FLAGS)('%s', async (label, flags) => {
+    const s = await Store.open(undefined, label === 'plain');
+    await s.run('remember', 'the billing service retries a failed charge three times', ...flags);
     s.expectPinned();
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 
-  it('a second row whose tags the store already holds', () => {
-    const s = new Store();
-    s.run('remember', 'the billing service retries a failed charge three times', '--tag', 'billing');
-    s.run('remember', 'the invoice worker sends a receipt after each charge', '--tag', 'billing');
+  it('a second row whose tags the store already holds', async () => {
+    const s = await Store.open();
+    await s.run('remember', 'the billing service retries a failed charge three times', '--tag', 'billing');
+    await s.run('remember', 'the invoice worker sends a receipt after each charge', '--tag', 'billing');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('the salience gate skips a repeat of the same text, and --force stores it', () => {
-    const s = new Store(SALIENCE_ON);
-    s.run('remember', 'the billing service retries a failed charge three times');
-    s.run('remember', 'the billing service retries a failed charge three times');
-    s.run('remember', 'the billing service retries a failed charge three times', '--force');
+  it('the salience gate skips a repeat of the same text, and --force stores it', async () => {
+    const s = await Store.open(SALIENCE_ON);
+    await s.run('remember', 'the billing service retries a failed charge three times');
+    await s.run('remember', 'the billing service retries a failed charge three times');
+    await s.run('remember', 'the billing service retries a failed charge three times', '--force');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('the salience gate weakens a repeated error', () => {
-    const s = new Store(SALIENCE_ON);
+  it('the salience gate weakens a repeated error', async () => {
+    const s = await Store.open(SALIENCE_ON);
     for (let n = 1; n <= 4; n++) {
       writeEntry(s.root, createMemory(`connection timeout on database shard ${n}`, { tags: ['error'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     }
     s.settle();
-    s.run('remember', 'connection timeout on database shard 5', '--error');
+    await s.run('remember', 'connection timeout on database shard 5', '--error');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
   it('a rejected value is refused', async () => {
-    const s = new Store();
+    const s = await Store.open();
     await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
     s.settle();
-    s.run('remember', 'the billing service retries a failed charge nine times');
+    await s.run('remember', 'the billing service retries a failed charge nine times');
     s.expectPinned();
-  }, CASE_MS);
+  });
 });
 
 const SUPERSEDE_FLAGS: ReadonlyArray<[string, string[], string[]]> = [
@@ -182,65 +196,65 @@ const SUPERSEDE_FLAGS: ReadonlyArray<[string, string[], string[]]> = [
 ];
 
 describe('hippo supersede (built CLI, no server)', () => {
-  it.each(SUPERSEDE_FLAGS)('%s', (_label, oldFlags, flags) => {
-    const s = new Store();
-    s.run('remember', 'the billing service retries a failed charge three times', ...oldFlags);
-    s.run('supersede', s.lastId(), 'the billing service retries a failed charge five times', ...flags);
+  it.each(SUPERSEDE_FLAGS)('%s', async (label, oldFlags, flags) => {
+    const s = await Store.open(undefined, label === 'plain');
+    await s.run('remember', 'the billing service retries a failed charge three times', ...oldFlags);
+    await s.run('supersede', s.lastId(), 'the billing service retries a failed charge five times', ...flags);
     s.expectPinned();
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 
-  it('a missing id', () => {
-    const s = new Store();
-    s.run('supersede', 'mem_does_not_exist', 'the billing service retries a failed charge five times');
+  it('a missing id', async () => {
+    const s = await Store.open();
+    await s.run('supersede', 'mem_does_not_exist', 'the billing service retries a failed charge five times');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('an id that is already superseded', () => {
-    const s = new Store();
-    s.run('remember', 'the billing service retries a failed charge three times');
+  it('an id that is already superseded', async () => {
+    const s = await Store.open();
+    await s.run('remember', 'the billing service retries a failed charge three times');
     const oldId = s.lastId();
-    s.run('supersede', oldId, 'the billing service retries a failed charge five times');
-    s.run('supersede', oldId, 'the billing service retries a failed charge seven times');
+    await s.run('supersede', oldId, 'the billing service retries a failed charge five times');
+    await s.run('supersede', oldId, 'the billing service retries a failed charge seven times');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
   it('new content that is a rejected value', async () => {
-    const s = new Store();
+    const s = await Store.open();
     await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
     s.settle();
-    s.run('remember', 'the billing service retries a failed charge three times');
-    s.run('supersede', s.lastId(), 'the billing service retries a failed charge nine times');
+    await s.run('remember', 'the billing service retries a failed charge three times');
+    await s.run('supersede', s.lastId(), 'the billing service retries a failed charge nine times');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
   it("another person's personal row", async () => {
-    const s = new Store();
+    const s = await Store.open();
     const owner = { subject: 'api_key:hk_a', role: 'member', owner: 'a' } as const;
     const { id } = await remember(apiCtx(s.root, 'default', owner), { content: 'my own note about the billing retry count', personal: true });
     s.settle();
-    s.run('supersede', id, 'a newer note about the billing retry count');
+    await s.run('supersede', id, 'a newer note about the billing retry count');
     s.expectPinned();
-  }, CASE_MS);
+  });
 });
 
 describe('hippo trace record (built CLI, no server)', () => {
   const steps = JSON.stringify([{ action: 'ran the migration', observation: 'two tables changed' }, { action: 'ran the tests', observation: 'all passed' }]);
 
-  it('the required flags alone', () => {
-    const s = new Store();
-    s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'success');
+  it('the required flags alone', async () => {
+    const s = await Store.open(undefined, true);
+    await s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'success');
     s.expectPinned();
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 
-  it('--session, --tag and --source', () => {
-    const s = new Store();
-    s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'partial', '--session', 'sess-1', '--tag', 'deploy', '--source', 'agent');
+  it('--session, --tag and --source', async () => {
+    const s = await Store.open();
+    await s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'partial', '--session', 'sess-1', '--tag', 'deploy', '--source', 'agent');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('an outcome outside the three', () => {
-    const s = new Store();
-    s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'unknown');
+  it('an outcome outside the three', async () => {
+    const s = await Store.open();
+    await s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'unknown');
     s.expectPinned();
-  }, CASE_MS);
+  });
 });

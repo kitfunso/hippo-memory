@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../src/core/project-identity.js';
@@ -12,9 +11,10 @@ import { defaultSleepLogPath } from '../src/hooks/shared.js';
 import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
+import type { InProcessResult } from './_helpers/run-in-process.js';
 
-// Always run against the local built CLI so we're testing our source, not a
-// stale globally-installed version (mirrors tests/pinned-inject.test.ts).
+// Verbs run through runCli in this process; the first case of each verb spawns the local built CLI, never a global install.
 const FAKE_JWT = ['eyJ' + 'FAKEHEADER', 'eyJ' + 'FAKEPAYLOAD', 'FAKESIG'].join('.');
 
 /**
@@ -50,17 +50,17 @@ function backdateActiveSnapshot(hippoRoot: string, tenantId: string, minutesAgo:
   }
 }
 
-function runHippo(
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-  input?: string,
-): SpawnSyncReturns<string> {
-  return hippoRun(args, { cwd, env, input });
+function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): Promise<InProcessResult> {
+  return runCliAs(args, { cwd, env, input });
 }
 
-function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
-  const result = runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], cwd, env);
+async function spawnHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): Promise<InProcessResult> {
+  const r = hippoRun(args, { cwd, env, input });
+  return { status: r.status ?? -1, stdout: r.stdout, stderr: r.stderr };
+}
+
+async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const result = await runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], cwd, env);
   expect(result.status).toBe(0);
 }
 
@@ -68,16 +68,16 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
   });
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('writes a task_snapshots row (source=pre-compact, payload session_id) and writes zero memories', () => {
+  it('writes a task_snapshots row (source=pre-compact, payload session_id) and writes zero memories', async () => {
     const transcriptPath = path.join(dir, 'transcript.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -114,7 +114,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await spawnHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const hippoRoot = getHippoRoot(dir);
@@ -130,7 +130,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(entries).toHaveLength(0);
   });
 
-  it('last user line is a Claude Code system notification -> Task falls back to the previous typed line, notice stays out of Summary', () => {
+  it('last user line is a Claude Code system notification -> Task falls back to the previous typed line, notice stays out of Summary', async () => {
     const transcriptPath = path.join(dir, 'system-notification.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -148,7 +148,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -158,7 +158,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.summary).not.toContain('Another Claude session');
   });
 
-  it('missing transcript_path (no auto-discovery fallback in the scratch env) -> exit 0, no snapshot written', () => {
+  it('missing transcript_path (no auto-discovery fallback in the scratch env) -> exit 0, no snapshot written', async () => {
     const payload = JSON.stringify({
       session_id: 'sess-missing',
       transcript_path: path.join(dir, 'does-not-exist.jsonl'),
@@ -166,12 +166,12 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('positive control: true manual invocation (no stdin at all) DOES pick up a transcript via auto-discovery', () => {
+  it('positive control: true manual invocation (no stdin at all) DOES pick up a transcript via auto-discovery', async () => {
     // Proves discovery is reachable in this scratch env, so the negative
     // (contamination) case below is a real regression guard, not a test
     // that trivially passes because nothing was ever discoverable.
@@ -194,7 +194,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     // longer "manual" — it fails closed instead (see the dedicated
     // malformed/missing-transcript_path test below). So this positive
     // control passes NO input whatsoever, matching a real interactive run.
-    const result = runHippo(['pre-compact'], dir, env);
+    const result = await runHippo(['pre-compact'], dir, env);
 
     expect(result.status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -202,7 +202,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.summary).toContain('DISCOVERABLE SESSION');
   });
 
-  it('fail-closed (X4): non-empty stdin JSON object with no transcript_path field -> exit 0, skip, no auto-discovery fallback', () => {
+  it('fail-closed (X4): non-empty stdin JSON object with no transcript_path field -> exit 0, skip, no auto-discovery fallback', async () => {
     // Companion to the positive control above: the same payload shape, but
     // sent as real (non-empty) stdin rather than omitted entirely. A decoy
     // transcript sits exactly where auto-discovery would look; the fixed
@@ -217,13 +217,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     );
 
     const payload = JSON.stringify({ cwd: dir, hook_event_name: 'PreCompact' });
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('fail-closed (X4): "transcript_path": null -> exit 0, skip, no auto-discovery fallback', () => {
+  it('fail-closed (X4): "transcript_path": null -> exit 0, skip, no auto-discovery fallback', async () => {
     const decoyProjectDir = path.join(dir, '.claude', 'projects', 'decoy-null-path');
     fs.mkdirSync(decoyProjectDir, { recursive: true });
     fs.writeFileSync(
@@ -234,13 +234,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     );
 
     const payload = JSON.stringify({ session_id: 'sess-null-path', transcript_path: null, cwd: dir, hook_event_name: 'PreCompact' });
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('X11: payload transcript_path not ending .jsonl -> exit 0, skip', () => {
+  it('X11: payload transcript_path not ending .jsonl -> exit 0, skip', async () => {
     const transcriptPath = path.join(dir, 'transcript.txt');
     fs.writeFileSync(
       transcriptPath,
@@ -255,13 +255,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       cwd: dir,
       hook_event_name: 'PreCompact',
     });
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('contamination regression: payload transcript_path present but unreadable -> SKIP, never falls back to a decoy found via auto-discovery', () => {
+  it('contamination regression: payload transcript_path present but unreadable -> SKIP, never falls back to a decoy found via auto-discovery', async () => {
     // Plant a decoy exactly where auto-discovery looks. If the producer
     // ever fell back to discovery when the payload's own path is
     // unreadable, it would snapshot THIS decoy under the payload's
@@ -283,7 +283,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       cwd: dir,
       hook_event_name: 'PreCompact',
     });
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
 
     expect(result.status).toBe(0);
     const hippoRoot = getHippoRoot(dir);
@@ -293,13 +293,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(leaked).toBeUndefined();
   });
 
-  it('malformed stdin (not JSON at all) -> exit 0, no snapshot written', () => {
-    const result = runHippo(['pre-compact'], dir, env, 'this is not json at all');
+  it('malformed stdin (not JSON at all) -> exit 0, no snapshot written', async () => {
+    const result = await runHippo(['pre-compact'], dir, env, 'this is not json at all');
     expect(result.status).toBe(0);
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('empty transcript file -> exit 0, no snapshot written (skip rule: empty summary)', () => {
+  it('empty transcript file -> exit 0, no snapshot written (skip rule: empty summary)', async () => {
     const transcriptPath = path.join(dir, 'empty.jsonl');
     fs.writeFileSync(transcriptPath, '');
     const payload = JSON.stringify({
@@ -309,12 +309,12 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('caps task/summary/next_step at 200/2000/500 chars; hippo snapshot save stays uncapped', () => {
+  it('caps task/summary/next_step at 200/2000/500 chars; hippo snapshot save stays uncapped', async () => {
     const longTask = 'X'.repeat(400);
     const longAssistantText = 'Y'.repeat(1000);
     // Big filler chunks so the RAW summary (before the producer's own cap)
@@ -339,7 +339,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const hippoRoot = getHippoRoot(dir);
@@ -359,7 +359,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     // The shared `saveActiveTaskSnapshot` / `hippo snapshot save` CLI path is
     // untouched — caps are enforced in the pre-compact producer ONLY.
     const uncappedText = 'Q'.repeat(3000);
-    const saveResult = runHippo(
+    const saveResult = await runHippo(
       ['snapshot', 'save', '--task', uncappedText, '--summary', uncappedText, '--next-step', uncappedText],
       dir,
       env,
@@ -371,7 +371,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(manualSnapshot!.next_step.length).toBe(3000);
   });
 
-  it('X1: per-field merge — a tool-heavy tail with no plain-text user turn keeps the existing task instead of blanking it', () => {
+  it('X1: per-field merge — a tool-heavy tail with no plain-text user turn keeps the existing task instead of blanking it', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'user-authored task must survive',
@@ -399,7 +399,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       cwd: dir,
       hook_event_name: 'PreCompact',
     });
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
@@ -410,7 +410,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.next_step).toContain('verify the output');
   });
 
-  it('X7: corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash output', () => {
+  it('X7: corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash output', async () => {
     const hippoRoot = getHippoRoot(dir);
     const dbPath = path.join(hippoRoot, 'hippo.db');
     fs.writeFileSync(dbPath, 'not a valid sqlite database file, just garbage bytes 0000000', 'utf8');
@@ -434,14 +434,14 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toMatch(/at Object\.|node:internal|Uncaught|Error:|SQLITE_/i);
     expect(result.stderr).not.toMatch(/at Object\.|node:internal|Uncaught|SQLITE_/i);
   });
 
-  it('X9: secret-shaped content in the transcript is redacted before it lands in the snapshot fields', () => {
+  it('X9: secret-shaped content in the transcript is redacted before it lands in the snapshot fields', async () => {
     const transcriptPath = path.join(dir, 'secret.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -457,7 +457,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -470,7 +470,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.next_step).toContain('[REDACTED]');
   });
 
-  it('a Bearer JWT an older build left in the snapshot survives neither compaction nor the session-end handoff', () => {
+  it('a Bearer JWT an older build left in the snapshot survives neither compaction nor the session-end handoff', async () => {
     const hippoRoot = getHippoRoot(dir);
     // Raw SQL, because saveActiveTaskSnapshot now scrubs: this is the row a build without the scrub left behind.
     const db = openHippoDb(hippoRoot);
@@ -493,15 +493,15 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     );
     const payload = JSON.stringify({ session_id: 'sess-old-jwt', transcript_path: transcriptPath, cwd: dir, hook_event_name: 'PreCompact' });
 
-    expect(runHippo(['pre-compact'], dir, env, payload).status).toBe(0);
+    expect((await runHippo(['pre-compact'], dir, env, payload)).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot!.next_step).toBe('retry the export with Authorization: [REDACTED]');
     const handoff = writeSessionEndHandoff(hippoRoot, { tenantId: 'default', sessionId: 'sess-old-jwt', evidence: null });
     expect(handoff!.nextAction).toBe('retry the export with Authorization: [REDACTED]');
   });
 
-  it('hippo snapshot save stores a JWT scrubbed', () => {
-    const result = runHippo(
+  it('hippo snapshot save stores a JWT scrubbed', async () => {
+    const result = await runHippo(
       ['snapshot', 'save', '--task', 'call the export API', '--summary', `the token is ${FAKE_JWT}`, '--next-step', `use Bearer ${FAKE_JWT}`],
       dir,
       env,
@@ -518,16 +518,16 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
   });
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('CX5: the snapshot is redacted, and pre-compact writes zero memories', () => {
+  it('CX5: the snapshot is redacted, and pre-compact writes zero memories', async () => {
     const transcriptPath = path.join(dir, 'cx5.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -543,7 +543,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const hippoRoot = getHippoRoot(dir);
@@ -555,8 +555,8 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     expect(snapshot!.task).toContain('[REDACTED]');
   });
 
-  it("CX6: per-field fallback never carries another session's content into this session's snapshot", () => {
-    const seed = runHippo(
+  it("CX6: per-field fallback never carries another session's content into this session's snapshot", async () => {
+    const seed = await runHippo(
       ['snapshot', 'save', '--task', 'SESSION A TASK', '--summary', 'A summary', '--next-step', 'A next', '--session', 'sess-A'],
       dir,
       env,
@@ -581,7 +581,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -592,7 +592,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     expect(snapshot!.next_step).toContain('continue B work');
   });
 
-  it('CX8: a PEM private-key block is redacted through the END delimiter, not just the BEGIN line', () => {
+  it('CX8: a PEM private-key block is redacted through the END delimiter, not just the BEGIN line', async () => {
     const pem =
       '-----BEGIN RSA PRIVATE KEY-----\nMIIfakefakefakebase64payloadfakefakefake\n-----END RSA PRIVATE KEY-----';
     const transcriptPath = path.join(dir, 'cx8.jsonl');
@@ -610,7 +610,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -620,7 +620,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     expect(snapshot!.task).toContain('[REDACTED]');
   });
 
-  it('CX9: the summary cap keeps the NEWEST turns, not the oldest', () => {
+  it('CX9: the summary cap keeps the NEWEST turns, not the oldest', async () => {
     const turn = (marker: string) => `${marker} ${'lorem ipsum working state detail '.repeat(20)}`;
     const transcriptPath = path.join(dir, 'cx9.jsonl');
     fs.writeFileSync(
@@ -640,7 +640,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -652,20 +652,20 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     expect(snapshot!.summary).toContain('[...earlier turns trimmed]');
   });
 
-  it('CX10: a structurally incomplete payload ({}) fails closed in compact-resume', () => {
-    const seed = runHippo(
+  it('CX10: a structurally incomplete payload ({}) fails closed in compact-resume', async () => {
+    const seed = await runHippo(
       ['snapshot', 'save', '--task', 'stale task', '--summary', 's', '--next-step', 'n'],
       dir,
       env,
     );
     expect(seed.status).toBe(0);
 
-    const result = runHippo(['compact-resume'], dir, env, '{}');
+    const result = await runHippo(['compact-resume'], dir, env, '{}');
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('CX7: an oversized final JSONL record does not swallow the tail (window grows, earlier turns survive)', () => {
+  it('CX7: an oversized final JSONL record does not swallow the tail (window grows, earlier turns survive)', async () => {
     const transcriptPath = path.join(dir, 'cx7.jsonl');
     // Final record ~600KB (> the 256KB window), shaped as a tool_result so
     // it can never win task derivation itself.
@@ -689,7 +689,7 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact', '--log-file', logFile], dir, env, payload);
+    const result = await runHippo(['pre-compact', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
@@ -724,7 +724,7 @@ describe('uninitialized store gate: neither verb may create a store', () => {
     fs.rmSync(homeDir, { recursive: true, force: true });
   });
 
-  it('hippo pre-compact against an uninitialized target -> exit 0, no .hippo/hippo.db created in the project dir', () => {
+  it('hippo pre-compact against an uninitialized target -> exit 0, no .hippo/hippo.db created in the project dir', async () => {
     const transcriptPath = path.join(dir, 'transcript.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -737,15 +737,15 @@ describe('uninitialized store gate: neither verb may create a store', () => {
       hook_event_name: 'PreCompact',
     });
 
-    const result = runHippo(['pre-compact'], dir, env, payload);
+    const result = await runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
     expect(fs.existsSync(path.join(dir, '.hippo'))).toBe(false);
     expect(fs.existsSync(path.join(dir, '.hippo', 'hippo.db'))).toBe(false);
   });
 
-  it('hippo compact-resume against an uninitialized target -> exit 0, silent, no .hippo/hippo.db created in the project dir', () => {
+  it('hippo compact-resume against an uninitialized target -> exit 0, silent, no .hippo/hippo.db created in the project dir', async () => {
     const payload = JSON.stringify({ session_id: 'sess-uninit', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
     expect(fs.existsSync(path.join(dir, '.hippo'))).toBe(false);
@@ -757,16 +757,16 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
   });
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('source: "compact" -> stdout contains the task, next step, and session trail', () => {
+  it('source: "compact" -> stdout contains the task, next step, and session trail', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'add rate limiting to the endpoint',
@@ -782,7 +782,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     });
 
     const payload = JSON.stringify({ session_id: 'sess-resume-1', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await spawnHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Restored after compaction');
@@ -795,43 +795,43 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     expect(result.stdout).toContain('decided to use PostgreSQL for the backend');
   });
 
-  it('X5: payload session_id present and different from the snapshot session_id -> silent exit 0 (no cross-session restore)', () => {
+  it('X5: payload session_id present and different from the snapshot session_id -> silent exit 0 (no cross-session restore)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'session-a task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-a',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-b', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('X5: payload session_id matches the snapshot session_id -> prints', () => {
+  it('X5: payload session_id matches the snapshot session_id -> prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'session-match task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-match',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-match', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('session-match task');
   });
 
-  it('X5: snapshot has no session_id (manual `snapshot save`) -> payload session_id present still prints', () => {
+  it('X5: snapshot has no session_id (manual `snapshot save`) -> payload session_id present still prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'no-session-id task', summary: 's', next_step: 'n', source: 'cli',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-any', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('no-session-id task');
   });
 
-  it('DF-Z0: snapshot updated 16 min ago -> silent, even with a matching session id', () => {
+  it('DF-Z0: snapshot updated 16 min ago -> silent, even with a matching session id', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale snapshot task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-stale',
@@ -839,13 +839,13 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     backdateActiveSnapshot(hippoRoot, 'default', 16);
 
     const payload = JSON.stringify({ session_id: 'sess-stale', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('DF-Z0: snapshot updated 14 min ago -> prints', () => {
+  it('DF-Z0: snapshot updated 14 min ago -> prints', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'fresh-enough snapshot task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-fresh',
@@ -853,13 +853,13 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     backdateActiveSnapshot(hippoRoot, 'default', 14);
 
     const payload = JSON.stringify({ session_id: 'sess-fresh', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('fresh-enough snapshot task');
   });
 
-  it('X8: session event content is capped at 400 chars in compact-resume output', () => {
+  it('X8: session event content is capped at 400 chars in compact-resume output', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 't', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-long-event',
@@ -872,55 +872,55 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     });
 
     const payload = JSON.stringify({ session_id: 'sess-long-event', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain('E'.repeat(1000));
     expect(result.stdout).toContain('E'.repeat(400));
   });
 
-  it('source: "startup" -> empty stdout, exit 0 (matcher-defence-in-depth)', () => {
+  it('source: "startup" -> empty stdout, exit 0 (matcher-defence-in-depth)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 't', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-x',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-x', source: 'startup' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('X13: malformed non-empty stdin -> exit 0, silent (fail closed)', () => {
+  it('X13: malformed non-empty stdin -> exit 0, silent (fail closed)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'manual-use task', summary: 's', next_step: 'n', source: 'pre-compact',
     });
 
-    const result = runHippo(['compact-resume'], dir, env, 'not json');
+    const result = await runHippo(['compact-resume'], dir, env, 'not json');
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('X13: true manual invocation (no stdin at all) still prints', () => {
+  it('X13: true manual invocation (no stdin at all) still prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'manual-use task', summary: 's', next_step: 'n', source: 'pre-compact',
     });
 
-    const result = runHippo(['compact-resume'], dir, env);
+    const result = await runHippo(['compact-resume'], dir, env);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('manual-use task');
   });
 
-  it('no active snapshot -> exit 0, empty stdout (nothing to restore)', () => {
+  it('no active snapshot -> exit 0, empty stdout (nothing to restore)', async () => {
     const payload = JSON.stringify({ session_id: 'sess-none', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
-  it('corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash/stack leaked to stdout', () => {
+  it('corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash/stack leaked to stdout', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'task before corruption', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-corrupt',
@@ -937,7 +937,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     }
 
     const payload = JSON.stringify({ session_id: 'sess-corrupt', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     // loadActiveTaskSnapshot throws before any console.log runs, so the
@@ -955,9 +955,9 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
   let prevHome: string | undefined;
   let prevUserProfile: string | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
       task: 'combined-firing task',
       summary: 'combined-firing summary',
@@ -981,26 +981,26 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('no pending session-end log: last-sleep is silent, compact-resume block is intact', () => {
+  it('no pending session-end log: last-sleep is silent, compact-resume block is intact', async () => {
     expect(fs.existsSync(defaultSleepLogPath())).toBe(false);
 
-    const lastSleep = runHippo(['last-sleep'], dir, env);
+    const lastSleep = await runHippo(['last-sleep'], dir, env);
     expect(lastSleep.status).toBe(0);
     expect(lastSleep.stdout.trim()).toBe('');
 
-    const compactResume = runHippo(['compact-resume'], dir, env, JSON.stringify({ session_id: 'sess-combo', source: 'compact' }));
+    const compactResume = await runHippo(['compact-resume'], dir, env, JSON.stringify({ session_id: 'sess-combo', source: 'compact' }));
     expect(compactResume.status).toBe(0);
     expect(compactResume.stdout).toContain('Restored after compaction');
     expect(compactResume.stdout).toContain('combined-firing task');
     expect(compactResume.stdout).not.toContain('Previous session hippo consolidation');
   });
 
-  it('pending session-end log present: both blocks print, neither corrupts the other', () => {
+  it('pending session-end log present: both blocks print, neither corrupts the other', async () => {
     const logPath = defaultSleepLogPath();
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     fs.writeFileSync(logPath, '[hippo] a previous session already consolidated memory\n', 'utf8');
 
-    const lastSleep = runHippo(['last-sleep'], dir, env);
+    const lastSleep = await runHippo(['last-sleep'], dir, env);
     expect(lastSleep.status).toBe(0);
     // The log goes to stderr: SessionStart stdout would put it in the model's context.
     expect(lastSleep.stdout.trim()).toBe('');
@@ -1010,7 +1010,7 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
     // not a no-op, and that clearing doesn't touch the sqlite-backed snapshot.
     expect(fs.existsSync(logPath)).toBe(false);
 
-    const compactResume = runHippo(['compact-resume'], dir, env, JSON.stringify({ session_id: 'sess-combo', source: 'compact' }));
+    const compactResume = await runHippo(['compact-resume'], dir, env, JSON.stringify({ session_id: 'sess-combo', source: 'compact' }));
     expect(compactResume.status).toBe(0);
     expect(compactResume.stdout).toContain('Restored after compaction');
     expect(compactResume.stdout).toContain('combined-firing task');

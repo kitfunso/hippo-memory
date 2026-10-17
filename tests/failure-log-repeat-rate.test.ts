@@ -2,8 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -14,8 +13,8 @@ import { blockHash } from '../src/util/token-text.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
 import { RejectedValueError } from '../src/core/api-errors.js';
 import type { JsonValue } from '../src/util/json.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 
 function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
@@ -206,57 +205,60 @@ describe('hippo failures', () => {
     initStore(join(dir, '.hippo'));
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
-
-  function run(args: string[], input = '', cwd = dir): string {
+  // In process, throwing on a non-zero exit as execFileSync did, so coverage sees the hook and the report.
+  // In process, with execFileSync's throw on a non-zero exit, so coverage sees the hook and the report.
+  async function run(args: string[], input = '', cwd = dir): Promise<string> {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd, USERPROFILE: cwd };
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
-    return execFileSync(process.execPath, [HIPPO_JS, ...args], { env, cwd, encoding: 'utf8', input, stdio: 'pipe' });
+    const r = await runCliAs(args, { env, cwd, input });
+    if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+    return r.stdout;
   }
   const broke = (session?: string, what = 'something real broke'): string =>
     JSON.stringify({ session_id: session, tool_name: 'Bash', error: `Exit code 1\nError: ${what}` });
 
-  it('reports outcomes and repeats from what the hook logged, including a lesson it could not save', () => {
-    expect(run(['failures'])).toContain('No failed tool calls recorded in the last 30 days.');
+  it('reports outcomes and repeats from what the hook logged, including a lesson it could not save', async () => {
+    expect(await run(['failures'])).toContain('No failed tool calls recorded in the last 30 days.');
     const build = (session: string): string => JSON.stringify({
       session_id: session, tool_name: 'Bash', tool_input: { command: 'npm run build' },
       error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
     });
     const refused = { session_id: 's3', tool_name: 'Bash', error: 'Exit code 1\nError: Cannot find module express' };
     rejectLesson(join(dir, '.hippo'), lessonFromFailure(refused).text!);
-    run(['capture-error'], build('s1'));
-    run(['capture-error'], build('s2'));
-    run(['capture-error'], JSON.stringify({ session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' }));
-    // Storing this one throws; the hook still exits 0 (execFileSync would throw otherwise) and the log keeps it.
-    run(['capture-error'], JSON.stringify(refused));
+    await run(['capture-error'], build('s1'));
+    await run(['capture-error'], build('s2'));
+    await run(['capture-error'], JSON.stringify({ session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' }));
+    // Storing this one throws; the hook still exits 0 (run would throw otherwise) and the log keeps it.
+    await run(['capture-error'], JSON.stringify(refused));
 
-    const summary = JSON.parse(run(['failures', '--json']));
+    const summary = JSON.parse(await run(['failures', '--json']));
     expect(summary).toMatchObject({ total: 4, rated: 3, repeats: 1, sessions: 3 });
     expect(summary.outcomes).toMatchObject({ stored: 1, duplicate: 1, 'store-failed': 1, 'skipped-routine': 1 });
-    const text = run(['failures', '--days', '7']);
+    const text = await run(['failures', '--days', '7']);
     expect(text).toContain('last 7 days');
     expect(text).toContain('(1 new, 1 already in memory, 1 could not be saved)');
     expect(text).toContain('Repeats: 1 of 3 errors first happened in another session.');
-    expect(run(['failures', '--days', '120'])).toContain('last 120 days (rows are kept 90 days)');
+    expect(await run(['failures', '--days', '120'])).toContain('last 120 days (rows are kept 90 days)');
   });
 
-  it('still exits 0 and stores the lesson when the failure log is broken', () => {
+  it('still exits 0 and stores the lesson when the failure log is broken', async () => {
     const root = join(dir, '.hippo');
     withDb(root, (db) => db.exec('DROP TABLE failure_log'));
-    run(['capture-error'], broke('s1'));
+    await run(['capture-error'], broke('s1'));
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['Bash: Exit code 1 Error: something real broke']);
   });
 
-  it('reads the store the hook fell back to, never creates one, and names errors without a session', () => {
+  it('reads the store the hook fell back to, never creates one, and names errors without a session', async () => {
     const bare = mkdtempSync(join(tmpdir(), 'hippo-failures-bare-'));
     try {
-      expect(() => run(['failures', '--global'], '', bare)).toThrow();
+      await expect(run(['failures', '--global'], '', bare)).rejects.toThrow();
       expect(existsSync(join(bare, 'global'))).toBe(false);
       initStore(join(bare, 'global'));
-      run(['capture-error'], broke('s1'), bare);
-      run(['capture-error'], broke(undefined, 'another thing broke'), bare);
-      expect(JSON.parse(run(['failures', '--json'], '', bare))).toMatchObject({ total: 2, rated: 1, repeats: 0, sessions: 1 });
-      expect(run(['failures'], '', bare)).toContain('Repeats: 0 of 1 errors first happened in another session. 1 more had no session id.');
+      await run(['capture-error'], broke('s1'), bare);
+      await run(['capture-error'], broke(undefined, 'another thing broke'), bare);
+      expect(JSON.parse(await run(['failures', '--json'], '', bare))).toMatchObject({ total: 2, rated: 1, repeats: 0, sessions: 1 });
+      expect(await run(['failures'], '', bare)).toContain('Repeats: 0 of 1 errors first happened in another session. 1 more had no session id.');
     } finally {
       rmSync(bare, { recursive: true, force: true });
     }

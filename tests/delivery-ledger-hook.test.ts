@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -13,6 +13,7 @@ import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-t
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { HippoConfig } from '../src/core/config.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -40,6 +41,7 @@ interface Payload {
 interface RunOptions {
   args?: string[];
   env?: NodeJS.ProcessEnv;
+  spawned?: boolean;
 }
 
 let tmp: string;
@@ -70,13 +72,13 @@ function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject'
   return dir;
 }
 
-function run(dir: string, payload: Payload | null, opts: RunOptions = {}): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...(opts.args ?? HOOK_ARGS)], {
-    cwd: dir,
-    env: { ...BASE_ENV, HIPPO_HOME: path.join(dir, 'global'), ...opts.env },
-    input: payload === null ? '' : JSON.stringify(payload),
-    encoding: 'utf8',
-  });
+// In process unless `spawned`: F1 pins the hook in a real child, and F5 and the preload cases spawn their own.
+async function run(dir: string, payload: Payload | null, opts: RunOptions = {}): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  const args = opts.args ?? HOOK_ARGS;
+  const env = { ...BASE_ENV, HIPPO_HOME: path.join(dir, 'global'), ...opts.env };
+  const input = payload === null ? '' : JSON.stringify(payload);
+  if (!opts.spawned) return runCliAs(args, { cwd: dir, env, input });
+  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: dir, env, input, encoding: 'utf8' });
 }
 
 function claude(sessionId: string, prompt = PROMPT): Payload {
@@ -127,10 +129,10 @@ afterEach(() => {
 });
 
 describe('what one hook call records', () => {
-  it('F1: a pin over budget is rejected for budget, and injected tokens price the exact additionalContext', () => {
+  it('F1: a pin over budget is rejected for budget, and injected tokens price the exact additionalContext', async () => {
     const small = seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     const big = seed(`PINNED: ${'the deploy checklist covers every service and region '.repeat(30)}`, { pinned: true });
-    const r = run(proj, claude('f1'), { args: [...HOOK_ARGS, '--budget', '200'] });
+    const r = await run(proj, claude('f1'), { args: [...HOOK_ARGS, '--budget', '200'], spawned: true });
     expect(r.status).toBe(0);
     const sent = additionalContext(r.stdout);
     const [e] = eventsN(proj, 'f1', 1);
@@ -144,11 +146,11 @@ describe('what one hook call records', () => {
     expect(row?.tokens).toBeGreaterThan(200);
   });
 
-  it('F2: gate rejections carry scores, prompt_recall is set, and rows past the cap only count', () => {
+  it('F2: gate rejections carry scores, prompt_recall is set, and rows past the cap only count', async () => {
     configure(true, { promptRecall: true, promptRecallMinShared: 2 });
     const relevant = seed('the postgres migration script needs a rollback plan before deploy');
     for (let i = 0; i < 20; i++) seed(`postgres note ${i}: the reporting cluster pools its connections through pgbouncer`);
-    const r = run(proj, claude('f2'));
+    const r = await run(proj, claude('f2'));
     expect(r.status).toBe(0);
     const [e] = eventsN(proj, 'f2', 1);
     expect(e.prompt_recall).toBe(1);
@@ -160,10 +162,10 @@ describe('what one hook call records', () => {
     expect(e.rejected_unlisted).toBeGreaterThanOrEqual(4);
   });
 
-  it('F3: an unchanged static block on the next turn is recorded as reused under the same hash', () => {
+  it('F3: an unchanged static block on the next turn is recorded as reused under the same hash', async () => {
     const pin = seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    expect(run(proj, claude('f3', 'first question about deploys')).stdout).not.toBe('');
-    expect(run(proj, claude('f3', 'second question about the test suite')).stdout).toBe('');
+    expect((await run(proj, claude('f3', 'first question about deploys'))).stdout).not.toBe('');
+    expect((await run(proj, claude('f3', 'second question about the test suite'))).stdout).toBe('');
     const [first, second] = eventsN(proj, 'f3', 2);
     expect([first.turn_seq, first.block_state, second.turn_seq, second.block_state]).toEqual([1, 'sent', 2, 'reused']);
     expect(second.static_hash).toBe(first.static_hash);
@@ -171,12 +173,12 @@ describe('what one hook call records', () => {
     expect(second.candidates.find((c) => c.memory_id === pin.id)?.outcome).toBe('reused');
   });
 
-  it('F3b: with prompt recall on, a reused static block beside a sent recall block is one reused-recall-sent event', () => {
+  it('F3b: with prompt recall on, a reused static block beside a sent recall block is one reused-recall-sent event', async () => {
     configure(true, { promptRecall: true });
     const pin = seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     const relevant = seed('the postgres migration script needs a rollback plan before deploy');
-    expect(run(proj, claude('f3b', 'how should the postgres migration rollback work')).status).toBe(0);
-    const r = run(proj, claude('f3b', 'does the postgres migration rollback need a review'));
+    expect((await run(proj, claude('f3b', 'how should the postgres migration rollback work'))).status).toBe(0);
+    const r = await run(proj, claude('f3b', 'does the postgres migration rollback need a review'));
     expect(r.status).toBe(0);
     const recallSent = additionalContext(r.stdout);
     const [first, second] = eventsN(proj, 'f3b', 2);
@@ -187,9 +189,9 @@ describe('what one hook call records', () => {
     expect(second.candidates.find((c) => c.memory_id === relevant.id)).toMatchObject({ outcome: 'emitted', pool: 'prompt-recall' });
   });
 
-  it('F3c: a skip whose token row fails still records one reused event, through the render fallback', () => {
+  it('F3c: a skip whose token row fails still records one reused event, through the render fallback', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    expect(run(proj, claude('f3c', 'first question about deploys')).stdout).not.toBe('');
+    expect((await run(proj, claude('f3c', 'first question about deploys'))).stdout).not.toBe('');
     const db = openHippoDb(store(proj));
     try {
       db.exec(`CREATE TRIGGER block_skip BEFORE INSERT ON token_ledger WHEN NEW.event = 'skip'
@@ -197,7 +199,7 @@ describe('what one hook call records', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(run(proj, claude('f3c', 'second question about the test suite')).stdout).toBe('');
+    expect((await run(proj, claude('f3c', 'second question about the test suite'))).stdout).toBe('');
     const [first, second] = eventsN(proj, 'f3c', 2);
     expect([second.turn_seq, second.block_state, second.static_hash]).toEqual([2, 'reused', first.static_hash]);
     const check = openHippoDb(store(proj));
@@ -210,15 +212,15 @@ describe('what one hook call records', () => {
     }
   });
 
-  it('F4: repeated Claude payloads and Codex turn ids are duplicates; a new turn id or a 10 s gap is not', () => {
+  it('F4: repeated Claude payloads and Codex turn ids are duplicates; a new turn id or a 10 s gap is not', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     const now = { HIPPO_FAKE_NOW: FAKE_NOW };
-    run(proj, claude('f4'), { env: now });
-    run(proj, claude('f4'), { env: now });
+    await run(proj, claude('f4'), { env: now });
+    await run(proj, claude('f4'), { env: now });
     const codex = (turn: string): Payload => ({ ...claude('f4-codex'), turn_id: turn });
-    run(proj, codex('t1'), { env: now });
-    run(proj, codex('t1'), { env: now });
-    run(proj, codex('t2'), { env: now });
+    await run(proj, codex('t1'), { env: now });
+    await run(proj, codex('t1'), { env: now });
+    await run(proj, codex('t2'), { env: now });
     const [a, b] = eventsN(proj, 'f4', 2);
     expect([a.turn_seq, b.turn_seq, b.duplicate_of]).toEqual([1, null, a.id]);
     const [c1, c2, c3] = eventsN(proj, 'f4-codex', 3);
@@ -231,16 +233,16 @@ describe('what one hook call records', () => {
     } finally {
       closeHippoDb(db);
     }
-    run(proj, claude('f4'), { env: now });
+    await run(proj, claude('f4'), { env: now });
     const third = eventsN(proj, 'f4', 3)[2];
     expect([third.duplicate_of, third.turn_seq]).toEqual([null, 2]);
   });
 
-  it('F4b: a blank Codex turn id counts as none, so later turns are not duplicates of the first', () => {
+  it('F4b: a blank Codex turn id counts as none, so later turns are not duplicates of the first', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    run(proj, { ...claude('f4b', 'first question about deploys'), turn_id: '' });
-    run(proj, { ...claude('f4b', 'second question about the test suite'), turn_id: '' });
-    run(proj, { ...claude('f4b', 'third question about the release'), turn_id: '   ' });
+    await run(proj, { ...claude('f4b', 'first question about deploys'), turn_id: '' });
+    await run(proj, { ...claude('f4b', 'second question about the test suite'), turn_id: '' });
+    await run(proj, { ...claude('f4b', 'third question about the release'), turn_id: '   ' });
     expect(eventsN(proj, 'f4b', 3).map((e) => [e.host_turn_id, e.turn_seq, e.duplicate_of, e.runtime])).toEqual([
       [null, 1, null, 'claude-code'],
       [null, 2, null, 'claude-code'],
@@ -274,13 +276,14 @@ describe('what one hook call records', () => {
       expect(rows.map((e) => e.turn_seq)).toEqual(rows.map((_, i) => i + 1));
       expect(rows.length + (stderrBySession.get(sessionId)?.length ?? 0)).toBe(3);
     }
-  }, 60_000);
+  // Six spawned hooks take about 2 s solo; 20 s is a 10x margin for a busy runner.
+  }, 20_000);
 
-  it('F6: no session anywhere is missing, an env session is env, and a sub-agent keeps the parent session without a turn', () => {
+  it('F6: no session anywhere is missing, an env session is env, and a sub-agent keeps the parent session without a turn', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    run(proj, { prompt: PROMPT, hook_event_name: 'UserPromptSubmit' });
-    run(proj, { prompt: 'another prompt', hook_event_name: 'UserPromptSubmit' }, { env: { HIPPO_SESSION_ID: 'from-env' } });
-    run(proj, { ...claude('parent'), agent_id: 'agent-1' });
+    await run(proj, { prompt: PROMPT, hook_event_name: 'UserPromptSubmit' });
+    await run(proj, { prompt: 'another prompt', hook_event_name: 'UserPromptSubmit' }, { env: { HIPPO_SESSION_ID: 'from-env' } });
+    await run(proj, { ...claude('parent'), agent_id: 'agent-1' });
     const [missing] = eventsN(proj, null, 1);
     expect([missing.session_state, missing.turn_seq, missing.duplicate_of]).toEqual(['missing', null, null]);
     const [env] = eventsN(proj, 'from-env', 1);
@@ -289,7 +292,7 @@ describe('what one hook call records', () => {
     expect([sub.session_state, sub.turn_seq]).toEqual(['subagent', null]);
   });
 
-  it('with no local store, the event lands in the global store and hashes that store, not the missing local one', () => {
+  it('with no local store, the event lands in the global store and hashes that store, not the missing local one', async () => {
     const bare = path.join(tmp, 'bare');
     const globalRoot = path.join(bare, 'global');
     fs.mkdirSync(globalRoot, { recursive: true });
@@ -298,7 +301,7 @@ describe('what one hook call records', () => {
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify({
       deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false },
     }));
-    expect(run(bare, claude('glob')).status).toBe(0);
+    expect((await run(bare, claude('glob'))).status).toBe(0);
     const db = openHippoDb(globalRoot);
     let rows: DeliveryEventRow[];
     try {
@@ -313,21 +316,21 @@ describe('what one hook call records', () => {
   it.each([
     ['json', ['context', '--pinned-only', '--include-recent', '5', '--format', 'json']],
     ['markdown', ['context', '--pinned-only', '--include-recent', '5']],
-  ])('%s: emitted_hash and injected_tokens describe every stdout byte, trailing newline included', (format, args) => {
+  ])('%s: emitted_hash and injected_tokens describe every stdout byte, trailing newline included', async (format, args) => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    const r = run(proj, claude(`bytes-${format}`), { args });
+    const r = await run(proj, claude(`bytes-${format}`), { args });
     expect(r.stdout.endsWith('\n')).toBe(true);
     const [e] = eventsN(proj, `bytes-${format}`, 1);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
   });
 
-  it('records disabled for a zero budget, with the session and prompt hash, and when pinned injection is off', () => {
+  it('records disabled for a zero budget, with the session and prompt hash, and when pinned injection is off', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    expect(run(proj, claude('zero'), { args: [...HOOK_ARGS, '--budget', '0'] }).stdout).toBe('');
+    expect((await run(proj, claude('zero'), { args: [...HOOK_ARGS, '--budget', '0'] })).stdout).toBe('');
     const [zero] = eventsN(proj, 'zero', 1);
     expect([zero.block_state, zero.prompt_hash, zero.turn_seq]).toEqual(['disabled', blockHash(PROMPT), 1]);
     configure(true, { enabled: false });
-    expect(run(proj, claude('off')).stdout).toBe('');
+    expect((await run(proj, claude('off'))).stdout).toBe('');
     expect(eventsN(proj, 'off', 1)[0].block_state).toBe('disabled');
   });
 });
@@ -342,9 +345,9 @@ describe('the ledger never changes the hook', () => {
     }
   }
 
-  it('F7a: a failing write rolls back, keeps stdout and the exit code, and prints one stderr line', () => {
+  it('F7a: a failing write rolls back, keeps stdout and the exit code, and prints one stderr line', async () => {
     fixture();
-    const off = run(clone(false), claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
+    const off = await run(clone(false), claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     const dir = clone(true);
     const db = openHippoDb(store(dir));
     try {
@@ -352,27 +355,27 @@ describe('the ledger never changes the hook', () => {
     } finally {
       closeHippoDb(db);
     }
-    const on = run(dir, claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
+    const on = await run(dir, claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     expect(off.stdout).not.toBe('');
     expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
     expect(ledgerLines(on.stderr)).toEqual([expect.stringMatching(/^\[hippo\] error: delivery ledger write failed: /)]);
     expect(eventCount(dir)).toBe(0);
   });
 
-  it('F7d: a render that throws keeps its own exit code and the ledger adds nothing', () => {
+  it('F7d: a render that throws keeps its own exit code and the ledger adds nothing', async () => {
     fixture();
     const corrupt = (dir: string): string => {
       fs.writeFileSync(path.join(store(dir), 'hippo.db'), 'not a sqlite database');
       return dir;
     };
-    const off = run(corrupt(clone(false)), claude('f7d'));
-    const on = run(corrupt(clone(true)), claude('f7d'));
+    const off = await run(corrupt(clone(false)), claude('f7d'));
+    const on = await run(corrupt(clone(true)), claude('f7d'));
     expect(off.status).not.toBe(0);
     expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
     expect(ledgerLines(on.stderr)).toEqual([]);
   });
 
-  it('F8: with the flag off nothing is written to the ledger tables', () => {
+  it('F8: with the flag off nothing is written to the ledger tables', async () => {
     fixture();
     configure(false);
     const preload = path.join(tmp, 'preload.mjs');
@@ -402,12 +405,12 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
   ];
   for (const promptRecall of [true, false]) {
     for (const [label, args] of formats) {
-      it(`F9: ${label} prints the same bytes with the flag on and off, promptRecall ${promptRecall ? 'on' : 'off'}`, () => {
+      it(`F9: ${label} prints the same bytes with the flag on and off, promptRecall ${promptRecall ? 'on' : 'off'}`, async () => {
         fixture();
         const env = { HIPPO_FAKE_NOW: FAKE_NOW };
-        const off = run(clone(false, { promptRecall }), claude('f9'), { args, env });
+        const off = await run(clone(false, { promptRecall }), claude('f9'), { args, env });
         const dir = clone(true, { promptRecall });
-        const on = run(dir, claude('f9'), { args, env });
+        const on = await run(dir, claude('f9'), { args, env });
         expect(on.status).toBe(0);
         expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
         expect(on.stdout).not.toBe('');
@@ -416,12 +419,12 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     }
   }
 
-  it('F10: every ledger text cell is a hash, id, timestamp, session, turn id or enum, never prompt or memory text', () => {
+  it('F10: every ledger text cell is a hash, id, timestamp, session, turn id or enum, never prompt or memory text', async () => {
     fixture();
     configure(true, { promptRecall: true });
-    run(proj, claude('f10'));
-    run(proj, { ...claude('f10-codex'), turn_id: 'turn-9' });
-    run(proj, { prompt: PROMPT, hook_event_name: 'UserPromptSubmit' });
+    await run(proj, claude('f10'));
+    await run(proj, { ...claude('f10-codex'), turn_id: 'turn-9' });
+    await run(proj, { prompt: PROMPT, hook_event_name: 'UserPromptSubmit' });
     const ids = new Set(seeded.map((m) => m.id));
     const allowed = new Set([
       'default', 'f10', 'f10-codex', 'turn-9',
@@ -452,13 +455,13 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     expect(cells.filter((v) => words.some((p) => v.includes(p)))).toEqual([]);
   });
 
-  it('F10: a tool-failure row holds no error or command text, and a 300-character tool_use_id is stored cut to 128', () => {
+  it('F10: a tool-failure row holds no error or command text, and a 300-character tool_use_id is stored cut to 128', async () => {
     fixture();
     configure(true);
     const error = 'ZQXERROR the quarterly reconciliation exploded halfway through';
     const command = 'zqxcommand --reconcile everything now';
     const toolUseId = 'toolu_'.padEnd(300, 'x');
-    const r = run(proj, {
+    const r = await run(proj, {
       session_id: 'f10-fail', hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_use_id: toolUseId,
       tool_input: { command }, error,
     }, { args: ['capture-error'] });

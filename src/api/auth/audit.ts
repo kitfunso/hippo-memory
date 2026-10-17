@@ -7,6 +7,7 @@ import type { AuditMaintenance } from '../../store/port.js';
 import { DAY_MS } from '../../util/time.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { Context } from '../types.js';
+import { memoryPages } from '../memories/memories.js';
 
 export interface AuditListOptions {
   op?: AuditOp;
@@ -45,10 +46,18 @@ export async function removeAuditErrors(
   return maintenanceOf(ctx).deleteAutomatically(removals, ctx.actor.subject);
 }
 
-/** The caller's memories run through the quality audit; a memory that backs an object is never marked for removal. */
-export async function auditMemoryQuality(ctx: Context): Promise<AuditResult> {
-  const maintenance = maintenanceOf(ctx);
-  return auditMemories(await maintenance.tenantEntries(ctx.tenantId), await maintenance.objectBackedIds());
+/** The caller's memories run through the quality audit a page at a time, as each row is judged alone; a memory that
+ * backs an object is never marked for removal. */
+export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number } = {}): Promise<AuditResult> {
+  const backing = await maintenanceOf(ctx).objectBackedIds();
+  const audit: AuditResult = { total: 0, issues: [], clean: 0 };
+  for await (const page of memoryPages(ctx.store, ctx.tenantId, opts.pageSize)) {
+    const part = auditMemories(page, backing);
+    audit.total += part.total;
+    audit.clean += part.clean;
+    audit.issues.push(...part.issues);
+  }
+  return audit;
 }
 
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage

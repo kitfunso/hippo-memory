@@ -11,6 +11,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hashArm } from '../src/store/pilot-arm.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -39,8 +40,10 @@ function env(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...BASE_ENV, HIPPO_HOME: path.join(tmp, 'global'), ...extra };
 }
 
-function run(args: string[], payload: Payload | null, dir = proj, extra: NodeJS.ProcessEnv = {}) {
-  return hippoRun(args, { cwd: dir, env: env(extra), input: payload === null ? '' : JSON.stringify(payload) });
+// In process unless `spawned`: the holdout case and the concurrent pair run real children, the rest read rows and bytes.
+async function run(args: string[], payload: Payload | null, dir = proj, extra: NodeJS.ProcessEnv = {}, spawned = false): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  const opts = { cwd: dir, env: env(extra), input: payload === null ? '' : JSON.stringify(payload) };
+  return spawned ? hippoRun(args, opts) : runCliAs(args, opts);
 }
 
 function snapshotFor(sessionId: string): void {
@@ -82,118 +85,118 @@ afterEach(() => {
 });
 
 describe('the per-prompt hook', () => {
-  it('holdout: empty stdout, one holdout row at the stored rate, no inject rows', () => {
-    const r = run(HOOK_ARGS, prompt('h1'));
+  it('holdout: empty stdout, one holdout row at the stored rate, no inject rows', async () => {
+    const r = await run(HOOK_ARGS, prompt('h1'), proj, {}, true);
     expect(r.status).toBe(0);
     expect(r.stdout).toBe('');
     expect(arms()).toEqual([{ session_id: 'h1', tenant_id: 'default', surface: 'pilot', event: 'arm', items: 10000, tokens: 0, block_hash: 'holdout' }]);
     expect(injects()).toBe(0);
   });
 
-  it('SessionStart payload on `hippo context --auto --budget 1500` books the arm without --pinned-only', () => {
-    const r = run(START_ARGS, { session_id: 'ss1', hook_event_name: 'SessionStart', source: 'startup' });
+  it('SessionStart payload on `hippo context --auto --budget 1500` books the arm without --pinned-only', async () => {
+    const r = await run(START_ARGS, { session_id: 'ss1', hook_event_name: 'SessionStart', source: 'startup' });
     expect(r.stdout).toBe('');
     expect(arms().map((a) => [a.session_id, a.block_hash])).toEqual([['ss1', 'holdout']]);
   });
 
-  it('books the arm before the --budget 0 early return', () => {
-    run([...HOOK_ARGS, '--budget', '0'], prompt('b0'));
+  it('books the arm before the --budget 0 early return', async () => {
+    await run([...HOOK_ARGS, '--budget', '0'], prompt('b0'));
     expect(arms()).toHaveLength(1);
   });
 
-  it('hippo arm on an EMPTY store still books a row, so an empty injection is not a selection filter', () => {
+  it('hippo arm on an EMPTY store still books a row, so an empty injection is not a selection filter', async () => {
     const empty = path.join(tmp, 'empty');
     fs.mkdirSync(store(empty), { recursive: true });
     initStore(store(empty));
     const id = sessionFor('hippo', 5000);
     setRate(5000, store(empty));
-    const r = run(HOOK_ARGS, prompt(id), empty);
+    const r = await run(HOOK_ARGS, prompt(id), empty);
     expect(r.stdout).toBe('');
     expect(arms(store(empty)).map((a) => [a.block_hash, a.items])).toEqual([['hippo', 5000]]);
   });
 
-  it('hippo arm prints exactly what rate 0 prints', () => {
+  it('hippo arm prints exactly what rate 0 prints', async () => {
     const id = sessionFor('hippo', 5000);
     const off = path.join(tmp, 'off', 'proj');
     fs.cpSync(proj, off, { recursive: true });
     setRate(0, store(off));
     setRate(5000);
-    const expected = run(HOOK_ARGS, prompt(id), off).stdout;
+    const expected = (await run(HOOK_ARGS, prompt(id), off)).stdout;
     expect(expected).toContain('rollback plan');
-    expect(run(HOOK_ARGS, prompt(id)).stdout).toBe(expected);
+    expect((await run(HOOK_ARGS, prompt(id))).stdout).toBe(expected);
     expect(arms().map((a) => a.block_hash)).toEqual(['hippo']);
   });
 
-  it('keeps one row across prompts of one session', () => {
-    run(HOOK_ARGS, prompt('twice'));
-    run(HOOK_ARGS, prompt('twice'));
+  it('keeps one row across prompts of one session', async () => {
+    await run(HOOK_ARGS, prompt('twice'));
+    await run(HOOK_ARGS, prompt('twice'));
     expect(arms()).toHaveLength(1);
   });
 
-  it('rate 0 and a missing config: no row, normal output', () => {
+  it('rate 0 and a missing config: no row, normal output', async () => {
     setRate(0);
-    expect(run(HOOK_ARGS, prompt('z0')).stdout).toContain('rollback plan');
+    expect((await run(HOOK_ARGS, prompt('z0'))).stdout).toContain('rollback plan');
     setRate(null);
-    run(HOOK_ARGS, prompt('z1'));
+    await run(HOOK_ARGS, prompt('z1'));
     expect(arms()).toHaveLength(0);
   });
 
-  it('no session id: no row, normal output', () => {
-    const r = run(HOOK_ARGS, null);
+  it('no session id: no row, normal output', async () => {
+    const r = await run(HOOK_ARGS, null);
     expect(r.stdout).toContain('rollback plan');
     expect(arms()).toHaveLength(0);
   });
 
-  it('sub-agent payload books nothing and follows the parent holdout', () => {
-    run(HOOK_ARGS, prompt('parent'));
-    const sub = run(HOOK_ARGS, prompt('parent', { agent_id: 'a1' }));
+  it('sub-agent payload books nothing and follows the parent holdout', async () => {
+    await run(HOOK_ARGS, prompt('parent'));
+    const sub = await run(HOOK_ARGS, prompt('parent', { agent_id: 'a1' }));
     expect(sub.stdout).toBe('');
     expect(arms()).toHaveLength(1);
-    const fresh = run(HOOK_ARGS, prompt('lonely', { agent_id: 'a2' }));
+    const fresh = await run(HOOK_ARGS, prompt('lonely', { agent_id: 'a2' }));
     expect(fresh.stdout).toBe('');
     expect(arms().map((a) => a.session_id)).toEqual(['parent']);
   });
 
-  it('env-only session id (the agent ran hippo context itself) follows a stored holdout and writes nothing', () => {
-    run(HOOK_ARGS, prompt('envs'));
-    const r = run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: 'envs' });
+  it('env-only session id (the agent ran hippo context itself) follows a stored holdout and writes nothing', async () => {
+    await run(HOOK_ARGS, prompt('envs'));
+    const r = await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: 'envs' });
     expect(r.stdout).toBe('');
     expect(arms()).toHaveLength(1);
-    const unknown = run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: 'never-seen' });
+    const unknown = await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: 'never-seen' });
     expect(unknown.stdout).toBe('');
     expect(arms()).toHaveLength(1);
   });
 
-  it('rate 0 turns the pilot off even for a stored holdout session, and rate 10000 silences it again', () => {
-    run(HOOK_ARGS, prompt('keep'));
+  it('rate 0 turns the pilot off even for a stored holdout session, and rate 10000 silences it again', async () => {
+    await run(HOOK_ARGS, prompt('keep'));
     setRate(0);
-    expect(run(HOOK_ARGS, prompt('keep')).stdout).toContain('rollback plan');
+    expect((await run(HOOK_ARGS, prompt('keep'))).stdout).toContain('rollback plan');
     setRate(10000);
-    expect(run(HOOK_ARGS, prompt('keep')).stdout).toBe('');
+    expect((await run(HOOK_ARGS, prompt('keep'))).stdout).toBe('');
     expect(arms()).toHaveLength(1);
   });
 
-  it('the stored arm wins end to end after the rate drops', () => {
+  it('the stored arm wins end to end after the rate drops', async () => {
     let id = '';
     for (let i = 0; id === ''; i++) if (hashArm(`w-${i}`, 1) === 'hippo') id = `w-${i}`;
     snapshotFor(id);
-    run(HOOK_ARGS, prompt(id));
+    await run(HOOK_ARGS, prompt(id));
     expect(arms().map((a) => a.block_hash)).toEqual(['holdout']);
     setRate(1);
-    expect(run(HOOK_ARGS, prompt(id)).stdout).toBe('');
-    expect(run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: id }).stdout).toBe('');
-    expect(run(HOOK_ARGS, prompt(id, { agent_id: 'a1' })).stdout).toBe('');
-    expect(run(['compact-resume'], { session_id: id, source: 'compact' }).stdout).toBe('');
+    expect((await run(HOOK_ARGS, prompt(id))).stdout).toBe('');
+    expect((await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: id })).stdout).toBe('');
+    expect((await run(HOOK_ARGS, prompt(id, { agent_id: 'a1' }))).stdout).toBe('');
+    expect((await run(['compact-resume'], { session_id: id, source: 'compact' })).stdout).toBe('');
     expect(arms()).toHaveLength(1);
   });
 
-  it('a blank payload session id skips the pilot gate but keeps the X5 cross-restore guard', () => {
+  it('a blank payload session id skips the pilot gate but keeps the X5 cross-restore guard', async () => {
     snapshotFor('other-session');
-    expect(run(['compact-resume'], { session_id: '  ', source: 'compact' }).stdout).toBe('');
+    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toBe('');
     snapshotFor('  ');
     // At rate 10000 any hashed id is holdout, so printing proves the blank id never reached the gate.
-    expect(run(['compact-resume'], { session_id: '  ', source: 'compact' }).stdout).toContain('Restored after compaction');
-    expect(run(HOOK_ARGS, prompt('  ')).stdout).toContain('rollback plan');
+    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toContain('Restored after compaction');
+    expect((await run(HOOK_ARGS, prompt('  '))).stdout).toContain('rollback plan');
     expect(arms()).toHaveLength(0);
   });
 
@@ -210,7 +213,7 @@ describe('the per-prompt hook', () => {
     expect(arms()).toHaveLength(1);
   });
 
-  it('with no local store the row lands in the global store and compact-resume finds it there', () => {
+  it('with no local store the row lands in the global store and compact-resume finds it there', async () => {
     const bare = path.join(tmp, 'bare');
     fs.mkdirSync(bare, { recursive: true });
     const globalRoot = path.join(tmp, 'global');
@@ -218,9 +221,9 @@ describe('the per-prompt hook', () => {
     initStore(globalRoot);
     setRate(10000, globalRoot);
     saveActiveTaskSnapshot(globalRoot, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'gs1' });
-    run(HOOK_ARGS, prompt('gs1'), bare);
+    await run(HOOK_ARGS, prompt('gs1'), bare);
     expect(arms(globalRoot).map((a) => a.block_hash)).toEqual(['holdout']);
-    expect(run(['compact-resume'], { session_id: 'gs1', source: 'compact' }, bare).stdout).toBe('');
+    expect((await run(['compact-resume'], { session_id: 'gs1', source: 'compact' }, bare)).stdout).toBe('');
   });
 });
 
@@ -229,25 +232,25 @@ describe('compact-resume', () => {
     saveActiveTaskSnapshot(store(proj), 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: sessionId });
   };
 
-  it('prints nothing for a holdout session with a fresh snapshot and books no row', () => {
+  it('prints nothing for a holdout session with a fresh snapshot and books no row', async () => {
     snapshot('cr1');
-    run(HOOK_ARGS, prompt('cr1'));
-    const r = run(['compact-resume'], { session_id: 'cr1', source: 'compact' });
+    await run(HOOK_ARGS, prompt('cr1'));
+    const r = await run(['compact-resume'], { session_id: 'cr1', source: 'compact' });
     expect(r.stdout).toBe('');
     expect(arms()).toHaveLength(1);
   });
 
-  it('prints as before for the hippo arm', () => {
+  it('prints as before for the hippo arm', async () => {
     const id = sessionFor('hippo', 5000);
     setRate(5000);
     snapshot(id);
-    run(HOOK_ARGS, prompt(id));
-    expect(run(['compact-resume'], { session_id: id, source: 'compact' }).stdout).toContain('Restored after compaction');
+    await run(HOOK_ARGS, prompt(id));
+    expect((await run(['compact-resume'], { session_id: id, source: 'compact' })).stdout).toContain('Restored after compaction');
   });
 
-  it('prints as before at rate 0', () => {
+  it('prints as before at rate 0', async () => {
     setRate(0);
     snapshot('cr0');
-    expect(run(['compact-resume'], { session_id: 'cr0', source: 'compact' }).stdout).toContain('Restored after compaction');
+    expect((await run(['compact-resume'], { session_id: 'cr0', source: 'compact' })).stdout).toContain('Restored after compaction');
   });
 });

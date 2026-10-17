@@ -4,6 +4,7 @@ import type { StrengthTallies } from '../../store/candidates.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import { canTouchScope } from '../../core/recall-scope.js';
 import type { EntryCursor } from '../../store/entry-reads.js';
+import type { HippoStore } from '../../store/port.js';
 import { requireHostAdmin, type Context } from '../types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
@@ -44,21 +45,29 @@ function tenantFilter(ctx: Context, reach: TenantReach): string | undefined {
 /** Rows a listing reads per query by default; the verbs still receive every row. */
 const LIST_PAGE_SIZE = 1000;
 
+/** The tenant's memory rows (null: every tenant's), oldest first, `pageSize` per query, so a pass can hold one page. */
+export async function* memoryPages(
+  store: HippoStore,
+  tenant: string | null,
+  pageSize: number = LIST_PAGE_SIZE,
+): AsyncGenerator<MemoryEntry[]> {
+  const limit = Math.max(1, Math.trunc(pageSize));
+  let after: EntryCursor | undefined;
+  do {
+    const page = await store.reports.entriesPage(tenant, { limit, after });
+    yield page.entries;
+    after = page.next ?? undefined;
+  } while (after);
+}
+
 /** Every memory row in reach, oldest first, read `pageSize` rows per query so no single read grows with the store. */
 export async function listMemories(
   ctx: Context,
   reach: TenantReach = {},
   opts: { pageSize?: number } = {},
 ): Promise<MemoryEntry[]> {
-  const tenant = tenantFilter(ctx, reach) ?? null;
-  const limit = Math.max(1, Math.trunc(opts.pageSize ?? LIST_PAGE_SIZE));
   const all: MemoryEntry[] = [];
-  let after: EntryCursor | undefined;
-  do {
-    const page = await ctx.store.reports.entriesPage(tenant, { limit, after });
-    all.push(...page.entries);
-    after = page.next ?? undefined;
-  } while (after);
+  for await (const page of memoryPages(ctx.store, tenantFilter(ctx, reach) ?? null, opts.pageSize)) all.push(...page);
   return all;
 }
 

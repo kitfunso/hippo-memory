@@ -1,4 +1,4 @@
-// One temp project with its own home and global store for the spawned-CLI parity tests, with the masks that make a run repeatable.
+// One temp project with its own home and global store for the CLI parity tests, with the masks that make a run repeatable.
 // Masked: the temp folder, memory ids, ISO timestamps, calendar dates, Node's SQLite notice, four time columns; strength is rounded.
 import { afterAll, expect } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -10,7 +10,8 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { initStore } from '../../src/store/open.js';
 import { ownStderr } from './own-stderr.js';
 import { runInProcess } from './run-in-process.js';
-import { hippoRun, hippoRunAsync } from './spawn-hippo.js';
+import { runCliAs } from './run-cli-as.js';
+import { hippoRunAsync } from './spawn-hippo.js';
 
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session, a server, a clock or a home for the child, so the developer's shell cannot change a row.
@@ -69,7 +70,7 @@ function spellingsOf(base: string): string[] {
   return [...new Set(all)].sort((a, b) => b.length - a.length);
 }
 
-/** One temp project with its own global store and home; `run`, `runAsync` and `call` append each exit code and output to the transcript. */
+/** One temp project with its own global store and home; `run` and `call` append each exit code and output to the transcript. */
 export class Store {
   readonly base = mkdtempSync(join(tmpdir(), 'hippo-cli-parity-'));
   // Four fixed folder names fill the path tags, so no tag carries the random temp name.
@@ -81,8 +82,11 @@ export class Store {
   private readonly ids = new Map<string, string>();
   private readonly transcript: string[] = [];
   private auditMark = 0;
+  private readonly spawned: boolean;
 
-  constructor(opts: { init?: boolean; global?: boolean } = {}) {
+  /** `spawned` runs each command through the built CLI, the pin that the bytes a real process prints match the in-process run. */
+  constructor(opts: { init?: boolean; global?: boolean; spawned?: boolean } = {}) {
+    this.spawned = opts.spawned ?? false;
     bases.push(this.base);
     mkdirSync(this.cwd, { recursive: true });
     const user = join(this.base, 'user');
@@ -113,15 +117,10 @@ export class Store {
     this.transcript.push(`$ hippo ${args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${ownStderr(r.stderr)}`);
   }
 
-  run(...args: string[]): void {
-    const r = hippoRun(args, { cwd: this.cwd, env: this.env, timeout: SPAWN_MS });
-    expect(r.error, `spawn ${args.join(' ')}`).toBeUndefined();
-    this.record(args, r);
-  }
-
-  /** `run` with the test thread left free, for a child that calls a server this process runs. */
-  async runAsync(...args: string[]): Promise<void> {
-    this.record(args, await hippoRunAsync(args, { cwd: this.cwd, env: this.env, timeout: SPAWN_MS }));
+  async run(...args: string[]): Promise<void> {
+    const opts = { cwd: this.cwd, env: this.env };
+    // Async in both modes, so a run that calls a server this process holds leaves the thread free to answer.
+    this.record(args, this.spawned ? await hippoRunAsync(args, { ...opts, timeout: SPAWN_MS }) : await runCliAs(args, opts));
   }
 
   /** A verb function with no flag for its test seam (the refine fetcher), run in this process with its output captured. */
