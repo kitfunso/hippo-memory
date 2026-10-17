@@ -48,8 +48,8 @@ const NO_MATCH = /\bno (?:matches|files|results) found\b/i;
 /** Shell commands whose exit code 1 means "nothing found" or "differs", not an error. */
 const QUIET_EXIT_1 = /^\s*(?:grep|rg|egrep|fgrep|find|test|\[|diff|cmp|git diff|git grep)\b/;
 
-// Claude Code's tool names, then the Copilot CLI's and VS Code's; tests/capture/copilot-failure-reading.test.ts cites where
-// each comes from.
+// Claude Code's tool names, then the Copilot CLI's and VS Code's;
+// tests/capture/copilot-failure-reading.test.ts cites where each comes from.
 const SEARCH_TOOLS: ReadonlySet<string> = new Set([
   'Grep',
   'Glob',
