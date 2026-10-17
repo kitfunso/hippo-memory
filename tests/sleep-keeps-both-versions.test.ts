@@ -448,7 +448,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('api recall with a fresh tail', async () => {
     const { root, row } = await mergedStore();
-    expect((await api.retrieve(ctx(root), { query: QUERY, freshTailCount: 5 })).results.map((r) => r.id)).toEqual([row.id]);
+    expect((await api.retrieve(ctx(root), { query: QUERY, window: { freshTailCount: 5 } })).results.map((r) => r.id)).toEqual([row.id]);
   });
 
   it('CLI recall and explain', async () => {

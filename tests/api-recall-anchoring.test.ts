@@ -85,7 +85,7 @@ describe('api.recall anchoringHint', () => {
     ];
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
-      recallHistory: snapshot,
+      hints: { recallHistory: snapshot },
     });
     expect(result.anchoringHint).toBeDefined();
     expect(result.anchoringHint!.reason).toBe('memory_dominance');
@@ -108,7 +108,7 @@ describe('api.recall anchoringHint', () => {
     process.env.HIPPO_ANCHORING = 'off';
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
-      recallHistory: snapshot,
+      hints: { recallHistory: snapshot },
     });
     expect(result.anchoringHint).toBeUndefined();
   });
@@ -117,7 +117,7 @@ describe('api.recall anchoringHint', () => {
     seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
-      recallHistory: [],
+      hints: { recallHistory: [] },
     });
     expect(result.anchoringHint).toBeUndefined();
   });
@@ -127,7 +127,7 @@ describe('api.recall anchoringHint', () => {
     const snapshot: RecallHistorySnapshot = [entry(hashQueryText('xyzzy plugh'), null)];
     const result = await retrieve(ctxFor(root), {
       query: 'xyzzy plugh',
-      recallHistory: snapshot,
+      hints: { recallHistory: snapshot },
     });
     expect(result.anchoringHint).toBeUndefined();
   });
@@ -139,7 +139,7 @@ describe('api.recall anchoringHint', () => {
       entry(222, memId),
     ];
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(0);
-    await retrieve(ctxFor(root), { query: 'frobnicate baz quux', recallHistory: snapshot });
+    await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(1);
   });
 
@@ -151,7 +151,7 @@ describe('api.recall anchoringHint', () => {
     ];
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
-      recallHistory: snapshot,
+      hints: { recallHistory: snapshot },
     });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(1);
   });
@@ -165,7 +165,7 @@ describe('api.recall anchoringHint', () => {
   it('suppressedByInterference stays 0 on R1 query_repeat (only memory_dominance counts)', async () => {
     const memId = seedQueryMatchingMemory(root, 'foo bar baz');
     const snapshot: RecallHistorySnapshot = [entry(hashQueryText('foo bar baz'), memId)];
-    const result = await retrieve(ctxFor(root), { query: 'foo bar baz', recallHistory: snapshot });
+    const result = await retrieve(ctxFor(root), { query: 'foo bar baz', hints: { recallHistory: snapshot } });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
@@ -175,8 +175,8 @@ describe('api.recall anchoringHint', () => {
       entry(111, memId),
       entry(222, memId),
     ];
-    const r1 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', recallHistory: snapshot });
-    const r2 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', recallHistory: snapshot });
+    const r1 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
+    const r2 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(r1.anchoringHint).toEqual(r2.anchoringHint);
     // Audit_log will have 2 rows (one per call) — that's expected and not a purity violation.
   });
@@ -190,7 +190,7 @@ describe('api.recall anchoringHint', () => {
     // ctx is tenant-default; snapshot rows reference memId which is also tenant-default.
     // Pass to a tenant-b ctx — top will be null (no matching memory in tenant-b).
     const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
-    const result = await retrieve(ctxB, { query: 'frobnicate baz quux', recallHistory: snapshot });
+    const result = await retrieve(ctxB, { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     // No matching memory in tenant-b → top null → R2 cannot fire (current can't extend dominance).
     expect(result.anchoringHint).toBeUndefined();
   });

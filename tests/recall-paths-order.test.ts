@@ -53,7 +53,7 @@ function cliCore(): Pick<CliCoreRecall, 'rank'> {
   const config = loadConfig(root);
   return {
     rank: {
-      budget: 4000, cost: (r) => r.tokens, limit: 3, includeSuperseded: false, explicitScope: null, activeScope: null,
+      budget: 4000, cost: (r) => r.tokens, window: { limit: 3 }, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     },
   };
@@ -101,7 +101,7 @@ afterEach(() => {
 
 describe('retrieve paths: order and writes', () => {
   it('the band ranker returns its band, audits and strengthens it, and leaves last_retrieval_ids alone', async () => {
-    const result = await retrieve(ctx(), { query: CLAIM, limit: 3 });
+    const result = await retrieve(ctx(), { query: CLAIM, window: { limit: 3 } });
     expect(idsOf(result)).toEqual(BAND_IDS);
     expect(written()).toEqual({
       audit: [['recall', 3], ['recall_autodebias_hint_no_class_match', null]],
@@ -112,7 +112,7 @@ describe('retrieve paths: order and writes', () => {
   });
 
   it('the band ranker recorded for HTTP writes the no-session row first', async () => {
-    const result = await retrieve(ctx(), { query: CLAIM, limit: 3, recordAs: RECALL_RECORDING.http });
+    const result = await retrieve(ctx(), { query: CLAIM, window: { limit: 3 }, trace: { recordAs: RECALL_RECORDING.http } });
     expect(idsOf(result)).toEqual(BAND_IDS);
     expect(written()).toEqual({
       audit: [['recall_anchor_skipped_no_session', null], ['recall', 3], ['recall_autodebias_hint_no_class_match', null]],
@@ -126,9 +126,9 @@ describe('retrieve paths: order and writes', () => {
     let ranked: string[] = [];
     const result = await retrieve(ctx(), {
       query: CLAIM,
-      limit: 3,
-      keepHeldCopies: true,
-      suppressAvailabilityHint: true,
+      window: { limit: 3 },
+      filter: { keepHeldCopies: true },
+      hints: { suppressAvailabilityHint: true },
       showRanked: (ranking) => {
         ranked = ranking.ranked.map((r) => r.entry.id);
         return { ids: ranked.slice(0, 2), audit: [CALLER_ROW] };

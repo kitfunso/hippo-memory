@@ -99,7 +99,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
     // maxSub = max(1, ceil(limit * 0.3)) = 1 at limit=1, so only the WINNING
     // (highest overflow count) summary is substituted — a clean single-slot
     // assertion instead of inspecting relative order in a longer list.
-    const r = await retrieve(ctxFor(root), { query: 'alpha zulu topic event', limit: 1 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha zulu topic event', window: { limit: 1 } });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
     expect(summaries[0].id).toBe(summaryB.id); // topic B (6 overflow) beats topic A (2 overflow)

@@ -62,8 +62,7 @@ describe('scorerWindow tenant isolation', () => {
     const tenantAIds = seedTwoTenants(N);
     const result = await retrieve(ctxFor(root, 'tenant-a'), {
       query: 'kappa',
-      limit: 100,
-      scorerWindow: N + 5,
+      window: { limit: 100, scorerWindow: N + 5 },
     });
     expect(result.results.length).toBe(N);
     for (const r of result.results) {
@@ -77,8 +76,7 @@ describe('scorerWindow tenant isolation', () => {
     const tenantAIds = seedTwoTenants(N);
     const result = await retrieve(ctxFor(root, 'tenant-a'), {
       query: '',
-      limit: 100,
-      scorerWindow: N + 5,
+      window: { limit: 100, scorerWindow: N + 5 },
     });
     expect(result.results.length).toBe(N);
     for (const r of result.results) {
@@ -92,8 +90,7 @@ describe('scorerWindow tenant isolation', () => {
     const tenantAIds = seedTwoTenants(N);
     const result = await retrieve(ctxFor(root, 'tenant-a'), {
       query: 'kapp',
-      limit: 100,
-      scorerWindow: N + 5,
+      window: { limit: 100, scorerWindow: N + 5 },
     });
     expect(result.results.length).toBe(N);
     for (const r of result.results) {

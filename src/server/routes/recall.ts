@@ -28,11 +28,16 @@ export function __resetSessionRecallHistoryHttp(): void {
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
 export async function handleRecallMemories({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const { opts: recallOpts, limit, mode, explain } = parseRecallRequest(httpParams(query));
-  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recordAs: RECALL_RECORDING.http });
+  const result = await retrieve(ctx, {
+    ...recallOpts,
+    window: { ...recallOpts.window, limit },
+    mode,
+    trace: { explain, recordAs: RECALL_RECORDING.http },
+  });
 
   // Continuity payloads should never be cached. The caller is asking for
   // session-state-aware data; intermediaries must not reuse it across users.
-  if (recallOpts.includeContinuity) {
+  if (recallOpts.window.includeContinuity) {
     res.setHeader('Cache-Control', 'no-store');
   }
   sendJson(res, 200, result);

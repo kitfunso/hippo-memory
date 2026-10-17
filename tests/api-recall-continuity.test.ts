@@ -57,7 +57,7 @@ describe('api.recall continuity flag', () => {
 
     const result = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'deploys', includeContinuity: true },
+      { query: 'deploys', window: { includeContinuity: true } },
     );
     expect(result.continuity).toBeDefined();
     expect(result.continuity!.activeSnapshot?.task).toBe('Ship the recall continuity slice');
@@ -72,7 +72,7 @@ describe('api.recall continuity flag', () => {
 
     const result = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'lonely', includeContinuity: true },
+      { query: 'lonely', window: { includeContinuity: true } },
     );
     expect(result.continuity).toBeDefined();
     expect(result.continuity!.activeSnapshot).toBeNull();
@@ -106,7 +106,7 @@ describe('api.recall continuity flag', () => {
 
     const result = await retrieve(
       apiCtx(tmpDir, 'tenantB', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
     expect(result.continuity!.activeSnapshot).toBeNull();
     expect(result.continuity!.sessionHandoff).toBeNull();
@@ -126,7 +126,7 @@ describe('api.recall continuity flag', () => {
 
     const result = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
     expect(result.continuity!.activeSnapshot).toBeNull();
     expect(result.continuity!.sessionHandoff).toBeNull();
@@ -147,13 +147,13 @@ describe('api.recall continuity flag', () => {
 
     const noScopeResult = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
     expect(noScopeResult.continuity!.activeSnapshot).toBeNull();
 
     const scopedResult = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
+      { query: 'anything', window: { includeContinuity: true }, filter: { scope: 'slack:private:Csecret' } },
     );
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
   });
@@ -181,7 +181,7 @@ describe('api.recall continuity flag', () => {
 
     const noScopeResult = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
     // Snapshot is public-scope (null) so it surfaces. Handoff is private,
     // must NOT surface.
@@ -190,7 +190,7 @@ describe('api.recall continuity flag', () => {
 
     const scopedResult = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
+      { query: 'anything', window: { includeContinuity: true }, filter: { scope: 'slack:private:Csecret' } },
     );
     // Note: snapshot has scope=null and won't match 'slack:private:Csecret'
     // exactly. Handoff has matching scope and DOES surface.
@@ -214,14 +214,14 @@ describe('api.recall continuity flag', () => {
     // Caller asks for C2 → must NOT see C1 snapshot.
     const c2Result = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true, scope: 'slack:private:C2' },
+      { query: 'anything', window: { includeContinuity: true }, filter: { scope: 'slack:private:C2' } },
     );
     expect(c2Result.continuity!.activeSnapshot).toBeNull();
 
     // Caller asks for C1 exactly → DOES see C1 snapshot.
     const c1Result = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true, scope: 'slack:private:C1' },
+      { query: 'anything', window: { includeContinuity: true }, filter: { scope: 'slack:private:C1' } },
     );
     expect(c1Result.continuity!.activeSnapshot?.task).toBe('C1 task');
   });
@@ -238,7 +238,7 @@ describe('api.recall continuity flag', () => {
 
     const result = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
     // 4 + 4 + 4 chars at Math.ceil(len/4) = 1+1+1 = 3
     expect(result.continuityTokens).toBe(3);
@@ -252,7 +252,7 @@ describe('api.recall continuity flag', () => {
     });
     const before = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
 
     saveSessionHandoff(tmpDir, 'default', {
@@ -261,7 +261,7 @@ describe('api.recall continuity flag', () => {
     });
     const after = await retrieve(
       apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'anything', includeContinuity: true },
+      { query: 'anything', window: { includeContinuity: true } },
     );
     expect(after.continuityTokens!).toBeGreaterThan(before.continuityTokens!);
   });

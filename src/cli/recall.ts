@@ -247,8 +247,7 @@ async function cmdRecall(
   const slot: PresentedSlot = {};
   await api.retrieve(ctx, {
     query,
-    goalTag: o.goalTag,
-    sessionId: o.sessionId,
+    boost: { goalTag: o.goalTag, sessionId: o.sessionId },
     cliCore: {
       rank: rankOptions(query, flags, o, priced),
       // The global store is a second source for this surface alone, and never when it is the store being searched.
@@ -319,7 +318,7 @@ function rankOptions(
   return {
     budget: entryBudget,
     cost: priced.printCost,
-    limit: o.limit,
+    window: { limit: o.limit },
     why: o.showWhy,
     includeSuperseded: o.includeSuperseded,
     asOf: o.asOf,

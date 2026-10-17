@@ -89,8 +89,8 @@ export async function runIncidentRecallEval(opts: {
 
     const r = await retrieve(ctx, {
       query: sc.query,
-      limit: 10,
-      scope: `slack:public:${sc.channel}`,
+      window: { limit: 10 },
+      filter: { scope: `slack:public:${sc.channel}` },
     });
     const recallHit = sc.answer_ts.filter((ts) =>
       r.results.some((res) => res.content.includes(sentinel({ ts }))),

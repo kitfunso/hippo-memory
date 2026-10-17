@@ -187,7 +187,7 @@ describe('api.recall planningFallacyHint', () => {
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
     // Sanity: the same data with an explicit scope filter on recall still surfaces
     // the hint (the resolver doesn't consult opts.scope by design).
-    const scopedResult = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days', scope: 'channel:work' });
+    const scopedResult = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days', filter: { scope: 'channel:work' } });
     expect(scopedResult.planningFallacyHint).toBeDefined();
     expect(scopedResult.planningFallacyHint!.classTag).toBe('migration-effort');
   });

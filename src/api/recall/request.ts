@@ -26,7 +26,16 @@ import {
   recordShownRecall,
   strengthenOf,
 } from './finish.js';
-import type { CliCoreRanker, CliCoreRecall, RecallOptions, RecallResult, ShownCliCore } from './types.js';
+import type {
+  CliCoreRanker,
+  CliCoreRecall,
+  RecallBoostOptions,
+  RecallFilterOptions,
+  RecallOptions,
+  RecallResult,
+  RecallWindowOptions,
+  ShownCliCore,
+} from './types.js';
 
 const MAX_RECALL_LIMIT = 1000;
 // recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote cost.
@@ -59,11 +68,13 @@ export function toolParams(args: Readonly<Record<string, JsonValue>>): RequestPa
   return { get: (name) => args[name], queryName: 'query' };
 }
 
-/** The recall options every surface passes through to retrieve(). */
-export type SharedRecallOptions = Pick<
-  RecallOptions,
-  'query' | 'scope' | 'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId'
-> & { includeContinuity: boolean };
+/** The recall options every surface passes through to retrieve(); each surface adds its own window limit. */
+export interface SharedRecallOptions {
+  readonly query: string;
+  readonly window: Omit<RecallWindowOptions, 'limit'> & { readonly includeContinuity: boolean };
+  readonly filter: Pick<RecallFilterOptions, 'scope'>;
+  readonly boost: Pick<RecallBoostOptions, 'sessionId'>;
+}
 
 export interface ParsedRecallRequest {
   readonly opts: SharedRecallOptions;
@@ -163,13 +174,9 @@ export function parseRecallRequest(params: RequestParams): ParsedRecallRequest {
   return {
     opts: {
       query,
-      scope,
-      includeContinuity,
-      freshTailCount,
-      freshTailSessionId,
-      summarizeOverflow,
-      scorerWindow,
-      sessionId,
+      window: { includeContinuity, freshTailCount, freshTailSessionId, summarizeOverflow, scorerWindow },
+      filter: { scope },
+      boost: { sessionId },
     },
     limit,
     mode,
@@ -205,7 +212,7 @@ export async function retrieveWithCliCore(
   const store = ctx.store;
   const ranking = await rankRecall(
     { store, config: configOf(ctx), global: rankGlobal(ctx, core.sources), tenantId: ctx.tenantId, note: core.note },
-    { ...core.rank, query: opts.query, sessionId: opts.sessionId, goalTag: opts.goalTag },
+    { ...core.rank, query: opts.query, boost: opts.boost },
   );
   if (ranking.halted) {
     // The stages that ran earned these rows, so the caller's flag error does not drop them.
@@ -290,7 +297,7 @@ async function recordShown(
   // holds back the count.
   await recordShownRecall(ctx, store, RECALL_RECORDING.cli, {
     query: opts.query,
-    sessionId: opts.sessionId,
+    sessionId: opts.boost?.sessionId,
     topId: ids[0] ?? null,
     anchoredOn: shown.anchoredOn,
     items: ids.length,
@@ -338,7 +345,7 @@ function traceOf(
 ): RecallTraceInput {
   return {
     tenantId: ctx.tenantId,
-    sessionId: opts.sessionId || core.hostSessionId || null,
+    sessionId: opts.boost?.sessionId || core.hostSessionId || null,
     pipeline: 'cli',
     query: opts.query,
     explainMode: core.rank.why === true,
