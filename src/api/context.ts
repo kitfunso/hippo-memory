@@ -37,6 +37,7 @@ import type { StoreReach } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
+  globalStoreInReach,
   selectBySearch,
   selectPinned,
   selectStrongest,
@@ -264,11 +265,8 @@ function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
   };
 }
 
-/** The operator's global store, which planContext proved present before it set hasGlobal. */
 function globalSource(ctx: Context): ContextSource {
-  const global = ctx.reach?.global;
-  if (global === undefined) throw new Error('hasGlobal without a global store in reach');
-  return sourceOf(global.store);
+  return sourceOf(globalStoreInReach(ctx));
 }
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */

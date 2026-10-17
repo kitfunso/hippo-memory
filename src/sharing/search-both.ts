@@ -114,12 +114,12 @@ export async function searchBothHybrid(
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  const sources = { local: vectorSourceOf(store), global: vectorSourceOf(global) };
+  const sources = { local: localFilesVectorSource(store), global: localFilesVectorSource(global) };
   return rankBothStores(query, sources, { local: localEntries, global: globalEntries }, vectorCandidates, options);
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
-function vectorSourceOf(store: HippoStore): VectorSource | undefined {
+export function localFilesVectorSource(store: HippoStore): VectorSource | undefined {
   return folderVectorSource({ hippoRoot: requireGroup(store, 'localFiles').hippoRoot, store });
 }
 

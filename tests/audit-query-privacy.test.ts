@@ -95,6 +95,16 @@ describe('recall audits store a query hash, never the text', () => {
     expectHashedOnly(rows[0], QUERY);
   });
 
+  it('context recall writes the same hashed row into the global store it reached', async () => {
+    initStore(globalRoot);
+    await getContext(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), { q: QUERY, crossProject: true });
+    const [local, global] = [localRoot, globalRoot].map((root) =>
+      auditRows(root).filter((r) => r.op === 'recall' && r.metadata.mode === 'context'));
+    expect(global).toHaveLength(1);
+    expectHashedOnly(global[0], QUERY);
+    expect(global[0].metadata).toEqual(local[0].metadata);
+  });
+
   it('CLI recall row has no query key', () => {
     execFileSync('node', [HIPPO_BIN, 'recall', QUERY], {
       cwd: home,

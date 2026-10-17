@@ -18,6 +18,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -235,6 +236,40 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
       expect(index[promoted.globalId]).toBeDefined();
     }, { timeout: 30_000, interval: 250 });
   }, 35_000);
+});
+
+describe('global-row-embeddings: the first promote, before any global store exists', () => {
+  let localRoot: string;
+  let globalRoot: string;
+  let embeddings: HashedEmbeddings;
+
+  beforeEach(async () => {
+    embeddings = await startHashedEmbeddings();
+    localRoot = makeTmpStore();
+    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-noglobal-'));
+    // Only hippo.db marks a store as initialized, so the context's reach has no global store yet.
+    const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
+    fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify(config), 'utf8');
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await embeddings.close();
+    cleanUp(localRoot, globalRoot);
+  });
+
+  it('embeds the copy into the global store the promote created', async () => {
+    const entry = createMemory('first promote embeds into a new global store', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(localRoot, entry);
+    const ctx = apiCtx(localRoot);
+    expect(ctx.reach?.global).toBeUndefined();
+
+    const promoted = promote(ctx, entry.id);
+
+    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toBeDefined(), { timeout: 10_000 });
+  });
 });
 
 // ---------------------------------------------------------------------------

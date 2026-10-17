@@ -1,7 +1,6 @@
 {
   "src/api/auth/auth.ts": 1,
   "src/api/auth/session-owners.ts": 1,
-  "src/api/context-select.ts": 1,
   "src/api/embeddings.ts": 4,
   "src/api/ledger-db.ts": 3,
   "src/api/memories/promote.ts": 1,

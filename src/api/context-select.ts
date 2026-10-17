@@ -3,13 +3,13 @@
 import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { auditQueryFields, recordAuditEvent, type AppendAuditOpts } from '../store/audit.js';
+import { auditQueryFields, type AppendAuditOpts } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { rankBothStores } from '../sharing/search-both.js';
+import { localFilesVectorSource, rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { searchByEngine } from '../search/engine.js';
-import { folderVectorSource, vectorSourceOf } from '../search/hybrid.js';
+import { vectorSourceOf } from '../search/hybrid.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
@@ -425,7 +425,7 @@ async function searchBothStores(
   const sources = {
     local: vectorSourceOf({ store: plan.local.store, config: plan.config }),
     // Its own config.json names the global store's embedding model, read only when the vector arm runs.
-    global: folderVectorSource({ hippoRoot: plan.globalRoot, store: ctx.reach?.global?.store }),
+    global: localFilesVectorSource(globalStoreInReach(ctx)),
   };
   const merged = await rankBothStores(
     plan.query,
@@ -509,5 +509,12 @@ async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: 
     metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
   };
   if (plan.hasLocal) await plan.local.store.appendAuditEvents([row]);
-  if (plan.hasGlobal && !plan.primaryIsGlobal) recordAuditEvent(plan.globalRoot, row);
+  if (plan.hasGlobal && !plan.primaryIsGlobal) await globalStoreInReach(ctx).appendAuditEvents([row]);
+}
+
+/** The operator's global store, which planContext proved present before it set hasGlobal. */
+export function globalStoreInReach(ctx: Context): HippoStore {
+  const global = ctx.reach?.global;
+  if (global === undefined) throw new Error('hasGlobal without a global store in reach');
+  return global.store;
 }

@@ -123,16 +123,6 @@ export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): v
   );
 }
 
-/** One audit row in the store under `hippoRoot`, as its own write. */
-export function recordAuditEvent(hippoRoot: string, event: AppendAuditOpts): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    appendAuditEvent(db, event);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 let auditWriteFailures = 0;
 
 /** For callers that keep a mutation when its audit row fails: the failure is logged and counted, never silent. */
