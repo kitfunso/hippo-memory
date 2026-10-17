@@ -486,31 +486,25 @@ export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: 
 // project's rows and user-global ones.
 // No owner: a personal or connector-private row must never answer `duplicate` for, or stop, a team copy. `instr`
 // prefilters; `includes` re-checks.
-export function loadContentsWithTag(
-  hippoRoot: string,
+export function contentsWithTagAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   tag: string,
   origins?: readonly string[],
 ): string[] {
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
-      const admit = scopeAdmitSql('');
-      /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
-      const rows = db
-        .prepare(
-          `SELECT content, tags_json FROM memories WHERE tenant_id = ? ` +
-            `AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
-        )
-        .all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{
-        content: string;
-        tags_json: string;
-      }>;
-      return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-    },
-    openStore,
-  );
+  const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
+  const admit = scopeAdmitSql('');
+  /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+  const rows = db
+    .prepare(
+      `SELECT content, tags_json FROM memories WHERE tenant_id = ? ` +
+        `AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
+    )
+    .all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{
+    content: string;
+    tags_json: string;
+  }>;
+  return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
 }
 
 export interface VaultRawRow {

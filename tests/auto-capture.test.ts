@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { extractFromTexts } from '../src/capture/extract.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
+import { failureTarget } from './_helpers/failure-target.js';
 import { lessonFromFailure, failureSignature } from '../src/capture/failure-reading.js';
 import { initStore } from '../src/store/open.js';
 import { getHippoRoot } from '../src/core/project-identity.js';
@@ -203,13 +204,13 @@ describe('failed-tool capture', () => {
     expect(lessonFromFailure({ tool_name: 'Bash', error: 'Permission to use Bash has been denied.' })).toMatchObject({ rule: 'declined' });
   });
 
-  it('stores an unverified error memory once, however often it repeats', () => {
+  it('stores an unverified error memory once, however often it repeats', async () => {
     const { dir } = scratch();
     try {
       initStore(dir);
       const payload = { tool_name: 'Bash', tool_input: { command: 'npm run build' }, error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo' };
-      expect(captureToolFailure(dir, 'default', payload)).toBe('stored');
-      expect(captureToolFailure(dir, 'default', { ...payload, error: 'Exit code 2\nsrc/a.ts(40,9): error TS2304: Cannot find name foo' })).toBe('duplicate');
+      expect(await captureToolFailure(failureTarget(dir), payload)).toBe('stored');
+      expect(await captureToolFailure(failureTarget(dir), { ...payload, error: 'Exit code 2\nsrc/a.ts(40,9): error TS2304: Cannot find name foo' })).toBe('duplicate');
       const rows = loadAllEntries(dir, 'default');
       expect(rows).toHaveLength(1);
       expect(rows[0]!.tags).toEqual(expect.arrayContaining(['error', 'auto-captured']));

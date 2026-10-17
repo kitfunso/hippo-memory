@@ -21,7 +21,8 @@ const SERVER_TYPES = [
 ];
 const STORE_KIT_VALUES = [
   'bufferToFloat32', 'decodeVector', 'EMBEDDING_MODEL_META_KEY', 'encodeVector', 'entryAfterOutcome', 'float32ToBuffer', 'ftsTermParts',
-  'hasGroup', 'isSharedStore', 'OTHER_STORE_MARKER', 'ownScopeTouches', 'passesScopeFilterForRecall', 'physicsSearch', 'rankVectorRows', 'rarestFtsQuery',
+  'hasGroup', 'heldTexts', 'isSharedStore', 'normalizeValueForRejection', 'OTHER_STORE_MARKER', 'ownScopeTouches', 'passesScopeFilterForRecall',
+  'physicsSearch', 'rankVectorRows', 'rarestFtsQuery',
   'RECALL_DEFAULT_DENY_SCOPES', 'RejectedValueError', 'rejectionDigest', 'replacesIndex', 'requireGroup', 'SECRET_TAGS', 'sqliteStore', 'StoreBusyError',
   'tallyAmbientEntries',
 ];
@@ -42,6 +43,8 @@ const STORE_KIT_TYPES = [
   'MemoryConflict', 'PushGoalOpts', 'Reports', 'ResolveConflictOpts', 'ResolveConflictRequest',
   'SessionEndHandoffRequest', 'SessionEventInput', 'Sessions', 'SnapshotInput', 'StrengthTallies', 'TokenSummary',
   'WorkingMemoryFilter', 'WorkingMemoryItem', 'WorkingMemoryPush',
+  'AppliedRejection', 'LiftedRejection', 'Rejection', 'RejectionCheck', 'Rejections', 'RejectionSource', 'RejectedValueRow',
+  'FailureEvent', 'FailureLog', 'FailureOutcome',
 ];
 
 const sorted = (names: readonly string[]): string[] => [...names].sort();

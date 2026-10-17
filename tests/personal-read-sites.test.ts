@@ -14,7 +14,8 @@ import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../src/store/candidates.js';
 import { loadAmbientTallies } from '../src/store/ambient.js';
-import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '../src/store/entry-reads.js';
+import { countSessionRawMemories, loadAllEntries } from '../src/store/entry-reads.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { canReadScope, personalScopeOf, type ScopeActor } from '../src/core/recall-scope.js';
 import { touchableScopeSql } from '../src/store/rule-sql.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
@@ -168,7 +169,7 @@ describe('deny-only read sites', () => {
   });
 
   it('failure dedup: only the team row carries the tag', () => {
-    expect(loadContentsWithTag(root, T, 'path:hippo')).toEqual(['zebrafish note team keeps the build cache warm']);
+    expect(sqliteSyncStore(root).lessonWrites.contentsWithTag(T, 'path:hippo')).toEqual(['zebrafish note team keeps the build cache warm']);
   });
 });
 

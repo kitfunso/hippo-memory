@@ -66,6 +66,9 @@ entry/store-kit.d.ts: EntryRemoval re-export
 entry/store-kit.d.ts: EntryTarget re-export
 entry/store-kit.d.ts: EntryWrite re-export
 entry/store-kit.d.ts: EntryWrites re-export
+entry/store-kit.d.ts: FailureEvent re-export
+entry/store-kit.d.ts: FailureLog re-export
+entry/store-kit.d.ts: FailureOutcome re-export
 entry/store-kit.d.ts: FailureSummary re-export
 entry/store-kit.d.ts: GetActiveGoalsOpts re-export
 entry/store-kit.d.ts: Goal re-export

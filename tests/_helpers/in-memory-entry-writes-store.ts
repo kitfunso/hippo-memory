@@ -39,6 +39,7 @@ export interface InMemoryEntryWritesStore extends StoreSide {
   /** The guard's tombstones by `tombstoneKey`, shared so a store built on this one adds and lifts them. */
   readonly tombstones: Map<string, Tombstone>;
   readonly rowById: (id: string) => MemoryEntry | undefined;
+  readonly allRows: () => MemoryEntry[];
 }
 
 /** One write's rows and audit rows, staged so a throw drops both, as a rolled-back transaction would. */
@@ -224,6 +225,6 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
   };
   return {
     store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten, writeWith, archiveWith, rawIdsFor, archiveAllWith,
-    stage: inTx, tombstones, rowById: (id) => structuredClone(memories.get(id)),
+    stage: inTx, tombstones, rowById: (id) => structuredClone(memories.get(id)), allRows: () => structuredClone([...memories.values()]),
   };
 }

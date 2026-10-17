@@ -17,6 +17,7 @@ import { importMarkdown } from '../src/importers/markdown.js';
 import { importVault } from '../src/importers/vault.js';
 import { type ImportOptions, type ImportResult } from '../src/importers/core.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
+import { failureTarget } from './_helpers/failure-target.js';
 import { captureError, partitionLessons } from '../src/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { addWorkspace } from '../src/connectors/slack/workspaces.js';
@@ -235,8 +236,8 @@ describe('importers', () => {
 });
 
 describe('machine-captured lessons', () => {
-  it('a tool failure that echoes a token is stored without it', () => {
-    const outcome = captureToolFailure(root, 'default', {
+  it('a tool failure that echoes a token is stored without it', async () => {
+    const outcome = await captureToolFailure(failureTarget(root), {
       tool_name: 'Bash',
       error: `fatal: Authentication failed for https://x-access-token:${GHP}@github.com/acme/repo.git`,
       tool_input: { command: 'git push origin main' },

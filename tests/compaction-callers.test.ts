@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadContentsWithTag } from '../src/store/entry-reads.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
 import { isStoreBusy } from '../src/store/busy.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -14,6 +14,7 @@ import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { markSnapshotSaved, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../src/store/compactions-record.js';
 import { captureToolFailure, storeLesson } from '../src/capture/capture-error.js';
+import { failureTarget } from './_helpers/failure-target.js';
 import { failureHash, failureReport } from '../src/capture/failure-reading.js';
 import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../src/util/compaction-items.js';
@@ -168,6 +169,16 @@ const postCompact = (ctx: Context, requestId = 'cmp-1') =>
 const sessionEnd = (ctx: Context) =>
   sessionEndHandoffForCaller(ctx, { sessionId: 'sA', project: PROJECT, workingState: null, evidence: { gitRef: 'a'.repeat(40), dirtyTree: false, testStatus: 'unknown' } });
 
+async function caught(fn: () => object): Promise<Error | null> {
+  try {
+    await fn();
+  } catch (err) {
+    if (err instanceof Error) return err;
+    throw err;
+  }
+  return null;
+}
+
 function thrown(fn: () => void): Error | null {
   try {
     fn();
@@ -200,10 +211,10 @@ describe('saveItems for a caller', () => {
 describe('storeLesson for a caller', () => {
   const other = { actor: 'bob@acme', originProject: 'acme/web', origins: ['acme/web'] };
 
-  it('counts a user-global lesson as a repeat in every project', () => {
+  it('counts a user-global lesson as a repeat in every project', async () => {
     seed(LESSON, '', ['error', 'auto-captured']);
-    expect(loadContentsWithTag(root, TENANT, 'auto-captured', ['acme/web'])).toEqual([LESSON]);
-    expect(storeLesson(root, TENANT, LESSON, other)).toBe('duplicate');
+    expect(sqliteSyncStore(root).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web'])).toEqual([LESSON]);
+    expect(await storeLesson(failureTarget(root, TENANT), LESSON, other)).toBe('duplicate');
   });
 });
 
@@ -401,8 +412,8 @@ describe('saveCompactionItemsForCaller', () => {
 });
 
 describe('captureFailureForCaller', () => {
-  it('lesson carries owner as actor and project origin, and the log row both', () => {
-    expect(captureFailureForCaller(owned('alice'), failure())).toEqual({ outcome: 'stored' });
+  it('lesson carries owner as actor and project origin, and the log row both', async () => {
+    expect(await captureFailureForCaller(owned('alice'), failure())).toEqual({ outcome: 'stored' });
     withDb((db) => {
       expect(writtenRows(db, 'tool-failure')).toEqual([{ content: LESSON, origin_project: 'acme/app', actor: 'alice' }]);
       expect(failureRows(db)).toEqual([
@@ -411,38 +422,38 @@ describe('captureFailureForCaller', () => {
     });
   });
 
-  it('repeat check is per project', () => {
-    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
-    expect(captureFailureForCaller(owned('alice'), failure({ requestId: 'fail-2' })).outcome).toBe('duplicate');
+  it('repeat check is per project', async () => {
+    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('alice'), failure({ requestId: 'fail-2' }))).outcome).toBe('duplicate');
     const web = { name: 'acme/web', legacyName: 'web' };
-    expect(captureFailureForCaller(owned('bob'), failure({ sessionId: 'sB', project: web, requestId: 'fail-3' })).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('bob'), failure({ sessionId: 'sB', project: web, requestId: 'fail-3' }))).outcome).toBe('stored');
   });
 
-  it('a repeat request_id writes nothing and returns the earlier result (F10)', () => {
-    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
-    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
+  it('a repeat request_id writes nothing and returns the earlier result (F10)', async () => {
+    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
     expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 1 });
   });
 
-  it('a retry after a failed store stores the lesson and settles its log row', () => {
+  it('a retry after a failed store stores the lesson and settles its log row', async () => {
     const undo = failOn('memories', 'INSERT', 'store boom');
-    expect(() => captureFailureForCaller(owned('alice'), failure())).toThrow('store boom');
+    await expect(captureFailureForCaller(owned('alice'), failure())).rejects.toThrow('store boom');
     withDb((db) => expect(failureRows(db).map((r) => r.outcome)).toEqual(['store-failed']));
     undo();
-    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
     withDb((db) => expect(failureRows(db).map((r) => r.outcome)).toEqual(['stored']));
   });
 
-  it('detail_hash equals what logFailure stores for the same payload (F13)', () => {
+  it('detail_hash equals what logFailure stores for the same payload (F13)', async () => {
     const payload = {
       session_id: 'local-s',
       tool_name: 'Bash',
       error: 'npm run build failed: src/a.ts(12,3): error TS2304: Cannot find name foo',
       tool_input: { command: 'cd /repo && npm run build' },
     };
-    captureToolFailure(root, TENANT, payload);
+    await captureToolFailure(failureTarget(root, TENANT), payload);
     const report = failureReport(payload);
-    captureFailureForCaller(owned('alice'), failure({ tool: report.tool, text: report.text, skip: report.skip, rule: report.rule, detailHash: report.detail_hash }));
+    await captureFailureForCaller(owned('alice'), failure({ tool: report.tool, text: report.text, skip: report.skip, rule: report.rule, detailHash: report.detail_hash }));
     withDb((db) => {
       const [local, caller] = failureRows(db);
       expect(local.detail_hash).toMatch(/^[0-9a-f]{16}$/);
@@ -450,10 +461,10 @@ describe('captureFailureForCaller', () => {
     });
   });
 
-  it('scrubs a sent text again and cuts it to 200 after the scrub, so a mask that runs longer still stores', () => {
+  it('scrubs a sent text again and cuts it to 200 after the scrub, so a mask that runs longer still stores', async () => {
     const text = `Bash: mail to a@b.co failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200);
     expect(text).toHaveLength(200);
-    expect(captureFailureForCaller(owned('alice'), failure({ text })).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('alice'), failure({ text }))).outcome).toBe('stored');
     withDb((db) => {
       const [row] = writtenRows(db, 'tool-failure');
       expect(row?.content).toBe(`Bash: mail to [email] failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200));
@@ -461,24 +472,24 @@ describe('captureFailureForCaller', () => {
     });
   });
 
-  it('cuts the scrubbed text on a code point, never inside a surrogate pair', () => {
+  it('cuts the scrubbed text on a code point, never inside a surrogate pair', async () => {
     // 200 sent; the mask adds one, so the emoji's halves land at 199 and 200 of the scrubbed text.
     const filler = 'Retry the deploy. '.repeat(10).slice(0, 169);
     const text = `Bash: mail to a@b.co failed. ${filler}\u{1F600}`;
     expect(text).toHaveLength(200);
-    expect(captureFailureForCaller(owned('alice'), failure({ text })).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('alice'), failure({ text }))).outcome).toBe('stored');
     withDb((db) => expect(writtenRows(db, 'tool-failure')[0]?.content).toBe(`Bash: mail to [email] failed. ${filler}`));
   });
 
-  it('log error never masks a store error', () => {
+  it('log error never masks a store error', async () => {
     failOn('memories', 'INSERT', 'store boom');
     failOn('failure_log', 'INSERT', 'log boom');
-    expect(() => captureFailureForCaller(owned('alice'), failure())).toThrow('store boom');
+    await expect(captureFailureForCaller(owned('alice'), failure())).rejects.toThrow('store boom');
   });
 
-  it('logs a routine skip with its rule and stores no lesson', () => {
+  it('logs a routine skip with its rule and stores no lesson', async () => {
     const req = failure({ tool: 'Grep', text: 'Grep: no matches found', skip: 'skipped-routine', rule: 'search-tool' });
-    expect(captureFailureForCaller(owned('alice'), req)).toEqual({ outcome: 'skipped-routine' });
+    expect(await captureFailureForCaller(owned('alice'), req)).toEqual({ outcome: 'skipped-routine' });
     withDb((db) => {
       expect(count(db, 'memories')).toBe(0);
       expect(count(db, 'failure_log', `outcome = 'skipped-routine' AND skip_rule = 'search-tool'`)).toBe(1);
@@ -492,8 +503,8 @@ describe('captureFailureForCaller', () => {
     ['a blank request id', failure({ requestId: '' }), 'request id'],
     ['text past 200 characters', failure({ text: 'x'.repeat(201) }), 'text'],
     ['a lesson with no text', failure({ text: null }), 'text'],
-  ])('refuses %s, naming the field, before it binds the session', (_what, req, field) => {
-    const err = thrown(() => captureFailureForCaller(owned('alice'), req));
+  ])('refuses %s, naming the field, before it binds the session', async (_what, req, field) => {
+    const err = await caught(() => captureFailureForCaller(owned('alice'), req));
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: expect.stringMatching(new RegExp(`^${field}:`)) });
     withDb((db) => expect(count(db, 'session_owners')).toBe(0));
@@ -543,7 +554,7 @@ describe('sessionEndHandoffForCaller', () => {
 });
 
 describe('a second owner on the same session', () => {
-  const calls: Array<[string, (ctx: Context) => void]> = [
+  const calls: Array<[string, (ctx: Context) => object]> = [
     ['pre-compact', (ctx) => preCompact(ctx)],
     ['compact-resume', (ctx) => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source: 'compact' })],
     ['post-compact', (ctx) => postCompact(ctx)],
@@ -551,14 +562,14 @@ describe('a second owner on the same session', () => {
     ['session end', (ctx) => sessionEndHandoffForCaller(ctx, { sessionId: 'sA', project: PROJECT, workingState: STATE, evidence: null })],
   ];
 
-  it.each(calls)('%s: a second owner on the same session gets a 409 ConflictError', (_name, call) => {
+  it.each(calls)('%s: a second owner on the same session gets a 409 ConflictError', async (_name, call) => {
     bindSessionOwner(owned('alice'), 'sA');
-    const err = thrown(() => call(owned('bob')));
+    const err = await caught(() => call(owned('bob')));
     expect(err).toBeInstanceOf(ConflictError);
     expect(err).toMatchObject({ status: 409 });
     expect(rowCounts()).toEqual({ compactions: 0, task_snapshots: 0, session_handoffs: 0, failure_log: 0, memories: 0 });
     // The session's own owner still gets through.
-    expect(thrown(() => call(owned('alice')))).toBeNull();
+    expect(await caught(() => call(owned('alice')))).toBeNull();
   });
 });
 
@@ -570,24 +581,24 @@ describe('a request id another session sent', () => {
   const items = (owner: string, sessionId: string, list: readonly string[] = ITEMS) =>
     saveCompactionItemsForCaller(owned(owner), { sessionId, project: PROJECT, trigger: 'auto', items: list, requestId: 'cmp-1' });
 
-  it('capture-error: the same id with a different body from the same session gets the first outcome and writes nothing', () => {
-    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
+  it('capture-error: the same id with a different body from the same session gets the first outcome and writes nothing', async () => {
+    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
     const other = failure({ tool: 'Grep', text: 'Grep: no matches found', skip: 'skipped-routine', rule: 'search-tool' });
-    expect(captureFailureForCaller(owned('alice'), other)).toEqual({ outcome: 'stored' });
+    expect(await captureFailureForCaller(owned('alice'), other)).toEqual({ outcome: 'stored' });
     expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 1 });
   });
 
-  it.each(senders)('capture-error: the same id from %s is a 409 and leaves the first row alone', (_who, owner, sessionId) => {
+  it.each(senders)('capture-error: the same id from %s is a 409 and leaves the first row alone', async (_who, owner, sessionId) => {
     // A failed first store leaves a row a retry settles, which a foreign id would otherwise rewrite.
     const undo = failOn('memories', 'INSERT', 'store boom');
-    expect(() => captureFailureForCaller(owned('alice'), failure())).toThrow('store boom');
+    await expect(captureFailureForCaller(owned('alice'), failure())).rejects.toThrow('store boom');
     undo();
-    const err = thrown(() => captureFailureForCaller(owned(owner), failure({ sessionId })));
+    const err = await caught(() => captureFailureForCaller(owned(owner), failure({ sessionId })));
     expect(err).toBeInstanceOf(ConflictError);
     expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
     withDb((db) => expect(failureRows(db)).toEqual([expect.objectContaining({ outcome: 'store-failed', owner_subject: 'alice' })]));
     expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 0 });
-    expect(captureFailureForCaller(owned('alice'), failure()).outcome).toBe('stored');
+    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
   });
 
   it('post-compact: the same id with different items from the same session gets the first count and writes none of them', () => {

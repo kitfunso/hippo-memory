@@ -3,9 +3,10 @@
 import { pruneAuditRows } from '../audit.js';
 import { loadTextsHoldingWords } from '../candidates.js';
 import { deleteEntriesAutomatically, memoriesBackingObjects } from '../delete-and-batch.js';
-import { loadAllEntries } from '../entry-reads.js';
+import { contentsWithTagAt, loadAllEntries } from '../entry-reads.js';
 import { writeEntriesSkippingRejected, writeEntriesTogether } from '../entry-writes.js';
 import { updateStats } from '../index-and-stats.js';
+import { onHandle, openStore } from '../open.js';
 import type { AuditMaintenance, LessonWrites, Sync } from '../port.js';
 import { repairAutomaticMemories, repairQualityOnce } from '../quality-repair.js';
 import { touchableScopeSql } from '../rule-sql.js';
@@ -26,6 +27,8 @@ export function sqliteLessonWrites(hippoRoot: string): Sync<LessonWrites> {
     tenantEntries: (tenantId) => loadAllEntries(hippoRoot, tenantId),
     textsHoldingWords: (tenantId, words, ownScope) =>
       loadTextsHoldingWords(hippoRoot, tenantId, words, undefined, touchableScopeSql('', ownScope)),
+    contentsWithTag: (tenantId, tag, origins) =>
+      onHandle(hippoRoot, (db) => contentsWithTagAt(db, tenantId, tag, origins), openStore),
     writeSkippingRejected(entries, actor) {
       const written: string[] = [];
       writeEntriesSkippingRejected(

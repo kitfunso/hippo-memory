@@ -699,14 +699,15 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     if (isInitialized(root) && payload) {
       // SAFETY: JSON.parse returns a JSON value by definition.
       const failure = JSON.parse(payload) as JsonValue;
-      const rec = startToolFailureRecorder(cliApiContext(root, tenantId), {
+      const ctx = cliApiContext(root, tenantId);
+      const rec = startToolFailureRecorder(ctx, {
         stdinText: text,
         runtime: hookRuntime(flags),
         envSessionId: hostSessionId(),
       });
-      await runHookWithStores(() => {
+      await runHookWithStores(async () => {
         try {
-          return captureToolFailure(root, tenantId, failure, (id) => rec?.logged(id));
+          return await captureToolFailure(ctx, failure, (id) => rec?.logged(id));
         } finally {
           flushDeliveryRecorder(rec);
         }

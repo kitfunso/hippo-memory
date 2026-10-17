@@ -8,7 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { latestCompactionRows } from '../src/store/compactions.js';
 import { markSnapshotSavedAt, saveCallerItems, startCompactionAt } from '../src/store/compaction-caller.js';
 import { failuresBySession } from '../src/store/failure-log.js';
-import { recordFailureAt, requestOutcomeAt, settleFailureOutcomeAt } from '../src/store/failure-log-at.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
 import { withRejectionProbe } from '../src/store/rejection-probe.js';
 import { writeCapturedItems } from '../src/store/capture-write.js';
@@ -50,17 +50,19 @@ function reject(text: string): void {
 }
 
 describe('failure log functions', () => {
-  it('recordFailureAt writes a row that a later read finds', () => {
-    recordFailureAt(root, { tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'a', detailHash: 'b' });
+  const log = () => sqliteSyncStore(root).failureLog;
+
+  it('record writes a row that a later read finds', () => {
+    log().record({ tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'a', detailHash: 'b' });
     expect(read((db) => failuresBySession(db, 'default', '1970-01-01T00:00:00.000Z')).map((r) => r.sessionId)).toEqual(['s1']);
   });
 
-  it('requestOutcomeAt reads a request outcome and settleFailureOutcomeAt rewrites it', () => {
-    recordFailureAt(root, { tenantId: 'default', sessionId: 's1', outcome: 'store-failed', requestId: 'r1' });
-    expect(requestOutcomeAt(root, 'default', 'r1', 's1')).toBe('store-failed');
-    settleFailureOutcomeAt(root, 'default', 'r1', 'stored');
-    expect(requestOutcomeAt(root, 'default', 'r1', 's1')).toBe('stored');
-    expect(requestOutcomeAt(root, 'default', 'unknown', 's1')).toBeNull();
+  it('requestOutcome reads a request outcome and settleOutcome rewrites it', () => {
+    log().record({ tenantId: 'default', sessionId: 's1', outcome: 'store-failed', requestId: 'r1' });
+    expect(log().requestOutcome('default', 'r1', 's1')).toBe('store-failed');
+    log().settleOutcome('default', 'r1', 'stored');
+    expect(log().requestOutcome('default', 'r1', 's1')).toBe('stored');
+    expect(log().requestOutcome('default', 'unknown', 's1')).toBeNull();
   });
 });
 

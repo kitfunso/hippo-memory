@@ -18,6 +18,7 @@ export {
   type EntryTarget,
   type EntryWrite,
   type EntryWrites,
+  type FailureLog,
   type Goals,
   type HippoStore,
   type KeyAudit,
@@ -79,7 +80,7 @@ export type { HandoffFilter, SessionEndHandoffRequest } from '../store/handoffs.
 export type { ResolveConflictOpts, ResolveConflictRequest } from '../store/conflicts.js';
 export type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
 export type { EntryCursor, EntryPage } from '../store/entry-reads.js';
-export type { FailureSummary } from '../store/failure-log.js';
+export type { FailureEvent, FailureOutcome, FailureSummary } from '../store/failure-log.js';
 export type { MemoryConflict } from '../store/rows.js';
 export type { SessionEventInput, SnapshotInput } from '../store/sessions.js';
 export type { StrengthTallies } from '../store/candidates.js';
