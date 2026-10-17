@@ -596,7 +596,7 @@ describe('a request id another session sent', () => {
   });
 
   it.each(senders)('post-compact: the same id from %s is a 409 and never finishes the first record', (_who, owner, sessionId) => {
-    // Items that failed leave the record summarised, which a foreign id would otherwise finish under its own session.
+    // Items that failed leave the record summarized, which a foreign id would otherwise finish under its own session.
     const undo = failOn('memories', 'INSERT', 'items boom');
     expect(() => items('alice', 'sA')).toThrow('items boom');
     undo();

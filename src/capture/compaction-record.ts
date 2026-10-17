@@ -18,7 +18,7 @@ import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
 
-/** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
+/** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
   "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', " +
   "each lesson learned, decision made (with its reason) and correction the user gave in this session that " +

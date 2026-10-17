@@ -46,7 +46,7 @@ interface Seed {
   id: string;
   status: 'started' | 'summarised';
   startedMinutesAgo: number;
-  summarisedMinutesAgo?: number;
+  summarizedMinutesAgo?: number;
   items?: string[];
   transcript?: string;
   session?: string;
@@ -62,7 +62,7 @@ function seed(root: string, r: Seed): void {
     s.proj,
     r.transcript ?? null,
     ago(r.startedMinutesAgo),
-    r.summarisedMinutesAgo === undefined ? null : ago(r.summarisedMinutesAgo),
+    r.summarizedMinutesAgo === undefined ? null : ago(r.summarizedMinutesAgo),
     r.status === 'summarised' ? 'the summary' : null,
     r.status === 'summarised' ? JSON.stringify(r.items ?? []) : null,
     r.status,
@@ -99,7 +99,7 @@ describe('replay of records a killed hook left', () => {
   beforeEach(() => initStore(s.hippoRoot));
 
   it('finishes a record left summarised for over 10 minutes, once', () => {
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(compactionMemories(s.hippoRoot).map((r) => r.content).sort()).toEqual([...ITEMS].sort());
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ status: 'done', items_written: 2 }]);
@@ -108,8 +108,8 @@ describe('replay of records a killed hook left', () => {
   });
 
   it('logs a stalled record with malformed items and still replays the others', () => {
-    seed(s.hippoRoot, { id: 'cmp-bad', status: 'summarised', startedMinutesAgo: 40, summarisedMinutesAgo: 30, items: ITEMS, session: 's-bad' });
-    seed(s.hippoRoot, { id: 'cmp-good', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-bad', status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30, items: ITEMS, session: 's-bad' });
+    seed(s.hippoRoot, { id: 'cmp-good', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS });
     run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json' WHERE id = 'cmp-bad'`);
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(compactionMemories(s.hippoRoot).map((r) => r.content).sort()).toEqual([...ITEMS].sort());
@@ -117,14 +117,14 @@ describe('replay of records a killed hook left', () => {
   });
 
   it('leaves a record that is under 10 minutes old to its own hook', () => {
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 5, summarisedMinutesAgo: 1, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 5, summarizedMinutesAgo: 1, items: ITEMS });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
     expect(compactionRows(s.hippoRoot)[0].status).toBe('summarised');
   });
 
   it('writes nothing twice when the rows are already there', () => {
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS });
     replayCompactionsAt(s.hippoRoot, log);
     run(s.hippoRoot, `UPDATE compactions SET status = 'summarised', summarised_at = ?`, ago(20));
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
@@ -133,7 +133,7 @@ describe('replay of records a killed hook left', () => {
   });
 
   it('never turns an item the record had redacted into a row', () => {
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ['The release bot deploys with the token [REDACTED] so rotate it monthly.', ITEMS[0]] });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ['The release bot deploys with the token [REDACTED] so rotate it monthly.', ITEMS[0]] });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(compactionMemories(s.hippoRoot).map((r) => r.content)).toEqual([ITEMS[0]]);
     expect(logs.join('\n')).toContain('skipped 1 item(s) as secret');
@@ -245,7 +245,7 @@ describe('replay of records a killed hook left', () => {
   it('counts the rows it writes in the remembered counter', () => {
     const remembered = (): number => Number(rows<{ value: string }>(`SELECT value FROM meta WHERE key = 'total_remembered'`)[0]?.value ?? 0);
     const before = remembered();
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(remembered() - before).toBe(2);
   });
@@ -259,7 +259,7 @@ describe('replay of records a killed hook left', () => {
 
   it('skips a record whose transcript is gone without failing the rest', () => {
     seed(s.hippoRoot, { id: 'cmp-gone', status: 'started', startedMinutesAgo: 30, transcript: path.join(s.proj, 'missing.jsonl') });
-    seed(s.hippoRoot, { id: 'cmp-2', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS, session: 's2' });
+    seed(s.hippoRoot, { id: 'cmp-2', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS, session: 's2' });
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
     expect(compactionRows(s.hippoRoot).map((r) => [r.id, r.status]).sort()).toEqual([['cmp-2', 'done'], ['cmp-gone', 'started']]);
   });
@@ -269,7 +269,7 @@ describe('two replayers working the same store', () => {
   beforeEach(() => initStore(s.hippoRoot));
 
   it('a stale replayer writes nothing and reports what the first one wrote', () => {
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS });
     const db = openHippoDb(s.hippoRoot);
     try {
       const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', cwd: null, items: ITEMS };
@@ -352,7 +352,7 @@ describe('hippo sleep finishes what the hook could not', () => {
 
   it('a dry run replays nothing', () => {
     initStore(s.hippoRoot);
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS });
     expect(runHippo(['sleep', '--no-learn', '--dry-run'], s.proj, s.env).status).toBe(0);
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
     expect(compactionRows(s.hippoRoot)[0].status).toBe('summarised');
@@ -386,7 +386,7 @@ describe('hippo sleep finishes what the hook could not', () => {
 
   it('the next post-compact also finishes an earlier compaction', () => {
     initStore(s.hippoRoot);
-    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS, session: 'earlier' });
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarizedMinutesAgo: 20, items: ITEMS, session: 'earlier' });
     const hook = runHippo(['post-compact'], s.proj, s.env, postCompactPayload('s2', s.proj, summaryWith(['The staging database is reset every Sunday night by the platform team.'])));
     expect(oneLine(hook.stdout)).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(3);

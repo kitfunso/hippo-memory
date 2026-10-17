@@ -174,7 +174,7 @@ function codexTurn(entry: TranscriptRecord): SessionTurn | null {
 }
 
 export function summariseTranscript(jsonl: string): string {
-  return summariseSessionTurns(collectSessionTurns(jsonl));
+  return summarizeSessionTurns(collectSessionTurns(jsonl));
 }
 
 /** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
@@ -185,7 +185,7 @@ export function sessionTail(turns: readonly SessionTurn[]) {
   };
 }
 
-export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
+export function summarizeSessionTurns(turns: readonly SessionTurn[]): string {
   const { users: tailUsers, assistants: tailAssistants } = sessionTail(turns);
   if (tailUsers.length === 0 && tailAssistants.length === 0) return '';
 

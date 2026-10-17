@@ -38,18 +38,18 @@ export interface StartedCompactionInput {
   readonly startedAt: string;
 }
 
-export interface SummarisedUpdate {
+export interface SummarizedUpdate {
   readonly summary: string;
   readonly itemsJson: string;
-  readonly summarisedAt: string;
+  readonly summarizedAt: string;
   readonly requestId?: string;
 }
 
-export interface SummarisedInsert extends SummarisedUpdate {
+export interface SummarizedInsert extends SummarizedUpdate {
   readonly id: string;
 }
 
-export type SummarisedInsertMeta = Omit<StartedCompactionInput, 'id'>;
+export type SummarizedInsertMeta = Omit<StartedCompactionInput, 'id'>;
 
 const COLUMNS =
   'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, ' +
@@ -94,13 +94,13 @@ export function latestStartedRows(
   );
 }
 
-/** `summarised` rows whose summary is older than `summarisedBefore`, an ISO string. */
-export function stalledSummarisedRows(
+/** `summarised` rows whose summary is older than `summarizedBefore`, an ISO string. */
+export function stalledSummarizedRows(
   db: DatabaseSyncLike,
   tenantId: string,
-  summarisedBefore: string,
+  summarizedBefore: string,
 ): CompactionRow[] {
-  return selectRows(db, `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`, tenantId, summarisedBefore);
+  return selectRows(db, `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`, tenantId, summarizedBefore);
 }
 
 /** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`, oldest first. */
@@ -138,13 +138,13 @@ export function insertStartedCompaction(db: DatabaseSyncLike, tenantId: string, 
 }
 
 /** Moves a `started` row to `summarised`; false when another process already moved it. */
-export function markCompactionSummarised(
+export function markCompactionSummarized(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
-  update: SummarisedUpdate,
+  update: SummarizedUpdate,
 ): boolean {
-  const { summary, itemsJson, summarisedAt, requestId } = update;
+  const { summary, itemsJson, summarizedAt, requestId } = update;
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const result = db
@@ -153,17 +153,17 @@ export function markCompactionSummarised(
       `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
     )
-    .run(summary, itemsJson, summarisedAt, ...stamp, tenantId, id);
+    .run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
   return (result.changes ?? 0) > 0;
 }
 
-export function insertSummarisedCompaction(
+export function insertSummarizedCompaction(
   db: DatabaseSyncLike,
   tenantId: string,
-  meta: SummarisedInsertMeta,
-  row: SummarisedInsert,
+  meta: SummarizedInsertMeta,
+  row: SummarizedInsert,
 ): void {
-  const { id, summary, itemsJson, summarisedAt, requestId } = row;
+  const { id, summary, itemsJson, summarizedAt, requestId } = row;
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
@@ -181,7 +181,7 @@ export function insertSummarisedCompaction(
     meta.cwd,
     meta.transcriptPath,
     meta.startedAt,
-    summarisedAt,
+    summarizedAt,
     summary,
     itemsJson,
     ...stamp,
