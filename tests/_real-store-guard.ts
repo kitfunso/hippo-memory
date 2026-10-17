@@ -51,8 +51,8 @@ export function watchedStoreDirs(cwd: string, home: string): string[] {
   let dir = realpathOrResolve(cwd);
   // getHippoRoot falls back to cwd/.hippo when the walk finds no marker, so it is reachable even at a bound.
   add(join(dir, '.hippo'));
-  // SHORTCUT: 64 copies the unexported MAX_WALK_DEPTH (project-identity.ts:43); export it there to end the drift.
-  for (let depth = 0; depth < 64; depth++) {
+  // No depth cap: the real walk's cap only ends it sooner, and the filesystem root ends this one, so every dir it could read is watched.
+  for (;;) {
     if (samePath(dir, homeReal) || samePath(dir, tmpReal)) break;
     // Every ancestor's store is listed even when absent: a test can create one mid-run.
     add(join(dir, '.hippo'));
