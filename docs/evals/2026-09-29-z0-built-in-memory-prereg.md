@@ -287,3 +287,11 @@ An adversarial review of the first draft found 14 issues. All were accepted:
 - several claims were loose or wrong.
 
 Nothing was rejected.
+
+## Amendment 1 (2026-10-15), before the freeze
+
+Calibration on two set R repositories (cj, bm) found no design within the caps that reaches the power this prereg asks for (`z0-stage2-record.md`, "S9: preliminary sizing"). The founder approved items 1 and 2 on 2026-10-15. All three apply before stage 2's check, before the freeze and before any scored task exists.
+
+1. **H3 leaves the primary family.** It is still computed, reported with its interval and split as H3 says, but it is not sized and does not gate the start. The primary family is H1 and H2, Holm-adjusted at a two-sided 0.05. Reason: hippo was dearer than built-in memory on one calibration repository and cheaper on the other, and that spread is about three times the 5% saving H3 tests. No feasible size gives it 80% power, and a hypothesis that is not sized only takes alpha from H1.
+2. **Two more set R development repositories** are calibrated before sizing. The repository variance then has three degrees of freedom instead of one, and D6's 80% bound inflates it about 3 times instead of about 16 times.
+3. **Verdicts use a t test over repositories, with G-1 degrees of freedom.** H1 and H2 test the mean of the repository means; H3 tests the pooled ratio with a cluster-robust standard error. The two-level bootstrap is still reported beside it. Reason: in 2000 simulated true-zero runs at 5 repositories, the bootstrap called H1 a win 2.9% to 4.2% of the time and H3 5.6% to 7.4%, against a level of 1.7%. The t test stayed at or under the level in every simulated cell. Sizing simulates the t test.

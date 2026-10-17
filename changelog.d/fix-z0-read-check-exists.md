@@ -1,0 +1,4 @@
+### Fixed
+
+- **The Z0 read check no longer voids a session for a grep pattern or a path that names nothing on disk.** It read every slash-bearing shell word as a file, so an import path in a `grep` pattern resolved into another run's folder and voided a boring-maths screen session, though nothing was read. Prereg 162 voids reads of files, so a word naming no file is now skipped.
+- **The read check now splits shell commands the way the agent's shell does.** It split on `|` inside quotes and ignored `\"`, so a Comonicon.jl session's `grep -rn "lower()\|replace(\"_\"..." .` produced a bare `\` word that Windows resolves to `C:/`, and the session was voided as an ancestor search. Commands are now read line by line with the shell's quotes, its escape character (backslash in Bash, backtick in PowerShell) and line continuations, and a grep-family command's pattern operand is no longer a path unless `-e` or `-f` supplied the pattern.

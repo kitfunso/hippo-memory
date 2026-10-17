@@ -20,7 +20,7 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     otherRun: 'READ:{OUT}/runs/seqF/A2/seed1/claude-config/x',
     past: 'READ_PAST',
     operator: 'BASH:cat ~/.claude/projects/p/s.jsonl',
-    envConfig: 'BASH:cat $CLAUDE_CONFIG_DIR/history.jsonl',
+    envConfig: 'BASH:cat $CLAUDE_CONFIG_DIR/projects/*/*.jsonl',
     envUp: 'BASH:ls ${HIPPO_HOME}/../../../A2',
     rgHome: 'BASH:rg secret ~',
     grepRun: 'GREP:{RUN}',
@@ -29,16 +29,29 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     contentPretty: 'ECHO_TRANSCRIPT_PRETTY',
     subagent: 'SUBAGENT\nREAD:{OUT}/runs/seqF/A2/seed1/work/lib.js',
     own: 'READ:lib.js\nREAD:{RUN}/claude-config/CLAUDE.md\nGREP:.\nBASH:cat $CLAUDE_CONFIG_DIR/projects/x/memory/MEMORY.md',
-    cache: 'READ:{OUT}/repo-cache/seqF/HEAD',
+    cache: 'READ:{OUT}/repo-cache/seqF/.git/HEAD',
     quotedHome: 'BASH:cat "$HOME"/.claude/projects/p/s.jsonl',
     sessionIdOnly: 'ECHO:{"type":"delivery","sessionId":"not-a-transcript-line"}',
     scattered: 'ECHO:{"user":{"uuid":"u"},"event":{"type":"delivery","sessionId":"s"}}',
     nestedRecord: 'ECHO:{"wrap":{"type":"user","uuid":"u1","sessionId":"other-session"}}',
     coloured: 'ECHO:{"uuid":"u1",\x1b[0m\x1b[1m\x1b[31m"type":"user"\x1b[0m,"sessionId":"other-session"}',
+    heredocFile: "BASH:mkdir -p t && cat > t/x.test.js <<'EOF'\\nconst lib = require('../../../A2/seed1/work/lib.js');\\nEOF\\nnode --test t",
+    heredocPiped: "BASH:cat <<'EOF' | sh\\ncat ../../../A2/seed1/work/lib.js\\nEOF",
+    importPattern: 'BASH:grep -n "../../lib/affiliates" lib.js',
+    escapedPattern: 'BASH:grep -rn "lower()\\|replace(\\"_\\"\\|replace(\'_\'" --include=*.py . | grep -v test | head -30',
+    escapedQuote: 'BASH:grep -rn "x\\" /" .',
+    rootPattern: 'BASH:grep -rn / .',
+    rootByFlag: 'BASH:grep -rn -e x /',
+    continued: 'BASH:rg -n secret \\\\n  ~',
+    cdBack: 'CWD:src\nBASH:cd .. && git status',
+    cdUp: 'CWD:src\nBASH:cat ../../../../A2/seed1/work/lib.js',
   };
 
   beforeAll(async () => {
-    const { out } = isolate('reads');
+    const { out, home } = isolate('reads');
+    // The read check skips paths that name nothing, so the files these probes read exist.
+    for (const f of ['runs/seqF/A2/seed1/claude-config/x', 'runs/seqF/A2/seed1/work/lib.js']) writeFileIn(out, f);
+    writeFileIn(home, '.claude/projects/p/s.jsonl');
     const r = makeRepo();
     await run(spec(r, [], [...Object.entries(reads).map(([id, prompt]) => task(r, id, prompt)), plain(r, 'after')]), ['A1'], out);
     recs = readRecords(out);
@@ -80,7 +93,24 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
   it('type, uuid and sessionId from different objects do not make a transcript line', () => expect(find(recs, 'A1', 'scattered').void).toBeNull());
   it('a transcript record nested inside other output still voids', () => expectRead('nestedRecord', 'transcript-content'));
   it('a transcript line printed with colour escapes still voids', () => expectRead('coloured', 'transcript-content'));
+  it('a path in a heredoc that cat writes to a file is file content, not a read', () => expect(find(recs, 'A1', 'heredocFile').void).toBeNull());
+  it('a heredoc piped on to a shell is a script, so its reads still void', () => expectRead('heredocPiped', 'other-run'));
+  it('a path in a grep pattern that names nothing on disk is not a read', () => expect(find(recs, 'A1', 'importPattern')).toMatchObject({ invalid: null, void: null }));
+  it('a grep pattern is not a path, even with escaped quotes and pipes or naming the root', () => {
+    for (const id of ['escapedPattern', 'escapedQuote', 'rootPattern']) expect(find(recs, 'A1', id), id).toMatchObject({ invalid: null, void: null });
+  });
+  it('an operand after a -e pattern is still a search root', () => expectRead('rootByFlag', 'ancestor-search'));
+  it('a line continuation joins a search to its root', () => expectRead('continued', 'ancestor-search'));
+  it('a call runs where an earlier call\'s cd left the shell, as its transcript line records', () => {
+    expect(find(recs, 'A1', 'cdBack')).toMatchObject({ invalid: null, void: null });
+    expectRead('cdUp', 'other-run');
+  });
 });
+
+function writeFileIn(root: string, rel: string): void {
+  mkdirSync(join(root, rel, '..'), { recursive: true });
+  writeFileSync(join(root, rel), 'x\n');
+}
 
 describe('a Codex call\'s workdir is a read of that dir', () => {
   afterEach(cleanup);
@@ -171,6 +201,7 @@ describe('resume hits: session 1 decides void, and only a teach\'s resume adds t
 
   it('a resume read voids a teach; on an apply it is only kept, while the same read in session 1 voids', async () => {
     const { out } = isolate('resume-reads');
+    writeFileIn(out, 'runs/seqF/A2/seed1/claude-config/x');
     const r = makeRepo();
     await run(oneLesson(r, { t1: `LESSON_BAD\nRESUME_${other}`, a1: `LESSON_BAD\nRESUME_${other}`, a2: `LESSON_BAD\n${other}` }), ['A1'], out);
     const recs = readRecords(out);
@@ -278,6 +309,7 @@ describe('delivery voids and the worktree read', () => {
 
   it('a worktree made outside the workspace voids later reads of it; a canary wins over a read in its session', async () => {
     const { out } = isolate('worktree');
+    writeFileIn(out, 'runs/seqF/A2/seed1/claude-config/x');
     const r = makeRepo();
     process.env.FAKE_WT_DIR = `${tmp('z0-wt-')}/wt`;
     const s = spec(r, [], [
@@ -297,6 +329,7 @@ describe('delivery voids and the worktree read', () => {
 
   it.skipIf(process.platform !== 'win32')('an out dir and a worktree under 8.3 short names classify long-path reads, as on the CI runner', async (t) => {
     const { out } = isolate('shortname');
+    writeFileIn(out, 'runs/seqF/A2/seed1/claude-config/x');
     const r = makeRepo();
     const wtParent = tmp('z0-surf-worktree-parent-');
     const [shortOut, shortWt] = [out, wtParent].map(shortName);
@@ -316,6 +349,7 @@ describe('delivery voids and the worktree read', () => {
 
   it('a read through a link alias of the out dir is classified like the out dir itself', async (t) => {
     const { out } = isolate('alias');
+    writeFileIn(out, 'runs/seqF/A2/seed1/claude-config/x');
     const r = makeRepo();
     const alias = join(tmp('z0-surf-alias-'), 'alias');
     try {

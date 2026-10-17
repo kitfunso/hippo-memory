@@ -7,8 +7,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(HERE, '..', '..');
 export const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 
-// A parent session id makes a child Claude Code session report and log under the parent's id.
-export const STRIP_ENV = ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_REMOTE_SESSION_ID', 'HIPPO_SESSION_ID', 'HIPPO_HOME', 'HIPPO_TENANT'];
+// A parent session id makes a child Claude Code session report and log under the parent's id. Claude Code sets
+// NoDefaultCurrentDirectoryInExePath in its own shells, and cmd.exe then stops finding a task's `gradlew.bat` in the checkout.
+export const STRIP_ENV = ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_REMOTE_SESSION_ID', 'HIPPO_SESSION_ID', 'HIPPO_HOME', 'HIPPO_TENANT', 'NoDefaultCurrentDirectoryInExePath'];
 
 /** The key the env already uses for PATH (Windows spells it Path). */
 export function pathKey(env) {
@@ -95,10 +96,29 @@ function runnerGit(args, extraEnv) {
   return [['-c', `core.hooksPath=${NO_HOOKS}`, '-c', 'core.attributesFile=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', ...args], env];
 }
 
+// Windows real-time scanning can hold a fresh loose object past Git for Windows' own short rename retry.
+const OBJECT_LOCK = /unable to write file .*objects[\\/][0-9a-f]{2}[\\/][0-9a-f]{38,62}: Permission denied/;
+const LOCK_WAITS_MS = [500, 1000, 2000, 4000];
+/** Retries taken this process, printed at the end of a run so an environment flake is seen, never hidden. */
+export const objectLockRetries = { count: 0 };
+
+/** fn(), rerun while it fails on a locked loose object; every git that writes objects leaves refs untouched on that failure, so a rerun is safe. */
+export function retryObjectLock(fn, waits = LOCK_WAITS_MS) {
+  for (let i = 0; ; i++) {
+    try {
+      return fn();
+    } catch (err) {
+      if (i >= waits.length || !OBJECT_LOCK.test(String(err.stderr ?? ''))) throw err;
+      objectLockRetries.count++;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waits[i]);
+    }
+  }
+}
+
 /** Every runner git call goes through here or gitSpawn; extraEnv adds keys but can never undo the isolation. */
 export function git(args, cwd, extraEnv = {}, encoding = 'utf8') {
   const [argv, env] = runnerGit(args, extraEnv);
-  return execFileSync('git', argv, { cwd, env, encoding, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28 });
+  return retryObjectLock(() => execFileSync('git', argv, { cwd, env, encoding, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28 }));
 }
 
 /** git() for a caller that reads the exit code itself; stdout and stderr are Buffers. */

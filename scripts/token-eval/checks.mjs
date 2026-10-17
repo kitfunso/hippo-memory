@@ -68,7 +68,7 @@ export class CheckerError extends Error {
   }
 }
 
-/** Run a lesson's checker on the workspace; `commands` goes to the checker as a JSON file named by Z0_COMMANDS. Throws WorkspaceGitError on a broken .git. */
+/** Run a lesson's checker on the workspace; `commands` goes to the checker as a JSON file named by CHECK_COMMANDS. Throws WorkspaceGitError on a broken .git. */
 export function runCheck(lesson, { work, env, preCommit, postCommit, commands, scratch, timeoutMs = 120_000 }) {
   fs.mkdirSync(scratch, { recursive: true });
   const commandsFile = path.join(scratch, 'z0-commands.json');
@@ -79,7 +79,7 @@ export function runCheck(lesson, { work, env, preCommit, postCommit, commands, s
   const r = spawnSync(process.execPath, [lesson.checkPath, ...(lesson.check.args ?? [])], {
     cwd: work, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 26,
     // A checker's git reads the workspace config alone, never the operator's global hooks or diff drivers.
-    env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_PARAMETERS: configParams, Z0_PRE_COMMIT: preCommit, Z0_POST_COMMIT: postCommit, Z0_COMMANDS: commandsFile, Z0_LESSON_ID: lesson.id },
+    env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_PARAMETERS: configParams, CHECK_PRE_COMMIT: preCommit, CHECK_POST_COMMIT: postCommit, CHECK_COMMANDS: commandsFile, CHECK_LESSON_ID: lesson.id },
   });
   const stderr = r.stderr ?? '';
   if (r.error?.code === 'ETIMEDOUT') throw new CheckerError(`checker for lesson ${lesson.id} timed out after ${timeoutMs} ms`, stderr);

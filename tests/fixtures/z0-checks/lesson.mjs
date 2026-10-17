@@ -12,14 +12,14 @@ const log = (o) => logFile && fs.appendFileSync(logFile, `check ${JSON.stringify
 
 if (process.argv.includes('escape') || (arg('escape-if') && fs.existsSync(arg('escape-if')))) fs.writeFileSync('../CLAUDE.md', 'written by a checker\n');
 // A pruned pre-session commit must never pass as a verdict.
-if (git('cat-file', '-e', `${process.env.Z0_PRE_COMMIT}^{commit}`).status !== 0) {
-  log({ lesson: process.env.Z0_LESSON_ID, prunedPre: process.env.Z0_PRE_COMMIT });
+if (git('cat-file', '-e', `${process.env.CHECK_PRE_COMMIT}^{commit}`).status !== 0) {
+  log({ lesson: process.env.CHECK_LESSON_ID, prunedPre: process.env.CHECK_PRE_COMMIT });
   process.exit(2);
 }
 const entry = {
-  lesson: process.env.Z0_LESSON_ID, pre: process.env.Z0_PRE_COMMIT, post: process.env.Z0_POST_COMMIT,
+  lesson: process.env.CHECK_LESSON_ID, pre: process.env.CHECK_PRE_COMMIT, post: process.env.CHECK_POST_COMMIT,
   preRef: out(git('rev-parse', '-q', '--verify', 'refs/z0/pre')),
-  commands: JSON.parse(fs.readFileSync(process.env.Z0_COMMANDS, 'utf8')),
+  commands: JSON.parse(fs.readFileSync(process.env.CHECK_COMMANDS, 'utf8')),
 };
 const has = arg('has');
 if (has) entry.has = git('cat-file', '-e', has).status === 0;

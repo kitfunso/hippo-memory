@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment, SHELL_TOOLS } from './records.mjs';
+import { requestBodies } from './proxy.mjs';
 
 /** Void reasons in precedence order: the record's `void` is the first one hit. */
 export const VOID_ORDER = ['operator-canary', 'read', 'auto-memory', 'user-instructions', 'hippo-text'];
@@ -12,8 +13,10 @@ const FLOOR_ARMS = new Set(['A0', 'A4']);
 const HIPPO_MARK = '<!-- hippo:start -->';
 const HOME_PAIR = { HOME: 'USERPROFILE', USERPROFILE: 'HOME' };
 const ENV_FORM = /\$\{?\w+\}?|\$env:\w+|%\w+%/i;
-const WORD_PART = /(\s+|[<>()])|"([^"]*)"|'([^']*)'|([^\s"'<>()]+)/g;
 const SEARCH_ALWAYS = new Set(['rg', 'ag', 'ack', 'find', 'fd', 'tree', 'du']);
+const PATTERN_FIRST = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
+// With -e or -f the pattern comes from the flag, so every operand is a path; rg --files takes no pattern.
+const PATTERN_FLAG = /^-(?:[a-zA-Z]*[ef]|-regexp|-file)/;
 const GREP_R = /^-[a-z]*r|^--(?:dereference-)?recursive$/i;
 const PS_R = /^-r(?:ecurse)?$/i;
 const RECURSIVE_FLAG = { grep: GREP_R, egrep: GREP_R, fgrep: GREP_R, ls: /^-[a-zA-Z]*R|^--recursive$/, 'get-childitem': PS_R, gci: PS_R, dir: /^(?:-r(?:ecurse)?|[-/]s)$/i };
@@ -56,28 +59,69 @@ function cutWildcard(p) {
   return wild < 0 ? p : p.slice(0, p.lastIndexOf('/', wild) + 1) || p.slice(0, wild);
 }
 
-/** Shell words, with quoted and bare parts that touch joined as the shell joins them, so `"$HOME"/x` is one word. */
-function shellWords(seg) {
-  const words = [];
-  let cur = null;
-  for (const m of seg.matchAll(WORD_PART)) {
-    if (m[1] === undefined) {
-      cur = (cur ?? '') + (m[2] ?? m[3] ?? m[4]);
-      continue;
+/** Each simple command's words, line by line, read with the agent shell's quotes and escape character, so `"$HOME"/x` is one word and `;&|()` end a command. */
+function shellCommands(text, esc) {
+  const cmds = [];
+  const joined = text.replace(esc === '\\' ? /\\\r?\n/g : /`\r?\n/g, '');
+  for (const line of joined.split('\n')) {
+    let [words, word, quote] = [[], null, null];
+    const endWord = () => { if (word !== null) words.push(word); word = null; };
+    const endCmd = () => { endWord(); if (words.length) cmds.push(words); words = []; };
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === esc && quote !== "'") {
+        const n = line[++i];
+        // Inside double quotes Bash keeps a backslash that escapes nothing special.
+        if (n !== undefined) word = (word ?? '') + (quote === '"' && esc === '\\' && !'$`"\\'.includes(n) ? c + n : n);
+      } else if (quote) {
+        if (c === quote) quote = null;
+        else word += c;
+      } else if (c === '"' || c === "'") {
+        quote = c;
+        word ??= '';
+      } else if (';&|()'.includes(c)) endCmd();
+      else if (/[\s<>]/.test(c)) endWord();
+      else word = (word ?? '') + c;
     }
-    if (cur !== null) words.push(cur);
-    cur = null;
+    endCmd();
   }
-  return cur === null ? words : [...words, cur];
+  return cmds;
+}
+
+const commandName = (word) => (word ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+
+// A body that only cat or tee takes is file content, as a Write tool's is; one fed to any other command, or piped on, may be a script.
+const HEREDOC = /(?<!<)<<(?!<)(-?)\s*(['"]?)([\w.-]+)\2/g;
+const FILE_SINK = new Set(['cat', 'tee']);
+
+function onlyToFile(line, at) {
+  // Quote-blind on purpose: in `git commit -m "$(cat <<'EOF'` the quote closes after the body.
+  const cmd = commandName(line.slice(0, at).split(/&&|\|\||[;&|(]/).at(-1).trim().split(/[\s<>]+/)[0]);
+  return FILE_SINK.has(cmd) && !line.slice(at).split(/&&|\|\||[;&]/)[0].includes('|');
+}
+
+/** The command with each file-content heredoc body blanked; every other line stays. */
+function blankFileBodies(command) {
+  const lines = String(command ?? '').split('\n');
+  for (let i = 0, next = 0; i < lines.length; i++) {
+    if (i < next) continue;
+    next = i + 1;
+    for (const m of lines[i].matchAll(HEREDOC)) {
+      let end = next;
+      while (end < lines.length && (m[1] ? lines[end].replace(/^\t+/, '') : lines[end]) !== m[3]) end++;
+      if (onlyToFile(lines[i], m.index)) lines.fill('', next, end + 1);
+      next = end + 1;
+    }
+  }
+  return lines.join('\n');
 }
 
 /** Path tokens of a shell command as `{token, search, cwd}`; a `cd` target counts as a read and moves cwd for the rest of the command. */
-function shellPaths(command, work, opts) {
+function shellPaths(command, work, opts, esc) {
   const out = [];
   let cwd = work;
-  for (const seg of String(command ?? '').split(/&&|\|\||[;|&\n]/)) {
-    const words = shellWords(seg);
-    const cmd = (words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+  for (const words of shellCommands(blankFileBodies(command), esc)) {
+    const cmd = commandName(words[0]);
     const args = words.slice(1).filter((a) => !a.startsWith('-'));
     const flags = words.slice(1).filter((a) => a.startsWith('-') || a.startsWith('/'));
     const search = SEARCH_ALWAYS.has(cmd) || flags.some((a) => RECURSIVE_FLAG[cmd]?.test(a)) || (WILDCARD_SEARCH.has(cmd) && args.some((a) => a.includes('*')));
@@ -86,7 +130,9 @@ function shellPaths(command, work, opts) {
       cwd = resolveToken(args[0], { ...opts, cwd });
       continue;
     }
-    const kept = words.filter((a, i) => !a.startsWith('-') && (/[\\/]/.test(a) || a.startsWith('~') || ENV_FORM.test(a) || (search && i > 0 && (a === '.' || a === '..'))));
+    // A grep-family command's first operand is its pattern, which names no file.
+    const pattern = PATTERN_FIRST.has(cmd) && !flags.some((a) => PATTERN_FLAG.test(a)) ? words.indexOf(args[0], 1) : -1;
+    const kept = words.filter((a, i) => i !== pattern && !a.startsWith('-') && (/[\\/]/.test(a) || a.startsWith('~') || ENV_FORM.test(a) || (search && i > 0 && (a === '.' || a === '..'))));
     for (const token of kept) out.push({ token, search: search && token !== words[0], cwd });
     // A search with no path searches cwd, which a cd may have moved.
     if (search && !kept.some((a) => a !== words[0])) out.push({ token: '.', search: true, cwd });
@@ -96,7 +142,7 @@ function shellPaths(command, work, opts) {
 
 /** Every path a tool call names, as `{token, search, cwd}`. */
 function toolPaths(name, input, work, opts) {
-  if (name === 'Bash' || name === 'PowerShell') return shellPaths(input.command, work, opts);
+  if (name === 'Bash' || name === 'PowerShell') return shellPaths(input.command, work, opts, name === 'Bash' ? '\\' : '`');
   if (name === 'Grep') return [{ token: input.path ?? '.', search: true, cwd: work }];
   if (name === 'Glob') {
     const root = resolveToken(input.path ?? '.', { ...opts, cwd: work });
@@ -205,12 +251,15 @@ export function deliveryHits(run, snap, preSession) {
 function pathHits(run, b, files, fileName, how) {
   const opts = { env: how.env, platform: process.platform };
   const hits = [];
-  for (const { file, name, input } of how.adapter.toolInputs(files)) {
-    const paths = toolPaths(name, input, input.cwd ?? run.dirs.work, opts);
-    // A Codex shell call's workdir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
-    if (SHELL_TOOLS.has(name) && input.cwd && input.cwd !== run.dirs.work) paths.unshift({ token: input.cwd, search: false, cwd: run.dirs.work });
+  for (const { file, name, input, cwd: callCwd } of how.adapter.toolInputs(files)) {
+    // A call runs in its cwd: where an earlier `cd` left Claude Code's shell, or a Codex call's workdir.
+    const paths = toolPaths(name, input, callCwd ?? run.dirs.work, opts);
+    // That dir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
+    if (SHELL_TOOLS.has(name) && callCwd && callCwd !== run.dirs.work) paths.unshift({ token: callCwd, search: false, cwd: run.dirs.work });
     for (const { token, search, cwd } of paths) {
       const p = b.fold(cutWildcard(resolveToken(token, { ...opts, cwd })));
+      // Prereg 162 voids a read of files: a word naming nothing on disk, such as an import path in a grep pattern, read nothing.
+      if (!fs.existsSync(p)) continue;
       const cls = classify(b, p, search);
       if (cls && (!how.outsideOnly || OUTSIDE.has(cls))) hits.push(hit('read', cls, name, p, fileName(file)));
       if (FLOOR_ARMS.has(run.arm) && /^[^/]+\/memory(?:\/|$)/i.test(under(p, b.projects) ? relTo(b.projects, p) : '')) hits.push(hit('auto-memory', 'tool-input', name, p, fileName(file)));
@@ -247,6 +296,22 @@ function ownObjects(text) {
   return [...done, ...stack.filter((f) => f.obj).map((f) => f.own.join(''))];
 }
 
+// Claude Code's own wording for injected memory and hook text (seen 2026-10-10); a rewording only loses these checks, never voids a clean session.
+const AUTO_MEMORY_TEXT = "(user's auto-memory, persists across conversations)";
+const HOOK_TEXT = 'hook additional context';
+
+/** Hits from the proxy's request logs, which hold what the model received (smoke report point 1). */
+function requestHits(ctx, run, logs, fileName) {
+  const hits = [];
+  for (const log of logs) {
+    const sent = requestBodies(log).join('\n');
+    for (const c of ctx.canaries) if (sent.includes(c)) hits.push(hit('operator-canary', 'request', null, null, fileName(log)));
+    if (FLOOR_ARMS.has(run.arm) && sent.includes(AUTO_MEMORY_TEXT)) hits.push(hit('auto-memory', 'request', null, null, fileName(log)));
+    if (!HIPPO_ARMS.has(run.arm) && (sent.includes(HIPPO_MARK) || sent.includes(HOOK_TEXT))) hits.push(hit('hippo-text', 'request', null, null, fileName(log)));
+  }
+  return hits;
+}
+
 /** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
 function contentHits(ctx, run, b, files, fileName, how) {
   const hits = [];
@@ -264,6 +329,7 @@ function contentHits(ctx, run, b, files, fileName, how) {
     const raw = fs.existsSync(file) ? segmentText(seg) : '';
     for (const c of ctx.canaries) if (raw.includes(c)) hits.push(hit('operator-canary', null, null, null, fileName(file)));
   }
+  hits.push(...requestHits(ctx, run, how.requestLogs, fileName));
   if (how.outsideOnly || HIPPO_ARMS.has(run.arm)) return hits;
   for (const { file } of how.adapter.hookContexts(files)) hits.push(hit('hippo-text', 'hook', null, null, fileName(file)));
   // The Codex hook item's shape is not pinned yet (plan R16), so a rollout holding hippo's marker anywhere voids too.
@@ -273,10 +339,10 @@ function contentHits(ctx, run, b, files, fileName, how) {
 
 /** The session's G1 verdict: `void` is the highest-precedence hit's reason; `voidHits` keeps every hit, in precedence order.
  * A Codex session passes its adapter and env; `outsideOnly` keeps just the reach outside the run, for Codex's own memory threads. */
-export function sessionVoid(ctx, run, step, { files, ownIds, delivery, adapter = CLAUDE_READ, env = run.env, outsideOnly = false, markScan = false }) {
+export function sessionVoid(ctx, run, step, { files, ownIds, delivery, adapter = CLAUDE_READ, env = run.env, outsideOnly = false, markScan = false, requestLogs = /** @type {string[]} */ ([]) }) {
   const b = bounds(ctx, run, step, ownIds);
   const fileName = (f) => path.relative(ctx.outDir, f).split(path.sep).join('/');
-  const how = { adapter, env, outsideOnly, markScan };
+  const how = { adapter, env, outsideOnly, markScan, requestLogs };
   const hits = byPrecedence([...delivery, ...pathHits(run, b, files, fileName, how), ...contentHits(ctx, run, b, files, fileName, how)]);
   return { void: hits[0]?.reason ?? null, voidHits: hits };
 }

@@ -129,7 +129,7 @@ describe('z0-regrade regrade and grading', () => {
     expect(rowFor(c.out, 'a1')).toMatchObject({ status: 'error', error: { stage: 'bundle' } });
   }, 300_000);
 
-  it('the checker sees the run\'s env but for Z0_COMMANDS and the three homes, which start empty under rg/; the token reaches neither (9)', async () => {
+  it('the checker sees the run\'s env but for CHECK_COMMANDS and the three homes, which start empty under rg/; the token reaches neither (9)', async () => {
     const c = copyOut(shared);
     const before = dumpsIn(shared.dumps);
     expect(await regrade(c, ['--cell', keyOf('t2')])).toMatchObject({ code: 0 });
@@ -139,14 +139,14 @@ describe('z0-regrade regrade and grading', () => {
     const runDumps = before.map((f) => dumpOf(shared.dumps, f));
     for (const [i, post] of [grade.first, grade.finalCheck].entries()) {
       const now = dumpOf(shared.dumps, added[i]);
-      const then = runDumps.find((d) => d.Z0_POST_COMMIT === post && d.Z0_LESSON_ID === 'f2-l1')!;
+      const then = runDumps.find((d) => d.CHECK_POST_COMMIT === post && d.CHECK_LESSON_ID === 'f2-l1')!;
       expect(then).toBeDefined();
       const keys = [...new Set([...Object.keys(then), ...Object.keys(now)])];
-      expect(keys.filter((k) => then[k] !== now[k]).sort()).toEqual(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'Z0_COMMANDS']);
+      expect(keys.filter((k) => then[k] !== now[k]).sort()).toEqual(['CHECK_COMMANDS', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']);
       const mapped = (p: string) => p.replace(join(shared.out, 'runs'), join(realpathSync.native(c.out), 'rg'));
       for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']) expect(now[k]).toBe(mapped(then[k]));
       // One commands file per cell, so after both calls it holds the final check's list.
-      if (i === 1) expect(JSON.parse(readFileSync(now.Z0_COMMANDS, 'utf8'))).toEqual(grade.commandsFinal);
+      if (i === 1) expect(JSON.parse(readFileSync(now.CHECK_COMMANDS, 'utf8'))).toEqual(grade.commandsFinal);
       for (const d of [then, now]) expect(Object.keys(d).some((k) => k.toUpperCase() === 'CLAUDE_CODE_OAUTH_TOKEN') || Object.values(d).includes(TOKEN)).toBe(false);
     }
   }, 300_000);

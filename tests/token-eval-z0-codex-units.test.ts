@@ -5,7 +5,7 @@ import { delimiter, dirname, join } from 'node:path';
 import { validateTasks, planRuns } from '../scripts/token-eval/ab-run.mjs';
 import { armEnv, armSettings, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS } from '../scripts/token-eval/arms.mjs';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
-import { parseWrapperWait } from '../scripts/token-eval/codex.mjs';
+import { parseWrapperWait, CODEX_LIMIT_RE } from '../scripts/token-eval/codex.mjs';
 import { wrapperVerdict, wrapperWait } from '../scripts/token-eval/codex-task.mjs';
 import { readIfPresent } from '../scripts/token-eval/codex-auth.mjs';
 import { CHECKS, cleanup, tmp, lesson, family, task, teach, apply } from './fixtures/z0-harness.js';
@@ -177,6 +177,11 @@ describe('the wrapper\'s end line (R17)', () => {
   it('takes the bound from --codex-wrapper-wait-ms, 120 s unless set, and refuses a value that is not a whole number', () => {
     expect([parseWrapperWait(), parseWrapperWait('500'), parseWrapperWait('0')]).toEqual([120_000, 500, 0]);
     for (const bad of ['-1', '1.5', 'soon', '']) expect(() => parseWrapperWait(bad), bad).toThrow(/--codex-wrapper-wait-ms/);
+  });
+
+  it('reads a usage, weekly or session limit as a limit, and plain failures as none', () => {
+    for (const m of ["You've hit your usage limit.", "You've hit your weekly limit. Try again on Friday.", "You've hit your session limit"]) expect(CODEX_LIMIT_RE.test(m), m).toBe(true);
+    for (const m of ['tests failed: 3', 'the limit of the series is 0']) expect(CODEX_LIMIT_RE.test(m), m).toBe(false);
   });
 });
 

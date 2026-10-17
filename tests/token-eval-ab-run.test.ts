@@ -1,7 +1,7 @@
 // Z0 runner end to end with a stand-in for Claude Code (tests/fixtures/fake-claude.mjs), so it costs nothing.
 // Real git, hidden-test grading, hippo hooks, ledger and CLI; the stand-in's token numbers are made up.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -175,6 +175,10 @@ describe('Z0 runner plan and reads', () => {
     expect(isUsageLimit({ is_error: true, subtype: 'success', result: 'Claude AI usage limit reached|1790000000' }, 'Claude AI usage limit reached|1790000000')).toBe(true);
     expect(isUsageLimit(null, 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}')).toBe(true);
     expect(isUsageLimit(null, "You've hit your limit")).toBe(true);
+    const weekly = "You've hit your weekly limit · resets Oct 17, 5am (Europe/London)";
+    expect(isUsageLimit({ is_error: true, subtype: 'success', result: weekly }, weekly)).toBe(true);
+    expect(isUsageLimit({ is_error: true, subtype: 'success' }, "You've hit your session limit · resets 4pm")).toBe(true);
+    expect(isUsageLimit({ is_error: true, subtype: 'success' }, "You've hit your Opus weekly limit")).toBe(true);
     expect(isUsageLimit({ is_error: false, result: 'the rate limit reached its cap' }, 'the rate limit reached its cap')).toBe(false);
     expect(isUsageLimit({ is_error: true, subtype: 'error_max_budget_usd' }, 'budget limit reached')).toBe(false);
     expect(isUsageLimit({ is_error: true, subtype: 'error_during_execution' }, 'TypeError: x is undefined')).toBe(false);
@@ -520,9 +524,8 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
   it('validates and plans a run with dist/ absent (no build needed to dry-run)', () => {
     const scratch = tmp('ab-run-nodist-');
     const scriptsDir = join(scratch, 'scripts', 'token-eval');
-    mkdirSync(scriptsDir, { recursive: true });
-    const src = resolve(__dirname, '..', 'scripts', 'token-eval');
-    for (const f of readdirSync(src)) writeFileSync(join(scriptsDir, f), readFileSync(join(src, f)));
+    // The whole scripts/ tree, as a checkout without dist/ has it: the runner imports shared libs from scripts/.
+    cpSync(resolve(__dirname, '..', 'scripts'), join(scratch, 'scripts'), { recursive: true });
     const r = makeRepo();
     const tasksFile = join(scratch, 'tasks.json');
     writeFileSync(tasksFile, JSON.stringify(validateTasks({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] })));
