@@ -18,8 +18,8 @@ export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMainte
       removals.length === 0 ? [] : on((db, own) => deleteEntriesAutomaticallyAt(db, own, removals, actor), openStore),
     pruneAuditRows: (prune) => on((db) => pruneAuditRowsAt(db, prune)),
     // Quality repair opens the store unmigrated, so it takes the folder and not a handle.
-    repairQuality: (tenantId, apply) => repairAutomaticMemories(files, { tenantId, apply }),
-    repairQualityOnce: (tenantId) => repairQualityOnce(files, tenantId),
+    repairQuality: (tenantId, apply, protect) => repairAutomaticMemories(files, { tenantId, apply, protect }),
+    repairQualityOnce: (tenantId, protect) => repairQualityOnce(files, tenantId, protect),
   };
 }
 
