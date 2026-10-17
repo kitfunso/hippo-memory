@@ -9,7 +9,7 @@ import { detectSecret } from '../util/secret-detect.js';
 import { initStore, type OnHandle, openStore, type StoreFiles } from './open.js';
 import { writePromotedEntry } from './entry-writes.js';
 import { readEntryAt } from './entry-reads.js';
-import { isQuarantineScope } from './quarantine.js';
+import { isQuarantineScope } from '../core/recall-scope.js';
 import type { PromoteOptions } from './port/promotion.js';
 
 function assertPromotable(id: string, entry: MemoryEntry): void {

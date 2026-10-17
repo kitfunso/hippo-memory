@@ -9,7 +9,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';

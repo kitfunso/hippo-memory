@@ -1,4 +1,5 @@
-import { type Context, adminActor } from '../api/index.js';
+import { adminActor } from '../api/index.js';
+import type { ContextWith } from '../api/types.js';
 import type { Machine, SyncOptions } from '../agent-memories/sync.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
@@ -6,7 +7,7 @@ import { runConsolidation } from '../consolidate/sleep.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
-import type { LocalFiles } from '../store/port.js';
+import type { FolderStore, LocalFiles } from '../store/port.js';
 import {
   runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
 } from '../store/sqlite/store.js';
@@ -15,6 +16,11 @@ import { CLI_ACTOR } from '../core/actor.js';
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   return sqliteStore(hippoRoot);
+}
+
+/** A folder's hippo.db beside its folder, as sharing and sync take each side; the global one may not exist yet. */
+export function cliFolder(hippoRoot: string): FolderStore {
+  return { root: hippoRoot, store: cliStore(hippoRoot) };
 }
 
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
@@ -42,7 +48,7 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
 
 // The one place the CLI names its audit actor and builds its store;
 // root is a parameter because some verbs target the global store.
-export function cliApiContext(hippoRoot: string, tenantId: string): Context {
+export function cliApiContext(hippoRoot: string, tenantId: string): ContextWith<'localFiles'> {
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = loadConfig(hippoRoot);

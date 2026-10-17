@@ -1,8 +1,10 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
 // write of the three.
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
-import { DEFAULT_EMBEDDING_MODEL } from '../embeddings/local.js';
+import { onHandle, type OnHandle } from './open.js';
+import {
+  embeddingIndexIdentity, indexedModel, indexNeedsRebuild, replacesIndex,
+} from '../embeddings/index-identity.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
 import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
@@ -25,20 +27,11 @@ import { chunked } from '../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../util/sql.js';
 import type { StoredVectorSummary } from './port/embedding-index.js';
-import type { EmbeddingIndexState } from './port/vector-reads.js';
+import type { EmbeddingIndexState } from '../embeddings/index-identity.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 
 const MAX_BACKFILL_PAGE = 500;
-
-/** The model the index was built by: the stored identity, else the default model when vectors exist. */
-export function indexedModel(state: EmbeddingIndexState): string | null {
-  return state.storedModel ?? (state.hasVectors ? DEFAULT_EMBEDDING_MODEL : null);
-}
-
-/** Whether a vector write under the index identity `model` first drops the stored index, which another model built. */
-export function replacesIndex(state: EmbeddingIndexState, model: string): boolean {
-  const indexed = indexedModel(state);
-  return indexed !== null && indexed !== model;
-}
 
 function embeddingIndexStateOn(db: DatabaseSyncLike): EmbeddingIndexState {
   return {
@@ -55,6 +48,34 @@ export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
 /** Records `identity` as what built the index. */
 export function saveIndexIdentityAt(db: DatabaseSyncLike, identity: string): void {
   setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
+}
+
+function loadStoredEmbeddingModel(on: OnHandle): string | null {
+  try {
+    return on((db) => storedIndexStateAt(db).storedModel);
+  } catch (err) {
+    rethrowIfSqliteBlocked(err);
+    log.debug(`stored embedding model unreadable: ${errorMessage(err)}`, errorFields(err));
+    return null;
+  }
+}
+
+/** Saves the index identity of provider `model`, versioned by `embeddingIndexIdentity` as the compare side is. */
+export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
+  on((db) => { saveIndexIdentityAt(db, embeddingIndexIdentity(model)); });
+}
+
+function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, number[]>): string | null {
+  const storedModel = loadStoredEmbeddingModel(on);
+  if (storedModel) return storedModel;
+  return indexedModel({
+    storedModel,
+    hasVectors: index ? Object.keys(index).length > 0 : on((db) => storedIndexStateAt(db).hasVectors),
+  });
+}
+
+export function embeddingModelRequiresReindex(on: OnHandle, model: string, index?: Record<string, number[]>): boolean {
+  return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via

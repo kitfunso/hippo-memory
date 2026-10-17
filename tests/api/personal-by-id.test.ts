@@ -12,7 +12,7 @@ import { listRejectionsForTenant, rejectValue } from '../../src/trust/reject-flo
 import { readEntry } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 
 let root: string;
 let globalRoot: string;
@@ -29,7 +29,10 @@ function ctxFor(actor: Actor): FullContext {
 }
 
 function mcpCtxFor(actor: Actor): McpContext {
-  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role , store: sqliteStore(root) };
+  const store = sqliteStore(root);
+  const ctx: McpContext = {
+    hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role, store, reach: sqliteReach(root, store),
+  };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return ctx;
 }

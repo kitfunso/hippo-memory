@@ -6,8 +6,9 @@ import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { predictionBaserate } from '../api/objects/predictions.js';
 import { listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
 import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
-import { mcpActor, type ToolCall } from './protocol.js';
-import { requireGroup } from '../store/index.js';
+import { mcpActor, type McpContext, type ToolCall } from './protocol.js';
+import { storeWith, type FolderStore } from '../store/port.js';
+import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -100,15 +101,22 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   await getTouchableMemory({ hippoRoot, tenantId, actor, store }, shareId);
   // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's
   // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
-  const global = requireGroup(store, 'localFiles').globalStore();
-  const shared = shareMemory(store, global, shareId, { force, tenantId });
+  const local = { root: hippoRoot, store: storeWith(store, 'localFiles') };
+  const shared = shareMemory(local, globalTarget(ctx), shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
 }
 
-export function runPeersTool({ store, tenantId }: ToolCall): string {
+/** The global store the host's reach names; the tool table runs share and peers only where hippo.db sets one. */
+function globalTarget(ctx: McpContext): FolderStore {
+  const target = ctx.reach?.globalTarget;
+  if (target === undefined) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
+  return target;
+}
+
+export function runPeersTool({ ctx, tenantId }: ToolCall): string {
   // Tenant-scope peer discovery to the caller, as hippo_share does; undefined would list host-wide.
-  const peers = listPeers(requireGroup(store, 'localFiles').globalStore(), tenantId);
+  const peers = listPeers(globalTarget(ctx), tenantId);
   if (peers.length === 0) return 'No peers found.';
   return peers
     .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)

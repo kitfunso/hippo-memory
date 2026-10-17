@@ -5,12 +5,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
-import { requireGroup, type HippoStore, type LocalFiles } from '../store/port.js';
-import { isPersonalScope } from '../core/recall-scope.js';
+import type { FolderStore, LocalFiles } from '../store/port.js';
+import { isPersonalScope, isQuarantineScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { isQuarantineScope } from '../trust/quarantine.js';
-import { embedMemory, embedAll } from '../search/embed-memories.js';
+import { embedMemory, embedAll, folderIndex } from '../search/embed-memories.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
@@ -89,29 +88,28 @@ export function transferScore(entry: MemoryEntry): number {
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
 export function shareMemory(
-  store: HippoStore,
-  global: HippoStore,
+  local: FolderStore,
+  global: FolderStore,
   id: string,
   options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
 ): MemoryEntry | null {
   // tenantId is optional for single-tenant callers (autoShare passes only `{ force: true }`); MCP/REST hosts MUST pass
   // it so tenant A cannot share
   // tenant B's memory to global (readEntry returns null on a cross-tenant lookup).
-  const local = requireGroup(store, 'localFiles');
-  const entry = local.learning.readEntry(id, options.tenantId);
+  const entry = local.store.localFiles.learning.readEntry(id, options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  const globalEntry = toGlobalEntry(local.hippoRoot, entry, options.force === true);
+  const globalEntry = toGlobalEntry(local.root, entry, options.force === true);
   if (!globalEntry) return null;
 
-  const to = requireGroup(global, 'localFiles');
+  const to = global.store.localFiles;
   to.sharing.ensureFiles();
   to.learning.writeEntry(globalEntry);
 
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
   // the whole index per call.
   if (!options.skipEmbed) {
-    void embedMemory(to, globalEntry);
+    void embedMemory(folderIndex(global), globalEntry);
   }
 
   return globalEntry;
@@ -167,15 +165,14 @@ function assertShareable(entry: MemoryEntry, id: string): void {
  * 'promoted:<path>' sources.
  *  `tenantId` filters to one tenant; undefined is host-wide (legacy callers: CLI standalone, dashboard). */
 export function listPeers(
-  global: HippoStore,
+  global: FolderStore,
   tenantId?: string,
 ): Array<{ project: string; count: number; latest: string }> {
-  const files = requireGroup(global, 'localFiles');
-  if (!fs.existsSync(files.hippoRoot)) return [];
+  if (!fs.existsSync(global.root)) return [];
 
   // Tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const tallies = files.sharing.sourceTallies(tenantId)
+  const tallies = global.store.localFiles.sharing.sourceTallies(tenantId)
     .sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
   const peerMap = new Map<string, { count: number; latest: string }>();
 
@@ -275,8 +272,8 @@ function shareCandidates(
  * `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
  * rejection refusals (0 under `dryRun`). */
 export function autoShare(
-  store: HippoStore,
-  global: HippoStore,
+  from: FolderStore,
+  global: FolderStore,
   options: {
     minScore?: number;
     dryRun?: boolean;
@@ -288,11 +285,11 @@ export function autoShare(
 
   // A row with none of these signals scores at most 0.5, so above that
   // bar only signal rows can share or count as never-auto-share skips.
-  const local = requireGroup(store, 'localFiles');
+  const local = from.store.localFiles;
   const localEntries = minScore > 0.5
     ? local.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, options.tenantId)
     : local.learning.allEntries(options.tenantId);
-  const to = requireGroup(global, 'localFiles');
+  const to = global.store.localFiles;
   to.sharing.ensureFiles();
   // Host-wide read. The global store IS the union across all tenants;
   // per-tenant filtering on the global root would defeat the purpose.
@@ -304,10 +301,10 @@ export function autoShare(
 
   if (dryRun) return candidates;
 
-  const shared = shareCandidates(local.hippoRoot, to, candidates, options.stats);
+  const shared = shareCandidates(from.root, to, candidates, options.stats);
 
   if (shared.length > 0) {
-    void embedAll(to).catch((err) => logEmbedAllFailure('autoShare', err));
+    void embedAll(folderIndex(global)).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;

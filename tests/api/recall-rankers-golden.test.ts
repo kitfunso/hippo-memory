@@ -12,7 +12,7 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { onDb } from '../_helpers/store-worker-server.js';
 import {

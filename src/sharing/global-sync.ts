@@ -4,12 +4,12 @@ import { BadRequestError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../core/agent-memory-tools.js';
-import { requireGroup, type HippoStore, type LocalFiles } from '../store/port.js';
+import type { FolderStore } from '../store/port.js';
 import { chunked } from '../util/chunked.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { embedAll } from '../search/embed-memories.js';
+import { embedAll, folderIndex } from '../search/embed-memories.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 
@@ -18,28 +18,27 @@ import { logEmbedAllFailure } from './search-both.js';
  * share copy under a new ID). The caller's request scope keeps it to one open per store.
  *  Returns the count of newly copied entries. */
 export function syncGlobalToLocal(
-  store: HippoStore,
-  global: HippoStore,
+  into: FolderStore,
+  global: FolderStore,
   opts: { includeCrossProject?: boolean } = {},
 ): number {
-  const local = requireGroup(store, 'localFiles');
-  const localRoot = local.hippoRoot;
-  if (isSharedStore(localRoot)) {
+  if (isSharedStore(into.root)) {
     throw new BadRequestError(
-      `Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, ` +
+      `Refusing to sync into ${into.root}: a shared store takes no copies of a personal global store, ` +
         `whose rows would reach every member.`,
     );
   }
-  const from = requireGroup(global, 'localFiles');
-  if (!fs.existsSync(from.hippoRoot)) return 0;
+  if (!fs.existsSync(global.root)) return 0;
 
-  return copyMissingRows(local, from, opts.includeCrossProject === true);
+  return copyMissingRows(into, global, opts.includeCrossProject === true);
 }
 
 const textKey = (e: { tenant_id: string; content: string }): string => `${e.tenant_id}\n${e.content}`;
 
 /** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together. */
-function copyMissingRows(local: LocalFiles, from: LocalFiles, includeCrossProject: boolean): number {
+function copyMissingRows(into: FolderStore, global: FolderStore, includeCrossProject: boolean): number {
+  const local = into.store.localFiles;
+  const from = global.store.localFiles;
   // Host-wide read: the global union is copied into a tenant-scoped local store, and each copy keeps its own tenant.
   const localKeys = local.sharing.textKeys();
   const localIds = new Set(localKeys.map((k) => k.id));
@@ -57,7 +56,7 @@ function copyMissingRows(local: LocalFiles, from: LocalFiles, includeCrossProjec
   // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret
   // rows never copied.
   // origin_project is preserved on the copy (the write stamps it only when missing).
-  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(local.hippoRoot)));
+  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(into.root)));
   // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
   let rejected = 0;
   const count = local.sharing.writeSkippingRejected((put) => {
@@ -74,11 +73,11 @@ function copyMissingRows(local: LocalFiles, from: LocalFiles, includeCrossProjec
       else rejected++;
     }
   });
-  finishSyncDown(local, count, rejected);
+  finishSyncDown(into, count, rejected);
   return count;
 }
 
-function finishSyncDown(local: LocalFiles, count: number, rejected: number): void {
+function finishSyncDown(into: FolderStore, count: number, rejected: number): void {
   if (rejected > 0) {
     log.warn(
       `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,
@@ -88,6 +87,6 @@ function finishSyncDown(local: LocalFiles, count: number, rejected: number): voi
   // Batch producer: one embedAll() on the destination rather than an
   // embedMemory() per copied row (same batching invariant as autoShare).
   if (count > 0) {
-    void embedAll(local).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+    void embedAll(folderIndex(into)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 }

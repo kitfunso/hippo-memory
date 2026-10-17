@@ -212,7 +212,10 @@ export async function retrieveWithCliCore(
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const store = ctx.store;
   const ranking = await rankRecall(
-    { store, config: configOf(ctx), global: rankGlobal(ctx, core.sources), tenantId: ctx.tenantId, note: core.note },
+    {
+      store, config: configOf(ctx), onHippoDb: ctx.reach?.isHippoDb, global: rankGlobal(ctx, core.sources),
+      tenantId: ctx.tenantId, note: core.note,
+    },
     { ...core.rank, query: opts.query, boost: opts.boost },
   );
   if (ranking.halted) {
@@ -311,8 +314,8 @@ async function recordShown(
 /** The second store ranked, as the caller's own store when its root is the one searched, so its graph walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
-  if (sources.globalRoot === ctx.hippoRoot) return { store: ctx.store, config: configOf(ctx) };
-  return { store: sources.globalStore, config: configAtRoot(ctx, sources.globalRoot) };
+  if (sources.globalRoot === ctx.hippoRoot) return { store: ctx.store, config: configOf(ctx), onHippoDb: true };
+  return { store: sources.globalStore, config: configAtRoot(ctx, sources.globalRoot), onHippoDb: true };
 }
 
 /** The second store takes its own recall rows, unless it is the root being searched already. */

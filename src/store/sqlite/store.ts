@@ -237,13 +237,15 @@ export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boole
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
+  const globalTarget = other === undefined ? { root: globalRoot, store: sqliteStore(globalRoot) } : undefined;
   const reach: StoreReach = {
     hasLocal: other !== undefined || isInitialized(hippoRoot),
     isGlobal: isGlobalStoreRoot(hippoRoot),
     shared: sharedStore,
+    isHippoDb: other === undefined,
+    globalTarget,
   };
-  if (!canReadGlobal) return reach;
-  return { ...reach, global: { root: globalRoot, store: sqliteStore(globalRoot) } };
+  return canReadGlobal ? { ...reach, global: globalTarget } : reach;
 }
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as

@@ -11,7 +11,7 @@ import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../graph/stream.js';
 import { Layer, type MemoryEntry } from '../../core/memory.js';
 import { multihopSearch } from '../../search/multihop.js';
 import type { PhysicsConfig } from '../../core/physics-config.js';
-import { passesCliRecallScopeFilter } from '../../core/recall-scope.js';
+import { passesCliRecallScopeFilter, recallScopeFilter } from '../../core/recall-scope.js';
 import type { RerankerFn } from '../../rerankers/types.js';
 import { currentEntries } from '../../search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../search/boosts.js';
@@ -32,7 +32,6 @@ import {
   type SearchResult,
 } from '../../core/search-types.js';
 import { rankBothStores } from '../../sharing/search-both.js';
-import { recallScopeFilter } from '../../store/search-rows.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
 import type { HippoStore } from '../../store/index.js';
 import { isJsonNumber } from '../../util/json.js';
@@ -45,6 +44,7 @@ import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
 export interface RankSource {
   readonly store: HippoStore;
   readonly config: HippoConfig;
+  readonly onHippoDb?: boolean;
 }
 
 /** Stores rankRecall reads and where it sends operator notes. */

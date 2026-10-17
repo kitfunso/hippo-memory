@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { openHippoDb, isFtsAvailable, type DatabaseSyncLike } from '../db/index.js';
 import { tokenize } from '../util/tokenize.js';
-import { isPersonalScope } from '../core/recall-scope.js';
+import { recallScopeFilter, type RecallScopeFilter } from '../core/recall-scope.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -19,7 +19,7 @@ import { escapeLike } from '../util/escape.js';
 import { placeholders } from '../util/sql.js';
 import type { OriginFilter } from './port/types.js';
 import type { RecallSearchEntriesOptions } from './port/sharing.js';
-import type { VectorCandidateSpec, RecallScopeFilter } from './port/vector-reads.js';
+import type { VectorCandidateSpec } from './port/vector-reads.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is
  * its JS twin. */
@@ -41,21 +41,6 @@ function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | 
     sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`,
     params: [...scope.params, ...originProjects],
   };
-}
-
-/** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the
- * default set, unless it is personal, which only `ownScope` opens. */
-export function recallScopeFilter(
-  requestedScope: string | undefined,
-  mode: 'exact' | 'additive',
-  ownScope?: string,
-): RecallScopeFilter {
-  if (!requestedScope || (mode === 'additive' && isPersonalScope(requestedScope))) {
-    return { mode: 'default-deny', ownScope };
-  }
-  return mode === 'additive'
-    ? { mode: 'default-deny-or-exact', value: requestedScope, ownScope }
-    : { mode: 'exact', value: requestedScope };
 }
 
 const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;

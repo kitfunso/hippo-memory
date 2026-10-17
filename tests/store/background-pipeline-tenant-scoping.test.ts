@@ -9,7 +9,6 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { sqliteStore } from '../../src/store/index.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { refineStore } from '../../src/cli/refine-llm.js';
@@ -21,7 +20,7 @@ import { consolidate } from '../../src/index.js';
 import { listPeers } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { embedAll } from '../../src/search/embed-memories.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
+import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
@@ -392,7 +391,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     writeEntry(hippoRoot, b);
 
     // Both tenants' shared entries surface as peers (host-wide aggregation)
-    const peers = listPeers(sqliteStore(hippoRoot));
+    const peers = listPeers(folderStore(hippoRoot));
     const peerNames = peers.map((p) => p.project);
     expect(peerNames).toContain('project-foo');
     expect(peerNames).toContain('project-bar');

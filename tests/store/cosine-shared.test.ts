@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { cosineSimilarity } from '../../src/store/embeddings/index.js';
 import { cosineOf } from '../../src/core/cosine.js';
 import { queryGravityMagnitude, type PhysicsParticle } from '../../src/core/physics.js';
 
@@ -17,9 +16,8 @@ describe('one cosine for embeddings and physics', () => {
     ['orthogonal', [1, 0], [0, 1]],
   ];
 
-  it.each(cases)('%s: embeddings, shared helper and physics gravity agree', (_name, a, b) => {
+  it.each(cases)('%s: the shared helper and physics gravity agree', (_name, a, b) => {
     const cos = cosineOf(a, b);
-    expect(cosineSimilarity(a, b)).toBe(cos);
     expect(queryGravityMagnitude(particleAt(a), b, 1)).toBeCloseTo(Math.max(0, cos) ** 2, 12);
   });
 

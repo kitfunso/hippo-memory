@@ -8,7 +8,7 @@ import { createApiKey } from '../../src/store/auth.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
-import { saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
 import { lastRecalledIds } from '../../src/mcp/session-state.js';

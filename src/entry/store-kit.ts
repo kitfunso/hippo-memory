@@ -131,7 +131,7 @@ export {
   type VectorRow,
 } from '../db/vector-store.js';
 export { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
-export { replacesIndex } from '../store/vector-index.js';
+export { replacesIndex } from '../embeddings/index-identity.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
 export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from '../core/recall-scope.js';
 export { SECRET_TAGS } from '../util/secret-detect.js';

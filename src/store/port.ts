@@ -173,12 +173,33 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
   return methods;
 }
 
+/** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
+export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
+
+/** hippo.db and the folder it sits in, for work that reads both: sharing, sync, embedding and the global store. */
+export interface FolderStore {
+  readonly root: string;
+  readonly store: StoreWith<'localFiles'>;
+}
+
+function setsGroup<G extends OptionalGroup>(store: HippoStore, group: G): store is StoreWith<G> {
+  return store[group] !== undefined;
+}
+
+/** `store` typed with `group` set; a store without it throws StoreNotPortedError, which answers 501. */
+export function storeWith<G extends OptionalGroup>(store: HippoStore, group: G): StoreWith<G> {
+  if (!setsGroup(store, group)) throw new StoreNotPortedError(store.kind, group);
+  return store;
+}
+
 /** Which stores a call reaches, probed once by a composition root so the api reads this instead of the disk. */
 export interface StoreReach {
   readonly hasLocal: boolean; // the primary store has a project of its own, or is not hippo.db
   readonly isGlobal: boolean; // the primary root is the operator's global store
   readonly shared: boolean; // a store serving many people, so the operator's global store stays out
   readonly global?: { readonly root: string; readonly store: HippoStore }; // set only when readable
+  readonly isHippoDb?: boolean; // the primary store is hippo.db, whose folder `hippo embed` and sleep reach
+  readonly globalTarget?: FolderStore; // where share, promote and sync write; set on hippo.db, maybe not created yet
 }
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './busy.js';

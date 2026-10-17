@@ -23,7 +23,7 @@ import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api/index.js';
 import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
-import { cliApiContext, cliInitGlobal, cliLocalFiles, cliSyncOptions } from './api-context.js';
+import { cliApiContext, cliFolder, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
@@ -398,7 +398,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
 
 // Sync command
 
-export function handleSync({ hippoRoot, tenantId, flags }: CommandContext): void {
+export function handleSync({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();
@@ -409,8 +409,7 @@ export function handleSync({ hippoRoot, tenantId, flags }: CommandContext): void
 
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = flagIsTrue(flags, 'cross-project');
-  const global = cliLocalFiles(hippoRoot).globalStore();
-  const count = syncGlobalToLocal(cliApiContext(hippoRoot, tenantId).store, global, { includeCrossProject });
+  const count = syncGlobalToLocal(cliFolder(hippoRoot), cliFolder(globalRoot), { includeCrossProject });
   const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
@@ -444,8 +443,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const minScore = numberFlag(flags, 'min-score') ?? AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');
-    const { store } = cliApiContext(hippoRoot, tenantId);
-    const results = autoShare(store, cliLocalFiles(hippoRoot).globalStore(), { minScore, dryRun, tenantId });
+    const results = autoShare(cliFolder(hippoRoot), cliFolder(getGlobalRoot()), { minScore, dryRun, tenantId });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
     } else if (dryRun) {
@@ -464,7 +462,8 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
     const ctx = cliApiContext(hippoRoot, tenantId);
-    const result = shareMemory(ctx.store, cliLocalFiles(hippoRoot).globalStore(), shareId, { force, tenantId });
+    const local = { root: hippoRoot, store: ctx.store };
+    const result = shareMemory(local, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);
@@ -483,11 +482,11 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   }
 }
 
-export function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): void {
+export function handlePeers({ tenantId, flags }: CommandContext): void {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flagIsTrue(flags, 'all-tenants');
   const tenantScope = allTenants ? undefined : tenantId;
-  const peers = listPeers(cliLocalFiles(hippoRoot).globalStore(), tenantScope);
+  const peers = listPeers(cliFolder(getGlobalRoot()), tenantScope);
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {

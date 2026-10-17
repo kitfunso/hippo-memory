@@ -58,6 +58,39 @@ export function isPersonalScope(scope: string | null | undefined): boolean {
   return /^personal:private:/i.test(scope);
 }
 
+export const QUARANTINE_SCOPE_PREFIX = 'quarantine:private:';
+
+export function isQuarantineScope(scope: string | null | undefined): boolean {
+  return scope != null && scope.startsWith(QUARANTINE_SCOPE_PREFIX);
+}
+
+/** Scope a quarantined memory is stored under; matches PRIVATE_SCOPE_RE so every default-deny site hides it. */
+export function quarantineScopeFor(original: string | null): string {
+  return `${QUARANTINE_SCOPE_PREFIX}${original ?? 'unscoped'}`;
+}
+
+/** Recall scope filter: 'default-deny' (exclude RECALL_DEFAULT_DENY_SCOPES), 'exact' (scope = value),
+ * 'default-deny-or-exact' (both; CLI `--scope`); a store's reads apply it as data. */
+export type RecallScopeFilter =
+  | { mode: 'default-deny'; ownScope?: string }
+  | { mode: 'exact'; value: string }
+  | { mode: 'default-deny-or-exact'; value: string; ownScope?: string };
+
+/** None requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set, unless it is
+ * personal, which only `ownScope` opens. */
+export function recallScopeFilter(
+  requestedScope: string | undefined,
+  mode: 'exact' | 'additive',
+  ownScope?: string,
+): RecallScopeFilter {
+  if (!requestedScope || (mode === 'additive' && isPersonalScope(requestedScope))) {
+    return { mode: 'default-deny', ownScope };
+  }
+  return mode === 'additive'
+    ? { mode: 'default-deny-or-exact', value: requestedScope, ownScope }
+    : { mode: 'exact', value: requestedScope };
+}
+
 /** The caller's own personal scope, or null when it has no owner that can hold one. */
 export function personalScopeOf(actor: { owner?: string } | undefined): string | null {
   const owner = actor?.owner;

@@ -9,7 +9,7 @@ import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/core/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
-import { embeddingIndexIdentity, embeddingInputText } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings/index-identity.js';
 import { embedAll, embedMemory } from '../../src/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { writeEntry } from '../../src/store/entry-writes.js';

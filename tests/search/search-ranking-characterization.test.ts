@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { initStore, handlesOf } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../../src/core/memory.js';
-import { saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';

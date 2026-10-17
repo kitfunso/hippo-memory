@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { cosineSimilarity } from '../../src/store/embeddings/index.js';
+import { cosineOf as cosineSimilarity } from '../../src/core/cosine.js';
 import { REQUIRE_EMBEDDINGS_VAR } from '../_helpers/embedding-backend.js';
 
 const LOCAL_JS = new URL('../../dist/embeddings/local.js', import.meta.url).href;

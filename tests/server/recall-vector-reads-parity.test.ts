@@ -13,7 +13,7 @@ import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
 import { lastRecalledIds } from '../../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
-import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';

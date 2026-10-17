@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { embeddingIndexIdentity, embeddingInputText } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings/index-identity.js';
 import { embedAll, embedMemory } from '../../src/search/embed-memories.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';

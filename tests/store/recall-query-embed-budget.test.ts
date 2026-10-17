@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { embedMemory } from '../../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/embeddings/provider.js';

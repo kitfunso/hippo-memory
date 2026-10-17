@@ -8,7 +8,7 @@
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // portImportsFromSql counts imports and re-exports in src/store/port.ts and src/store/port/ of a src/store or src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
 // buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and the composition roots.
-// groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
+// groupChecksInApi counts requireGroup, hasGroup and storeWith calls in files that layers.json puts in the api or a domain layer.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -181,7 +181,7 @@ function countDomainStoreImports(file, sf) {
 }
 
 const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteSyncStore', 'initStore']);
-const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup']);
+const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup', 'storeWith']);
 const COMPOSITION_ROOTS = new Set(['src/cli/api-context.ts', 'src/server/boot.ts', 'src/mcp/stdio.ts']);
 const LAYERS = JSON.parse(readFileSync('layers.json', 'utf8'));
 const layerOf = (f) => {
