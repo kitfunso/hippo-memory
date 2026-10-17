@@ -16,6 +16,7 @@ import {
 import { blockHash } from '../src/util/token-text.js';
 import { flushDeliveryRecorder } from '../src/api/prompt-hook.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const PROJECT = 'proj-a';
@@ -41,7 +42,7 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
 function recorder(fault?: DeliveryFault): DeliveryRecorder {
   return createDeliveryRecorder({
     fault,
-    root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
+    ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
   });
 }
@@ -242,7 +243,7 @@ describe('rejection reasons', () => {
 describe('the event type of a recorder', () => {
   it('R1 takes eventType over a UserPromptSubmit payload', () => {
     const rec = createDeliveryRecorder({
-      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType: 'pre-compact',
+      ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType: 'pre-compact',
       stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
     });
     expect(eventOf(rec).eventType).toBe('pre-compact');
@@ -251,7 +252,7 @@ describe('the event type of a recorder', () => {
   it('R2 without eventType keeps the payload inference', () => {
     expect(eventOf(recorder()).eventType).toBe('prompt-submit');
     const manual = createDeliveryRecorder({
-      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText: JSON.stringify({ session_id: 's1' }),
+      ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText: JSON.stringify({ session_id: 's1' }),
     });
     expect(eventOf(manual).eventType).toBe('pinned-manual');
   });
@@ -259,7 +260,7 @@ describe('the event type of a recorder', () => {
 
 describe('prompt facts on a boundary or context row', () => {
   const withPrompt = (eventType?: DeliveryEventType) => createDeliveryRecorder({
-    root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
+    ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
     stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
   });
 
@@ -290,7 +291,7 @@ describe('prompt facts on a boundary or context row', () => {
 
 describe('the tool-failure recorder', () => {
   const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) => createDeliveryRecorder({
-    fault, root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
+    fault, ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
     stdinText: JSON.stringify({ session_id: 's', hook_event_name: 'PostToolUseFailure', ...payload }),
   });
 

@@ -19,7 +19,6 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
-import { applyGraphOps } from '../src/store/graph-apply.js';
 import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
@@ -229,7 +228,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
   });
 
-  it('16. atomic rebuild: applyGraphOps rolls back all writes on a throw (codex P2)', async () => {
+  it('16. atomic rebuild: graphRebuild.applyOps rolls back all writes on a throw (codex P2)', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     // A rebuild that inserts then throws must leave NO partial graph rows: the
     // whole transaction rolls back. This is what makes extractGraph atomic, so two
@@ -239,7 +238,7 @@ describe('sleep enqueue-hook', () => {
     // The second op names another tenant's memory, so its insert throws after the first one wrote.
     const foreign = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'other', { decisionText: 'Adopt Redis as a cache' });
     expect(() =>
-      applyGraphOps(tc.hippoRoot, T, [
+      sqliteStore(tc.hippoRoot).localFiles.graphRebuild.applyOps(T, [
         { op: 'insertEntity', entity: entity('policy', d.memoryId!) },
         { op: 'insertEntity', entity: entity('system', foreign.memoryId!) },
       ], { from: 0, holdMs: Infinity }),

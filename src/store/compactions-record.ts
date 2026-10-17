@@ -3,7 +3,7 @@ import * as path from 'path';
 import { ConflictError } from '../core/api-errors.js';
 import { COMPACTION_DB_WAIT_MS, REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../core/compaction-timing.js';
 import { isStringValue } from '../core/capture-contract.js';
-import { selectItemRows } from '../util/compaction-items.js';
+import { itemWords, restates, writableItemRows } from '../util/compaction-items.js';
 import { isSharedStore } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { gatedWrite } from './gated-write.js';
@@ -46,9 +46,6 @@ import { isRecallBoostAblated } from '../core/ablation.js';
 import { updateStats } from './index-and-stats.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, reportCompactionFailure } from '../util/log.js';
-
-/** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
-const REDACTED = '[REDACTED]';
 
 export type { CompactionStatus };
 
@@ -302,41 +299,6 @@ export interface ItemContext {
   caller?: { actor: string; origins: readonly string[] };
 }
 
-/** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
-const PROTECTED_WORDS = new Set([
-  'not',
-  'no',
-  'never',
-  'none',
-  'nor',
-  'without',
-  'cannot',
-  't',
-  'only',
-  'except',
-  'unless',
-  'until',
-]);
-/** Below this share of the held text's words, an item is a fragment of something longer, not a restatement. */
-const RESTATE_MIN_SHARE = 0.5;
-
-function words(text: string): string[] {
-  return text.normalize('NFC').toLowerCase().split(/[^\p{L}\p{M}\p{N}_]+/u).filter(Boolean);
-}
-
-/** True when `item` is `held` with words left out, in the same order, keeping every number and protected word. Spacing,
- * case and punctuation may differ. */
-function restates(item: readonly string[], held: readonly string[]): boolean {
-  if (item.length === 0 || item.length < RESTATE_MIN_SHARE * held.length) return false;
-  const kept = new Set(item);
-  let next = 0;
-  for (const w of held) {
-    if (next < item.length && w === item[next]) next++;
-    else if (!kept.has(w) && (PROTECTED_WORDS.has(w) || /\p{N}/u.test(w))) return false;
-  }
-  return next === item.length;
-}
-
 interface Held {
   /** null for a row this batch wrote, which needs no strengthening. */
   id: string | null;
@@ -350,7 +312,7 @@ function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly stri
   return heldMemoryRows(db, tenantId, origins).map((r) => ({
     id: r.id,
     sessionId: r.source_session_id,
-    words: words(r.content),
+    words: itemWords(r.content),
   }));
 }
 
@@ -390,8 +352,8 @@ function writeItemRows(
   const origin = ctx.caller === undefined ? itemOrigin(hippoRoot, ctx) : ctx.originProject;
   const restated = new Set<string>();
   for (const text of rows) {
-    const itemWords = words(text);
-    const match = held.find((h) => restates(itemWords, h.words));
+    const textWords = itemWords(text);
+    const match = held.find((h) => restates(textWords, h.words));
     if (match) {
       out.repeats++;
       if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
@@ -405,7 +367,7 @@ function writeItemRows(
     const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
     if (gatedWrite(db, hippoRoot, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
       out.written.push(entry);
-      held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
+      held.push({ id: null, sessionId: ctx.sessionId, words: textWords });
     } else {
       out.refused++;
     }
@@ -434,11 +396,7 @@ function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void
 export function saveItems(
   db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log, baseHalfLifeDays: number,
 ): number {
-  const usable = ctx.items.filter((item) => !item.includes(REDACTED));
-  if (usable.length < ctx.items.length) log(`skipped ${ctx.items.length - usable.length} item(s) as secret`);
-  const { rows, tooLong, capped } = selectItemRows(usable);
-  if (tooLong > 0) log(`item too long: ${tooLong} kept in the record only`);
-  if (capped > 0) log(`capped: ${capped} more kept in the record only`);
+  const rows = writableItemRows(ctx.items, log);
 
   let finishedItems = 0;
   const writes = withWriteScopeOr<ItemWrites, null>(db, 'save_items', (rollback) => {

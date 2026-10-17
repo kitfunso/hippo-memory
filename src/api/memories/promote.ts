@@ -40,7 +40,7 @@ export function promote(
   });
 
   // The store a promote first creates is in no reach yet, so the group builds it; embedMemory never rejects.
-  void embedMemory(requireGroup(local.globalStore(), 'localFiles').hippoRoot, globalEntry);
+  void embedMemory(requireGroup(local.globalStore(), 'localFiles'), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

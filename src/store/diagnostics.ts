@@ -1,6 +1,5 @@
-// What `hippo doctor` and `hippo support-bundle` read from a store: one read-only open each, plain data out.
-import { countTableRows, ftsRowCounts, getMeta, getSchemaVersion, openHippoDbReadOnly } from '../db/index.js';
-import { onHandle } from './open.js';
+// What `hippo doctor` and `hippo support-bundle` read from a store's handle: plain data out.
+import { countTableRows, ftsRowCounts, getMeta, getSchemaVersion, type DatabaseSyncLike } from '../db/index.js';
 import { listTableNames } from '../db/tables.js';
 import { errorMessage } from '../util/log.js';
 import { compactionCountsAt, tokenTallySince, type CompactionCounts, type TokenTally } from './doctor-reads.js';
@@ -44,20 +43,18 @@ export interface StoreHealth {
   readonly compactions: Attempt<CompactionCounts>;
 }
 
-/** Everything `hippo doctor` reads from one store; throws when it cannot be opened or its schema version read. */
-export function readStoreHealth(hippoRoot: string, cutoffs: HealthCutoffs): StoreHealth {
-  return onHandle(hippoRoot, (db) => {
-    return {
-      schemaVersion: getSchemaVersion(db),
-      memories: countTableRows(db, 'memories'),
-      dormant: countTableRows(db, 'dormant_memories'),
-      fts: attempt(() => ftsRowCounts(db)),
-      tokens: attempt(() => tokenTallySince(db, cutoffs.since)),
-      failures: attempt(() => countFailuresSince(db, cutoffs.since)),
-      lastSleep: attempt(() => lastConsolidationAt(db)),
-      compactions: attempt(() => compactionCountsAt(db, cutoffs.stuckBefore, cutoffs.transcriptFloor)),
-    };
-  }, openHippoDbReadOnly);
+/** Everything `hippo doctor` reads from one store; throws when its schema version cannot be read. */
+export function storeHealthAt(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
+  return {
+    schemaVersion: getSchemaVersion(db),
+    memories: countTableRows(db, 'memories'),
+    dormant: countTableRows(db, 'dormant_memories'),
+    fts: attempt(() => ftsRowCounts(db)),
+    tokens: attempt(() => tokenTallySince(db, cutoffs.since)),
+    failures: attempt(() => countFailuresSince(db, cutoffs.since)),
+    lastSleep: attempt(() => lastConsolidationAt(db)),
+    compactions: attempt(() => compactionCountsAt(db, cutoffs.stuckBefore, cutoffs.transcriptFloor)),
+  };
 }
 
 export interface StoreInventory {
@@ -70,12 +67,10 @@ export interface StoreInventory {
 
 /** Schema version, oldest allowed binary and row count of every table, for a support bundle; never reads a memory
  * column. */
-export function readStoreInventory(hippoRoot: string): StoreInventory {
-  return onHandle(hippoRoot, (db) => {
-    const schemaVersion = getSchemaVersion(db);
-    const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
-    const tables: JsonObject = {};
-    for (const name of listTableNames(db)) tables[name] = countTableRows(db, name);
-    return { schemaVersion, minCompatibleBinary, tables };
-  }, openHippoDbReadOnly);
+export function storeInventoryAt(db: DatabaseSyncLike): StoreInventory {
+  const schemaVersion = getSchemaVersion(db);
+  const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
+  const tables: JsonObject = {};
+  for (const name of listTableNames(db)) tables[name] = countTableRows(db, name);
+  return { schemaVersion, minCompatibleBinary, tables };
 }

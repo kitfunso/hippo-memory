@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { loadStats, updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
+import { updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
 import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
@@ -49,7 +50,7 @@ function count(root: string, sql: string, ...params: string[]): number {
 }
 
 function forgottenTotal(root: string): number {
-  return Number(loadStats(root).total_forgotten);
+  return Number(sqliteSyncStore(root).reports.stats().total_forgotten);
 }
 
 /** Holds the store's write lock until `releaseMs`, long enough that the first tries answer 503. */

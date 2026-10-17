@@ -18,7 +18,7 @@ import {
 } from '../connectors/github/types.js';
 import type { JsonValue } from '../util/json.js';
 import type { CommandContext } from './flag-values.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
 import { errorMessage } from '../util/log.js';
 
@@ -113,8 +113,8 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Fla
   }
 }
 
-export function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: Flags): void {
-  const items = listDlq(githubDlq, hippoRoot, { tenantId });
+export async function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: Flags): Promise<void> {
+  const items = await listDlq(githubDlq, cliStore(hippoRoot), { tenantId });
   if (items.length === 0) {
     console.log('no entries');
     return;
@@ -225,7 +225,7 @@ export async function handleGitHub({ hippoRoot, tenantId, args, flags }: Command
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    cmdGitHubDlqList(hippoRoot, tenantId, flags);
+    await cmdGitHubDlqList(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {

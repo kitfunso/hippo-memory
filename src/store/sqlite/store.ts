@@ -7,13 +7,20 @@ import { getHippoDbPath, withWriteScope } from '../../db/index.js';
 import { activeGoalsWithPolicies } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
-import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
-import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
+import { loadAmbientCandidates, loadContextCandidates, newestEntriesAt, schemaFitAt } from '../candidates.js';
+import {
+  liveContentsBySourceAndTagAt, loadEntriesByIds, loadFreshRawMemories, rawRowsUnderRefAt,
+} from '../entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
+import { sqliteCaptures } from './captures-group.js';
+import { sqliteCompactionHooks } from './compaction-hooks-group.js';
 import { sqliteCards } from './cards-group.js';
 import { sqliteConflicts } from './conflicts-group.js';
 import { sqliteDormant } from './dormant-group.js';
 import { sqliteGoals } from './goals-group.js';
+import { sqliteRejections } from './rejections-group.js';
+import { sqliteFailureLog } from './failure-log-group.js';
+import { sqliteCompactions } from './compactions-group.js';
 import { sqliteReports } from './reports-group.js';
 import { sqliteSessions } from './sessions-group.js';
 import { sqliteConnectorEvents } from './connector-events-group.js';
@@ -22,6 +29,10 @@ import { sqliteConsolidation } from './consolidation-group.js';
 import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
 import { sqliteSharing } from './sharing-group.js';
+import { sqliteDiagnostics } from './diagnostics-group.js';
+import { sqliteEmbeddingIndex } from './embedding-index-group.js';
+import { sqliteGraphRebuild } from './graph-rebuild-group.js';
+import { sqliteLedger } from './ledger-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
@@ -39,7 +50,7 @@ import { updateStats } from '../index-and-stats.js';
 import { flushStatsMirrors } from '../mirrors.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
-import { onHandle } from '../open.js';
+import { onHandle, openStore } from '../open.js';
 import {
   type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
   type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
@@ -48,6 +59,10 @@ import {
   hasGroup,
 } from '../port.js';
 import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
+import type { Rejections } from '../port/rejections.js';
+import type { FailureLog } from '../port/failure-log.js';
+import type { Compactions } from '../port/compactions.js';
+import type { LocalFiles } from '../port/local-files.js';
 import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
@@ -64,6 +79,24 @@ type AsyncOnly = 'vectors';
 // LocalFiles is written synchronous already, and Sync would erase its plain methods.
 export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'localFiles'>> & Pick<HippoStore, 'localFiles'>;
 
+function sqliteLocalFiles(hippoRoot: string): LocalFiles {
+  return {
+    hippoRoot,
+    consolidation: sqliteConsolidation(hippoRoot),
+    agentImport: sqliteAgentImport,
+    captures: sqliteCaptures(hippoRoot),
+    compactionHooks: sqliteCompactionHooks(hippoRoot),
+    promotion: sqlitePromotion(hippoRoot),
+    learning: sqliteLearning(hippoRoot),
+    sharing: sqliteSharing(hippoRoot),
+    diagnostics: sqliteDiagnostics(hippoRoot),
+    graphRebuild: sqliteGraphRebuild(hippoRoot),
+    embeddingIndex: sqliteEmbeddingIndex(hippoRoot),
+    ledger: sqliteLedger(hippoRoot),
+    globalStore: () => sqliteStore(resolveGlobalRootDir()),
+  };
+}
+
 /** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles, so close
  * has nothing to release. */
 export function sqliteSyncStore(
@@ -71,15 +104,7 @@ export function sqliteSyncStore(
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
   return {
     kind: 'sqlite',
-    localFiles: {
-      hippoRoot,
-      consolidation: sqliteConsolidation(hippoRoot),
-      agentImport: sqliteAgentImport,
-      promotion: sqlitePromotion(hippoRoot),
-      learning: sqliteLearning(hippoRoot),
-      sharing: sqliteSharing(hippoRoot),
-      globalStore: () => sqliteStore(resolveGlobalRootDir()),
-    },
+    localFiles: sqliteLocalFiles(hippoRoot),
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),
@@ -107,6 +132,9 @@ export function sqliteSyncStore(
     conflicts: sqliteConflicts(hippoRoot),
     dormant: sqliteDormant(hippoRoot),
     reports: sqliteReports(hippoRoot),
+    rejections: sqliteRejections(hippoRoot),
+    failureLog: sqliteFailureLog(hippoRoot),
+    compactions: sqliteCompactions(hippoRoot),
     close() {
       flushStatsMirrors(hippoRoot);
     },
@@ -263,6 +291,9 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     conflicts: served<Conflicts>(sync.conflicts),
     dormant: served<Dormant>(sync.dormant),
     reports: served<Reports>(sync.reports),
+    rejections: served<Rejections>(sync.rejections),
+    failureLog: served<FailureLog>(sync.failureLog),
+    compactions: served<Compactions>(sync.compactions),
     close: async () => sync.close(),
   };
 }
@@ -300,6 +331,13 @@ function sqliteContextReads(hippoRoot: string): Sync<ContextReads> {
     ambientTallies(tenantId, filter) {
       return loadAmbientTallies(hippoRoot, tenantId, filter);
     },
+    newestEntries: (tenantId, limit) => onHandle(hippoRoot, (db) => newestEntriesAt(db, tenantId, limit), openStore),
+    schemaFit: (tenantId, content, tags) =>
+      onHandle(hippoRoot, (db) => schemaFitAt(db, tenantId, content, tags), openStore),
+    liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>
+      onHandle(hippoRoot, (db) => liveContentsBySourceAndTagAt(db, tenantId, source, tag, exceptSessionId), openStore),
+    rawRowsUnderRef: (tenantId, refPrefix) =>
+      onHandle(hippoRoot, (db) => rawRowsUnderRefAt(db, tenantId, refPrefix), openStore),
   };
 }
 

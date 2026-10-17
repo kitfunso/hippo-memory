@@ -8,6 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/c
 import { embedMemory } from '../src/search/embed-memories.js';
 import { embeddingIndexIdentity, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveStoredVectors } from '../src/store/vector-index.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
@@ -46,10 +47,10 @@ function seed(rows: number): MemoryEntry {
 
 describe('inline reindex row cap', () => {
   it('rebuilds inline at 256 rows', async () => {
-    await expect(embedMemory(root, seed(256))).resolves.toBe('indexed');
+    await expect(embedMemory(sqliteSyncStore(root).localFiles, seed(256))).resolves.toBe('indexed');
   });
 
   it('leaves the rebuild to hippo embed at 257 rows', async () => {
-    await expect(embedMemory(root, seed(257))).resolves.toBe('failed');
+    await expect(embedMemory(sqliteSyncStore(root).localFiles, seed(257))).resolves.toBe('failed');
   });
 });

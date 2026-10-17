@@ -5,7 +5,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from './core/project-identity.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
+import type { StoreHealth } from './store/diagnostics.js';
+import type { Diagnostics } from './store/port/diagnostics.js';
+import { sqliteStore } from './store/sqlite/store.js';
 import { loadConfig } from './core/config.js';
 import {
   getCurrentSchemaVersion,
@@ -17,7 +19,6 @@ import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
-import { readProjectTags } from './store/project-tags.js';
 import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
@@ -226,9 +227,9 @@ function compactionsCheck(
 }
 
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
-function projectsCheck(globalRoot: string): DoctorCheck {
+function projectsCheck(global: Diagnostics, globalRoot: string): DoctorCheck {
   try {
-    const r = readProjectTags(globalRoot, resolveTenantId({}), (reads) => planProjectRepair(reads, globalRoot));
+    const r = global.projectTags(resolveTenantId({}), (reads) => planProjectRepair(reads, globalRoot));
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0
@@ -385,10 +386,10 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
 }
 
 /** Checks that read the store's database; a store that cannot be opened becomes one failed schema check. */
-function databaseChecks(store: string, now: Date, spoolFs?: SpoolFs): DoctorCheck[] {
+function databaseChecks(diagnostics: Diagnostics, store: string, now: Date, spoolFs?: SpoolFs): DoctorCheck[] {
   let health: StoreHealth;
   try {
-    health = readStoreHealth(store, {
+    health = diagnostics.health({
       since: new Date(now.getTime() - 7 * DAY_MS).toISOString(),
       stuckBefore: new Date(now.getTime() - REPLAY_AFTER_MS).toISOString(),
       transcriptFloor: new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
@@ -484,7 +485,9 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
   const hasGlobal = isInitialized(globalRoot);
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);
-  if (store !== null) checks.push(...databaseChecks(store, now, opts.spoolFs));
+  if (store !== null) {
+    checks.push(...databaseChecks(sqliteStore(store).localFiles.diagnostics, store, now, opts.spoolFs));
+  }
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
   if (holdoutRateBp > 0) {
@@ -495,7 +498,7 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
-  if (hasGlobal) checks.push(projectsCheck(globalRoot));
+  if (hasGlobal) checks.push(projectsCheck(sqliteStore(globalRoot).localFiles.diagnostics, globalRoot));
 
   checks.push(claudeCodeCheck(home));
 

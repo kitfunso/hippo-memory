@@ -61,9 +61,7 @@ export interface Consolidation {
   auditEachRow(events: readonly AppendAuditOpts[]): number;
   /** Logs and counts an audit row that could not be written, for a caller whose own write threw. */
   reportAuditFailure(op: AuditOp, reason: string): void;
-  /** Every memory of every tenant, as it stands now. */
-  allEntries(): MemoryEntry[];
-  /** Up to `limit` memories of every tenant after `after`, in allEntries' order, so a pass holds one page at a time. */
+  /** Up to `limit` memories of every tenant after `after`, by created then id, so a pass holds one page at a time. */
   entriesPage(page: { readonly limit: number; readonly after?: EntryCursor }): EntryPage;
   /** The current distilled memories: no raw row and no superseded one. */
   currentDistilledEntries(): MemoryEntry[];

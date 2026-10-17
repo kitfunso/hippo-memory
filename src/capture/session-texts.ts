@@ -7,6 +7,7 @@ import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { longestWord, storedTextKeys } from '../util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
+import { requireGroup } from '../store/port.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { extractFromTexts } from './extract.js';
 
@@ -50,18 +51,19 @@ export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): S
   // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
+  // The dedup read and the writes both sit in the request's own hippo.db.
+  const local = requireGroup(ctx.store, 'localFiles');
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.
   const held = loadTextsHoldingWords(
-    ctx.hippoRoot,
+    local.hippoRoot,
     ctx.tenantId,
     items.map((i) => longestWord(i.content)),
     projectNames(req.project),
   );
   const tally = captureExtractedItems(
-    ctx.hippoRoot,
+    local,
     {
-      dryRun: false,
       tenantId: ctx.tenantId,
       originProject: req.project,
       sessionId: req.sessionId,

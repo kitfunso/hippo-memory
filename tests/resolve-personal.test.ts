@@ -86,7 +86,7 @@ describe('resolving conflicts next to personal rows', () => {
     expect(readEntry(root, loser, 'default')).toBeNull();
     expect(readEntry(root, teamCopy, 'default')).toBeNull();
     expect(readEntry(root, personalId, 'default')?.scope).toBe('personal:private:a');
-    const tombstones = listRejectionsForTenant(root, 'default');
+    const tombstones = await listRejectionsForTenant(sqliteStore(root), 'default');
     expect(tombstones.map((r) => r.sourceMemoryId)).toEqual([loser]);
   });
 
@@ -100,7 +100,7 @@ describe('resolving conflicts next to personal rows', () => {
     }
     expect(refusal?.status).toBe(400);
     expect(refusal?.message).toContain('cannot reject the value of personal memory');
-    expect(listRejectionsForTenant(root, 'default')).toHaveLength(0);
+    expect(await listRejectionsForTenant(sqliteStore(root), 'default')).toHaveLength(0);
     expect(readEntry(root, personalId, 'default')).not.toBeNull();
     expect(listMemoryConflicts(root, 'open', 'default').map((c) => c.id)).toEqual([conflictId]);
 

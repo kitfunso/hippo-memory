@@ -260,7 +260,7 @@ function renderContextJson(view: ContextView, query: string): void {
   });
   console.log(jsonText);
   rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-  bookLedgerTurn(view.hippoRoot, {
+  bookLedgerTurn({
     uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
@@ -293,7 +293,7 @@ function renderContextMarkdown(view: ContextView): void {
   }));
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-  bookLedgerTurn(view.hippoRoot, {
+  bookLedgerTurn({
     uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),

@@ -26,14 +26,6 @@ export function saveSlackCursorAt(db: DatabaseSyncLike, tenantId: string, channe
   ).run(tenantId, channelId, latestTs, new Date().toISOString());
 }
 
-export function slackCursor(hippoRoot: string, tenantId: string, channelId: string): string | null {
-  return onHandle(hippoRoot, (db) => slackCursorAt(db, tenantId, channelId));
-}
-
-export function saveSlackCursor(hippoRoot: string, tenantId: string, channelId: string, latestTs: string): void {
-  onHandle(hippoRoot, (db) => saveSlackCursorAt(db, tenantId, channelId, latestTs));
-}
-
 // Event log
 
 const SLACK_LOG: EventLogSpec = { table: 'slack_event_log', keyColumn: 'event_id' };
@@ -100,7 +92,7 @@ export interface SlackDlqInsert {
   slackTimestamp?: string | null;
 }
 
-const DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
+export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
   { field: 'id', column: 'id', kind: 'int' },
   { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
   { field: 'teamId', column: 'team_id', kind: 'nullableText', insert: true },
@@ -113,22 +105,6 @@ const DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
   { field: 'signature', column: 'signature', kind: 'nullableText', insert: true },
   { field: 'slackTimestamp', column: 'slack_timestamp', kind: 'nullableText', insert: true },
 ]);
-
-export function insertSlackDlq(hippoRoot: string, row: SlackDlqInsert): number {
-  return onHandle(hippoRoot, (db) => DLQ.insert(db, row));
-}
-
-export function listSlackDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
-  return onHandle(hippoRoot, (db) => DLQ.list(db, tenantId, limit));
-}
-
-export function slackDlqEntry(hippoRoot: string, id: number): DlqItem | null {
-  return onHandle(hippoRoot, (db) => DLQ.get(db, id));
-}
-
-export function markSlackDlqRetried(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => DLQ.markRetried(db, id));
-}
 
 // Workspace routing
 
@@ -160,7 +136,7 @@ export interface SlackWorkspace {
 }
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */
-function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
+export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
   const addedAt = new Date().toISOString();
   db.prepare(
     `INSERT INTO slack_workspaces (team_id, tenant_id, added_at)
@@ -172,7 +148,7 @@ function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, tenantId: 
   return { teamId, tenantId, addedAt };
 }
 
-function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
+export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
   // SAFETY: the SELECT names team_id, tenant_id and added_at, all NOT NULL text columns of slack_workspaces.
   const rows = db
     .prepare(
@@ -187,21 +163,9 @@ function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
 }
 
 /** True when a row was deleted, so the caller can report not-found without a second lookup. */
-function removeSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string): boolean {
+export function removeSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string): boolean {
   const result = db
     .prepare(`DELETE FROM slack_workspaces WHERE team_id = ?`)
     .run(teamId);
   return Number(result.changes) > 0;
-}
-
-export function upsertSlackWorkspace(hippoRoot: string, teamId: string, tenantId: string): SlackWorkspace {
-  return onHandle(hippoRoot, (db) => upsertSlackWorkspaceAt(db, teamId, tenantId));
-}
-
-export function listSlackWorkspaces(hippoRoot: string): SlackWorkspace[] {
-  return onHandle(hippoRoot, listSlackWorkspacesAt);
-}
-
-export function removeSlackWorkspace(hippoRoot: string, teamId: string): boolean {
-  return onHandle(hippoRoot, (db) => removeSlackWorkspaceAt(db, teamId));
 }

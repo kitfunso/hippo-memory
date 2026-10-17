@@ -74,11 +74,11 @@ function copyMissingRows(local: LocalFiles, from: LocalFiles, includeCrossProjec
       else rejected++;
     }
   });
-  finishSyncDown(local.hippoRoot, count, rejected);
+  finishSyncDown(local, count, rejected);
   return count;
 }
 
-function finishSyncDown(localRoot: string, count: number, rejected: number): void {
+function finishSyncDown(local: LocalFiles, count: number, rejected: number): void {
   if (rejected > 0) {
     log.warn(
       `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,
@@ -88,6 +88,6 @@ function finishSyncDown(localRoot: string, count: number, rejected: number): voi
   // Batch producer: one embedAll() on the destination rather than an
   // embedMemory() per copied row (same batching invariant as autoShare).
   if (count > 0) {
-    void embedAll(localRoot).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+    void embedAll(local).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 }

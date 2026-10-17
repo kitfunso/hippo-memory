@@ -102,8 +102,8 @@ describe('reject next to personal rows', () => {
       await expectMissingIdAnswer(id, (target) => reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }));
     }
     expect(await masked(id, () => reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }))).toEqual({ status: 400, message: PERSONAL_REFUSAL });
-    expect(() => rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id })).toThrow(PERSONAL_REFUSAL);
-    expect(listRejectionsForTenant(root, 'default')).toHaveLength(0);
+    await expect(rejectValue(sqliteStore(root), { tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id })).rejects.toThrow(PERSONAL_REFUSAL);
+    expect(await listRejectionsForTenant(sqliteStore(root), 'default')).toHaveLength(0);
     expect(readEntry(root, id, 'default')?.scope).toBe('personal:private:a');
   });
 
@@ -121,7 +121,7 @@ describe('reject next to personal rows', () => {
   it('the CLI reject by value, which has no owner, leaves every personal row', async () => {
     const mineA = (await remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true })).id;
     const team = (await remember(ctxFor(actorB), { content: SHARED_TEXT })).id;
-    const { removedIds } = rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'stale', value: SHARED_TEXT });
+    const { removedIds } = await rejectValue(sqliteStore(root), { tenantId: 'default', actor: 'cli', reason: 'stale', value: SHARED_TEXT });
     expect(removedIds).toEqual([team]);
     expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
   });

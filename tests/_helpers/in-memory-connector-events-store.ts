@@ -1,7 +1,9 @@
-// A store other than hippo.db for the ConnectorEvents group, built on the in-memory connector-writes store: it copies tenant routing
-// and both dead-letter queues out of hippo.db once, then answers from memory and shares the event log the write group keeps.
+// A store other than hippo.db for the ConnectorEvents group, built on the in-memory connector-writes store: it copies tenant routing,
+// both dead-letter queues and the backfill cursors out of hippo.db once, then answers from memory and shares the write group's event log.
 import type { EntryWrites, HippoStore } from '../../src/entry/store-kit.js';
-import type { ConnectorDeadLetter, ConnectorEvents, ConnectorWrites } from '../../src/store/port.js';
+import type { StoredCursors } from '../../src/store/connectors/github.js';
+import type { SlackWorkspace } from '../../src/store/connectors/slack.js';
+import type { ConnectorDeadLetter, ConnectorEvents, ConnectorWrites, DeadLetterConnector, DeadLetterRows } from '../../src/store/port.js';
 import { inMemoryConnectorWritesStore, rowsOf, sqliteConnectorSide, type ConnectorSide } from './in-memory-connector-writes-store.js';
 
 /** One dead-letter row of either queue; the columns only the other connector's table has are null. */
@@ -20,6 +22,8 @@ export interface ParkedLetter {
   readonly deliveryId: string | null;
   readonly installationId: string | null;
   readonly repoFullName: string | null;
+  readonly retryCount: number;
+  readonly retriedAt: string | null;
 }
 
 /** A store under test with a read of both dead-letter queues, Slack's first, each oldest first. */
@@ -39,10 +43,15 @@ interface RepoRoute {
 }
 
 const LETTERS_SQL = `SELECT 'slack' AS connector, id, tenant_id AS tenantId, raw_payload AS rawPayload, error, bucket, signature, received_at AS receivedAt,
-    team_id AS teamId, slack_timestamp AS slackTimestamp, NULL AS eventName, NULL AS deliveryId, NULL AS installationId, NULL AS repoFullName FROM slack_dlq
-  UNION ALL SELECT 'github', id, tenant_id, raw_payload, error, bucket, signature, received_at, NULL, NULL, event_name, delivery_id, installation_id, repo_full_name FROM github_dlq
+    team_id AS teamId, slack_timestamp AS slackTimestamp, NULL AS eventName, NULL AS deliveryId, NULL AS installationId, NULL AS repoFullName,
+    retry_count AS retryCount, retried_at AS retriedAt FROM slack_dlq
+  UNION ALL SELECT 'github', id, tenant_id, raw_payload, error, bucket, signature, received_at, NULL, NULL, event_name, delivery_id, installation_id, repo_full_name,
+    retry_count, retried_at FROM github_dlq
   ORDER BY connector DESC, id`;
-const WORKSPACES_SQL = 'SELECT team_id AS id, tenant_id AS tenantId FROM slack_workspaces';
+const WORKSPACES_SQL = 'SELECT team_id AS teamId, tenant_id AS tenantId, added_at AS addedAt FROM slack_workspaces';
+const SLACK_CURSORS_SQL = 'SELECT tenant_id AS tenantId, channel_id AS channelId, latest_ts AS latestTs FROM slack_cursors';
+const GITHUB_CURSORS_SQL = `SELECT tenant_id AS tenantId, repo_full_name AS repo, issues_hwm AS issues, issue_comments_hwm AS issueComments,
+  pr_review_comments_hwm AS prReviewComments FROM github_cursors`;
 const INSTALLATIONS_SQL = 'SELECT installation_id AS id, tenant_id AS tenantId FROM github_installations';
 const REPOSITORIES_SQL = 'SELECT repo_full_name AS repoFullName, tenant_id AS tenantId, added_at AS addedAt FROM github_repositories ORDER BY added_at, tenant_id';
 
@@ -62,12 +71,68 @@ function parked(letter: ConnectorDeadLetter, id: number): ParkedLetter {
     connector: letter.connector, id, tenantId: letter.tenantId, rawPayload: letter.rawPayload, error: letter.error, bucket: letter.bucket,
     signature: letter.signature, receivedAt: new Date().toISOString(), teamId: slack?.teamId ?? null, slackTimestamp: slack?.slackTimestamp ?? null,
     eventName: github?.eventName ?? null, deliveryId: github?.deliveryId ?? null, installationId: github?.installationId ?? null, repoFullName: github?.repoFullName ?? null,
+    retryCount: 0, retriedAt: null,
+  };
+}
+
+/** A parked row as its own queue's reads answer it. */
+function rowOf<C extends DeadLetterConnector>(letter: ParkedLetter): DeadLetterRows[C] {
+  const { connector: _c, teamId, slackTimestamp, eventName, deliveryId, installationId, repoFullName, ...common } = letter;
+  const own = letter.connector === 'slack' ? { teamId, slackTimestamp } : { eventName, deliveryId, installationId, repoFullName };
+  // SAFETY: the connector tag picks the columns that queue holds, so the row has exactly that queue's fields.
+  return { ...common, ...own } as DeadLetterRows[C];
+}
+
+const key = (...parts: string[]): string => parts.join('\u0000');
+const HWM_FIELD = { issues_hwm: 'issues', issue_comments_hwm: 'issueComments', pr_review_comments_hwm: 'prReviewComments' } as const;
+type StateMethods = Omit<ConnectorEvents, 'eventRecord' | 'markEventSeen' | 'deletionTarget' | 'archiveDeletedArtifact' | 'slackTeamRoute' | 'githubRouting' | 'parkDeadLetter'>;
+
+/** The dead-letter reads, backfill cursors and workspace registry, over rows copied once from hippo.db. */
+function stateOn(hippoRoot: string, letters: ParkedLetter[], workspaces: Map<string, SlackWorkspace>): StateMethods {
+  const slackCursors = new Map(rowsOf<{ tenantId: string; channelId: string; latestTs: string }>(hippoRoot, SLACK_CURSORS_SQL)
+    .map((r): [string, string] => [key(r.tenantId, r.channelId), r.latestTs]));
+  const githubCursors = new Map(rowsOf<StoredCursors & { tenantId: string; repo: string }>(hippoRoot, GITHUB_CURSORS_SQL)
+    .map(({ tenantId, repo, ...hwm }): [string, StoredCursors] => [key(tenantId, repo), hwm]));
+  const none: StoredCursors = { issues: null, issueComments: null, prReviewComments: null };
+  const find = (connector: DeadLetterConnector, id: number) => letters.find((row) => row.connector === connector && row.id === id);
+  return {
+    async deadLetters(connector, tenantId, limit) {
+      const rows = letters.filter((row) => row.connector === connector && row.tenantId === tenantId);
+      return rows.sort((a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.id - b.id).slice(0, limit).map((row) => rowOf(row));
+    },
+    async deadLetter(connector, id) {
+      const row = find(connector, id);
+      return row ? rowOf(row) : null;
+    },
+    async markDeadLetterRetried(connector, id) {
+      const row = find(connector, id);
+      if (row) letters.splice(letters.indexOf(row), 1, { ...row, retryCount: row.retryCount + 1, retriedAt: new Date().toISOString() });
+    },
+    slackCursor: async (tenantId, channelId) => slackCursors.get(key(tenantId, channelId)) ?? null,
+    async saveSlackCursor(tenantId, channelId, latestTs) {
+      slackCursors.set(key(tenantId, channelId), latestTs);
+    },
+    githubCursors: async (tenantId, repo) => ({ ...(githubCursors.get(key(tenantId, repo)) ?? none) }),
+    async saveGitHubHwm(tenantId, repo, column, value) {
+      githubCursors.set(key(tenantId, repo), { ...(githubCursors.get(key(tenantId, repo)) ?? none), [HWM_FIELD[column]]: value });
+    },
+    async seedGitHubCursors(tenantId, repo, since) {
+      const held = githubCursors.get(key(tenantId, repo)) ?? none;
+      githubCursors.set(key(tenantId, repo), { issues: held.issues ?? since, issueComments: held.issueComments ?? since, prReviewComments: held.prReviewComments ?? since });
+    },
+    slackWorkspaces: async () => [...workspaces.values()].sort((a, b) => (a.teamId < b.teamId ? -1 : 1)).map((w) => ({ ...w })),
+    async registerSlackWorkspace(teamId, tenantId) {
+      const workspace = { teamId, tenantId, addedAt: new Date().toISOString() };
+      workspaces.set(teamId, workspace);
+      return { ...workspace };
+    },
+    removeSlackWorkspace: async (teamId) => workspaces.delete(teamId),
   };
 }
 
 export function inMemoryConnectorEventsStore(hippoRoot: string): InMemoryConnectorEventsStore {
   const base = inMemoryConnectorWritesStore(hippoRoot);
-  const workspaces = tenantById(hippoRoot, WORKSPACES_SQL);
+  const workspaces = new Map(rowsOf<SlackWorkspace>(hippoRoot, WORKSPACES_SQL).map((w): [string, SlackWorkspace] => [w.teamId, w]));
   const installations = tenantById(hippoRoot, INSTALLATIONS_SQL);
   const repositories = rowsOf<RepoRoute>(hippoRoot, REPOSITORIES_SQL);
   const letters = lettersAt(hippoRoot);
@@ -92,7 +157,7 @@ export function inMemoryConnectorEventsStore(hippoRoot: string): InMemoryConnect
       return { duplicate: false, archived: ids.length };
     },
     async slackTeamRoute(teamId) {
-      const tenantId = workspaces.get(teamId);
+      const tenantId = workspaces.get(teamId)?.tenantId;
       return tenantId ? { tenantId } : { tenantId: null, workspaceCount: workspaces.size };
     },
     async githubRouting({ installationId, repoFullName }) {
@@ -106,6 +171,7 @@ export function inMemoryConnectorEventsStore(hippoRoot: string): InMemoryConnect
       letters.push(parked(letter, id));
       return id;
     },
+    ...stateOn(hippoRoot, letters, workspaces),
   };
 
   return {

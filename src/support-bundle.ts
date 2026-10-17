@@ -8,7 +8,7 @@ import { pathToFileURL } from 'url';
 import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './core/project-identity.js';
 import { realpathOrResolve } from './util/real-path.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import { readStoreInventory } from './store/diagnostics.js';
+import { sqliteStore } from './store/sqlite/store.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from './core/config.js';
 import { redactSecretsStrict } from './util/secret-detect.js';
@@ -96,7 +96,7 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
   if (fs.existsSync(walPath)) files['hippo.db-wal'] = fs.statSync(walPath).size;
 
   try {
-    const { schemaVersion, minCompatibleBinary, tables } = readStoreInventory(storeDir);
+    const { schemaVersion, minCompatibleBinary, tables } = sqliteStore(storeDir).localFiles.diagnostics.inventory();
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
   } catch (err) {

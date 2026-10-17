@@ -16,6 +16,7 @@ import {
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from './_helpers/count-statements.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
@@ -329,7 +330,7 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
 describe('createDeliveryRecorder row building', () => {
   const mem = (n: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`memory number ${n}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), id: `m${String(n).padStart(3, '0')}`, ...extra });
   const recorder = (payload: Record<string, string> = {}) => createDeliveryRecorder({
-    root, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
+    ledger: sqliteSyncStore(root).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit', ...payload }),
   });
   const built = (rec: ReturnType<typeof recorder>): DeliveryEventInput => {

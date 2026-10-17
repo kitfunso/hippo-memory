@@ -45,7 +45,7 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
-import { cliApiContext, cliLedgerReach, cliSyncOptions } from './api-context.js';
+import { cliApiContext, cliLedgerReach, cliStore, cliSyncOptions } from './api-context.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -128,7 +128,7 @@ async function restoreCompactSnapshot(
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
   rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
-  bookLedgerTurn(hippoRoot, {
+  bookLedgerTurn({
     uses: [{
       tenantId,
       sessionId: payloadSessionId,
@@ -355,7 +355,8 @@ async function sleepIfDue(
   if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
   const prefix = `turn close, session ${sessionId}`;
   try {
-    const { enabled, count, threshold, due } = autoSleepDue(hippoRoot, tenantId, loadConfig(hippoRoot).autoSleep);
+    const { enabled, count, threshold, due } =
+      await autoSleepDue(cliStore(hippoRoot), tenantId, loadConfig(hippoRoot).autoSleep);
     if (!due) {
       const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
       appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });
@@ -690,14 +691,15 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     if (isInitialized(root) && payload) {
       // SAFETY: JSON.parse returns a JSON value by definition.
       const failure = JSON.parse(payload) as JsonValue;
-      const rec = startToolFailureRecorder(cliApiContext(root, tenantId), {
+      const ctx = cliApiContext(root, tenantId);
+      const rec = startToolFailureRecorder(ctx, {
         stdinText: text,
         runtime: hookRuntime(flags),
         envSessionId: hostSessionId(),
       });
-      await runHookWithStores(() => {
+      await runHookWithStores(async () => {
         try {
-          return captureToolFailure(root, tenantId, failure, (id) => rec?.logged(id));
+          return await captureToolFailure(ctx, failure, (id) => rec?.logged(id));
         } finally {
           flushDeliveryRecorder(rec);
         }

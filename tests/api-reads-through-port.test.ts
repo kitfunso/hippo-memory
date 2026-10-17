@@ -38,7 +38,7 @@ describe('reads through a served store', () => {
     const ctx = { ...ctxAt(plain), store: portOnlyStore(served) };
     await expect(reject(ctx, { memoryId: onlyInFolder.id, reason: 'wrong' })).rejects.toThrow(NotFoundError);
     expect(readEntry(plain, onlyInFolder.id, TENANT)).not.toBeNull();
-    expect(listRejectionsForTenant(plain, TENANT)).toEqual([]);
+    expect(await listRejectionsForTenant(sqliteStore(plain), TENANT)).toEqual([]);
   });
 
   it('authKeyTenant finds a key in the served store', async () => {

@@ -215,8 +215,9 @@ describe('published runtime exports', () => {
       decodeVector
       encodeVector entryAfterOutcome
       float32ToBuffer ftsTermParts
-      hasGroup
+      hasGroup heldTexts
       isSharedStore
+      normalizeValueForRejection
       ownScopeTouches
       passesScopeFilterForRecall physicsSearch
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex requireGroup
