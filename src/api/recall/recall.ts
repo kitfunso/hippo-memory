@@ -35,6 +35,7 @@ import type {
   RecallResultItem,
   RecallWindowOptions,
   ContinuityBlock,
+  StoreRanking,
 } from './types.js';
 import { type Context, type StoreContext, ownerOrSubject, RecallContractError } from '../types.js';
 import {
@@ -70,13 +71,14 @@ function inCallerProject(entry: MemoryEntry, opts: RecallOptions): boolean {
  * surface that sets `recordAs`. Only the CLI core ranker writes last_retrieval_ids (contract lock). */
 export async function retrieve(ctx: StoreContext, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
+  // A ranker of its own: it ranks with rankRecall over its whole candidate pool, not the band's SQL window.
   if (opts.cliCore) return retrieveWithCliCore(ctx, opts, opts.cliCore);
   const windowSize = recallWindowSize(opts.window);
   // From the authenticated actor, never from RecallOptions, which a caller fills in.
   const own = personalScopeOf(ctx.actor) ?? undefined;
-  if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked, own);
   const store = ctx.store;
-  const how = opts.trace?.recordAs;
+  // Under showRanked the caller's shown list is what gets recorded, never the band.
+  const how = opts.showRanked ? undefined : opts.trace?.recordAs;
   if (!how) return retrieveBand(ctx, store, opts, windowSize, own);
   const { recallHistory, leadingAudit } = recallLead(ctx, how, opts.query, opts.boost?.sessionId);
   const led = { ...opts, hints: { ...opts.hints, recallHistory }, trace: { ...opts.trace, leadingAudit } };
@@ -101,7 +103,8 @@ function shownBand(opts: RecallOptions, result: RecallResult): ShownList {
   };
 }
 
-/** The default ranker: the SQL BM25 band, reordered by hybrid or physics search when `mode` asks. */
+/** The default ranker: the SQL BM25 band, reordered by hybrid or physics search when `mode` asks. Under `showRanked`
+ * the band is the top of a wide ranking, and the caller's cut of that ranking is what gets audited and strengthened. */
 async function retrieveBand(
   ctx: StoreContext,
   store: HippoStore,
@@ -109,28 +112,57 @@ async function retrieveBand(
   windowSize: number,
   own: string | undefined,
 ): Promise<RecallResult> {
-  let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
-  if (opts.mode === 'hybrid' || opts.mode === 'physics') {
-    const searchOpts = {
-      budget: Infinity,
-      scope: opts.filter?.scope ?? null,
-      vectorCandidates: recallVectorSpec(ctx, opts, own),
-    };
-    const ranked = await searchByEngine(
-      vectorSourceOf({ store, config: configOf(ctx) }),
-      opts.query,
-      candidates,
-      physicsFor(ctx, opts),
-      searchOpts,
-    );
-    const rankedIds = new Set(ranked.map((r) => r.entry.id));
-    candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
-  }
-  const plan = planRecall(ctx, opts, candidates, own);
-  const reads = await readRecall(ctx, store, opts, plan);
-  const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
-  await finishBandRecall(ctx, store, opts, writes, result.results.map((r) => r.id));
-  return result;
+  const band: BandCandidates = opts.showRanked
+    ? await wideBand(ctx, opts, windowSize, opts.showRanked, own)
+    : { all: await sqlBand(ctx, store, opts, windowSize, own) };
+  // The caller traces and audits the rows it shows, so the band writes neither.
+  const bandOpts = band.wide ? { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } } : opts;
+  const plan = planRecall(ctx, bandOpts, band.all, own);
+  const reads = await readRecall(ctx, store, bandOpts, plan, band.goals);
+  const composed = composeRecall(ctx, bandOpts, { windowSize, all: band.all, plan, reads, auditBand: !band.wide });
+  if (band.wide) await finishShownRecall(ctx, store, opts, band.wide, composed);
+  else await finishBandRecall(ctx, store, opts, composed.writes, composed.result.results.map((r) => r.id));
+  return composed.result;
+}
+
+/** What the band plans from. `goals`, when set, was read once for both boosts, so readRecall skips that read. */
+interface BandCandidates {
+  readonly all: MemoryEntry[];
+  readonly goals?: ActiveGoals | null;
+  readonly wide?: WideRanking;
+}
+
+/** Under `showRanked`: the ranking the caller cuts its list from, and the goal log rows that ranking's boost earned. */
+interface WideRanking {
+  readonly show: NonNullable<RecallOptions['showRanked']>;
+  readonly ranking: StoreRanking;
+  readonly goalLog: GoalRecallLogRow[];
+}
+
+/** The SQL BM25 window, reordered by hybrid or physics search when `mode` asks. */
+async function sqlBand(
+  ctx: StoreContext,
+  store: HippoStore,
+  opts: RecallOptions,
+  windowSize: number,
+  own: string | undefined,
+): Promise<MemoryEntry[]> {
+  const candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
+  if (opts.mode !== 'hybrid' && opts.mode !== 'physics') return candidates;
+  const searchOpts = {
+    budget: Infinity,
+    scope: opts.filter?.scope ?? null,
+    vectorCandidates: recallVectorSpec(ctx, opts, own),
+  };
+  const ranked = await searchByEngine(
+    vectorSourceOf({ store, config: configOf(ctx) }),
+    opts.query,
+    candidates,
+    physicsFor(ctx, opts),
+    searchOpts,
+  );
+  const rankedIds = new Set(ranked.map((r) => r.entry.id));
+  return [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
 }
 
 /** The one recall write: the caller's leading audit rows go first, and the ids shown are the ones strengthened. */
@@ -180,15 +212,15 @@ function recallVectorSpec(ctx: StoreContext, opts: RecallOptions, own: string | 
 // Tag, pin and recency boosts can lift a row from deep in the BM25 order, so MCP ranks a wide lexical window.
 const SHOW_RANKED_LEXICAL_WINDOW = 1000;
 
-/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid
- * otherwise, over a wide lexical window plus the nearest vectors. */
-async function retrieveFromStore(
+/** The band under `showRanked`: physics when `mode` says so, hybrid otherwise, over a wide lexical window plus the
+ * nearest vectors, goal boost applied; the band is the top `windowSize` rows of that ranking. */
+async function wideBand(
   ctx: StoreContext,
   opts: RecallOptions,
   windowSize: number,
   show: NonNullable<RecallOptions['showRanked']>,
   own: string | undefined,
-): Promise<RecallResult> {
+): Promise<BandCandidates> {
   const store = ctx.store;
   const loaded = await store.searchRecallEntries(
     opts.query,
@@ -205,28 +237,32 @@ async function retrieveFromStore(
     searchOpts,
   );
   const { ranked, goals, rankedLog } = await boostRankedByGoals(ctx, opts, searched);
-  const window = ranked.slice(0, windowSize).map((r) => r.entry);
-  const bandOpts = { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } };
-  const plan = planRecall(ctx, bandOpts, window, own);
-  const reads = await readRecall(ctx, store, bandOpts, plan, goals);
-  const { result, writes } = composeRecall(ctx, bandOpts, { windowSize, all: window, plan, reads, auditBand: false });
-  const shown = show(
-    { ranked, pool: withVectorCandidates(pool, ranked), droppedByScope: loaded.length - pool.length },
-    result,
-  );
-  const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, ranked);
+  const ranking = { ranked, pool: withVectorCandidates(pool, ranked), droppedByScope: loaded.length - pool.length };
+  return { all: ranked.slice(0, windowSize).map((r) => r.entry), goals, wide: { show, ranking, goalLog: rankedLog } };
+}
+
+/** The caller shows its cut of the wide ranking; its rows go after the band's, in the same one write. */
+async function finishShownRecall(
+  ctx: StoreContext,
+  store: HippoStore,
+  opts: RecallOptions,
+  wide: WideRanking,
+  composed: ComposedRecall,
+): Promise<void> {
+  const shown = wide.show(wide.ranking, composed.result);
+  const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, wide.ranking.ranked);
+  const { writes } = composed;
   await finishBandRecall(
     ctx,
     store,
     opts,
     {
-      goalLog: [...rankedLog, ...writes.goalLog],
+      goalLog: [...wide.goalLog, ...writes.goalLog],
       audit: [...writes.audit, shownRow, ...shown.audit],
       trace,
     },
     shown.ids,
   );
-  return result;
 }
 
 type RankedResults = Awaited<ReturnType<typeof searchByEngine>>;
