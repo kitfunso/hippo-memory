@@ -49,7 +49,8 @@ describe('z0-regrade regrade and grading', () => {
     expect(await cli(['reader', '--out', c.out, '--labels', labels])).toMatchObject({ code: 0 });
     expect(await grading(c.out)).toMatchObject({ code: 0 });
     expect(readGrading(c.out)).toMatchObject({ readerSample: { n: pairs.length, disagreements: 0 }, g5: { readerRound: 1 } });
-    expect(pairs.length).toBeGreaterThan(0);
+    // Every teach resumes, so the three give a first and a final pair each; the four applies pass first and give one; n1 has no lesson.
+    expect(pairs).toHaveLength(10);
     // The round passed, so the checkers are frozen: a changed one is refused before any cell runs.
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
     const { check } = lessonOf(raw, 'f1-l1');

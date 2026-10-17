@@ -267,17 +267,18 @@ describe('importVault (g) — dialect syntax does not crash', () => {
   it('imports Obsidian (^block-id, ![[embed]]) without error', async () => {
     const r = await importVault(path.join(FIXTURES, 'obsidian-sample'), opts({ name: 'obs' }));
     expect(r.imported).toBe(r.total);
-    expect(r.total).toBeGreaterThan(0);
+    // One note per .md file in the fixture; dot-folders are never walked.
+    expect(r.total).toBe(3);
   });
   it('imports Foam (plain md) without error', async () => {
     const r = await importVault(path.join(FIXTURES, 'foam-sample'), opts({ name: 'foam' }));
     expect(r.imported).toBe(r.total);
-    expect(r.total).toBeGreaterThan(0);
+    expect(r.total).toBe(3);
   });
   it('imports Dendron (dot-hierarchy filenames) without error', async () => {
     const r = await importVault(path.join(FIXTURES, 'dendron-sample'), opts({ name: 'den' }));
     expect(r.imported).toBe(r.total);
-    expect(r.total).toBeGreaterThan(0);
+    expect(r.total).toBe(2);
     // Dot-hierarchy filename survives as a relpath-keyed artifactRef.
     const all = loadAllEntries(tmpDir, 'default');
     expect(all.some((e) => e.artifact_ref === 'vault:den:vault.note.child.md')).toBe(true);

@@ -197,7 +197,8 @@ describe('the hook trust seam (test 12)', () => {
     expect([a.invalid, a.void, a.codexHookTrust]).toEqual([null, null, 'flag']);
     expect(a.codexHooksFired?.injections).toBeGreaterThanOrEqual(1);
     const seen = fakeSeen(codexLog);
-    expect(seen.length).toBeGreaterThan(0);
+    // Teaches run in Claude and a Codex apply gets no correction, so each of the six applies is one Codex session.
+    expect(seen).toHaveLength(6);
     expect(seen.every((s) => s.argv.includes('--dangerously-bypass-hook-trust'))).toBe(true);
   }, xLimit());
 });

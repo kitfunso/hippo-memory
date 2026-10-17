@@ -67,7 +67,7 @@ describe('store-ready MCP tools', () => {
 
   it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
     const unready = declared.filter((name) => !ready.includes(name));
-    expect(unready.length).toBeGreaterThan(0);
+    expect(unready).toEqual(['hippo_share', 'hippo_peers']);
     for (const name of unready) {
       const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } }, ctxOn('stub'));
       expect(res).toEqual(notPorted);

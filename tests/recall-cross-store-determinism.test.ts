@@ -176,6 +176,6 @@ describe('recall cross-store determinism', () => {
     const contentsA = resultsA.map((r) => r.entry.content);
     const contentsB = resultsB.map((r) => r.entry.content);
     expect(contentsA).toEqual(contentsB);
-    expect(contentsA.length).toBeGreaterThan(0);
+    expect([...contentsA].sort()).toEqual(CONTENTS.slice(1).sort());
   });
 });

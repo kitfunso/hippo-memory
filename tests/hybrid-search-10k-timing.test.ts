@@ -76,7 +76,8 @@ describe('hybrid recall at 10k rows', () => {
     t0 = performance.now();
     const atFewer = await recordStatementsAsync(() => recall(fewer));
     console.log(`hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`);
-    expect(atFewer.result.length).toBeGreaterThan(0);
+    // The 20 rows that name the query plus the 50 nearest vectors, none of them shared, all inside the budget.
+    expect(atFewer.result).toHaveLength(70);
     // The smaller recall ran its vector scan too, so the two counts compare like with like.
     expect(atFewer.rowsRead).toBeGreaterThanOrEqual(FEWER_ROWS);
     // A query per row scored, or per chunk of rows, grows the statements with the store.
@@ -86,7 +87,8 @@ describe('hybrid recall at 10k rows', () => {
 
   it('one recall reads each stored vector once and few other rows', async () => {
     const { result, statements, rowsRead } = await recordStatementsAsync(recallOnce);
-    expect(result.length).toBeGreaterThan(0);
+    // The 200 rows that name the query plus the 50 nearest vectors, less row 2500, which is both.
+    expect(result).toHaveLength(249);
     // Every stored vector is read, so the ceilings below measure a recall that ran its vector scan.
     expect(rowsRead).toBeGreaterThanOrEqual(ROWS);
     // About 1.3 times what one recall does; a second vector scan or a whole-store load of memories passes it.

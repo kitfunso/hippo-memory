@@ -113,7 +113,7 @@ describe('api.recall — trace wiring', () => {
       await remember(ctx, { content: 'recall-trace-target-beta also matches' });
 
       const result = await retrieve(ctx, { query: 'recall-trace-target', window: { limit: 5 } });
-      expect(result.results.length).toBeGreaterThan(0);
+      expect(result.results).toHaveLength(2);
 
       const traces = traceRows(home, 'api');
       expect(traces).toHaveLength(1);
@@ -142,7 +142,7 @@ describe('api.recall — trace wiring', () => {
 
       expect(lastTraceId(home)).toBeNull();
       const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', window: { limit: 5 } });
-      expect(result.results.length).toBeGreaterThan(0);
+      expect(result.results).toHaveLength(1);
 
       // A trace row WAS written (previous test), but last_trace_id stays null.
       expect(lastTraceId(home)).toBeNull();
@@ -179,7 +179,7 @@ describe('api.recall — trace wiring', () => {
       await remember(ctx, { content: 'suppressed-trace-target' });
 
       const result = await retrieve(ctx, { query: 'suppressed-trace-target', window: { limit: 5 }, trace: { suppressRecallTrace: true } });
-      expect(result.results.length).toBeGreaterThan(0);
+      expect(result.results).toHaveLength(1);
 
       expect(traceRows(home, 'api')).toHaveLength(0);
     } finally {
@@ -196,7 +196,7 @@ describe('api.getContext — trace wiring', () => {
       await remember(ctx, { content: 'context-trace-target-gamma' });
 
       const result = await getContext(ctx, { q: 'context-trace-target', budget: 1000 });
-      expect(result.entries.length).toBeGreaterThan(0);
+      expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
       expect(traces).toHaveLength(1);
@@ -205,7 +205,7 @@ describe('api.getContext — trace wiring', () => {
       const idx = loadLastRecall(home);
       expect(idx.last_trace_id).toBe(String(traces[0].id));
       // F1 lockstep: last_retrieval_ids advanced in the SAME saveIndex call.
-      expect(idx.last_retrieval_ids.length).toBeGreaterThan(0);
+      expect(idx.last_retrieval_ids).toEqual([result.entries[0].entry.id]);
     } finally {
       restore();
     }
@@ -218,7 +218,7 @@ describe('api.getContext — trace wiring', () => {
       writeEntry(home, createMemory('pinned-context-trace-delta', { pinned: true }));
 
       const result = await getContext(ctx, { pinnedOnly: true, budget: 1000 });
-      expect(result.entries.length).toBeGreaterThan(0);
+      expect(result.entries).toHaveLength(1);
 
       expect(traceRows(home, 'context')).toHaveLength(0);
       expect(lastTraceId(home)).toBeNull();
@@ -269,7 +269,7 @@ describe('api.getContext — trace wiring', () => {
       await remember(ctx, { content: 'context-trace-target-caller-session' });
 
       const result = await getContext(ctx, { q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
-      expect(result.entries.length).toBeGreaterThan(0);
+      expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
       expect(traces).toHaveLength(1);
@@ -326,7 +326,7 @@ describe('CLI cmdRecall — trace wiring', () => {
     expect(traces).toHaveLength(1);
     const idx = loadLastRecall(localStore);
     expect(idx.last_trace_id).toBe(String(traces[0].id));
-    expect(idx.last_retrieval_ids.length).toBeGreaterThan(0);
+    expect(idx.last_retrieval_ids).toHaveLength(1);
   });
 
   it('a zero-result recall writes an empty trace row (result_count 0, no result rows) but leaves last_trace_id UNCHANGED', async () => {

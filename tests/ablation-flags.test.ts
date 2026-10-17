@@ -463,7 +463,7 @@ describe('HIPPO_FAKE_NOW', () => {
       budget: 10000,
       explain: true,
     });
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(1);
     expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
   });
 

@@ -47,7 +47,7 @@ describe('multihopSearch', () => {
     const entries = loadAllEntries(hippoRoot, 'default');
     const results = multihopSearch('Alice hiking', entries, { budget: 4000 });
 
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(1);
     expect(results[0].entry.content).toContain('Alice');
   });
 

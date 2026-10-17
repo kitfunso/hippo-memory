@@ -128,7 +128,9 @@ describe('B11 and U1', () => {
   it('B11: no column of a boundary row holds the instruction or the snapshot text', () => {
     scenario(p);
     const cells = tableRows(p, 'SELECT * FROM delivery_events').flatMap((r) => Object.values(r)).filter((v): v is string => typeof v === 'string');
-    expect(cells.length).toBeGreaterThan(0);
+    // The two boundary rows, 11 non-null text cells each: ts, tenant, runtime, event, surface, two store
+    // fields, session and its state, block state and emitted hash.
+    expect(cells).toHaveLength(22);
     const raw = [SNAPSHOT_TASK, PRE_COMPACT_INSTRUCTION.slice(0, 40), 'delivery ledger'];
     expect(cells.filter((c) => raw.some((t) => c.includes(t)))).toEqual([]);
   });

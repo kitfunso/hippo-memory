@@ -105,7 +105,9 @@ describe('bindSessionOwner', () => {
     setFloor('0.0.1');
     bindSessionOwner(ctx('alice'), 's1');
     // The open refuses any binary below the floor (github-rollback-guard-and-deletion-atomicity.test.ts), so a floor above the release shuts it out.
-    expect(compareSemver(floor() ?? '', PREVIOUS_RELEASE)).toBeGreaterThan(0);
+    expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
+    // compareSemver returns the first differing part's difference: the minor of 1.64.0 over 1.63.2.
+    expect(compareSemver(floor() ?? '', PREVIOUS_RELEASE)).toBe(1);
   });
 
   it('a bind that lost the race to another owner returns the stored owner, not its own', () => {

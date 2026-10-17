@@ -57,7 +57,8 @@ function expectHashedOnly(row: AuditRow, query: string): void {
 
 function expectNoCanary(): void {
   const rows = [...auditRows(localRoot), ...auditRows(globalRoot)];
-  expect(rows.length).toBeGreaterThan(0);
+  // remember, context and API recall one row each; CLI, MCP and HTTP a recall plus a no-session anchor skip each.
+  expect(rows).toHaveLength(9);
   for (const row of rows) expect(row.text).not.toContain(CANARY);
 }
 
@@ -111,8 +112,8 @@ describe('recall audits store a query hash, never the text', () => {
       encoding: 'utf-8',
     });
     const rows = auditRows(localRoot).filter((r) => r.op === 'recall');
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) expectHashedOnly(row, QUERY);
+    expect(rows).toHaveLength(1);
+    expectHashedOnly(rows[0], QUERY);
   });
 });
 

@@ -104,9 +104,9 @@ describe('fresh-tail policy', () => {
       query: 'session',
       window: { freshTailCount: 5, freshTailSessionId: sess },
     });
-    const freshIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
-    // Every fresh-tail row must come from sess-A.
-    expect(freshIds.length).toBeGreaterThan(0);
+    const fresh = r.results.filter((it) => it.isFreshTail).map((it) => it.content).sort();
+    // Every fresh-tail row must come from sess-A, and all three of them surface.
+    expect(fresh).toEqual(['session A event 0', 'session A event 1', 'session A event 2']);
     // And no fresh-tail row should mention "session B".
     for (const it of r.results) {
       if (it.isFreshTail) {

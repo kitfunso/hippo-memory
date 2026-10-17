@@ -43,9 +43,8 @@ describe('predictions store (first-class object)', () => {
       targetDate: '2026-06-15',
     });
 
-    expect(pred.id).toBeGreaterThan(0);
-    expect(pred.memoryId).toBeDefined();
-    expect(pred.memoryId).not.toBeNull();
+    expect(pred.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
+    expect(pred.memoryId).toMatch(/^sem_/); // the mirror is a semantic-layer memory
     expect(pred.tenantId).toBe('default');
     expect(pred.classTag).toBe('migration-effort');
     expect(pred.claimText).toBe('migration takes 2 days');

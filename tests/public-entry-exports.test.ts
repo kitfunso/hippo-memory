@@ -127,7 +127,8 @@ function runtimeReexports(source: string): string[] {
 describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = runtimeReexports(readFileSync(resolve(REPO_ROOT, 'src', 'index.ts'), 'utf-8'));
-    expect(modules.length).toBeGreaterThan(0);
+    // src/index.ts, not this test, sets the list; these two prove the scan reads a multi-line block and a mixed line.
+    expect(modules).toEqual(expect.arrayContaining(['./core/card.js', './api/sleep/sleep.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 

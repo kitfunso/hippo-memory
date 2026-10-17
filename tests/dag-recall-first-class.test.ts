@@ -256,6 +256,7 @@ describe('first-class DAG recall (scoring layer)', () => {
       summaryDeboost: 1.0,
     });
     const summaryBaseScore = findResult(baseline, summary.id)?.score ?? 0;
+    // BM25 times a clock-dependent strength and recency, so only the sign is fixed.
     expect(summaryBaseScore).toBeGreaterThan(0);
 
     // Run with reranker + default deboost

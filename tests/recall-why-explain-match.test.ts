@@ -65,34 +65,31 @@ describe('explainMatch', () => {
     const entries = makeEntries();
     const results = search('FRED cache failure', entries, { budget: 10000 });
 
-    expect(results.length).toBeGreaterThan(0);
+    // No stemming, so 'failure' misses 'failures'; the FRED row also holds the rarer term and ranks first.
+    expect(results.map((r) => r.entry.id)).toEqual([entries[0].id, entries[2].id]);
 
     const explanation = explainMatch('FRED cache failure', results[0]);
     expect(explanation.hasBm25).toBe(true);
     expect(explanation.hasEmbedding).toBe(false);
-    expect(explanation.matchedTerms.length).toBeGreaterThan(0);
-    expect(explanation.reason).toContain('BM25');
-    expect(explanation.reason).toContain('matched terms');
+    expect(explanation.matchedTerms).toEqual(['fred', 'cache']);
+    expect(explanation.reason).toBe('BM25: matched terms [fred, cache]');
   });
 
   it('includes specific matched terms in the explanation', () => {
     const entries = makeEntries();
     const results = search('cache refresh', entries, { budget: 10000 });
 
-    expect(results.length).toBeGreaterThan(0);
+    // Both rows hold both terms; the shorter one ranks first.
+    expect(results.map((r) => r.entry.id)).toEqual([entries[2].id, entries[0].id]);
 
     const explanation = explainMatch('cache refresh', results[0]);
-    // At least one of 'cache' or 'refresh' should appear
-    const hasRelevantTerm = explanation.matchedTerms.some(
-      (t) => t === 'cache' || t === 'refresh'
-    );
-    expect(hasRelevantTerm).toBe(true);
+    expect(explanation.matchedTerms).toEqual(['cache', 'refresh']);
   });
 
   it('returns cosine=0 for BM25-only results', () => {
     const entries = makeEntries();
     const results = search('FRED cache', entries, { budget: 10000 });
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((r) => r.entry.id)).toEqual([entries[0].id, entries[2].id]);
 
     const explanation = explainMatch('FRED cache', results[0]);
     expect(explanation.cosineSimilarity).toBe(0);
@@ -102,12 +99,12 @@ describe('explainMatch', () => {
   it('returns reason text that is non-empty', () => {
     const entries = makeEntries();
     const results = search('error pipeline', entries, { budget: 10000 });
-    expect(results.length).toBeGreaterThan(0);
 
-    for (const r of results) {
-      const explanation = explainMatch('error pipeline', r);
-      expect(explanation.reason.length).toBeGreaterThan(0);
-    }
+    // 'pipeline' comes only from the FRED row's data-pipeline tag; 'error' is a tag on two rows.
+    expect(results.map((r) => explainMatch('error pipeline', r).reason)).toEqual([
+      'BM25: matched terms [error, pipeline]',
+      'BM25: matched terms [error]',
+    ]);
   });
 
   it('handles a result with no BM25 and no embedding match gracefully', () => {
@@ -154,7 +151,7 @@ describe('--why JSON output fields', () => {
   it('search results contain all fields needed for --why annotation', () => {
     const entries = makeEntries();
     const results = search('FRED cache', entries, { budget: 10000 });
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(2);
 
     const r = results[0];
     // Verify all fields exist on SearchResult that --why needs
@@ -169,7 +166,7 @@ describe('--why JSON output fields', () => {
     // explainMatch produces the reason field
     const explanation = explainMatch('FRED cache', r);
     expect(explanation.reason).toBeTypeOf('string');
-    expect(explanation.reason.length).toBeGreaterThan(0);
+    expect(explanation.reason).toBe('BM25: matched terms [fred, cache]');
   });
 
   it('resolveConfidence returns valid confidence level', () => {
@@ -213,14 +210,15 @@ describe('hybridSearch results carry explainMatch data', () => {
   it('hybridSearch results include bm25 and cosine fields', async () => {
     const entries = makeEntries();
     const results = await hybridSearch('FRED cache failure', entries, { budget: 10000 });
-    expect(results.length).toBeGreaterThan(0);
 
     for (const r of results) {
       expect(r.bm25).toBeTypeOf('number');
       expect(r.cosine).toBeTypeOf('number');
-
-      const explanation = explainMatch('FRED cache failure', r);
-      expect(explanation.reason.length).toBeGreaterThan(0);
     }
+    // No hippoRoot means no stored vectors, so hybrid ranks by BM25 alone, as search does.
+    expect(results.map((r) => explainMatch('FRED cache failure', r).reason)).toEqual([
+      'BM25: matched terms [fred, cache]',
+      'BM25: matched terms [cache]',
+    ]);
   });
 });

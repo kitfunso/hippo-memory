@@ -510,14 +510,14 @@ describe('Retrieval quality benchmark', () => {
   for (const tc of TEST_CASES) {
     it(`query: "${tc.query}"`, () => {
       const expectedIds = tc.expectedLabels.map((l) => seedIds[l]).filter(Boolean);
-      expect(expectedIds.length).toBeGreaterThan(0); // sanity check all labels exist
+      expect(expectedIds).toHaveLength(tc.expectedLabels.length); // sanity check all labels exist
 
       const topIds = runQuery(tc.query);
       const m = mrr(topIds, expectedIds);
       const p3 = precision3(topIds, expectedIds);
 
-      // At minimum we want MRR > 0  - something relevant in the top-10
-      expect(m, `MRR=0 for query "${tc.query}". Top results: ${topIds.slice(0,3).join(', ')}`).toBeGreaterThan(0);
+      // Something relevant in the top-10: a hit at rank 10 scores 1/10, and the rank is the scorer's to choose.
+      expect(m, `MRR=0 for query "${tc.query}". Top results: ${topIds.slice(0,3).join(', ')}`).toBeGreaterThanOrEqual(0.1);
 
       // Log for visibility (doesn't fail)
       console.log(

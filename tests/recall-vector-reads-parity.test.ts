@@ -196,7 +196,9 @@ describe('recall through the vector reads of a store other than hippo.db', () =>
     // hippo.db's own reply shows the vector arm ran: a row no query word matches is in it, and no filtered row is.
     const shown = shownIds(onHippoDb);
     expect(onHippoDb.replies.every((r) => r.status === 200)).toBe(true);
-    expect(onHippoDb.requests).toBeGreaterThan(0);
+    // Hybrid embeds the query once; physics embeds it, then its classic pool (the seeded rows with no usable particle)
+    // goes through hybrid, which embeds it again.
+    expect(onHippoDb.requests).toBe(physics ? 2 : 1);
     expect(shown).toContain(VECTOR_ONLY);
     expect(shown.filter((id) => HIDDEN_IDS.includes(id))).toEqual([]);
   });

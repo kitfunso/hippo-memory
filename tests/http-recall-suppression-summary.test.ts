@@ -6,9 +6,8 @@
  *    all 6 camelCase counters (matching the api.recall TS interface).
  * 2. Counters reflect actual filter activity (droppedByBudget non-zero when
  *    candidates > limit).
- * 3. Back-compat: a payload WITHOUT `suppressionSummary` (legacy server
- *    pre-v1.12.13) still parses into the TS RecallResult shape because the
- *    field is optional.
+ * The field staying optional needs no test here: resultOf in src/api/recall/request.ts builds a RecallResult without
+ * it, so `npm run typecheck:tests` fails the day it turns required.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -16,7 +15,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import type { RecallResult, RecallSuppressionSummary } from '../src/api/index.js';
+import type { RecallResult } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -54,54 +53,22 @@ describe('HTTP /v1/memories suppressionSummary', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
     expect(res.status).toBe(200);
     const body = await jsonAs<Partial<RecallResult>>(res);
-    expect(body.suppressionSummary).toBeDefined();
-    const s = body.suppressionSummary!;
-    // All 6 camelCase fields present on the wire.
-    expect(s).toHaveProperty('totalCandidates');
-    expect(s).toHaveProperty('droppedPreRank');
-    expect(s).toHaveProperty('droppedByBudget');
-    expect(s).toHaveProperty('summarySubstitutionsAdded');
-    expect(s).toHaveProperty('freshTailAdded');
-    expect(s).toHaveProperty('suppressedByInterference');
+    // All 6 camelCase fields on the wire: 20 seeded matches, none filtered before rank, no session, summary or tail.
+    expect(body.suppressionSummary).toEqual({
+      totalCandidates: 20,
+      droppedPreRank: 0,
+      droppedByBudget: 15,
+      summarySubstitutionsAdded: 0,
+      freshTailAdded: 0,
+      suppressedByInterference: 0,
+    });
   });
 
   it('droppedByBudget reflects the limit cut over the wire', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
     const body = await jsonAs<Partial<RecallResult>>(res);
-    expect(body.results!.length).toBeLessThanOrEqual(5);
+    expect(body.results).toHaveLength(5);
     // 20 candidates, limit 5 -> 15 dropped by budget.
-    expect(body.suppressionSummary!.droppedByBudget).toBeGreaterThanOrEqual(15);
-  });
-
-  it('back-compat: TS RecallResult type accepts a pre-v1.12.13 payload without suppressionSummary', () => {
-    // Hand-construct a literal pre-v1.12.13-shaped response (no
-    // suppressionSummary key). Cast to the new type and verify the field
-    // is undefined (not throwing). This proves the field is forever
-    // optional and existing clients receiving pre-v1.12.13 server payloads
-    // do not break.
-    const legacyPayload: RecallResult = {
-      results: [],
-      total: 0,
-      tokens: 0,
-      windowSize: 200,
-      // NOTE: no suppressionSummary key
-    };
-    expect(legacyPayload.suppressionSummary).toBeUndefined();
-    // And the type system accepts construction with the field present too.
-    const newPayload: RecallResult = {
-      results: [],
-      total: 0,
-      tokens: 0,
-      windowSize: 200,
-      suppressionSummary: {
-        totalCandidates: 0,
-        droppedPreRank: 0,
-        droppedByBudget: 0,
-        summarySubstitutionsAdded: 0,
-        freshTailAdded: 0,
-        suppressedByInterference: 0,
-      } satisfies RecallSuppressionSummary,
-    };
-    expect(newPayload.suppressionSummary).toBeDefined();
+    expect(body.suppressionSummary!.droppedByBudget).toBe(15);
   });
 });

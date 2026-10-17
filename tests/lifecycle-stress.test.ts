@@ -58,10 +58,13 @@ function scoreAssembled(
   return { answered, tokens };
 }
 
+// Xenova/all-MiniLM-L6-v2, the default local embedding model these stores use, emits 384 numbers.
+const MINILM_DIMENSIONS = 384;
+
 // Fails a run where embedMemory stored nothing, which would otherwise pass on BM25 alone.
 function expectVectorsStored(hippoRoot: string): void {
   const index = loadEmbeddingIndex(hippoRoot);
-  for (const e of loadAllEntries(hippoRoot, 'default')) expect(index[e.id]?.length ?? 0, `vector stored for ${e.id}`).toBeGreaterThan(0);
+  for (const e of loadAllEntries(hippoRoot, 'default')) expect(index[e.id]?.length ?? 0, `vector stored for ${e.id}`).toBe(MINILM_DIMENSIONS);
 }
 
 describe('lifecycle-stress injector', () => {
@@ -158,13 +161,13 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     expectVectorsStored(root);
 
     const cons = await consolidate(root, {});
-    // merge must fire on the redundant clusters
-    expect(cons.semanticCreated).toBeGreaterThan(0);
+    // merge must fire once per redundant fact cluster, and never on the distractors
+    expect(cons.semanticCreated).toBe(labels.length);
 
     for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
     const after = loadAllEntries(root, 'default');
     const summaries = after.filter((e) => (e.content || '').startsWith('[Consolidated'));
-    expect(summaries.length).toBeGreaterThan(0);
+    expect(summaries).toHaveLength(labels.length);
 
     // every redundant-cluster fact's answer token survives into SOME summary
     for (const lab of labels) {
@@ -199,7 +202,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     // the fact members (numFacts*dupesPerFact = 2*2 = 4). No tag filter needed.
     const noise = injectStream({ seed: 99, scaleMemories: 40, numFacts: 2, dupesPerFact: 2 }).memories
       .slice(2 * 2);
-    expect(noise.length).toBeGreaterThan(0);
+    expect(noise).toHaveLength(40 - 2 * 2);
     for (const m of noise) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
     expectVectorsStored(root);

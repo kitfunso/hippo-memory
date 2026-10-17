@@ -157,7 +157,10 @@ describe('buildSupportBundle', () => {
     expect(parsed.stores[0].schemaVersion).toBe(getCurrentSchemaVersion());
     expect(parsed.stores[0].path.startsWith('~')).toBe(true);
     expect(Array.isArray(parsed.doctor.checks)).toBe(true);
-    expect(parsed.doctor.checks.length).toBeGreaterThan(0);
+    // codex joins only where CODEX_HOME names a folder on this machine; no global store, so no projects check.
+    expect(parsed.doctor.checks.map((c: { id: string }) => c.id).filter((id: string) => id !== 'codex')).toEqual([
+      'node', 'store', 'schema', 'memories', 'fts', 'tokens', 'failures', 'sleep', 'compactions', 'claude-code', 'embeddings',
+    ]);
     expect(parsed.logs.tails).toBeUndefined();
   });
 

@@ -129,7 +129,8 @@ describe('importClaude - CLAUDE.md', () => {
     ].join('\n'));
 
     const result = importClaude(file, makeOpts());
-    expect(result.imported).toBeGreaterThan(0);
+    // The heading and four bullets; '## Stack' is under the 10-character floor and the hook block is cut.
+    expect(result.imported).toBe(5);
 
     const all = loadAllEntries(tmpDir, 'default');
     const contents = all.map((e) => e.content);

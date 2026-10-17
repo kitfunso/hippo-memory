@@ -75,7 +75,8 @@ describe('computeAmbientState', () => {
       mem('OK thing', { emotional_valence: 'neutral' }),
     ];
     const state = computeAmbientState(entries);
-    expect(state.emotionalSkew).toBeGreaterThan(0);
+    // Critical counts as negative, so two of three rows: (2 / 3) * 2 - 0.5.
+    expect(state.emotionalSkew).toBeCloseTo(5 / 6, 10);
   });
 
   it('computes consolidationRatio', () => {

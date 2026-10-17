@@ -78,7 +78,10 @@ const CASES: readonly Case[] = [
     },
     reaches: (p) => {
       expect(p.result.activeSnapshot?.task).toBe('unkeyed task for session a');
-      expect(p.result.recentEvents?.length).toBeGreaterThan(0);
+      // The session's five newest events, oldest first, less the private ping the scope filter drops.
+      expect(p.result.recentEvents?.map((e) => e.content)).toEqual([
+        'promoted the canary', 'paged the on-call', 'same time, lower id', 'same time, higher id',
+      ]);
       expect(p.result.ambientState).toBeDefined();
       expect(p.result.entries.some((e) => e.isGlobal)).toBe(true);
     },
@@ -96,7 +99,7 @@ const CASES: readonly Case[] = [
       globalRetrieved: ['mem_g_note', 'mem_g_pin'],
     },
     physicsOn: true,
-    reaches: (p) => expect(p.result.entries.length).toBeGreaterThan(0),
+    reaches: (p) => expect(p.result.entries).toHaveLength(13),
     storeReads: ['searchRecallEntries', 'physicsParticles'],
   },
   {
@@ -111,7 +114,7 @@ const CASES: readonly Case[] = [
       globalRetrieved: ['mem_g_note', 'mem_g_pin'],
     },
     physicsOff: true,
-    reaches: (p) => expect(p.result.entries.length).toBeGreaterThan(0),
+    reaches: (p) => expect(p.result.entries).toHaveLength(13),
     storeReads: ['searchRecallEntries', 'nearestEntries'],
   },
   {

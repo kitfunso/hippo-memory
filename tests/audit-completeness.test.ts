@@ -75,7 +75,7 @@ describe('audit log captures every mutation', () => {
     const dbGlobal = openHippoDb(home);
     try {
       const events = queryAuditEvents(dbGlobal, { tenantId: 'default', op: 'promote' });
-      expect(events.length).toBeGreaterThan(0);
+      expect(events).toHaveLength(1);
       const meta = events[0]!.metadata;
       expect(meta.sourceId).toBe(localId);
     } finally {

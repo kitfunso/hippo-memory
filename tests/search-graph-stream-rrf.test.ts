@@ -126,13 +126,13 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const cosineRanked = [0, 1, 2, 3, 4, 5];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3); // top-3: 0,1,2 ; adjacent(5) NOT a seed
     const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
-    expect(graphRanked).toContain(5);        // the graph IS populated and boosts the distractor
+    expect(graphRanked).toEqual([5]);        // the graph IS populated and boosts the distractor, its only reach
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
     const order3 = fusedOrder(entries.length, [bm25Ranked, cosineRanked, graphRanked], [BM25_W, DENSE_W, 0.5]);
     expect(order2[0]).toBe(0);               // answer is rank 1 under 2-stream
     expect(order3[0]).toBe(0);               // ...and STILL rank 1 under 3-stream (no displacement)
-    expect(order3.indexOf(5)).toBeGreaterThan(0); // boosted distractor did not reach the top
+    expect(order3).toEqual([0, 1, 5, 2, 3, 4]); // boosted distractor rose from 6th to 3rd, not to the top
   });
 
   it('empty graphRanked -> the 3rd list is skipped -> fused order is byte-identical to the 2-list path', async () => {

@@ -104,8 +104,9 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     await fireIn(p, 'x2b', P1);
     const [e] = events('x2b');
     expect(cand('x2b', target.id)).toEqual([]);
-    expect(Number(e.rejected_unlisted)).toBeGreaterThan(0);
-    expect(Number(e.rejected_count) - Number(e.rejected_unlisted)).toBeLessThan(16);
+    // The recent five are the pin and the four newest notes; the two older notes and the target load but are never judged.
+    expect(Number(e.rejected_unlisted)).toBe(3);
+    expect(Number(e.rejected_count) - Number(e.rejected_unlisted)).toBe(0);
     const v = read('x2b', target.id);
     ok(v, 'x2b', target.id, { class: 'indeterminate', reason: 'undecided', turn: at(e.id, 1), stage: null });
   });

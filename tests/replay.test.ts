@@ -129,10 +129,11 @@ describe('sampleForReplay', () => {
 
 describe('replayPriority', () => {
   it('returns a positive finite number for a plain entry', () => {
-    const e = fakeEntry({ content: 'x' });
-    const p = replayPriority(e, new Date(), false);
+    // createMemory's strength drifts with the clock it runs on, so it is set; at its own last_retrieved every factor is 1.
+    const e = fakeEntry({ content: 'x', strength: 1 });
+    const p = replayPriority(e, new Date(e.last_retrieved), false);
     expect(Number.isFinite(p)).toBe(true);
-    expect(p).toBeGreaterThan(0);
+    expect(p).toBe(1);
   });
 
   it('critical valence > neutral valence', () => {
@@ -161,17 +162,19 @@ describe('replayPriority', () => {
     // clamp, which went negative for neg >> pos. Negative weights broke the
     // weighted-sample-without-replacement picker in sampleForReplay.
     const now = new Date();
-    const doomed = fakeEntry({ content: 'doom', outcome_positive: 0, outcome_negative: 100 });
-    expect(replayPriority(doomed, now, false)).toBeGreaterThan(0);
+    const doomed = fakeEntry({ content: 'doom', outcome_positive: 0, outcome_negative: 100, strength: 1 });
+    // `now` predates the entry, so it has no idle time; the reward sits at its 0.1 floor and every other factor is 1.
+    expect(replayPriority(doomed, now, false)).toBe(0.1);
   });
 
   it('is finite when last_retrieved is malformed', () => {
     const now = new Date();
-    const bad = fakeEntry({ content: 'bad' });
+    const bad = fakeEntry({ content: 'bad', strength: 1 });
     // Force an invalid timestamp post-construction to exercise NaN guard.
     const mutated = { ...bad, last_retrieved: 'not-a-date' };
     const p = replayPriority(mutated, now, false);
     expect(Number.isFinite(p)).toBe(true);
-    expect(p).toBeGreaterThan(0);
+    // The guard reads an unparseable time as zero idle hours, which leaves every factor at 1.
+    expect(p).toBe(1);
   });
 });

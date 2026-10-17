@@ -132,7 +132,8 @@ describe('canAutoDelete and AUTO_DELETABLE_SQL agree, over pinned x kind x tags 
 
     expect(sqlDeletableIds(root)).toEqual(fromFunction);
     expect(sqlDeletableIds(root)).toEqual(table.filter((r) => r.deletable).map((r) => r.id).sort());
-    expect(fromFunction.length).toBeGreaterThan(0);
+    // One unpinned distilled row for each of the 11 cases that are not kept.
+    expect(fromFunction).toHaveLength(11);
     expect(fromFunction.length).toBeLessThan(table.length);
   });
 
@@ -350,7 +351,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
 
     expect(fetcher).toHaveBeenCalled();
     expect(result.extractionCandidates).toBe(3);
-    expect(result.merged).toBeGreaterThan(0);
+    expect(result.merged).toBe(3);
   });
 
   it('three kept look-alike rows never reach the fetcher and are not merged', async () => {

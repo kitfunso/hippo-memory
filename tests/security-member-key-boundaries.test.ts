@@ -189,7 +189,9 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: 'unknown:legacy' } })).rejects.toThrow(api.ScopeForbiddenError);
     await expect(api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).rejects.toThrow(api.ScopeForbiddenError);
 
-    expect((await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } })).results.length).toBeGreaterThan(0);
+    // The public row is the only one seeded in that scope.
+    const publicResults = (await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } })).results;
+    expect(publicResults.map((r) => r.content)).toEqual([PUBLIC_TEXT]);
     const adminResults = (await api.retrieve(adminCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } })).results;
     expect(adminResults.map((r) => r.content).join(' ')).toContain('payroll');
   });

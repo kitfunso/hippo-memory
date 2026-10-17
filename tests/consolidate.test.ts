@@ -36,7 +36,7 @@ describe('Decay pass', () => {
     writeEntry(tmpDir, ancient);
 
     const result = await consolidate(tmpDir, { now: new Date() });
-    expect(result.removed).toBeGreaterThan(0);
+    expect(result.removed).toBe(1);
 
     const remaining = loadAllEntries(tmpDir, 'default');
     expect(remaining.find((e) => e.id === ancient.id)).toBeUndefined();
@@ -69,7 +69,7 @@ describe('Decay pass', () => {
 
     const result = await consolidate(tmpDir, { dryRun: true, now: new Date() });
     expect(result.dryRun).toBe(true);
-    expect(result.removed).toBeGreaterThan(0);
+    expect(result.removed).toBe(1);
 
     // Entry should still be on disk
     const remaining = loadAllEntries(tmpDir, 'default');
@@ -213,13 +213,13 @@ describe('Merge pass', () => {
 
     const result = await consolidate(tmpDir, { now: new Date() });
 
-    expect(result.merged).toBeGreaterThan(0);
-    expect(result.semanticCreated).toBeGreaterThan(0);
+    expect(result.merged).toBe(2);
+    expect(result.semanticCreated).toBe(1);
     expect(result.details.some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
 
     const all = loadAllEntries(tmpDir, 'default');
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
-    expect(semantics.length).toBeGreaterThan(0);
+    expect(semantics).toHaveLength(1);
   });
 
   it('does not merge dissimilar entries', async () => {

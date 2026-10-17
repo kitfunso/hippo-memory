@@ -94,7 +94,8 @@ describe('SessionStart hooks', () => {
     await remember('the release script needs the staging flag or it publishes to production');
     await hippo(['sleep', '--log-file', logFile]);
     const lines = fs.readFileSync(logFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
-    expect(lines.length).toBeGreaterThan(0);
+    // In process the console spies bypass the tee, so only cmdSleep's opening line is certain; teed warnings may follow.
+    expect(lines[0]).toMatch(/^\[hippo\] \S+ consolidating memory\.\.\.$/);
 
     const runs = [];
     for (const c of commands) runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }, true));

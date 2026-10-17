@@ -54,6 +54,7 @@ describe('recall held-copy drop', () => {
     expect(contents.filter((c) => c === 'quokka habitat notes')).toHaveLength(1);
     expect(result.results.every((r) => r.isFreshTail === true)).toBe(true);
     expect(result.suppressionSummary?.freshTailAdded).toBe(result.results.length - 1);
-    expect(result.tokens).toBeGreaterThan(0);
+    // ceil(chars / 4) of each row: 20 characters cost 5 and 21 cost 6.
+    expect(result.tokens).toBe(11);
   });
 });

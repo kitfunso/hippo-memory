@@ -77,8 +77,9 @@ describe('GET /v1/context', () => {
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
     const body = await jsonAs<{ entries: unknown[]; tokens: number }>(res);
-    expect(body.entries.length).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.entries).toHaveLength(5);
+    // Each row prices as its printed line `- **[verified] ctx-route-mem-N** (100%)`: 39 chars and a newline.
+    expect(body.tokens).toBe(50);
   });
 
   it('honors tight budget cap', async () => {
@@ -197,7 +198,7 @@ describe('GET /v1/context', () => {
       entries: Array<{ entry: { id: string; content: string; pinned?: boolean } }>;
     }>(res);
     // All returned entries should be pinned.
-    expect(body.entries.length).toBeGreaterThan(0);
+    expect(body.entries.map((e) => e.entry.content)).toEqual(['pinned-canary']);
     for (const e of body.entries) {
       expect(e.entry.pinned).toBe(true);
     }
@@ -320,10 +321,11 @@ describe('GET /v1/context - ambientState field', () => {
       tokens: number;
       ambientState?: { totalMemories: number };
     }>(res);
-    expect(body.entries.length).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.entries).toHaveLength(1);
+    // `- **[verified] ambient-route-marker-row** (100%)` and a newline: 49 chars.
+    expect(body.tokens).toBe(13);
     expect(body.ambientState).toBeDefined();
-    expect(body.ambientState!.totalMemories).toBeGreaterThan(0);
+    expect(body.ambientState!.totalMemories).toBe(1);
   });
 
   it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {
@@ -334,8 +336,9 @@ describe('GET /v1/context - ambientState field', () => {
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
     const body = await jsonAs<{ entries: unknown[]; tokens: number; ambientState?: unknown }>(res);
-    expect(body.entries.length).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.entries).toHaveLength(1);
+    // `- **[verified] ambient-off-marker-row** (100%)` and a newline: 47 chars.
+    expect(body.tokens).toBe(12);
     expect(body.ambientState).toBeUndefined();
   });
 });

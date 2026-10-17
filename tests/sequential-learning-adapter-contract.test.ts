@@ -64,7 +64,7 @@ describe('sequential-learning adapter contract', () => {
 
 describe('hippo adapter goal-stack boost fires end-to-end', () => {
   // Each adapter call starts the built CLI: init, the goal, the store and the recall.
-  it('writes at least one row to goal_recall_log after pushGoal+store+recall', async () => {
+  it('writes one row to goal_recall_log after pushGoal+store+recall', async () => {
     // We use the public adapter so any wiring bug surfaces. The adapter
     // creates its own temp HIPPO_HOME and sets HIPPO_SESSION_ID for us.
     await hippoAdapter.init();
@@ -84,7 +84,7 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
 
       const recalled = await hippoAdapter.recall('handling errors in data pipeline');
       expect(Array.isArray(recalled)).toBe(true);
-      expect(recalled.length).toBeGreaterThan(0);
+      expect(recalled.map((r) => r.content)).toEqual(['Never use bare except: pass. It swallows all errors silently.']);
 
       // Query the temp store directly. The adapter exposes _storeDir.
       const storeDir = storeDirOf(hippoAdapter);
@@ -116,7 +116,7 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
         const row = db
           .prepare('SELECT COUNT(*) AS n FROM goal_recall_log')
           .get() as { n: number };
-        expect(row.n).toBeGreaterThan(0);
+        expect(row.n).toBe(1);
       } finally {
         db.close();
       }

@@ -210,7 +210,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       const cleanRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean' AND target_id = ?
       `).all(profile.id) as Array<{ metadata_json: string }>;
-      expect(cleanRows.length).toBeGreaterThan(0);
+      expect(cleanRows).toHaveLength(1);
       const meta = JSON.parse(cleanRows[0].metadata_json);
       expect(meta.source).toBe('buildEntityProfiles-clean');
       expect(meta.dag_level).toBe(3); // H1 fold: read actual level, NOT hardcoded 2
@@ -243,7 +243,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       const auditRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?
       `).all(l3.id) as Array<{ metadata_json: string }>;
-      expect(auditRows.length).toBeGreaterThan(0);
+      expect(auditRows).toHaveLength(1); // only the 0 to 1 flip audits, and the raw UPDATE above wrote none
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.dag_level).toBe(3); // H1 fold: actual level
     } finally {
@@ -476,7 +476,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const l3 = makeL3Profile('alice entity profile xyz searchable content', 'alice');
     writeEntry(hippoRoot, l3);
     const results = await hybridSearch('searchable xyz', [l3], { explain: true });
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(1);
     const br = results[0]!.breakdown;
     expect(br?.dagLevel).toBe(3);
     expect(br?.summaryDeboost).toBeCloseTo(0.85);

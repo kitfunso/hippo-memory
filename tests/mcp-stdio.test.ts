@@ -5,6 +5,7 @@ import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { parseFrame } from '../src/mcp/framing.js';
+import { TOOLS } from '../src/mcp/tools.js';
 
 // ─── parseFrame unit tests ───
 
@@ -171,6 +172,7 @@ describe('hippo mcp stdio', () => {
     const listResp = JSON.parse(listLine);
     expect(listResp.id).toBe(2);
     expect(Array.isArray(listResp.result?.tools)).toBe(true);
-    expect(listResp.result.tools.length).toBeGreaterThan(0);
+    // A tools/list on stdio has no store yet, so it lists every tool.
+    expect(listResp.result.tools.map((t: { name: string }) => t.name)).toEqual(TOOLS.map((t) => t.name));
   });
 });

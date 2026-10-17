@@ -95,7 +95,7 @@ describe('MCP hippo_recall scorer_window', () => {
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
     const text = extractResultText(result);
-    expect(text.length).toBeGreaterThan(0);
+    expect(text).toContain('Found 30 memories:');
     // Appendix renders "## Fresh tail / substituted summaries" header
     // (src/mcp/server.ts:470). Confirm the appendix path fired with the
     // beta rows that physics didn't score.

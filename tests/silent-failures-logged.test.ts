@@ -10,7 +10,7 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { handleInit } from '../src/cli/init.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { loadConfig } from '../src/core/config.js';
-import { resolveEmbeddingModel } from '../src/embeddings/local.js';
+import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../src/embeddings/local.js';
 import { countTableRows } from '../src/db/tables.js';
 import { insertDormantRow, listDormantSnapshots } from '../src/store/dormant.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -171,7 +171,7 @@ describe('resolveEmbeddingModel', () => {
   it('warns with the reason before it falls back to the default model', () => {
     // @ts-expect-error a missing embeddings section is the cheapest way to make the model read throw
     const model = resolveEmbeddingModel(undefined);
-    expect(model.length).toBeGreaterThan(0);
+    expect(model).toBe(DEFAULT_EMBEDDING_MODEL);
     expect(logged().some((l) => l.includes('warn: embedding model config unreadable'))).toBe(true);
   });
 });

@@ -685,7 +685,7 @@ describe('(h) scale characterization', () => {
     }
 
     const entries = buildEntries();
-    expect(entries.length).toBeGreaterThanOrEqual(2000);
+    expect(entries).toHaveLength(TENANTS.length * N_PER_TENANT);
 
     initStore(dir);
     enableMemoryValue(dir, { replay: { count: 0 }, autoTraceCapture: false });
@@ -704,7 +704,8 @@ describe('(h) scale characterization', () => {
     const condemnedIds = new Set(
       loaded.filter((e) => !e.pinned && calculateStrength(e, NOW, decayOpts) < 0.05).map((e) => e.id),
     );
-    expect(condemnedIds.size).toBeGreaterThan(0);
+    // The seed's draws condemn 106, 117 and 104 rows: 200+ days old at a one-day half-life, while every other row is under 5 days old.
+    expect(condemnedIds.size).toBe(327);
 
     // --- Determinism ---
     const rescued1 = rescueSet(loaded, condemnedIds, NOW);
@@ -728,14 +729,14 @@ describe('(h) scale characterization', () => {
       }
       return true;
     });
-    expect(dropped).toBeGreaterThan(0);
+    expect(dropped).toBe(280);
 
     const rescuedAfterMutation = rescueSet(mutated, condemnedIds, NOW);
     const tenantACondemned = [...condemnedIds].filter((id) => {
       const e = loaded.find((x) => x.id === id);
       return e?.tenant_id === tenantAId;
     });
-    expect(tenantACondemned.length).toBeGreaterThan(0);
+    expect(tenantACondemned).toHaveLength(106);
     for (const id of tenantACondemned) {
       expect(rescuedAfterMutation.has(id)).toBe(rescued1.has(id));
     }
@@ -788,12 +789,14 @@ describe('(h) scale characterization', () => {
         .filter(hasStringTargetId)
         .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
     );
+    // One audit row per tenant-A rescue the pure rescueSet predicted; the count comes from its scores, not the seed alone.
+    expect(cycle1ByIdMeta.size).toBe(perTenant[tenantAId].rescued);
     expect(cycle1ByIdMeta.size).toBeGreaterThan(0);
 
     const dirMutated = makeRoot('case');
     enableMemoryValue(dirMutated, { replay: { count: 0 }, autoTraceCapture: false });
 
-    expect(dropCount).toBeGreaterThan(0);
+    expect(dropCount).toBe(280);
     let droppedForMutated = 0;
     const seedForMutated = loaded.filter((e) => {
       if (e.tenant_id === tenantBId && droppedForMutated < dropCount) {
@@ -819,7 +822,7 @@ describe('(h) scale characterization', () => {
     expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());
     for (const [id, meta1] of cycle1ByIdMeta) {
       const meta2 = mutatedByIdMeta.get(id);
-      expect(meta2, `tenant A rescue metadata missing in the tenant-B-mutated store for ${id}`).toBeDefined();
+      expect(meta2, `tenant A rescue metadata differs in the tenant-B-mutated store for ${id}`).toEqual(meta1);
       expect(meta2!.rank).toBe(meta1.rank);
       expect(meta2!.totalNonPinned).toBe(meta1.totalNonPinned);
       expect(meta2!.keepN).toBe(meta1.keepN);

@@ -289,7 +289,8 @@ describe('chunked consolidation flush', () => {
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
 
     const stopped = storeFacts(fx);
-    expect(stopped.merged).toBeGreaterThan(0);
+    // A zero hold commits one unit per chunk, so two clusters land before the second pause throws.
+    expect(stopped.merged).toBe(2);
     expect(stopped.merged).toBeLessThan(12);
     expect(stopped.parentsDemoted).toBe(true);
     expect(stopped.retiredXorSuccessor).toBe(true);

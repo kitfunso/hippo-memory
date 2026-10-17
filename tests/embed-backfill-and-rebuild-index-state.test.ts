@@ -214,9 +214,9 @@ describe('a model identity change on hippo.db', () => {
 });
 
 /** The most full memory rows one statement of a run can hand back: the length of its id list, or the whole store when it has none. */
-function peakFullRowsRead(statements: readonly string[]): number {
+function peakFullRowsRead(statements: readonly string[], fullReads: number): number {
   const reads = statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS));
-  expect(reads.length).toBeGreaterThan(0);
+  expect(reads).toHaveLength(fullReads);
   return Math.max(...reads.map((sql) => {
     const idList = /\bid IN \(([?,\s]+)\)/.exec(sql);
     return idList ? idList[1].split('?').length - 1 : ROWS;
@@ -224,16 +224,17 @@ function peakFullRowsRead(statements: readonly string[]): number {
 }
 
 describe('rows held while embedding hippo.db', () => {
+  // A rebuild reads its 300 rows twice, once to embed and once to reset the particles.
   it.each([
-    { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120 },
-    { name: 'a rebuild of 300 rows', template: (): string => indexedOld, id: 'fake-new', embedded: ROWS },
-  ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded }) => {
+    { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120, fullReads: 2 },
+    { name: 'a rebuild of 300 rows', template: (): string => indexedOld, id: 'fake-new', embedded: ROWS, fullReads: 10 },
+  ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded, fullReads }) => {
     const root = copyOf(template());
     const calls: number[] = [];
     const log = await recordStatementsAsync(() => embedAll(root, undefined, fake(id, (texts) => calls.push(texts.length))));
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
-    expect(peakFullRowsRead(log.statements)).toBe(PAGE);
+    expect(peakFullRowsRead(log.statements, fullReads)).toBe(PAGE);
   });
 
   it("resets particles from ids for both tenants' embedded rows, reading the rows at most 64 at a time", () => {
@@ -246,6 +247,6 @@ describe('rows held while embedding hippo.db', () => {
     expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
-    expect(peakFullRowsRead(log.statements)).toBe(PAGE);
+    expect(peakFullRowsRead(log.statements, 5)).toBe(PAGE);
   });
 });

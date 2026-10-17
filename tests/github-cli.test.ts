@@ -144,7 +144,8 @@ describe('hippo github CLI', () => {
     expect(json.pages.issues).toBe(1);
     // Verify the row actually landed in the store.
     const all = loadAllEntries(hippoRoot, 'default');
-    expect(all.length).toBeGreaterThan(0);
+    // An issue's memory is its title and body, a blank line apart.
+    expect(all.map((e) => e.content)).toEqual(['hello\n\nworld']);
   });
 
   it('dlq list on empty DLQ prints "no entries"', () => {

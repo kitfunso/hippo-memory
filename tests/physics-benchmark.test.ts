@@ -444,6 +444,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const s = standard[i]!;
         expect(s.expectedCount).toBe(tc.expectedLabels.length);
         logRow(s, 'mrr');
+        // The rank follows the default embedding model, which only some runners have, so only a top-10 hit is fixed.
         expect(s.classic.mrr, `Classic MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
     });
@@ -452,6 +453,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
       expect(standard).toHaveLength(STANDARD_QUERIES.length);
       logSummary('Standard Queries', standard, 'mrr');
       expect(mean(standard, 'classic', 'mrr')).toBeGreaterThanOrEqual(0.8);
+      // Rank-based like the per-query checks, so only a floor holds.
       expect(mean(standard, 'physics', 'mrr')).toBeGreaterThan(0);
     });
   });
@@ -462,6 +464,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const s = cluster[i]!;
         expect(s.expectedCount).toBe(tc.expectedLabels.length);
         logRow(s, 'r3');
+        // Physics scores decay from the real clock and fall back to the default model, so only a top-10 hit is fixed.
         expect(s.physics.mrr, `Physics MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
     });

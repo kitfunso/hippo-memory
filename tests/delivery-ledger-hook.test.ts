@@ -440,7 +440,8 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     } finally {
       closeHippoDb(db);
     }
-    expect(cells.length).toBeGreaterThan(0);
+    // The scan covers each run's session and turn, the 2 pins, and the one note that shares the prompt's words.
+    expect(cells).toEqual(expect.arrayContaining(['f10', 'f10-codex', 'turn-9', ...seeded.slice(0, 3).map((m) => m.id)]));
     const odd = cells.filter((v) => !/^[0-9a-f]{16}$/.test(v) && !/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) && !ids.has(v) && !allowed.has(v));
     expect(odd).toEqual([]);
     const words = [PROMPT, ...seeded.map((m) => m.content)].flatMap((t) => {

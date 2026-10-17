@@ -66,11 +66,13 @@ describe('bootstrap', () => {
     const clear = Array.from({ length: 200 }, () => 1 + (rand() - 0.5));
     const est = pairedBootstrap(clear);
     expect(est.estimate).toBeCloseTo(1, 1);
-    expect(est.low).toBeGreaterThan(0);
+    // Every draw lies in [0.5, 1.5), so no resample mean, and no interval end, can fall below 0.5.
+    expect(est.low).toBeGreaterThanOrEqual(0.5);
     const noise = Array.from({ length: 200 }, () => rand() - 0.5);
     const nul = pairedBootstrap(noise);
-    expect(nul.low).toBeLessThan(0);
-    expect(nul.high).toBeGreaterThan(0);
+    // The seeded noise and the default resampler seed fix both ends, one each side of zero.
+    expect(nul.low).toBeCloseTo(-0.039276, 6);
+    expect(nul.high).toBeCloseTo(0.037303, 6);
   });
 
   it('gives a wider interval when clustering is respected', () => {
@@ -173,7 +175,9 @@ describe('two-level bootstrap', () => {
     expect(r.p).toBe(0);
     expect(r.iterations).toBe(10_000);
     expect(r.dropped).toBe(0);
-    expect(r.low).toBeGreaterThan(0);
+    // Both drawn repositories drawing family [1] twice gives mean 1, about 625 of the 10,000 resamples: the 2.5% end is
+    // index 250, inside that run.
+    expect(r.low).toBe(1);
   });
 
   it('gives p above 0.5 for a distribution centred on the null', () => {
@@ -198,7 +202,8 @@ describe('two-level bootstrap', () => {
     const ratio = (u: readonly Pair[]): number => mean(u.map((x) => x.t)) / mean(u.map((x) => x.c));
     const repos: Repository<Pair>[] = [[[{ c: 0, t: 0 }]], [[{ c: 1, t: 1 }]]];
     const r = twoLevelBootstrap(repos, ratio, { iterations: 500, nullValue: 1 });
-    expect(r.dropped).toBeGreaterThan(0);
+    // Only a resample that draws the 0/0 repository twice is dropped; default seed 1 does that 122 times in 500.
+    expect(r.dropped).toBe(122);
     expect(r.iterations + r.dropped).toBe(500);
     const none = twoLevelBootstrap(data, () => Number.NaN, small);
     expect([none.estimate, none.low, none.high, none.p].every(Number.isNaN)).toBe(true);
@@ -217,7 +222,8 @@ describe('two-level bootstrap', () => {
       return mean(units);
     }, small);
     expect(broken).toBe(0);
-    expect(sawFamily).toBeGreaterThan(0);
+    // The estimate's own call plus the 181 of default seed 1's 300 resamples that drew the family.
+    expect(sawFamily).toBe(182);
   });
 
   it('draws repositories first, then every family of each drawn repository', () => {

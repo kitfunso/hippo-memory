@@ -85,10 +85,10 @@ describe('rollback guard', () => {
 
   it('compareSemver handles standard cases', () => {
     expect(compareSemver('1.2.3', '1.2.3')).toBe(0);
-    expect(compareSemver('1.2.4', '1.2.3')).toBeGreaterThan(0);
-    expect(compareSemver('1.3.0', '1.2.99')).toBeGreaterThan(0);
-    expect(compareSemver('2.0.0', '1.99.99')).toBeGreaterThan(0);
-    expect(compareSemver('1.2.3', '1.2.4')).toBeLessThan(0);
+    expect(compareSemver('1.2.4', '1.2.3')).toBe(1);
+    expect(compareSemver('1.3.0', '1.2.99')).toBe(1);
+    expect(compareSemver('2.0.0', '1.99.99')).toBe(1);
+    expect(compareSemver('1.2.3', '1.2.4')).toBe(-1);
   });
 });
 

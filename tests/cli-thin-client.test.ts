@@ -364,7 +364,7 @@ describe('cli thin-client mode', () => {
       try {
         expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
         const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
-        expect(events.length).toBeGreaterThan(0);
+        expect(events).toHaveLength(1);
         expect(events[0].actor).toBe('localhost:cli');
         // The counter lives in api.archiveRaw so the routed path reaches it;
         // when it lived in the CLI, routing an archive silently lost the count.

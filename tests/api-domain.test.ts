@@ -50,11 +50,13 @@ describe('api domain — recall/forget/promote/supersede', () => {
       { query: 'alpha-token' },
     );
 
-    expect(result.results.length).toBeGreaterThan(0);
+    // The noise row shares no term with the query, so only the canary is a candidate.
+    expect(result.results).toHaveLength(1);
     expect(result.results[0]!.content).toContain('alpha-token');
     expect(result.results[0]!.id).toMatch(/^mem_/);
-    expect(result.total).toBeGreaterThan(0);
-    expect(result.tokens).toBeGreaterThan(0);
+    expect(result.total).toBe(1);
+    // estimateTokens is ceil(chars / 4): the canary's 34 characters cost 9.
+    expect(result.tokens).toBe(9);
 
     const db = openHippoDb(home);
     try {

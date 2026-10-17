@@ -83,7 +83,7 @@ describe('E1 generator', () => {
       JSON.stringify(p.memories.filter(keep).map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })));
     expect(strip(v1, () => true)).toBe(strip(base, () => true));
     const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
-    expect(negs.length).toBeGreaterThan(0);
+    expect(negs).toHaveLength(TINY.numFacts * TINY.distractorMultiple);
     expect(negs.every((m: any) => m.session < floor)).toBe(true);
     // @ts-expect-error - 'junk' is deliberately outside the lookalikeWindow union to reach the runtime validation
     expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(/lookalikeWindow/);
@@ -96,7 +96,8 @@ describe('E1 driver', () => {
     const result = await runArmSeed('full', 3, TINY, (hippoRoot: string) => {
       storeSeen = true;
       const entries = loadAllEntries(hippoRoot, 'default');
-      expect(entries.length).toBeGreaterThan(0);
+      // Seed 3's protocol: 12 facts, 5 updates, 1 contradiction, 2 traps and 48 distractors, none ever deleted.
+      expect(entries).toHaveLength(68);
       // Every created timestamp lies within the protocol's simulated range -
       // nothing stamped with the real 2026 clock (rev #8 invariant).
       for (const e of entries) {

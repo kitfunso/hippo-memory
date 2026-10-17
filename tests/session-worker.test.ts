@@ -24,6 +24,8 @@ afterEach(() => fake.cleanup());
 /** A pid that named a process a moment ago and names none now. */
 function deadPid(): number {
   const r = spawnSync(process.execPath, ['-e', '']);
+  // The OS picks the pid, so only its sign is fixed; status 0 says the process ran and has exited.
+  expect(r.status).toBe(0);
   expect(r.pid).toBeGreaterThan(0);
   return r.pid!;
 }

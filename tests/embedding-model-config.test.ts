@@ -173,7 +173,7 @@ describe('embedding model configuration', () => {
       const results = await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
       expect(stub.requests).toHaveLength(0);
-      expect(results.length).toBeGreaterThan(0);
+      expect(results.map((r) => r.entry.id)).toEqual([entry.id]);
     } finally {
       await stub.close();
     }
@@ -194,14 +194,15 @@ describe('embedding model configuration', () => {
       const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
       saveStoredEmbeddingModel(tmpDir, providerId);
 
-      const results = await hybridSearch('query text', [createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], {
+      const entry = createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      const results = await hybridSearch('query text', [entry], {
         hippoRoot: tmpDir,
         budget: 1000,
       });
 
       // Empty index -> no cached doc vectors -> the query embedding is skipped.
       expect(stub.requests).toHaveLength(0);
-      expect(results.length).toBeGreaterThan(0);
+      expect(results.map((r) => r.entry.id)).toEqual([entry.id]);
     } finally {
       await stub.close();
     }

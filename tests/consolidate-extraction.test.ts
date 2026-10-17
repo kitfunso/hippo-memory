@@ -60,7 +60,8 @@ describe('Extracted fact protection', () => {
 
     const result = await consolidate(tmpDir, { dryRun: false, now: new Date() });
 
-    expect(result.merged).toBeGreaterThan(0);
+    // Every pair overlaps past the merge threshold, so all three episodes form one cluster.
+    expect(result.merged).toBe(3);
   });
 
   it('does not detect conflicts between extracted facts', async () => {

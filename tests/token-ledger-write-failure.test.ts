@@ -95,8 +95,9 @@ describe('token ledger write failures', () => {
 
     process.env.HIPPO_LOG = 'debug';
     expect((await hook('s-dropped-2')).stdout).toContain('the deploy window opens on Tuesdays');
+    // With no printed hash the hook skips the last-sent read, so its one inject row is the one write that fails.
     const lines = skippedLines();
-    expect(lines.length).toBeGreaterThan(0);
+    expect(lines).toHaveLength(1);
     for (const line of lines) {
       expect(line).toMatch(/^\[hippo\] debug: token ledger row skipped: no such table: token_ledger ts=\S+\n$/);
     }

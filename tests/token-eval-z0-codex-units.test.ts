@@ -42,7 +42,8 @@ describe('set X in the tasks file (test 1)', () => {
   it('accepts a sequence with set X and gives its tasks role set X', () => {
     const s = validateTasks(xSpec(), CHECKS);
     const steps: Step[] = planRuns(s, ['X1']);
-    expect(steps.length).toBeGreaterThan(0);
+    // X1's 3 seeds times the 9 tasks: 3 teaches and 6 applies.
+    expect(steps).toHaveLength(27);
     for (const st of steps) expect(st.role.set).toBe('X');
   });
 

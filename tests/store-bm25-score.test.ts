@@ -73,7 +73,7 @@ describe('loadSearchEntries bm25_score', () => {
   it('No-terms path: empty query returns entries with bm25_score undefined', () => {
     writeEntry(root, makeRaw('any content'));
     const results = loadSearchEntries(root, '', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((e) => e.content)).toEqual(['any content']);
     for (const e of results) {
       expect(e.bm25_score).toBeUndefined();
     }
@@ -134,7 +134,7 @@ describe('loadSearchEntries bm25_score', () => {
     // FTS5 matches whole tokens, so a part-word is the only route to LIKE that leaves the FTS index untouched.
     writeEntry(root, makeRaw('alphabet soup contents'));
     const results = loadSearchEntries(root, 'alphab', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(1);
     // Anchor: the expected row must come back via the LIKE branch.
     expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
     // No FTS path → no bm25_score on any returned row.
@@ -176,7 +176,8 @@ describe('loadSearchEntries bm25_score', () => {
         // The LIKE predicate lowers content and tags once per term for each row it tests.
         return lowered / 2;
       });
-      expect(rowsTested[0]).toBeGreaterThan(0);
+      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/search-rows.ts).
+      expect(rowsTested[0]).toBe(2000);
       expect(rowsTested[1]).toBe(rowsTested[0]);
     } finally {
       closeHippoDb(db);
@@ -197,7 +198,7 @@ describe('loadSearchEntries bm25_score', () => {
       200,
       'default',
     );
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((e) => e.content).sort()).toEqual(['another row', 'one row']);
     // None of the returned rows should carry bm25_score because we did
     // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
     // → full-store fallback).

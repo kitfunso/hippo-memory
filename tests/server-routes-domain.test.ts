@@ -71,10 +71,11 @@ describe('server HTTP routes — memories', () => {
       total: number;
       tokens: number;
     }>(res);
-    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.results).toHaveLength(1);
     expect(body.results[0]!.content).toContain('alpha-token-http');
-    expect(body.total).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.total).toBe(1);
+    // estimateTokens is ceil(length / 4) over the one 41-char matching row.
+    expect(body.tokens).toBe(11);
   });
 
   it('DELETE /v1/memories/:id removes the row', async () => {
@@ -295,14 +296,12 @@ describe('server HTTP routes — auth + audit', () => {
     const allRes = await fetch(`${handle.url}/v1/audit`);
     expect(allRes.status).toBe(200);
     const allBody = await jsonAs<Array<{ op: string; actor: string }>>(allRes);
-    expect(allBody.length).toBeGreaterThan(0);
-    expect(allBody.some((e) => e.op === 'remember')).toBe(true);
+    expect(allBody.map((e) => e.op)).toEqual(['remember']);
 
     const filteredRes = await fetch(`${handle.url}/v1/audit?op=remember&limit=5`);
     expect(filteredRes.status).toBe(200);
     const filteredBody = await jsonAs<Array<{ op: string }>>(filteredRes);
-    expect(filteredBody.length).toBeGreaterThan(0);
-    expect(filteredBody.every((e) => e.op === 'remember')).toBe(true);
+    expect(filteredBody.map((e) => e.op)).toEqual(['remember']);
   });
 
   it('GET /v1/audit with invalid since returns 400', async () => {

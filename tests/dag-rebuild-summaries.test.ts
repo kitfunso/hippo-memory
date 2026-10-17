@@ -521,7 +521,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       const auditRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean'
       `).all() as Array<{ metadata_json: string }>;
-      expect(auditRows.length).toBeGreaterThan(0);
+      // One summary was built, and its dirty flag cleared once.
+      expect(auditRows).toHaveLength(1);
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.source).toBe('buildDag-clean');
     } finally {
@@ -675,7 +676,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         expect(rebuildSpy.mock.calls[index][1].cap).toBe(expected);
         if (index === 0) {
           const processed = result.summariesRebuilt + result.summariesZeroChildSkipped + result.summariesRebuildFailed;
-          expect(processed).toBeGreaterThan(0);
+          // The one dirty summary seeded above.
+          expect(processed).toBe(1);
         }
       }
     } finally {

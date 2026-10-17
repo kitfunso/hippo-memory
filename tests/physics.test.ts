@@ -260,7 +260,8 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]) });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
       const force = attractionForce(pi, pj, 0.01);
-      expect(vecNorm(force)).toBeGreaterThan(0);
+      // The force is a unit direction times G * m_i * m_j * cos^3, with cos = 1.02 / sqrt(1.01 * 1.04).
+      expect(vecNorm(force)).toBeCloseTo(0.01 * (1.02 / Math.sqrt(1.01 * 1.04)) ** 3, 10);
     });
 
     it('opposing particles get zero attraction', () => {
@@ -294,8 +295,8 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 1, 0]) });
       const force = attractionForce(pi, pj, 1.0);
-      // Should have positive y component (toward pj)
-      expect(force[1]).toBeGreaterThan(0);
+      // Should have positive y component (toward pj): cos^3 = 1 / (2 * sqrt(2)) along pj - pi, whose length is sqrt(2 - sqrt(2)).
+      expect(force[1]).toBeCloseTo(0.25 / Math.sqrt(2 - Math.SQRT2), 10);
     });
   });
 
@@ -307,7 +308,8 @@ describe('Force computations', () => {
       // Force should point from j toward i (away from j)
       // pi is at [~1, ~0.1, 0], pj is at [~1, ~0.2, 0]
       // Direction away from pj should have negative y component relative to pj
-      expect(vecNorm(force)).toBeGreaterThan(0);
+      // 1 - cos is about 0.0048, under the 0.01 floor, so the magnitude is K / 0.01^2.
+      expect(vecNorm(force)).toBeCloseTo(5000, 6);
     });
 
     it('scales with mass product', () => {
@@ -335,9 +337,9 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: [0, 1, 0] });
       const force = repulsionForce(pi, pj, 1.0);
-      // Direction is normalize(pi.pos - pj.pos) = normalize([1,-1,0])
-      expect(force[0]).toBeGreaterThan(0);
-      expect(force[1]).toBeLessThan(0);
+      // Direction is normalize(pi.pos - pj.pos) = normalize([1,-1,0]); orthogonal rows have distance 1, so magnitude 1.
+      expect(force[0]).toBeCloseTo(Math.SQRT1_2, 10);
+      expect(force[1]).toBeCloseTo(-Math.SQRT1_2, 10);
     });
   });
 

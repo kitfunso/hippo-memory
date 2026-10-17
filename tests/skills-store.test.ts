@@ -53,7 +53,7 @@ describe('skills store (executable/exportable first-class object)', () => {
 
   it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
     const s = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' });
-    expect(s.id).toBeGreaterThan(0);
+    expect(s.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
     expect(s.memoryId).not.toBeNull();
     expect(s.skillName).toBe('Run tests');
     expect(s.instructions).toBe('npm test before commit');

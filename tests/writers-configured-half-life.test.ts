@@ -171,10 +171,11 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
 ];
 
 describe('writers on a configured default half-life', () => {
-  it.each(writers)('%s starts the new memory on the configured default', async (_path, write) => {
+  it.each(writers)('%s starts the new memory on the configured default', async (name, write) => {
     const root = store();
     const written = await write(root);
-    expect(written.length).toBeGreaterThan(0);
+    // The file import splits its two paragraphs into two rows; every other writer makes one row from its seed.
+    expect(written).toHaveLength(name === 'file import' ? 2 : 1);
     for (const entry of written) {
       expect(entry.half_life_days).toBe(deriveHalfLife(CONFIGURED, entry));
       expect(readEntry(root, entry.id)?.half_life_days).toBe(entry.half_life_days);

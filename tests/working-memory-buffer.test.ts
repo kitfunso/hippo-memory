@@ -32,10 +32,10 @@ describe('schema migration', () => {
 describe('wmPush', () => {
   it('creates entries and returns the row ID', () => {
     const id = wmPush(tmpDir, { scope: 'test', content: 'first note' });
-    expect(id).toBeGreaterThan(0);
+    expect(id).toBe(1);
 
     const id2 = wmPush(tmpDir, { scope: 'test', content: 'second note' });
-    expect(id2).toBeGreaterThan(id);
+    expect(id2).toBe(2);
   });
 
   it('stores all fields correctly', () => {
