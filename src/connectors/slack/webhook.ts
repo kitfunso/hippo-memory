@@ -43,10 +43,10 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: H
     closeIfBodyUnread(request);
     throw new HttpError(401, 'invalid Slack signature');
   }
-  const rawBody = await readWebhookBody(request);
+  const rawBytes = await readWebhookBody(request);
   if (
     !verifySlackSignature({
-      rawBody,
+      rawBody: rawBytes,
       timestamp: tsStr,
       signature: sigStr,
       signingSecret: secret,
@@ -59,7 +59,7 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: H
     hippoRoot: opts.hippoRoot,
     store,
     res,
-    rawBody,
+    rawBody: rawBytes.toString('utf8'),
     signature: sigStr,
     slackTimestamp: tsStr,
   });

@@ -317,6 +317,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'typed-object-characterization.test.ts',
   'types/server.types.test.ts',
   'vector-writes-conformance.test.ts',
+  'webhook-raw-bytes.test.ts',
   'work-queue-cards.test.ts',
   'writers-configured-half-life.test.ts',
 ].map((name) => `tests/${name}`);

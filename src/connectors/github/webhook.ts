@@ -32,12 +32,12 @@ import type { JsonValue } from '../../util/json.js';
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
 async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
-  const rawBody = await readWebhookBody(request);
+  const rawBytes = await readWebhookBody(request);
   const previousSecret = envGitHubWebhookSecretPrevious();
-  if (!verifyGitHubSignature({ rawBody, signature: sigStr, webhookSecret: secret, previousSecret })) {
+  if (!verifyGitHubSignature({ rawBody: rawBytes, signature: sigStr, webhookSecret: secret, previousSecret })) {
     throw new HttpError(401, 'invalid GitHub signature');
   }
-  return rawBody;
+  return rawBytes.toString('utf8');
 }
 
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
