@@ -13,16 +13,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { estimateTokens } from '../src/util/token-text.js';
-import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { graphExpandRecall } from '../src/graph/recall.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { runCli } from '../src/cli.js';
-import { runInProcess } from './_helpers/run-in-process.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { estimateTokens } from '../../src/util/token-text.js';
+import type { SearchResult } from '../../src/core/search-types.js';
+import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
+import { graphExpandRecall } from '../../src/graph/recall.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { runCli } from '../../src/cli.js';
+import { runInProcess } from '../_helpers/run-in-process.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }

@@ -2,20 +2,20 @@
 // object costs no write and a renamed one keeps its entity id and the edges that point at it.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { saveDecision } from '../src/objects/decisions.js';
-import { savePolicy } from '../src/objects/policies.js';
-import { saveCustomerNote } from '../src/objects/customer-notes.js';
-import { saveProjectBrief } from '../src/objects/project-briefs.js';
-import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../src/graph/extract.js';
-import { readGraphDelta, entityKey, type GraphOp } from '../src/graph/delta.js';
-import { insertEntityAt } from './_helpers/graph-seed.js';
-import type { EntityType, SourceObjectType } from '../src/store/graph-rows.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { objectsAt } from './_helpers/objects-at.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { loadConfig } from '../src/core/config.js';
+import { deleteEntry } from '../../src/store/delete-and-batch.js';
+import { saveDecision } from '../../src/objects/decisions.js';
+import { savePolicy } from '../../src/objects/policies.js';
+import { saveCustomerNote } from '../../src/objects/customer-notes.js';
+import { saveProjectBrief } from '../../src/objects/project-briefs.js';
+import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../../src/graph/extract.js';
+import { readGraphDelta, entityKey, type GraphOp } from '../../src/graph/delta.js';
+import { insertEntityAt } from '../_helpers/graph-seed.js';
+import type { EntityType, SourceObjectType } from '../../src/store/graph-rows.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { objectsAt } from '../_helpers/objects-at.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const T = 'default';
 

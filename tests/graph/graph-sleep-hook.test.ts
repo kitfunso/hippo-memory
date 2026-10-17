@@ -10,27 +10,27 @@
  * Real SQLite (temp dirs), no mocks.
  */
 
-import type { FullContext } from './_helpers/api-ctx.js';
+import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { saveDecision, closeDecision } from '../src/objects/decisions.js';
-import { savePolicy } from '../src/objects/policies.js';
-import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
-import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
-import { loadExtractionQueue } from './_helpers/graph-queue.js';
-import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
-import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph/extract.js';
-import type { EntityType } from '../src/store/graph-rows.js';
-import { readGraphDelta } from '../src/graph/delta.js';
-import { WRITE_BUDGET } from '../src/util/write-budget.js';
-import { sleep, adminActor } from '../src/api/index.js';
-import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
-import { apiCtx } from './_helpers/api-ctx.js';
-import { objectsAt } from './_helpers/objects-at.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { loadConfig } from '../src/core/config.js';
-import { makeStore, makeRoot } from './_helpers/make-root.js';
+import { deleteEntry } from '../../src/store/delete-and-batch.js';
+import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
+import { savePolicy } from '../../src/objects/policies.js';
+import { saveProjectBrief, refreshedBrief } from '../../src/objects/project-briefs.js';
+import { loadPendingExtractionTenants, markGraphDirty } from '../../src/store/graph-queue.js';
+import { loadExtractionQueue } from '../_helpers/graph-queue.js';
+import { loadEntities, loadRelations } from '../../src/store/graph-reads.js';
+import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../../src/graph/extract.js';
+import type { EntityType } from '../../src/store/graph-rows.js';
+import { readGraphDelta } from '../../src/graph/delta.js';
+import { WRITE_BUDGET } from '../../src/util/write-budget.js';
+import { sleep, adminActor } from '../../src/api/index.js';
+import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { objectsAt } from '../_helpers/objects-at.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
+import { makeStore, makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

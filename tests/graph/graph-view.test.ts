@@ -8,22 +8,22 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { saveDecision } from '../src/objects/decisions.js';
-import { savePolicy } from '../src/objects/policies.js';
-import { saveCustomerNote } from '../src/objects/customer-notes.js';
-import { extractGraph } from '../src/graph/extract.js';
+import { saveDecision } from '../../src/objects/decisions.js';
+import { savePolicy } from '../../src/objects/policies.js';
+import { saveCustomerNote } from '../../src/objects/customer-notes.js';
+import { extractGraph } from '../../src/graph/extract.js';
 import {
   buildGraphModel,
   layoutGraph,
   renderGraphHtml,
   renderGraphCanvas,
   type GraphModel,
-} from '../src/graph/view.js';
-import { serve, type ServerHandle } from '../src/server.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { objectsAt } from './_helpers/objects-at.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { loadConfig } from '../src/core/config.js';
+} from '../../src/graph/view.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { objectsAt } from '../_helpers/objects-at.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
