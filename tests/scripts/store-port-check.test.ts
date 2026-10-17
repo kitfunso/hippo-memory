@@ -434,6 +434,49 @@ describe('check-store-port.mjs', () => {
     });
   });
 
+  it('portImportsFromSql counts a port import of a file that runs SQL, and not one of a pure file', () => {
+    const files = {
+      'src/store/port.ts': "import type { A } from './sql.js';\nimport type { B } from './pure.js';\nexport type { C } from './port/g.js';\n",
+      'src/store/port/g.ts': "import type { A } from '../sql.js';\nexport type C = A;\n",
+      'src/store/sql.ts': "export type A = 1;\nexport const f = (db: any) => db.prepare('SELECT 1');\n",
+      'src/store/pure.ts': "export type B = 2;\n",
+    };
+    withFixture(files, null, ({ run }) => {
+      expect(list(run)).toMatchObject({ portImportsFromSql: '2', 'src/store/port.ts:1': 'portImportsFromSql', 'src/store/port/g.ts:1': 'portImportsFromSql' });
+      expect(list(run)['src/store/port.ts:2']).toBeUndefined();
+    });
+  });
+
+  it('buildsOutsideRoots counts an imported store builder outside the roots, and skips a same-named local function', () => {
+    const files = {
+      'src/store/open.ts': 'export const initStore = (r: string) => r;\n',
+      'src/capture/a.ts': "import { initStore } from '../store/open.js';\nexport const f = () => initStore('r');\n",
+      'src/capture/b.ts': "function initStore(r: string) { return r; }\nexport const g = () => initStore('r');\n",
+      'src/cli/api-context.ts': "import { initStore } from '../store/open.js';\nexport const h = () => initStore('r');\n",
+    };
+    withFixture(files, null, ({ run }) => {
+      const l = list(run);
+      expect(l.buildsOutsideRoots).toBe('1');
+      expect(l['src/capture/a.ts:2']).toBe('buildsOutsideRoots');
+      expect(l['src/capture/b.ts:2']).toBeUndefined();
+    });
+  });
+
+  it('groupChecksInApi counts requireGroup and hasGroup in the api and domain layers only', () => {
+    const files = {
+      'layers.json': JSON.stringify({ folders: { api: 'api', consolidate: 'domain', cli: 'surface' } }),
+      'src/api/a.ts': "export const f = (s: any) => requireGroup(s, 'localFiles');\n",
+      'src/consolidate/b.ts': "export const g = (s: any) => hasGroup(s, 'localFiles');\n",
+      'src/cli/c.ts': "export const h = (s: any) => requireGroup(s, 'localFiles');\n",
+    };
+    withFixture(files, null, ({ run }) => {
+      const l = list(run);
+      expect(l.groupChecksInApi).toBe('2');
+      expect(l['src/api/a.ts:1']).toBe('groupChecksInApi');
+      expect(l['src/cli/c.ts:1']).toBeUndefined();
+    });
+  });
+
   it('passes on the real repo', () => {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: REPO, encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);

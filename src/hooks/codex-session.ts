@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonObject } from '../store/working-memory.js';
 import { isJsonString } from '../util/json.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
+import type { JsonObject } from '../store/port/types.js';
 
 export interface CodexSessionTranscriptOptions {
   codexHome: string;

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../../src/store/failure-log.js';
+import { recordFailure, summarizeFailures, failuresBySession } from '../../src/store/failure-log.js';
 import { captureToolFailure } from '../../src/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureSignature, lessonFromFailure } from '../../src/capture/failure-reading.js';
@@ -15,6 +15,7 @@ import { RejectedValueError } from '../../src/core/api-errors.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import type { FailureOutcome } from '../../src/store/port/failure-log.js';
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 

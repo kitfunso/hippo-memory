@@ -24,14 +24,10 @@ import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../util/sql.js';
+import type { StoredVectorSummary } from './port/embedding-index.js';
+import type { EmbeddingIndexState } from './port/vector-reads.js';
 
 const MAX_BACKFILL_PAGE = 500;
-
-/** What a store's vector index was built by: the stored identity, and whether any vector exists. */
-export interface EmbeddingIndexState {
-  readonly storedModel: string | null;
-  readonly hasVectors: boolean;
-}
 
 /** The model the index was built by: the stored identity, else the default model when vectors exist. */
 export function indexedModel(state: EmbeddingIndexState): string | null {
@@ -69,11 +65,6 @@ export function loadEmbeddingIndexAt(db: DatabaseSyncLike): Record<string, numbe
 
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
   return onHandle(hippoRoot, (db) => loadEmbeddingIndexAt(db));
-}
-
-export interface StoredVectorSummary {
-  readonly ids: Set<string>;
-  readonly dims: number | undefined;
 }
 
 /** Every stored vector id and the float count of the first row, with no vector decoded. */

@@ -12,10 +12,10 @@ import { sqliteStore } from './store/sqlite/store.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from './core/config.js';
 import { redactSecretsStrict } from './util/secret-detect.js';
-import type { JsonObject } from './store/working-memory.js';
 import { type JsonValue, isJsonString, isJsonObject } from './util/json.js';
 import { escapeRegex } from './util/escape.js';
 import { errorMessage } from './util/log.js';
+import type { JsonObject } from './store/port/types.js';
 
 export interface SupportBundleOptions extends DoctorOptions {
   readonly cwd: string;

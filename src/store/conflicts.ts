@@ -15,6 +15,7 @@ import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { DetectedConflict } from './port/consolidation.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -158,8 +159,6 @@ export function listTouchableConflicts(
 ): MemoryConflict[] {
   return onHandle(hippoRoot, (db) => listTouchableConflictsAt(db, status, tenantId, actor), openStore);
 }
-
-export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
 type SameTenant = (a: string, b: string) => boolean;
 
 export function replaceDetectedConflictsAt(

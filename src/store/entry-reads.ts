@@ -8,6 +8,9 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { chunked } from '../util/chunked.js';
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { placeholders } from '../util/sql.js';
+import type { EntriesWithBase, EntryCursor, EntryPage } from './port/consolidation.js';
+import type { RawRefRow } from './port/context-reads.js';
+import type { EntrySignals, EntryTextKey } from './port/sharing.js';
 
 const MAX_IDS_PER_READ = 500;
 
@@ -323,13 +326,6 @@ function ftsInSync(db: DatabaseSyncLike): boolean {
   return counts !== null && counts.memories === counts.fts;
 }
 
-export interface EntryTextKey {
-  id: string;
-  tenant_id: string;
-  content: string;
-  source: string;
-}
-
 /** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
  * another store already holds each. */
 export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): EntryTextKey[] {
@@ -344,11 +340,6 @@ export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): En
     content: row.content,
     source: row.source,
   }));
-}
-
-export interface EntriesWithBase {
-  entries: MemoryEntry[];
-  base: { get(id: string): MemoryEntry | undefined };
 }
 
 /** Every entry plus a by-id lookup of each as loaded, rebuilt from its row on first use, so no deep copy of the
@@ -376,18 +367,6 @@ function selectAllRows(db: DatabaseSyncLike, tenantId?: string): MemoryRow[] {
     : db.prepare(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
       ).all() as MemoryRow[];
-}
-
-/** Where a page stopped: the `created`, `id` of its last row, in loadAllEntries' order. */
-export interface EntryCursor {
-  created: string;
-  id: string;
-}
-
-export interface EntryPage {
-  entries: MemoryEntry[];
-  /** The cursor that reads the page after this one, or null when this was the last. */
-  next: EntryCursor | null;
 }
 
 /** Up to `limit` rows in loadAllEntries' order, starting after `after`; omitting `tenantId` reads every tenant. */
@@ -471,13 +450,6 @@ export function contentsWithTagAt(
     tags_json: string;
   }>;
   return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-}
-
-export interface RawRefRow {
-  id: string;
-  artifact_ref: string;
-  tags_json: string;
-  scope: string | null;
 }
 
 /** A tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
@@ -603,14 +575,6 @@ export function loadCurrentDistilledEntriesAt(db: DatabaseSyncLike): MemoryEntry
      ORDER BY created ASC, id ASC`,
   ).all() as MemoryRow[];
   return rows.map(rowToEntry);
-}
-
-/** Row traits any one of which lets a row through loadEntriesWithSignals. */
-export interface EntrySignals {
-  tags: readonly string[];
-  sourcePrefix: string;
-  minRetrievals: number;
-  valences: readonly string[];
 }
 
 /** Rows holding at least one signal, in loadAllEntries' order; omitting `tenantId` reads every tenant. A superset:

@@ -23,7 +23,7 @@ import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type Dec
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { queryAuditEvents, type AuditEvent } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
 import {
   computeMvFeatures,
   MV_FEATURE_NAMES,
@@ -38,7 +38,7 @@ import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
 import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadSessionDecayContext } from '../_helpers/root-forms.js';
-
+import type { AuditEvent } from '../../src/store/port/types.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

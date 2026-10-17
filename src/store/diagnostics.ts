@@ -5,7 +5,7 @@ import { errorMessage } from '../util/log.js';
 import { compactionCountsAt, tokenTallySince, type CompactionCounts, type TokenTally } from './doctor-reads.js';
 import { countFailuresSince } from './failure-log.js';
 import { lastConsolidationAt } from './index-and-stats.js';
-import type { JsonObject } from './working-memory.js';
+import type { JsonObject } from './port/types.js';
 
 /** One read's value, or the message of the error that stopped it, so a broken table never hides the reads beside it. */
 export type Attempt<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };

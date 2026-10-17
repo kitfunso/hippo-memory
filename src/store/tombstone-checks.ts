@@ -1,8 +1,10 @@
 // Sleep's tombstone checks run on one handle for the whole pass, owned here so no stage holds a raw one.
 import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
-import { type AppendAuditOpts, appendAuditEvent, reportAuditWriteFailure } from './audit.js';
-import { findRejectedValue, type RejectedValueRow } from './rejection.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { findRejectedValue } from './rejection.js';
 import { errorMessage } from '../util/log.js';
+import type { AppendAuditOpts } from './port/types.js';
+import type { RejectedValueRow } from './port/rejections.js';
 
 /** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
  * once. */

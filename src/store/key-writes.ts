@@ -1,11 +1,12 @@
 // hippo.db's half of the KeyWrites store group.
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
-import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
+import { appendAuditEvent } from './audit.js';
 import { grantScope, insertApiKey, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { isRestrictedScope } from '../core/recall-scope.js';
 import type { KeyMint, SelfKeyMint } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
+import type { AppendAuditOpts } from './port/types.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {

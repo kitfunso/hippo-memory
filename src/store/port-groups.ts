@@ -6,18 +6,20 @@ import type { MemoryEntry } from '../core/memory.js';
 import type { CardDetail } from './card-detail.js';
 import type { StatusCounts, StrengthTallies } from './candidates.js';
 import type { ResolveConflictOpts, ResolveConflictRequest } from './conflicts.js';
-import type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from './dormant.js';
-import type { EntryCursor, EntryPage } from './entry-reads.js';
+import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './dormant.js';
 import type { FailureSummary } from './failure-log.js';
-import type { CompleteGoalOpts, Goal, PushGoalOpts } from './goals.js';
+import type { CompleteGoalOpts, PushGoalOpts } from './goals.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
 import type { FailureLog } from './port/failure-log.js';
 import type { Compactions } from './port/compactions.js';
 import type { Rejections } from './port/rejections.js';
 import type { LegacyStats, MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
-import type { ContinuityKey, SessionEventInput, SnapshotInput } from './sessions.js';
+import type { SessionEventInput, SnapshotInput } from './sessions.js';
 import type { TokenSummary } from './token-ledger.js';
-import type { JsonObject, WorkingMemoryItem } from './working-memory.js';
+import type { WorkingMemoryItem } from './working-memory.js';
+import type { DormantSnapshot } from './port/agent-import.js';
+import type { EntryCursor, EntryPage } from './port/consolidation.js';
+import type { Goal, ContinuityKey, JsonObject } from './port/types.js';
 
 export interface WorkingMemoryFilter {
   readonly scope?: string;

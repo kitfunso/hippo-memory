@@ -4,7 +4,6 @@ import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike 
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../core/project-identity.js';
 import { assertTenantId } from '../core/tenant-id.js';
-import type { JsonObject } from './working-memory.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../util/version.js';
 import {
@@ -17,12 +16,7 @@ import {
 } from './rows.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
-
-/** A shared-store caller's task state bucket: its owner and every name its project's rows carry. */
-export interface ContinuityKey {
-  readonly owner: string;
-  readonly project: readonly string[];
-}
+import type { ContinuityKey, JsonObject } from './port/types.js';
 
 export interface ContinuityFilter {
   readonly sql: string;

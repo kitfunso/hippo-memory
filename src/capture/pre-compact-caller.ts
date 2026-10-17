@@ -4,9 +4,9 @@ import type { Context } from '../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
-import type { ContinuityKey } from '../store/sessions.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
 import { mergeWorkingState, type WorkingState } from './working-state.js';
+import type { ContinuityKey } from '../store/port/types.js';
 
 export interface CallerPreCompactRequest {
   readonly sessionId: string;

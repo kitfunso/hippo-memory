@@ -11,6 +11,7 @@ import type {
   QuarantineRejection,
   QuarantinedMemory,
 } from './port.js';
+import type { QuarantineRow, QuarantineStatus } from './port/quarantine.js';
 
 export const QUARANTINE_SCOPE_PREFIX = 'quarantine:private:';
 
@@ -21,19 +22,6 @@ export function isQuarantineScope(scope: string | null | undefined): boolean {
 /** Scope a quarantined memory is stored under; matches PRIVATE_SCOPE_RE so every default-deny site hides it. */
 export function quarantineScopeFor(original: string | null): string {
   return `${QUARANTINE_SCOPE_PREFIX}${original ?? 'unscoped'}`;
-}
-
-export type QuarantineStatus = 'pending' | 'approved' | 'rejected';
-
-export interface QuarantineRow {
-  tenantId: string;
-  memoryId: string;
-  originalScope: string | null;
-  reason: string;
-  status: QuarantineStatus;
-  quarantinedAt: string;
-  decidedAt: string | null;
-  decidedBy: string | null;
 }
 
 interface QuarantineDbRow {

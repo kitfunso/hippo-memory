@@ -1,6 +1,6 @@
 import { envStdinWaitMs } from '../util/env.js';
 import { isJsonString, type JsonValue, isJsonObjectLiteral } from '../util/json.js';
-import type { JsonObject } from '../store/working-memory.js';
+import type { JsonObject } from '../store/port/types.js';
 
 const DEFAULT_STDIN_WAIT_MS = 1000;
 

@@ -5,7 +5,7 @@ import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../util/token-text.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { type JsonValue, isJsonObjectLiteral, isJsonString } from '../util/json.js';
-import type { CaptureErrorOutcome, RoutineRule } from '../store/failure-log.js';
+import type { CaptureErrorOutcome, RoutineRule } from '../store/port/failure-log.js';
 
 const COMMAND_HEAD_WORDS = 2;
 

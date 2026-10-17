@@ -4,7 +4,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonObject } from '../store/working-memory.js';
 import {
   type JsonHookTarget,
   HIPPO_SLEEP_MARKER,
@@ -25,6 +24,7 @@ import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from 
 import { escapeRegex } from '../util/escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
+import type { JsonObject } from '../store/port/types.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {

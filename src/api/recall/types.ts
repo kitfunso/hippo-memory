@@ -10,11 +10,11 @@ import type {
 } from '../../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
-import type { AppendAuditOpts } from '../../store/audit.js';
 import type { HippoStore } from '../../store/port.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
+import type { AppendAuditOpts } from '../../store/port/types.js';
 
 /** How many rows a recall loads and returns, and the bands it adds beside them. */
 export interface RecallWindowOptions {

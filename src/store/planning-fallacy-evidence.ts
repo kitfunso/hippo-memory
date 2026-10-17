@@ -1,17 +1,6 @@
 import type { DatabaseSyncLike } from '../db/index.js';
-import { computePredictionBaserateAt, type PredictionBaserate } from './predictions.js';
-
-export interface ClassResolution {
-  classTag: string | null;
-  /** True when >=2 classes tied at the best overlap score AND best >= 1. Caller emits `recall_autodebias_hint_tiebreak`
-   * and returns a null hint (silent: an alphabetical tiebreak would show the wrong class half the time). */
-  tiebreak: boolean;
-}
-
-/** The prediction class a forward claim resolves to, and that class's closed-prediction stats when one resolved. */
-export interface PlanningFallacyEvidence extends ClassResolution {
-  readonly baserate: PredictionBaserate | null;
-}
+import { computePredictionBaserateAt } from './predictions.js';
+import type { PlanningFallacyEvidence, ClassResolution } from './port/types.js';
 
 /** Resolve a query-token set to a unique best-matching class_tag for the tenant: lower-cased token overlap, best score
  * >= 1 AND above the 2nd-best. TENANT-GLOBAL by design, not scope-filtered (base rates need the full sample): class_tag

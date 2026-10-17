@@ -26,7 +26,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
 
-
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 

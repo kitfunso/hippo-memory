@@ -375,7 +375,6 @@ function answerRequest(
   );
 }
 
-
 function listenOn(server: Server, port: number, host: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const onError = (err: Error): void => {
@@ -393,7 +392,6 @@ function listenOn(server: Server, port: number, host: string): Promise<void> {
     server.listen(port, host);
   });
 }
-
 
 function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
   const shutdown = { run: stop, boundMs: shutdownBoundMs(drainMs) };

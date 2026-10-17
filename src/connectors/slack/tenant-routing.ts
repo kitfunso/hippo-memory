@@ -1,6 +1,6 @@
 import { envSlackAllowUnknownTeamFallback, envTenant } from '../../util/env.js';
 import type { HippoStore } from '../../store/index.js';
-import type { SlackTeamRoute } from '../../store/connectors/slack.js';
+import type { SlackTeamRoute } from '../../store/port/connectors.js';
 
 /** Look up the tenant_id for a Slack team_id; the HIPPO_TENANT fallback applies only when slack_workspaces is empty
  * (single-workspace install).

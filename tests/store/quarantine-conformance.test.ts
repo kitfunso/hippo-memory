@@ -2,7 +2,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AuditEvent } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
 import { sqliteStore } from '../../src/store/index.js';
@@ -13,6 +12,7 @@ import {
 } from '../_helpers/in-memory-quarantine-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';

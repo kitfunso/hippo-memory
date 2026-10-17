@@ -72,7 +72,6 @@ function collect(res: Response): () => string {
   return () => buf;
 }
 
-
 const HEARTBEAT_MS = 50;
 
 /** Fakes only the heartbeat's interval, so a test fires each tick by hand and counts live intervals; fetch and the polls keep real time. */

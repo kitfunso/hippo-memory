@@ -2,7 +2,6 @@
 // Vectors and particles carry no tenant, so each method covers the whole store.
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
-import type { StoredVectorSummary } from '../vector-index.js';
 
 export interface EmbeddingIndex {
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */
@@ -28,4 +27,9 @@ export interface EmbeddingIndex {
   resetParticles(ids: readonly string[], index: Record<string, number[]>): number;
   /** A first particle for `entry` at `vector`, unless it has one. */
   seedParticle(entry: MemoryEntry, vector: number[]): void;
+}
+
+export interface StoredVectorSummary {
+  readonly ids: Set<string>;
+  readonly dims: number | undefined;
 }

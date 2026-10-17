@@ -8,13 +8,14 @@ import {
   authCreate, authCreateSelf, authListRows,
   type AuthCreateResult,
 } from '../../src/api/index.js';
-import { verifyApiKeyCached, type ApiKeyListItem } from '../../src/store/auth.js';
+import { verifyApiKeyCached } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../../src/entry/store-kit.js';
 import { inMemoryKeyWritesStore, OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/in-memory-key-writes-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import type { ApiKeyListItem } from '../../src/store/port/key-writes.js';
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;

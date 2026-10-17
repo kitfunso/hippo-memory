@@ -7,18 +7,7 @@ import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
 import { HIGH_SCHEMA_FIT } from '../core/memory.js';
 import { placeholders } from '../util/sql.js';
-
-/** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
-export interface AmbientStoreFilter {
-  exactScope?: string;
-  /** The reader's personal scope, which the default deny admits. */
-  ownScope?: string;
-  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
-  project?: readonly string[];
-  /** The reader's project names: a secret-tagged row counts only inside its own non-empty origin project. */
-  currentProject: readonly string[];
-  now: Date;
-}
+import type { AmbientStoreFilter } from './port/context-reads.js';
 
 /** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
  * match. */

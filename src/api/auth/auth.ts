@@ -1,15 +1,14 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
-import {
-  DEFAULT_KEY_TTL_DAYS, listApiKeys, mintApiKey,
-  type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
-} from '../../store/auth.js';
+import { DEFAULT_KEY_TTL_DAYS, listApiKeys, mintApiKey } from '../../store/auth.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/index.js';
 import type { ApiKeyOwner } from '../../store/tenant-lookup.js';
 import { DAY_MS } from '../../util/time.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
+import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../store/port/key-writes.js';
+import type { ApiKeyRecord } from '../../store/port/types.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 

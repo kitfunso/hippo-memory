@@ -2,11 +2,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { _readApiKeyVerifyStatsForTests, createApiKey, verifyApiKeyCached, type ApiKeyRecord, type CreateApiKeyResult } from '../../src/store/auth.js';
+import {
+  _readApiKeyVerifyStatsForTests,
+  createApiKey,
+  verifyApiKeyCached,
+  type CreateApiKeyResult,
+} from '../../src/store/auth.js';
 import { ownerOrSubject, type Actor } from '../../src/api/index.js';
 import { ownerOrSubject as exportedOwnerOrSubject, serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import type { ApiKeyRecord } from '../../src/store/port/types.js';
 
 const WHOAMI = '/v1/x-whoami';
 

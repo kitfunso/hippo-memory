@@ -3,13 +3,13 @@
 import * as predictionsApi from '../api/objects/predictions.js';
 import type { Context } from '../api/types.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
-import type { Prediction } from '../store/predictions.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { foundOrExit, idArgOrExit, requireStatus } from './object-verbs.js';
 import { fail } from './exit.js';
+import type { Prediction } from '../store/port/predictions.js';
 
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';

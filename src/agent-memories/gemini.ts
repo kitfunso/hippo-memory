@@ -2,7 +2,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isStringValue } from '../core/capture-contract.js';
-import type { JsonObject } from '../store/working-memory.js';
 import { readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
@@ -11,6 +10,7 @@ import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
 import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
+import type { JsonObject } from '../store/port/types.js';
 
 const SECTION = 'gemini added memories';
 

@@ -5,19 +5,10 @@
 import { normalizeValueForRejection, rejectionDigest } from '../core/rejection-digest.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { RejectedValueError } from '../core/api-errors.js';
+import type { RejectedValueRow } from './port/rejections.js';
 
 // store-kit publishes rejectionDigest from this path.
 export { normalizeValueForRejection, rejectionDigest };
-
-export interface RejectedValueRow {
-  tenantId: string;
-  digest: string;
-  reason: string | null;
-  rejectedBy: string | null;
-  rejectedAt: string;
-  sourceMemoryId: string | null;
-  normalizedChars: number | null;
-}
 
 interface RawRejectedValueRow {
   tenant_id: string;

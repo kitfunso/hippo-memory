@@ -70,8 +70,9 @@ import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
 import { loadRecallEntriesAt } from '../search-rows.js';
-import { type ContinuityKey, listSessionEventsAt, loadActiveTaskSnapshotAt } from '../sessions.js';
+import { listSessionEventsAt, loadActiveTaskSnapshotAt } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from '../vector-index.js';
+import type { ContinuityKey } from '../port/types.js';
 
 /** Not on the synchronous store: the nearest-row scan yields to
  * the event loop, so this group answers only through Promises. */

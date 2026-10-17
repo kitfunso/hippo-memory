@@ -13,6 +13,9 @@
   "storeImportsInDomain": 14,
   "handleHoldersOutside": 0,
   "storeFilesWithoutSql": 2,
+  "portImportsFromSql": 0,
+  "buildsOutsideRoots": 24,
+  "groupChecksInApi": 27,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts",
     "src/store/embeddings/index.ts"

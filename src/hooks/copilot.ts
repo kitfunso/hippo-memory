@@ -3,12 +3,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
-import type { JsonObject } from '../store/working-memory.js';
 import { type JsonValue, readJsonFile, isJsonObjectLiteral } from '../util/json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
 import { copilotHomeDir, vscodeUserDirs } from './shared.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
+import type { JsonObject } from '../store/port/types.js';
 
 const MCP_KEY = 'hippo';
 

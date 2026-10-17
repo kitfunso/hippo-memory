@@ -2,7 +2,6 @@
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
-import { AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
 import type { AuditResult } from '../core/memory-audit.js';
 import * as api from '../api/index.js';
 import { parseOlderThanFlag } from './audit-prune.js';
@@ -14,6 +13,9 @@ import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../util/format.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import { AUDIT_OPS } from '../store/port/audit-ops.js';
+import type { AuditEvent } from '../store/port/types.js';
+import type { AuditOp } from '../store/port/audit-ops.js';
 
 // Audit log subcommands (`hippo audit list`)
 

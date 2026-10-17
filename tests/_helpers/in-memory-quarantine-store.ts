@@ -11,9 +11,9 @@ import { selectEntriesByIds } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { openStore } from '../../src/store/open.js';
 import type { Quarantine, QuarantineRefusal, QuarantinedMemory } from '../../src/store/port.js';
-import type { QuarantineRow } from '../../src/store/quarantine.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
+import type { QuarantineRow } from '../../src/store/port/quarantine.js';
 
 export interface InMemoryQuarantineStore extends StoreSide {
   readonly store: HippoStore & { readonly quarantine: Quarantine };

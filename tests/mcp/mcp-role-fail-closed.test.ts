@@ -16,7 +16,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
-
 const LESSON = 'fix the retry loop that dropped the last queued webhook delivery';
 
 /** A temp git repo with one lesson-shaped commit; `beforeCommit` runs first, e.g. to switch branch. */

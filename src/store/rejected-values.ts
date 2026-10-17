@@ -19,8 +19,8 @@ import {
   listRejectedValues,
   normalizeValueForRejection,
   rejectionDigest,
-  type RejectedValueRow,
 } from './rejection.js';
+import type { RejectedValueRow } from './port/rejections.js';
 
 type HoldsValue = (text: string) => boolean;
 

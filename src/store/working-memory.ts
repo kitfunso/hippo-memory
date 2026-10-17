@@ -3,13 +3,11 @@
 
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { openStore } from './open.js';
-import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { resolveTenantId } from './tenant.js';
+import type { JsonObject } from './port/types.js';
 
 const WM_MAX_ENTRIES = 20;
-
-export type JsonObject = { [key: string]: JsonValue };
 
 export interface WorkingMemoryItem {
   id: number;

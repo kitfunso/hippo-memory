@@ -3,12 +3,9 @@
 import { envRequireSessionScopedFreshTail } from '../../util/env.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
 import { recallScopeFilter } from '../../store/search-rows.js';
-import type { ContinuityKey } from '../../store/sessions.js';
 import { estimateTokens } from '../../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../core/handoff.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
-import type { RecallTraceInput } from '../../store/recall-trace.js';
-import type { ActiveGoals, GoalRecallLogRow } from '../../store/goals.js';
 import { boostByGoals, type GoalStackBoostOptions } from '../../search/goal-boost.js';
 import type { ForwardClaimMatch } from '../../learn/forward-claim-detector.js';
 import { type HippoStore, type RecallSearchArgs, type RecallWrites } from '../../store/index.js';
@@ -25,7 +22,6 @@ import { configOf } from '../config-of.js';
 import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
-import type { PlanningFallacyEvidence } from '../../store/planning-fallacy-evidence.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../../core/recall-scope.js';
 import type {
@@ -54,6 +50,8 @@ import {
   type ShownList,
 } from './finish.js';
 import { retrieveWithCliCore } from './request.js';
+import type { ContinuityKey, ActiveGoals, PlanningFallacyEvidence } from '../../store/port/types.js';
+import type { RecallTraceInput, GoalRecallLogRow } from '../../store/port/recall-writes.js';
 
 const DEFAULT_RECALL_LIMIT = 10;
 

@@ -1,19 +1,12 @@
 // Ambient context injection: the admission policy and getContext.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
-import {
-  type ContextCandidateFilter,
-  type AmbientRecallRequest,
-  type AmbientLoadResult,
-  type RecentOrigins,
-} from '../store/candidates.js';
-import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
+import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import type { RecallTraceInput } from '../store/recall-trace.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
@@ -50,6 +43,14 @@ import type { ContextOptions, ContextResult, ContextResultEntry } from './contex
 import { strengthenOf } from './recall/finish.js';
 import { tokenPurse } from './recall/render.js';
 import { type Context, ownerOrSubject } from './types.js';
+import type {
+  ContextCandidateFilter,
+  AmbientRecallRequest,
+  AmbientLoadResult,
+  RecentOrigins,
+} from '../store/port/context-reads.js';
+import type { ContinuityKey } from '../store/port/types.js';
+import type { RecallTraceInput } from '../store/port/recall-writes.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 

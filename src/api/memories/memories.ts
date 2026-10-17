@@ -3,9 +3,9 @@ import type { MemoryEntry } from '../../core/memory.js';
 import type { StrengthTallies } from '../../store/candidates.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import { canTouchScope } from '../../core/recall-scope.js';
-import type { EntryCursor } from '../../store/entry-reads.js';
 import type { HippoStore } from '../../store/port.js';
 import { requireHostAdmin, type Context } from '../types.js';
+import type { EntryCursor } from '../../store/port/consolidation.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
 export async function getMemory(ctx: Context, id: string): Promise<MemoryEntry | null> {

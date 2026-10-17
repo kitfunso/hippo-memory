@@ -1,9 +1,13 @@
 import type { Context } from '../../api/index.js';
-import type { DlqBucket, DlqItem, GitHubDlqInsert } from '../../store/connectors/github.js';
 import { replayParked, type ConnectorDlq, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
 import type { JsonValue } from '../../util/json.js';
+import type {
+  GitHubDlqBucket as DlqBucket,
+  GitHubDlqItem as DlqItem,
+  GitHubDlqInsert,
+} from '../../store/port/connectors.js';
 
 export type { DlqBucket, DlqItem };
 

@@ -27,7 +27,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-
 const SECRET = 'shhh-current';
 const PREVIOUS_SECRET = 'shhh-old';
 

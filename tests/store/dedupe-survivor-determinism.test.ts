@@ -31,7 +31,6 @@ import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/open.js';
 
-
 function ctxFor(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }

@@ -11,6 +11,7 @@ import type { HippoIndex } from './rows.js';
 import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
 import { DAY_MS } from '../util/time.js';
+import type { SessionDecayContext } from './port/consolidation.js';
 
 /** The last recall's ids and its trace alone, for a caller that needs no index entry. */
 export function loadLastRecallAt(db: DatabaseSyncLike): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
@@ -112,14 +113,6 @@ export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, 
        AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
   ).get<{ n: number }>(tenantId, dayAgo);
   return row.n;
-}
-
-/** Session decay context: the data needed for session-based and adaptive decay. */
-export interface SessionDecayContext {
-  /** Total number of sleep (consolidation) cycles completed. */
-  sleepCount: number;
-  /** Average interval between recent sleep cycles, in days. 0 if < 2 cycles. */
-  avgSessionIntervalDays: number;
 }
 
 /** Timestamp of the latest consolidation run, or undefined when there is none. */

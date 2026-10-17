@@ -9,13 +9,14 @@ import { BadRequestError } from '../../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveActiveTaskSnapshot, type ContinuityKey } from '../../src/store/sessions.js';
+import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { closeTaskSnapshotsForSession } from '../_helpers/root-forms.js';
+import type { ContinuityKey } from '../../src/store/port/types.js';
 
 const P = { name: 'p', legacyName: 'p' } as const;
 const KEY_A: ContinuityKey = { owner: 'alice', project: ['p'] };

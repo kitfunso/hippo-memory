@@ -11,30 +11,7 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 import { blockHash } from '../util/token-text.js';
 import { placeholders } from '../util/sql.js';
-
-/** One ranked result to persist alongside its trace row. */
-export interface RecallTraceResultInput {
-  memoryId: string;
-  score: number;
-  /** Per-stage rerank steps when the caller ran with explain/--why; omitted
-   *  (or empty) persists `rerank_json` as NULL. */
-  rerankSteps?: RerankStep[];
-}
-
-/** Input to `writeRecallTrace`. */
-export interface RecallTraceInput {
-  tenantId: string;
-  sessionId?: string | null;
-  pipeline: 'api' | 'cli' | 'context' | 'mcp';
-  /** Raw query text. NEVER persisted — only its sha256/16 hash + length are
-   *  stored (GDPR Path A / audit convention, CLI). */
-  query: string;
-  /** True when the caller ran with explain/--why (per-result rerank steps
-   *  may be present). Defaults to false. */
-  explainMode?: boolean;
-  /** Results in returned rank order (index 0 = rank 1). */
-  results: RecallTraceResultInput[];
-}
+import type { RecallTraceInput } from './port/recall-writes.js';
 
 /** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
  * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is

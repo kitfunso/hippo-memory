@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents, type AuditEvent, type AuditOp } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import type { Rejection, RejectionSource } from '../../src/store/rejected-values.js';
@@ -10,6 +10,8 @@ import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/store/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditOp } from '../../src/store/port/audit-ops.js';
 
 let root: string;
 const rejections = (): ReturnType<typeof sqliteSyncStore>['rejections'] => sqliteSyncStore(root).rejections;

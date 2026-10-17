@@ -5,8 +5,9 @@ import { BadRequestError } from '../core/api-errors.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { mergedSuccessor } from '../core/merged-row.js';
 import type { HippoStore } from '../store/index.js';
-import { normalizeValueForRejection, type RejectedValueRow } from '../store/rejection.js';
+import { normalizeValueForRejection } from '../store/rejection.js';
 import type { AppliedRejection, LiftedRejection, RejectionSource } from '../store/rejected-values.js';
+import type { RejectedValueRow } from '../store/port/rejections.js';
 
 export interface RejectFlowOptions {
   tenantId: string;

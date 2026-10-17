@@ -1,5 +1,4 @@
 import { adminActor, type Context } from '../../api/index.js';
-import type { DlqBucket, DlqItem, SlackDlqInsert } from '../../store/connectors/slack.js';
 import { replayParked, type ConnectorDlq, type Reingest, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
@@ -8,6 +7,11 @@ import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } fr
 import { handleMessageDeleted } from './deletion.js';
 import type { JsonValue } from '../../util/json.js';
 import { YEAR_S } from '../../util/time.js';
+import type {
+  SlackDlqBucket as DlqBucket,
+  SlackDlqItem as DlqItem,
+  SlackDlqInsert,
+} from '../../store/port/connectors.js';
 
 export type { DlqBucket, DlqItem };
 

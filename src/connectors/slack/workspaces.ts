@@ -2,7 +2,7 @@
 // fail-closed routing). `add` overwrites a team's tenant on purpose, so moving a workspace needs no delete first.
 
 import type { HippoStore } from '../../store/index.js';
-import type { SlackWorkspace } from '../../store/connectors/slack.js';
+import type { SlackWorkspace } from '../../store/port/connectors.js';
 
 export type { SlackWorkspace };
 

@@ -21,7 +21,6 @@ import {
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 
-
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';
 // AWS's documented example access key: a public placeholder, not a credential.

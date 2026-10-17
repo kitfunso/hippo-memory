@@ -5,7 +5,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
-import type { EntrySignals } from '../store/entry-reads.js';
 import { requireGroup, type HippoStore, type LocalFiles } from '../store/port.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
@@ -16,6 +15,7 @@ import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
+import type { EntrySignals } from '../store/port/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
