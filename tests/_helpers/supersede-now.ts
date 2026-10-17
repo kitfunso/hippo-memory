@@ -1,10 +1,34 @@
-// A second writer for supersede race tests: the api's supersede awaits between its read and its write, so it cannot win from inside a lock request.
+// Supersede race helpers: a winner that commits in another process, and one that runs to its commit before it returns.
 import type { Context } from '../../src/api/types.js';
 import { loadConfig } from '../../src/core/config.js';
 import { createSuccessor } from '../../src/core/memory.js';
 import { personalScopeOf } from '../../src/core/recall-scope.js';
 import { loadEntriesByIds } from '../../src/store/entry-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { initStore } from '../../src/store/open.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sqlText, stageScratchWinner, type StagedWinner } from './race-winner.js';
+
+/** A supersede another process wins: it copies a successor from a scratch store and links `oldId` to it under the write lock. */
+export async function stageSupersedeWinner(ctx: Context, oldId: string, newContent: string): Promise<StagedWinner & { successorId: string }> {
+  const [old] = loadEntriesByIds(ctx.hippoRoot, [oldId], ctx.tenantId);
+  if (!old) throw new Error(`no row ${oldId} in tenant ${ctx.tenantId} to supersede`);
+  const successor = createSuccessor(old, newContent, { tenantId: ctx.tenantId, baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays });
+  const scratch = mkdtempSync(join(tmpdir(), 'hippo-race-winner-'));
+  initStore(scratch);
+  writeEntry(scratch, successor);
+  const audit = JSON.stringify({ newId: successor.id });
+  const winner = await stageScratchWinner(ctx.hippoRoot, scratch, ['memories'], [
+    `UPDATE memories SET superseded_by = ${sqlText(successor.id)} WHERE id = ${sqlText(oldId)} AND tenant_id = ${sqlText(ctx.tenantId)}`,
+    `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (${sqlText(new Date().toISOString())}, ` +
+      `${sqlText(ctx.tenantId)}, ${sqlText(ctx.actor.subject)}, 'supersede', ${sqlText(oldId)}, ${sqlText(audit)})`,
+  ]);
+  const committed = winner.committed.finally(() => rmSync(scratch, { recursive: true, force: true }));
+  return { committed, successorId: successor.id };
+}
 
 /** api.supersede's read and write on hippo.db, run to its commit before it returns; answers the successor's id. */
 export function supersedeNow(ctx: Context, oldId: string, newContent: string): string {

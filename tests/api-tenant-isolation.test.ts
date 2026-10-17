@@ -1,6 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
 import { withStore } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
@@ -13,12 +12,10 @@ import {
   supersede,
 } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { ConflictError } from '../src/core/api-errors.js';
 import { makeRoot } from './_helpers/make-root.js';
-import { supersedeNow } from './_helpers/supersede-now.js';
+import { stageSupersedeWinner } from './_helpers/supersede-now.js';
 import { apiCtx } from './_helpers/api-ctx.js';
-
-// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 /**
  * Typed wrapper around a single-row SQL lookup. Every call site below
@@ -84,29 +81,20 @@ describe('api tenant isolation', () => {
   });
 
   // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
-  it('supersede refuses the writer that read the row before another connection superseded it', async () => {
+  it('supersede refuses the writer that read the row before another process superseded it', async () => {
     const alpha = (): FullContext => (apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }));
     const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
-    const winners: string[] = [];
-    let raced = false;
-    const { exec } = DatabaseSync.prototype;
-    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
-      // The loser's first lock request: the winner runs to its commit on its own connection, then the loser goes on.
-      if (sql === 'BEGIN IMMEDIATE' && !raced) {
-        raced = true;
-        winners.push(supersedeNow(alpha(), created.id, 'the winner'));
-      }
-      exec.call(this, sql);
-    });
-    await expect(supersede(alpha(), created.id, 'the loser')).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
-    vi.restoreAllMocks();
+    const winner = await stageSupersedeWinner(alpha(), created.id, 'the winner');
+    const refused = supersede(alpha(), created.id, 'the loser');
+    await expect(refused).rejects.toBeInstanceOf(ConflictError);
+    await expect(refused).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
+    await winner.committed;
 
-    expect(winners).toHaveLength(1);
     const db = openHippoDb(home);
     try {
       const old = queryRow<{ superseded_by: string | null }>(db, `SELECT superseded_by FROM memories WHERE id = ?`, created.id);
-      expect(old?.superseded_by).toBe(winners[0]);
+      expect(old?.superseded_by).toBe(winner.successorId);
       // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
       const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
       expect(Number(rows?.c)).toBe(2);
@@ -114,7 +102,7 @@ describe('api tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(`is already superseded by ${winners[0]}`);
+    await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(`is already superseded by ${winner.successorId}`);
   });
 
   // ---- Test 6: supersede CAS — clean path -----------------------------------

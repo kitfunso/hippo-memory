@@ -1,13 +1,12 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { remember } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { ingestEvent, type IngestEvent, type IngestInput } from '../src/connectors/github/ingest.js';
 import type { IngestResult } from '../src/connectors/ingest.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
@@ -19,9 +18,7 @@ import type {
   GitHubPullRequestReviewCommentEvent,
 } from '../src/connectors/github/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
-
-// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
+import { stageScratchWinner } from './_helpers/race-winner.js';
 
 // -- Test helpers ----------------------------------------------------------
 
@@ -105,34 +102,29 @@ interface LostRace {
   readonly winner: IngestResult;
 }
 
-/** The second worker's write of the same issue event. remember's first store call is the write, which hippo.db runs before it
- *  returns, so it commits inside the loser's lock request; only the answer waits for the Promise. */
-async function storeAsOtherWorker(root: string, { event }: IngestInput): Promise<IngestResult> {
+/** The second worker's write of the same issue event, run on a scratch store so its rows can be copied in under a held lock. */
+async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Promise<IngestResult> {
   const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
   if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
   const { issue, repository } = event.payload;
   const idempotencyKey = computeIdempotencyKey(`github://${repository?.full_name}/issue/${issue.number}`, issue.updated_at ?? null);
   const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
-  const stored = await remember(ctx(root), { ...opts, untrusted: true, event: logged });
+  const stored = await remember(ctx(scratch), { ...opts, untrusted: true, event: logged });
   return { status: stored.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: stored.duplicate?.memoryId ?? stored.id };
 }
 
-/** Ingests `input` as the loser of a race: at its first lock request a second worker stores the same event on its own connection and commits. */
+/** Ingests `input` as the loser of a race: another process holds the write lock with the second worker's rows, and commits them while this ingest waits. */
 async function ingestBehindAnotherWorker(root: string, input: IngestInput): Promise<LostRace> {
-  const winners: Promise<IngestResult>[] = [];
-  let winnerRan = false;
-  const { exec } = DatabaseSync.prototype;
-  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
-    if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
-      winnerRan = true;
-      winners.push(storeAsOtherWorker(root, input));
-    }
-    exec.call(this, sql);
-  });
+  const scratch = mkdtempSync(join(tmpdir(), 'hippo-gh-winner-'));
   try {
-    return { loser: await ingestEvent(ctx(root), input), winner: await winners[0] };
+    initStore(scratch);
+    const winner = await storeAsOtherWorker(scratch, input);
+    const staged = await stageScratchWinner(root, scratch, ['memories', 'github_event_log']);
+    const loser = await ingestEvent(ctx(root), input);
+    await staged.committed;
+    return { loser, winner };
   } finally {
-    spy.mockRestore();
+    rmSync(scratch, { recursive: true, force: true });
   }
 }
 
