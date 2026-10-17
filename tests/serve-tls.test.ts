@@ -183,7 +183,7 @@ describe('hippo serve over TLS', () => {
     const stdout = await startServe(args, env);
     const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
     expect(await healthOverTls(port, pair.cert)).toBe(200);
-    expect(stdout).toContain('requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1; HIPPO_KEYLESS_LOCAL_ROLE=admin opens sleep and the quarantine routes); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request');
+    expect(stdout).toContain('requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request');
   }, 60_000);
 
   it.each([

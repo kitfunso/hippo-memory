@@ -122,8 +122,8 @@ describe('an untyped error is a 500 that hides its text', () => {
     // before serve starts because a running server holds the file open, and Windows refuses to delete an open file.
     home = mkdtempSync(join(tmpdir(), 'hippo-error-class-'));
     mkdirSync(join(home, 'hippo.db'));
-    // No key can be minted in a store that will not open, so the keyless caller is made admin for the admin-only audit route.
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    // No key can be minted in a store that will not open, so a resolver vouches for an admin on the admin-only audit route.
+    handle = await serve({ hippoRoot: home, port: 0, authResolver: () => ({ tenantId: 'default', subject: 'ops', role: 'admin' }) });
   });
 
   afterAll(async () => {
@@ -141,7 +141,7 @@ describe('an untyped error is a 500 that hides its text', () => {
       writes.push(String(chunk));
       return true;
     });
-    const r = await call(handle, { method: 'GET', path: '/v1/audit', headers: { 'x-request-id': 'req-s1b-500' } });
+    const r = await call(handle, { method: 'GET', path: '/v1/audit', headers: { 'x-request-id': 'req-s1b-500', authorization: 'Bearer ops-token' } });
     expect(r.status).toBe(500);
     expect(r.body).toEqual({ error: INTERNAL_ERROR_MESSAGE, requestId: 'req-s1b-500' });
     expect(r.requestIdHeader).toBe('req-s1b-500');

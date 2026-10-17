@@ -10,6 +10,7 @@ import type { ServerHandle } from '../src/server.js';
 import { serializeEntry } from '../src/core/markdown.js';
 import { HALF_LIFE_BASE_META_KEY } from '../src/store/open.js';
 import { createSqliteExecutor } from '../src/store/sqlite/executor.js';
+import { mintAdminKey } from './_helpers/admin-server.js';
 import { cleanups, execOn, get, holdWriteLock, newRoot, onDb, post, removeLater, start, undoAll } from './_helpers/store-worker-server.js';
 
 afterEach(undoAll);
@@ -36,8 +37,7 @@ async function recalled(server: ServerHandle, query: string): Promise<string[]> 
 describe('a root with no hippo.db', () => {
   it('answers its first request, a read, from a reader, after the writer recorded what a new store records', async () => {
     const root = bareRoot();
-    // GET /v1/quarantine is an admin route, so this machine's keyless caller opts in to admin.
-    const server = await start(root, undefined, { keylessLocalRole: 'admin' });
+    const server = await start(root);
 
     const graph = await get(server, '/v1/graph');
 
@@ -45,7 +45,8 @@ describe('a root with no hippo.db', () => {
     // The graph read writes nothing, so only the setup can have recorded this.
     expect(halfLifeBase(root)).toBe(String(DEFAULT_HALF_LIFE_DAYS));
     const rest = [
-      await get(server, '/v1/quarantine'),
+      // GET /v1/quarantine is an admin route, and the key can be minted only once the first read made the db.
+      await get(server, '/v1/quarantine', mintAdminKey(root)),
       await get(server, '/v1/memories?q=deploy'),
       await get(server, '/v1/sessions/sess-1/assemble'),
       await post(server, '/v1/memories/mem_000000000000/supersede', { content: 'never saved' }),

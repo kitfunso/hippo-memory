@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { mintAdminKey } from './_helpers/admin-server.js';
 import { mkdtempSync, rmSync, mkdirSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -635,8 +636,9 @@ describe('cli thin-client mode', () => {
   it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
     const workspace = makeWorkspace();
     const hippoRoot = join(workspace, '.hippo');
-    // A keyless member may not write a private scope it cannot read, so the operator names admin.
-    const handle: ServerHandle = await serve({ hippoRoot, port: 0, keylessLocalRole: 'admin' });
+    // A keyless member may not write a private scope it cannot read, so the CLI sends an admin key.
+    const handle: ServerHandle = await serve({ hippoRoot, port: 0 });
+    vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
     try {
       const { stdout, stderr } = await runCliAsync(workspace, 'remember', 'thin client scope canary content', '--scope', 'slack:private:CX');
       expect(stdout, `stderr: ${stderr}`).toMatch(/Remembered/);
@@ -652,6 +654,7 @@ describe('cli thin-client mode', () => {
         closeHippoDb(db);
       }
     } finally {
+      vi.unstubAllEnvs();
       await handle.stop();
       rmSync(workspace, { recursive: true, force: true });
     }

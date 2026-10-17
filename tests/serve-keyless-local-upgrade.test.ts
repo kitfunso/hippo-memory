@@ -15,9 +15,7 @@ const KEY_REQUIRED_LINE =
   'every request needs an API key: mint one with `hippo auth create` and send it as "Authorization: Bearer <key>" ' +
   '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, start with HIPPO_ALLOW_KEYLESS_LOCAL=1';
 const KEYLESS_LINE =
-  'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1; HIPPO_KEYLESS_LOCAL_ROLE=admin opens sleep and the quarantine routes); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request';
-const KEYLESS_ADMIN_LINE =
-  'requests from this machine need no API key and act as host admin (HIPPO_ALLOW_KEYLESS_LOCAL=1, HIPPO_KEYLESS_LOCAL_ROLE=admin); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request';
+  'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request';
 
 interface Served {
   readonly stdout: string;
@@ -89,7 +87,7 @@ describe('hippo serve says its key rule at start', () => {
   it.each([
     ['no switch set', {}, KEY_REQUIRED_LINE],
     ['HIPPO_ALLOW_KEYLESS_LOCAL=1', { HIPPO_ALLOW_KEYLESS_LOCAL: '1' }, KEYLESS_LINE],
-    ['HIPPO_KEYLESS_LOCAL_ROLE=admin', { HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_KEYLESS_LOCAL_ROLE: 'admin' }, KEYLESS_ADMIN_LINE],
+    ['HIPPO_KEYLESS_LOCAL_ROLE=admin, which nothing reads', { HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_KEYLESS_LOCAL_ROLE: 'admin' }, KEYLESS_LINE],
     ['HIPPO_REQUIRE_AUTH=1', { HIPPO_REQUIRE_AUTH: '1' }, 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)'],
     ['both switches', { HIPPO_REQUIRE_AUTH: '1', HIPPO_ALLOW_KEYLESS_LOCAL: '1' }, 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)'],
   ])('with %s', async (_name, env, line) => {

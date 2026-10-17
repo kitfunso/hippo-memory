@@ -81,8 +81,8 @@ async def test_get_context_pinned_only_empty_store(hippo_server: str):
         assert ctx.entries == []
 
 
-async def test_sleep_dry_run(hippo_server: str):
-    async with Hippo(base_url=hippo_server) as client:
+async def test_sleep_dry_run(hippo_server: str, hippo_admin_key: str):
+    async with Hippo(base_url=hippo_server, api_key=hippo_admin_key) as client:
         await client.remember(content="sleep-dry-run canary")
         result = await client.sleep(dry_run=True)
         assert result.dry_run is True

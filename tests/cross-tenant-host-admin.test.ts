@@ -9,10 +9,11 @@ import { makeRoot } from './_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { adminActor } from '../src/api/index.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import type { ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { autoSleepInFlight } from '../src/mcp/session-state.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { serveAsAdmin } from './_helpers/admin-server.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -64,7 +65,7 @@ beforeEach(async () => {
   vi.stubEnv('HIPPO_HOME', globalHome);
   vi.stubEnv('HIPPO_TENANT', '');
   vi.stubEnv('ANTHROPIC_API_KEY', '');
-  handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+  handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
@@ -114,11 +115,6 @@ describe('host admin is unchanged', () => {
     const k = key('default', 'admin');
     expect((await audit('?tenant=acme', k)).status).toBe(200);
     expect((await sleep(k)).status).toBe(200);
-  });
-
-  it('lets a keyless loopback caller opted in with keylessLocalRole: admin read another tenant and sleep', async () => {
-    expect((await audit('?tenant=acme')).status).toBe(200);
-    expect((await sleep()).status).toBe(200);
   });
 
   it('marks the CLI actor as host admin and lets the CLI sleep', () => {

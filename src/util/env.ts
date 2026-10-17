@@ -169,10 +169,6 @@ export function envHealthProbeMs(): number | undefined { return positiveInt('HIP
 export function envRequireAuth(): boolean { return flag('HIPPO_REQUIRE_AUTH'); }
 /** `1` lets a request made on this machine in with no key; HIPPO_REQUIRE_AUTH=1 wins over it. */
 export function envAllowKeylessLocal(): boolean { return flag('HIPPO_ALLOW_KEYLESS_LOCAL'); }
-/** The role a keyless local request gets: `admin` (host admin) only when asked for by name, else `member`. */
-export function envKeylessLocalRole(): 'admin' | 'member' {
-  return trimmed('HIPPO_KEYLESS_LOCAL_ROLE')?.toLowerCase() === 'admin' ? 'admin' : 'member';
-}
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
 export function envAllowCleartext(): boolean { return flag('HIPPO_ALLOW_CLEARTEXT'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }

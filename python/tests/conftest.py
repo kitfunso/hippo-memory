@@ -12,6 +12,7 @@ that never reached a server must not report green.
 """
 
 from __future__ import annotations
+import json
 import os
 import shutil
 import socket
@@ -56,6 +57,15 @@ def _wait_for_health(url: str, timeout: float = 20.0) -> bool:
     return False
 
 
+_ADMIN_KEYS: dict[str, str] = {}
+
+
+@pytest.fixture(scope="function")
+def hippo_admin_key(hippo_server: str) -> str:
+    """An admin key for the server `hippo_server` started; a keyless client is only a member."""
+    return _ADMIN_KEYS[hippo_server]
+
+
 @pytest.fixture(scope="function")
 def hippo_server() -> Iterator[str]:
     """Spawn `node bin/hippo.js serve` on a free port; yield base URL.
@@ -67,13 +77,12 @@ def hippo_server() -> Iterator[str]:
 
     home = tempfile.mkdtemp(prefix="hippo-py-test-")
     port = _pick_free_port()
-    # The SDK tests use a keyless client and act as the host admin, so sleep and key creation stay open.
+    # Most SDK tests use a keyless client, which acts as a member; the ones that need admin use hippo_admin_key.
     env = {
         **os.environ,
         "HIPPO_HOME": home,
         "HIPPO_TENANT": "default",
         "HIPPO_ALLOW_KEYLESS_LOCAL": "1",
-        "HIPPO_KEYLESS_LOCAL_ROLE": "admin",
     }
 
     # hippo serve requires a .hippo dir to exist. Bootstrap it via `hippo init`.
@@ -88,6 +97,19 @@ def hippo_server() -> Iterator[str]:
     if init.returncode != 0:
         shutil.rmtree(home, ignore_errors=True)
         _unavailable(f"hippo init failed: {init.stderr or init.stdout}")
+
+    mint = subprocess.run(
+        ["node", str(HIPPO_BIN), "auth", "create", "--role", "admin", "--json"],
+        env=env,
+        cwd=home,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if mint.returncode != 0:
+        shutil.rmtree(home, ignore_errors=True)
+        _unavailable(f"hippo auth create failed: {mint.stderr or mint.stdout}")
+    admin_key = json.loads(mint.stdout)["plaintext"]
 
     proc = subprocess.Popen(
         ["node", str(HIPPO_BIN), "serve", "--port", str(port)],
@@ -108,6 +130,7 @@ def hippo_server() -> Iterator[str]:
         shutil.rmtree(home, ignore_errors=True)
         _unavailable(f"hippo serve did not respond on {url}/health within 20s; see TODOS.md python-v0.1 integration-test gap")
 
+    _ADMIN_KEYS[url] = admin_key
     try:
         yield url
     finally:

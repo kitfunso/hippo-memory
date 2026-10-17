@@ -21,12 +21,13 @@ import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../src/api/index.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import type { ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { serveAsAdmin } from './_helpers/admin-server.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets POST /v1/sleep under test in this
@@ -46,7 +47,7 @@ describe('POST /v1/sleep', () => {
     globalHome = makeRoot('srv-slp');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
