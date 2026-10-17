@@ -26,6 +26,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'audit-query-privacy.test.ts',
   'auth-key-writes-store.test.ts',
   'auth-mint-defaults.test.ts',
+  'auth-resolver-scope-cap.test.ts',
   'auth-revoke-store.test.ts',
   'auth-verified-key-cache.test.ts',
   'auto-capture.test.ts',
