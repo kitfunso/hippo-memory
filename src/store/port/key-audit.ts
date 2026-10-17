@@ -1,4 +1,4 @@
-import type { AuditEvent, ListAuditAfterOpts } from '../audit.js';
+import type { AuditEvent } from './types.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;
@@ -18,4 +18,13 @@ export interface KeyAudit {
   /** The highest audit id ever assigned, pruned rows included, 0 before the first; a tail that sees it drop knows the
    * log was restored. */
   auditHighId(): Promise<number>;
+}
+
+export interface ListAuditAfterOpts {
+  /** Last id already consumed; 0 starts from the beginning. */
+  afterId: number;
+  /** Clamped to 1..10000; default 1000. */
+  limit?: number;
+  /** Omit for every tenant (deployment-wide export). */
+  tenantId?: string;
 }

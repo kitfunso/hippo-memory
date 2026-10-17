@@ -22,29 +22,7 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles } from './open.js';
-
-/** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected`
- * is kept. */
-export interface QualityRepairIssue {
-  readonly id: string;
-  readonly reason: string;
-  readonly disposition: 'set-aside' | 'review' | 'protected';
-  readonly protection?: string;
-}
-
-/** One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot be changed
- * safely. */
-export interface QualityRepairResult {
-  readonly root: string;
-  readonly schema: number;
-  readonly supported: boolean;
-  readonly blockers: readonly string[];
-  readonly total: number;
-  readonly issues: readonly QualityRepairIssue[];
-  readonly appliedIds: readonly string[];
-  readonly backup: string | null;
-  readonly warnings: readonly string[];
-}
+import type { QualityRepairResult, QualityRepairIssue } from './port/audit-maintenance.js';
 
 const REQUIRED_COLUMNS = {
   memories: MEMORY_SELECT_COLUMNS.split(',').map((s) => s.trim()),

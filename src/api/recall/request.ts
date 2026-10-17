@@ -7,9 +7,8 @@ import {
   detectPlanningClaim,
   type PlanningFallacyDecision,
 } from '../../predictions/planning-fallacy.js';
-import { reportAuditWriteFailure, type AppendAuditOpts } from '../../store/audit.js';
+import { reportAuditWriteFailure } from '../../store/audit.js';
 import { requireGroup, type HippoStore, type LastRecallWrites } from '../../store/index.js';
-import type { RecallTraceInput } from '../../store/recall-trace.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
@@ -36,6 +35,8 @@ import type {
   RecallWindowOptions,
   ShownCliCore,
 } from './types.js';
+import type { AppendAuditOpts } from '../../store/port/types.js';
+import type { RecallTraceInput } from '../../store/port/recall-writes.js';
 
 const MAX_RECALL_LIMIT = 1000;
 // recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote cost.

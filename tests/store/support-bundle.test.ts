@@ -10,9 +10,9 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { buildSupportBundle } from '../../src/support-bundle.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../../src/db/index.js';
-import type { JsonObject } from '../../src/store/working-memory.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import type { JsonObject } from '../../src/store/port/types.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

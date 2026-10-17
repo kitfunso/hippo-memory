@@ -5,7 +5,6 @@ import { evalNow } from '../../core/ablation.js';
 import { oneCopyPerMemory } from '../context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../core/compare.js';
 import { isEmbeddingAvailable } from '../../embeddings/local.js';
-import type { GoalRecallLogRow } from '../../store/goals.js';
 import { boostByGoals } from '../../search/goal-boost.js';
 import { graphExpandRecall } from '../../graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../graph/stream.js';
@@ -40,6 +39,7 @@ import { isJsonNumber } from '../../util/json.js';
 import { currentSignal } from '../../util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../util/tokenize.js';
 import type { RecallBoostOptions, RecallWindowOptions } from './types.js';
+import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {

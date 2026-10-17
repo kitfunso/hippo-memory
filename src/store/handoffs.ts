@@ -11,7 +11,8 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import type { TaskSnapshot } from './rows.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
-import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './sessions.js';
+import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './sessions.js';
+import type { ContinuityKey } from './port/types.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS =

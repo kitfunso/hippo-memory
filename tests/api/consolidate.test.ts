@@ -14,7 +14,6 @@ import { refreshParticleProperties } from '../../src/core/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../../src/core/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 

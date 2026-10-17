@@ -3,11 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents, type AppendAuditOpts } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
 import { lazyTombstoneChecks } from '../../src/store/tombstone-checks.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/open.js';
+import type { AppendAuditOpts } from '../../src/store/port/types.js';
 
 const roots: string[] = [];
 const DIGEST = rejectionDigest('the staging password is hunter2');

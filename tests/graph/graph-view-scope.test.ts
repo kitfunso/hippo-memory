@@ -25,7 +25,6 @@ function mem(home: string, text: string, scope: string | null): MemoryEntry {
   return m;
 }
 
-
 const names = (m: { nodes: { name: string }[] }): string[] => m.nodes.map((n) => n.name).sort();
 
 describe('graph-view personal scope', () => {

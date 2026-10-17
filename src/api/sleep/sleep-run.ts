@@ -10,11 +10,11 @@ import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '.
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import type { Context } from '../types.js';
-import type { EntryCursor } from '../../store/entry-reads.js';
 import { requireGroup, type Consolidation, type HippoStore, type LocalFiles } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
+import type { EntryCursor } from '../../store/port/consolidation.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row, or shrink the
  * pages dedup, the audit and ambient read; production never sets them. */

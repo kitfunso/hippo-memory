@@ -5,8 +5,7 @@ import type { Card, CardComment, CardRun } from '../../src/core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../../src/core/handoff.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { recordAuditEventsRowByRowAt } from '../../src/store/audit.js';
-import type { AppendAuditOpts, FailedAuditEvent } from '../../src/store/audit.js';
-import type { ConnectorEventRecord } from '../../src/store/connectors/event-log.js';
+import type { FailedAuditEvent } from '../../src/store/audit.js';
 import { githubEventRecordAt, markGitHubEventSeenAt } from '../../src/store/connectors/github.js';
 import type { GitHubEventLogEntry } from '../../src/store/connectors/github.js';
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/connectors/slack.js';
@@ -14,14 +13,6 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
-import type {
-  AmbientLoadResult,
-  AmbientRecallRequest,
-  ContextCandidateFilter,
-  HeldText,
-  RecentOrigins,
-  SourceTally,
-} from '../../src/store/candidates.js';
 import {
   loadAmbientCandidatesAt,
   loadContextCandidatesAt,
@@ -41,9 +32,7 @@ import {
   reviewCardAt,
 } from '../../src/store/cards.js';
 import { replaceDetectedConflictsAt } from '../../src/store/conflicts.js';
-import type { DetectedConflict } from '../../src/store/conflicts.js';
 import { commitInChunksAt, deleteEntriesOneByOneAt, memoriesBackingObjectsAt } from '../../src/store/delete-and-batch.js';
-import type { FlushComponent, LoadedRows } from '../../src/store/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../src/store/dormant.js';
 import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
 import {
@@ -56,15 +45,8 @@ import {
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
 } from '../../src/store/entry-reads.js';
-import type { EntriesWithBase, EntryTextKey } from '../../src/store/entry-reads.js';
 import { writeEntriesTogetherAt } from '../../src/store/entry-writes.js';
-import type {
-  ActiveGoals,
-  CompleteGoalOpts,
-  GetActiveGoalsOpts,
-  Goal,
-  PushGoalOpts,
-} from '../../src/store/goals.js';
+import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/goals.js';
 import {
   activeGoalsWithPoliciesAt,
   completeGoalAt,
@@ -94,14 +76,8 @@ import {
   saveIndexAt,
   updateStatsUnlessBusyAt,
 } from '../../src/store/index-and-stats.js';
-import type { SessionDecayContext } from '../../src/store/index-and-stats.js';
 import { handlesOf, onHandle, openStore, waitingOpener } from '../../src/store/open.js';
-import type {
-  ClosePredictionOptions,
-  ListPredictionsOptions,
-  Prediction,
-  PredictionBaserate,
-} from '../../src/store/predictions.js';
+import type { ClosePredictionOptions, ListPredictionsOptions } from '../../src/store/predictions.js';
 import {
   closePredictionAt,
   computePredictionBaserateAt,
@@ -112,9 +88,7 @@ import {
 } from '../../src/store/predictions.js';
 import type { HippoIndex, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
 import type { SqlFragment } from '../../src/store/rule-sql.js';
-import type { RecallSearchEntriesOptions, VectorCandidateSpec } from '../../src/store/search-rows.js';
 import { loadRecallEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
-import type { ContinuityKey } from '../../src/store/sessions.js';
 import {
   clearActiveTaskSnapshotAt,
   closeTaskSnapshotsForSessionAt,
@@ -130,10 +104,8 @@ import {
   loadChildrenOfSummariesAt,
   loadChildrenOfSummaryAt,
 } from '../../src/store/summaries.js';
-import type { RebuildPatch } from '../../src/store/summaries.js';
 import type { ApiCall } from '../../src/store/token-ledger.js';
 import { recordRereadsAt } from '../../src/store/token-ledger.js';
-import type { StoredVectorSummary } from '../../src/store/vector-index.js';
 import {
   loadStoredParticlesAt,
   loadStoredVectorsAt,
@@ -143,9 +115,38 @@ import {
   seedStoredParticleAt,
   storedVectorSummaryAt,
 } from '../../src/store/vector-index.js';
-import type { JsonObject, WorkingMemoryItem } from '../../src/store/working-memory.js';
+import type { WorkingMemoryItem } from '../../src/store/working-memory.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../../src/store/working-memory.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
+import type {
+  AppendAuditOpts,
+  HeldText,
+  ActiveGoals,
+  GetActiveGoalsOpts,
+  Goal,
+  PredictionBaserate,
+  ContinuityKey,
+  JsonObject,
+} from '../../src/store/port/types.js';
+import type { ConnectorEventRecord } from '../../src/store/port/connectors.js';
+import type {
+  AmbientLoadResult,
+  AmbientRecallRequest,
+  ContextCandidateFilter,
+  RecentOrigins,
+} from '../../src/store/port/context-reads.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../src/store/port/sharing.js';
+import type {
+  DetectedConflict,
+  FlushComponent,
+  LoadedRows,
+  EntriesWithBase,
+  SessionDecayContext,
+  RebuildPatch,
+} from '../../src/store/port/consolidation.js';
+import type { Prediction } from '../../src/store/port/predictions.js';
+import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
+import type { StoredVectorSummary } from '../../src/store/port/embedding-index.js';
 
 export function loadAmbientCandidates(
   hippoRoot: string,

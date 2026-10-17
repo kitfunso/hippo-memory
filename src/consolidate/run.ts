@@ -1,10 +1,10 @@
 import { MemoryEntry, type DecayOptions } from '../core/memory.js';
-import type { DormantMove } from '../store/dormant.js';
 import type { Consolidation } from '../store/port.js';
 import type { Learning } from '../store/port/learning.js';
 import type { TombstoneChecks } from '../store/tombstone-checks.js';
 import { loadConfig } from '../core/config.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
+import type { DormantMove } from '../store/port/consolidation.js';
 
 export interface ConsolidationResult {
   decayed: number;

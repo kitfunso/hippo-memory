@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonObject } from '../store/working-memory.js';
 import { homeDir } from '../util/agent-homes.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
+import type { JsonObject } from '../store/port/types.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 

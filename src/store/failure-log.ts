@@ -2,43 +2,13 @@
 import { ConflictError } from '../core/api-errors.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { DAY_MS } from '../util/time.js';
-
-/** Why a failure was not stored, or `stored`. */
-export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
-
-/** Which routine check skipped a failure; the log keeps it so declines can be told apart from empty searches. */
-export type RoutineRule = 'declined' | 'os-permission' | 'no-match' | 'search-tool' | 'quiet-exit';
+import type { FailureEvent, FailureOutcome } from './port/failure-log.js';
 
 /** Rows older than this are pruned on write, which also bounds how far back a repeat can be found. */
 export const FAILURE_LOG_RETENTION_DAYS = 90;
 
-/** A capture-error outcome, or `store-failed` when storing the lesson threw. */
-export type FailureOutcome = CaptureErrorOutcome | 'store-failed';
-
 /** Longest session id or tool name kept; the hook payload is not trusted to be short. */
 const MAX_FIELD = 128;
-
-/** One failed tool call, for {@link recordFailure}. Never the failure text: it can carry paths and secrets. */
-export interface FailureEvent {
-  tenantId: string;
-  /** Host session id from the hook payload; null when it had none. */
-  sessionId?: string | null;
-  tool?: string | null;
-  outcome: FailureOutcome;
-  /** The routine check that skipped it, for `skipped-routine`. */
-  rule?: RoutineRule | null;
-  /** Hash of the lesson text's signature, the key dedupe uses; null when the payload had no readable error. */
-  sigHash?: string | null;
-  /** Hash of the untruncated error plus the command's first two words, finer than `sigHash`. */
-  detailHash?: string | null;
-  /** A shared-store caller's owner and project; null on a local store. */
-  ownerSubject?: string | null;
-  originProject?: string | null;
-  /** The client's queue record id, so a retried send finds the earlier row. */
-  requestId?: string | null;
-  /** Override the timestamp (tests). ISO string. */
-  now?: string;
-}
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {

@@ -2,10 +2,12 @@ import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
-import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
+import { keysetAfter } from '../util/keyset.js';
 import type { HippoStore } from './index.js';
 import { DAY_MS } from '../util/time.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../util/version.js';
+import type { ApiKeyRecord } from './port/types.js';
+import type { ApiKeyListRow, ApiKeyListItem, ListApiKeysOpts, NewApiKey } from './port/key-writes.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
@@ -138,20 +140,6 @@ export function mintApiKey(): MintedApiKey {
   return { keyId, plaintext, keyHash: hashKey(plaintext) };
 }
 
-/** One api_keys row as core hands it to a store: the hash of the secret, never the secret. */
-export interface NewApiKey {
-  readonly keyId: string;
-  readonly keyHash: string;
-  readonly tenantId: string;
-  readonly label: string | null;
-  readonly role: 'admin' | 'member';
-  readonly createdAt: string;
-  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the CLI mints. */
-  readonly ownerSubject: string | null;
-  /** ISO time the key stops working; null means it never expires. */
-  readonly expiresAt: string | null;
-}
-
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
   // Migration v26 (role column) has already run; an older binary ignores expires_at and would honour an expired key,
   // so the store shuts it out before the first one exists.
@@ -193,20 +181,6 @@ export interface VerifiedApiKey {
   keyId: string;
   role: 'admin' | 'member';
   scopes: string[];
-  ownerSubject?: string | null;
-}
-
-/** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret, the role
- * and the expiry. */
-export interface ApiKeyRecord {
-  keyHash: string;
-  tenantId: string;
-  revokedAt: string | null;
-  role: string;
-  scopes: string[];
-  /** ISO time the key stops working; null when it never expires. */
-  expiresAt: string | null;
-  /** Who minted the key; optional because a store that omits it fails safe to an unowned key. */
   ownerSubject?: string | null;
 }
 
@@ -401,43 +375,6 @@ function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
     .prepare(`SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`)
     .all(keyId) as Array<{ scope: string }>;
   return rows.map((r) => r.scope);
-}
-
-export interface ApiKeyListItem {
-  keyId: string;
-  tenantId: string;
-  label: string | null;
-  createdAt: string;
-  revokedAt: string | null;
-  /** Authorization role from the `role` column (schema migration v26).
-   * Fail-safe cast: any non-'admin' value reads as 'member'. */
-  role: 'admin' | 'member';
-  /** Restricted scopes this key may read. */
-  scopes: string[];
-  /** ISO time the key stops working; null when it never expires. */
-  expiresAt: string | null;
-  /** The auth-resolver subject that minted this key for itself; null for keys an admin or the CLI minted. */
-  ownerSubject: string | null;
-}
-
-export interface ListApiKeysOpts {
-  /** Only keys that still work: unrevoked and unexpired. */
-  active: boolean;
-  /** Only this tenant's keys; omit for every tenant (the CLI's single-tenant view). */
-  tenantId?: string;
-  /** Only keys minted by this auth-resolver subject. */
-  ownerSubject?: string;
-  /** Only this one key. */
-  keyId?: string;
-  /** Resume after this row: the position the previous page ended on (key and id are both the row id). */
-  after?: KeysetPosition;
-  limit?: number;
-}
-
-/** A listed key plus its row id, the paging key the list item itself does not expose. */
-export interface ApiKeyListRow {
-  rowId: number;
-  key: ApiKeyListItem;
 }
 
 /** Keys newest first, with their row ids, filtered and limited in SQL. */

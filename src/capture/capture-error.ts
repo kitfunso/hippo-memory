@@ -5,7 +5,6 @@ import type { Context } from '../api/types.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { createMemory } from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
-import type { CaptureErrorOutcome, FailureOutcome } from '../store/failure-log.js';
 import {
   failureHash,
   failureSignature,
@@ -14,6 +13,7 @@ import {
   type FailureReading,
 } from './failure-reading.js';
 import type { JsonValue } from '../util/json.js';
+import type { CaptureErrorOutcome, FailureOutcome } from '../store/port/failure-log.js';
 
 /** The store a failure is logged and its lesson kept in, with the folder its config is read from. */
 export type FailureTarget = Pick<Context, 'hippoRoot' | 'tenantId' | 'store'>;

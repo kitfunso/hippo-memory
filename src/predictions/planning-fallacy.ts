@@ -1,7 +1,6 @@
 import { envAutodebiasOff } from '../util/env.js';
-import type { AppendAuditOpts } from '../store/audit.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../learn/forward-claim-detector.js';
-import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
+import type { AppendAuditOpts, PlanningFallacyEvidence } from '../store/port/types.js';
 
 const TARGET_ID_CHARS = 100;
 

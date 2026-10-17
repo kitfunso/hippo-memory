@@ -27,7 +27,6 @@ import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 
-
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator
 // ---------------------------------------------------------------------------

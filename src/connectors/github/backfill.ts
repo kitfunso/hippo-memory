@@ -3,7 +3,6 @@
  *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
 import type { Context } from '../../api/index.js';
-import type { HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
 import type {
@@ -15,6 +14,7 @@ import type {
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
 import { MINUTE_MS } from '../../util/time.js';
+import type { HwmColumn } from '../../store/port/connectors.js';
 
 const API = 'https://api.github.com';
 

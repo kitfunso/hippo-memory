@@ -16,38 +16,14 @@ import type { PredictionSave } from './port.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
 import { plural } from '../util/format.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { PredictionBaserate } from './port/types.js';
+import type { Prediction, SavePredictionOptions } from './port/predictions.js';
 
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
   actual_value, closure_state, closed_at, closure_note, created_at`;
-
-export interface Prediction {
-  id: number;
-  /** Nullable: ON DELETE SET NULL allows memory deletion (forget /
-   *  consolidate / archive) without breaking the prediction row. */
-  memoryId: string | null;
-  tenantId: string;
-  classTag: string;
-  claimText: string;
-  estimateValue: number | null;
-  estimateUnit: string | null;
-  targetDate: string | null;
-  actualValue: number | null;
-  closureState: ClosureState;
-  closedAt: string | null;
-  closureNote: string | null;
-  createdAt: string;
-}
-
-export interface SavePredictionOptions {
-  classTag: string;
-  claimText: string;
-  estimateValue?: number;
-  estimateUnit?: string;
-  targetDate?: string;
-}
 
 export interface ClosePredictionOptions {
   closureState: ClosureState;
@@ -364,28 +340,6 @@ export function loadAllPredictionsAt(
     LIMIT ?
   `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
   return rows.map(rowToPrediction);
-}
-
-export interface PredictionBaserate {
-  classTag: string;
-  /** Count of closed predictions with a numeric actual_value (excludes
-   *  open + closed-unknown). The denominator for MAE. */
-  nClosed: number;
-  /** Count of closed rows where estimate_value > 0 (i.e. ratio is defined).
-   *  Subset of nClosed used for meanRatio + p50Ratio. */
-  nRatioEligible: number;
-  meanEstimate: number | null;
-  meanActual: number | null;
-  /** mean(actual / estimate) over the nRatioEligible subset. Null when
-   *  nRatioEligible = 0 (e.g. all closed predictions had estimate=0). */
-  meanRatio: number | null;
-  /** Median ratio over the nRatioEligible subset. */
-  p50Ratio: number | null;
-  /** Mean absolute error = mean(|actual - estimate|) over the nClosed set. */
-  mae: number | null;
-  /** Human-readable summary string for direct surface in CLI / MCP / HTTP.
-   *  Empty when nClosed = 0. */
-  summary: string;
 }
 
 /** One closed prediction as the baserate reads it: both values set. */

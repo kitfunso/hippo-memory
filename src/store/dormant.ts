@@ -16,22 +16,8 @@ import { appendAuditEvent } from './audit.js';
 import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTakenAt } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
-
-/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects
- * repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain
- * defect. */
-export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
-
-/** One memory that sleep is moving out of active memory into the dormant store. */
-export interface DormantMove {
-  /** The memory as it stood when it faded; restored verbatim apart from its recall clock. */
-  entry: MemoryEntry;
-  /** Live strength at the moment it went dormant (below the decay threshold). */
-  strength: number;
-  reason: DormantReason;
-  /** ISO time of the sleep that made it dormant. */
-  dormantAt: string;
-}
+import type { DormantSnapshot } from './port/agent-import.js';
+import type { DormantMove } from './port/consolidation.js';
 
 /** A dormant memory as listed to a user. */
 export interface DormantMemory {
@@ -171,14 +157,6 @@ function listDormantRows(
     )
     .all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
   return rows.map(rowToDormantMemory);
-}
-
-/** A dormant memory's stored snapshot plus when and why it went dormant. */
-export interface DormantSnapshot {
-  entry: MemoryEntry;
-  reason: string;
-  strength: number;
-  dormantAt: string;
 }
 
 /** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */

@@ -2,12 +2,13 @@
 
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import { stampOriginProject } from '../../store/entry-row.js';
-import type { DormantMemory, DormantSnapshot, ListDormantOpts } from '../../store/dormant.js';
+import type { DormantMemory, ListDormantOpts } from '../../store/dormant.js';
 import { strengthAblation } from '../../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../../core/memory.js';
 import { configOf } from '../config-of.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 import type { Context } from '../types.js';
+import type { DormantSnapshot } from '../../store/port/agent-import.js';
 
 /**
  * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is

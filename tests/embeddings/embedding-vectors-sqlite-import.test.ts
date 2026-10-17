@@ -16,7 +16,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
 
-
 let root: string;
 
 beforeEach(() => {

@@ -1,7 +1,6 @@
 // GraphReads answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same rows hidden and the same truncated flag.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { AuditEvent } from '../../src/store/audit.js';
 import type { ScopeActor } from '../../src/core/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import type { Entity, Relation, StoredGraph } from '../../src/store/graph-rows.js';
@@ -9,6 +8,7 @@ import {
   BULK_TENANT, HELD_SCOPE, inMemoryGraphReadsStore, MANY, seededAt, seedGraphRows, SOLO_TENANT, type SeededGraph,
 } from '../_helpers/in-memory-graph-reads-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
 
 type Call<R = GraphRows> = GroupCall<'graphReads', R>;
 type Edge = readonly [from: number, to: number];

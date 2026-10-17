@@ -1,3 +1,34 @@
+export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../store/port/key-writes.js';
+export type {
+  ApiKeyRecord,
+  AppendAuditOpts,
+  AuditEvent,
+  ActiveGoals,
+  GetActiveGoalsOpts,
+  Goal,
+  RetrievalPolicy,
+  ClassResolution,
+  PlanningFallacyEvidence,
+  PredictionBaserate,
+  OriginFilter,
+  ContinuityKey,
+} from '../store/port/types.js';
+export type { ListAuditAfterOpts } from '../store/port/key-audit.js';
+export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../store/port/recall-writes.js';
+export type { RecallScopeFilter, VectorCandidateSpec, EmbeddingIndexState } from '../store/port/vector-reads.js';
+export type { DormantSnapshot } from '../store/port/agent-import.js';
+export type { EntryCursor, EntryPage } from '../store/port/consolidation.js';
+export type {
+  RawRefRow,
+  AmbientLoadResult,
+  AmbientRecallRequest,
+  ContextCandidateFilter,
+  RecentOrigins,
+  AmbientStoreFilter,
+} from '../store/port/context-reads.js';
+export type { FailureEvent, FailureOutcome } from '../store/port/failure-log.js';
+export type { RejectedValueRow } from '../store/port/rejections.js';
+
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types, hippo.db's rule
 // helpers),
 // so a store built on it applies hippo.db's rules with the same code.
@@ -59,19 +90,10 @@ export { normalizeValueForRejection, rejectionDigest } from '../store/rejection.
 export { heldTexts } from '../util/same-text.js';
 export { RejectedValueError } from '../core/api-errors.js';
 export { ownScopeTouches } from '../core/recall-scope.js';
-export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../store/auth.js';
 export type { KeysetPosition } from '../util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
-export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from '../store/audit.js';
 export type { ContinuityBlock } from '../api/recall/types.js';
-export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from '../store/goals.js';
 export type { MemoryEntry } from '../core/memory.js';
-export type { ClassResolution, PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
-export type { PredictionBaserate } from '../store/predictions.js';
-export type { RecallTraceInput } from '../store/recall-trace.js';
-export type { StrengthenOptions } from '../store/entry-writes.js';
-export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from '../store/search-rows.js';
-export type { ContinuityKey } from '../store/sessions.js';
 export type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 export type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 // The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
@@ -80,9 +102,8 @@ export type { CardDetail } from '../store/card-detail.js';
 export type { CompleteGoalOpts, PushGoalOpts } from '../store/goals.js';
 export type { HandoffFilter, SessionEndHandoffRequest } from '../store/handoffs.js';
 export type { ResolveConflictOpts, ResolveConflictRequest } from '../store/conflicts.js';
-export type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
-export type { EntryCursor, EntryPage, RawRefRow } from '../store/entry-reads.js';
-export type { FailureEvent, FailureOutcome, FailureSummary } from '../store/failure-log.js';
+export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../store/dormant.js';
+export type { FailureSummary } from '../store/failure-log.js';
 export type { CallerItems } from '../store/compaction-caller.js';
 export type { CompactionStart } from '../store/compactions-record.js';
 export type { MemoryConflict } from '../store/rows.js';
@@ -92,17 +113,8 @@ export type { LegacyStats } from '../store/rows.js';
 export type { TokenSummary } from '../store/token-ledger.js';
 export type { WorkingMemoryItem } from '../store/working-memory.js';
 export type { AppliedRejection, LiftedRejection, Rejection, RejectionSource } from '../store/rejected-values.js';
-export type { RejectedValueRow } from '../store/rejection.js';
-export type {
-  AmbientLoadResult,
-  AmbientRecallRequest,
-  ContextCandidateFilter,
-  RecentOrigins,
-} from '../store/candidates.js';
-export type { AmbientStoreFilter } from '../store/ambient.js';
 export type { AmbientTallies } from '../core/ambient.js';
 export type { TokenUse } from '../store/token-ledger.js';
-export type { EmbeddingIndexState } from '../store/vector-index.js';
 export type { PhysicsParticle } from '../core/physics.js';
 // An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root in the options.
 export { physicsSearch } from './folder-search.js';

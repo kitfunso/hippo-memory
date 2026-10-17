@@ -1,7 +1,7 @@
-import type { Prediction, PredictionBaserate, SavePredictionOptions } from '../predictions.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import type { ClosureState } from '../../core/prediction.js';
 import type { KeysetPosition } from '../../util/keyset.js';
+import type { PredictionBaserate } from './types.js';
 
 /** A claim to save and the memory row that mirrors it into recall: core builds it with
  * `predictionMirror` in the tenant the save names, so every store keeps the same row. */
@@ -43,4 +43,30 @@ export interface Predictions {
    * actual, in ascending id order (its float sums depend on it). Then appends one predict_baserate row ({class_tag,
    * n_closed}), also for a class with no such row. */
   predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
+}
+
+export interface Prediction {
+  id: number;
+  /** Nullable: ON DELETE SET NULL allows memory deletion (forget /
+   *  consolidate / archive) without breaking the prediction row. */
+  memoryId: string | null;
+  tenantId: string;
+  classTag: string;
+  claimText: string;
+  estimateValue: number | null;
+  estimateUnit: string | null;
+  targetDate: string | null;
+  actualValue: number | null;
+  closureState: ClosureState;
+  closedAt: string | null;
+  closureNote: string | null;
+  createdAt: string;
+}
+
+export interface SavePredictionOptions {
+  classTag: string;
+  claimText: string;
+  estimateValue?: number;
+  estimateUnit?: string;
+  targetDate?: string;
 }

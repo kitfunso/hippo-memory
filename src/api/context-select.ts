@@ -1,9 +1,8 @@
 // getContext's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
 import { recallScopeFilter } from '../store/search-rows.js';
-import type { AmbientLoadResult } from '../store/candidates.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { auditQueryFields, type AppendAuditOpts } from '../store/audit.js';
+import { auditQueryFields } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { localFilesVectorSource, rankBothStores } from '../sharing/search-both.js';
@@ -28,6 +27,8 @@ import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
 import type { Context } from './types.js';
+import type { AmbientLoadResult } from '../store/port/context-reads.js';
+import type { AppendAuditOpts } from '../store/port/types.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 

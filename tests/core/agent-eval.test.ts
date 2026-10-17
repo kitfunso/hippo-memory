@@ -314,7 +314,6 @@ function hitRateByPhase(results: SimResult[]) {
 
 const tasks = generateTasks();
 
-
 describe('Agent evaluation: sequential learning benchmark', () => {
   it('generates 50 tasks with 25+ trap encounters', () => {
     expect(tasks.length).toBe(50);

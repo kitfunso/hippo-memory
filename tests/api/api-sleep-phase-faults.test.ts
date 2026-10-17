@@ -21,9 +21,10 @@ import { sqliteStore } from '../../src/store/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
-import { queryAuditEvents, type AuditEvent } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
 import { configOf as realConfigOf } from '../../src/api/config-of.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

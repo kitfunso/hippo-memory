@@ -1,15 +1,9 @@
 // The async store interface and its groups; type-only apart from
 // the store errors, so an add-on can build a store on it alone.
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
-import type { ConnectorEvents, ConnectorWrites } from './connectors/event-log.js';
 import type { LocalFiles } from './port/local-files.js';
 import type { SessionAndAdminGroups } from './port-groups.js';
-import type { ApiKeyRecord } from './auth.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { ActiveGoals, GetActiveGoalsOpts } from './goals.js';
-import type { ContinuityKey } from './sessions.js';
-import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
-import type { AppendAuditOpts } from './audit.js';
 import type { TokenUse } from './token-ledger.js';
 import type { SessionEvent, TaskSnapshot } from './rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
@@ -32,6 +26,30 @@ import type { Objects } from './port/objects.js';
 import type { Readiness } from './port/readiness.js';
 import type { LastRecall } from './port/last-recall.js';
 import type { RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
+import type { ConnectorEvents, ConnectorWrites } from './port/connectors.js';
+import type {
+  ApiKeyRecord,
+  ActiveGoals,
+  GetActiveGoalsOpts,
+  ContinuityKey,
+  PlanningFallacyEvidence,
+  AppendAuditOpts,
+} from './port/types.js';
+export type {
+  ConnectorEvent,
+  ConnectorWrite,
+  ConnectorWriteOutcome,
+  ConnectorArchive,
+  ConnectorWrites,
+  ConnectorEventRecord,
+  DeletionLookup,
+  DeletionTarget,
+  ArtifactArchive,
+  ConnectorDeadLetter,
+  ConnectorEvents,
+  DeadLetterConnector,
+  DeadLetterRows,
+} from './port/connectors.js';
 
 export type { RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
 export type { VectorReads } from './port/vector-reads.js';
@@ -97,22 +115,6 @@ export type {
 export type { GraphViewQuery, GraphRows, GraphReads } from './port/graph-reads.js';
 export type { AuditMaintenance } from './port/audit-maintenance.js';
 export type { LessonWrites } from './port/lesson-writes.js';
-
-export type {
-  ConnectorEvent,
-  ConnectorWrite,
-  ConnectorWriteOutcome,
-  ConnectorArchive,
-  ConnectorWrites,
-  ConnectorEventRecord,
-  DeletionLookup,
-  DeletionTarget,
-  ArtifactArchive,
-  ConnectorDeadLetter,
-  ConnectorEvents,
-  DeadLetterConnector,
-  DeadLetterRows,
-} from './connectors/event-log.js';
 
 export type {
   AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, Ledger, LocalFiles,

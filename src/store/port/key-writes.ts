@@ -1,5 +1,5 @@
-import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../auth.js';
 import type { JsonValue } from '../../util/json.js';
+import type { KeysetPosition } from '../../util/keyset.js';
 
 /** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither
  * holds the plaintext. */
@@ -31,4 +31,55 @@ export interface KeyWrites {
   /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops revoked rows and an
    * expires_at not above now's toISOString. */
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
+}
+
+/** A listed key plus its row id, the paging key the list item itself does not expose. */
+export interface ApiKeyListRow {
+  rowId: number;
+  key: ApiKeyListItem;
+}
+
+export interface ApiKeyListItem {
+  keyId: string;
+  tenantId: string;
+  label: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  /** Authorization role from the `role` column (schema migration v26).
+   * Fail-safe cast: any non-'admin' value reads as 'member'. */
+  role: 'admin' | 'member';
+  /** Restricted scopes this key may read. */
+  scopes: string[];
+  /** ISO time the key stops working; null when it never expires. */
+  expiresAt: string | null;
+  /** The auth-resolver subject that minted this key for itself; null for keys an admin or the CLI minted. */
+  ownerSubject: string | null;
+}
+
+export interface ListApiKeysOpts {
+  /** Only keys that still work: unrevoked and unexpired. */
+  active: boolean;
+  /** Only this tenant's keys; omit for every tenant (the CLI's single-tenant view). */
+  tenantId?: string;
+  /** Only keys minted by this auth-resolver subject. */
+  ownerSubject?: string;
+  /** Only this one key. */
+  keyId?: string;
+  /** Resume after this row: the position the previous page ended on (key and id are both the row id). */
+  after?: KeysetPosition;
+  limit?: number;
+}
+
+/** One api_keys row as core hands it to a store: the hash of the secret, never the secret. */
+export interface NewApiKey {
+  readonly keyId: string;
+  readonly keyHash: string;
+  readonly tenantId: string;
+  readonly label: string | null;
+  readonly role: 'admin' | 'member';
+  readonly createdAt: string;
+  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the CLI mints. */
+  readonly ownerSubject: string | null;
+  /** ISO time the key stops working; null means it never expires. */
+  readonly expiresAt: string | null;
 }

@@ -4,13 +4,13 @@ import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { familyUnits, groupFlush } from '../../src/consolidate/flush-units.js';
-import { type FlushComponent } from '../../src/store/delete-and-batch.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { commitInChunks } from '../_helpers/root-forms.js';
+import type { FlushComponent } from '../../src/store/port/consolidation.js';
 
 // SAFETY: node:sqlite's StatementSync is the class db.ts's prepare returns, and it carries its SQL text.
 const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {

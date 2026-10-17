@@ -18,7 +18,7 @@ import { failureHash, failureReport } from '../../src/capture/failure-reading.js
 import { WORKING_STATE_CAPS } from '../../src/capture/working-state.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../src/util/compaction-items.js';
 import { compactResumeText } from '../../src/api/context-render.js';
-import { saveActiveTaskSnapshot, type ContinuityKey } from '../../src/store/sessions.js';
+import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../../src/core/api-errors.js';
 import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -37,6 +37,7 @@ import {
 } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import type { ContinuityKey } from '../../src/store/port/types.js';
 
 const TENANT = 'acme-tenant';
 const META = { sessionId: 's1', trigger: 'auto', cwd: null, transcriptPath: null };

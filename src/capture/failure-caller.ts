@@ -3,14 +3,14 @@
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';
-import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../store/failure-log.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { scrubForSharing } from './share-scrub.js';
-import type { ContinuityKey } from '../store/sessions.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { assertRequestId, bindCaller } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash } from './failure-reading.js';
+import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../store/port/failure-log.js';
+import type { ContinuityKey } from '../store/port/types.js';
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
 

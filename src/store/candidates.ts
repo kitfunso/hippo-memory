@@ -15,17 +15,14 @@ import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js'
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { originInSql } from '../core/project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
-
-export interface AmbientRecallRequest {
-  terms: string[];
-  limit: number;
-  ownScope?: string;
-}
-
-export interface AmbientLoadResult {
-  entries: MemoryEntry[];
-  recall?: MemoryEntry[];
-}
+import type { HeldText } from './port/types.js';
+import type {
+  AmbientLoadResult,
+  AmbientRecallRequest,
+  ContextCandidateFilter,
+  RecentOrigins,
+} from './port/context-reads.js';
+import type { SourceTally } from './port/sharing.js';
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 /** idx_memories_pinned (migration v51) serves it. */
@@ -33,12 +30,6 @@ const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created 
 /** idx_memories_created_drift (migration v51) serves it. */
 const AMBIENT_DRIFT_SQL =
   `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
-
-/** The origins a caller's recent rows may carry: its project names, and user-global ('') rows when `userGlobal`. */
-export interface RecentOrigins {
-  readonly names: readonly string[];
-  readonly userGlobal: boolean;
-}
 
 type RunSql = (where: string, params: Array<string | number>) => MemoryEntry[];
 
@@ -163,19 +154,6 @@ export function loadAmbientCandidatesAt(
   return { entries, recall: recallEntries };
 }
 
-/** The rows a non-pinned context read may admit; each predicate is one getContext's admission applies again in JS. */
-export interface ContextCandidateFilter {
-  /** Envelope scope asked for by name; absent applies recall's default deny. */
-  exactScope?: string;
-  /** The caller's personal scope, which the default deny admits. */
-  ownScope?: string;
-  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
-  project?: readonly string[];
-  /** Most rows returned; past it, the rows decay has worn least win. */
-  cap: number;
-  now: Date;
-}
-
 // calculateStrength's decay exponent with its reward factor: the strongest rows, without scoring each one in JS. A
 // function, not a constant, so the outcome-slow ablation is read per query as strengthSql reads it.
 const decayExponentSql = (): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
@@ -274,8 +252,6 @@ export function loadContextCandidatesAt(
   return rows.map(rowToEntry);
 }
 
-export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
-
 // No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
 
@@ -361,14 +337,6 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
       .iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{ content: string }>;
     return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
   });
-}
-
-export interface SourceTally {
-  source: string;
-  count: number;
-  latest: string;
-  /** `created`, a unit separator, then `id` of the source's first row in loadAllEntries' order. */
-  first: string;
 }
 
 /** Row count and newest `created` per source, for peer listings that need no row; all tenants when `tenantId` is

@@ -1,6 +1,5 @@
 // The Rejections group, kept apart from port.ts: the tombstones `hippo reject` writes and every write guard reads.
 import type { AppliedRejection, LiftedRejection, Rejection } from '../rejected-values.js';
-import type { RejectedValueRow } from '../rejection.js';
 
 export interface RejectionCheck {
   readonly tenantId: string;
@@ -16,4 +15,14 @@ export interface Rejections {
   list(tenantId: string): Promise<RejectedValueRow[]>;
   /** Whether a write guard would refuse each check, in order; writes nothing, so a dry run counts what a run skips. */
   refusedAmong(checks: readonly RejectionCheck[]): Promise<boolean[]>;
+}
+
+export interface RejectedValueRow {
+  tenantId: string;
+  digest: string;
+  reason: string | null;
+  rejectedBy: string | null;
+  rejectedAt: string;
+  sourceMemoryId: string | null;
+  normalizedChars: number | null;
 }

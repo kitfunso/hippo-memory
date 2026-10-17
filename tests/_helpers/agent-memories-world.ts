@@ -10,7 +10,7 @@ import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
 import type { ToolId } from '../../src/core/agent-memory-tools.js';
-import { queryAuditEvents, type AuditOp } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { type DormantMemory } from '../../src/store/dormant.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
@@ -19,6 +19,7 @@ import { isInitialized } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { apiCtx } from './api-ctx.js';
 import { loadDormantMemories } from './root-forms.js';
+import type { AuditOp } from '../../src/store/port/audit-ops.js';
 
 export interface World {
   readonly dir: string;

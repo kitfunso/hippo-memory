@@ -3,15 +3,11 @@
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
 import type { WriteBudget } from '../../util/write-budget.js';
-import type { AppendAuditOpts, AuditOp } from '../audit.js';
-import type { DetectedConflict } from '../conflicts.js';
-import type { FlushComponent, LoadedRows } from '../delete-and-batch.js';
-import type { EntriesWithBase, EntryCursor, EntryPage } from '../entry-reads.js';
 import type { HalfLifeMove, HalfLifeRows } from '../half-life.js';
-import type { SessionDecayContext } from '../index-and-stats.js';
 import type { SessionEvent } from '../rows.js';
-import type { RebuildPatch } from '../summaries.js';
 import type { TombstoneChecks } from '../tombstone-checks.js';
+import type { AppendAuditOpts } from './types.js';
+import type { AuditOp } from './audit-ops.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
@@ -94,4 +90,69 @@ export interface Consolidation {
   clearSummaryDirty(summaryId: string, tenantId: string, actor: string, source?: string): void;
   /** The L2 topic summaries with no L3 profile above them. */
   unprofiledTopicSummaries(): MemoryEntry[];
+}
+
+export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
+
+/** Ops that must commit in one transaction, so a flush split across several never lands part of one. */
+export interface FlushComponent {
+  writes: readonly MemoryEntry[];
+  deletes: readonly string[];
+  dormant: readonly DormantMove[];
+}
+
+/** One memory that sleep is moving out of active memory into the dormant store. */
+export interface DormantMove {
+  /** The memory as it stood when it faded; restored verbatim apart from its recall clock. */
+  entry: MemoryEntry;
+  /** Live strength at the moment it went dormant (below the decay threshold). */
+  strength: number;
+  reason: DormantReason;
+  /** ISO time of the sleep that made it dormant. */
+  dormantAt: string;
+}
+
+/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects
+ * repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain
+ * defect. */
+export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
+
+/** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
+export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
+
+export interface EntriesWithBase {
+  entries: MemoryEntry[];
+  base: { get(id: string): MemoryEntry | undefined };
+}
+
+/** Where a page stopped: the `created`, `id` of its last row, in loadAllEntries' order. */
+export interface EntryCursor {
+  created: string;
+  id: string;
+}
+
+export interface EntryPage {
+  entries: MemoryEntry[];
+  /** The cursor that reads the page after this one, or null when this was the last. */
+  next: EntryCursor | null;
+}
+
+/** Session decay context: the data needed for session-based and adaptive decay. */
+export interface SessionDecayContext {
+  /** Total number of sleep (consolidation) cycles completed. */
+  sleepCount: number;
+  /** Average interval between recent sleep cycles, in days. 0 if < 2 cycles. */
+  avgSessionIntervalDays: number;
+}
+
+/** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal
+ * rebuild. */
+export interface RebuildPatch {
+  content: string;            // new content for normal rebuild; summary.content for zero-child
+  descendant_count: number;
+  earliest_at: string | null;
+  latest_at: string | null;
+  bumpRebuildCount: boolean;
+  zeroChildren: boolean;
+  actor: string;
 }

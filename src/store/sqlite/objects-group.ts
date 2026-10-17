@@ -6,7 +6,6 @@ import { keysetAfter } from '../../util/keyset.js';
 import { chunked } from '../../util/chunked.js';
 import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../core/memory.js';
 import { scopeAdmitSql } from '../rule-sql.js';
-import type { JsonObject } from '../working-memory.js';
 import { stampOriginProjectIn, upsertEntryRow } from '../entry-row.js';
 import { auditEntryWrite, writeEntryMirrorsIn } from '../entry-writes.js';
 import { markGraphDirtyAt } from '../graph-queue.js';
@@ -35,6 +34,7 @@ import type {
 import { auditingRefusal } from './entry-writes-group.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../util/sql.js';
+import type { JsonObject } from '../port/types.js';
 
 /** The group with each answer as its value; spelled out because
  * `Sync<Objects>` would widen each method's kind to every kind. */

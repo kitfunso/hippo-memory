@@ -16,7 +16,7 @@
   },
   {
     "file": "cli/audit.ts",
-    "target": "store/audit.ts",
+    "target": "store/port/audit-ops.ts",
     "why": "AUDIT_OPS, the op vocabulary --op is checked against; a constant, not a store read"
   },
   {

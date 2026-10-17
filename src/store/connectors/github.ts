@@ -5,6 +5,13 @@ import { archiveRawMemory } from '../raw-archive.js';
 import type { ConnectorEventRecord } from '../port.js';
 import { eventMemoryAt, eventRecordAt, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
+import type {
+  GitHubRouting,
+  GitHubDlqInsert,
+  GitHubDlqItem as DlqItem,
+  StoredCursors,
+  HwmColumn,
+} from '../port/connectors.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -76,38 +83,6 @@ export function archiveDeletedArtifactAt(db: DatabaseSyncLike, del: ArtifactDele
   return { duplicate: false, archived: memoryIds.length };
 }
 
-export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_failed' | 'unhandled';
-
-export interface DlqItem {
-  id: number;
-  tenantId: string;
-  rawPayload: string;
-  error: string;
-  eventName: string | null;
-  deliveryId: string | null;
-  signature: string | null;
-  installationId: string | null;
-  repoFullName: string | null;
-  retryCount: number;
-  receivedAt: string;
-  retriedAt: string | null;
-  bucket: DlqBucket | string;
-}
-
-/** One github_dlq row to write, already redacted by the caller; the four GitHub-only columns are stored NULL when left
- * out. */
-export interface GitHubDlqInsert {
-  tenantId: string;
-  rawPayload: string;
-  error: string;
-  eventName?: string | null;
-  deliveryId?: string | null;
-  signature: string | null;
-  installationId?: string | null;
-  repoFullName?: string | null;
-  bucket: DlqBucket;
-}
-
 export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'id', column: 'id', kind: 'int' },
   { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
@@ -123,14 +98,6 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'retriedAt', column: 'retried_at', kind: 'nullableText' },
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
-
-/** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no
- * installation was sent. */
-export interface GitHubRouting {
-  installations: number;
-  repositories: number;
-  tenant: string | null;
-}
 
 export function githubRoutingAt(
   db: DatabaseSyncLike,
@@ -163,14 +130,6 @@ export function githubRoutingAt(
     )
     .get(args.repoFullName) as { tenant_id?: string } | undefined;
   return { ...counts, tenant: row?.tenant_id ?? null };
-}
-
-export type HwmColumn = 'issues_hwm' | 'issue_comments_hwm' | 'pr_review_comments_hwm';
-
-export interface StoredCursors {
-  issues: string | null;
-  issueComments: string | null;
-  prReviewComments: string | null;
 }
 
 export function githubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {

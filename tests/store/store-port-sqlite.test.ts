@@ -5,7 +5,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
-import { appendAuditEvent, type AppendAuditOpts } from '../../src/store/audit.js';
+import { appendAuditEvent } from '../../src/store/audit.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
 import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
@@ -40,6 +40,7 @@ import {
   activeGoalsWithPolicies, pushGoal, loadEntriesByIds, loadFreshRawMemories, loadStoredVectors,
   loadVectorCandidateEntries,
 } from '../_helpers/root-forms.js';
+import type { AppendAuditOpts } from '../../src/store/port/types.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

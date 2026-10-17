@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { claudeCodeAdapter, claudeFolderName, claudeTranscriptListing, transcriptNotesProject } from '../../src/agent-memories/claude-code.js';
 import type { AdapterContext, Container } from '../../src/agent-memories/types.js';
-import type { JsonObject } from '../../src/store/working-memory.js';
+import type { JsonObject } from '../../src/store/port/types.js';
 
 const made: string[] = [];
 const tmp = () => {

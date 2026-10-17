@@ -2,7 +2,6 @@ import type { MemoryEntry } from '../core/memory.js';
 import { cosineOf } from '../core/cosine.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
-import type { VectorCandidateSpec } from '../store/search-rows.js';
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
@@ -10,6 +9,7 @@ import { envQueryEmbedTimeoutMs } from '../util/env.js';
 import { hasGroup, type HippoStore, type VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
+import type { VectorCandidateSpec } from '../store/port/vector-reads.js';
 
 /**
  * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry

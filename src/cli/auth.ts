@@ -1,6 +1,5 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
-import type { ApiKeyListItem } from '../store/auth.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -8,6 +7,7 @@ import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag
 import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
+import type { ApiKeyListItem } from '../store/port/key-writes.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands

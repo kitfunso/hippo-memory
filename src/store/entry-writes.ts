@@ -13,6 +13,8 @@ import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { RenameSourceOptions } from './port/agent-import.js';
+import type { StrengthenOptions } from './port/recall-writes.js';
 
 export interface WriteEntryOptions {
   actor?: string;
@@ -182,12 +184,6 @@ export function writeEntryMirrorsIn(files: StoreFiles, entry: MemoryEntry): void
   writeEntryMirrors(files.hippoRoot, entry);
 }
 
-/** The caller passes the eval-only recall-boost ablation switch, so the store never reads experiment config itself. */
-export interface StrengthenOptions {
-  readonly tenantId?: string;
-  readonly recallBoostAblated: boolean;
-}
-
 /** Strengthen what a read returned: update only the four retrieval columns on the live row, never a stale copy.
  *  Best effort: a failure logs and never fails the read. Returns the ids found in this store. */
 export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], opts: StrengthenOptions): Set<string> {
@@ -306,12 +302,6 @@ export function renameEntrySourceAt(
     .prepare(`UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`)
     .run(to, id, tenantId, from);
   return Number(moved.changes ?? 0);
-}
-
-export interface RenameSourceOptions {
-  readonly from: string;
-  readonly to: string;
-  readonly origin: string | null;
 }
 
 /** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the row is gone or moved. */

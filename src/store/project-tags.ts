@@ -9,20 +9,14 @@ import {
 } from '../db/index.js';
 import { withBackup } from '../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { appendAuditEvent, queryAuditEvents, type AppendAuditOpts, type AuditEvent } from './audit.js';
+import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import {
   compactionOriginsWithCwd,
   compactionTranscripts,
   holdsOrigin,
   restampCompactionOrigin,
 } from './compactions.js';
-import {
-  insertDormantRow,
-  listDormantSnapshots,
-  replaceDormantEntry,
-  type DormantReason,
-  type DormantSnapshot,
-} from './dormant.js';
+import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
 import { selectAllEntries, selectEntriesByIds, selectLiveEntriesBySourcePrefix } from './entry-reads.js';
 import {
   deleteEntryRowInTx,
@@ -33,6 +27,9 @@ import {
 import { removeEntryMirrors } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { setAsideRow, type SetAsideResult, type SetAsideWhy } from './set-aside.js';
+import type { AppendAuditOpts, AuditEvent } from './port/types.js';
+import type { DormantReason } from './port/consolidation.js';
+import type { DormantSnapshot } from './port/agent-import.js';
 
 export type ProjectTagOp = 'project_merge' | 'project_repair';
 

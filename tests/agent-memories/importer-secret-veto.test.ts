@@ -20,7 +20,6 @@ import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-
 const sync = (root: string, home: string): Tally =>
   totalTally(importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } }));
 

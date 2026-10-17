@@ -10,6 +10,7 @@ import { chunked } from '../util/chunked.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { RebuildPatch } from './port/consolidation.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private
 // MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
@@ -107,18 +108,6 @@ export function loadChildrenOfSummariesAt(
 /** Key into the map loadChildrenOfSummaries returns. */
 export function childrenKey(tenantId: string, summaryId: string): string {
   return `${tenantId}\u0000${summaryId}`;
-}
-
-/** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal
- * rebuild. */
-export interface RebuildPatch {
-  content: string;            // new content for normal rebuild; summary.content for zero-child
-  descendant_count: number;
-  earliest_at: string | null;
-  latest_at: string | null;
-  bumpRebuildCount: boolean;
-  zeroChildren: boolean;
-  actor: string;
 }
 
 /** Apply a rebuild result to a dirty summary in one write scope (UPDATE plus syncFtsRow); `AND summary_dirty = 1` makes

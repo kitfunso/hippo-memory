@@ -1,12 +1,10 @@
 // The agent-memories import's reach into a store chosen by root; synchronous, so each container's writes stay in one
 // transaction that never spans an await.
 import type { MemoryEntry } from '../../core/memory.js';
-import type { AppendAuditOpts } from '../audit.js';
-import type { DormantSnapshot } from '../dormant.js';
-import type { RenameSourceOptions } from '../entry-writes.js';
 import type { GatedWriteResult } from '../gated-write.js';
 import type { ProjectTagReads } from '../project-tags.js';
 import type { SetAsideResult, SetAsideWhy } from '../set-aside.js';
+import type { AppendAuditOpts } from './types.js';
 
 /** The calls one container's sync makes inside its transaction, bound to the target store's handle and root. */
 export interface ContainerTx {
@@ -57,4 +55,18 @@ export interface AgentImport {
   openStandIn(): ImportTarget;
   /** True when `err` means another writer held the store past its wait. */
   isBusy<E>(err: E): boolean;
+}
+
+/** A dormant memory's stored snapshot plus when and why it went dormant. */
+export interface DormantSnapshot {
+  entry: MemoryEntry;
+  reason: string;
+  strength: number;
+  dormantAt: string;
+}
+
+export interface RenameSourceOptions {
+  readonly from: string;
+  readonly to: string;
+  readonly origin: string | null;
 }

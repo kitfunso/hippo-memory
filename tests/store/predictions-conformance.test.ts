@@ -1,13 +1,14 @@
 // Predictions answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { AuditEvent } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
-import { predictionMirror, type Prediction, type PredictionBaserate, type SavePredictionOptions } from '../../src/store/predictions.js';
+import { predictionMirror } from '../../src/store/predictions.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import type { AuditEvent, PredictionBaserate } from '../../src/store/port/types.js';
+import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';

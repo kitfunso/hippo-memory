@@ -1,6 +1,5 @@
 // Admin routes: API keys, quarantine and the audit log.
 import { DEFAULT_LIST_LIMIT, MAX_ID_LEN } from '../../util/limits.js';
-import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
 import {
   auditList,
   authCreate,
@@ -16,6 +15,8 @@ import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { getString, isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
 import { isJsonBoolean, isJsonNumber } from '../../util/json.js';
+import { AUDIT_OPS } from '../../store/port/audit-ops.js';
+import type { AuditOp } from '../../store/port/audit-ops.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 

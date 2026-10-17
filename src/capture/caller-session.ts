@@ -9,8 +9,8 @@ import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { bindSessionOwner } from '../api/auth/session-owners.js';
-import type { ContinuityKey } from '../store/sessions.js';
 import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
+import type { ContinuityKey } from '../store/port/types.js';
 
 /**
  * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns

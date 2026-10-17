@@ -2,9 +2,9 @@
 
 import { ConflictError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
 import type { QuarantineRefusal } from '../../store/port.js';
-import type { QuarantineStatus } from '../../store/quarantine.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { Context } from '../types.js';
+import type { QuarantineStatus } from '../../store/port/quarantine.js';
 
 export interface QuarantineListItem {
   id: string;

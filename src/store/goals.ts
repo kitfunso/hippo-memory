@@ -2,9 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { placeholders } from '../util/sql.js';
-
-export type GoalStatus = 'active' | 'suspended' | 'completed';
-export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
+import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, PolicyType, GetActiveGoalsOpts } from './port/types.js';
+import type { GoalRecallLogRow } from './port/recall-writes.js';
 
 export interface GoalRow {
   id: string;
@@ -19,31 +18,6 @@ export interface GoalRow {
   created_at: string;
   completed_at: string | null;
   outcome_score: number | null;
-}
-
-export interface Goal {
-  id: string;
-  sessionId: string;
-  tenantId: string;
-  goalName: string;
-  level: number;
-  parentGoalId?: string;
-  status: GoalStatus;
-  successCondition?: string;
-  retrievalPolicyId?: string;
-  createdAt: string;
-  completedAt?: string;
-  outcomeScore?: number;
-}
-
-export interface RetrievalPolicy {
-  id: string;
-  goalId: string;
-  policyType: PolicyType;
-  weightSchemaFit: number;
-  weightRecency: number;
-  weightOutcome: number;
-  errorPriority: number;
 }
 
 const MAX_ACTIVE_GOAL_DEPTH = 3;
@@ -197,17 +171,6 @@ function insertRetrievalPolicy(
   return policyId;
 }
 
-export interface GetActiveGoalsOpts {
-  sessionId: string;
-  tenantId: string;
-}
-
-/** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
-export interface ActiveGoals {
-  readonly goals: Goal[];
-  readonly policies: ReadonlyMap<string, RetrievalPolicy>;
-}
-
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
 export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): ActiveGoals {
   const goals = getActiveGoalsWithDb(db, opts);
@@ -238,16 +201,6 @@ function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): G
     ORDER BY created_at ASC
   `).all(opts.tenantId, opts.sessionId) as GoalRow[];
   return rows.map(rowToGoal);
-}
-
-/** One `goal_recall_log` row: a boosted local memory recalled while its goal was active. */
-export interface GoalRecallLogRow {
-  goalId: string;
-  memoryId: string;
-  tenantId: string;
-  sessionId: string;
-  recalledAt: string;
-  score: number;
 }
 
 // Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at

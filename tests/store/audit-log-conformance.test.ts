@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent, listAuditEventsAfter, type AuditOp, type QueryAuditOptions } from '../../src/store/audit.js';
+import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/audit.js';
 import { createApiKey } from '../../src/store/auth.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -13,6 +13,8 @@ import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src
 import { inMemoryAuditLogStore } from '../_helpers/in-memory-audit-log-store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import type { AuditOp } from '../../src/store/port/audit-ops.js';
+import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
 
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;

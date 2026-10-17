@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../../core/memory.js';
-import type { HeldText } from '../candidates.js';
+import type { HeldText } from './types.js';
 
 /** The reads and writes behind git auto-learn's batch. */
 export interface LessonWrites {

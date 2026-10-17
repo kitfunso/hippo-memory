@@ -17,14 +17,9 @@ import {
 import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
 import { placeholders } from '../util/sql.js';
-
-/** Recall scope filter: 'default-deny' (exclude RECALL_DEFAULT_DENY_SCOPES), 'exact' (m.scope = value),
- * 'default-deny-or-exact' (both; CLI `--scope`). @internal Internal SQL-builder shape; not re-exported from
- * `src/index.ts`. Subject to change. */
-export type RecallScopeFilter =
-  | { mode: 'default-deny'; ownScope?: string }
-  | { mode: 'exact'; value: string }
-  | { mode: 'default-deny-or-exact'; value: string; ownScope?: string };
+import type { OriginFilter } from './port/types.js';
+import type { RecallSearchEntriesOptions } from './port/sharing.js';
+import type { VectorCandidateSpec, RecallScopeFilter } from './port/vector-reads.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is
  * its JS twin. */
@@ -36,9 +31,6 @@ function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | unde
   // The trailing arm keeps a deliberately requested scope loadable, private or quarantined included.
   return { sql: ` AND (${admit.sql} OR ${col}scope = ?)`, params: [...admit.params, scopeFilter.value] };
 }
-
-/** One project name, or every name a project's rows carry. */
-export type OriginFilter = string | readonly string[];
 
 // In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows out of the LIMIT.
 function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | undefined): SqlFragment {
@@ -254,16 +246,6 @@ export function loadSearchEntries(
   return onHandle(hippoRoot, (db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore);
 }
 
-export interface RecallSearchEntriesOptions {
-  readonly limit?: number;
-  readonly tenantId?: string;
-  readonly requestedScope?: string;
-  readonly explicitScopeMode?: 'exact' | 'additive';
-  readonly includeSuperseded?: boolean;
-  readonly originProjects?: OriginFilter;
-  readonly ownScope?: string;
-}
-
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
  * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
  * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
@@ -310,17 +292,6 @@ export function loadRecallSearchEntriesFromDb(
   } = options;
   const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
   return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
-}
-
-/** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical
- * load. */
-export interface VectorCandidateSpec {
-  tenantId?: string;
-  scope?: RecallScopeFilter;
-  includeSuperseded: boolean;
-  /** How many nearest rows to add; default 50. */
-  limit?: number;
-  origin?: OriginFilter;
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first. */

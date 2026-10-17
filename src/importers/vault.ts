@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
-import type { RawRefRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from '../api/index.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import { assertClientScope } from '../core/recall-scope.js';
@@ -16,6 +15,7 @@ import { type ImportResult, type ImportOptions } from './core.js';
 import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
+import type { RawRefRow } from '../store/port/context-reads.js';
 
 // K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/connectors/slack|github). A changed note appends a new raw row after archiveRaw of the old one; NEVER

@@ -132,8 +132,6 @@ describe('cmdRecall candidate accounting closes', () => {
   });
 });
 
-
-
 describe('graph-expanded recall keeps the published accounting honest', () => {
   let home: string;
   afterEach(() => {

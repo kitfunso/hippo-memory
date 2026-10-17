@@ -1,10 +1,7 @@
 import type { MemoryEntry } from '../../core/memory.js';
-import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from '../candidates.js';
-import type { ContinuityKey } from '../sessions.js';
 import type { SessionHandoff } from '../../core/handoff.js';
-import type { AmbientStoreFilter } from '../ambient.js';
 import type { AmbientTallies } from '../../core/ambient.js';
-import type { RawRefRow } from '../entry-reads.js';
+import type { ContinuityKey } from './types.js';
 
 /** One ambient load: the pins, the `recentNeeded` newest rows `admit` keeps, and the prompt-recall candidates. */
 export interface AmbientCandidateRequest {
@@ -40,4 +37,53 @@ export interface ContextReads {
   liveContentsBySourceAndTag(tenantId: string, source: string, tag: string, exceptSessionId: string): Promise<string[]>;
   /** The tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
   rawRowsUnderRef(tenantId: string, refPrefix: string): Promise<RawRefRow[]>;
+}
+
+export interface AmbientLoadResult {
+  entries: MemoryEntry[];
+  recall?: MemoryEntry[];
+}
+
+export interface AmbientRecallRequest {
+  terms: string[];
+  limit: number;
+  ownScope?: string;
+}
+
+/** The rows a non-pinned context read may admit; each predicate is one getContext's admission applies again in JS. */
+export interface ContextCandidateFilter {
+  /** Envelope scope asked for by name; absent applies recall's default deny. */
+  exactScope?: string;
+  /** The caller's personal scope, which the default deny admits. */
+  ownScope?: string;
+  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
+  project?: readonly string[];
+  /** Most rows returned; past it, the rows decay has worn least win. */
+  cap: number;
+  now: Date;
+}
+
+/** The origins a caller's recent rows may carry: its project names, and user-global ('') rows when `userGlobal`. */
+export interface RecentOrigins {
+  readonly names: readonly string[];
+  readonly userGlobal: boolean;
+}
+
+/** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
+export interface AmbientStoreFilter {
+  exactScope?: string;
+  /** The reader's personal scope, which the default deny admits. */
+  ownScope?: string;
+  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
+  project?: readonly string[];
+  /** The reader's project names: a secret-tagged row counts only inside its own non-empty origin project. */
+  currentProject: readonly string[];
+  now: Date;
+}
+
+export interface RawRefRow {
+  id: string;
+  artifact_ref: string;
+  tags_json: string;
+  scope: string | null;
 }

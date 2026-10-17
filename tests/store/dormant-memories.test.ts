@@ -26,7 +26,7 @@ import { saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { saveCustomerNote } from '../../src/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents, type AuditEvent, type AuditOp } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
 import { consolidate } from '../../src/index.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -38,6 +38,8 @@ import { WRITE_BUDGET } from '../../src/util/write-budget.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditOp } from '../../src/store/port/audit-ops.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };

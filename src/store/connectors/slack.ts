@@ -5,6 +5,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import type { ConnectorEventRecord } from '../port.js';
 import { eventMemoryAt, eventRecordAt, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
+import type { SlackTeamRoute, SlackDlqInsert, SlackDlqItem as DlqItem, SlackWorkspace } from '../port/connectors.js';
 
 // Backfill cursors
 
@@ -57,35 +58,6 @@ export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: stri
   return row?.id ?? null;
 }
 
-// Dead-letter queue
-
-export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';
-
-export interface DlqItem {
-  id: number;
-  tenantId: string;
-  teamId: string | null;
-  rawPayload: string;
-  error: string;
-  receivedAt: string;
-  retriedAt: string | null;
-  bucket: DlqBucket | string;
-  retryCount: number;
-  signature: string | null;
-  slackTimestamp: string | null;
-}
-
-/** One row to park; the two Slack-only columns are stored NULL when left out. */
-export interface SlackDlqInsert {
-  tenantId: string;
-  teamId?: string | null;
-  rawPayload: string;
-  error: string;
-  bucket: DlqBucket;
-  signature: string | null;
-  slackTimestamp?: string | null;
-}
-
 export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
   { field: 'id', column: 'id', kind: 'int' },
   { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
@@ -100,11 +72,6 @@ export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
   { field: 'slackTimestamp', column: 'slack_timestamp', kind: 'nullableText', insert: true },
 ]);
 
-// Workspace routing
-
-/** The tenant a team maps to, or how many workspaces are registered when it maps to none. */
-export type SlackTeamRoute = { tenantId: string } | { tenantId: null; workspaceCount: number };
-
 export function slackTeamRouteAt(db: DatabaseSyncLike, teamId: string): SlackTeamRoute {
   // SAFETY: the SELECT names only `tenant_id`; .get() returns undefined when no row matches.
   const row = db
@@ -117,12 +84,6 @@ export function slackTeamRouteAt(db: DatabaseSyncLike, teamId: string): SlackTea
     .prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`)
     .get() as { c: number | bigint }).c;
   return { tenantId: null, workspaceCount: Number(total) };
-}
-
-export interface SlackWorkspace {
-  teamId: string;
-  tenantId: string;
-  addedAt: string; // ISO timestamp
 }
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */

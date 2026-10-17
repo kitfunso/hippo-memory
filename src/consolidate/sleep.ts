@@ -5,8 +5,6 @@
 
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, canAutoDelete, LEGACY_TYPED_HALF_LIFE, type DecayOptions } from '../core/memory.js';
-import type { LoadedRows } from '../store/delete-and-batch.js';
-import type { AppendAuditOpts } from '../store/audit.js';
 import type { Consolidation, LocalFiles } from '../store/port.js';
 import type { HippoConfig } from '../core/config.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
@@ -22,6 +20,8 @@ import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../util/time.js';
 import { plural } from '../util/format.js';
+import type { LoadedRows } from '../store/port/consolidation.js';
+import type { AppendAuditOpts } from '../store/port/types.js';
 
 export type ConsolidateOptions = {
   dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget;

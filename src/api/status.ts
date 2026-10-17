@@ -4,10 +4,10 @@ import type { PhysicsParticle } from '../core/physics.js';
 import type { LegacyStats } from '../store/rows.js';
 import type { StatusCounts } from '../store/candidates.js';
 import { requireGroup } from '../store/port.js';
-import type { StoredVectorSummary } from '../store/vector-index.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type Context } from './types.js';
+import type { StoredVectorSummary } from '../store/port/embedding-index.js';
 
 export interface StoreStatus {
   stats: LegacyStats;

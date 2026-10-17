@@ -1,10 +1,9 @@
 // A store other than hippo.db for the ConnectorEvents group, built on the in-memory connector-writes store: it copies tenant routing,
 // both dead-letter queues and the backfill cursors out of hippo.db once, then answers from memory and shares the write group's event log.
 import type { EntryWrites, HippoStore } from '../../src/entry/store-kit.js';
-import type { StoredCursors } from '../../src/store/connectors/github.js';
-import type { SlackWorkspace } from '../../src/store/connectors/slack.js';
 import type { ConnectorDeadLetter, ConnectorEvents, ConnectorWrites, DeadLetterConnector, DeadLetterRows } from '../../src/store/port.js';
 import { inMemoryConnectorWritesStore, rowsOf, sqliteConnectorSide, type ConnectorSide } from './in-memory-connector-writes-store.js';
+import type { StoredCursors, SlackWorkspace } from '../../src/store/port/connectors.js';
 
 /** One dead-letter row of either queue; the columns only the other connector's table has are null. */
 export interface ParkedLetter {

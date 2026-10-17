@@ -6,7 +6,7 @@ import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.
 import { checkRejectionGuard } from './rejection.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { type DormantMove, insertDormantRow } from './dormant.js';
+import { insertDormantRow } from './dormant.js';
 import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
@@ -17,6 +17,7 @@ import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { FlushComponent, LoadedRows, DormantMove } from './port/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */
@@ -185,9 +186,6 @@ function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<
   return rows;
 }
 
-/** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
-export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
-
 // The child fields a level-2/3 summary is built from (loadChildrenOfSummary, generateDagSummary).
 const SUMMARY_INPUTS = ['content', 'created', 'dag_parent_id', 'kind'] as const;
 
@@ -217,13 +215,6 @@ export function batchWriteAndDelete(
     const all: FlushComponent = { writes: toWrite, deletes: toDeleteIds, dormant };
     return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
   }, openStore);
-}
-
-/** Ops that must commit in one transaction, so a flush split across several never lands part of one. */
-export interface FlushComponent {
-  writes: readonly MemoryEntry[];
-  deletes: readonly string[];
-  dormant: readonly DormantMove[];
 }
 
 const failedUnits = new WeakMap<Error, string[]>();

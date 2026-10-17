@@ -1,4 +1,3 @@
-import type { QuarantineRow, QuarantineStatus } from '../quarantine.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 
 /** Which of a tenant's quarantine records a list reads; `limit` is 100 when unset. */
@@ -41,3 +40,16 @@ export interface Quarantine {
    * memory row can still be rejected. */
   rejectQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineRejection>;
 }
+
+export interface QuarantineRow {
+  tenantId: string;
+  memoryId: string;
+  originalScope: string | null;
+  reason: string;
+  status: QuarantineStatus;
+  quarantinedAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+}
+
+export type QuarantineStatus = 'pending' | 'approved' | 'rejected';

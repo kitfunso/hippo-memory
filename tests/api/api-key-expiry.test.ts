@@ -3,7 +3,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
 import { raiseMinBinary } from '../../src/db/meta.js';
-import { createApiKey, insertApiKey, mintApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, _readApiKeyVerifyStatsForTests, type ApiKeyRecord } from '../../src/store/auth.js';
+import {
+  createApiKey,
+  insertApiKey,
+  mintApiKey,
+  readApiKeyRecord,
+  validateApiKey,
+  verifyApiKeyCached,
+  _readApiKeyVerifyStatsForTests,
+} from '../../src/store/auth.js';
 import { adminActor, authCreateSelf, authListRows, type Actor, type AuthCreateSelfResult } from '../../src/api/index.js';
 import { handleAuth } from '../../src/cli/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -13,6 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import type { ApiKeyRecord } from '../../src/store/port/types.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
