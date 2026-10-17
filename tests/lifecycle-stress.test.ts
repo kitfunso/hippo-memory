@@ -31,6 +31,7 @@ import { consolidate } from '../src/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 
 import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
@@ -164,14 +165,14 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 42, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemory(sqliteSyncStore(root).localFiles, e);
     expectVectorsStored(root);
 
     const cons = await consolidate(root, {});
     // merge must fire on the redundant clusters
     expect(cons.semanticCreated).toBeGreaterThan(0);
 
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemory(sqliteSyncStore(root).localFiles, e);
     const after = loadAllEntries(root, 'default');
     const summaries = after.filter((e) => (e.content || '').startsWith('[Consolidated'));
     expect(summaries.length).toBeGreaterThan(0);
@@ -187,10 +188,10 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 11, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemory(sqliteSyncStore(root).localFiles, e);
     expectVectorsStored(root);
     await consolidate(root, {});
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemory(sqliteSyncStore(root).localFiles, e);
     const after = loadAllEntries(root, 'default');
 
     // at a generous budget every fact's token must be retrievable by its topic
@@ -211,7 +212,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
       .slice(2 * 2);
     expect(noise.length).toBeGreaterThan(0);
     for (const m of noise) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(root, e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemory(sqliteSyncStore(root).localFiles, e);
     expectVectorsStored(root);
     const entries = loadAllEntries(root, 'default');
 

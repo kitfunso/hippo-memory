@@ -8,6 +8,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 // Built from parts so the repo's secret scan does not flag the test file.
@@ -44,7 +45,7 @@ function summaries(): string[] {
 async function write(content: string): Promise<void> {
   const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(root, entry);
-  await embedMemory(root, entry);
+  await embedMemory(sqliteSyncStore(root).localFiles, entry);
 }
 
 describe('embedMemory provider failure', () => {
@@ -84,8 +85,8 @@ describe('embedMemory provider failure', () => {
     const entry = createMemory('a memory under a typo in the provider name', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
 
-    await expect(fresh.embedMemory(root, entry)).resolves.toBe('failed');
-    await expect(fresh.embedMemory(root, entry)).resolves.toBe('failed');
+    await expect(fresh.embedMemory(sqliteSyncStore(root).localFiles, entry)).resolves.toBe('failed');
+    await expect(fresh.embedMemory(sqliteSyncStore(root).localFiles, entry)).resolves.toBe('failed');
 
     expect(warnings()).toHaveLength(1);
     expect(warnings()[0]).toContain("[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'");
@@ -99,11 +100,11 @@ describe('embedMemory provider failure', () => {
     writeEntry(root, entry);
 
     fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
-    await fresh.embedMemory(root, entry);
+    await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
     fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
     vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
-    await fresh.embedMemory(root, entry);
-    await fresh.embedMemory(root, entry);
+    await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
+    await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
 
     expect(warnings()).toHaveLength(2);
     expect(warnings()[0]).toContain('embedding failed (config)');
@@ -118,12 +119,12 @@ describe('embedMemory provider failure', () => {
       vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
       const entry = createMemory('a memory that keeps failing', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(root, entry);
-      await fresh.embedMemory(root, entry);
-      await fresh.embedMemory(root, entry);
-      await fresh.embedMemory(root, entry);
+      await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
+      await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
+      await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
       expect(summaries()).toEqual([]);
       vi.setSystemTime(Date.now() + 61_000);
-      await fresh.embedMemory(root, entry);
+      await fresh.embedMemory(sqliteSyncStore(root).localFiles, entry);
       expect(warnings()).toHaveLength(1);
       expect(summaries()).toHaveLength(1);
       expect(summaries()[0]).toContain('3 more embedding errors from openai');

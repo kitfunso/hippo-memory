@@ -7,6 +7,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { sharedLocalEmbedder } from '../src/embeddings/local.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 let root: string;
 
@@ -28,6 +29,6 @@ describe('embedMemory when the provider availability probe throws', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const entry = createMemory('a memory whose provider probe throws', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
-    await expect(embedMemory(root, entry)).resolves.toBe('failed');
+    await expect(embedMemory(sqliteSyncStore(root).localFiles, entry)).resolves.toBe('failed');
   });
 });

@@ -8,6 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedMemory, embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
@@ -49,7 +50,7 @@ afterEach(() => {
 async function remember(content: string): Promise<string> {
   const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(root, entry);
-  await embedMemory(root, entry);
+  await embedMemory(sqliteSyncStore(root).localFiles, entry);
   return entry.id;
 }
 
@@ -84,7 +85,7 @@ describe('corrupt embeddings.json at import', () => {
     expect(fs.existsSync(fp)).toBe(false);
     expect(asideFiles()).toHaveLength(1);
 
-    expect(await embedAll(root)).toBe(1);
+    expect(await embedAll(sqliteSyncStore(root).localFiles)).toBe(1);
     expect(Object.keys(loadEmbeddingIndex(root))).toEqual([first]);
     expect(asideFiles()).toHaveLength(1);
   });

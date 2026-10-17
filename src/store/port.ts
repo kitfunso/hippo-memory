@@ -630,7 +630,9 @@ export interface VectorViews {
   storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
 }
 
-export type { AgentImport, Consolidation, ContainerTx, ImportTarget, LocalFiles } from './port/local-files.js';
+export type {
+  AgentImport, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, LocalFiles,
+} from './port/local-files.js';
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {

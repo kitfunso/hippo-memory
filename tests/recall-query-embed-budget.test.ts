@@ -20,6 +20,7 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_h
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -201,7 +202,7 @@ describe('the write-side embedding', () => {
     const entry: MemoryEntry = createMemory('the release train leaves on tuesdays', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
     writeEntry(root, entry);
 
-    await embedMemory(root, entry);
+    await embedMemory(sqliteSyncStore(root).localFiles, entry);
 
     expect(loadEmbeddingIndex(root)[entry.id]).toHaveLength(16);
     expect(await recall(root)).not.toContain(VECTOR_ONLY);

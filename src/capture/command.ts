@@ -4,6 +4,7 @@ import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { writeCapturedItems } from '../store/capture-write.js';
 import { embedMemory } from '../search/embed-memories.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { initStore } from '../store/open.js';
@@ -241,6 +242,7 @@ export function captureExtractedItems(
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
+  const local = sqliteSyncStore(targetRoot).localFiles;
 
   if (!options.dryRun) {
     const outcomes = writeCapturedItems(
@@ -253,7 +255,7 @@ export function captureExtractedItems(
       {
         actor: options.actor,
         lean: options.lean,
-        onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry),
+        onCaptured: options.lean ? undefined : (entry) => void embedMemory(local, entry),
       },
     );
     for (const outcome of outcomes) tally[outcome]++;

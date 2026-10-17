@@ -20,6 +20,7 @@ import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -179,7 +180,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     // is idempotent and, because embed writes are serialized through the
     // module's embed lock, awaiting it guarantees the earlier fire-and-forget
     // call has also settled by the time this resolves.
-    await embedAll(localRoot);
+    await embedAll(sqliteSyncStore(localRoot).localFiles);
 
     const index = loadEmbeddingIndex(localRoot);
     expect(index[entry.id]).toBeDefined();
@@ -194,7 +195,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
     expect(shared.length).toBe(1);
 
-    await embedAll(globalRoot);
+    await embedAll(sqliteSyncStore(globalRoot).localFiles);
 
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[shared[0].id]).toBeDefined();

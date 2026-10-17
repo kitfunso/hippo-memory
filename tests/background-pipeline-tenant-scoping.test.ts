@@ -381,7 +381,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
 
     // Side-effect: confirms embedAll returns a non-negative number without throw.
     // (When OPENAI_API_KEY is unset this is 0; when set it would do the rebuild.)
-    const count = await embedAll(hippoRoot);
+    const count = await embedAll(sqliteSyncStore(hippoRoot).localFiles);
     expect(count).toBeGreaterThanOrEqual(0);
 
     // The contract assertion: the exact reader call shape embedAll +
