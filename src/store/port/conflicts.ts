@@ -32,3 +32,27 @@ export interface ConflictRowPage {
   /** The position the next page starts after, or null when this page was the last. */
   readonly next: KeysetPosition | null;
 }
+
+/** One member of a conflict, with the scope the api read and decided on. */
+export interface ConflictSide {
+  readonly id: string;
+  readonly scope: string | null;
+}
+
+/** What the api decided for the loser. `reject` also tombstones its value and removes the tenant's other rows holding
+ * it that `inReach` admits; the store calls `inReach` inside its write. */
+export type LoserFate =
+  | { readonly kind: 'weaken' }
+  | { readonly kind: 'remove' }
+  | { readonly kind: 'reject'; readonly inReach: (scope: string | null) => boolean };
+
+export interface ConflictResolution {
+  readonly conflictId: number;
+  readonly keep: ConflictSide;
+  readonly loser: ConflictSide;
+  readonly fate: LoserFate;
+  /** Named on the audit row, the tombstone and a raw loser's archive row. */
+  readonly actor: string;
+  /** Kept on the tombstone and a raw loser's archive row. */
+  readonly reason: string;
+}

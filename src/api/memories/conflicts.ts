@@ -1,8 +1,10 @@
 // Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
-import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../../core/recall-scope.js';
+import {
+  canTouchScope, isPersonalScope, passesScopeFilterForRecall, personalScopeOf,
+} from '../../core/recall-scope.js';
 import type { MemoryConflict } from '../../store/rows.js';
-import type { ConflictMember, ConflictRow } from '../../store/port/conflicts.js';
+import type { ConflictMember, ConflictRow, ConflictSide, LoserFate } from '../../store/port/conflicts.js';
 import { classifyOriginProject } from '../../core/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
@@ -77,25 +79,46 @@ export async function resolveMemoryConflict(
   const row = await touchableConflict(ctx, conflictId);
   if (!row) throw new NotFoundError(`conflict not found: ${conflictId}`);
   if (row.conflict.status !== 'open') throw new ConflictError(`conflict ${conflictId} is already resolved`);
-  const pair = [row.conflict.memory_a_id, row.conflict.memory_b_id];
-  if (!pair.includes(opts.keepId)) {
-    throw new BadRequestError(`keep must be one of the two memories in conflict ${conflictId}: ${pair.join(', ')}`);
-  }
+  const { keep, loser } = sidesOf(row, opts.keepId);
   if (!isLive(row.a) || !isLive(row.b)) {
     throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
   }
-  const resolved = await ctx.store.conflicts.resolve(
-    ctx.tenantId,
-    { conflictId, keepId: opts.keepId, forgetLoser: opts.forget === true },
-    {
-      rejectLoserValue: opts.rejectLoser === true,
-      reason: opts.reason,
-      rejectedBy: ctx.actor.subject,
-    },
-  );
-  // Every check passed above, so null here is another resolver getting there first.
-  if (resolved === null) throw new ConflictError(`conflict ${conflictId} is already resolved`);
-  return { conflictId, keptId: opts.keepId, loserId: resolved.loserId };
+  const reason = opts.reason ?? `resolveConflict ${conflictId}: kept ${keep.id}`;
+  const fate = loserFate(ctx.actor, loser, opts);
+  const resolved = await ctx.store.conflicts.resolve(ctx.tenantId, {
+    conflictId, keep, loser, fate, actor: ctx.actor.subject, reason,
+  });
+  // Every check passed above, so false here is another resolver, or a scope change, getting there first.
+  if (!resolved) throw new ConflictError(`conflict ${conflictId} is already resolved`);
+  return { conflictId, keptId: keep.id, loserId: loser.id };
+}
+
+interface ResolveSides {
+  readonly keep: ConflictSide;
+  readonly loser: ConflictSide;
+}
+
+/** `keepId`'s side and the other one, with the scopes the store must still find at write time. */
+function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
+  const { conflict } = row;
+  const a = { id: conflict.memory_a_id, scope: row.a?.scope ?? null };
+  const b = { id: conflict.memory_b_id, scope: row.b?.scope ?? null };
+  if (keepId === a.id) return { keep: a, loser: b };
+  if (keepId === b.id) return { keep: b, loser: a };
+  throw new BadRequestError(`keep must be one of the two memories in conflict ${conflict.id}: ${a.id}, ${b.id}`);
+}
+
+/** A rejection is a tenant-wide tombstone, so it may not carry a personal row's value, and its sweep stays within
+ * what the caller may touch. */
+function loserFate(actor: Actor, loser: ConflictSide, opts: ResolveMemoryConflictOptions): LoserFate {
+  if (opts.rejectLoser !== true) return { kind: opts.forget === true ? 'remove' : 'weaken' };
+  if (isPersonalScope(loser.scope)) {
+    throw new BadRequestError(
+      `cannot reject the value of personal memory ${loser.id}: a rejection reaches the whole tenant, ` +
+        `so its reason would show to everyone; resolve with forget instead`,
+    );
+  }
+  return { kind: 'reject', inReach: (scope) => canTouchScope(actor, scope) };
 }
 
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:

@@ -103,8 +103,11 @@ describe('conflicts group', () => {
     expect((await served.list(query('other'))).rows).toHaveLength(0);
     expect((await served.get(T, open!.conflict.id))?.conflict.id).toBe(open!.conflict.id);
     expect(await served.get('other', open!.conflict.id)).toBeNull();
-    const resolved = await served.resolve(T, { conflictId: open!.conflict.id, keepId: a.id }, {});
-    expect(resolved?.loserId).toBe(b.id);
+    const keep = { id: a.id, scope: a.scope ?? null };
+    const loser = { id: b.id, scope: b.scope ?? null };
+    const resolution = { conflictId: open!.conflict.id, keep, loser, fate: { kind: 'weaken' } as const, actor: 'test', reason: '' };
+    expect(await served.resolve(T, resolution)).toBe(true);
+    expect(await served.resolve(T, resolution)).toBe(false);
     expect((await served.list(query(T))).rows).toHaveLength(0);
   });
 });

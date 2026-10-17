@@ -6,7 +6,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { resolveConflict, listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { updateStats } from '../../src/store/index-and-stats.js';
 import { DAY_MS } from '../../src/util/time.js';
 import { handleStatus } from '../../src/cli/status.js';
@@ -15,7 +15,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
 import {
-  loadEveryTenantEntries, replaceDetectedConflicts, appendConsolidationRun, saveStoredVectors,
+  loadEveryTenantEntries, replaceDetectedConflicts, appendConsolidationRun, resolveConflictKeeping, saveStoredVectors,
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
 
@@ -141,7 +141,7 @@ function seedEveryCase(): void {
   ], NOW);
   const resolved = listMemoryConflicts(root).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
-  resolveConflict(root, { conflictId: resolved.id, keepId: fresh });
+  if (!resolveConflictKeeping(root, 'default', resolved.id, fresh)) throw new Error('fixture conflict not resolved');
   saveStoredVectors(root, [[fresh, [1, 2, 3, 4]], [otherA, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
   updateStats(root, { remembered: 5, recalled: 3, forgotten: 1 });
   appendConsolidationRun(root, { timestamp: daysAgo(2), decayed: 1, merged: 0, removed: 0 });

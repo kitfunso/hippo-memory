@@ -8,7 +8,6 @@ export function sqliteConflicts(on: OnHandle): Sync<Conflicts> {
   return {
     list: (query) => on((db) => conflictPageAt(db, query), openStore),
     get: (tenantId, conflictId) => on((db) => conflictByIdAt(db, tenantId, conflictId), openStore),
-    resolve: (tenantId, request, opts) =>
-      on((db, files) => resolveConflictAt(db, files, { ...request, tenantId }, opts), openStore),
+    resolve: (tenantId, resolution) => on((db, files) => resolveConflictAt(db, files, tenantId, resolution), openStore),
   };
 }

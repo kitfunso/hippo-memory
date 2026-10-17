@@ -38,10 +38,10 @@ const STORE_KIT_TYPES = [
   'VectorMatch', 'VectorReads', 'VectorRow', 'VectorRowWrite', 'VectorWrite', 'VectorWriteResult', 'VectorWrites',
   // The session and admin groups (port-groups.ts).
   'Card', 'CardComment', 'CardCreate', 'CardDetail', 'CardRun', 'CardStatus', 'Cards', 'CompleteGoalOpts',
-  'ConflictListQuery', 'ConflictMember', 'ConflictRow', 'ConflictRowPage',
+  'ConflictListQuery', 'ConflictMember', 'ConflictResolution', 'ConflictRow', 'ConflictRowPage', 'ConflictSide', 'LoserFate',
   'Conflicts', 'Dormant', 'DormantMemory', 'DormantRestoreOutcome', 'DormantRestoreRequest', 'DormantSnapshot',
   'EntryCursor', 'EntryPage', 'FailureSummary', 'Goals', 'HandoffFilter', 'HandoffOutcome', 'ListDormantOpts',
-  'MemoryConflict', 'PushGoalOpts', 'Reports', 'ResolveConflictOpts', 'ResolveConflictRequest',
+  'MemoryConflict', 'PushGoalOpts', 'Reports',
   'SessionEndHandoffRequest', 'SessionEventInput', 'Sessions', 'SnapshotInput', 'StrengthTallies', 'TokenSummary',
   'WorkingMemoryFilter', 'WorkingMemoryItem', 'WorkingMemoryPush',
   'AppliedRejection', 'LiftedRejection', 'Rejection', 'RejectionCheck', 'Rejections', 'RejectionSource', 'RejectedValueRow',

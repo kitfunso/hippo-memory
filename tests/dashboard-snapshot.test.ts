@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/core/memory.js';
-import { listMemoryConflicts, resolveConflict } from '../src/store/conflicts.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { buildSnapshot, createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -11,7 +11,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
-import { replaceDetectedConflicts } from './_helpers/root-forms.js';
+import { replaceDetectedConflicts, resolveConflictKeeping } from './_helpers/root-forms.js';
 
 let store: TmpStore;
 
@@ -94,7 +94,7 @@ describe('dashboard snapshot', () => {
       { memory_a_id: r1.id, memory_b_id: r2.id, reason: 'already settled', score: 0.6 },
     ]);
     const settled = listMemoryConflicts(store.hippoRoot, 'open', 'default').find((c) => c.reason === 'already settled')!;
-    expect(resolveConflict(store.hippoRoot, { conflictId: settled.id, keepId: r1.id, tenantId: 'default' })).not.toBeNull();
+    expect(resolveConflictKeeping(store.hippoRoot, 'default', settled.id, r1.id)).toBe(true);
 
     const snap = snapshot();
     const overview = buildOverview(snap);
