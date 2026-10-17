@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
+import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
 
 describe('detectForwardClaim — positive matches', () => {
   it('matches "will take" verb phrase', () => {

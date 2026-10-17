@@ -3,14 +3,14 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
-import { captureError, extractLessons, partitionLessons, fetchGitLog, isGitRepo } from '../src/learn/autolearn.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
-import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { captureError, extractLessons, partitionLessons, fetchGitLog, isGitRepo } from '../../src/learn/autolearn.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { extractInvalidationTarget, invalidateMatching } from '../../src/learn/invalidation.js';
+import { handleMcpRequest } from '../../src/mcp/server.js';
+import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // captureError

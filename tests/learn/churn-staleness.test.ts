@@ -1,6 +1,6 @@
 /** FE2 staleness-from-code-churn: extraction, detection, outcome-clearing, rank, config, CLI. */
 
-import type { FullContext } from './_helpers/api-ctx.js';
+import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,23 +8,23 @@ import { execSync, execFileSync } from 'child_process';
 import {
   extractChurnRefs,
   detectChurnStale,
-} from '../src/learn/invalidation.js';
-import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { readEntry } from '../src/store/entry-reads.js';
-import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { search } from '../src/search/bm25-search.js';
-import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
-import { churnStaleFactor } from '../src/search/boosts.js';
-import { openHippoDb } from '../src/db/index.js';
-import { savePhysicsState } from '../src/db/physics-state.js';
-import type { PhysicsParticle } from '../src/core/physics.js';
-import { loadConfig } from '../src/core/config.js';
-import * as api from '../src/api/index.js';
-import { apiCtx } from './_helpers/api-ctx.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { runCliAs } from './_helpers/run-cli-as.js';
-import { makeRoot } from './_helpers/make-root.js';
+} from '../../src/learn/invalidation.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { readEntry } from '../../src/store/entry-reads.js';
+import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { search } from '../../src/search/bm25-search.js';
+import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
+import { churnStaleFactor } from '../../src/search/boosts.js';
+import { openHippoDb } from '../../src/db/index.js';
+import { savePhysicsState } from '../../src/db/physics-state.js';
+import type { PhysicsParticle } from '../../src/core/physics.js';
+import { loadConfig } from '../../src/core/config.js';
+import * as api from '../../src/api/index.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
