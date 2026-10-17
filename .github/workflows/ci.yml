@@ -297,12 +297,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Test stores live in the temp dir, and C: takes 5 ms per fsync against 0.15 ms on D:.
-      - name: Temp dir on the D drive
+      # EXPERIMENT arm 2: test stores on the C: system disk, away from the D: temp disk that stalls (#903).
+      - name: Temp dir on the C drive
         if: runner.os == 'Windows'
         run: |
-          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          $d = 'C:\hippo-test-tmp'
+          New-Item -ItemType Directory -Force $d | Out-Null
+          "TEMP=$d" >> $env:GITHUB_ENV
+          "TMP=$d" >> $env:GITHUB_ENV
       # EXPERIMENT: record which disk backs each drive and whether Defender scans it.
       - name: Disk and Defender state
         if: runner.os == 'Windows'
@@ -314,7 +316,8 @@ jobs:
           (Get-MpPreference).ExclusionPath
           "TEMP=$env:TEMP cores=$env:NUMBER_OF_PROCESSORS"
       - name: Vitest
-        run: npx vitest run --shard=${{ matrix.shard }}
+        # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
+        run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
 
