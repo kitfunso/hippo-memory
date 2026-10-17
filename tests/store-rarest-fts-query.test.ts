@@ -1,10 +1,6 @@
 // Z1b latency fix: rarest-term FTS pre-select (docs/plans/2026-09-26-z1b-tool-recall.md).
 // Real SQLite store in a tmp dir, no mocks.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import {
   loadRecallSearchEntries,
@@ -13,19 +9,12 @@ import {
 } from '../src/store/search-rows.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
+import { makeStore } from './_helpers/make-root.js';
 
-let tmpRoot: string;
 let root: string;
 
 beforeEach(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-rarest-fts-'));
-  root = path.join(tmpRoot, '.hippo');
-  fs.mkdirSync(root, { recursive: true });
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  ({ root } = makeStore('rarest-fts'));
 });
 
 describe('pickRarestFtsQuery', () => {

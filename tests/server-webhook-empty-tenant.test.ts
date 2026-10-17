@@ -1,13 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const GH_SECRET = 'gh-secret';
 const SLACK_SECRET = 'slack-secret';
@@ -47,8 +44,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
 
   beforeEach(async () => {
     savedTenant = process.env.HIPPO_TENANT;
-    root = mkdtempSync(join(tmpdir(), 'hippo-empty-tenant-'));
-    initStore(root);
+    root = makeRoot('empty-tenant');
     process.env.GITHUB_WEBHOOK_SECRET = GH_SECRET;
     process.env.SLACK_SIGNING_SECRET = SLACK_SECRET;
     process.env.HIPPO_TENANT = envValue;
@@ -61,7 +57,6 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     if (savedTenant === undefined) delete process.env.HIPPO_TENANT;
     else process.env.HIPPO_TENANT = savedTenant;
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   function tenantsOf(list: (tenant: string) => unknown[]) {

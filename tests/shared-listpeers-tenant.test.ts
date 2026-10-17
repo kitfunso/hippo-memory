@@ -6,16 +6,13 @@
  * before aggregation. Undefined keeps host-wide behaviour for back-compat.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { sqliteStore } from '../src/store/index.js';
 import { listPeers } from '../src/sharing/share.js';
 import { Layer } from '../src/core/memory.js';
 import type { MemoryEntry } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function makeSharedEntry(opts: { id: string; project: string; tenantId: string }): MemoryEntry {
   return {
@@ -58,18 +55,13 @@ describe('listPeers tenant scoping', () => {
   let globalRoot: string;
 
   beforeEach(() => {
-    globalRoot = mkdtempSync(join(tmpdir(), 'hippo-listpeers-tenant-'));
-    initStore(globalRoot);
+    globalRoot = makeRoot('listpeers-tenant');
     // Seed entries from 3 projects across 2 tenants.
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_a1', project: 'projectA', tenantId: 'acme' }));
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_a2', project: 'projectA', tenantId: 'acme' }));
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_b1', project: 'projectB', tenantId: 'acme' }));
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_c1', project: 'projectC', tenantId: 'globex' }));
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_c2', project: 'projectC', tenantId: 'globex' }));
-  });
-
-  afterEach(() => {
-    rmSync(globalRoot, { recursive: true, force: true });
   });
 
   it('no tenantId arg: returns host-wide peers (back-compat)', () => {

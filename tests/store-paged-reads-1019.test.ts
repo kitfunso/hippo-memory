@@ -1,25 +1,22 @@
 // A mirror sync that spans several pages, and a recall trace written in one or many multi-row inserts.
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serializeEntry } from '../src/core/markdown.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { syncMirrorFiles } from '../src/store/mirrors.js';
 import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeStore } from './_helpers/make-root.js';
 
 let home: string;
-afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
 
 function freshRoot(): string {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-paged-reads-'));
+  home = makeStore('paged-reads').base;
   const root = path.join(home, '.hippo');
-  initStore(root);
   return root;
 }
 

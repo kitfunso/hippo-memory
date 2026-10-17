@@ -1,13 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'path';
-import * as os from 'os';
 import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at
@@ -22,8 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
 
 let tmpDir: string;
 
-beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-sch-')); });
-afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+beforeEach(() => { tmpDir = makeRoot('sch', { init: false }); });
 
 describe('schema v3: trace columns', () => {
   it('round-trips trace_outcome + source_session_id on a fresh store', () => {

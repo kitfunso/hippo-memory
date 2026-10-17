@@ -1,19 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { childrenKey, loadChildrenOfSummaries, loadChildrenOfSummary } from '../src/store/summaries.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('loadChildrenOfSummaries', () => {
   let root: string;
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-children-batch-'));
-    initStore(root);
+    root = makeRoot('children-batch');
   });
-  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
   it('matches the per-summary read for more parents than one chunk', () => {
     const parents = Array.from({ length: 520 }, (_, i) => ({ id: `parent_${i}`, tenant_id: 'default' }));

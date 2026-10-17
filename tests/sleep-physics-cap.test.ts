@@ -1,7 +1,6 @@
 // The sleep physics pass is all-pairs per substep, so past its particle cap it moves only the most recently recalled.
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { particlesToSimulate, physicsPass } from '../src/consolidate/physics-pass.js';
 import { newConsolidationResult, type SleepRun } from '../src/consolidate/run.js';
@@ -10,10 +9,10 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -51,9 +50,8 @@ function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
 
 describe('sleep physics cap', () => {
   it('moves only the most recently recalled particles past the cap and leaves the rest as stored', () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-physics-cap-'));
+    const root = makeRoot('physics-cap');
     roots.push(root);
-    initStore(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ physics: { enabled: true } }));
     const recent = '2026-01-02T00:00:00.000Z';
     const older = '2026-01-01T00:00:00.000Z';

@@ -1,22 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pr1-'));
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('pr1', { init: false });
 });
 
 describe('SQLite busy_timeout', () => {

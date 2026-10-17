@@ -1,11 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { withSharedStoreHandles } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { runSlackSmoke } from '../benchmarks/e1.3/slack-1000-event-smoke.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The case commits 100 rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -14,12 +11,7 @@ describe('slack 1000-event smoke (CI subset)', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-smoke-'));
-    initStore(root);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('slack-smoke');
   });
 
   it('100 events, replayed twice, produces exactly 100 raw memories with zero outbound HTTP', async () => {

@@ -1,7 +1,6 @@
 // A store flagged `"sharedStore": true` stamps NULL on a write that names no project, never the folder that holds it.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -23,12 +22,13 @@ import { COMPACTION_MEMORY_TAG } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { summaryWith } from './_helpers/compaction-hooks.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmp: string;
 const origHome = process.env.HIPPO_HOME;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-shared-origin-'));
+  tmp = makeRoot('shared-origin', { init: false });
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
@@ -38,7 +38,6 @@ afterEach(() => {
   if (origHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 interface Layout { readonly store: string; readonly folderStamp: string }

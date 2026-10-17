@@ -1,24 +1,19 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, expect, it } from 'vitest';
+import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const mode = (p: string): number => statSync(p).mode & 0o777;
 
 let base: string;
 
-afterEach(() => {
-  rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-});
-
 // Windows has no POSIX mode bits: chmod only toggles read-only, so there is nothing to assert.
 describe.skipIf(process.platform === 'win32')('store files are owner-only on create', () => {
   it('a fresh store gets a 0700 directory and 0600 database, WAL and SHM files', () => {
-    base = mkdtempSync(join(tmpdir(), 'hippo-perms-'));
+    base = makeStore('perms').base;
     const root = join(base, '.hippo');
-    initStore(root);
     const db = openHippoDb(root);
     try {
       expect(mode(root).toString(8)).toBe('700');
@@ -34,7 +29,7 @@ describe.skipIf(process.platform === 'win32')('store files are owner-only on cre
   });
 
   it('never changes the mode of a directory or database that already exists', () => {
-    base = mkdtempSync(join(tmpdir(), 'hippo-perms-'));
+    base = makeRoot('perms', { init: false });
     const root = join(base, '.hippo');
     mkdirSync(root);
     chmodSync(root, 0o755);

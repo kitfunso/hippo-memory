@@ -1,25 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('schema migration v16: tenant_id columns', () => {
   it('migrates to latest schema version (currently 22)', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('adds tenant_id to memories, working_memory, consolidation_runs, task_snapshots, memory_conflicts', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
       for (const tbl of ['memories', 'working_memory', 'consolidation_runs', 'task_snapshots', 'memory_conflicts']) {
@@ -29,12 +26,11 @@ describe('schema migration v16: tenant_id columns', () => {
       }
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('creates composite (tenant_id, ...) indexes on each table', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
       // SAFETY: query selects only the "name" column from sqlite_master, so each row has a "name" string.
@@ -46,14 +42,13 @@ describe('schema migration v16: tenant_id columns', () => {
       expect(names.has('idx_task_snapshots_tenant_status')).toBe(true);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });
 
 describe('schema migration v16: api_keys and audit_log tables', () => {
   it('creates api_keys table with required columns', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
       // SAFETY: PRAGMA table_info always returns rows with a "name" column per SQLite's fixed schema.
@@ -64,12 +59,11 @@ describe('schema migration v16: api_keys and audit_log tables', () => {
       }
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('enforces UNIQUE on api_keys.key_id', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
       db.prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`)
@@ -80,12 +74,11 @@ describe('schema migration v16: api_keys and audit_log tables', () => {
       ).toThrow(/UNIQUE/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('creates audit_log table with required columns', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
       // SAFETY: PRAGMA table_info always returns rows with a "name" column per SQLite's fixed schema.
@@ -96,14 +89,13 @@ describe('schema migration v16: api_keys and audit_log tables', () => {
       }
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });
 
 describe('v16 backfill', () => {
   it('existing memories get tenant_id="default" after migration', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-backfill-'));
+    const home = makeRoot('a5-backfill');
     // Seed at v15 by running migrations only up to 15. Easiest: open the DB once
     // (which runs all migrations), then manually insert a row WITHOUT tenant_id and
     // verify the DEFAULT applies. Pre-existing rows from the live system would have
@@ -118,7 +110,6 @@ describe('v16 backfill', () => {
       expect(row.tenant_id).toBe('default');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

@@ -11,16 +11,14 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
@@ -47,9 +45,7 @@ function safeRmSync(p: string): void {
 describe('Slack connector — provenance coverage parity', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-prov-'));
-    mkdirSync(join(root, '.hippo'), { recursive: true });
-    initStore(root);
+    root = makeRoot('slack-prov');
   });
   afterEach(() => safeRmSync(root));
 

@@ -1,7 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { initStore } from '../src/store/open.js';
 import {
   saveActiveTaskSnapshot,
@@ -11,6 +8,7 @@ import {
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
 } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
 // never-expires fix for the active task snapshot ambient-injection surfaces.
@@ -21,10 +19,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 let tmpDir: string;
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-snapshot-freshness-'));
-});
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('snapshot-freshness', { init: false });
 });
 
 /** Direct SQL backdate of a row's `updated_at` — the project convention for

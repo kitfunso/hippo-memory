@@ -2,8 +2,7 @@
 // Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
@@ -11,6 +10,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpRoot: string;
 let projectStore: string;
@@ -26,7 +26,7 @@ function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): 
 }
 
 beforeEach(() => {
-  tmpRoot = mkdtempSync(join(tmpdir(), 'hippo-supersede-provenance-'));
+  tmpRoot = makeRoot('supersede-provenance', { init: false });
   projectStore = join(tmpRoot, 'proj', '.hippo');
   globalStore = join(tmpRoot, 'global');
   mkdirSync(projectStore, { recursive: true });
@@ -38,7 +38,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('supersede keeps provenance', () => {

@@ -7,14 +7,10 @@
  * per-layer plumbing.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer, calculateStrength } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/index.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -22,6 +18,7 @@ import { hybridSearch } from '../src/entry/folder-search.js';
 import { sampleForReplay } from '../src/consolidate/replay.js';
 import { savePhysicsState, loadPhysicsState } from '../src/db/physics-state.js';
 import { initializeParticle } from '../src/core/physics.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -29,12 +26,7 @@ const createMemory7 = (content: string, options: Parameters<typeof createMemory>
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-trace-inherit-'));
-  initStore(tmpDir);
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('trace-inherit');
 });
 
 describe('Trace layer inherits core memory mechanics', () => {

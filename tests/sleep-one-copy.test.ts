@@ -6,7 +6,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads.js';
 import { runSleep } from '../src/api/sleep/sleep-run.js';
@@ -16,6 +15,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { countMatching, recordStatementsAsync } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
 const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`;
@@ -23,9 +23,8 @@ const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY c
 const roots: string[] = [];
 
 function newRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-one-copy-'));
+  const root = makeRoot('one-copy');
   roots.push(root);
-  initStore(root);
   return root;
 }
 

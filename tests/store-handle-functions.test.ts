@@ -1,10 +1,6 @@
 // The store functions capture code calls with a folder and plain values: each opens its own handle on a real store.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { latestCompactionRows } from '../src/store/compactions.js';
 import { markSnapshotSavedAt, saveCallerItems, startCompactionAt } from '../src/store/compaction-caller.js';
 import { failuresBySession } from '../src/store/failure-log.js';
@@ -15,16 +11,12 @@ import { writeCapturedItems } from '../src/store/capture-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { duplicateKey } from '../src/util/same-text.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-store-handle-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  root = makeRoot('store-handle');
 });
 
 function read<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {

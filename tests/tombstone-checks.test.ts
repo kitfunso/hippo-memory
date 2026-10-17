@@ -1,13 +1,12 @@
 // Sleep's tombstone checks answer per tenant on one lazily opened handle, write their refusal rows on it, and do nothing under a dry run.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { queryAuditEvents, type AppendAuditOpts } from '../src/store/audit.js';
 import { insertRejectedValue, rejectionDigest } from '../src/store/rejection.js';
 import { lazyTombstoneChecks } from '../src/store/tombstone-checks.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const roots: string[] = [];
 const DIGEST = rejectionDigest('the staging password is hunter2');
@@ -18,9 +17,8 @@ afterEach(() => {
 
 /** A store where tenant `ta` has rejected one value. */
 function storeWithTombstone(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-tombstone-checks-'));
+  const root = makeRoot('tombstone-checks');
   roots.push(root);
-  initStore(root);
   const db = openHippoDb(root);
   try {
     insertRejectedValue(db, { tenantId: 'ta', digest: DIGEST, reason: 'leaked', rejectedBy: 'test', rejectedAt: '2026-06-01T12:00:00.000Z', normalizedChars: 31 });

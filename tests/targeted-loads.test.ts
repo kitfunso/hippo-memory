@@ -1,7 +1,6 @@
 // Perf slice: each changed read keeps its result and pins its load shape through the statements a real store runs.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
@@ -10,16 +9,15 @@ import { listMemories } from '../src/api/memories/memories.js';
 import { loadContextCandidates } from '../src/store/candidates.js';
 import { loadAllEntries, loadEntryTextKeys, readEntry } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
 import { applyRejection } from '../src/store/rejected-values.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { storedTextKeys } from '../src/util/same-text.js';
+import { makeStore } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = join(mkdtempSync(join(tmpdir(), 'hippo-targeted-loads-')), '.hippo');
-  initStore(root);
+  root = makeStore('targeted-loads').root;
 });
 
 afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));

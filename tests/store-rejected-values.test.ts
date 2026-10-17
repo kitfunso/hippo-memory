@@ -1,26 +1,20 @@
 // applyRejection, liftRejection, loadRejectedValues and rejectionGuardRefuses against a real store: what each writes, and what a refusal leaves unwritten.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
 import { applyRejection, liftRejection, loadRejectedValues, rejectionGuardRefuses, type Rejection, type RejectionSource } from '../src/store/rejected-values.js';
 import { rejectionDigest } from '../src/store/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-rejected-values-'));
-  initStore(root);
+  root = makeRoot('rejected-values');
 });
-
-afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 function auditRows(tenantId: string, op: AuditOp): AuditEvent[] {
   const db = openHippoDb(root);

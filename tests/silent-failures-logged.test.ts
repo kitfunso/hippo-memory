@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import fs from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { syncBuiltinESMExports } from 'node:module';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { fetchWithRetry } from '../src/util/http-retry.js';
 import { heartbeatVerdict } from '../src/server/auth.js';
@@ -19,6 +18,7 @@ import { initStore } from '../src/store/open.js';
 import { renderGraphHtml } from '../src/graph/view.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 let stderr: MockInstance<typeof process.stderr.write>;
@@ -27,7 +27,7 @@ const logged = (): string[] => stderr.mock.calls.map((call) => String(call[0]));
 const errno = (code: string): NodeJS.ErrnoException => Object.assign(new Error(`${code}: forced`), { code });
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-silent-'));
+  root = makeRoot('silent', { init: false });
   _resetLogOnceForTests();
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
@@ -37,7 +37,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.HIPPO_LOG;
   syncBuiltinESMExports();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 /** Makes fs.readdirSync throw `code` for the rest of the test, mirrored into the ESM named exports. */

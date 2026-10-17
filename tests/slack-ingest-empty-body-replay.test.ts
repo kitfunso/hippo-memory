@@ -12,15 +12,13 @@
  * memory was written previously).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { adminActor } from '../src/api/index.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeStore } from './_helpers/make-root.js';
 
 function ctx(hippoRoot: string) {
   return apiCtx(hippoRoot, 'default', adminActor('test:slack-ingest-empty-body'));
@@ -32,12 +30,7 @@ describe('ingestMessage empty-body replay status consistency', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-ingest-empty-'));
-    initStore(join(root, '.hippo'));
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeStore('ingest-empty').base;
   });
 
   it('replay of empty body returns skipped (not duplicate) — B3 fix', async () => {

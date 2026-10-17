@@ -5,10 +5,9 @@
  * Real SQLite, the built CLI, a real HTTP server on port 0. No mocks.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer } from '../src/core/memory.js';
@@ -21,6 +20,7 @@ import { handleMcpRequest } from '../src/mcp/server.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
   const db = openHippoDb(root);
@@ -34,10 +34,8 @@ function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T):
 describe('token ledger helpers', () => {
   let home: string;
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-ledger-'));
-    initStore(home);
+    home = makeRoot('ledger');
   });
-  afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('tracks the last injected block per session and surface, and resets', async () => {
     withDb(home, (db) => {
@@ -106,12 +104,9 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
   let hippoDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hippo-hook-dedup-'));
-    hippoDir = join(tmpDir, '.hippo');
-    initStore(hippoDir);
+    ({ base: tmpDir, root: hippoDir } = makeStore('hook-dedup'));
     writeEntry(hippoDir, createMemory('NEVER force-push to master because it rewrites shared history', { pinned: true, layer: Layer.Episodic }));
   });
-  afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
 
   // In process unless `spawned`, with hippoOut's throw on a non-zero exit; the first case pins the hook in a real child.
   async function run(args: string[], stdin = '', spawned = false): Promise<string> {
@@ -196,10 +191,8 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   let origHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-ledger-http-'));
+    home = makeRoot('ledger-http');
     globalHome = mkdtempSync(join(tmpdir(), 'hippo-ledger-global-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    initStore(home);
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     writeEntry(home, createMemory('the zanzibar gateway needs the legacy auth header', { layer: Layer.Episodic }));
@@ -207,7 +200,6 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   afterEach(() => {
     if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = origHippoHome;
-    rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
 

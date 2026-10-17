@@ -1,13 +1,10 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { backfillChannel } from '../src/connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
@@ -22,10 +19,8 @@ const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: '
 describe('backfill survives 429 + Retry-After through the full loop', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-bfrl-'));
-    initStore(root);
+    root = makeRoot('slack-bfrl');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('429 then 200 → backfill ingests + cursor advances', async () => {
     let phase = 0;

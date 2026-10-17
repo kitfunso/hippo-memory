@@ -2,7 +2,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
@@ -13,6 +12,7 @@ import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ROW = 'the zorblaxian quintessor needs a restart every monday';
 const PROMPT = 'how do I restart the zorblaxian quintessor';
@@ -56,7 +56,7 @@ async function hookText(project: string): Promise<string> {
 }
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remember-project-'));
+  tmp = makeRoot('remember-project', { init: false });
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
@@ -68,7 +68,6 @@ afterEach(async () => {
   if (origHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('POST /v1/memories on a shared store', () => {

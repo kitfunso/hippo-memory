@@ -13,15 +13,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SECRET = 'shhh';
 
@@ -34,8 +31,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-parsefail-'));
-    initStore(root);
+    root = makeRoot('slack-parsefail');
     process.env.SLACK_SIGNING_SECRET = SECRET;
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
@@ -44,7 +40,6 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     delete process.env.SLACK_SIGNING_SECRET;
     delete process.env.HIPPO_TENANT;
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   function rowsByTenant(tenant: string) {

@@ -1,14 +1,14 @@
 // SessionEnd in a folder with no store of its own saves into the global store, or nothing when there is none.
 // Real built CLI and real stores, no mocks.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { makeRoot } from './_helpers/make-root.js';
 const RULE = 'Never run npm install in the billing service';
 const USER_TEXT = `We decided to use pnpm for the billing service. ${RULE}; the lockfile is pnpm-lock.yaml.`;
 
@@ -18,21 +18,13 @@ let globalRoot: string;
 let env: NodeJS.ProcessEnv;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-global-'));
+  dir = makeRoot('session-end-global', { init: false });
   cwd = path.join(dir, 'work');
   fs.mkdirSync(cwd);
   globalRoot = path.join(dir, 'global');
   env = { ...process.env, HIPPO_HOME: globalRoot, HOME: dir, USERPROFILE: dir };
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.HIPPO_SESSION_ID;
-});
-
-afterEach(() => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // best-effort cleanup only: a leftover scratch dir is harmless
-  }
 });
 
 function worker(args: string[]) {
