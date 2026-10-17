@@ -182,7 +182,6 @@ export const PROCESS_TESTS: readonly string[] = [
   'personal-read-sites.test.ts',
   'personal-write.test.ts',
   'pilot-arm-hook.test.ts',
-  'postinstall-script.test.ts',
   'pre-compact-e2e.test.ts',
   'predictions-conformance.test.ts',
   'prepublish-test-gate.test.ts',
