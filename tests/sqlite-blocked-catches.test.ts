@@ -15,6 +15,7 @@ import { sqliteStore } from '../src/store/index.js';
 import { physicsSearch, folderVectorSource } from '../src/entry/folder-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { handlesOf } from '../src/store/open.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -34,7 +35,7 @@ const ROWS: readonly Row[] = [
   }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
-  ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(embeddingModelRequiresReindex(root, 'm', {})), 'false'],
+  ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(embeddingModelRequiresReindex(handlesOf(root).on, 'm', {})), 'false'],
   ['search/vector.ts resolveVectorArm', /fillVectorArm/,
     async (root) => `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`, 'embeddings false'],
   ['search/physics-search.ts physicsQueryVector', /physicsQueryVector/,

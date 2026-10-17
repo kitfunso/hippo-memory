@@ -6,20 +6,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { saveActiveTaskSnapshot, appendSessionEvent, closeTaskSnapshotsForSession } from '../src/store/sessions.js';
-import {
-  saveSessionHandoff,
-  loadHandoffById,
-  loadLatestHandoff,
-  stampHandoffOutcome,
-  writeSessionEndHandoff,
-} from '../src/store/handoffs.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { getContext, adminActor } from '../src/api/index.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+import {
+  closeTaskSnapshotsForSession, loadHandoffById, loadLatestHandoff, stampHandoffOutcome,
+  writeSessionEndHandoff,
+} from './_helpers/root-forms.js';
 
 interface ColumnInfo {
   name: string;

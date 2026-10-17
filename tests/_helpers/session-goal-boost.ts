@@ -1,7 +1,8 @@
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { activeGoalsWithPolicies, localGoalRecallRows } from '../../src/store/goals.js';
+import { localGoalRecallRows } from '../../src/store/goals.js';
 import { boostByGoals, type GoalStackBoost, type GoalStackBoostOptions } from '../../src/search/goal-boost.js';
+import { activeGoalsWithPolicies } from './root-forms.js';
 
 /** The recall path's goal boost in one call: the store's active goals, the boost, and the log cut to local rows as finishRecall cuts it. */
 export function sessionGoalBoost<R extends { entry: MemoryEntry; score: number }>(

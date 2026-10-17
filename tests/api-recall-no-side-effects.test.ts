@@ -22,10 +22,10 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
-import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadLastRecall } from './_helpers/root-forms.js';
 
 function tmpHome() {
   const home = makeRoot('api-recall-noside');

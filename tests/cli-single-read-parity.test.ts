@@ -6,9 +6,9 @@ import { describe, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
-import { replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Store } from './_helpers/cli-parity-store.js';
+import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 // A spawned case starts the built CLI up to five times, each a few seconds on a loaded Windows box; 60 s is twice that.
 const SPAWNED_CASE_MS = 60_000;

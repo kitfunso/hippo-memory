@@ -14,12 +14,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries, loadEntriesByIds } from '../src/store/entry-reads.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { sqliteDagReads } from '../src/store/sqlite/dag-reads-group.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadEntriesByIds } from './_helpers/root-forms.js';
+import { handlesOf } from '../src/store/open.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -118,7 +120,7 @@ describe('schema v25 — DAG summary metadata', () => {
     writeEntry(root, child2);
     writeEntry(root, grandchild);
 
-    const direct = sqliteDagReads(root).summaryWithDescendants('default', parent.id, { depth: 1, admit: () => true })?.levels[0] ?? [];
+    const direct = sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: () => true })?.levels[0] ?? [];
     expect(direct.map((e) => e.id)).toEqual([child1.id, child2.id]);
     // Grandchild reachable only via child1, not directly under parent.
     expect(direct.find((e) => e.id === grandchild.id)).toBeUndefined();

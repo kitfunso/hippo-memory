@@ -7,7 +7,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { embedMemory } from '../src/search/embed-memories.js';
-import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { retrieve } from '../src/api/index.js';
 import { physicsSearch } from '../src/entry/folder-search.js';
@@ -20,6 +20,8 @@ import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { saveEmbeddingIndex } from './_helpers/root-forms.js';
+import { handlesOf } from '../src/store/open.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -43,7 +45,7 @@ function seedStore(): string {
     index[entry.id] = vector;
   }
   saveEmbeddingIndex(root, index);
-  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
+  saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   return root;
 }
 

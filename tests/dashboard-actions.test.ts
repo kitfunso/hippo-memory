@@ -3,13 +3,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
   DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
+import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
 

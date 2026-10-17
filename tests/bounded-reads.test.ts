@@ -4,9 +4,7 @@ import { rmSync } from 'node:fs';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db/index.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../src/consolidate/dag.js';
@@ -14,6 +12,8 @@ import { countAllMemories } from '../src/api/memories/memories.js';
 import { adminActor } from '../src/api/types.js';
 import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { writeEntriesTogether, loadAllDirtySummaries } from './_helpers/root-forms.js';
+import { handlesOf } from '../src/store/open.js';
 
 const roots: string[] = [];
 
@@ -101,7 +101,7 @@ describe('rebuildDirtySummaries', () => {
       const root = seededDirty(n);
       const newest = loadAllDirtySummaries(root).slice(0, 3).map((e) => e.id);
       expect(loadAllDirtySummaries(root, 3).map((e) => e.id)).toEqual(newest);
-      const { result, rowsRead } = await recordStatementsAsync(() => rebuildDirtySummaries(sqliteConsolidation(root), { apiKey: 'k', fetcher, cap: 2 }));
+      const { result, rowsRead } = await recordStatementsAsync(() => rebuildDirtySummaries(sqliteConsolidation(handlesOf(root)), { apiKey: 'k', fetcher, cap: 2 }));
       expect(result).toMatchObject({ attempted: 2, capped: true });
       read.push(rowsRead);
     }

@@ -2,11 +2,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { initStore, handlesOf } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -17,6 +16,7 @@ import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { saveEmbeddingIndex } from './_helpers/root-forms.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 const TENANT = 'default';
@@ -107,7 +107,7 @@ function seedStore(): string {
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
   process.env.OPENAI_API_KEY = 'sk-test';
   saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
-  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
+  saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const entity = (memoryId: string): number =>
     insertEntityAt(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
   for (const [from, to] of [['z2', 'c1'], ['x1', 'd4'], ['d1', 'd3']]) {

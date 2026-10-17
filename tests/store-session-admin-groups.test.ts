@@ -3,11 +3,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { sqliteSyncStore, sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 const T = 'default';
 const roots: string[] = [];

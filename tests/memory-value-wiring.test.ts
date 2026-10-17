@@ -17,9 +17,7 @@ import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { consolidate } from '../src/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { loadSessionDecayContext } from '../src/store/index-and-stats.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -39,6 +37,7 @@ import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/consolidate
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
 import { mulberry32 } from './_helpers/property.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadEveryTenantEntries, loadSessionDecayContext } from './_helpers/root-forms.js';
 
 // Each case seeds a real store and runs a full sleep on it, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });

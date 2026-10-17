@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
-import { markGitHubEventSeen, type GitHubRouting, type StoredCursors } from '../src/store/connectors/github.js';
-import { markSlackEventSeen, type SlackTeamRoute, type SlackWorkspace } from '../src/store/connectors/slack.js';
+import { type GitHubRouting, type StoredCursors } from '../src/store/connectors/github.js';
+import { type SlackTeamRoute, type SlackWorkspace } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import type {
@@ -20,6 +20,7 @@ import {
 } from './_helpers/in-memory-connector-events-store.js';
 import type { LoggedEvent } from './_helpers/in-memory-connector-writes-store.js';
 import { outcomeOf, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { markGitHubEventSeen, markSlackEventSeen } from './_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:github';

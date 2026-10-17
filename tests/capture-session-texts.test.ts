@@ -13,12 +13,13 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { deriveOriginProject } from '../src/core/project-identity.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
 import { mergedText } from '../src/util/same-text.js';
-import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { initProject, removeScratch, runHippo, scratch } from './_helpers/compaction-hooks.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadEveryTenantEntries } from './_helpers/root-forms.js';
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',

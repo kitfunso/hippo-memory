@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { JsonValue } from '../src/util/json.js';
 import { runCli } from '../src/cli.js';
 import { initStore } from '../src/store/open.js';
@@ -20,6 +20,7 @@ import { waitFor } from './_helpers/wait-for.js';
 import {
   CLAUDE_SESSION, claudeCodePayload, copilotEventsJsonl, copilotPayload, copilotScratch, writeClaudeTranscript, writeCopilotSessionLog, type CopilotScratch,
 } from './_helpers/copilot-hooks.js';
+import { loadActiveTaskSnapshot } from './_helpers/root-forms.js';
 
 const CONTEXT_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'copilot'];
 const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth/retry.ts';

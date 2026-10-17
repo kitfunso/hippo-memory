@@ -12,15 +12,15 @@ import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../src/store/embeddings/index.js';
 import { embedAll, embedMemory } from '../src/search/embed-memories.js';
 import type { EmbeddingProvider } from '../src/embeddings/provider.js';
-import { loadEveryTenantEntries, loadAllEntryIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
-import { loadEmbeddingIndex, resetStoredParticles } from '../src/store/vector-index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadEveryTenantEntries, loadAllEntryIds, resetStoredParticles } from './_helpers/root-forms.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';

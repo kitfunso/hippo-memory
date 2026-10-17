@@ -4,12 +4,13 @@ import { describe, it, expect, expectTypeOf, beforeEach, afterEach } from 'vites
 import { rmSync } from 'node:fs';
 import { writeEntry, type WriteEntryOptions } from '../src/store/entry-writes.js';
 import { writeEntryThenFail } from './_helpers/failing-write.js';
-import { loadRecallEntries, loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import type { PromoteOptions } from '../src/store/port/promotion.js';
 import { confidenceFacets, type ConfidenceInputs } from '../src/core/memory.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadRecallEntries } from './_helpers/root-forms.js';
 
 let root: string;
 beforeEach(() => {

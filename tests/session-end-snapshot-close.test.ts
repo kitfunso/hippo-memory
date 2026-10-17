@@ -5,10 +5,10 @@ import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { getHippoRoot } from '../src/core/project-identity.js';
-import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { loadLatestHandoff } from '../src/store/handoffs.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { loadActiveTaskSnapshot, loadLatestHandoff } from './_helpers/root-forms.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the

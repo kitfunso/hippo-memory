@@ -4,12 +4,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { initStore, handlesOf } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { createMemory, type CreateMemoryOptions } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { hybridSearch } from '../src/entry/folder-search.js';
@@ -19,6 +18,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { saveEmbeddingIndex } from './_helpers/root-forms.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -67,7 +67,7 @@ function withEmbeddings(s: Seeded): void {
     else index[id] = label.startsWith('N') ? [0, 0, 1] : [0.6, 0.8, 0];
   }
   saveEmbeddingIndex(s.home, index);
-  saveStoredEmbeddingModel(s.home, resolveEmbeddingProvider(loadConfig(s.home).embeddings).id);
+  saveStoredEmbeddingModel(handlesOf(s.home).on, resolveEmbeddingProvider(loadConfig(s.home).embeddings).id);
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
     // SAFETY: body is the OpenAI embeddings request this provider just serialised.
     const body = JSON.parse(init.body) as { input: string[] };

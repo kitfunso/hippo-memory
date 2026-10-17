@@ -9,10 +9,6 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
-import {
-  loadAllDirtySummaries,
-  applyRebuildResult,
-} from '../src/store/summaries.js';
 import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { rebuildDirtySummaries, buildDag } from '../src/consolidate/dag.js';
@@ -22,6 +18,8 @@ import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadAllDirtySummaries, applyRebuildResult } from './_helpers/root-forms.js';
+import { handlesOf } from '../src/store/open.js';
 
 // The cap cases seed up to 75 rows and marks in a real store, so their time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -139,7 +137,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher('newly-generated-summary-content-X');
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'test-key',
       fetcher,
       cap: 20,
@@ -202,10 +200,10 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
-    await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), { apiKey: 'k', fetcher, cap: 20 });
+    await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
 
     // Second call — should be no-op
-    const result2 = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), { apiKey: 'k', fetcher, cap: 20 });
+    const result2 = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
     expect(result2.attempted).toBe(0);
     expect(result2.rebuilt).toBe(0);
     expect(result2.failed).toBe(0);
@@ -250,7 +248,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       );
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -280,7 +278,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const fetcher = makeOkFetcher();
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -309,7 +307,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -373,7 +371,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'second-summary-ok-content-XX' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), { apiKey: 'k', fetcher, cap: 20 });
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
 
     expect(result.attempted).toBe(2);
     expect(result.failed).toBe(1);
@@ -402,7 +400,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), { apiKey: 'k', fetcher, cap: 20 });
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
     expect(result.failed).toBe(1);
     expect(result.rebuilt).toBe(1);
     expect(loadAllDirtySummaries(hippoRoot).length).toBe(1);
@@ -531,7 +529,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
 
     // Now run rebuildDirtySummaries — must report attempted=0
-    const rebuildResult = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const rebuildResult = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -703,7 +701,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Fetcher regenerates content byte-identical to the tombstoned value —
     // the deterministic-summarization scenario the AT1 P1a fix guards.
     const fetcher = makeOkFetcher(rejectedContent);
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'test-key',
       fetcher,
       cap: 20,
@@ -755,7 +753,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher('fresh-regenerated-summary-content-T4');
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'test-key',
       fetcher,
       cap: 20,

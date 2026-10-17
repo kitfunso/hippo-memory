@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { sqliteStore } from '../src/store/index.js';
 import { createMemory, Layer } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
@@ -26,6 +26,7 @@ import { embedAll } from '../src/search/embed-memories.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeStore } from './_helpers/make-root.js';
+import { loadEveryTenantEntries } from './_helpers/root-forms.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

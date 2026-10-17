@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadContextCandidates, tallySources, loadTextsHoldingWords } from '../src/store/candidates.js';
 import { calculateStrength, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { _resetAblationCacheForTests, strengthAblation } from '../src/core/ablation.js';
 import { makeStore } from './_helpers/make-root.js';
+import { loadContextCandidates, tallySources, loadTextsHoldingWords } from './_helpers/root-forms.js';
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 const DAY = 86400000;

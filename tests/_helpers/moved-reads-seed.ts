@@ -10,7 +10,6 @@ import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
 import { extractGraph } from '../../src/graph/extract.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { mintApiKey } from '../../src/store/auth.js';
-import { loadEntriesByIds } from '../../src/store/entry-reads.js';
 import { hashedVector } from './hashed-embedding-server.js';
 import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
 import { keyFor, onDb } from './store-worker-server.js';
@@ -18,6 +17,7 @@ import { apiCtx } from './api-ctx.js';
 import { objectsAt } from './objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
+import { loadEntriesByIds } from './root-forms.js';
 
 export const EMBEDDING_MODEL = 'hashed-16';
 export const VECTOR_IDENTITY = embeddingIndexIdentity(`openai:${EMBEDDING_MODEL}`);

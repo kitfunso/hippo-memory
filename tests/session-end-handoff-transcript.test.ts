@@ -5,9 +5,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { WORKING_STATE_CAPS, transcriptWorkingState } from '../src/capture/working-state.js';
 import { initStore } from '../src/store/open.js';
-import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { loadLatestHandoff, saveSessionHandoff, writeSessionEndHandoff } from '../src/store/handoffs.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { loadActiveTaskSnapshot, loadLatestHandoff, writeSessionEndHandoff } from './_helpers/root-forms.js';
 
 // AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';

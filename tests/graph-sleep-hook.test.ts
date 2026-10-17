@@ -15,11 +15,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
-import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph/extract.js';
@@ -33,6 +31,7 @@ import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 import { makeStore } from './_helpers/make-root.js';
+import { deleteEntry, loadPendingExtractionTenants, markGraphDirty } from './_helpers/root-forms.js';
 
 const T = 'default';
 

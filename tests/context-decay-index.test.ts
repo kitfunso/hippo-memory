@@ -5,12 +5,13 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/inde
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../src/db/decay-key.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { MemoryEntry } from '../src/core/memory.js';
-import { contextRowsWhere, loadContextCandidates } from '../src/store/candidates.js';
+import { contextRowsWhere } from '../src/store/candidates.js';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { rewardFactorSql } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recordStatements } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadContextCandidates } from './_helpers/root-forms.js';
 
 const DAY = 86_400_000;
 const BASE = Date.UTC(2026, 5, 1);

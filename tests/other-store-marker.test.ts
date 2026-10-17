@@ -131,7 +131,7 @@ describe('the other-store marker', () => {
   it('quality repair, which opens hippo.db itself to skip migrations, refuses and takes no backup', () => {
     initStore(root);
     writeFileSync(marker, 'postgres');
-    expect(() => repairAutomaticMemories(root, { tenantId: 'default', apply: true })).toThrow(OtherStoreFolderError);
+    expect(() => repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply: true })).toThrow(OtherStoreFolderError);
     expect(existsSync(join(root, 'backups'))).toBe(false);
   });
 

@@ -12,12 +12,13 @@ import type { Machine } from '../../src/agent-memories/sync.js';
 import type { ToolId } from '../../src/core/agent-memory-tools.js';
 import { queryAuditEvents, type AuditOp } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadDormantMemories, type DormantMemory } from '../../src/store/dormant.js';
+import { type DormantMemory } from '../../src/store/dormant.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { initStore } from '../../src/store/open.js';
 import { isInitialized } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { apiCtx } from './api-ctx.js';
+import { loadDormantMemories } from './root-forms.js';
 
 export interface World {
   readonly dir: string;

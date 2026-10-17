@@ -12,22 +12,15 @@ import { runDoctor } from '../src/doctor.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
-  carryingCalls,
-  lastSentState,
-  readApiCalls,
-  recordRereads,
-  recordTokenUse,
-  shouldSkipUnchanged,
-  type ApiCall,
-  type TokenEvent,
-  type TokenSummary,
-  type TokenSurface,
+  carryingCalls, lastSentState, readApiCalls, recordTokenUse, shouldSkipUnchanged, type ApiCall,
+  type TokenEvent, type TokenSummary, type TokenSurface,
 } from '../src/store/token-ledger.js';
 import { isSubagentPayload } from '../src/util/hook-payload.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { recordRereads } from './_helpers/root-forms.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;

@@ -5,7 +5,6 @@ import { makeRoot } from './_helpers/make-root.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
@@ -14,6 +13,8 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
 import { rankRecall, type RankRecallOptions } from '../src/api/recall/pipeline.js';
 import type { SearchResult } from '../src/core/search-types.js';
+import { saveEmbeddingIndex } from './_helpers/root-forms.js';
+import { handlesOf } from '../src/store/open.js';
 
 const TENANT = 'default';
 const CUT = '2026-06-01T00:00:00.000Z';
@@ -43,7 +44,7 @@ beforeEach(() => {
   }));
   for (const e of [PRE1, PRE2, POST]) writeEntry(root, { ...e, tags: [...e.tags] });
   saveEmbeddingIndex(root, VECTORS);
-  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
+  saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const db = openHippoDb(root);
   try {
     savePhysicsState(db, Object.entries(VECTORS).map(([id, position]) => ({

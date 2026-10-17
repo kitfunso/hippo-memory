@@ -14,10 +14,10 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { loadNeighborRelations, loadEntitiesByMemoryId, loadEntitiesByIds } from '../src/store/graph-reads.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadEntitiesByMemoryId, loadNeighborRelations, loadEntitiesByIds } from './_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }

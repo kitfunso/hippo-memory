@@ -11,10 +11,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { closePrediction } from '../src/store/predictions.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import type { RecallResult } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { closePrediction } from './_helpers/root-forms.js';
 
 function seedBaserate(home: string): void {
   for (const [est, act] of [[2, 4], [3, 6], [4, 8]]) {

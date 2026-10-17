@@ -13,11 +13,11 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
-import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { remember, outcomeForLastRecall } from '../src/api/index.js';
 import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadLastRecall, saveIndex } from './_helpers/root-forms.js';
 
 function tmpHome(): string {
   const home = makeRoot('api-ofr');

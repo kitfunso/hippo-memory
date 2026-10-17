@@ -29,6 +29,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { handlesOf } from '../src/store/open.js';
 
 // Two cases build and consolidate a separate store for each of six ingest orders.
 vi.setConfig({ testTimeout: 30_000 });
@@ -94,8 +95,8 @@ describe('dedupe survivor determinism', () => {
     await remember(ctxFor(s2), { content: CONTENT_B });
     await remember(ctxFor(s2), { content: CONTENT_A });
 
-    const result1 = deduplicateStore(sqliteConsolidation(s1));
-    const result2 = deduplicateStore(sqliteConsolidation(s2));
+    const result1 = deduplicateStore(sqliteConsolidation(handlesOf(s1)));
+    const result2 = deduplicateStore(sqliteConsolidation(handlesOf(s2)));
 
     expect(result1.removed).toBe(1);
     expect(result2.removed).toBe(1);
@@ -118,7 +119,7 @@ describe('dedupe survivor determinism', () => {
         setStrength(home, ids[idx], strengths[idx]);
       }
 
-      deduplicateStore(sqliteConsolidation(home));
+      deduplicateStore(sqliteConsolidation(handlesOf(home)));
       const remaining = loadAllEntries(home, 'default');
       expect(remaining.length).toBe(1);
       survivorContents.add(remaining[0].content);
@@ -135,7 +136,7 @@ describe('dedupe survivor determinism', () => {
     setStrength(home, weak.id, 0.5);
     setStrength(home, strong.id, 1.0);
 
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
 
     expect(result.removed).toBe(1);
     expect(result.pairs[0].kept).toBe(strong.id);
@@ -162,8 +163,8 @@ describe('dedupe survivor determinism', () => {
     setRetrievalCount(s2, high2.id, 5);
     setRetrievalCount(s2, low2.id, 0);
 
-    const result1 = deduplicateStore(sqliteConsolidation(s1));
-    const result2 = deduplicateStore(sqliteConsolidation(s2));
+    const result1 = deduplicateStore(sqliteConsolidation(handlesOf(s1)));
+    const result2 = deduplicateStore(sqliteConsolidation(handlesOf(s2)));
 
     expect(result1.pairs[0].keptContent).toBe(CONTENT_B);
     expect(result2.pairs[0].keptContent).toBe(CONTENT_B);
@@ -187,7 +188,7 @@ describe('dedupe survivor determinism', () => {
     setRetrievalCount(home, strongRaw.id, 0);
     setRetrievalCount(home, retrieved.id, 5);
 
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
 
     expect(result.removed).toBe(1);
     expect(result.pairs[0].kept).toBe(retrieved.id);
@@ -200,7 +201,7 @@ describe('dedupe survivor determinism', () => {
     await remember(ctxFor(home), { content: CONTENT_A });
     await remember(ctxFor(home), { content: CONTENT_A });
 
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
 
     expect(result.removed).toBe(1);
     const remaining = loadAllEntries(home, 'default');
@@ -213,8 +214,8 @@ describe('dedupe survivor determinism', () => {
     await remember(ctxFor(home), { content: CONTENT_A });
     await remember(ctxFor(home), { content: CONTENT_B });
 
-    const dry = deduplicateStore(sqliteConsolidation(home), { dryRun: true });
-    const real = deduplicateStore(sqliteConsolidation(home), { dryRun: false });
+    const dry = deduplicateStore(sqliteConsolidation(handlesOf(home)), { dryRun: true });
+    const real = deduplicateStore(sqliteConsolidation(handlesOf(home)), { dryRun: false });
 
     expect(dry.removed).toBe(1);
     expect(real.removed).toBe(1);
@@ -296,7 +297,7 @@ describe('dedupe survivor determinism', () => {
   function survivorAfterDedupe(order: ReturnType<typeof createMemory>[]) {
     const home = makeRoot('dedupe-det-meta');
     for (const entry of order) writeEntry(home, entry);
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
     expect(result.removed).toBe(order.length - 1);
     const remaining = loadAllEntries(home, 'default');
     expect(remaining.length).toBe(1);
@@ -337,7 +338,7 @@ describe('dedupe survivor determinism', () => {
     for (const order of [[raw, semantic], [semantic, raw]]) {
       const home = makeRoot('dedupe-det-raw');
       for (const entry of order) writeEntry(home, entry);
-      const result = deduplicateStore(sqliteConsolidation(home));
+      const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
       expect(result.removed).toBe(0);
       expect(result.pairs).toHaveLength(0);
       const ids = loadAllEntries(home, 'default').map((e) => e.id).sort();
@@ -355,7 +356,7 @@ describe('dedupe survivor determinism', () => {
     };
     const current = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     for (const entry of [successor, stale, current]) writeEntry(home, entry);
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
     expect(result.removed).toBe(0);
     expect(result.pairs).toHaveLength(0);
     const ids = loadAllEntries(home, 'default').map((e) => e.id).sort();

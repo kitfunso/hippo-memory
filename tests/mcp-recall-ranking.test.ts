@@ -4,20 +4,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { initStore, handlesOf } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { pushGoal } from '../src/store/goals.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { pushGoal, saveEmbeddingIndex } from './_helpers/root-forms.js';
 
 // Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -133,7 +132,7 @@ function withEmbeddings(s: Seeded): void {
     index[memId] = label === 'S1' ? [1, 0, 0] : label.startsWith('N') ? [0, 0, 1] : [0.6, 0.8, 0];
   }
   saveEmbeddingIndex(s.home, index);
-  saveStoredEmbeddingModel(s.home, id);
+  saveStoredEmbeddingModel(handlesOf(s.home).on, id);
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
     // SAFETY: body is the OpenAI embeddings request this provider just serialised.
     const body = JSON.parse(init.body) as { input: string[] };

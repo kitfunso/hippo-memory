@@ -6,6 +6,7 @@ import * as path from 'path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { loadConfig } from '../src/core/config.js';
+import { handlesOf } from '../src/store/open.js';
 
 function writeConfig(hippoRoot: string, model: string): void {
   fs.writeFileSync(
@@ -112,7 +113,7 @@ describe('embedding model configuration', () => {
 
       const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
-      const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
+      const { saveEmbeddingIndex } = await import('./_helpers/root-forms.js');
       const { hybridSearch } = await import('../src/entry/folder-search.js');
       const { createMemory } = await import('../src/core/memory.js');
 
@@ -129,7 +130,7 @@ describe('embedding model configuration', () => {
       // Seed a real, in-sync embedding cache so hybridSearch's "does any
       // candidate have a cached vector" guard lets the query embed proceed.
       saveEmbeddingIndex(tmpDir, { [entryId]: [1, 0, 0] });
-      saveStoredEmbeddingModel(tmpDir, providerId);
+      saveStoredEmbeddingModel(handlesOf(tmpDir).on, providerId);
 
       await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
@@ -146,10 +147,10 @@ describe('embedding model configuration', () => {
     writeConfig(tmpDir, 'custom/model');
 
     const { embeddingModelRequiresReindex } = await import('../src/store/embeddings/index.js');
-    const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
+    const { saveEmbeddingIndex } = await import('./_helpers/root-forms.js');
     saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
 
-    expect(embeddingModelRequiresReindex(tmpDir, 'custom/model')).toBe(true);
+    expect(embeddingModelRequiresReindex(handlesOf(tmpDir).on, 'custom/model')).toBe(true);
   });
 
   it('falls back to BM25 when the embedding index needs reindexing', async () => {
@@ -158,7 +159,7 @@ describe('embedding model configuration', () => {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
-      const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
+      const { saveEmbeddingIndex } = await import('./_helpers/root-forms.js');
       const { hybridSearch } = await import('../src/entry/folder-search.js');
       const { createMemory } = await import('../src/core/memory.js');
 
@@ -167,7 +168,7 @@ describe('embedding model configuration', () => {
       // embeddingModelRequiresReindex genuinely returns true (VOYAGE_API_KEY
       // is set, so unavailability is not why the embed gets skipped).
       saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
-      saveStoredEmbeddingModel(tmpDir, 'voyage:some-other-model');
+      saveStoredEmbeddingModel(handlesOf(tmpDir).on, 'voyage:some-other-model');
 
       const entry = createMemory('query text semantic-only match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       const results = await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
@@ -192,7 +193,7 @@ describe('embedding model configuration', () => {
       // In sync (no reindex needed) but genuinely empty: no embeddings.json
       // was ever written for this store, so no candidate has a cached vector.
       const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
-      saveStoredEmbeddingModel(tmpDir, providerId);
+      saveStoredEmbeddingModel(handlesOf(tmpDir).on, providerId);
 
       const results = await hybridSearch('query text', [createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], {
         hippoRoot: tmpDir,

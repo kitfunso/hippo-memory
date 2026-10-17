@@ -9,10 +9,10 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
-import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { writeEntriesTogether } from './_helpers/root-forms.js';
 
 const roots: string[] = [];
 afterEach(() => {

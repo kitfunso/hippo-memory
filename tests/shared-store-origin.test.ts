@@ -8,7 +8,6 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { stampOriginProjectForImport } from '../src/store/entry-row.js';
 import { getGlobalRoot } from '../src/sharing/global-store.js';
-import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { shareMemory } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { BadRequestError } from '../src/core/api-errors.js';
@@ -24,6 +23,7 @@ import { summaryWith } from './_helpers/compaction-hooks.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { copyToGlobal } from './_helpers/root-forms.js';
 
 let tmp: string;
 const origHome = process.env.HIPPO_HOME;

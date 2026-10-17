@@ -9,22 +9,22 @@ import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import type { JsonValue } from '../src/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { initStore } from '../src/store/open.js';
+import { initStore, handlesOf } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { saveEmbeddingIndex, replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 const TENANT = 'default';
 const SESSION = 'two-repo-session';
@@ -140,7 +140,7 @@ beforeAll(async () => {
   for (const id of [ids.acme, ids.beta, ids.global, ids.none, ids.other, ids.alice, ids.bob]) vectors[id] = [0.6, 0.8, 0];
   vectors[ids.betaNear] = [1, 0, 0];
   saveEmbeddingIndex(store, vectors);
-  saveStoredEmbeddingModel(store, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
+  saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
 
   ids.acmeSum = seed('acmesum rollup of the acme session work', 'acme', SUMMARY);
   ids.betaSum = seed('betasum rollup of the beta session work', 'beta', SUMMARY);
