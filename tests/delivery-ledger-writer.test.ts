@@ -100,9 +100,9 @@ afterEach(() => {
 
 describe('writeDeliveryEventOnHandle', () => {
   it('writes the event and its candidates, and numbers turns per session', () => {
-    const first = writeDeliveryEventOnHandle(db,event({ promptHash: 'p1' }));
-    const second = writeDeliveryEventOnHandle(db,event({ promptHash: 'p2', ts: at(5000) }));
-    const other = writeDeliveryEventOnHandle(db,event({ promptHash: 'p1', sessionId: 'sess-2' }));
+    const first = writeDeliveryEventOnHandle(db, event({ promptHash: 'p1' }));
+    const second = writeDeliveryEventOnHandle(db, event({ promptHash: 'p2', ts: at(5000) }));
+    const other = writeDeliveryEventOnHandle(db, event({ promptHash: 'p1', sessionId: 'sess-2' }));
     expect(first).not.toBeNull();
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of, r.ledger_version])).toEqual([
@@ -117,9 +117,9 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 
   it('flags a repeated host turn id as a duplicate of the first, and a new turn id as a new turn', () => {
-    const first = writeDeliveryEventOnHandle(db,event({ runtime: 'codex', hostTurnId: 'turn-a' }));
-    const repeat = writeDeliveryEventOnHandle(db,event({ runtime: 'codex', hostTurnId: 'turn-a', ts: at(60_000) }));
-    const next = writeDeliveryEventOnHandle(db,event({ runtime: 'codex', hostTurnId: 'turn-b', ts: at(500) }));
+    const first = writeDeliveryEventOnHandle(db, event({ runtime: 'codex', hostTurnId: 'turn-a' }));
+    const repeat = writeDeliveryEventOnHandle(db, event({ runtime: 'codex', hostTurnId: 'turn-a', ts: at(60_000) }));
+    const next = writeDeliveryEventOnHandle(db, event({ runtime: 'codex', hostTurnId: 'turn-b', ts: at(500) }));
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
       [first, 1, null],
@@ -129,10 +129,10 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 
   it('without a turn id, flags the same prompt within the window either side, never past it', () => {
-    const first = writeDeliveryEventOnHandle(db,event({ ts: at(10_000) }));
-    const before = writeDeliveryEventOnHandle(db,event({ ts: at(8_500) }));
-    const after = writeDeliveryEventOnHandle(db,event({ ts: at(12_000) }));
-    const far = writeDeliveryEventOnHandle(db,event({ ts: at(20_000) }));
+    const first = writeDeliveryEventOnHandle(db, event({ ts: at(10_000) }));
+    const before = writeDeliveryEventOnHandle(db, event({ ts: at(8_500) }));
+    const after = writeDeliveryEventOnHandle(db, event({ ts: at(12_000) }));
+    const far = writeDeliveryEventOnHandle(db, event({ ts: at(20_000) }));
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
       [first, 1, null],
@@ -143,10 +143,10 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 
   it('gives no turn number and no duplicate check to missing-session and sub-agent events', () => {
-    writeDeliveryEventOnHandle(db,event({ sessionId: null, sessionState: 'missing' }));
-    writeDeliveryEventOnHandle(db,event({ sessionId: null, sessionState: 'missing' }));
-    const parent = writeDeliveryEventOnHandle(db,event());
-    writeDeliveryEventOnHandle(db,event({ sessionState: 'subagent' }));
+    writeDeliveryEventOnHandle(db, event({ sessionId: null, sessionState: 'missing' }));
+    writeDeliveryEventOnHandle(db, event({ sessionId: null, sessionState: 'missing' }));
+    const parent = writeDeliveryEventOnHandle(db, event());
+    writeDeliveryEventOnHandle(db, event({ sessionState: 'subagent' }));
     const missing = readDeliveryEvents(db, 'default', null);
     expect(missing.map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[null, null], [null, null]]);
     const inSession = readDeliveryEvents(db, 'default', 'sess-1');
@@ -159,8 +159,8 @@ describe('writeDeliveryEventOnHandle', () => {
   it('W8 numbers two context rows 500 ms apart, since a context row has no prompt or host turn to match', () => {
     const context = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
       event({ eventType: 'context', surface: 'context', sessionState: 'env', promptHash: null, promptLength: 0, ...overrides });
-    writeDeliveryEventOnHandle(db,context());
-    writeDeliveryEventOnHandle(db,context({ ts: at(500) }));
+    writeDeliveryEventOnHandle(db, context());
+    writeDeliveryEventOnHandle(db, context({ ts: at(500) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
   });
 
@@ -169,8 +169,8 @@ describe('writeDeliveryEventOnHandle', () => {
 
   describe.each(['pre-compact', 'compact-resume', 'session-end'] as const)('%s boundary duplicates', (type) => {
     it('W1 flags a second prompt-less event 500 ms later as a duplicate of the first', () => {
-      const first = writeDeliveryEventOnHandle(db,boundary(type));
-      const second = writeDeliveryEventOnHandle(db,boundary(type, { ts: at(500) }));
+      const first = writeDeliveryEventOnHandle(db, boundary(type));
+      const second = writeDeliveryEventOnHandle(db, boundary(type, { ts: at(500) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
         [first, 1, null],
         [second, null, first],
@@ -178,15 +178,15 @@ describe('writeDeliveryEventOnHandle', () => {
     });
 
     it('W2 numbers the same pair 3000 ms apart as turns 1 and 2', () => {
-      writeDeliveryEventOnHandle(db,boundary(type));
-      writeDeliveryEventOnHandle(db,boundary(type, { ts: at(3000) }));
+      writeDeliveryEventOnHandle(db, boundary(type));
+      writeDeliveryEventOnHandle(db, boundary(type, { ts: at(3000) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
     });
 
     it('W6 with one host turn id, flags 500 ms apart and numbers 3000 ms apart', () => {
-      const first = writeDeliveryEventOnHandle(db,boundary(type, { hostTurnId: 'turn-a' }));
-      const near = writeDeliveryEventOnHandle(db,boundary(type, { hostTurnId: 'turn-a', ts: at(500) }));
-      const far = writeDeliveryEventOnHandle(db,boundary(type, { hostTurnId: 'turn-a', ts: at(3000) }));
+      const first = writeDeliveryEventOnHandle(db, boundary(type, { hostTurnId: 'turn-a' }));
+      const near = writeDeliveryEventOnHandle(db, boundary(type, { hostTurnId: 'turn-a', ts: at(500) }));
+      const far = writeDeliveryEventOnHandle(db, boundary(type, { hostTurnId: 'turn-a', ts: at(3000) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
         [first, 1, null],
         [near, null, first],
@@ -195,19 +195,19 @@ describe('writeDeliveryEventOnHandle', () => {
     });
 
     it('W7 measures the window from the numbered row, so a third fire 1500 ms after a duplicate is numbered', () => {
-      const first = writeDeliveryEventOnHandle(db,boundary(type));
-      writeDeliveryEventOnHandle(db,boundary(type, { ts: at(1500) }));
-      writeDeliveryEventOnHandle(db,boundary(type, { ts: at(3000) }));
+      const first = writeDeliveryEventOnHandle(db, boundary(type));
+      writeDeliveryEventOnHandle(db, boundary(type, { ts: at(1500) }));
+      writeDeliveryEventOnHandle(db, boundary(type, { ts: at(3000) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
         [1, null], [null, first], [2, null],
       ]);
     });
 
     it('W5 gives a missing-session or sub-agent boundary no number and no duplicate', () => {
-      writeDeliveryEventOnHandle(db,boundary(type, { sessionId: null, sessionState: 'missing' }));
-      writeDeliveryEventOnHandle(db,boundary(type, { sessionId: null, sessionState: 'missing', ts: at(500) }));
-      writeDeliveryEventOnHandle(db,boundary(type, { sessionState: 'subagent' }));
-      writeDeliveryEventOnHandle(db,boundary(type, { sessionState: 'subagent', ts: at(500) }));
+      writeDeliveryEventOnHandle(db, boundary(type, { sessionId: null, sessionState: 'missing' }));
+      writeDeliveryEventOnHandle(db, boundary(type, { sessionId: null, sessionState: 'missing', ts: at(500) }));
+      writeDeliveryEventOnHandle(db, boundary(type, { sessionState: 'subagent' }));
+      writeDeliveryEventOnHandle(db, boundary(type, { sessionState: 'subagent', ts: at(500) }));
       expect(readDeliveryEvents(db, 'default', null).map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[null, null], [null, null]]);
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([
         ['subagent', null, null], ['subagent', null, null],
@@ -216,14 +216,14 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 
   it('W3 keeps numbering a prompt-less prompt-submit pair 500 ms apart', () => {
-    writeDeliveryEventOnHandle(db,event({ promptHash: null, promptLength: 0 }));
-    writeDeliveryEventOnHandle(db,event({ promptHash: null, promptLength: 0, ts: at(500) }));
+    writeDeliveryEventOnHandle(db, event({ promptHash: null, promptLength: 0 }));
+    writeDeliveryEventOnHandle(db, event({ promptHash: null, promptLength: 0, ts: at(500) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
   });
 
   it('W6 still flags a prompt-submit pair with one turn id 3000 ms apart', () => {
-    const first = writeDeliveryEventOnHandle(db,event({ hostTurnId: 'turn-a' }));
-    const repeat = writeDeliveryEventOnHandle(db,event({ hostTurnId: 'turn-a', ts: at(3000) }));
+    const first = writeDeliveryEventOnHandle(db, event({ hostTurnId: 'turn-a' }));
+    const repeat = writeDeliveryEventOnHandle(db, event({ hostTurnId: 'turn-a', ts: at(3000) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
       [first, 1, null],
       [repeat, null, first],
@@ -231,10 +231,10 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 
   it('W4 numbers each event type on its own, and never matches another session', () => {
-    writeDeliveryEventOnHandle(db,event({ promptHash: 'p1' }));
-    writeDeliveryEventOnHandle(db,boundary('pre-compact', { ts: at(100) }));
-    writeDeliveryEventOnHandle(db,boundary('compact-resume', { ts: at(200) }));
-    writeDeliveryEventOnHandle(db,boundary('pre-compact', { sessionId: 'sess-2', ts: at(300) }));
+    writeDeliveryEventOnHandle(db, event({ promptHash: 'p1' }));
+    writeDeliveryEventOnHandle(db, boundary('pre-compact', { ts: at(100) }));
+    writeDeliveryEventOnHandle(db, boundary('compact-resume', { ts: at(200) }));
+    writeDeliveryEventOnHandle(db, boundary('pre-compact', { sessionId: 'sess-2', ts: at(300) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.event_type, r.turn_seq, r.duplicate_of])).toEqual([
       ['prompt-submit', 1, null], ['pre-compact', 1, null], ['compact-resume', 1, null],
     ]);
@@ -244,17 +244,17 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 
   it('prunes events past the retention window, with their candidates', () => {
-    writeDeliveryEventOnHandle(db,event({ ts: '2026-01-01T00:00:00.000Z', promptHash: 'old' }));
+    writeDeliveryEventOnHandle(db, event({ ts: '2026-01-01T00:00:00.000Z', promptHash: 'old' }));
     expect(count('delivery_candidates')).toBe(1);
     const later = new Date(Date.parse('2026-01-01T00:00:00.000Z') + (DELIVERY_LEDGER_RETENTION_DAYS + 1) * 86_400_000).toISOString();
-    const kept = writeDeliveryEventOnHandle(db,event({ ts: later, promptHash: 'new' }));
+    const kept = writeDeliveryEventOnHandle(db, event({ ts: later, promptHash: 'new' }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.id)).toEqual([kept]);
     expect(count('delivery_candidates')).toBe(1);
   });
 
   it('a write under a far-future fake time prunes no real rows', () => {
-    const real = writeDeliveryEventOnHandle(db,event({ ts: new Date().toISOString(), promptHash: 'real' }));
-    const fake = writeDeliveryEventOnHandle(db,event({ ts: '2099-01-01T00:00:00.000Z', promptHash: 'fake' }));
+    const real = writeDeliveryEventOnHandle(db, event({ ts: new Date().toISOString(), promptHash: 'real' }));
+    const fake = writeDeliveryEventOnHandle(db, event({ ts: '2099-01-01T00:00:00.000Z', promptHash: 'fake' }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.id)).toEqual([real, fake]);
     expect(count('delivery_candidates')).toBe(2);
   });
@@ -262,7 +262,7 @@ describe('writeDeliveryEventOnHandle', () => {
   it('rolls back and returns null with one stderr line when a write fails', () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE delivery_candidates');
-    expect(writeDeliveryEventOnHandle(db,event())).toBeNull();
+    expect(writeDeliveryEventOnHandle(db, event())).toBeNull();
     expect(count('delivery_events')).toBe(0);
     expect(err).toHaveBeenCalledTimes(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: /);
@@ -271,7 +271,7 @@ describe('writeDeliveryEventOnHandle', () => {
   it('names the request on the failure line when the write runs inside one', () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE delivery_candidates');
-    expect(runWithRequestId('req-ledger-7', () => writeDeliveryEventOnHandle(db,event()))).toBeNull();
+    expect(runWithRequestId('req-ledger-7', () => writeDeliveryEventOnHandle(db, event()))).toBeNull();
     expect(err).toHaveBeenCalledTimes(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7 errorClass=\w+ stack=.*\n$/);
   });
@@ -424,46 +424,46 @@ describe('tool-failure rows', () => {
   const rows = () => readDeliveryEvents(db, 'default', 'sess-1');
 
   it('every stored row carries the current ledger version', () => {
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1', failureId: 3 }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1', failureId: 3 }));
     const [row] = rows();
     expect([row.ledger_version, row.tool_use_id, row.failure_id]).toEqual([DELIVERY_LEDGER_VERSION, 'toolu_1', 3]);
     expect(DELIVERY_LEDGER_VERSION).toBe(4);
   });
 
   it('the same tool_use_id twice is a duplicate of the first row and unnumbered', () => {
-    const first = writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1' }));
-    const second = writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1' }));
+    const first = writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
+    const second = writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
     expect(rows().map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([[first, 1, null], [second, null, first]]);
   });
 
   it('two distinct ids within one millisecond are two numbered rows', () => {
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1' }));
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_2' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_2' }));
     expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
   });
 
   it('no id gives two numbered rows, never merged by time', () => {
-    writeDeliveryEventOnHandle(db,failureEvent());
-    writeDeliveryEventOnHandle(db,failureEvent());
+    writeDeliveryEventOnHandle(db, failureEvent());
+    writeDeliveryEventOnHandle(db, failureEvent());
     expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
   });
 
   it('the same id in another session or tenant is not a duplicate', () => {
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1' }));
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1', sessionId: 'sess-2' }));
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1', tenantId: 'other' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1', sessionId: 'sess-2' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1', tenantId: 'other' }));
     expect(readDeliveryEvents(db, 'default', 'sess-2').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null]]);
     expect(readDeliveryEvents(db, 'other', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null]]);
   });
 
   it('a sub-agent row is unnumbered and never a duplicate', () => {
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1' }));
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1', sessionState: 'subagent' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1', sessionState: 'subagent' }));
     expect(rows().map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([['payload', 1, null], ['subagent', null, null]]);
   });
 
   it('the index rejects a forced second numbered row with the same key', () => {
-    writeDeliveryEventOnHandle(db,failureEvent({ toolUseId: 'toolu_1' }));
+    writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
     const forced = (turnSeq: number | null): void => { db.prepare(
       `INSERT INTO delivery_events (ts, ledger_version, tenant_id, runtime, event_type, surface, store_hash, write_store, session_id,
          session_state, turn_seq, block_state, tool_use_id)
