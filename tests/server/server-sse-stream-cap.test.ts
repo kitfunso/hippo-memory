@@ -1,0 +1,87 @@
+// GET /mcp/stream holds a socket and a timer per stream, so each API key (or each IP
+// when keyless) gets a bounded number of concurrent streams; a closed stream frees its slot.
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { createApiKey } from '../../src/store/auth.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { waitFor } from '../_helpers/wait-for.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+interface OpenStream {
+  status: number;
+  abort: () => void;
+}
+
+describe('/mcp/stream concurrent stream cap', () => {
+  let root: string;
+  let handle: ServerHandle;
+  const open: OpenStream[] = [];
+
+  async function openStream(headers: Record<string, string> = {}): Promise<OpenStream> {
+    const ac = new AbortController();
+    const res = await fetch(`${handle.url}/mcp/stream`, {
+      headers: { accept: 'text/event-stream', ...headers },
+      signal: ac.signal,
+    });
+    if (res.status === 200) {
+      // Read the first ping so the stream is known to be registered server-side.
+      await res.body!.getReader().read();
+    } else {
+      await res.text();
+    }
+    const stream = { status: res.status, abort: () => ac.abort() };
+    open.push(stream);
+    return stream;
+  }
+
+  function mintKey(label: string): string {
+    const db = openHippoDb(root);
+    try {
+      return createApiKey(db, { tenantId: 'default', label }).plaintext;
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  beforeEach(async () => {
+    vi.stubEnv('MCP_SSE_MAX_STREAMS', '2');
+    root = makeRoot('sse-cap');
+    handle = await serve({ hippoRoot: root, port: 0 });
+  });
+
+  afterEach(async () => {
+    for (const s of open.splice(0)) s.abort();
+    await handle.stop();
+  });
+
+  it('answers 429 to the stream past the cap and frees a slot when a stream closes', async () => {
+    const first = await openStream();
+    expect(first.status).toBe(200);
+    expect((await openStream()).status).toBe(200);
+    expect((await openStream()).status).toBe(429);
+
+    first.abort();
+    let status = 0;
+    await waitFor(async () => (status = (await openStream()).status) === 200, { timeoutMs: 3000, intervalMs: 50, what: 'a freed stream slot' });
+    expect(status).toBe(200);
+  });
+
+  it('counts each API key separately from the keyless loopback caller', async () => {
+    const keyA = mintKey('sse-cap-a');
+    const auth = { authorization: `Bearer ${keyA}` };
+    expect((await openStream(auth)).status).toBe(200);
+    expect((await openStream(auth)).status).toBe(200);
+    expect((await openStream(auth)).status).toBe(429);
+    expect((await openStream()).status).toBe(200);
+    expect((await openStream({ authorization: `Bearer ${mintKey('sse-cap-b')}` })).status).toBe(200);
+  });
+});
