@@ -19,18 +19,16 @@ import { join } from 'node:path';
 import { sleep, adminActor } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
 import { apiCtx } from './_helpers/api-ctx.js';
-import { initStore } from '../src/store/open.js';
 import { sqliteStore } from '../src/store/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer } from '../src/core/memory.js';
 import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
 import { configOf as realConfigOf } from '../src/api/config-of.js';
+import { makeStore } from './_helpers/make-root.js';
 
 function newCtx() {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-fault-'));
-  const hippoRoot = join(tmpDir, '.hippo');
-  initStore(hippoRoot);
+  const { base: tmpDir, root: hippoRoot } = makeStore('sleep-fault');
 
   // Seed at least one entry so consolidate / dedup / audit phases have
   // something to scan (otherwise some phases short-circuit before the

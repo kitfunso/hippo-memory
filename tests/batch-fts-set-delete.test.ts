@@ -1,11 +1,7 @@
 // A batch call clears the full-text rows it replaces with one delete, re-indexes only rows whose text changed,
 // and never indexes an id twice, even when the index refuses the delete.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { DatabaseSync } from '../src/db/sqlite.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
@@ -14,6 +10,7 @@ import type { MemoryEntry } from '../src/core/memory.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const FTS_WRITE = /(?:INSERT INTO|DELETE FROM) memories_fts\b/;
 const FTS_DELETE = /DELETE FROM memories_fts\b/;
@@ -22,15 +19,13 @@ let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fts-set-delete-'));
-  initStore(root);
+  root = makeRoot('fts-set-delete');
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   _resetLogOnceForTests();
 });
 
 afterEach(() => {
   stderrSpy.mockRestore();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 function seedRows(n: number, label = 'seed'): MemoryEntry[] {

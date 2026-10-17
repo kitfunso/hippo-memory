@@ -1,7 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
@@ -10,11 +9,11 @@ import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-api-rem-'));
-    initStore(home);
+    const home = makeRoot('api-rem');
     const result = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
       content: 'api-canary-remember-77',
       kind: 'distilled',
@@ -29,8 +28,7 @@ describe('api.remember', () => {
   });
 
   it('emits an audit event with the supplied actor', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-api-rem-'));
-    initStore(home);
+    const home = makeRoot('api-rem');
     await remember(
       apiCtx(home, 'default', { subject: 'api_key:hk_test', role: 'admin' }),
       { content: 'audit-trail-canary' },
@@ -50,7 +48,7 @@ describe('api.remember', () => {
 describe("api.remember stamps the caller's project", () => {
   let tmp: string;
   beforeEach(() => {
-    tmp = mkdtempSync(join(tmpdir(), 'hippo-api-rem-proj-'));
+    tmp = makeRoot('api-rem-proj', { init: false });
     _resetProjectIdentityCacheForTests();
     _resetSharedStoreCacheForTests();
     return () => {

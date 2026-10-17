@@ -1,21 +1,20 @@
 // A failed capture sets the exit code and returns, so the log tee is undone instead of dying inside process.exit.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { cmdCapture } from '../src/capture/command.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let dir: string;
 let savedExitCode: typeof process.exitCode;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-capture-fail-'));
+  dir = makeRoot('capture-fail', { init: false });
   savedExitCode = process.exitCode;
 });
 afterEach(() => {
   process.exitCode = savedExitCode;
   vi.restoreAllMocks();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe('cmdCapture failure', () => {

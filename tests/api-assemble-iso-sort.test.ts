@@ -1,14 +1,11 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { assemble } from '../src/api/index.js';
 import { seededRandom } from '../src/eval/eval-stats.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /**
  * F4 — byte compare canonical UTC ISO timestamps instead of localeCompare.
@@ -75,12 +72,7 @@ describe('assemble ISO sort: byte compare equivalence', () => {
 describe('assemble ISO sort: integration', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-f4-int-'));
-    mkdirSync(join(root, '.hippo'), { recursive: true });
-    initStore(root);
-  });
-  afterEach(() => {
-    try { rmSync(root, { recursive: true, force: true }); } catch { /* best-effort */ }
+    root = makeRoot('f4-int');
   });
 
   it('returns items chronologically ordered by createdAt after byte-cmp sort', async () => {

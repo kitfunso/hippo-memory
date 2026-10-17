@@ -1,15 +1,14 @@
 // A deferred write scope reads before it writes, and SQLite skips the busy handler for that upgrade,
 // so a second hippo process failed with `database is locked` instead of waiting for the write lock.
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createMemory } from '../src/core/memory.js';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
 import { distUrl, withDb } from './_helpers/agent-memories-world.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const WORKERS = 2;
 const ROWS = 60;
@@ -29,10 +28,6 @@ interface Finished {
 }
 
 let root: string;
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-});
 
 function runWorker(args: readonly string[]): Promise<Finished> {
   return new Promise((resolve, fail) => {
@@ -61,8 +56,7 @@ function storeCounts(hippoRoot: string): StoreCounts {
 
 describe('two hippo processes writing to one store at once', () => {
   it('both wait for the write lock, and every row lands with one remember audit row', async () => {
-    root = join(mkdtempSync(join(tmpdir(), 'hippo-writers-wait-')), '.hippo');
-    initStore(root);
+    root = makeStore('writers-wait').root;
     writeFileSync(join(root, 'worker.mjs'), WORKER, 'utf8');
 
     // Every worker waits for one shared start time after loading, so the writes overlap.
@@ -77,8 +71,7 @@ describe('two hippo processes writing to one store at once', () => {
 
 describe('writeEntryDbOnly inside the caller\'s transaction', () => {
   it('a throwing afterWrite undoes only its own row and leaves the caller\'s transaction open', () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-nested-write-'));
-    initStore(root);
+    root = makeRoot('nested-write');
     const kept = createMemory('The caller keeps this row when a nested write fails.', { baseHalfLifeDays: 30 });
     const dropped = createMemory('This nested row rolls back on its own.', { baseHalfLifeDays: 30 });
     const db = openHippoDb(root);

@@ -2,9 +2,7 @@
 // Real SQLite stores and the CLI entry in process; the long tags make the printed text cost far more than the content.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -17,6 +15,7 @@ import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
   'observability-alerting-runbook-owner', 'incident-review-follow-up-action-item',
@@ -106,10 +105,7 @@ function expectBudgetBinds(text: string): void {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-budget-block-'));
-  hippoDir = path.join(root, '.hippo');
-  fs.mkdirSync(hippoDir, { recursive: true });
-  initStore(hippoDir);
+  ({ base: root, root: hippoDir } = makeStore('budget-block'));
   ids = new Map();
   vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
   vi.stubEnv('HOME', root);
@@ -121,7 +117,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('hippo context', () => {

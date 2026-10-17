@@ -1,7 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromTexts } from '../src/capture/extract.js';
@@ -15,6 +13,7 @@ import { gatedWrite } from '../src/store/gated-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const captureTurns = (turns: readonly SessionTurn[]) => {
   const { users, assistants } = sessionTail(turns);
@@ -137,7 +136,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
   let ctx: FullContext;
 
   beforeEach(() => {
-    scratch = mkdtempSync(join(tmpdir(), 'hippo-quality-context-'));
+    scratch = makeRoot('quality-context', { init: false });
     root = join(scratch, 'project', '.hippo');
     initStore(root);
     const global = join(scratch, 'global');
@@ -148,7 +147,6 @@ describe('automatic quality does not govern manual or trusted import storage', (
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(scratch, { recursive: true, force: true });
   });
 
   it('keeps complete manual/import preferences in recent context and keeps pins under existing rules', async () => {

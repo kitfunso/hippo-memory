@@ -1,16 +1,13 @@
 // The ambient pinned query and its date-drift probe must run off the v51 partial indexes, not a memories scan.
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { recordStatements } from './_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { makeStore } from './_helpers/make-root.js';
 
 /** The pinned and drift statements loadAmbientCandidates really prepares, so the plan checks run the production SQL. */
 interface AmbientSql {
@@ -38,18 +35,16 @@ function indexNames(db: DatabaseSyncLike): string[] {
 }
 
 function seedStore() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-pinned-plan-'));
-  const root = join(home, '.hippo');
-  initStore(root);
+  const { root } = makeStore('pinned-plan');
   for (let i = 0; i < 30; i++) {
     writeEntry(root, { ...createMemory(`row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: i % 10 === 0 });
   }
-  return { root, home };
+  return root;
 }
 
 describe('ambient pinned query plan', () => {
   it('uses idx_memories_pinned and idx_memories_created_drift', () => {
-    const { root, home } = seedStore();
+    const root = seedStore();
     const { pinned: PINNED_SQL, drift: AMBIENT_DRIFT_SQL } = ambientSql(root);
     const db = openHippoDb(root);
     try {
@@ -58,35 +53,30 @@ describe('ambient pinned query plan', () => {
       expect(plan(db, AMBIENT_DRIFT_SQL)).toContain('USING INDEX idx_memories_created_drift');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('still reports drift and returns pins in created order through the indexes', () => {
-    const { root, home } = seedStore();
+    const root = seedStore();
+    const { drift: AMBIENT_DRIFT_SQL } = ambientSql(root);
+    const db = openHippoDb(root);
     try {
-      const { drift: AMBIENT_DRIFT_SQL } = ambientSql(root);
-      const db = openHippoDb(root);
-      try {
-        // SAFETY: one `id` TEXT column.
-        const seeded = (db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{ id: string }>).map((r) => r.id);
-        const created = ['2021-03-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z', '2021-02-01T00:00:00.000Z'];
-        seeded.forEach((id, i) => db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(created[i], id));
-        const pins = loadAmbientCandidates(root, 'default', 0, () => true).entries;
-        expect(pins.map((e) => e.id)).toEqual([seeded[1], seeded[2], seeded[0]]);
-        expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeUndefined();
-        db.prepare(`UPDATE memories SET created = '2020-01-01' WHERE id = ?`).run(pins[0].id);
-        expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeDefined();
-      } finally {
-        closeHippoDb(db);
-      }
+      // SAFETY: one `id` TEXT column.
+      const seeded = (db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{ id: string }>).map((r) => r.id);
+      const created = ['2021-03-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z', '2021-02-01T00:00:00.000Z'];
+      seeded.forEach((id, i) => db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(created[i], id));
+      const pins = loadAmbientCandidates(root, 'default', 0, () => true).entries;
+      expect(pins.map((e) => e.id)).toEqual([seeded[1], seeded[2], seeded[0]]);
+      expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeUndefined();
+      db.prepare(`UPDATE memories SET created = '2020-01-01' WHERE id = ?`).run(pins[0].id);
+      expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeDefined();
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      closeHippoDb(db);
     }
   });
 
   it('a v50 store gains both indexes on open and a second open is a no-op', () => {
-    const { root, home } = seedStore();
+    const root = seedStore();
     let db = openHippoDb(root);
     try {
       db.exec('DROP INDEX idx_memories_pinned; DROP INDEX idx_memories_created_drift;');
@@ -110,7 +100,6 @@ describe('ambient pinned query plan', () => {
       expect(indexNames(db)).toEqual(first);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

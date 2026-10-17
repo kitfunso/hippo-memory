@@ -1,16 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember } from '../src/api/index.js';
 import { classifyTransportFailure, HttpResponseError } from '../src/cli/client.js';
 import { boundPort } from './_helpers/listen.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeStore } from './_helpers/make-root.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -116,10 +115,7 @@ describe('classifyTransportFailure', () => {
 describe('remember over HTTP when the socket resets after the commit', () => {
   it('does not replay the write on the direct path', async () => {
     assertFreshBuild();
-    const home = mkdtempSync(join(tmpdir(), 'hippo-reset-'));
-    const hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    const { base: home, root: hippoRoot } = makeStore('reset');
 
     const startedAt = new Date().toISOString();
     const { server, port, posts } = await startResettingServer(hippoRoot, startedAt);
@@ -140,7 +136,6 @@ describe('remember over HTTP when the socket resets after the commit', () => {
       expect(stderr).toContain('may already have been applied');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
-      rmSync(home, { recursive: true, force: true });
     }
   }, 30000);
 });

@@ -16,8 +16,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -27,6 +25,7 @@ import { withSharedStoreHandles } from '../src/db/index.js';
 import { handleExplain } from '../src/cli/explain.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { runCli } from '../src/cli.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const CLEAN = 'clean deploykey fact for everyone';
 const PRIV_SLACK = 'private slack deploykey fact';
@@ -51,7 +50,7 @@ describe('cli recall scope default-deny', () => {
   let globalDir: string;
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-recall-scope-'));
+    home = makeRoot('recall-scope', { init: false });
     globalDir = join(home, 'global-hippo');
     vi.stubEnv('HIPPO_HOME', globalDir);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
@@ -64,7 +63,6 @@ describe('cli recall scope default-deny', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (home) rmSync(home, { recursive: true, force: true });
   });
 
   it('no-scope recall denies private and quarantine rows', async () => {

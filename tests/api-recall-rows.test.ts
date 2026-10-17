@@ -1,8 +1,6 @@
 // The api reads behind `hippo recall`, driven against a real temp store: budget fit, store origin, scoped continuity, JSON rows.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SearchResult } from '../src/core/search-types.js';
 import { initStore } from '../src/store/open.js';
@@ -18,6 +16,7 @@ import { handoffText, snapshotText } from '../src/api/context-render.js';
 import {
   cliRecallOrigin, cliRecallReranker, cliRecallSetting, fitRecallRows, loadCliRecallContinuity, recallJsonRow, type CliRecallSetting,
 } from '../src/api/recall/rows.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let hippoRoot: string;
@@ -47,7 +46,7 @@ function seedContinuity(): void {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-api-recall-cli-'));
+  home = makeRoot('api-recall-cli', { init: false });
   hippoRoot = join(home, '.hippo');
   globalRoot = join(home, 'global');
   vi.stubEnv('HIPPO_HOME', globalRoot);
@@ -60,7 +59,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('fitRecallRows', () => {

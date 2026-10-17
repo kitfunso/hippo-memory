@@ -1,11 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { remember, forget, archiveRaw } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function selectRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: T is pinned by each call site to the exact column list of the
@@ -26,12 +23,7 @@ describe('api tenant deny — archiveRaw and forget', () => {
   let home: string;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-tenant-deny-'));
-    initStore(home);
-  });
-
-  afterEach(() => {
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    home = makeRoot('tenant-deny');
   });
 
   it('archiveRaw refuses to archive a row that belongs to another tenant', async () => {

@@ -2,8 +2,7 @@
 // Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
@@ -11,6 +10,7 @@ import { getContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TAUGHT = 'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
 const USER_DECISION = "Let's go with SQLite for the cache because the app must work offline.";
@@ -27,7 +27,7 @@ describe('capture pins the rules a person states', () => {
     .entries.map(({ entry }) => entry.content);
 
   beforeEach(() => {
-    scratch = mkdtempSync(join(tmpdir(), 'hippo-pin-user-rules-'));
+    scratch = makeRoot('pin-user-rules', { init: false });
     root = join(scratch, 'project', '.hippo');
     initStore(root);
     const global = join(scratch, 'global');
@@ -38,7 +38,6 @@ describe('capture pins the rules a person states', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(scratch, { recursive: true, force: true });
   });
 
   it("pins the person's rule and leaves their decision and the agent's rule unpinned", () => {

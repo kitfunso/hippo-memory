@@ -1,7 +1,6 @@
 // The seams a server uses to save another machine's compaction and failures: its project, actor, tenant and request id, never the server's own.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -34,6 +33,7 @@ import {
   sessionEndHandoffForCaller,
   type CallerFailureRequest,
 } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TENANT = 'acme-tenant';
 const META = { sessionId: 's1', trigger: 'auto', cwd: null, transcriptPath: null };
@@ -52,7 +52,7 @@ let dir: string;
 let root: string;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-compaction-callers-'));
+  dir = makeRoot('compaction-callers', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
@@ -66,7 +66,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   _resetSharedStoreCacheForTests();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {

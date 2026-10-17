@@ -13,12 +13,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sleep, adminActor } from '../src/api/index.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeStore } from './_helpers/make-root.js';
 
 // Same secret shape tests/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.
@@ -31,9 +31,8 @@ describe('api.sleep secretSkipped counter', () => {
   let ctx: FullContext;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-'));
+    tmpDir = makeStore('sleep-secretskip').base;
     const hippoRoot = join(tmpDir, '.hippo');
-    initStore(hippoRoot);
     globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-global-'));
     vi.stubEnv('HIPPO_HOME', globalTmp);
 
@@ -45,7 +44,6 @@ describe('api.sleep secretSkipped counter', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(tmpDir, { recursive: true, force: true });
     rmSync(globalTmp, { recursive: true, force: true });
   });
 

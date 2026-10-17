@@ -11,10 +11,7 @@
  *   MRR         - 1/rank of first correct result (0 if none in top-10)
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   createMemory,
   calculateStrength,
@@ -26,6 +23,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
 import { markRetrieved } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -60,8 +58,7 @@ function seed(
 // ---------------------------------------------------------------------------
 
 beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-bench-'));
-  initStore(tmpDir);
+  tmpDir = makeRoot('bench');
 
   // ── Production rules ──────────────────────────────────────────────────────
   seed('never_overwrite', `NEVER overwrite existing production files. When improving a model:
@@ -380,10 +377,6 @@ Cut from hourly (16 runs/day, 5 replies each = ~80 posts) to 3x daily at irregul
 NOT: https://www.example.com/{name}. Always use this exact format when linking to calculators.`, {
     tags: ['project-a', 'url', 'seo'],
   });
-});
-
-afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------

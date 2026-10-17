@@ -15,6 +15,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { runCli } from '../src/cli.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const FAKE_NOW = '2026-09-06T12:00:00.000Z';
 
@@ -50,7 +51,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
   beforeEach(() => {
     process.env.HIPPO_FAKE_NOW = FAKE_NOW;
     _resetAblationCacheForTests();
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ambient-summary-'));
+    tmpRoot = makeRoot('ambient-summary', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
     initStore(projA);
@@ -60,7 +61,6 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
   afterEach(() => {
     delete process.env.HIPPO_FAKE_NOW;
     _resetAblationCacheForTests();
-    fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
   it('cross-project row + private-scope row are excluded from ambientState and its rendered summary', async () => {
@@ -96,7 +96,6 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
   afterEach(() => {
     delete process.env.HIPPO_FAKE_NOW;
     _resetAblationCacheForTests();
-    if (tmpRoot) fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
   it('avgStrength matches computeAmbientState over the returned (post-markRetrieved) entries, not the pre-retrieval ones', async () => {
@@ -104,7 +103,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     process.env.HIPPO_FAKE_NOW = AGED_NOW;
     _resetAblationCacheForTests();
 
-    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ambient-strength-'));
+    tmpRoot = makeRoot('ambient-strength', { init: false });
     const projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
     initStore(projA);

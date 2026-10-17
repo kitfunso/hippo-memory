@@ -8,12 +8,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db/index.js';
 import { createApiKey, validateApiKey } from '../src/store/auth.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('migration v26: api_keys.role', () => {
   it('CURRENT_SCHEMA_VERSION is 26', () => {
@@ -21,7 +19,7 @@ describe('migration v26: api_keys.role', () => {
   });
 
   it('fresh DB has api_keys.role column with DEFAULT admin', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v26-fresh-'));
+    const home = makeRoot('v26-fresh');
     const db = openHippoDb(home);
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
@@ -34,12 +32,11 @@ describe('migration v26: api_keys.role', () => {
       expect(role!.dflt_value).toBe("'admin'");
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('createApiKey 6-column INSERT stores role=admin when asked', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v26-create-'));
+    const home = makeRoot('v26-create');
     const db = openHippoDb(home);
     try {
       const { keyId, plaintext } = createApiKey(db, { tenantId: 'default', label: 'test-admin', role: 'admin' });
@@ -53,12 +50,11 @@ describe('migration v26: api_keys.role', () => {
       });
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('createApiKey with role=member surfaces role=member from validateApiKey', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v26-member-'));
+    const home = makeRoot('v26-member');
     const db = openHippoDb(home);
     try {
       const { plaintext } = createApiKey(db, {
@@ -71,12 +67,11 @@ describe('migration v26: api_keys.role', () => {
       expect(result.role).toBe('member');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('legacy keys (inserted before migration via direct SQL) backfill to admin via DEFAULT', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v26-legacy-'));
+    const home = makeRoot('v26-legacy');
     const db = openHippoDb(home);
     try {
       // Simulate a legacy 5-column INSERT (what v1.11.x binaries would do).
@@ -90,7 +85,6 @@ describe('migration v26: api_keys.role', () => {
       expect(row.role).toBe('admin');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

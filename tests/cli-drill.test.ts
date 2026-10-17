@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
-import { initStore } from '../src/store/open.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let home = '';
@@ -17,8 +16,7 @@ afterEach(() => {
 
 describe('hippo drill CLI', () => {
   it('rejects fractional depth', async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-cli-drill-'));
-    initStore(join(home, '.hippo'));
+    home = makeStore('cli-drill').base;
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     process.chdir(home);
 

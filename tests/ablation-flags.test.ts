@@ -11,8 +11,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import {
   calculateStrength,
@@ -27,6 +25,7 @@ import { outcomeMultiplier } from '../src/search/boosts.js';
 import { markRetrieved } from '../src/core/memory.js';
 import { evalNow, isOutcomeSlowAblated, strengthAblation, _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Core no longer reads the environment: each call hands it the flags the test just set.
 const abl = () => ({ ablation: strengthAblation() });
@@ -456,22 +455,15 @@ describe('HIPPO_FAKE_NOW', () => {
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.last_retrieved = '2026-06-11T00:00:00.000Z';
     m.half_life_days = 7;
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-abl-'));
-    try {
-      // Local-only store via the wrapper (global root nonexistent path).
-      const { initStore } = await import('../src/store/open.js');
-      const { writeEntry } = await import('../src/store/entry-writes.js');
-      initStore(tmp);
-      writeEntry(tmp, m);
-      const results = await searchBothHybrid('wrapper clock consistency check', ...sharingStores(tmp, path.join(tmp, 'no-global')), {
-        budget: 10000,
-        explain: true,
-      });
-      expect(results.length).toBeGreaterThan(0);
-      expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
-    } finally {
-      fs.rmSync(tmp, { recursive: true, force: true });
-    }
+    const tmp = makeRoot('abl');
+    const { writeEntry } = await import('../src/store/entry-writes.js');
+    writeEntry(tmp, m);
+    const results = await searchBothHybrid('wrapper clock consistency check', ...sharingStores(tmp, path.join(tmp, 'no-global')), {
+      budget: 10000,
+      explain: true,
+    });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
   });
 
   it('explicit now parameter always wins over the fake clock', () => {

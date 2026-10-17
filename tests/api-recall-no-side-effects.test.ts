@@ -21,17 +21,14 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { rmSync } from 'node:fs';
 import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-api-recall-noside-'));
-  initStore(home);
+  const home = makeRoot('api-recall-noside');
   const origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = home;
   return {

@@ -1,12 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { remember } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Makes every insert into the Slack event log fail, as a real constraint would. */
 function breakEventLog(root: string): void {
@@ -20,8 +17,7 @@ function breakEventLog(root: string): void {
 
 describe('remember with a connector event is transactional', () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-after-')); initStore(root); });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  beforeEach(() => { root = makeRoot('after');  });
 
   it('rolls back the memory row when the event log write throws', async () => {
     breakEventLog(root);

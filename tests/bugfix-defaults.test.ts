@@ -7,9 +7,8 @@
  *      MCP `hippo_learn` tool honoured.
  * Real git, the built CLI, real SQLite. No mocks.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
@@ -17,19 +16,15 @@ import { loadConfig } from '../src/core/config.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('physics scoring default', () => {
   it('is off unless a config opts in', () => {
     expect(DEFAULT_PHYSICS_CONFIG.enabled).toBe(false);
-    const home = mkdtempSync(join(tmpdir(), 'hippo-physics-default-'));
-    try {
-      initStore(home);
-      expect(loadConfig(home).physics.enabled).toBe(false);
-      writeFileSync(join(home, 'config.json'), JSON.stringify({ physics: { enabled: 'auto' } }), 'utf8');
-      expect(loadConfig(home).physics.enabled).toBe('auto');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    const home = makeRoot('physics-default');
+    expect(loadConfig(home).physics.enabled).toBe(false);
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ physics: { enabled: 'auto' } }), 'utf8');
+    expect(loadConfig(home).physics.enabled).toBe('auto');
   });
 });
 
@@ -37,7 +32,7 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
   let repo: string;
 
   beforeEach(() => {
-    repo = mkdtempSync(join(tmpdir(), 'hippo-learn-patterns-'));
+    repo = makeRoot('learn-patterns', { init: false });
     const git = (...args: string[]): void => {
       execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
     };
@@ -50,7 +45,6 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
     git('commit', '-q', '-m', 'oops: parser dropped the trailing newline on windows paths during export');
     initStore(join(repo, '.hippo'));
   });
-  afterEach(() => rmSync(repo, { recursive: true, force: true }));
 
   function learn(): void {
     const env = { ...process.env, HIPPO_HOME: join(repo, 'global') };

@@ -1,19 +1,19 @@
 // A junk numeric flag exits 1 with a message; before, it became NaN and slid past every `<` gate.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { handleEval } from '../src/cli/eval.js';
 import { handleShare } from '../src/cli/transfer.js';
 import { numberFlag } from '../src/cli/flag-values.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root = '';
 let store = '';
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-numflag-'));
+  root = makeRoot('numflag', { init: false });
   store = join(root, 'local');
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');

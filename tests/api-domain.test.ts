@@ -1,9 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { withStore } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -22,24 +18,21 @@ import {
 } from '../src/api/index.js';
 import { appendAuditEvent } from '../src/store/audit.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;
   let globalHome: string;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-api-dom-'));
-    globalHome = mkdtempSync(join(tmpdir(), 'hippo-api-glob-'));
-    initStore(home);
-    initStore(globalHome);
+    home = makeRoot('api-dom');
+    globalHome = makeRoot('api-glob');
     // Pin the global store to our tmpdir for promote().
     vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('recall returns BM25 candidates and audits with the supplied actor', async () => {
@@ -171,12 +164,7 @@ describe('api domain — archive_raw / auth / audit', () => {
   let home: string;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-api-aux-'));
-    initStore(home);
-  });
-
-  afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    home = makeRoot('api-aux');
   });
 
   it('archiveRaw moves a kind=raw row into raw_archive and removes it from memories', async () => {

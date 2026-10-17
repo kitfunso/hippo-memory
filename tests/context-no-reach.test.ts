@@ -1,7 +1,6 @@
 // A Context with no reach (an integrator's own store) reads one project and no global store, as the old "other" branch did.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -11,6 +10,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PROJECT = 'proj-a';
 let tmpRoot: string;
@@ -29,7 +29,7 @@ const idsOf = (r: { entries: Array<{ entry: { id: string } }> }): string[] => r.
 
 beforeEach(() => {
   _resetAblationCacheForTests();
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-no-reach-'));
+  tmpRoot = makeRoot('no-reach', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
@@ -45,7 +45,6 @@ afterEach(() => {
   delete process.env.HIPPO_HOME;
   _resetAblationCacheForTests();
   _resetSharedStoreCacheForTests();
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 const OPTS = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT } as const;

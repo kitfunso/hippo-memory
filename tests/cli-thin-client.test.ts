@@ -1,17 +1,16 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { mintAdminKey } from './_helpers/admin-server.js';
-import { mkdtempSync, rmSync, mkdirSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { boundPort } from './_helpers/listen.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
+import { makeStore } from './_helpers/make-root.js';
 
 /**
  * Headline parity test for A1: when `hippo serve` is running, CLI invocations
@@ -24,10 +23,7 @@ const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
 function makeWorkspace(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-thin-'));
-  const hippoRoot = join(home, '.hippo');
-  mkdirSync(hippoRoot, { recursive: true });
-  initStore(hippoRoot);
+  const { base: home } = makeStore('thin');
   return home;
 }
 

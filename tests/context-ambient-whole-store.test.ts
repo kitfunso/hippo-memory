@@ -1,8 +1,7 @@
 // The ambient summary describes the whole visible store, not the rows a query or the no-query cap happened to load.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
@@ -15,13 +14,14 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { getContext, adminActor } from '../src/api/index.js';
 import { renderAmbientSummary, tallyAmbientEntries, ambientStateFromTallies } from '../src/core/ambient.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root = '';
 let store = '';
 let ctx: FullContext;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-ambient-whole-'));
+  root = makeRoot('ambient-whole', { init: false });
   store = join(root, 'local');
   // An uninitialised global store, so a query reads the local FTS window alone.
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));

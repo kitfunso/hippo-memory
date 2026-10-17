@@ -1,7 +1,6 @@
 // Sleep may reuse a person's text and hippo's own sound text; hippo's text with a certain defect never feeds a summary or the global store.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { consolidate } from '../src/index.js';
 import { Layer } from '../src/core/memory.js';
@@ -10,6 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const DEFECT = 'Found local migration files to be';
 
@@ -17,7 +17,7 @@ let scratch: string;
 let root: string;
 const saved = { home: process.env.HIPPO_HOME, key: process.env.ANTHROPIC_API_KEY };
 beforeEach(() => {
-  scratch = mkdtempSync(join(tmpdir(), 'hippo-defects-local-'));
+  scratch = makeRoot('defects-local', { init: false });
   root = join(scratch, 'project', '.hippo');
   initStore(root);
   writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));
@@ -28,7 +28,6 @@ afterEach(() => {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
   }
-  rmSync(scratch, { recursive: true, force: true });
 });
 
 describe('automatic rows with a certain defect stay local', () => {

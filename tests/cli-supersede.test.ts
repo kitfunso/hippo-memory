@@ -1,20 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli } from '../src/cli.js';
-import { initStore } from '../src/store/open.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let home = '';
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-ss-'));
-  initStore(join(home, '.hippo'));
+  home = makeStore('ss').base;
   vi.stubEnv('HIPPO_HOME', home);
   process.chdir(home);
 });

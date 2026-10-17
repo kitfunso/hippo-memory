@@ -26,6 +26,7 @@ import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { embedAll } from '../src/search/embed-memories.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -461,9 +462,7 @@ describe('invalidate onlyId', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hippo-l9-onlyid-'));
-    hippoRoot = join(tmpDir, '.hippo');
-    initStore(hippoRoot);
+    ({ base: tmpDir, root: hippoRoot } = makeStore('l9-onlyid'));
   });
 
   afterEach(() => {

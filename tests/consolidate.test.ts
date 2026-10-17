@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { consolidate } from '../src/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -13,6 +12,7 @@ import { loadConfig } from '../src/core/config.js';
 import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
 import { refreshParticleProperties } from '../src/core/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../src/core/physics.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // One merge case builds and consolidates five separate stores.
 vi.setConfig({ testTimeout: 30_000 });
@@ -23,11 +23,7 @@ const createMemory7 = (content: string, options: Partial<Parameters<typeof creat
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-consolidate-'));
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('consolidate', { init: false });
 });
 
 describe('Decay pass', () => {
@@ -359,22 +355,16 @@ describe('Merge pass', () => {
     ] as const;
 
     for (const [left, right] of pairs) {
-      const caseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-consolidate-case-'));
-      try {
-        initStore(caseDir);
+      const caseDir = makeRoot('consolidate-case');
+      const a = createMemory7(left, { layer: Layer.Episodic, tags: ['conflict-check'] });
+      const b = createMemory7(right, { layer: Layer.Episodic, tags: ['conflict-check'] });
+      writeEntry(caseDir, a);
+      writeEntry(caseDir, b);
 
-        const a = createMemory7(left, { layer: Layer.Episodic, tags: ['conflict-check'] });
-        const b = createMemory7(right, { layer: Layer.Episodic, tags: ['conflict-check'] });
-        writeEntry(caseDir, a);
-        writeEntry(caseDir, b);
+      await consolidate(caseDir, { now: new Date() });
 
-        await consolidate(caseDir, { now: new Date() });
-
-        const conflicts = listMemoryConflicts(caseDir);
-        expect(conflicts, `${left} <> ${right}`).toHaveLength(1);
-      } finally {
-        fs.rmSync(caseDir, { recursive: true, force: true });
-      }
+      const conflicts = listMemoryConflicts(caseDir);
+      expect(conflicts, `${left} <> ${right}`).toHaveLength(1);
     }
   });
 
@@ -560,16 +550,11 @@ describe('Physics pass', () => {
     expect(off.physicsSimulated).toBe(0);
     expect(storedParticles()).toEqual(seeded);
 
-    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-consolidate-nophysics-'));
-    try {
-      initStore(empty);
-      fs.writeFileSync(path.join(empty, 'config.json'), JSON.stringify({ physics: { enabled: true } }), 'utf8');
-      writeEntry(empty, createMemory7('A memory with no particle stored for it'));
-      const result = await consolidate(empty, { now: new Date() });
-      expect(result.physicsSimulated).toBe(0);
-      expect(result.details.filter((line) => line.includes('physics'))).toEqual([]);
-    } finally {
-      fs.rmSync(empty, { recursive: true, force: true });
-    }
+    const empty = makeRoot('consolidate-nophysics');
+    fs.writeFileSync(path.join(empty, 'config.json'), JSON.stringify({ physics: { enabled: true } }), 'utf8');
+    writeEntry(empty, createMemory7('A memory with no particle stored for it'));
+    const result = await consolidate(empty, { now: new Date() });
+    expect(result.physicsSimulated).toBe(0);
+    expect(result.details.filter((line) => line.includes('physics'))).toEqual([]);
   });
 });

@@ -25,14 +25,13 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { remember, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-api-ctx-'));
-  initStore(home);
+  const home = makeRoot('api-ctx');
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir
   // so hasGlobal=false inside api.getContext. Keeps the test local-only and
   // prevents any global writes from leaking into the shared baseline.

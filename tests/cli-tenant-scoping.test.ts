@@ -10,8 +10,7 @@
  * HIPPO_TENANT=tenant_b.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -20,6 +19,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli as runCliEntry } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 
@@ -41,7 +41,7 @@ describe('CLI tenant-scoping', () => {
   let globalRoot: string;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-cli-tenant-'));
+    home = makeRoot('cli-tenant', { init: false });
     hippoRoot = join(home, '.hippo');
     globalRoot = join(home, '.hippo-global');
     mkdirSync(hippoRoot, { recursive: true });
@@ -56,7 +56,6 @@ describe('CLI tenant-scoping', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('cmdTrace local store: HIPPO_TENANT=tenant_b hides a tenant_a memory', async () => {

@@ -1,7 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
@@ -12,6 +11,7 @@ import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const CANARY = 'zqcanaryneedle';
@@ -62,7 +62,7 @@ function expectNoCanary(): void {
 }
 
 beforeEach(async () => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-audit-privacy-'));
+  home = makeRoot('audit-privacy', { init: false });
   mkdirSync(join(home, '.hippo'), { recursive: true });
   localRoot = join(home, '.hippo');
   globalRoot = join(home, 'global-hippo');
@@ -76,7 +76,6 @@ beforeEach(async () => {
 afterEach(() => {
   if (savedHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = savedHome;
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('auditQueryFields', () => {
