@@ -81,14 +81,6 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
   return { flagged: false, reason: null };
 }
 
-/**
- * Replace secret-shaped substrings in free text with a redaction marker, using the same `SECRET_PATTERNS` and
- * co-occurrence guard as `detectSecret`;
- * for callers persisting text that skips the capture content gate (e.g. pre-compact snapshot fields). */
-export function redactSecrets(text: string): string {
-  return redactText(text, false);
-}
-
 /** Only a run's first character starts a match, so a long run is scanned once; a
  * domain's first label opens on a letter, so logo@2x.png and react@18.2.0 stay. */
 const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
@@ -105,7 +97,7 @@ export function maskEmails(text: string): string {
  * JWTs.
  */
 export function redactSecretsStrict(text: string): string {
-  return redactText(text, true);
+  return redactText(text);
 }
 
 /** The text a write keeps, plus what to tell its caller about secret material in it. */
@@ -175,17 +167,14 @@ function redactPemBlocks(text: string): string {
   return out + text.slice(from);
 }
 
-function redactText(text: string, strict: boolean): string {
+function redactText(text: string): string {
   if (!text) return text;
   // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
   let result = redactPemBlocks(text);
-  for (const { name, re } of SECRET_PATTERNS) {
-    if (!strict && CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
+  for (const { re } of SECRET_PATTERNS) {
     const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
     result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
   }
-  if (strict) {
-    for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, '[REDACTED]');
-  }
+  for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, '[REDACTED]');
   return result;
 }

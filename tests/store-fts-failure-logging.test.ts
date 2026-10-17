@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
@@ -40,7 +40,7 @@ beforeEach(() => {
   initStore(root);
   breakFtsIndex();
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {

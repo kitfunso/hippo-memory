@@ -780,7 +780,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/util/secret-detect.ts
 - `module header`: Secret detection for memory content (v39 memory scope isolation, S4; docs/plans/2026-07-01-memory-scope-isolation.md).
 - `module header`: This is deliberately a thin slice of the A4 lifecycle-compliance item (no PII detection).
-- `redactSecrets`: e.g. the CS1 pre-compact snapshot fields — can scrub it in place instead.
 
 ### src/server/auth.ts
 - `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.

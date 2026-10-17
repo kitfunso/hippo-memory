@@ -17,7 +17,7 @@ import { insertDormantRow, listDormantSnapshots } from '../src/store/dormant.js'
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { renderGraphHtml } from '../src/graph/view.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let root: string;
@@ -28,7 +28,7 @@ const errno = (code: string): NodeJS.ErrnoException => Object.assign(new Error(`
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-silent-'));
-  resetLogOnce();
+  _resetLogOnceForTests();
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 

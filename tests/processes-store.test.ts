@@ -23,7 +23,7 @@ import {
   MAX_PROCESS_STEP_LEN,
 } from '../src/objects/processes.js';
 import { makeRoot } from './_helpers/make-root.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { loadConfig } from '../src/core/config.js';
 
@@ -152,7 +152,7 @@ describe('processes store (first-class object)', () => {
       db.prepare(`UPDATE processes SET steps = '{"a":1}' WHERE id = ?`).run(other.id);
     } finally { closeHippoDb(db); }
 
-    resetLogOnce();
+    _resetLogOnceForTests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let logged: string;
     try {

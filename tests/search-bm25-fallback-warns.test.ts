@@ -9,7 +9,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { hybridSearch } from '../src/search/hybrid.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
@@ -31,7 +31,7 @@ beforeEach(() => {
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = 'test-key-not-real';
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {

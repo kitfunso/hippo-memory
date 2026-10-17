@@ -15,7 +15,7 @@ import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../src/db/index.js';
 import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { resetAllPhysicsState } from '../src/db/physics-state.js';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
@@ -113,7 +113,7 @@ async function runPass(calls: readonly Call[], physics: boolean, backing: Backin
   _resetSessionRecallHistoryMcpForTests();
   _resetAblationCacheForTests();
   lastRecalledIds.clear();
-  resetLogOnce();
+  _resetLogOnceForTests();
   const s = freshStore(templates, 'local');
   const lines: string[] = [];
   try {

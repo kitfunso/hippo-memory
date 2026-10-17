@@ -1,5 +1,5 @@
 {
-  "count": 35,
+  "count": 32,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
     "src/capture/extract.ts:extractFromText",
@@ -32,9 +32,6 @@
     "src/store/goals.ts:pushGoalWithDb",
     "src/store/recall-trace.ts:DELIVERY_LEDGER_RETENTION_DAYS",
     "src/store/recall-trace.ts:readDeliveryEvents",
-    "src/store/recall-trace.ts:writeDeliveryEvent",
-    "src/util/log.ts:logThreshold",
-    "src/util/log.ts:resetLogOnce",
-    "src/util/secret-detect.ts:redactSecrets"
+    "src/store/recall-trace.ts:writeDeliveryEvent"
   ]
 }

@@ -16,7 +16,7 @@ import {
 } from '../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { getContext, adminActor } from '../src/api/index.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -202,7 +202,7 @@ describe('test 3: round trip of new fields', () => {
     }
 
     // The warn is once per row and column in a process, and the case above read the same row id in its own store.
-    resetLogOnce();
+    _resetLogOnceForTests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let logged: string;
     try {
