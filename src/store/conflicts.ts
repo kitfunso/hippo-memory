@@ -514,7 +514,7 @@ function removeConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemov
       archiveRawMemory(db, loserId, { reason, who: actor });
       removal.loserWasRaw = true;
     } else {
-      deleteEntryCore(db, loserId, { actor, suppressForgetAudit: true });
+      deleteEntryCore(db, loserId, loserRow.tenant_id, { actor, suppressForgetAudit: true });
     }
     removal.loserRemoved = true;
   }
@@ -580,7 +580,7 @@ function removeDuplicatesOfRejectedValue(
       archiveRawMemory(db, dup.id, { reason, who: actor });
       removal.extraRemovedRawIds.push(dup.id);
     } else {
-      deleteEntryCore(db, dup.id, { actor, suppressForgetAudit: true });
+      deleteEntryCore(db, dup.id, loserTenantId, { actor, suppressForgetAudit: true });
     }
     removal.extraRemovedIds.push(dup.id);
   }
