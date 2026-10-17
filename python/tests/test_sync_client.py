@@ -50,9 +50,9 @@ def test_sync_outcome_last_recall(hippo_server: str):
         assert result.applied >= 0
 
 
-def test_sync_auth_create_with_role_admin(hippo_server: str):
+def test_sync_auth_create_with_role_admin(hippo_server: str, hippo_admin_key: str):
     """v0.2.0: auth_create accepts role param. Server v1.12.4+ populates role on response."""
-    with HippoSync(base_url=hippo_server) as client:
+    with HippoSync(base_url=hippo_server, api_key=hippo_admin_key) as client:
         # Try admin role; the local server may be <1.12.3 (no role plumbing)
         # in which case `role` is silently accepted as label-equivalent.
         # Either way the call succeeds with a key_id.
@@ -65,17 +65,17 @@ def test_sync_auth_create_with_role_admin(hippo_server: str):
             assert result.role == "admin"
 
 
-def test_sync_auth_create_with_role_member(hippo_server: str):
+def test_sync_auth_create_with_role_member(hippo_server: str, hippo_admin_key: str):
     """v0.2.0: auth_create accepts role=member."""
-    with HippoSync(base_url=hippo_server) as client:
+    with HippoSync(base_url=hippo_server, api_key=hippo_admin_key) as client:
         result = client.auth_create(label="sync-member-key", role="member")
         assert result.key_id.startswith("hk_")
         if result.role is not None:
             assert result.role == "member"
 
 
-def test_sync_auth_create_defaults_to_an_expiring_member_key(hippo_server: str):
-    with HippoSync(base_url=hippo_server) as client:
+def test_sync_auth_create_defaults_to_an_expiring_member_key(hippo_server: str, hippo_admin_key: str):
+    with HippoSync(base_url=hippo_server, api_key=hippo_admin_key) as client:
         default = client.auth_create(label="sync-default-key")
         assert default.role == "member"
         assert default.expires_at is not None
@@ -85,9 +85,9 @@ def test_sync_auth_create_defaults_to_an_expiring_member_key(hippo_server: str):
         assert (forever.role, forever.expires_at) == ("admin", None)
 
 
-def test_sync_auth_list_includes_role_when_server_v1_12_3plus(hippo_server: str):
+def test_sync_auth_list_includes_role_when_server_v1_12_3plus(hippo_server: str, hippo_admin_key: str):
     """v0.2.0: AuthKey.role populated by server v1.12.3+, None on older."""
-    with HippoSync(base_url=hippo_server) as client:
+    with HippoSync(base_url=hippo_server, api_key=hippo_admin_key) as client:
         client.auth_create(label="list-test-key", role="member")
         keys = client.auth_list()
         assert isinstance(keys, list)
@@ -98,8 +98,8 @@ def test_sync_auth_list_includes_role_when_server_v1_12_3plus(hippo_server: str)
             assert k.key_id.startswith("hk_")
 
 
-def test_sync_auth_list_follows_next_cursor_across_pages(hippo_server: str):
-    with HippoSync(base_url=hippo_server) as client:
+def test_sync_auth_list_follows_next_cursor_across_pages(hippo_server: str, hippo_admin_key: str):
+    with HippoSync(base_url=hippo_server, api_key=hippo_admin_key) as client:
         for i in range(3):
             client.auth_create(label=f"paging-key-{i}", role="member")
         whole = client.auth_list()

@@ -12,7 +12,7 @@ import { resolveTenantId } from './store/tenant.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { exitAfterFlush } from './util/crash-handlers.js';
-import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
+import { errorFields, errorMessage, isLevelEnabled, log, warnUnknownFlagValues } from './util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
 import {
@@ -259,6 +259,7 @@ async function main(
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
+  warnUnknownFlagValues();
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {

@@ -11,8 +11,7 @@ const IPV6_PREFIX_GROUPS = 4;
 /**
  * Rate-limit key: the socket's remote address, which behind a TLS proxy collapses into one bucket unauthenticated
  * traffic can drain.
- * HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) is read only from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs, or `*`
- * for any peer),
+ * HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) is read only from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs),
  * so a caller that reaches the port past the proxy cannot pick its own bucket. In a comma-joined chain the key is the
  * rightmost hop no trusted proxy added.
  */
@@ -21,29 +20,24 @@ export function clientIpForRateLimit(req: IncomingMessage): string {
   const header = envClientIpHeader();
   if (!header) return socketIp;
   const trust = proxyTrust(envTrustedProxies());
-  if (trust === undefined || (trust !== ANY_PEER && !isTrustedProxy(trust, socketIp))) return socketIp;
+  if (trust === undefined || !isTrustedProxy(trust, socketIp)) return socketIp;
   const raw = req.headers[header];
   const hops = (Array.isArray(raw) ? raw.join(',') : raw ?? '')
     .split(',')
     .map((hop) => hop.trim())
     .filter((hop) => hop.length > 0);
   for (let i = hops.length - 1; i >= 0; i--) {
-    if (trust === ANY_PEER || !isTrustedProxy(trust, hops[i]!)) return hops[i]!;
+    if (!isTrustedProxy(trust, hops[i]!)) return hops[i]!;
   }
   return hops[0] ?? socketIp;
 }
 
-/** HIPPO_TRUSTED_PROXIES=*: every peer is the proxy, and the hop it appended is the client. */
-const ANY_PEER = '*';
-type ProxyTrust = typeof ANY_PEER | BlockList;
-
 let trustedProxyCache: { raw: string; list: BlockList } | undefined;
 
 /** Parses HIPPO_TRUSTED_PROXIES once per distinct value; undefined when unset, so no peer's header is read. */
-function proxyTrust(raw: string | undefined): ProxyTrust | undefined {
+function proxyTrust(raw: string | undefined): BlockList | undefined {
   const value = raw?.trim();
   if (!value) return undefined;
-  if (value === ANY_PEER) return ANY_PEER;
   if (trustedProxyCache?.raw === value) return trustedProxyCache.list;
   const list = new BlockList();
   for (const entry of value.split(',').map((e) => e.trim()).filter((e) => e.length > 0)) {
@@ -71,27 +65,30 @@ export class UntrustedClientIpHeaderError extends Error {
     super(
       `hippo serve: HIPPO_CLIENT_IP_HEADER is ${header} but HIPPO_TRUSTED_PROXIES is unset, so no peer may set that ` +
       `header. ` +
-        "Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs, or to * when the proxy is the only peer that " +
-        "can reach this port.",
+        "Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs.",
     );
     this.name = 'UntrustedClientIpHeaderError';
   }
 }
 
-/** Checked at boot: a client-IP header needs a trusted-proxy list, and `*` is said once, since it believes any peer. */
+/** serve() refused HIPPO_TRUSTED_PROXIES=*, which believes the header from any peer. */
+export class WildcardTrustedProxiesError extends Error {
+  constructor() {
+    super(
+      "hippo serve: HIPPO_TRUSTED_PROXIES must list the proxy's addresses or CIDRs, not *. A wildcard believes " +
+        'HIPPO_CLIENT_IP_HEADER from any peer, so a client that reaches this port without the proxy could put any ' +
+        'address in it and escape every per-address limit.',
+    );
+    this.name = 'WildcardTrustedProxiesError';
+  }
+}
+
+/** Checked at boot: a wildcard proxy list is refused, and a client-IP header needs a list to be read from. */
 export function assertClientIpHeaderPinned(): void {
+  if (envTrustedProxies()?.split(',').some((entry) => entry.trim() === '*')) throw new WildcardTrustedProxiesError();
   const header = envClientIpHeader();
   if (!header) return;
-  const trust = proxyTrust(envTrustedProxies());
-  if (trust === undefined) throw new UntrustedClientIpHeaderError(header);
-  if (trust === ANY_PEER) {
-    log.warn(
-      `serve: HIPPO_TRUSTED_PROXIES is *, so ${header} is read from any peer: a client that reaches this port ` +
-      `without the proxy can put any address ` +
-        `in ${header} and so escape every per-address limit. Keep the proxy the only route to this port, or list the ` +
-        `proxy's addresses instead of *.`,
-    );
-  }
+  if (proxyTrust(envTrustedProxies()) === undefined) throw new UntrustedClientIpHeaderError(header);
 }
 
 /** The key for one subscriber: an IPv6 address's /64, since one host may hold the whole /64; any other key as is. */

@@ -7,14 +7,12 @@ import {
 } from '../../objects/customer-notes.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { parseJsonBody } from '../validation.js';
+import { parseJsonBody, getString, requiredString } from '../validation.js';
 import { saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  optionalString,
-  requiredString,
   supersedeRoute,
   type VersionedRouteConfig,
 } from './object-routes.js';
@@ -27,7 +25,7 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOptions>
   filterParam: 'customer',
   revise: (body) => {
     const note = requiredString(body, 'note', { max: 8192 });
-    const changeSummary = optionalString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
+    const changeSummary = getString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
     return (existing, id) => ({ customer: existing.customer, note, changeSummary, supersedesNoteId: id });
   },
 };

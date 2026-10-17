@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember as apiRemember } from '../src/api/index.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import type { ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { serveAsAdmin } from './_helpers/admin-server.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets one of this file's routes under
@@ -25,7 +26,7 @@ describe('server HTTP routes — memories', () => {
     globalHome = makeRoot('srv-routes');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
@@ -194,7 +195,7 @@ describe('server HTTP routes — auth + audit', () => {
     home = makeRoot('srv-routes');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = home;
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {

@@ -11,10 +11,14 @@ import {
   getString,
   getStringArray,
   isSetMember,
+  MAX_ARRAY_ITEMS,
+  MAX_CONTENT_LEN,
+  MAX_SHORT_FIELD_LEN,
   parseJsonBody,
   parseListLimit,
   validateIdSegment,
 } from '../validation.js';
+import { MAX_ID_LEN } from '../../util/limits.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
@@ -22,11 +26,11 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 // POST /v1/memories
 export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
-  const content = getString(body, 'content');
+  const content = getString(body, 'content', MAX_CONTENT_LEN);
   if (!content) {
     throw new HttpError(400, 'content is required');
   }
-  const kindRaw = getString(body, 'kind');
+  const kindRaw = getString(body, 'kind', MAX_ID_LEN);
   if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
     throw new HttpError(400, `invalid kind: ${kindRaw}`);
   }
@@ -37,10 +41,10 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
   const result = await remember(ctx, {
     content,
     kind: kindRaw,
-    scope: getString(body, 'scope'),
-    owner: getString(body, 'owner'),
-    artifactRef: getString(body, 'artifactRef'),
-    tags: getStringArray(body, 'tags'),
+    scope: getString(body, 'scope', MAX_ID_LEN),
+    owner: getString(body, 'owner', MAX_ID_LEN),
+    artifactRef: getString(body, 'artifactRef', MAX_SHORT_FIELD_LEN),
+    tags: getStringArray(body, 'tags', MAX_ARRAY_ITEMS, MAX_ID_LEN),
     project: getCallerProject(body),
     personal: personalRaw === true,
   });
@@ -64,7 +68,7 @@ export async function handleArchiveMemory(
 ): Promise<void> {
   validateIdSegment(archiveMatch.id!, 'memory id');
   const body = await parseJsonBody(req, ctx);
-  const reason = getString(body, 'reason');
+  const reason = getString(body, 'reason', MAX_SHORT_FIELD_LEN);
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
@@ -79,7 +83,7 @@ export async function handleSupersedeMemory(
 ): Promise<void> {
   validateIdSegment(supersedeMatch.id!, 'memory id');
   const body = await parseJsonBody(req, ctx);
-  const content = getString(body, 'content');
+  const content = getString(body, 'content', MAX_CONTENT_LEN);
   if (!content) {
     throw new HttpError(400, 'content is required');
   }
@@ -127,6 +131,9 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const isNonEmptyId = (item: JsonValue): item is string => isJsonString(item) && item.length > 0;
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
+    }
+    if (idsRaw.some((id) => id.length > MAX_ID_LEN)) {
+      throw new HttpError(400, `each ids entry exceeds ${MAX_ID_LEN}-character cap`);
     }
     // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite. Auth runs
     // first, so only a caller with a key

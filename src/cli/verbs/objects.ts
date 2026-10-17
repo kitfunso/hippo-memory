@@ -201,8 +201,7 @@ export const OBJECT_VERBS = {
                            in front (or $HIPPO_ALLOW_CLEARTEXT=1)
                            Every request needs an API key (hippo auth create).
                            $HIPPO_ALLOW_KEYLESS_LOCAL=1 lets requests from this machine
-                           in without one, as a member ($HIPPO_KEYLESS_LOCAL_ROLE=admin
-                           for host admin); $HIPPO_REQUIRE_AUTH=1 wins over it.`],
+                           in without one, as a member; $HIPPO_REQUIRE_AUTH=1 wins over it.`],
   }),
   goal: verb(() => import('../goals.js'), 'handleGoal', {
     scoped: true,

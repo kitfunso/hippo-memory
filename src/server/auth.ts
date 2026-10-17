@@ -1,5 +1,5 @@
 // Bearer and loopback auth for the HTTP server.
-import { envAllowKeylessLocal, envKeylessLocalRole, envRequireAuth } from '../util/env.js';
+import { envAllowKeylessLocal, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
@@ -100,7 +100,7 @@ type AuthOptions = Pick<
   ResolvedServeOptions,
   'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'
 > &
-  Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter' | 'keylessLocalRole'>>;
+  Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -289,13 +289,9 @@ export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpt
   return contextFor(await checkAuth(req, opts), opts);
 }
 
-/** The keyless local caller: any process on this machine can reach
- * loopback, so it is a member unless the operator names admin. */
-function keylessLocalActor(opts: AuthOptions): Actor {
-  const role = opts.keylessLocalRole ?? envKeylessLocalRole();
-  return role === 'admin'
-    ? { subject: 'localhost:cli', role: 'admin', hostAdmin: true }
-    : { subject: 'localhost:cli', role: 'member' };
+/** The keyless local caller: any process on this machine can reach loopback, so it is always a member. */
+function keylessLocalActor(): Actor {
+  return { subject: 'localhost:cli', role: 'member' };
 }
 
 function contextFor(id: BearerIdentity | null, opts: AuthOptions): StoreContext {
@@ -310,7 +306,7 @@ function contextFor(id: BearerIdentity | null, opts: AuthOptions): StoreContext 
   return {
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: keylessLocalActor(opts),
+    actor: keylessLocalActor(),
     store: opts.store,
     reach,
     config,

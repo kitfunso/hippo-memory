@@ -2,15 +2,13 @@
 import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS, PROCESS, type SaveProcessOptions } from '../../objects/processes.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  optionalString,
-  requiredString,
   supersedeRoute,
   type VersionedRouteConfig,
 } from './object-routes.js';
@@ -50,8 +48,8 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOptions> = {
     if (steps.length === 0) {
       throw new HttpError(400, 'steps is required (at least one step) for a supersession');
     }
-    const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
-    const description = optionalString(body, 'description', MAX_SHORT_FIELD_LEN);
+    const changeSummary = getString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
+    const description = getString(body, 'description', MAX_SHORT_FIELD_LEN);
     return (existing, id) => ({
       processName: existing.processName,
       steps,
@@ -72,7 +70,7 @@ export async function handleCreateProcess(rr: AuthedRouteRequest): Promise<void>
   const process = await saveFor(ctx, PROCESS, {
     processName: requiredString(body, 'processName', { max: MAX_SHORT_FIELD_LEN }),
     steps: validateProcessStepsBody(body['steps']),
-    description: optionalString(body, 'description', MAX_SHORT_FIELD_LEN),
+    description: getString(body, 'description', MAX_SHORT_FIELD_LEN),
   });
   sendJson(rr.res, 201, { process });
 }

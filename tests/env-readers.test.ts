@@ -59,16 +59,18 @@ describe('HIPPO_REQUIRE_SERVER', () => {
 
 describe('HIPPO_ANCHORING and HIPPO_AVAILABILITY', () => {
   it.each([['HIPPO_ANCHORING', envAnchoringOff], ['HIPPO_AVAILABILITY', envAvailabilityOff]] as const)(
-    '%s switches the hint off only for the exact value off',
+    '%s switches the hint off only for an off spelling',
     (name, off) => {
       delete process.env[name];
       expect(off()).toBe(false);
-      for (const v of ['', '0', 'false', 'OFF', 'on']) {
+      for (const v of ['', 'on', '1', 'maybe']) {
         process.env[name] = v;
         expect(off(), `${name}=${v}`).toBe(false);
       }
-      process.env[name] = 'off';
-      expect(off()).toBe(true);
+      for (const v of ['off', 'OFF', '0', 'false']) {
+        process.env[name] = v;
+        expect(off(), `${name}=${v}`).toBe(true);
+      }
     },
   );
 });
