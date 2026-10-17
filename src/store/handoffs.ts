@@ -1,4 +1,4 @@
-import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { type DatabaseSyncLike } from '../db/index.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -10,8 +10,8 @@ import {
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import type { TaskSnapshot } from './rows.js';
-import { onHandle, openStore } from './open.js';
-import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';
+import { onHandle, openStore, type StoreFiles } from './open.js';
+import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './sessions.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS =
@@ -53,34 +53,38 @@ function insertHandoffRow(
 }
 
 /** Save a session handoff record; returns the persisted handoff. */
-export function saveSessionHandoff(
-  hippoRoot: string,
+export function saveSessionHandoffAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key?: ContinuityKey,
 ): SessionHandoff {
   assertTenantId('saveSessionHandoff', tenantId);
   const stamp = key ? continuityStamp(key) : null;
-  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   // Scope is stored as given; read-side default-deny in api.recall + cmdRecall
   // continuity excludes slack:private:* and 'unknown:legacy'.
-  try {
-    const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
+  const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
 
-    const id = Number(result.lastInsertRowid ?? 0);
-    // SAFETY: row's shape matches HANDOFF_COLUMNS.
-    const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
-      SessionHandoffRow | undefined;
-    if (!row) {
-      throw new Error('Failed to reload saved session handoff');
-    }
-
-    return rowToSessionHandoff(row);
-  } finally {
-    closeHippoDb(db);
+  const id = Number(result.lastInsertRowid ?? 0);
+  // SAFETY: row's shape matches HANDOFF_COLUMNS.
+  const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
+    SessionHandoffRow | undefined;
+  if (!row) {
+    throw new Error('Failed to reload saved session handoff');
   }
+
+  return rowToSessionHandoff(row);
+}
+
+export function saveSessionHandoff(
+  hippoRoot: string,
+  tenantId: string,
+  handoff: Omit<SessionHandoff, 'updatedAt'>,
+  key?: ContinuityKey,
+): SessionHandoff {
+  return onHandle(hippoRoot, (db) => saveSessionHandoffAt(db, tenantId, handoff, key), openStore);
 }
 
 export interface HandoffFilter {
@@ -136,86 +140,68 @@ function handoffConditions(
 }
 
 /** Load the most recent handoff, optionally filtered by session ID. */
-export function loadLatestHandoff(
-  hippoRoot: string,
+export function loadLatestHandoffAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sessionId?: string,
   opts: HandoffFilter = {},
   key?: ContinuityKey,
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
-  const db = openStore(hippoRoot);
+  const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
+  // SAFETY: row's shape matches HANDOFF_COLUMNS.
+  const row = db.prepare(`
+    SELECT ${HANDOFF_COLUMNS}
+    FROM session_handoffs
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `).get(...params) as SessionHandoffRow | undefined;
 
-  try {
-    const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
-    // SAFETY: row's shape matches HANDOFF_COLUMNS.
-    const row = db.prepare(`
-      SELECT ${HANDOFF_COLUMNS}
-      FROM session_handoffs
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC, id DESC
-      LIMIT 1
-    `).get(...params) as SessionHandoffRow | undefined;
-
-    return row ? rowToSessionHandoff(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  return row ? rowToSessionHandoff(row) : null;
 }
 
 /** Load a specific handoff by its row ID. */
-export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
+export function loadHandoffByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
-  const db = openStore(hippoRoot);
+  // SAFETY: row's shape matches HANDOFF_COLUMNS.
+  const row = db.prepare(`
+    SELECT ${HANDOFF_COLUMNS}
+    FROM session_handoffs
+    WHERE id = ? AND tenant_id = ?
+  `).get(id, tenantId) as SessionHandoffRow | undefined;
 
-  try {
-    // SAFETY: row's shape matches HANDOFF_COLUMNS.
-    const row = db.prepare(`
-      SELECT ${HANDOFF_COLUMNS}
-      FROM session_handoffs
-      WHERE id = ? AND tenant_id = ?
-    `).get(id, tenantId) as SessionHandoffRow | undefined;
-
-    return row ? rowToSessionHandoff(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  return row ? rowToSessionHandoff(row) : null;
 }
 
 /** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows changed. */
-export function stampHandoffOutcome(
-  hippoRoot: string,
+export function stampHandoffOutcomeAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
   outcome: HandoffOutcome,
 ): number {
   assertTenantId('stampHandoffOutcome', tenantId);
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      const result = db
-        .prepare(
-          `
-      UPDATE session_handoffs SET outcome = ?
-      WHERE tenant_id = ? AND session_id = ? AND outcome IS NULL
-        AND id = (
-          SELECT id FROM session_handoffs
-          WHERE tenant_id = ? AND session_id = ?
-          ORDER BY created_at DESC, id DESC LIMIT 1
-        )
+  const result = db
+    .prepare(
+      `
+  UPDATE session_handoffs SET outcome = ?
+  WHERE tenant_id = ? AND session_id = ? AND outcome IS NULL
+    AND id = (
+      SELECT id FROM session_handoffs
+      WHERE tenant_id = ? AND session_id = ?
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    )
     `,
-        )
-        .run(outcome, tenantId, sessionId, tenantId, sessionId);
-      return Number(result.changes ?? 0);
-    },
-    openStore,
-  );
+    )
+    .run(outcome, tenantId, sessionId, tenantId, sessionId);
+  return Number(result.changes ?? 0);
 }
 
 /** Rewrites the session's newest handoff when it is still a transcript read, in one statement so a handoff written
  * meanwhile is never overwritten; null when none was rewritten. */
-function replaceTranscriptHandoff(
-  hippoRoot: string,
+function replaceTranscriptHandoffAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key: ContinuityKey | undefined,
@@ -223,38 +209,36 @@ function replaceTranscriptHandoff(
   const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
   const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC, id ` +
   `DESC LIMIT 1`;
-  return onHandle(hippoRoot, (db) => {
-    const result = db
-      .prepare(
-        `
-      UPDATE session_handoffs SET repo_root = ?, task_id = ?, summary = ?, next_action = ?, artifacts_json = ?, scope =
-      ?, created_at = ?,
-        constraints_json = ?, evidence_json = ?, outcome = ?, target_runtime = ?, card_id = ?
-      WHERE id = (${newest}) AND json_valid(evidence_json) AND json_extract(evidence_json, '$.derivedFrom') =
-      'transcript'
-    `,
-      )
-      .run(
-        handoff.repoRoot ?? null,
-        handoff.taskId ?? null,
-        handoff.summary,
-        handoff.nextAction ?? null,
-        JSON.stringify(handoff.artifacts ?? []),
-        handoff.scope ?? null,
-        new Date().toISOString(),
-        JSON.stringify(handoff.constraints ?? []),
-        handoff.evidence ? JSON.stringify(handoff.evidence) : null,
-        handoff.outcome ?? null,
-        handoff.targetRuntime ?? null,
-        handoff.cardId ?? null,
-        ...params,
-      );
-    if (Number(result.changes ?? 0) === 0) return null;
-    // SAFETY: row's shape matches HANDOFF_COLUMNS.
-    const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(...params) as
-      SessionHandoffRow | undefined;
-    return row ? rowToSessionHandoff(row) : null;
-  }, openStore);
+  const result = db
+    .prepare(
+      `
+    UPDATE session_handoffs SET repo_root = ?, task_id = ?, summary = ?, next_action = ?, artifacts_json = ?, scope =
+    ?, created_at = ?,
+      constraints_json = ?, evidence_json = ?, outcome = ?, target_runtime = ?, card_id = ?
+    WHERE id = (${newest}) AND json_valid(evidence_json) AND json_extract(evidence_json, '$.derivedFrom') =
+    'transcript'
+  `,
+    )
+    .run(
+      handoff.repoRoot ?? null,
+      handoff.taskId ?? null,
+      handoff.summary,
+      handoff.nextAction ?? null,
+      JSON.stringify(handoff.artifacts ?? []),
+      handoff.scope ?? null,
+      new Date().toISOString(),
+      JSON.stringify(handoff.constraints ?? []),
+      handoff.evidence ? JSON.stringify(handoff.evidence) : null,
+      handoff.outcome ?? null,
+      handoff.targetRuntime ?? null,
+      handoff.cardId ?? null,
+      ...params,
+    );
+  if (Number(result.changes ?? 0) === 0) return null;
+  // SAFETY: row's shape matches HANDOFF_COLUMNS.
+  const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(...params) as
+    SessionHandoffRow | undefined;
+  return row ? rowToSessionHandoff(row) : null;
 }
 
 interface HandoffSource {
@@ -322,12 +306,16 @@ export interface SessionEndHandoffRequest {
 /** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier
  * transcript read instead of adding a revision. Returns null when no source is the session's, a newer handoff covers
  * it, or the latest one is not transcript-derived or already holds `derived`. */
-export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHandoffRequest): SessionHandoff | null {
+export function writeSessionEndHandoffAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  request: SessionEndHandoffRequest,
+): SessionHandoff | null {
   const { tenantId, sessionId, evidence, derived = null, key, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
-  const active = loadActiveTaskSnapshot(hippoRoot, tenantId, key);
-  const existing = loadLatestHandoff(hippoRoot, tenantId, sessionId, {}, key);
+  const active = loadActiveTaskSnapshotAt(db, files, tenantId, key);
+  const existing = loadLatestHandoffAt(db, tenantId, sessionId, {}, key);
   let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
   let handoffEvidence = evidence;
   let fromTranscript = false;
@@ -345,21 +333,19 @@ export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHan
     handoffEvidence = fromDerived.evidence;
     fromTranscript = true;
   }
-  const outcome = sessionOutcome(hippoRoot, tenantId, sessionId);
+  const outcome = sessionOutcomeAt(db, tenantId, sessionId);
   const handoff = buildSessionEndHandoff(sessionId, snapshot, existing, handoffEvidence, outcome);
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (fromTranscript && inPlace && existing) return replaceTranscriptHandoff(hippoRoot, tenantId, handoff, key);
-  return saveSessionHandoff(hippoRoot, tenantId, handoff, key);
+  if (fromTranscript && inPlace && existing) return replaceTranscriptHandoffAt(db, tenantId, handoff, key);
+  return saveSessionHandoffAt(db, tenantId, handoff, key);
 }
 
-function sessionOutcome(hippoRoot: string, tenantId: string, sessionId: string): HandoffOutcome | null {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: row's shape matches the single `content` column below.
-    const content = (db.prepare(`
-      SELECT content FROM session_events
-      WHERE tenant_id = ? AND session_id = ? AND event_type = 'session_complete'
-      ORDER BY created_at DESC, id DESC LIMIT 1
-    `).get(tenantId, sessionId) as { content?: string } | undefined)?.content;
-    return isHandoffOutcome(content) ? content : null;
-  });
+function sessionOutcomeAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
+  // SAFETY: row's shape matches the single `content` column below.
+  const content = (db.prepare(`
+    SELECT content FROM session_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = 'session_complete'
+    ORDER BY created_at DESC, id DESC LIMIT 1
+  `).get(tenantId, sessionId) as { content?: string } | undefined)?.content;
+  return isHandoffOutcome(content) ? content : null;
 }

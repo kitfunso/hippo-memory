@@ -1,6 +1,6 @@
 import { HOUR_MS } from '../util/time.js';
 import { isSharedStore } from '../core/config.js';
-import { closeHippoDb, HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../core/project-identity.js';
 import { assertTenantId } from '../core/tenant-id.js';
@@ -16,7 +16,7 @@ import {
   rowToSessionEvent,
 } from './rows.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
-import { onHandle, openStore } from './open.js';
+import { onHandle, openStore, type StoreFiles } from './open.js';
 
 /** A shared-store caller's task state bucket: its owner and every name its project's rows carry. */
 export interface ContinuityKey {
@@ -97,8 +97,9 @@ function insertSnapshot(
   return Number(result.lastInsertRowid ?? 0);
 }
 
-export function saveActiveTaskSnapshot(
-  hippoRoot: string,
+export function saveActiveTaskSnapshotAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   tenantId: string,
   snapshot: SnapshotInput,
   key?: ContinuityKey,
@@ -107,63 +108,69 @@ export function saveActiveTaskSnapshot(
   assertKeyedOnSharedStore('saveActiveTaskSnapshot', hippoRoot, key);
   const stamp = key ? continuityStamp(key) : null;
   const owned = key ? continuityWhere(key) : null;
-  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
+  const id = withWriteScope(db, 'save_active_task', () => {
+    db.prepare(
+      `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
+      `?${owned ? ` AND ${owned.sql}` : ''}`,
+    ).run(now, tenantId, ...(owned?.params ?? []));
+    const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
+    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
+    if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
+    return inserted;
+  });
 
-  try {
-    const id = withWriteScope(db, 'save_active_task', () => {
-      db.prepare(
-        `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
-        `?${owned ? ` AND ${owned.sql}` : ''}`,
-      ).run(now, tenantId, ...(owned?.params ?? []));
-      const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
-      // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
-      if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      return inserted;
-    });
+  // SAFETY: row's shape matches the ten columns named in the SELECT above.
+  const row = db.prepare(`
+    SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
+    FROM task_snapshots
+    WHERE id = ?
+  `).get(id) as TaskSnapshotRow | undefined;
 
-    // SAFETY: row's shape matches the ten columns named in the SELECT above.
-    const row = db.prepare(`
-      SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
-      FROM task_snapshots
-      WHERE id = ?
-    `).get(id) as TaskSnapshotRow | undefined;
-
-    if (!row) {
-      throw new Error('Failed to reload saved active task snapshot');
-    }
-
-    const loaded = rowToTaskSnapshot(row);
-    // The mirror is one file per store, so only the local, unkeyed path writes it.
-    if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
-    return loaded;
-  } finally {
-    closeHippoDb(db);
+  if (!row) {
+    throw new Error('Failed to reload saved active task snapshot');
   }
+
+  const loaded = rowToTaskSnapshot(row);
+  // The mirror is one file per store, so only the local, unkeyed path writes it.
+  if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
+  return loaded;
 }
 
-export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
+export function saveActiveTaskSnapshot(
+  hippoRoot: string,
+  tenantId: string,
+  snapshot: SnapshotInput,
+  key?: ContinuityKey,
+): TaskSnapshot {
+  return onHandle(hippoRoot, (db) => saveActiveTaskSnapshotAt(db, { hippoRoot }, tenantId, snapshot, key), openStore);
+}
+
+export function loadActiveTaskSnapshotAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
+  tenantId: string,
+  key?: ContinuityKey,
+): TaskSnapshot | null {
   assertTenantId('loadActiveTaskSnapshot', tenantId);
   const owned = key ? continuityWhere(key) : null;
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: row's shape matches the ten columns named in the SELECT above.
-    const row = db.prepare(`
-      SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
-      FROM task_snapshots
-      WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}
-      ORDER BY updated_at DESC, id DESC
-      LIMIT 1
-    `).get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
+  // SAFETY: row's shape matches the ten columns named in the SELECT above.
+  const row = db.prepare(`
+    SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
+    FROM task_snapshots
+    WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}
+    ORDER BY updated_at DESC, id DESC
+    LIMIT 1
+  `).get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
 
-    if (!row) {
-      if (!key) removeActiveTaskMirror(hippoRoot, tenantId);
-      return null;
-    }
+  if (!row) {
+    if (!key) removeActiveTaskMirror(hippoRoot, tenantId);
+    return null;
+  }
 
-    const loaded = rowToTaskSnapshot(row);
-    if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
-    return loaded;
-  }, openStore);
+  const loaded = rowToTaskSnapshot(row);
+  if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
+  return loaded;
 }
 
 /** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still
@@ -180,13 +187,14 @@ function isNonEmptySessionId(value: string | null | undefined): value is string 
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
  * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
-export function loadFreshActiveTaskSnapshot(
-  hippoRoot: string,
+export function loadFreshActiveTaskSnapshotAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   tenantId: string,
   opts: { maxAgeMs?: number; sessionId?: string | null } = {},
   key?: ContinuityKey,
 ): TaskSnapshot | null {
-  return freshActiveSnapshot(loadActiveTaskSnapshot(hippoRoot, tenantId, key), opts);
+  return freshActiveSnapshot(loadActiveTaskSnapshotAt(db, files, tenantId, key), opts);
 }
 
 /** `loadFreshActiveTaskSnapshot`'s owner-match-or-age rule, for a snapshot a store read. */
@@ -208,68 +216,58 @@ export function freshActiveSnapshot(
   return ageMs <= maxAgeMs ? snapshot : null;
 }
 
-export function clearActiveTaskSnapshot(
-  hippoRoot: string,
+export function clearActiveTaskSnapshotAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): boolean {
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', hippoRoot, undefined);
-  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
-
-  try {
-    // SAFETY: active's shape matches the single `id` column selected above.
-    const active = db
-      .prepare(
-        `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
-        `LIMIT 1`,
-      )
-      .get(tenantId) as { id?: number } | undefined;
-    if (!active?.id) {
-      removeActiveTaskMirror(hippoRoot, tenantId);
-      return false;
-    }
-
-    db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
-      clearedStatus,
-      now,
-      active.id,
-      tenantId,
-    );
+  // SAFETY: active's shape matches the single `id` column selected above.
+  const active = db
+    .prepare(
+      `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
+      `LIMIT 1`,
+    )
+    .get(tenantId) as { id?: number } | undefined;
+  if (!active?.id) {
     removeActiveTaskMirror(hippoRoot, tenantId);
-    return true;
-  } finally {
-    closeHippoDb(db);
+    return false;
   }
+
+  db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
+    clearedStatus,
+    now,
+    active.id,
+    tenantId,
+  );
+  removeActiveTaskMirror(hippoRoot, tenantId);
+  return true;
 }
 
 /** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an
  * ending session can never close a newer session's snapshot. Returns the number of rows closed. */
-export function closeTaskSnapshotsForSession(
-  hippoRoot: string,
+export function closeTaskSnapshotsForSessionAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
   status: string = 'session-ended',
   key?: ContinuityKey,
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
-  if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than close nothing
+  if (key) continuityStamp(key);
+ // a partial key is a caller bug, so fail loud rather than close nothing
   const owned = key ? continuityWhere(key) : null;
-  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
-
-  try {
-    const result = db
-      .prepare(
-        `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
-        `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
-      )
-      .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
-    return Number(result.changes ?? 0);
-  } finally {
-    closeHippoDb(db);
-  }
+  const result = db
+    .prepare(
+      `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
+      `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
+    )
+    .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
+  return Number(result.changes ?? 0);
 }
 
 export interface SessionEventInput {
@@ -340,94 +338,88 @@ function recentSessionEventsOldestFirst(
   return recentRows.map(rowToSessionEvent).reverse();
 }
 
-export function appendSessionEvent(
-  hippoRoot: string,
+export function appendSessionEventAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   tenantId: string,
   event: SessionEventInput,
 ): SessionEvent {
   assertTenantId('appendSessionEvent', tenantId);
-  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   // Scope is stored as given; default-deny in api.recall + cmdRecall
   // continuity reads applies to slack:private:* and 'unknown:legacy' rows.
-  try {
-    const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
-    const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
-    writeRecentSessionMirror(hippoRoot, tenantId, recent);
-    return loaded;
-  } finally {
-    closeHippoDb(db);
-  }
+  const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
+  const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
+  writeRecentSessionMirror(hippoRoot, tenantId, recent);
+  return loaded;
 }
 
-export function listSessionEvents(
-  hippoRoot: string,
+export function appendSessionEvent(hippoRoot: string, tenantId: string, event: SessionEventInput): SessionEvent {
+  return onHandle(hippoRoot, (db) => appendSessionEventAt(db, { hippoRoot }, tenantId, event), openStore);
+}
+
+export function listSessionEventsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
-  options: { session_id?: string; task?: string; limit?: number } = {}
+  options: { session_id?: string; task?: string; limit?: number } = {},
 ): SessionEvent[] {
   assertTenantId('listSessionEvents', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    const clauses: string[] = ['tenant_id = ?'];
-    const params: Array<string | number> = [tenantId];
+  const clauses: string[] = ['tenant_id = ?'];
+  const params: Array<string | number> = [tenantId];
 
-    if (options.session_id) {
-      clauses.push('session_id = ?');
-      params.push(options.session_id);
-    }
-    if (options.task) {
-      clauses.push('task = ?');
-      params.push(options.task);
-    }
+  if (options.session_id) {
+    clauses.push('session_id = ?');
+    params.push(options.session_id);
+  }
+  if (options.task) {
+    clauses.push('task = ?');
+    params.push(options.task);
+  }
 
-    const limit = Math.max(1, Math.trunc(options.limit ?? 8));
-    params.push(limit);
+  const limit = Math.max(1, Math.trunc(options.limit ?? 8));
+  params.push(limit);
 
-    const where = `WHERE ${clauses.join(' AND ')}`;
-    // SAFETY: rows' shape matches the nine columns named in the SELECT
-    // above.
-    const rows = db.prepare(`
-      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
-      FROM session_events
-      ${where}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(...params) as SessionEventRow[];
+  const where = `WHERE ${clauses.join(' AND ')}`;
+  // SAFETY: rows' shape matches the nine columns named in the SELECT
+  // above.
+  const rows = db.prepare(`
+    SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
+    FROM session_events
+    ${where}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(...params) as SessionEventRow[];
 
-    return rows.map(rowToSessionEvent).reverse();
-  }, openStore);
+  return rows.map(rowToSessionEvent).reverse();
 }
 
 /** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed
  * window. */
-export function findPromotableSessions(
-  hippoRoot: string,
+export function findPromotableSessionsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sinceMs: number,
 ): Array<{ session_id: string }> {
   assertTenantId('findPromotableSessions', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows' shape matches the single `session_id` column selected
-    // above.
-    const rows = db.prepare(`
-      SELECT DISTINCT session_id FROM session_events
-      WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
-    `).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
-    return rows;
-  }, openStore);
+  // SAFETY: rows' shape matches the single `session_id` column selected
+  // above.
+  const rows = db.prepare(`
+    SELECT DISTINCT session_id FROM session_events
+    WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
+  `).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
+  return rows;
 }
 
 /** Idempotency guard: true if a trace-layer memory with this source_session_id already exists. */
-export function traceExistsForSession(hippoRoot: string, tenantId: string, session_id: string): boolean {
+export function traceExistsForSessionAt(db: DatabaseSyncLike, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    const row = db.prepare(`
-      SELECT 1 FROM memories
-      WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
-      LIMIT 1
-    `).get(session_id, tenantId);
-    return !!row;
-  }, openStore);
+  const row = db.prepare(`
+    SELECT 1 FROM memories
+    WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
+    LIMIT 1
+  `).get(session_id, tenantId);
+  return !!row;
 }
 
 /** The owner a session id is bound to, or null. */
@@ -485,10 +477,11 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
 }
 
 /** The owner stored for the session id, binding `binding.owner` first when none is stored. */
-export function sessionOwnerOrBind(hippoRoot: string, binding: SessionOwnerBinding): string | null {
+export function sessionOwnerOrBindAt(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
-  return onHandle(
-    hippoRoot,
-    (db) => selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding),
-  );
+  return selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding);
+}
+
+export function sessionOwnerOrBind(hippoRoot: string, binding: SessionOwnerBinding): string | null {
+  return onHandle(hippoRoot, (db) => sessionOwnerOrBindAt(db, binding));
 }

@@ -3,11 +3,11 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { githubEventMemoryAt, markGitHubEventSeenAt } from '../connectors/github.js';
 import { markSlackEventSeenAt, slackEventMemoryAt } from '../connectors/slack.js';
-import { stampOriginProject } from '../entry-row.js';
-import { writeEntryMirrors } from '../entry-writes.js';
-import { onHandle, openStore } from '../open.js';
+import { type OnHandle, openStore } from '../open.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites, Sync } from '../port.js';
 import { recordQuarantine } from '../quarantine.js';
+import { stampOriginProjectIn } from '../entry-row.js';
+import { writeEntryMirrorsIn } from '../entry-writes.js';
 import { archiveRawAt, writeInOwnTenant } from './entry-writes-group.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever sees it. */
@@ -51,17 +51,16 @@ function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteO
 }
 
 /** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back write leaves none. */
-export function sqliteConnectorWrites(hippoRoot: string): Sync<ConnectorWrites> {
+export function sqliteConnectorWrites(on: OnHandle): Sync<ConnectorWrites> {
   return {
-    writeConnectorEntry(write) {
-      const entry = stampOriginProject(hippoRoot, write.entry);
-      const result = onHandle(hippoRoot, (db) => writeOnce(db, { ...write, entry }), openStore);
-      if (result.outcome === 'written') writeEntryMirrors(hippoRoot, entry);
+    writeConnectorEntry: (write) => on((db, files) => {
+      const entry = stampOriginProjectIn(files, write.entry);
+      const result = writeOnce(db, { ...write, entry });
+      if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
       return result;
-    },
-    archiveConnectorEntry(archive) {
-      // The log write's answer is unread: a key logged before keeps its row and the archive stands.
-      return archiveRawAt(hippoRoot, archive, (db, archivedId) => { logEvent(db, archive.event, archivedId); });
-    },
+    }, openStore),
+    // The log write's answer is unread: a key logged before keeps its row and the archive stands.
+    archiveConnectorEntry: (archive) => on((db, files) =>
+      archiveRawAt(db, files, archive, (handle, archivedId) => { logEvent(handle, archive.event, archivedId); })),
   };
 }

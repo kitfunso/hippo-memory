@@ -1,5 +1,5 @@
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../util/log.js';
 import { blockHash } from '../util/token-text.js';
@@ -236,20 +236,15 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
 
 /** Latest time each target got a good outcome, from the audit rows, read on a handle of its own; unlike
  * queryAuditEvents it has no row cap. */
-export function confirmedOutcomeTimes(hippoRoot: string, tenantId: string): Map<string, string> {
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
-    const rows = db.prepare(
-      `SELECT target_id, MAX(ts) AS ts FROM audit_log
-         WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
-           AND json_extract(metadata_json, '$.good') = 1
-         GROUP BY target_id`,
-    ).all(tenantId) as { target_id: string; ts: string }[];
-    return new Map(rows.map((r) => [r.target_id, r.ts]));
-  } finally {
-    closeHippoDb(db);
-  }
+export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
+  // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
+  const rows = db.prepare(
+    `SELECT target_id, MAX(ts) AS ts FROM audit_log
+       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+         AND json_extract(metadata_json, '$.good') = 1
+       GROUP BY target_id`,
+  ).all(tenantId) as { target_id: string; ts: string }[];
+  return new Map(rows.map((r) => [r.target_id, r.ts]));
 }
 
 const AUDIT_COLUMNS = 'id, ts, tenant_id, actor, op, target_id, metadata_json';
@@ -299,21 +294,19 @@ export interface FailedAuditEvent {
 
 /** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that
  * failed, for the caller to report. */
-export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const failed: FailedAuditEvent[] = [];
-    for (const event of events) {
-      try {
-        appendAuditEvent(db, event);
-      } catch (error) {
-        failed.push({ event, error });
-      }
+export function recordAuditEventsRowByRowAt(
+  db: DatabaseSyncLike,
+  events: readonly AppendAuditOpts[],
+): FailedAuditEvent[] {
+  const failed: FailedAuditEvent[] = [];
+  for (const event of events) {
+    try {
+      appendAuditEvent(db, event);
+    } catch (error) {
+      failed.push({ event, error });
     }
-    return failed;
-  } finally {
-    closeHippoDb(db);
   }
+  return failed;
 }
 
 export interface AuditPrune {
@@ -328,23 +321,18 @@ export interface AuditPrune {
 
 /** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write scope, so neither lands
  * alone; returns the row count. */
-export function pruneAuditRows(hippoRoot: string, prune: AuditPrune): number {
+export function pruneAuditRowsAt(db: DatabaseSyncLike, prune: AuditPrune): number {
   const { tenantId, cutoff, actor, olderThanDays } = prune;
-  const db = openHippoDb(hippoRoot);
-  try {
-    if (prune.dryRun) return countAuditBefore(db, tenantId, cutoff);
-    return withWriteScope(db, 'audit_prune', () => {
-      const count = deleteAuditBefore(db, tenantId, cutoff);
-      // Written after the delete with ts = now, so the cutoff just applied cannot take it.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'audit_prune',
-        metadata: { cutoff, count, dryRun: false, olderThanDays },
-      });
-      return count;
+  if (prune.dryRun) return countAuditBefore(db, tenantId, cutoff);
+  return withWriteScope(db, 'audit_prune', () => {
+    const count = deleteAuditBefore(db, tenantId, cutoff);
+    // Written after the delete with ts = now, so the cutoff just applied cannot take it.
+    appendAuditEvent(db, {
+      tenantId,
+      actor,
+      op: 'audit_prune',
+      metadata: { cutoff, count, dryRun: false, olderThanDays },
     });
-  } finally {
-    closeHippoDb(db);
-  }
+    return count;
+  });
 }

@@ -18,9 +18,13 @@ export interface CardDetail {
 
 /** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card), the five
  * reads on one snapshot. */
-export function loadCardDetail(hippoRoot: string, tenantId: string, id: string): CardDetail | null {
+export function loadCardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
   assertTenantId('loadCardDetail', tenantId);
-  return onHandle(hippoRoot, (db) => withReadSnapshot(db, () => cardDetailAt(db, tenantId, id)), openStore);
+  return withReadSnapshot(db, () => cardDetailAt(db, tenantId, id));
+}
+
+export function loadCardDetail(hippoRoot: string, tenantId: string, id: string): CardDetail | null {
+  return onHandle(hippoRoot, (db) => loadCardDetailAt(db, tenantId, id), openStore);
 }
 
 function cardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {

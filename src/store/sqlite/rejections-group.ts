@@ -1,19 +1,18 @@
 // hippo.db's half of the Rejections store group: each call on a handle of its own.
 import { RejectedValueError } from '../../core/api-errors.js';
-import { onHandle, openStore } from '../open.js';
+import { type OnHandle, openStore } from '../open.js';
 import type { Rejections } from '../port/rejections.js';
 import type { Sync } from '../port.js';
 import { applyRejectionAt, liftRejectionAt } from '../rejected-values.js';
 import { checkRejectionGuard, listRejectedValues } from '../rejection.js';
 
-export function sqliteRejections(hippoRoot: string): Sync<Rejections> {
+export function sqliteRejections(on: OnHandle): Sync<Rejections> {
   return {
-    apply: (rejection) => onHandle(hippoRoot, (db) => applyRejectionAt(db, hippoRoot, rejection), openStore),
-    lift: (tenantId, digestPrefix, actor) =>
-      onHandle(hippoRoot, (db) => liftRejectionAt(db, tenantId, digestPrefix, actor), openStore),
-    list: (tenantId) => onHandle(hippoRoot, (db) => listRejectedValues(db, tenantId), openStore),
+    apply: (rejection) => on((db, files) => applyRejectionAt(db, files, rejection), openStore),
+    lift: (tenantId, digestPrefix, actor) => on((db) => liftRejectionAt(db, tenantId, digestPrefix, actor), openStore),
+    list: (tenantId) => on((db) => listRejectedValues(db, tenantId), openStore),
     refusedAmong: (checks) =>
-      onHandle(hippoRoot, (db) =>
+      on((db) =>
         checks.map(({ tenantId, entryId, content }) => {
           try {
             checkRejectionGuard(db, tenantId, entryId, content);

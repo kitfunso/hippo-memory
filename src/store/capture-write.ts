@@ -6,6 +6,7 @@ import { writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
+import type { StoreFiles } from './open.js';
 
 export type CapturedOutcome = 'captured' | 'skipped' | 'rejected';
 
@@ -27,7 +28,7 @@ export interface CaptureWriteOptions {
  * each one written, so a repeat inside the batch is skipped. */
 export function writeCapturedItemsAt(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  { hippoRoot }: StoreFiles,
   items: readonly CaptureItem[],
   keys: Set<string>,
   opts: CaptureWriteOptions,

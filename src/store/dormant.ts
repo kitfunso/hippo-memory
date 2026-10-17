@@ -2,8 +2,8 @@
  * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
  * goes, so every reader of `memories` stops seeing it, as if deleted. Not the raw archive (`raw_archive`,
  * `archiveRawMemory`), which keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
-import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
+import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { type StoreFiles } from './open.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { SqlFragment } from './rule-sql.js';
 import type { WriteBudget } from '../util/write-budget.js';
@@ -304,43 +304,34 @@ async function expireInChunks(
 
 /** Deletes for good every memory that went dormant before `cutoffIso`, on one handle; returns how many went, or under
  * `dryRun` how many would. */
-export async function expireDormantBefore(
-  hippoRoot: string,
+export async function expireDormantBeforeAt(
+  db: DatabaseSyncLike,
   cutoffIso: string,
-  opts: { dryRun: boolean; budget: WriteBudget; busyWaitMs: number },
+  opts: { dryRun: boolean; budget: WriteBudget },
 ): Promise<number> {
-  const db = openHippoDb(hippoRoot, { busyWaitMs: opts.busyWaitMs });
-  try {
-    // The keys come from a read, so a run with nothing to expire never takes the write lock.
-    const keys = expiredDormantKeys(db, cutoffIso);
-    return opts.dryRun ? keys.length : await expireInChunks(db, keys, cutoffIso, opts.budget);
-  } finally {
-    closeHippoDb(db);
-  }
+  // The keys come from a read, so a run with nothing to expire never takes the write lock.
+  const keys = expiredDormantKeys(db, cutoffIso);
+  return opts.dryRun ? keys.length : await expireInChunks(db, keys, cutoffIso, opts.budget);
 }
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, read on a handle of its own. */
-export function loadDormantMemories(
-  hippoRoot: string,
+export function loadDormantMemoriesAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   opts: ListDormantOpts = {},
   admit: SqlFragment = EVERY_SCOPE,
 ): DormantMemory[] {
-  return onHandle(hippoRoot, (db) => {
-    return listDormantRows(db, tenantId, opts, admit);
-  });
+  return listDormantRows(db, tenantId, opts, admit);
 }
 
 /** Whether a tenant holds a dormant memory with this id whose scope `admit` passes, read on a handle of its own. */
-export function holdsDormantMemory(
-  hippoRoot: string,
+export function holdsDormantMemoryAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   id: string,
   admit: SqlFragment = EVERY_SCOPE,
 ): boolean {
-  return onHandle(hippoRoot, (db) => {
-    return hasDormantRow(db, tenantId, id, admit);
-  });
+  return hasDormantRow(db, tenantId, id, admit);
 }
 
 /** One restore as the store applies it. The two functions are the caller's policy over plain rows; neither is handed
@@ -400,19 +391,21 @@ function restoreInWriteScope(db: DatabaseSyncLike, restore: DormantRestore): Dor
 
 /** Brings one dormant memory back on a single handle: the live row, the dormant delete and the audit row commit
  * together, then its mirrors are written. */
-export function restoreDormantMemory(hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
-  return onHandle(hippoRoot, (db) => {
-    let outcome: DormantRestoreOutcome;
-    try {
-      outcome = restoreInWriteScope(db, restore);
-    } catch (error) {
-      // Written after the rollback, so the refusal row outlives it.
-      if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, restore.actor);
-      throw error;
-    }
-    if (outcome.status === 'restored') writeEntryMirrors(hippoRoot, outcome.entry);
-    return outcome;
-  });
+export function restoreDormantMemoryAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
+  restore: DormantRestore,
+): DormantRestoreOutcome {
+  let outcome: DormantRestoreOutcome;
+  try {
+    outcome = restoreInWriteScope(db, restore);
+  } catch (error) {
+    // Written after the rollback, so the refusal row outlives it.
+    if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, restore.actor);
+    throw error;
+  }
+  if (outcome.status === 'restored') writeEntryMirrors(hippoRoot, outcome.entry);
+  return outcome;
 }
 
 /** One permanent delete of a dormant memory. */
@@ -427,12 +420,10 @@ export interface DormantForget {
 
 /** Deletes a tenant's dormant memory for good and writes its `forget` audit row, on a single handle; false when it
  * holds none `admit` passes. */
-export function forgetDormantMemory(hippoRoot: string, forget: DormantForget): boolean {
+export function forgetDormantMemoryAt(db: DatabaseSyncLike, forget: DormantForget): boolean {
   const { tenantId, id, actor, admit } = forget;
-  return onHandle(hippoRoot, (db) => {
-    if (!hasDormantRow(db, tenantId, id, admit) || !deleteDormantRow(db, tenantId, id)) return false;
-    // Best-effort, like every other forget audit row: the delete stands.
-    audit(db, 'forget', { tenantId, actor, targetId: id, metadata: { dormant: true } });
-    return true;
-  });
+  if (!hasDormantRow(db, tenantId, id, admit) || !deleteDormantRow(db, tenantId, id)) return false;
+  // Best-effort, like every other forget audit row: the delete stands.
+  audit(db, 'forget', { tenantId, actor, targetId: id, metadata: { dormant: true } });
+  return true;
 }

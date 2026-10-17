@@ -1,7 +1,7 @@
 // The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its
 // snapshot runs on.
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
-import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
+import { withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import {
@@ -26,37 +26,29 @@ const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
 /** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so graph-view focus finds
  * `--entity NAME` directly without materializing every same-name row. */
-export function loadEntitiesByName(
-  hippoRoot: string,
+export function loadEntitiesByNameAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   name: string,
   opts: { limit?: number } = {},
-  txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntitiesByName', tenantId);
   const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-    const rows = db.prepare(`
-      SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
-      ORDER BY id ASC LIMIT ?
-    `).all(tenantId, name, limit) as EntityRow[];
-    return rows.map(rowToEntity);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
-  }
+  // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
+  const rows = db.prepare(`
+    SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
+    ORDER BY id ASC LIMIT ?
+  `).all(tenantId, name, limit) as EntityRow[];
+  return rows.map(rowToEntity);
 }
 
-export function loadEntities(
-  hippoRoot: string,
+export function loadEntitiesAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   opts: { entityType?: EntityType; limit?: number } = {},
-  txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntities', tenantId);
   const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
@@ -65,58 +57,61 @@ export function loadEntities(
       `loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`,
     );
   }
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const clauses = ['tenant_id = ?'];
-    const params: unknown[] = [tenantId];
-    if (opts.entityType) {
-      clauses.push('entity_type = ?');
-      params.push(opts.entityType);
-    }
-    params.push(limit);
-    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-    const rows = db.prepare(`
-      SELECT ${ENTITY_COLS} FROM entities
-      WHERE ${clauses.join(' AND ')}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(...params) as EntityRow[];
-    return rows.map(rowToEntity);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
+  const clauses = ['tenant_id = ?'];
+  const params: unknown[] = [tenantId];
+  if (opts.entityType) {
+    clauses.push('entity_type = ?');
+    params.push(opts.entityType);
   }
+  params.push(limit);
+  // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
+  const rows = db.prepare(`
+    SELECT ${ENTITY_COLS} FROM entities
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(...params) as EntityRow[];
+  return rows.map(rowToEntity);
+}
+
+export function loadEntities(
+  hippoRoot: string,
+  tenantId: string,
+  opts: { entityType?: EntityType; limit?: number } = {},
+): Entity[] {
+  return onHandle(hippoRoot, (db) => loadEntitiesAt(db, tenantId, opts));
+}
+
+export function loadRelationsAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  opts: { fromEntityId?: number; limit?: number } = {},
+): Relation[] {
+  assertTenantId('loadRelations', tenantId);
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
+  const clauses = ['tenant_id = ?'];
+  const params: unknown[] = [tenantId];
+  if (opts.fromEntityId !== undefined) {
+    clauses.push('from_entity_id = ?');
+    params.push(opts.fromEntityId);
+  }
+  params.push(limit);
+  // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
+  const rows = db.prepare(`
+    SELECT ${RELATION_COLS} FROM relations
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(...params) as RelationRow[];
+  return rows.map(rowToRelation);
 }
 
 export function loadRelations(
   hippoRoot: string,
   tenantId: string,
   opts: { fromEntityId?: number; limit?: number } = {},
-  txDb?: DatabaseSyncLike,
 ): Relation[] {
-  assertTenantId('loadRelations', tenantId);
-  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const clauses = ['tenant_id = ?'];
-    const params: unknown[] = [tenantId];
-    if (opts.fromEntityId !== undefined) {
-      clauses.push('from_entity_id = ?');
-      params.push(opts.fromEntityId);
-    }
-    params.push(limit);
-    // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
-    const rows = db.prepare(`
-      SELECT ${RELATION_COLS} FROM relations
-      WHERE ${clauses.join(' AND ')}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(...params) as RelationRow[];
-    return rows.map(rowToRelation);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
-  }
+  return onHandle(hippoRoot, (db) => loadRelationsAt(db, tenantId, opts));
 }
 
 /** Chunk size for IN-list queries: well under SQLite's 999-bound-variable default
@@ -125,43 +120,35 @@ export const IN_LIST_CHUNK = 400;
 
 /** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped,
  * read-only. */
-export function loadEntitiesByIds(
-  hippoRoot: string,
+export function loadEntitiesByIdsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   ids: readonly number[],
-  txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntitiesByIds', tenantId);
   if (ids.length === 0) return [];
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const out: Entity[] = [];
-    for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
-      const slice = ids.slice(i, i + IN_LIST_CHUNK);
-      const ph = placeholders(slice.length);
-      // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-      const rows = db.prepare(`
-        SELECT ${ENTITY_COLS} FROM entities
-        WHERE tenant_id = ? AND id IN (${ph})
-      `).all(tenantId, ...slice) as EntityRow[];
-      out.push(...rows.map(rowToEntity));
-    }
-    return out;
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
+  const out: Entity[] = [];
+  for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
+    const slice = ids.slice(i, i + IN_LIST_CHUNK);
+    const ph = placeholders(slice.length);
+    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
+    const rows = db.prepare(`
+      SELECT ${ENTITY_COLS} FROM entities
+      WHERE tenant_id = ? AND id IN (${ph})
+    `).all(tenantId, ...slice) as EntityRow[];
+    out.push(...rows.map(rowToEntity));
   }
+  return out;
 }
 
 /** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for multi-hop traversal,
  * one query for the whole frontier (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?`
  * rejects a fraction). */
-export function loadNeighborRelations(
-  hippoRoot: string,
+export function loadNeighborRelationsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   entityIds: readonly number[],
   opts: { limit?: number } = {},
-  txDb?: DatabaseSyncLike,
 ): Relation[] {
   assertTenantId('loadNeighborRelations', tenantId);
   if (entityIds.length === 0) return [];
@@ -169,39 +156,32 @@ export function loadNeighborRelations(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadNeighborRelations: limit must be a non-negative integer; got ${limit}`);
   }
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    // `limit` applies PER CHUNK, so a frontier over IN_LIST_CHUNK ids could return limit*chunks rows before the dedup
-    // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
-    const byId = new Map<number, Relation>();
-    for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
-      const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
-      const ph = placeholders(slice.length);
-      // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
-      const rows = db.prepare(`
-        SELECT ${RELATION_COLS} FROM relations
-        WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...slice, ...slice, limit) as RelationRow[];
-      for (const r of rows) byId.set(r.id, rowToRelation(r));
-    }
-    return Array.from(byId.values());
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
+  // `limit` applies PER CHUNK, so a frontier over IN_LIST_CHUNK ids could return limit*chunks rows before the dedup
+  // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
+  const byId = new Map<number, Relation>();
+  for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
+    const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
+    const ph = placeholders(slice.length);
+    // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
+    const rows = db.prepare(`
+      SELECT ${RELATION_COLS} FROM relations
+      WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, ...slice, ...slice, limit) as RelationRow[];
+    for (const r of rows) byId.set(r.id, rowToRelation(r));
   }
+  return Array.from(byId.values());
 }
 
 /** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus subgraph; `LIMIT` caps
  * only intra-union edges, so no out-of-union row evicts a valid one. The caller bounds `entityIds` (<= view limit), so
  * a single query is safe. */
-export function loadRelationsAmong(
-  hippoRoot: string,
+export function loadRelationsAmongAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   entityIds: number[],
   opts: { limit?: number } = {},
-  txDb?: DatabaseSyncLike,
 ): Relation[] {
   assertTenantId('loadRelationsAmong', tenantId);
   if (entityIds.length === 0) return [];
@@ -209,48 +189,40 @@ export function loadRelationsAmong(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const ph = placeholders(entityIds.length);
-    // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
-    const rows = db.prepare(`
-      SELECT ${RELATION_COLS} FROM relations
-      WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
-    return rows.map(rowToRelation);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
-  }
+  const ph = placeholders(entityIds.length);
+  // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
+  const rows = db.prepare(`
+    SELECT ${RELATION_COLS} FROM relations
+    WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
+  return rows.map(rowToRelation);
 }
 
 /** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop recall. Tenant-scoped,
  * read-only; chunks the IN-list under the SQLite variable cap. */
-export function loadEntitiesByMemoryId(
-  hippoRoot: string,
+export function loadEntitiesByMemoryIdAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   memoryIds: readonly string[],
 ): Entity[] {
   assertTenantId('loadEntitiesByMemoryId', tenantId);
   if (memoryIds.length === 0) return [];
-  return onHandle(hippoRoot, (db) => {
-    const out: Entity[] = [];
-    for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
-      const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
-      const ph = placeholders(slice.length);
-      // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
-      // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-      const rows = db.prepare(`
-        SELECT ${ENTITY_COLS} FROM entities
-        WHERE tenant_id = ? AND memory_id IN (${ph})
-        ORDER BY id ASC
-      `).all(tenantId, ...slice) as EntityRow[];
-      out.push(...rows.map(rowToEntity));
-    }
-    return out;
-  });
+  const out: Entity[] = [];
+  for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
+    const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
+    const ph = placeholders(slice.length);
+    // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
+    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
+    const rows = db.prepare(`
+      SELECT ${ENTITY_COLS} FROM entities
+      WHERE tenant_id = ? AND memory_id IN (${ph})
+      ORDER BY id ASC
+    `).all(tenantId, ...slice) as EntityRow[];
+    out.push(...rows.map(rowToEntity));
+  }
+  return out;
 }
 
 /** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write
@@ -281,20 +253,13 @@ function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): Read
 }
 
 /** storedGraphOn on its own connection, outside any write lock. */
-export function loadStoredGraph(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): StoredGraph {
-  return onHandle(hippoRoot, (db) => {
-    return storedGraphOn(db, tenantId, memoryIds);
-  });
+export function loadStoredGraphAt(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
+  return storedGraphOn(db, tenantId, memoryIds);
 }
 
 /** Run `fn` in ONE read transaction (a single WAL snapshot) so every `load*` read via `txDb` sees a consistent view
  * even if a rebuild commits concurrently (it clears and reinserts entities, so separate reads could mix old entity ids
  * with new relation ids). */
-export function withGraphReadSnapshot<T>(
-  hippoRoot: string,
-  fn: (txDb: DatabaseSyncLike) => T,
-): T {
-  return onHandle(hippoRoot, (db) => {
-    return withReadSnapshot(db, () => fn(db));
-  });
+export function withGraphReadSnapshotAt<T>(db: DatabaseSyncLike, fn: (txDb: DatabaseSyncLike) => T): T {
+  return withReadSnapshot(db, () => fn(db));
 }

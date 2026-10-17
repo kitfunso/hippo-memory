@@ -16,7 +16,6 @@ import { isInitialized } from '../core/project-identity.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
-import { loadLatestHandoff } from '../store/handoffs.js';
 import { isSyntheticMessage } from '../store/token-ledger.js';
 import { readOpenTranscriptTail } from '../util/transcript-tail.js';
 
@@ -566,18 +565,19 @@ export interface DigestOutcome {
  */
 function injectedTexts(hippoRoot: string, opts: SessionDigestOptions): string[] {
   // Sync, since the session-end hook counts this run's statements; the hook's root is this path's composition root.
-  const digests = sqliteSyncStore(hippoRoot).contextReads.liveContentsBySourceAndTag(
+  const store = sqliteSyncStore(hippoRoot);
+  const digests = store.contextReads.liveContentsBySourceAndTag(
     opts.tenantId,
     SESSION_DIGEST_TAG,
     SESSION_DIGEST_TAG,
     opts.key,
   );
-  const handoff = loadLatestHandoff(hippoRoot, opts.tenantId, undefined, {
+  const handoff = store.sessions.latestHandoff(opts.tenantId, null, {
     unfinishedOnly: true,
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
     scopeFilter: 'default-deny',
     excludeSessionId: opts.key,
-  });
+  }, null);
   if (!handoff) return digests;
   return [...digests, [handoff.taskId, handoff.summary, handoff.nextAction].filter(Boolean).join('\n')];
 }

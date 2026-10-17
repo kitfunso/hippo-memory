@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { openHippoDb, isFtsAvailable, type DatabaseSyncLike } from '../db/index.js';
 import { tokenize } from '../util/tokenize.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
@@ -236,15 +236,22 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
 
 /** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. With `tenantId` every
  * SELECT filters by it; omitted = no filter. */
+export function loadSearchEntriesAt(
+  db: DatabaseSyncLike,
+  query: string,
+  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
+  tenantId?: string,
+): MemoryEntry[] {
+  return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
+}
+
 export function loadSearchEntries(
   hippoRoot: string,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
   tenantId?: string,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
-  }, openStore);
+  return onHandle(hippoRoot, (db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore);
 }
 
 export interface RecallSearchEntriesOptions {
@@ -260,16 +267,16 @@ export interface RecallSearchEntriesOptions {
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
  * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
  * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
-export function loadRecallEntries(
-  hippoRoot: string,
+export function loadRecallEntriesAt(
+  db: DatabaseSyncLike,
   query: string,
   options: RecallSearchEntriesOptions = {},
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadRecallSearchEntriesFromDb(db, query, options), openStore);
+  return loadRecallSearchEntriesFromDb(db, query, options);
 }
 
-/** Positional form of `loadRecallEntries`, kept internal because the frozen q3b-ranker-floor benchmark imports it from
- * dist. */
+/** Positional root form of `loadRecallEntriesAt`, kept internal because the frozen q3b-ranker-floor benchmark imports
+ * it from dist. */
 export function loadRecallSearchEntries(
   hippoRoot: string,
   query: string,
@@ -281,15 +288,8 @@ export function loadRecallSearchEntries(
   originProjects?: OriginFilter,
   ownScope?: string,
 ): MemoryEntry[] {
-  return loadRecallEntries(hippoRoot, query, {
-    limit,
-    tenantId,
-    requestedScope,
-    explicitScopeMode,
-    includeSuperseded,
-    originProjects,
-    ownScope,
-  });
+  const options = { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope };
+  return onHandle(hippoRoot, (db) => loadRecallEntriesAt(db, query, options), openStore);
 }
 
 // Split out so callers with an already-open db (the prompt-recall path) skip
@@ -324,8 +324,8 @@ export interface VectorCandidateSpec {
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first. */
-export async function loadVectorCandidateEntries(
-  hippoRoot: string,
+export async function loadVectorCandidateEntriesAt(
+  db: DatabaseSyncLike,
   queryVector: readonly number[],
   spec: VectorCandidateSpec,
 ): Promise<MemoryEntry[]> {
@@ -333,25 +333,20 @@ export async function loadVectorCandidateEntries(
   const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const params = [...(spec.tenantId !== undefined ? [spec.tenantId] : []), ...scope.params];
-  const db = openStore(hippoRoot);
-  try {
-    const matches = await topVectorMatches(
-      db,
-      queryVector,
-      spec.limit ?? 50,
-      `${tenant} AND m.kind != 'archived'${scope.sql}${current}`,
-      params,
-    );
-    if (matches.length === 0) return [];
-    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db
-      .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`)
-      .all(...matches.map((m) => m.id)) as MemoryRow[];
-    const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
-    return matches.flatMap((m) => byId.get(m.id) ?? []);
-  } finally {
-    closeHippoDb(db);
-  }
+  const matches = await topVectorMatches(
+    db,
+    queryVector,
+    spec.limit ?? 50,
+    `${tenant} AND m.kind != 'archived'${scope.sql}${current}`,
+    params,
+  );
+  if (matches.length === 0) return [];
+  // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db
+    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`)
+    .all(...matches.map((m) => m.id)) as MemoryRow[];
+  const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
+  return matches.flatMap((m) => byId.get(m.id) ?? []);
 }
 
 /** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.

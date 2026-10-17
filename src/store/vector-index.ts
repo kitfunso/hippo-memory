@@ -52,25 +52,23 @@ function embeddingIndexStateOn(db: DatabaseSyncLike): EmbeddingIndexState {
 }
 
 /** hippo.db's index state, the meta row and the EXISTS on one handle. */
-export function storedIndexState(hippoRoot: string): EmbeddingIndexState {
-  return onHandle(hippoRoot, (db) => {
-    return embeddingIndexStateOn(db);
-  });
+export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
+  return embeddingIndexStateOn(db);
 }
 
-/** Records `identity` as what built the index under `hippoRoot`. */
-export function saveIndexIdentity(hippoRoot: string, identity: string): void {
-  onHandle(hippoRoot, (db) => {
-    setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
-  });
+/** Records `identity` as what built the index. */
+export function saveIndexIdentityAt(db: DatabaseSyncLike, identity: string): void {
+  setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via
  * `loadStoredVectors`. */
+export function loadEmbeddingIndexAt(db: DatabaseSyncLike): Record<string, number[]> {
+  return Object.fromEntries(loadVectors(db));
+}
+
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  return onHandle(hippoRoot, (db) => {
-    return Object.fromEntries(loadVectors(db));
-  });
+  return onHandle(hippoRoot, (db) => loadEmbeddingIndexAt(db));
 }
 
 export interface StoredVectorSummary {
@@ -79,61 +77,49 @@ export interface StoredVectorSummary {
 }
 
 /** Every stored vector id and the float count of the first row, with no vector decoded. */
-export function storedVectorSummary(hippoRoot: string): StoredVectorSummary {
-  return onHandle(hippoRoot, (db) => {
-    return { ids: storedVectorIds(db), dims: storedVectorDims(db) };
-  });
+export function storedVectorSummaryAt(db: DatabaseSyncLike): StoredVectorSummary {
+  return { ids: storedVectorIds(db), dims: storedVectorDims(db) };
 }
 
 /** Stored vectors for `ids` only. */
-export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
+export function loadStoredVectorsAt(db: DatabaseSyncLike, ids: readonly string[]): Map<string, number[]> {
   if (ids.length === 0) return new Map();
-  return onHandle(hippoRoot, (db) => {
-    return loadVectors(db, ids);
-  });
+  return loadVectors(db, ids);
 }
 
 /** `loadStoredVectors` as Float32 views, for a caller that only scores them. */
-export function loadStoredVectorViews(hippoRoot: string, ids: readonly string[]): Map<string, Float32Array> {
+export function loadStoredVectorViewsAt(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
-  return onHandle(hippoRoot, (db) => {
-    return loadVectorViews(db, ids);
-  });
+  return loadVectorViews(db, ids);
 }
 
 /** Replace every stored vector with `index`; `model` defaults to the stored index identity. */
-export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
-  onHandle(hippoRoot, (db) => {
-    replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, ''));
-  });
+export function saveEmbeddingIndexAt(db: DatabaseSyncLike, index: Record<string, number[]>, model?: string): void {
+  replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, ''));
 }
 
 /** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how
  * many it wrote. */
-export function saveStoredVectors(
-  hippoRoot: string,
+export function saveStoredVectorsAt(
+  db: DatabaseSyncLike,
   rows: Iterable<readonly [string, readonly number[]]>,
   model: string,
 ): number {
-  return onHandle(hippoRoot, (db) => {
-    return upsertVectors(db, rows, model);
-  });
+  return upsertVectors(db, rows, model);
 }
 
 /** Drops the vectors of deleted memories under `hippoRoot`, then returns the ids with no vector, oldest first. */
-export function pruneStoredVectorsListPending(hippoRoot: string): string[] {
-  return onHandle(hippoRoot, (db) => {
-    deleteOrphanVectors(db);
-    // SAFETY: the SELECT names exactly the one column read.
-    const rows = db
-      .prepare(
-        `SELECT id FROM memories
-         WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)
-         ORDER BY created ASC, id ASC`,
-      )
-      .all() as Array<{ id: string }>;
-    return rows.map((r) => r.id);
-  });
+export function pruneStoredVectorsListPendingAt(db: DatabaseSyncLike): string[] {
+  deleteOrphanVectors(db);
+  // SAFETY: the SELECT names exactly the one column read.
+  const rows = db
+    .prepare(
+      `SELECT id FROM memories
+       WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)
+       ORDER BY created ASC, id ASC`,
+    )
+    .all() as Array<{ id: string }>;
+  return rows.map((r) => r.id);
 }
 
 export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
@@ -206,17 +192,13 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
 }
 
 /** Every particle stored under `hippoRoot`. */
-export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
-  return onHandle(hippoRoot, (db) => {
-    return Array.from(loadPhysicsState(db).values());
-  });
+export function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
+  return Array.from(loadPhysicsState(db).values());
 }
 
 /** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
-export function saveStoredParticles(hippoRoot: string, particles: PhysicsParticle[]): void {
-  onHandle(hippoRoot, (db) => {
-    savePhysicsState(db, particles);
-  });
+export function saveStoredParticlesAt(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
+  savePhysicsState(db, particles);
 }
 
 const PARTICLE_PAGE = 64;
@@ -233,19 +215,16 @@ function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generato
 
 /** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how
  * many. Rows are read a page at a time. */
-export function resetStoredParticles(
-  hippoRoot: string,
+export function resetStoredParticlesAt(
+  db: DatabaseSyncLike,
   ids: readonly string[],
   embeddingIndex: Record<string, number[]>,
 ): number {
-  return onHandle(hippoRoot, (db) => {
-    return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
-  });
+  return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
 }
 
 /** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */
-export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  onHandle(hippoRoot, (db) => {
-    if (!loadPhysicsState(db, [entry.id]).has(entry.id)) savePhysicsState(db, [initializeParticle(entry, vector)]);
-  });
+export function seedStoredParticleAt(db: DatabaseSyncLike, entry: MemoryEntry, vector: number[]): void {
+  if (!loadPhysicsState(db, [entry.id]).has(entry.id)) savePhysicsState(db, [initializeParticle(entry, vector)]);
 }
+

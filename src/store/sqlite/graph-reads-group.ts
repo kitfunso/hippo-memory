@@ -1,25 +1,25 @@
 // hippo.db's half of the GraphReads store group: one read snapshot around the walk the CLI graph commands run.
 import { canReadScope } from '../../core/recall-scope.js';
 import {
-  loadEntitiesByIds, loadEntitiesByMemoryId, loadNeighborRelations, loadStoredGraph, withGraphReadSnapshot,
+  loadEntitiesByIdsAt, loadEntitiesByMemoryIdAt, loadNeighborRelationsAt, loadStoredGraphAt, withGraphReadSnapshotAt,
 } from '../graph-reads.js';
 import { graphViewRows } from '../graph-view-rows.js';
 import type { GraphReads, Sync } from '../port.js';
+import { type OnHandle } from '../open.js';
 
-export function sqliteGraphReads(hippoRoot: string): Sync<GraphReads> {
+export function sqliteGraphReads(on: OnHandle): Sync<GraphReads> {
   return {
     graphRows: (tenantId, { entity, limit, reader }) =>
-      withGraphReadSnapshot(hippoRoot, (db) =>
-        graphViewRows(hippoRoot, db, tenantId, {
+      on((db) => withGraphReadSnapshotAt(db, (snapshot) =>
+        graphViewRows(snapshot, tenantId, {
           entity,
           limit,
           canRead: reader && ((scope) => scope === null || canReadScope(reader, scope)),
-        }),
-      ),
-    entitiesForMemories: (tenantId, memoryIds) => loadEntitiesByMemoryId(hippoRoot, tenantId, memoryIds),
-    entitiesByIds: (tenantId, ids) => loadEntitiesByIds(hippoRoot, tenantId, ids),
+        }))),
+    entitiesForMemories: (tenantId, memoryIds) => on((db) => loadEntitiesByMemoryIdAt(db, tenantId, memoryIds)),
+    entitiesByIds: (tenantId, ids) => on((db) => loadEntitiesByIdsAt(db, tenantId, ids)),
     neighborRelations: (tenantId, entityIds, { limit }) =>
-      loadNeighborRelations(hippoRoot, tenantId, entityIds, { limit }),
-    storedGraph: (tenantId, memoryIds) => loadStoredGraph(hippoRoot, tenantId, memoryIds),
+      on((db) => loadNeighborRelationsAt(db, tenantId, entityIds, { limit })),
+    storedGraph: (tenantId, memoryIds) => on((db) => loadStoredGraphAt(db, tenantId, memoryIds)),
   };
 }

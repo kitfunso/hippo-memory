@@ -11,7 +11,7 @@ import { appendAuditEvent } from './audit.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
-import { onHandle, openStore } from './open.js';
+import { onHandle, openStore, type StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../core/actor.js';
 
 export interface WriteEntryOptions {
@@ -29,14 +29,7 @@ export interface WriteEntryInternalOptions extends WriteEntryOptions {
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'; the api layer passes the resolved
  * actor, so the audit log gets one row per write. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  writeEntryWithHook(hippoRoot, entry, opts);
-}
-
-/** writeEntry for store code that needs the write's own handle: `opts.afterWrite` shares the INSERT's SAVEPOINT. */
-function writeEntryWithHook(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryInternalOptions): void {
-  onHandle(hippoRoot, (db) => {
-    writeEntryOn(db, hippoRoot, entry, opts);
-  }, openStore);
+  onHandle(hippoRoot, (db) => writeEntryAt(db, { hippoRoot }, entry, opts), openStore);
 }
 
 /** Writes a promoted copy; with `auditAs` the `promote` audit row joins the INSERT's SAVEPOINT, so both or neither. */
@@ -46,37 +39,35 @@ export function writePromotedEntry(
   opts: { readonly actor?: string; readonly sourceId: string; readonly auditAs?: { tenantId: string; actor: string } },
 ): void {
   const { auditAs, sourceId } = opts;
-  writeEntryWithHook(hippoRoot, entry, {
-    actor: opts.actor,
-    afterWrite: auditAs && ((db, globalId) => {
-      appendAuditEvent(db, {
-        tenantId: auditAs.tenantId,
-        actor: auditAs.actor,
-        op: 'promote',
-        targetId: globalId,
-        metadata: { sourceId },
-      });
-    }),
+  const afterWrite = auditAs && ((db: DatabaseSyncLike, globalId: string) => {
+    appendAuditEvent(db, {
+      tenantId: auditAs.tenantId,
+      actor: auditAs.actor,
+      op: 'promote',
+      targetId: globalId,
+      metadata: { sourceId },
+    });
   });
+  onHandle(hippoRoot, (db) => writeEntryAt(db, { hippoRoot }, entry, { actor: opts.actor, afterWrite }), openStore);
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each
  * keeps its audit row, and mirrors follow the commit. Returns how many were written; an empty list opens no store. */
-export function writeEntriesTogether(hippoRoot: string, entries: readonly MemoryEntry[]): number {
-  if (entries.length === 0) return 0;
-  const stamped = entries.map((entry) => stampOriginProject(hippoRoot, entry));
-  const db = openStore(hippoRoot);
+export function writeEntriesTogetherAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  entries: readonly MemoryEntry[],
+): number {
+  const stamped = entries.map((entry) => stampOriginProject(files.hippoRoot, entry));
   try {
     withWriteScope(db, 'write_entries_together', () => {
       for (const entry of stamped) writeEntryDbOnly(db, entry);
     });
-    for (const entry of stamped) writeEntryMirrors(hippoRoot, entry);
+    for (const entry of stamped) writeEntryMirrors(files.hippoRoot, entry);
   } catch (error) {
-    // The scope has unwound, so the refusal row outlives the rollback, as writeEntryOn's does.
+    // The scope has unwound, so the refusal row outlives the rollback, as writeEntryAt's does.
     if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, CLI_ACTOR);
     throw error;
-  } finally {
-    closeHippoDb(db);
   }
   return stamped.length;
 }
@@ -84,57 +75,61 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
 /** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
  * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were
  * written. */
-export function writeEntriesSkippingRejected(
-  hippoRoot: string,
+export function writeEntriesSkippingRejectedAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   fill: (put: (entry: MemoryEntry) => boolean) => void,
   actor = CLI_ACTOR,
 ): number {
   const written: MemoryEntry[] = [];
-  onHandle(hippoRoot, (db) => {
-    withWriteScope(db, 'write_entries_skipping_rejected', () => {
-      fill((entry) => {
-        const stamped = stampOriginProject(hippoRoot, entry);
-        try {
-          writeEntryDbOnly(db, stamped, { actor });
-        } catch (error) {
-          if (!(error instanceof RejectedValueError)) throw error;
-          auditRejectionRefusal(db, error, actor);
-          return false;
-        }
-        written.push(stamped);
-        return true;
-      });
+  withWriteScope(db, 'write_entries_skipping_rejected', () => {
+    fill((entry) => {
+      const stamped = stampOriginProject(files.hippoRoot, entry);
+      try {
+        writeEntryDbOnly(db, stamped, { actor });
+      } catch (error) {
+        if (!(error instanceof RejectedValueError)) throw error;
+        auditRejectionRefusal(db, error, actor);
+        return false;
+      }
+      written.push(stamped);
+      return true;
     });
-  }, openStore);
-  for (const entry of written) writeEntryMirrors(hippoRoot, entry);
+  });
+  for (const entry of written) writeEntryMirrors(files.hippoRoot, entry);
   return written.length;
 }
 
 /** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
  * on one open store and committed alone; an id the tenant does not hold is skipped. */
-export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {
-  onHandle(hippoRoot, (db) => {
-    const live = selectEntriesByIds(db, ids, tenantId);
-    for (const id of new Set(ids)) {
-      const entry = live.get(id);
-      if (!entry || entry.tags.includes(tag)) continue;
-      writeEntryOn(db, hippoRoot, { ...entry, tags: [...entry.tags, tag] });
-    }
-  }, openStore);
+export function addTagToEntriesAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  ids: readonly string[],
+  tag: string,
+): void {
+  const live = selectEntriesByIds(db, ids, tenantId);
+  for (const id of new Set(ids)) {
+    const entry = live.get(id);
+    if (!entry || entry.tags.includes(tag)) continue;
+    writeEntryAt(db, files, { ...entry, tags: [...entry.tags, tag] });
+  }
 }
 
-/** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
-function writeEntryOn(
+/** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone.
+ * `opts.afterWrite` shares the INSERT's SAVEPOINT. */
+export function writeEntryAt(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   entry: MemoryEntry,
   opts?: WriteEntryInternalOptions,
 ): void {
   try {
-    const stamped = stampOriginProject(hippoRoot, entry);
+    const stamped = stampOriginProject(files.hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
-    writeEntryMirrors(hippoRoot, stamped);
+    writeEntryMirrors(files.hippoRoot, stamped);
   } catch (error) {
     // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands
     // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
@@ -181,6 +176,10 @@ export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor:
 /** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */
 export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
+}
+
+export function writeEntryMirrorsIn(files: StoreFiles, entry: MemoryEntry): void {
+  writeEntryMirrors(files.hippoRoot, entry);
 }
 
 /** The caller passes the eval-only recall-boost ablation switch, so the store never reads experiment config itself. */

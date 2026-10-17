@@ -79,6 +79,64 @@ export function onHandle<T>(
   }
 }
 
+/** `onHandle` for a call that runs to its promise, with the handle open until it settles. */
+export async function onHandleAsync<T>(
+  hippoRoot: string,
+  fn: (db: DatabaseSyncLike) => Promise<T>,
+  open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb,
+): Promise<T> {
+  const db = open(hippoRoot);
+  try {
+    return await fn(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** The folder a store keeps its mirror files in, beside hippo.db; an adapter hands it on and never reads it. */
+export interface StoreFiles {
+  readonly hippoRoot: string;
+}
+
+export type HandleOpener = (hippoRoot: string) => DatabaseSyncLike;
+
+/** One call on a handle of the store's own, closed after; `open` defaults to a bare handle, `openStore` also sets up
+ * the mirror folders. */
+export type OnHandle = <T>(fn: (db: DatabaseSyncLike, files: StoreFiles) => T, open?: HandleOpener) => T;
+
+export type OnHandleAsync = <T>(
+  fn: (db: DatabaseSyncLike, files: StoreFiles) => Promise<T>,
+  open?: HandleOpener,
+) => Promise<T>;
+
+/** An opener that waits on a locked store for `busyWaitMs` in place of the default wait. */
+export function waitingOpener(
+  busyWaitMs: number | undefined,
+  open: (hippoRoot: string, opts?: { busyWaitMs?: number }) => DatabaseSyncLike = openHippoDb,
+): HandleOpener {
+  return (hippoRoot) => open(hippoRoot, { busyWaitMs });
+}
+
+/** What an adapter gets of the store it serves: the openers and the files beside hippo.db, never the folder itself. */
+export interface Handles {
+  readonly on: OnHandle;
+  readonly onAsync: OnHandleAsync;
+  /** A bare handle the caller closes, for work that keeps one across several calls. */
+  readonly open: () => DatabaseSyncLike;
+  readonly files: StoreFiles;
+}
+
+/** The handles of the store under `hippoRoot`, which only the adapter's composition root builds. */
+export function handlesOf(hippoRoot: string): Handles {
+  const files: StoreFiles = { hippoRoot };
+  return {
+    on: (fn, open) => onHandle(hippoRoot, (db) => fn(db, files), open),
+    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(db, files), open),
+    open: () => openHippoDb(hippoRoot),
+    files,
+  };
+}
+
 /** `meta` key holding the default half-life base a store's memories are on (src/consolidate/half-life-migration.ts). */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */

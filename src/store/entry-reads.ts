@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { closeHippoDb, ftsRowCounts, isFtsAvailable, type DatabaseSyncLike } from '../db/index.js';
+import { ftsRowCounts, isFtsAvailable, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
@@ -17,19 +17,21 @@ export const TENANT_IS = '+tenant_id = ?';
 
 /** Read a memory entry by ID. With `tenantId` the read is tenant-scoped (cross-tenant returns null); omitted, no
  * tenant filter is applied. */
+export function readEntryAt(db: DatabaseSyncLike, id: string, tenantId?: string): MemoryEntry | null {
+  // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
+  // MemoryRow's field set.
+  const row = tenantId !== undefined
+    ? db.prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
+      ).get(id, tenantId) as MemoryRow | undefined
+    : db.prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
+      ).get(id) as MemoryRow | undefined;
+  return row ? rowToEntry(row) : null;
+}
+
 export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
-    // MemoryRow's field set.
-    const row = tenantId !== undefined
-      ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as MemoryRow | undefined
-      : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
-        ).get(id) as MemoryRow | undefined;
-    return row ? rowToEntry(row) : null;
-  }, openStore);
+  return onHandle(hippoRoot, (db) => readEntryAt(db, id, tenantId), openStore);
 }
 
 /** Rows by id on the caller's handle, one query per chunk; an
@@ -84,33 +86,27 @@ export function selectChildrenByParent(
 
 /** Batched lookup, capped at 500 ids per call to keep IN(?,?,...) within SQLite limits; tenant filter enforced when
  * `tenantId` is passed. */
-export function loadEntriesByIds(
-  hippoRoot: string,
-  ids: readonly string[],
-  tenantId?: string,
-): MemoryEntry[] {
+export function loadEntriesByIdsAt(db: DatabaseSyncLike, ids: readonly string[], tenantId?: string): MemoryEntry[] {
   if (ids.length === 0) return [];
   const capped = ids.slice(0, MAX_IDS_PER_READ);
-  return onHandle(hippoRoot, (db) => {
-    const marks = placeholders(capped.length);
-    // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
-    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows =
-      tenantId !== undefined
-        ? (db
-            .prepare(
-              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ` +
-                `AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
-            )
-            .all(...capped, tenantId) as MemoryRow[])
-        : (db
-            .prepare(
-              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-                `WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
-            )
-            .all(...capped) as MemoryRow[]);
-    return rows.map(rowToEntry);
-  }, openStore);
+  const marks = placeholders(capped.length);
+  // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
+  // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows =
+    tenantId !== undefined
+      ? (db
+          .prepare(
+            `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ` +
+              `AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
+          )
+          .all(...capped, tenantId) as MemoryRow[])
+      : (db
+          .prepare(
+            `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+              `WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
+          )
+          .all(...capped) as MemoryRow[]);
+  return rows.map(rowToEntry);
 }
 
 function originClause(origins: readonly string[] | undefined): string {
@@ -120,45 +116,43 @@ function originClause(origins: readonly string[] | undefined): string {
 /** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
  * With `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the newest and
  * break fresh-tail in assemble. */
-export function loadSessionRawMemories(
-  hippoRoot: string,
+export function loadSessionRawMemoriesAt(
+  db: DatabaseSyncLike,
   sessionId: string,
   tenantId?: string,
   cap?: number,
   origins?: readonly string[],
 ): MemoryEntry[] {
   if (!sessionId) return [];
-  return onHandle(hippoRoot, (db) => {
-    const params: Array<string | number> = [];
-    let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
-      `AND source_session_id = ? AND superseded_by IS NULL`;
-    params.push(sessionId);
-    if (tenantId !== undefined) {
-      sql += ' AND tenant_id = ?';
-      params.push(tenantId);
-    }
-    sql += originClause(origins);
-    params.push(...(origins ?? []));
-    if (cap !== undefined && cap > 0) {
-      sql += ' ORDER BY created DESC, id DESC LIMIT ?';
-      params.push(cap);
-      // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
-      const rows = db.prepare(sql).all(...params) as MemoryRow[];
-      return rows.reverse().map(rowToEntry);
-    }
-    sql += ' ORDER BY created ASC, id ASC';
+  const params: Array<string | number> = [];
+  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
+    `AND source_session_id = ? AND superseded_by IS NULL`;
+  params.push(sessionId);
+  if (tenantId !== undefined) {
+    sql += ' AND tenant_id = ?';
+    params.push(tenantId);
+  }
+  sql += originClause(origins);
+  params.push(...(origins ?? []));
+  if (cap !== undefined && cap > 0) {
+    sql += ' ORDER BY created DESC, id DESC LIMIT ?';
+    params.push(cap);
     // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
-    return rows.map(rowToEntry);
-  }, openStore);
+    return rows.reverse().map(rowToEntry);
+  }
+  sql += ' ORDER BY created ASC, id ASC';
+  // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
+  const rows = db.prepare(sql).all(...params) as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
  * could not load. Mirrors
  * `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only `ownScope`.
  * `tenantId` undefined counts cross-tenant. */
-export function countSessionRawMemories(
-  hippoRoot: string,
+export function countSessionRawMemoriesAt(
+  db: DatabaseSyncLike,
   sessionId: string,
   tenantId?: string,
   scope?: string,
@@ -166,37 +160,35 @@ export function countSessionRawMemories(
   origins?: readonly string[],
 ): number {
   if (!sessionId) return 0;
-  return onHandle(hippoRoot, (db) => {
-    const params: Array<string> = [];
-    let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` +
-      `AND source_session_id = ? AND superseded_by IS NULL`;
-    params.push(sessionId);
-    if (tenantId !== undefined) {
-      sql += ' AND tenant_id = ?';
-      params.push(tenantId);
-    }
-    sql += originClause(origins);
-    params.push(...(origins ?? []));
-    if (scope !== undefined && scope !== '') {
-      sql += ' AND scope = ?';
-      params.push(scope);
-    } else {
-      const admit = scopeAdmitSql('', ownScope);
-      sql += ` AND ${admit.sql}`;
-      params.push(...admit.params);
-    }
-    // SAFETY: row's shape matches the single `COUNT(*) AS c` column above.
-    const row = db.prepare(sql).get(...params) as { c?: number } | undefined;
-    return Number(row?.c ?? 0);
-  }, openStore);
+  const params: Array<string> = [];
+  let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` +
+    `AND source_session_id = ? AND superseded_by IS NULL`;
+  params.push(sessionId);
+  if (tenantId !== undefined) {
+    sql += ' AND tenant_id = ?';
+    params.push(tenantId);
+  }
+  sql += originClause(origins);
+  params.push(...(origins ?? []));
+  if (scope !== undefined && scope !== '') {
+    sql += ' AND scope = ?';
+    params.push(scope);
+  } else {
+    const admit = scopeAdmitSql('', ownScope);
+    sql += ` AND ${admit.sql}`;
+    params.push(...admit.params);
+  }
+  // SAFETY: row's shape matches the single `COUNT(*) AS c` column above.
+  const row = db.prepare(sql).get(...params) as { c?: number } | undefined;
+  return Number(row?.c ?? 0);
 }
 
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass
  * `sessionId` or concurrent sessions show up in each other's fresh tail. The
  * tenant-wide shape is discouraged: `api.recall` throws `RecallContractError`
  * for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
-export function loadFreshRawMemories(
-  hippoRoot: string,
+export function loadFreshRawMemoriesAt(
+  db: DatabaseSyncLike,
   count: number,
   tenantId?: string,
   sessionId?: string,
@@ -204,61 +196,55 @@ export function loadFreshRawMemories(
 ): MemoryEntry[] {
   if (count <= 0) return [];
   const capped = Math.min(count, 200);
-  return onHandle(hippoRoot, (db) => {
-    const params: Array<string | number> = [];
-    let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
-    if (tenantId !== undefined) {
-      sql += ' AND tenant_id = ?';
-      params.push(tenantId);
-    }
-    if (sessionId !== undefined && sessionId !== '') {
-      sql += ' AND source_session_id = ?';
-      params.push(sessionId);
-    }
-    sql += originClause(origins);
-    params.push(...(origins ?? []));
-    // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
-    // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
-    sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
-    params.push(capped);
-    // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
-    const rows = db.prepare(sql).all(...params) as MemoryRow[];
-    return rows.map(rowToEntry);
-  }, openStore);
+  const params: Array<string | number> = [];
+  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
+  if (tenantId !== undefined) {
+    sql += ' AND tenant_id = ?';
+    params.push(tenantId);
+  }
+  if (sessionId !== undefined && sessionId !== '') {
+    sql += ' AND source_session_id = ?';
+    params.push(sessionId);
+  }
+  sql += originClause(origins);
+  params.push(...(origins ?? []));
+  // Tie tail makes same-`created` rows deterministic; `content` before `id` because ids are random
+  // UUIDs, so an id-only tail would pick which same-created rows make the window per instance.
+  sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
+  params.push(capped);
+  // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
+  const rows = db.prepare(sql).all(...params) as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 /** Every entry of one tenant. A caller that surfaces rows to a user passes the resolved tenant. */
+export function loadAllEntriesAt(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
+  return selectAllEntries(db, tenantId);
+}
+
 export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    return selectAllEntries(db, tenantId);
-  }, openStore);
+  return onHandle(hippoRoot, (db) => loadAllEntriesAt(db, tenantId), openStore);
 }
 
 /** Every tenant's entries, for host-wide work such as consolidation; never for a request that answers a tenant. */
-export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    return selectAllEntries(db);
-  }, openStore);
+export function loadEveryTenantEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
+  return selectAllEntries(db);
 }
 
 /** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of
  * holding them all. */
-export function loadAllEntryIds(hippoRoot: string): string[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: the SELECT names exactly the one column read.
-    return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map(
-      (row) => row.id,
-    );
-  }, openStore);
+export function loadAllEntryIdsAt(db: DatabaseSyncLike): string[] {
+  // SAFETY: the SELECT names exactly the one column read.
+  return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map(
+    (row) => row.id,
+  );
 }
 
 /** How many memory rows the store holds across every tenant. */
-export function countAllEntries(hippoRoot: string): number {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: row's shape matches the single `COUNT(*) AS c` column.
-    const row = db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c?: number } | undefined;
-    return Number(row?.c ?? 0);
-  }, openStore);
+export function countAllEntriesAt(db: DatabaseSyncLike): number {
+  // SAFETY: row's shape matches the single `COUNT(*) AS c` column.
+  const row = db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c?: number } | undefined;
+  return Number(row?.c ?? 0);
 }
 
 // The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding cannot see.
@@ -295,8 +281,8 @@ function ftsMentionQuery(tokens: readonly string[], tag: string | null): string 
 /** A superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose lowercased
  * tags hold `tag`.
  * The caller re-checks each row exactly; this only spares decoding rows that cannot match. */
-export function loadEntriesMentioning(
-  hippoRoot: string,
+export function loadEntriesMentioningAt(
+  db: DatabaseSyncLike,
   tokens: readonly string[],
   tag: string,
   tenantId?: string,
@@ -317,25 +303,19 @@ export function loadEntriesMentioning(
   }
   const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      const ftsQuery = plainTag && isFtsAvailable(db) && ftsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
-      const where = ftsQuery === null
-        ? clauses.join(' OR ')
-        : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
-          hasNonAscii('tags_json');
-      // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-      const rows = db
-        .prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-            `WHERE ${tenantClause}(${where}) ORDER BY created ASC, id ASC`,
-        )
-        .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery])) as MemoryRow[];
-      return rows.map(rowToEntry);
-    },
-    openStore,
-  );
+  const ftsQuery = plainTag && isFtsAvailable(db) && ftsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
+  const where = ftsQuery === null
+    ? clauses.join(' OR ')
+    : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
+      hasNonAscii('tags_json');
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db
+    .prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+        `WHERE ${tenantClause}(${where}) ORDER BY created ASC, id ASC`,
+    )
+    .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery])) as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 function ftsInSync(db: DatabaseSyncLike): boolean {
@@ -352,20 +332,18 @@ export interface EntryTextKey {
 
 /** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
  * another store already holds each. */
-export function loadEntryTextKeys(hippoRoot: string, tenantId?: string): EntryTextKey[] {
-  return onHandle(hippoRoot, (db) => {
-    const where = tenantId !== undefined ? 'WHERE tenant_id = ? ' : '';
-    // SAFETY: rows' shape matches the four columns named in the SELECT.
-    const rows = db.prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
-      .all(...(tenantId !== undefined ? [tenantId] : [])) as
-      Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
-    return rows.map((row) => ({
-      id: row.id,
-      tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
-      content: row.content,
-      source: row.source,
-    }));
-  }, openStore);
+export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): EntryTextKey[] {
+  const where = tenantId !== undefined ? 'WHERE tenant_id = ? ' : '';
+  // SAFETY: rows' shape matches the four columns named in the SELECT.
+  const rows = db.prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
+    .all(...(tenantId !== undefined ? [tenantId] : [])) as
+    Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
+  return rows.map((row) => ({
+    id: row.id,
+    tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
+    content: row.content,
+    source: row.source,
+  }));
 }
 
 export interface EntriesWithBase {
@@ -375,14 +353,8 @@ export interface EntriesWithBase {
 
 /** Every entry plus a by-id lookup of each as loaded, rebuilt from its row on first use, so no deep copy of the
  * store is kept. */
-export function loadAllEntriesWithBase(hippoRoot: string): EntriesWithBase {
-  const db = openStore(hippoRoot);
-  let rows: MemoryRow[];
-  try {
-    rows = selectAllRows(db);
-  } finally {
-    closeHippoDb(db);
-  }
+export function loadAllEntriesWithBaseAt(db: DatabaseSyncLike): EntriesWithBase {
+  const rows = selectAllRows(db);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const built = new Map<string, MemoryEntry>();
   const get = (id: string): MemoryEntry | undefined => {
@@ -419,8 +391,8 @@ export interface EntryPage {
 }
 
 /** Up to `limit` rows in loadAllEntries' order, starting after `after`; omitting `tenantId` reads every tenant. */
-export function loadEntriesPage(
-  hippoRoot: string,
+export function loadEntriesPageAt(
+  db: DatabaseSyncLike,
   tenantId: string | undefined,
   page: { limit: number; after?: EntryCursor },
 ): EntryPage {
@@ -437,19 +409,13 @@ export function loadEntriesPage(
   const clause = where.length > 0 ? `WHERE ${where.join(' AND ')} ` : '';
   // One extra row says whether another page follows without a count.
   params.push(page.limit + 1);
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-      const rows = db
-        .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`)
-        .all(...params) as MemoryRow[];
-      const entries = rows.slice(0, page.limit).map(rowToEntry);
-      const last = entries[entries.length - 1];
-      return { entries, next: rows.length > page.limit && last ? { created: last.created, id: last.id } : null };
-    },
-    openStore,
-  );
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db
+    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`)
+    .all(...params) as MemoryRow[];
+  const entries = rows.slice(0, page.limit).map(rowToEntry);
+  const last = entries[entries.length - 1];
+  return { entries, next: rows.length > page.limit && last ? { created: last.created, id: last.id } : null };
 }
 
 /** Every memory row on an open connection, so a caller can read inside its own transaction. */
@@ -629,16 +595,14 @@ export function liveContentsBySourceAndTagAt(
 
 /** Every tenant's distilled rows nothing has superseded, in
  * loadAllEntries' order: the rows that can be each other's duplicate. */
-export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
-       WHERE COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''
-       ORDER BY created ASC, id ASC`,
-    ).all() as MemoryRow[];
-    return rows.map(rowToEntry);
-  }, openStore);
+export function loadCurrentDistilledEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db.prepare(
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+     WHERE COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''
+     ORDER BY created ASC, id ASC`,
+  ).all() as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 /** Row traits any one of which lets a row through loadEntriesWithSignals. */
@@ -651,7 +615,11 @@ export interface EntrySignals {
 
 /** Rows holding at least one signal, in loadAllEntries' order; omitting `tenantId` reads every tenant. A superset:
  * callers re-check each row. */
-export function loadEntriesWithSignals(hippoRoot: string, signals: EntrySignals, tenantId?: string): MemoryEntry[] {
+export function loadEntriesWithSignalsAt(
+  db: DatabaseSyncLike,
+  signals: EntrySignals,
+  tenantId?: string,
+): MemoryEntry[] {
   // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is
   // wider than startsWith.
   const anyOf = [
@@ -665,39 +633,31 @@ export function loadEntriesWithSignals(hippoRoot: string, signals: EntrySignals,
     ...signals.tags.map((t) => JSON.stringify(t)),
   ];
   const tenant = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db
-      .prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-          `WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
-      )
-      .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
-    return rows.map(rowToEntry);
-  }, openStore);
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db
+    .prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+        `WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
+    )
+    .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 /** A tenant's rows from `origins` that nothing superseded and
  * that are neither raw nor archived, in loadAllEntries' order. */
-export function loadCurrentEntriesFromOrigins(
-  hippoRoot: string,
+export function loadCurrentEntriesFromOriginsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   origins: readonly string[],
 ): MemoryEntry[] {
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-      const rows = db
-        .prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
-       WHERE tenant_id = ? AND ${originInSql(origins)} AND COALESCE(superseded_by, '') = ''
-         AND COALESCE(kind, 'distilled') NOT IN ('raw', 'archived')
-       ORDER BY created ASC, id ASC`,
-        )
-        .all(tenantId, ...origins) as MemoryRow[];
-      return rows.map(rowToEntry);
-    },
-    openStore,
-  );
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db
+    .prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+   WHERE tenant_id = ? AND ${originInSql(origins)} AND COALESCE(superseded_by, '') = ''
+     AND COALESCE(kind, 'distilled') NOT IN ('raw', 'archived')
+   ORDER BY created ASC, id ASC`,
+    )
+    .all(tenantId, ...origins) as MemoryRow[];
+  return rows.map(rowToEntry);
 }

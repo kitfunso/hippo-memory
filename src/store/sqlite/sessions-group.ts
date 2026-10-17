@@ -1,38 +1,44 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
 import {
-  loadHandoffById, loadLatestHandoff, saveSessionHandoff, stampHandoffOutcome, writeSessionEndHandoff,
+  loadHandoffByIdAt, loadLatestHandoffAt, saveSessionHandoffAt, stampHandoffOutcomeAt, writeSessionEndHandoffAt,
 } from '../handoffs.js';
 import type { Sessions } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import {
-  appendSessionEvent, clearActiveTaskSnapshot, closeTaskSnapshotsForSession, listSessionEvents,
-  loadActiveTaskSnapshot, loadFreshActiveTaskSnapshot, saveActiveTaskSnapshot, sessionOwnerOrBind,
+  appendSessionEventAt, clearActiveTaskSnapshotAt, closeTaskSnapshotsForSessionAt, listSessionEventsAt,
+  loadActiveTaskSnapshotAt, loadFreshActiveTaskSnapshotAt, saveActiveTaskSnapshotAt, sessionOwnerOrBindAt,
 } from '../sessions.js';
-import { wmClear, wmPush, wmRead } from '../working-memory.js';
+import { wmClearAt, wmPushAt, wmReadAt } from '../working-memory.js';
+import { type OnHandle, openStore } from '../open.js';
 
-export function sqliteSessions(hippoRoot: string): Sync<Sessions> {
+export function sqliteSessions(on: OnHandle): Sync<Sessions> {
   return {
-    saveSnapshot: (tenantId, snapshot, key) => saveActiveTaskSnapshot(hippoRoot, tenantId, snapshot, key ?? undefined),
-    loadSnapshot: (tenantId, key) => loadActiveTaskSnapshot(hippoRoot, tenantId, key ?? undefined),
+    saveSnapshot: (tenantId, snapshot, key) =>
+      on((db, files) => saveActiveTaskSnapshotAt(db, files, tenantId, snapshot, key ?? undefined), openStore),
+    loadSnapshot: (tenantId, key) =>
+      on((db, files) => loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined), openStore),
     loadFreshSnapshot: (tenantId, opts, key) =>
-      loadFreshActiveTaskSnapshot(hippoRoot, tenantId, opts, key ?? undefined),
-    clearSnapshot: (tenantId, clearedStatus) => clearActiveTaskSnapshot(hippoRoot, tenantId, clearedStatus),
+      on((db, files) => loadFreshActiveTaskSnapshotAt(db, files, tenantId, opts, key ?? undefined), openStore),
+    clearSnapshot: (tenantId, clearedStatus) =>
+      on((db, files) => clearActiveTaskSnapshotAt(db, files, tenantId, clearedStatus), openStore),
     closeSessionSnapshots: (tenantId, sessionId, status, key) =>
-      closeTaskSnapshotsForSession(hippoRoot, tenantId, sessionId, status, key ?? undefined),
-    appendEvent: (tenantId, event) => appendSessionEvent(hippoRoot, tenantId, event),
+      on((db) => closeTaskSnapshotsForSessionAt(db, tenantId, sessionId, status, key ?? undefined), openStore),
+    appendEvent: (tenantId, event) => on((db, files) => appendSessionEventAt(db, files, tenantId, event), openStore),
     listEvents: (tenantId, { sessionId, task, limit }) =>
-      listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, task, limit }),
-    saveHandoff: (tenantId, handoff, key) => saveSessionHandoff(hippoRoot, tenantId, handoff, key ?? undefined),
+      on((db) => listSessionEventsAt(db, tenantId, { session_id: sessionId, task, limit }), openStore),
+    saveHandoff: (tenantId, handoff, key) =>
+      on((db) => saveSessionHandoffAt(db, tenantId, handoff, key ?? undefined), openStore),
     latestHandoff: (tenantId, sessionId, filter, key) =>
-      loadLatestHandoff(hippoRoot, tenantId, sessionId ?? undefined, filter, key ?? undefined),
-    handoffById: (tenantId, id) => loadHandoffById(hippoRoot, tenantId, id),
+      on((db) => loadLatestHandoffAt(db, tenantId, sessionId ?? undefined, filter, key ?? undefined), openStore),
+    handoffById: (tenantId, id) => on((db) => loadHandoffByIdAt(db, tenantId, id), openStore),
     stampHandoffOutcome: (tenantId, sessionId, outcome) =>
-      stampHandoffOutcome(hippoRoot, tenantId, sessionId, outcome),
-    writeSessionEndHandoff: (tenantId, request) => writeSessionEndHandoff(hippoRoot, { ...request, tenantId }),
-    pushWorkingMemory: (tenantId, item) => wmPush(hippoRoot, { ...item, tenantId }),
-    readWorkingMemory: (tenantId, filter) => wmRead(hippoRoot, { ...filter, tenantId }),
-    clearWorkingMemory: (tenantId, filter) => wmClear(hippoRoot, { ...filter, tenantId }),
+      on((db) => stampHandoffOutcomeAt(db, tenantId, sessionId, outcome), openStore),
+    writeSessionEndHandoff: (tenantId, request) =>
+      on((db, files) => writeSessionEndHandoffAt(db, files, { ...request, tenantId }), openStore),
+    pushWorkingMemory: (tenantId, item) => on((db) => wmPushAt(db, { ...item, tenantId }), openStore),
+    readWorkingMemory: (tenantId, filter) => on((db) => wmReadAt(db, { ...filter, tenantId }), openStore),
+    clearWorkingMemory: (tenantId, filter) => on((db) => wmClearAt(db, { ...filter, tenantId }), openStore),
     bindSessionOwner: (tenantId, sessionId, owner, retentionMs) =>
-      sessionOwnerOrBind(hippoRoot, { tenantId, sessionId, owner, retentionMs }),
+      on((db) => sessionOwnerOrBindAt(db, { tenantId, sessionId, owner, retentionMs })),
   };
 }

@@ -31,7 +31,7 @@ import {
   writeEntryMirrors,
 } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
-import { onHandle } from './open.js';
+import type { StoreFiles } from './open.js';
 import { setAsideRow, type SetAsideResult, type SetAsideWhy } from './set-aside.js';
 
 export type ProjectTagOp = 'project_merge' | 'project_repair';
@@ -78,7 +78,6 @@ export interface ProjectTagStore extends ProjectTagReads {
 }
 
 export interface ProjectTagScope {
-  readonly hippoRoot: string;
   readonly tenantId: string;
   /** Who the audit rows name. */
   readonly actor: string;
@@ -119,29 +118,32 @@ function projectTagWrites(db: DatabaseSyncLike, { tenantId, actor }: ProjectTagS
 }
 
 function rewriteOn<T>(
-  db: DatabaseSyncLike, scope: ProjectTagScope, opts: { readonly dryRun: boolean; readonly backupLabel: string },
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  scope: ProjectTagScope,
+  opts: { readonly dryRun: boolean; readonly backupLabel: string },
   body: (tx: ProjectTagWrites, backup: string | null) => TagRewrite<T>,
 ): T {
   const tx = projectTagWrites(db, scope);
   if (opts.dryRun) return withTrialScope(db, TX_LABEL, () => body(tx, null)).result;
-  const done = withBackup(db, scope.hippoRoot, opts.backupLabel, (backup) =>
+  const done = withBackup(db, files.hippoRoot, opts.backupLabel, (backup) =>
     withWriteScope(db, TX_LABEL, () => body(tx, backup)),
   );
   // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild.
   for (const entry of selectEntriesByIds(db, done.rewrite, scope.tenantId).values()) {
-    writeEntryMirrors(scope.hippoRoot, entry);
+    writeEntryMirrors(files.hippoRoot, entry);
   }
-  for (const id of done.purge) removeEntryMirrors(scope.hippoRoot, id);
+  for (const id of done.purge) removeEntryMirrors(files.hippoRoot, id);
   return done.result;
 }
 
-/** Runs `fn` on hippo.db under `scope.hippoRoot`, opened for this call and closed after. */
-export function onProjectTags<T>(scope: ProjectTagScope, fn: (store: ProjectTagStore) => T): T {
-  return onHandle(scope.hippoRoot, (db) => fn({
+/** The tag store on a handle the caller opened and closes, with the folder its rewrites back up and re-mirror. */
+export function projectTagStoreOn(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope): ProjectTagStore {
+  return {
     ...projectTagReads(db, scope.tenantId),
-    hippoRoot: scope.hippoRoot,
-    rewrite: (opts, body) => rewriteOn(db, scope, opts, body),
+    hippoRoot: files.hippoRoot,
+    rewrite: (opts, body) => rewriteOn(db, files, scope, opts, body),
     repairedOnce: () => getMeta(db, AUTO_REPAIR_META_KEY) === '1',
     markRepairedOnce: () => setMeta(db, AUTO_REPAIR_META_KEY, '1'),
-  }));
+  };
 }

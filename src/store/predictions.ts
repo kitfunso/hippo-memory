@@ -6,8 +6,8 @@
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
-import { writeEntryAt } from './sqlite/entry-writes-group.js';
+import { type StoreFiles } from './open.js';
+import { writeEntryRowAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
@@ -22,7 +22,6 @@ const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
   actual_value, closure_state, closed_at, closure_note, created_at`;
-
 
 export interface Prediction {
   id: number;
@@ -119,7 +118,13 @@ export function predictionMirror(
 
 /** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
  * check included, and its predictions row shares that write scope, so neither lands alone. */
-export function writePrediction(hippoRoot: string, tenantId: string, save: PredictionSave, actor: string): Prediction {
+export function writePredictionAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  save: PredictionSave,
+  actor: string,
+): Prediction {
   assertTenantId('savePrediction', tenantId);
   const now = new Date().toISOString();
 
@@ -127,8 +132,8 @@ export function writePrediction(hippoRoot: string, tenantId: string, save: Predi
   // INSERT and the memory write share a SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
-  writeEntryAt(hippoRoot, { entry: save.mirror, actor }, (db, memoryId) => {
-    savedRow = insertPredictionRow(db, memoryId, tenantId, save, { now, actor });
+  writeEntryRowAt(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
+    savedRow = insertPredictionRow(writeDb, memoryId, tenantId, save, { now, actor });
   });
 
   if (!savedRow) {
@@ -208,8 +213,8 @@ function auditPredictionCreate(
 
 /** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table
  * is the source of truth). Accuracy is computed from (estimateValue, actualValue) at query time. */
-export function closePrediction(
-  hippoRoot: string,
+export function closePredictionAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   id: number,
   opts: ClosePredictionOptions,
@@ -222,14 +227,11 @@ export function closePrediction(
       `${opts.closureState}`,
     );
   }
-
   const now = new Date().toISOString();
-  return onHandle(hippoRoot, (db) => {
-    const row = withWriteScope(db, 'close_prediction', () =>
-      closeOpenPredictionRow(db, tenantId, id, opts, { now, actor }),
-    );
-    return rowToPrediction(row);
-  });
+  const row = withWriteScope(db, 'close_prediction', () =>
+    closeOpenPredictionRow(db, tenantId, id, opts, { now, actor }),
+  );
+  return rowToPrediction(row);
 }
 
 /** Closes the row, reloads it and audits the close; the caller owns the transaction. */
@@ -297,24 +299,18 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   );
 }
 
-export function loadPredictionById(
-  hippoRoot: string,
-  tenantId: string,
-  id: number,
-): Prediction | null {
+export function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: row's shape matches the columns named in the SELECT above.
-    const row = db.prepare(`
-      SELECT ${SELECT_COLUMNS}
-      FROM predictions WHERE id = ? AND tenant_id = ?
-    `).get(id, tenantId) as PredictionRow | undefined;
-    return row ? rowToPrediction(row) : null;
-  });
+  // SAFETY: row's shape matches the columns named in the SELECT above.
+  const row = db.prepare(`
+    SELECT ${SELECT_COLUMNS}
+    FROM predictions WHERE id = ? AND tenant_id = ?
+  `).get(id, tenantId) as PredictionRow | undefined;
+  return row ? rowToPrediction(row) : null;
 }
 
-export function loadPredictionsByClass(
-  hippoRoot: string,
+export function loadPredictionsByClassAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   classTag: string,
   opts: ListPredictionsOptions = {},
@@ -322,56 +318,52 @@ export function loadPredictionsByClass(
   assertTenantId('loadPredictionsByClass', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
-  return onHandle(hippoRoot, (db) => {
-    let rows: PredictionRow[];
-    if (opts.closureState) {
-      if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
-        throw new BadRequestError(
-          `loadPredictionsByClass: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ` +
-          `${opts.closureState}`,
-        );
-      }
-      // SAFETY: rows' shape matches the columns named in the SELECT above.
-      rows = db.prepare(`
-        SELECT ${SELECT_COLUMNS}
-        FROM predictions
-        WHERE tenant_id = ? AND class_tag = ? AND closure_state = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
-    } else {
-      // SAFETY: rows' shape matches the columns named in the SELECT above.
-      rows = db.prepare(`
-        SELECT ${SELECT_COLUMNS}
-        FROM predictions
-        WHERE tenant_id = ? AND class_tag = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, classTag, ...after.params, limit) as PredictionRow[];
+  let rows: PredictionRow[];
+  if (opts.closureState) {
+    if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
+      throw new BadRequestError(
+        `loadPredictionsByClass: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ` +
+        `${opts.closureState}`,
+      );
     }
-    return rows.map(rowToPrediction);
-  });
+    // SAFETY: rows' shape matches the columns named in the SELECT above.
+    rows = db.prepare(`
+      SELECT ${SELECT_COLUMNS}
+      FROM predictions
+      WHERE tenant_id = ? AND class_tag = ? AND closure_state = ?${after.sql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, classTag, opts.closureState, ...after.params, limit) as PredictionRow[];
+  } else {
+    // SAFETY: rows' shape matches the columns named in the SELECT above.
+    rows = db.prepare(`
+      SELECT ${SELECT_COLUMNS}
+      FROM predictions
+      WHERE tenant_id = ? AND class_tag = ?${after.sql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, classTag, ...after.params, limit) as PredictionRow[];
+  }
+  return rows.map(rowToPrediction);
 }
 
 /** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
-export function loadAllPredictions(
-  hippoRoot: string,
+export function loadAllPredictionsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
   assertTenantId('loadAllPredictions', tenantId);
   const after = keysetAfter('created_at', 'id', opts.after);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows' shape matches the columns named in the SELECT.
-    const rows = db.prepare(`
-      SELECT ${SELECT_COLUMNS}
-      FROM predictions
-      WHERE tenant_id = ?${after.sql}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
-    return rows.map(rowToPrediction);
-  });
+  // SAFETY: rows' shape matches the columns named in the SELECT.
+  const rows = db.prepare(`
+    SELECT ${SELECT_COLUMNS}
+    FROM predictions
+    WHERE tenant_id = ?${after.sql}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
+  return rows.map(rowToPrediction);
 }
 
 export interface PredictionBaserate {
@@ -405,8 +397,8 @@ export interface BaserateRow {
 /** Base-rate stats for closed predictions in a class (Lovallo-Kahneman inside-vs-outside view): closure_state='closed'
  * with estimate and actual non-null; closed-unknown and open are excluded. Audit-emit is built in here, not at the 3
  * call sites, so callers cannot drift. */
-export function computePredictionBaserate(
-  hippoRoot: string,
+export function computePredictionBaserateAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   classTag: string,
   actor: string = CLI_ACTOR,
@@ -416,27 +408,24 @@ export function computePredictionBaserate(
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
+  // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
+  // SAFETY: rows' shape matches the two columns named in the SELECT above.
+  const rows = db.prepare(`
+    SELECT estimate_value, actual_value
+    FROM predictions
+    WHERE tenant_id = ?
+      AND class_tag = ?
+      AND closure_state = 'closed'
+      AND estimate_value IS NOT NULL
+      AND actual_value IS NOT NULL
+    ORDER BY id
+  `).all(tenantId, classTag) as BaserateRow[];
 
-  return onHandle(hippoRoot, (db) => {
-    // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
-    // SAFETY: rows' shape matches the two columns named in the SELECT above.
-    const rows = db.prepare(`
-      SELECT estimate_value, actual_value
-      FROM predictions
-      WHERE tenant_id = ?
-        AND class_tag = ?
-        AND closure_state = 'closed'
-        AND estimate_value IS NOT NULL
-        AND actual_value IS NOT NULL
-      ORDER BY id
-    `).all(tenantId, classTag) as BaserateRow[];
-
-    const baserate = predictionBaserateOf(classTag, rows);
-    // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits
-    // its own hint.
-    if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
-    return baserate;
-  });
+  const baserate = predictionBaserateOf(classTag, rows);
+  // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits
+  // its own hint.
+  if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
+  return baserate;
 }
 
 function auditBaserateRead(
@@ -511,35 +500,34 @@ export function predictionBaserateOf(classTag: string, rows: readonly BaserateRo
   };
 }
 
-export function loadOpenPredictions(
-  hippoRoot: string,
+export function loadOpenPredictionsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
   assertTenantId('loadOpenPredictions', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
-  return onHandle(hippoRoot, (db) => {
-    let rows: PredictionRow[];
-    if (opts.classTag) {
-      // SAFETY: rows' shape matches the columns named in the SELECT above.
-      rows = db.prepare(`
-        SELECT ${SELECT_COLUMNS}
-        FROM predictions
-        WHERE tenant_id = ? AND class_tag = ? AND closure_state = 'open'${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
-    } else {
-      // SAFETY: rows' shape matches the columns named in the SELECT above.
-      rows = db.prepare(`
-        SELECT ${SELECT_COLUMNS}
-        FROM predictions
-        WHERE tenant_id = ? AND closure_state = 'open'${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as PredictionRow[];
-    }
-    return rows.map(rowToPrediction);
-  });
+  let rows: PredictionRow[];
+  if (opts.classTag) {
+    // SAFETY: rows' shape matches the columns named in the SELECT above.
+    rows = db.prepare(`
+      SELECT ${SELECT_COLUMNS}
+      FROM predictions
+      WHERE tenant_id = ? AND class_tag = ? AND closure_state = 'open'${after.sql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, opts.classTag, ...after.params, limit) as PredictionRow[];
+  } else {
+    // SAFETY: rows' shape matches the columns named in the SELECT above.
+    rows = db.prepare(`
+      SELECT ${SELECT_COLUMNS}
+      FROM predictions
+      WHERE tenant_id = ? AND closure_state = 'open'${after.sql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, ...after.params, limit) as PredictionRow[];
+  }
+  return rows.map(rowToPrediction);
 }
+
