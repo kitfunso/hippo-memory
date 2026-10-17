@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { stripComments } from './lib/source-text.mjs';
+import { readFacts } from './lib/ts-facts.mjs';
 
 const OTHER_PR = 'owned by an open pull request';
 
@@ -19,17 +19,13 @@ export const ALLOWED = {
   'capture/compact.ts': { count: 1, reason: OTHER_PR },
 };
 
-const CALL = /\bprocess\s*(?:\?\.|\.)\s*exit\s*\(|\bprocess\s*\[\s*['"`]exit['"`]\s*\]\s*\(/g;
-
 /**
  * Returns the 1-based line number of every process.exit call in a source text, one entry per call.
  * @param {string} text
  * @returns {number[]}
  */
 export function processExitLines(text) {
-  return stripComments(text)
-    .split('\n')
-    .flatMap((line, i) => Array.from(line.matchAll(CALL), () => i + 1));
+  return readFacts(text).calls.filter((c) => c.callee === 'process.exit').map((c) => c.line);
 }
 
 function listSourceFiles(dir) {

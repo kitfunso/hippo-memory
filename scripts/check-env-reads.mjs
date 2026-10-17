@@ -5,18 +5,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { stripComments } from './lib/source-text.mjs';
+import { readFacts } from './lib/ts-facts.mjs';
 
 /** Files allowed to touch process.env, each with its reason. Writes and child-process env passing belong here. */
 export const ALLOWED = {
   'util/env.ts': 'the typed accessor module every other file reads through',
 };
-
-const PATTERNS = [
-  /\bprocess\s*(?:\?\.|\.)\s*env\b/,
-  /\bprocess\s*\[\s*['"`]env['"`]\s*\]/,
-  /\{[^}]*\benv\b[^}]*\}\s*=\s*(?:globalThis\s*\.\s*)?process\b/,
-];
 
 /**
  * Returns the 1-based line numbers in a source text that touch process.env.
@@ -24,9 +18,7 @@ const PATTERNS = [
  * @returns {number[]}
  */
 export function envReadLines(text) {
-  return stripComments(text)
-    .split('\n')
-    .flatMap((line, i) => (PATTERNS.some((re) => re.test(line)) ? [i + 1] : []));
+  return [...new Set(readFacts(text).envReads.map((r) => r.line))];
 }
 
 function listSourceFiles(dir) {
