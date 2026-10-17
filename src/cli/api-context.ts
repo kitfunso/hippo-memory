@@ -1,4 +1,4 @@
-import { type StoreContext, adminActor } from '../api/index.js';
+import { type Context, adminActor } from '../api/index.js';
 import type { Machine, SyncOptions } from '../agent-memories/sync.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
@@ -42,7 +42,7 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
 
 // The one place the CLI names its audit actor and builds its store;
 // root is a parameter because some verbs target the global store.
-export function cliApiContext(hippoRoot: string, tenantId: string): StoreContext {
+export function cliApiContext(hippoRoot: string, tenantId: string): Context {
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = loadConfig(hippoRoot);

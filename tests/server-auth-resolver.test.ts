@@ -16,6 +16,7 @@ import {
   type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
 } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db/index.js';
 import { listAuditEventsAfter } from '../src/store/audit.js';
 import { waitFor } from './_helpers/wait-for.js';
@@ -425,6 +426,7 @@ describe('auth resolver and key routes', () => {
 describe('exported authRevoke for add-ons', () => {
   const ctx = (tenantId: string): Context => ({
     hippoRoot: home,
+    store: sqliteStore(home),
     tenantId,
     actor: { subject: 'system:addon:u1', role: 'admin', viaAuthResolver: true },
   });

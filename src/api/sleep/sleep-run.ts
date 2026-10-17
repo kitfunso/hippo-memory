@@ -9,7 +9,7 @@ import { evalNow } from '../../core/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import type { MemoryEntry } from '../../core/memory.js';
-import type { Context, StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 import type { EntryCursor } from '../../store/entry-reads.js';
 import { requireGroup, type Consolidation, type HippoStore, type LocalFiles } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
@@ -59,12 +59,12 @@ interface DirtyTenantSnapshot {
 }
 
 /** A sleep's context with hippo.db's own files, proved once before any phase runs. */
-type SleepContext = StoreContext & { readonly local: LocalFiles };
+type SleepContext = Context & { readonly local: LocalFiles };
 
 /** `sleep` with its phase dependencies overridable; tests pass
  * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  storeCtx: StoreContext,
+  storeCtx: Context,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
@@ -205,7 +205,7 @@ interface QualityAuditOptions {
 /** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared
  * state beyond the issues found. */
 async function runQualityAudit(
-  ctx: StoreContext,
+  ctx: Context,
   phases: SleepPhases,
   options: QualityAuditOptions,
 ): Promise<number> {

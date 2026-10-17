@@ -7,7 +7,7 @@ import {
   outcome as apiOutcome,
   learn as apiLearn,
   MCP_LEARN,
-  type StoreContext,
+  type Context,
 } from '../api/index.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';
@@ -22,7 +22,7 @@ export async function runRememberTool(
   if (args.tag) tags.push(String(args.tag));
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor
   // under HTTP-MCP, 'mcp' for stdio.
-  const apiCtx: StoreContext = {
+  const apiCtx: Context = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
@@ -55,7 +55,7 @@ export async function runOutcomeTool(
 
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP,
   // 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips cross-tenant ids silently.
-  const apiCtx: StoreContext = {
+  const apiCtx: Context = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),

@@ -10,7 +10,7 @@ import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
-import type { StoreContext } from '../api/index.js';
+import type { Context } from '../api/index.js';
 import {
   closeObject,
   foundOrExit,
@@ -67,7 +67,7 @@ export async function handleDecide({ hippoRoot, tenantId, args, flags }: Command
   await decideCreate(ctx, subcommand, flags);
 }
 
-async function decideCreate(ctx: StoreContext, decisionText: string, flags: CliFlags): Promise<void> {
+async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags): Promise<void> {
   const { hippoRoot, tenantId } = ctx;
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');

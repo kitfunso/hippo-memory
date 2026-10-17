@@ -1,6 +1,6 @@
 // The CLI ranking core writes through the store the context carries, and the port names no SQLite code.
 
-import type { StoreContext } from '../src/api/types.js';
+import type { Context } from '../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -74,7 +74,7 @@ describe('retrieve with the CLI ranking core', () => {
         },
       },
     };
-    const ctx: StoreContext = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
+    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
 

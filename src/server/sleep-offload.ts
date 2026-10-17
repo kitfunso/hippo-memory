@@ -2,7 +2,7 @@
 // stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { type Actor, type SleepOpts, type SleepResult, type StoreContext } from '../api/index.js';
+import { type Actor, type SleepOpts, type SleepResult, type Context } from '../api/index.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
 import { requireGroup, StoreBusyError } from '../store/port.js';
 import { envSleepTimeoutMs } from '../util/env.js';
@@ -130,7 +130,7 @@ function inTurn<R>(job: SleepJob): Promise<R> {
 
 /** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline
  * (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
-export function sleepInChild(ctx: StoreContext, opts: SleepOpts): Promise<SleepResult> {
+export function sleepInChild(ctx: Context, opts: SleepOpts): Promise<SleepResult> {
   return inTurn<SleepResult>({
     kind: 'sleep',
     // The child reopens the folder the served store owns.

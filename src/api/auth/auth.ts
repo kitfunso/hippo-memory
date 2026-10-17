@@ -9,7 +9,7 @@ import type { KeysetPosition } from '../../util/keyset.js';
 import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/index.js';
 import type { ApiKeyOwner } from '../../store/tenant-lookup.js';
 import { DAY_MS } from '../../util/time.js';
-import { requireHostAdmin, type Actor, type Context, type StoreContext } from '../types.js';
+import { requireHostAdmin, type Actor, type Context } from '../types.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 
@@ -42,7 +42,7 @@ export interface AuthCreateResult {
 /** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or
  * tenant A could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a
  * key never outranks its minter: a resolver admin is tenant-only, so it mints members. */
-export async function authCreate(ctx: StoreContext, opts: AuthCreateOpts): Promise<AuthCreateResult> {
+export async function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
@@ -133,7 +133,7 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
 /** Mint a member key for the caller an auth resolver vouched for, whatever its role; the
  * binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
 export async function authCreateSelf(
-  ctx: StoreContext,
+  ctx: Context,
   opts: AuthCreateSelfOpts,
 ): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
@@ -171,7 +171,7 @@ function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResu
 type KeyListOptions = { active: boolean; limit?: number; after?: KeysetPosition };
 
 /** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
-export async function authListRows(ctx: StoreContext, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
+export async function authListRows(ctx: Context, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
   return listRows(ctx, ctx.store, opts);
 }
 
@@ -236,7 +236,7 @@ export interface AuthRevokeResult {
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it
  *  minted.
  *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
-export async function authRevoke(ctx: StoreContext, keyId: string): Promise<AuthRevokeResult> {
+export async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
   const store = ctx.store;
   const keyAudit = store.keyAudit;
   assertMemberKeyRevokesSelf(ctx, keyId);
@@ -265,7 +265,7 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
 
 /** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
  * so the local CLI can run revoke and grant in the key's own tenant. */
-export async function authKeyTenant(ctx: StoreContext, keyId: string): Promise<string | undefined> {
+export async function authKeyTenant(ctx: Context, keyId: string): Promise<string | undefined> {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');
   }
@@ -278,13 +278,13 @@ export interface AuthGrantResult {
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Admin only. */
-export async function authGrant(ctx: StoreContext, keyId: string, scope: string): Promise<AuthGrantResult> {
+export async function authGrant(ctx: Context, keyId: string, scope: string): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_grant');
 }
 
 /** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
 export async function authUngrant(
-  ctx: StoreContext,
+  ctx: Context,
   keyId: string,
   scope: string,
 ): Promise<AuthGrantResult> {
@@ -292,7 +292,7 @@ export async function authUngrant(
 }
 
 async function changeGrant(
-  ctx: StoreContext, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant',
+  ctx: Context, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant',
 ): Promise<AuthGrantResult> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can change scope grants');

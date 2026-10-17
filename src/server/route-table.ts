@@ -1,4 +1,4 @@
-import type { StoreContext } from '../api/index.js';
+import type { Context } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { hasGroup, type StoreGroup, type HippoStore } from '../store/index.js';
@@ -576,7 +576,7 @@ export function routeMatches(route: Route, method: string, path: string): ((r: R
 async function passAuthGate(
   route: Exclude<Route, { auth: 'webhook-signature' }>,
   { req, opts }: RouteRequest,
-): Promise<StoreContext> {
+): Promise<Context> {
   const label = routeLabel(route);
   // Defence in depth, not the boundary: a socket address says where a request came from, never who sent it.
   if (route.auth === 'host-admin-local' && !isLoopback(req.socket.remoteAddress)) {

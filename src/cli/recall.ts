@@ -270,7 +270,7 @@ async function cmdRecall(
 }
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
-function parseRecallOptions(ctx: api.StoreContext, flags: CliFlags) {
+function parseRecallOptions(ctx: api.Context, flags: CliFlags) {
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = boolFlag(flags, 'json');
@@ -296,7 +296,7 @@ function parseRecallOptions(ctx: api.StoreContext, flags: CliFlags) {
 type RecallOptions = ReturnType<typeof parseRecallOptions>;
 
 /** Each entry priced as the line it prints, with the source marker `--why` shows. */
-function priceRecallEntries(ctx: api.StoreContext, query: string, o: RecallOptions) {
+function priceRecallEntries(ctx: api.Context, query: string, o: RecallOptions) {
   const origin = cliRecallOrigin(ctx, o.setting);
   const isGlobal = origin.isGlobal;
   const entryText = (r: SearchResult): string => recallEntryText(r, query, o.showWhy, isGlobal(r));
@@ -510,7 +510,7 @@ type FittedRecall = ReturnType<typeof fitRecallBlock>;
 /** The presenter `retrieve` calls once ranking ends: fits and
  * renders the block, and names the rows and hint rows to record. */
 async function presentRecall(
-  ctx: api.StoreContext,
+  ctx: api.Context,
   query: string,
   o: RecallOptions,
   ranked: RankedRecall,

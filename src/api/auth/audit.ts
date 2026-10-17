@@ -6,7 +6,7 @@ import type { QualityRepairResult } from '../../store/quality-repair.js';
 import type { AuditMaintenance } from '../../store/port.js';
 import { DAY_MS } from '../../util/time.js';
 import type { KeysetPosition } from '../../util/keyset.js';
-import type { StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 import { memoryPages } from '../memories/memories.js';
 
 export interface AuditListOptions {
@@ -19,7 +19,7 @@ export interface AuditListOptions {
 }
 
 /** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no audit emit. */
-export async function auditList(ctx: StoreContext, opts: AuditListOptions): Promise<AuditEvent[]> {
+export async function auditList(ctx: Context, opts: AuditListOptions): Promise<AuditEvent[]> {
   return ctx.store.auditLog.listAuditEvents({
     tenantId: ctx.tenantId, op: opts.op, since: opts.since, limit: opts.limit, after: opts.after,
   });
@@ -28,14 +28,14 @@ export async function auditList(ctx: StoreContext, opts: AuditListOptions): Prom
 /** The pass that removes audit errors; it leads the reason on each forget row. */
 export type AuditPass = 'audit --fix' | 'sleep-audit';
 
-function maintenanceOf(ctx: StoreContext): AuditMaintenance {
+function maintenanceOf(ctx: Context): AuditMaintenance {
   return ctx.store.auditMaintenance;
 }
 
 /** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned
  * or raw row stays. */
 export async function removeAuditErrors(
-  ctx: StoreContext,
+  ctx: Context,
   pass: AuditPass,
   issues: readonly AuditIssue[],
 ): Promise<string[]> {
@@ -48,7 +48,7 @@ export async function removeAuditErrors(
 
 /** The caller's memories run through the quality audit a page at a time, as each row is judged alone; a memory that
  * backs an object is never marked for removal. */
-export async function auditMemoryQuality(ctx: StoreContext, opts: { pageSize?: number } = {}): Promise<AuditResult> {
+export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number } = {}): Promise<AuditResult> {
   const backing = await maintenanceOf(ctx).objectBackedIds();
   const audit: AuditResult = { total: 0, issues: [], clean: 0 };
   for await (const page of memoryPages(ctx.store, ctx.tenantId, opts.pageSize)) {
@@ -63,7 +63,7 @@ export async function auditMemoryQuality(ctx: StoreContext, opts: { pageSize?: n
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage
  * behind a backup. */
 export async function repairMemoryQuality(
-  ctx: StoreContext,
+  ctx: Context,
   apply: boolean,
 ): Promise<QualityRepairResult> {
   return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply);
@@ -71,7 +71,7 @@ export async function repairMemoryQuality(
 
 /** The repair sleep and the daily runner apply once per store after an upgrade; null when it already ran there. */
 export async function repairMemoryQualityOnce(
-  ctx: StoreContext,
+  ctx: Context,
 ): Promise<QualityRepairResult | null> {
   return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId);
 }
@@ -102,7 +102,7 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
  * `ctx.actor`; opt-in, since retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call
  * never prunes its own record. Throws on non-positive days or an empty tenant. */
 export async function pruneAuditLog(
-  ctx: StoreContext,
+  ctx: Context,
   opts: PruneAuditOptions,
 ): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {

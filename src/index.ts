@@ -8,9 +8,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './core/memory.js';
-import { sleep as sleepOnStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
-import type { Context } from './api/types.js';
-import { sqliteSyncStore, withStore } from './store/sqlite/store.js';
+import { sqliteSyncStore } from './store/sqlite/store.js';
 import { runConsolidation, type ConsolidateOptions } from './consolidate/sleep.js';
 import { loadConfig } from './core/config.js';
 import type { ConsolidationResult } from './consolidate/run.js';
@@ -62,15 +60,11 @@ export {
   CARD_LEASE_MS,
 } from './core/card.js';
 export { ConsolidationResult } from './consolidate/run.js';
-export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
+export { sleep, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
 /** Run a full consolidation pass on the hippo.db under `hippoRoot`. */
 export async function consolidate(hippoRoot: string, options: ConsolidateOptions = {}): Promise<ConsolidationResult> {
   const config = options.config ?? loadConfig(hippoRoot);
   return runConsolidation(sqliteSyncStore(hippoRoot).localFiles, { ...options, config });
-}
-/** Published signature, so the Context may carry no store: it then runs on hippo.db under its root. */
-export async function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
-  return sleepOnStore(withStore(ctx), opts);
 }
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './consolidate/dedupe.js';

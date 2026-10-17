@@ -37,7 +37,7 @@ import type {
   ContinuityBlock,
   StoreRanking,
 } from './types.js';
-import { type Context, type StoreContext, ownerOrSubject, RecallContractError } from '../types.js';
+import { type Context, ownerOrSubject, RecallContractError } from '../types.js';
 import {
   anchoringRows,
   availabilityRows,
@@ -69,7 +69,7 @@ function inCallerProject(entry: MemoryEntry, opts: RecallOptions): boolean {
 
 /** The one recall entry: ranks with the ranker `opts` names, then writes the recall, and records it in full for a
  * surface that sets `recordAs`. Only the CLI core ranker writes last_retrieval_ids (contract lock). */
-export async function retrieve(ctx: StoreContext, opts: RecallOptions): Promise<RecallResult> {
+export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   // A ranker of its own: it ranks with rankRecall over its whole candidate pool, not the band's SQL window.
   if (opts.cliCore) return retrieveWithCliCore(ctx, opts, opts.cliCore);
@@ -106,7 +106,7 @@ function shownBand(opts: RecallOptions, result: RecallResult): ShownList {
 /** The default ranker: the SQL BM25 band, reordered by hybrid or physics search when `mode` asks. Under `showRanked`
  * the band is the top of a wide ranking, and the caller's cut of that ranking is what gets audited and strengthened. */
 async function retrieveBand(
-  ctx: StoreContext,
+  ctx: Context,
   store: HippoStore,
   opts: RecallOptions,
   windowSize: number,
@@ -141,7 +141,7 @@ interface WideRanking {
 
 /** The SQL BM25 window, reordered by hybrid or physics search when `mode` asks. */
 async function sqlBand(
-  ctx: StoreContext,
+  ctx: Context,
   store: HippoStore,
   opts: RecallOptions,
   windowSize: number,
@@ -199,7 +199,7 @@ function recallSearchArgs(ctx: Context, opts: RecallOptions, limit: number, own:
 }
 
 /** api.retrieve's vector arm: the recall load's exact-scope rule, current rows only. */
-function recallVectorSpec(ctx: StoreContext, opts: RecallOptions, own: string | undefined): HybridVectorCandidates {
+function recallVectorSpec(ctx: Context, opts: RecallOptions, own: string | undefined): HybridVectorCandidates {
   return {
     tenantId: ctx.tenantId,
     scope: recallScopeFilter(opts.filter?.scope, 'exact', own),
@@ -215,7 +215,7 @@ const SHOW_RANKED_LEXICAL_WINDOW = 1000;
 /** The band under `showRanked`: physics when `mode` says so, hybrid otherwise, over a wide lexical window plus the
  * nearest vectors, goal boost applied; the band is the top `windowSize` rows of that ranking. */
 async function wideBand(
-  ctx: StoreContext,
+  ctx: Context,
   opts: RecallOptions,
   windowSize: number,
   show: NonNullable<RecallOptions['showRanked']>,
@@ -243,7 +243,7 @@ async function wideBand(
 
 /** The caller shows its cut of the wide ranking; its rows go after the band's, in the same one write. */
 async function finishShownRecall(
-  ctx: StoreContext,
+  ctx: Context,
   store: HippoStore,
   opts: RecallOptions,
   wide: WideRanking,
@@ -268,7 +268,7 @@ async function finishShownRecall(
 type RankedResults = Awaited<ReturnType<typeof searchByEngine>>;
 
 // One goal read serves both boosts; the ranked list's log rows come first, so its scores win the log's first-write.
-async function boostRankedByGoals(ctx: StoreContext, opts: RecallOptions, ranked: RankedResults) {
+async function boostRankedByGoals(ctx: Context, opts: RecallOptions, ranked: RankedResults) {
   const noLog: GoalRecallLogRow[] = [];
   const { sessionId, goalTag } = opts.boost ?? {};
   const goals = sessionId && !goalTag ? await ctx.store.activeGoals({ sessionId, tenantId: ctx.tenantId }) : null;
@@ -288,7 +288,7 @@ function withVectorCandidates(pool: MemoryEntry[], ranked: RankedResults): Memor
 }
 
 function shownAuditAndTrace(
-  ctx: StoreContext,
+  ctx: Context,
   opts: RecallOptions,
   shownIds: readonly string[],
   ranked: RankedResults,

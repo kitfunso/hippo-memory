@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from './_helpers/compaction-hooks.js';
 import type { Context } from '../src/api/types.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { transcriptWorkingState } from '../src/capture/working-state.js';
 import { preCompactForCaller } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
@@ -84,7 +85,7 @@ describe('preCompactForCaller', () => {
     fs.mkdirSync(server, { recursive: true });
     initStore(server);
     fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
-    const ctx: Context = { hippoRoot: server, tenantId: 'acme', actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
+    const ctx: Context = { hippoRoot: server, store: sqliteStore(server), tenantId: 'acme', actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
     preCompactForCaller(ctx, { sessionId: 's1', project: { name: 'proj', legacyName: 'proj' }, trigger: 'auto', workingState: transcriptWorkingState(transcript, () => {}) });
     const stored = loadActiveTaskSnapshot(server, 'acme', { owner: 'alice', project: ['proj'] });
 

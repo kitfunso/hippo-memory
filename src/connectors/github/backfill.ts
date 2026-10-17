@@ -2,7 +2,7 @@
  *  An HWM (high-water mark) is saved only after its stream fully drains, so a crash in stream 2 keeps stream 1.
  *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
-import type { StoreContext } from '../../api/index.js';
+import type { Context } from '../../api/index.js';
 import { readCursors, seedCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
@@ -116,7 +116,7 @@ interface DrainStreamOptions {
 }
 
 async function drainStream(
-  ctx: StoreContext,
+  ctx: Context,
   url0: string,
   options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
@@ -246,7 +246,7 @@ function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepositor
 
 /** Drains one stream, then persists its HWM only when the stream ran to the end. */
 async function backfillStream(
-  ctx: StoreContext,
+  ctx: Context,
   opts: BackfillOptions,
   sleep: (ms: number) => Promise<void>,
   stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
@@ -266,7 +266,7 @@ async function backfillStream(
 }
 
 export async function backfillRepo(
-  ctx: StoreContext,
+  ctx: Context,
   opts: BackfillOptions,
 ): Promise<BackfillResult> {
   const sleep =

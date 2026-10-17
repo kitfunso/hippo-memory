@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
 import { ConflictError } from '../src/core/api-errors.js';
 import type { Context } from '../src/api/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { bindSessionOwner } from '../src/server.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../src/util/version.js';
@@ -27,7 +28,7 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 }
 
 function ctx(owner: string, tenantId = 'default'): Context {
-  return { hippoRoot: home, tenantId, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
+  return { hippoRoot: home, store: sqliteStore(home), tenantId, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
 }
 
 function bindings(): Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }> {

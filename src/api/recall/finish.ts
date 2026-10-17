@@ -7,7 +7,7 @@ import type { TokenSurface } from '../../store/token-ledger.js';
 import { envAnchoringOff, envAvailabilityOff } from '../../util/env.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
-import type { Context, StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 
 /**
  * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked within the window returns
@@ -468,7 +468,7 @@ export interface ShownList {
 
 /** Runs after the recall's own write, in this order: the ring, then the counter, then the ledger. */
 export async function recordShownRecall(
-  ctx: StoreContext,
+  ctx: Context,
   store: HippoStore,
   how: RecallRecording,
   shown: ShownList,

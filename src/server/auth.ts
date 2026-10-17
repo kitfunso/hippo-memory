@@ -6,7 +6,7 @@ import { resolveTenantId } from '../store/tenant.js';
 import { sqliteReach } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
-import { type Actor, type Context, type StoreContext, ownerOrSubject } from '../api/index.js';
+import { type Actor, type Context, ownerOrSubject } from '../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { clientLimitKey } from './client-ip.js';
@@ -276,7 +276,7 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
 
 /** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) on bad ones.
  * Reads the store only for an API-key-shaped Bearer (or any Bearer with no resolver), so keyless calls stay cheap. */
-export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOptions): Promise<StoreContext> {
+export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOptions): Promise<Context> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts);
   if (id !== null) chargeCaller(id.tenantId, ctx.actor, opts);
@@ -285,7 +285,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOptio
 
 /** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and
  * must re-check right before it acts. */
-export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOptions): Promise<StoreContext> {
+export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOptions): Promise<Context> {
   return contextFor(await checkAuth(req, opts), opts);
 }
 
@@ -294,7 +294,7 @@ function keylessLocalActor(): Actor {
   return { subject: 'localhost:cli', role: 'member' };
 }
 
-function contextFor(id: BearerIdentity | null, opts: AuthOptions): StoreContext {
+function contextFor(id: BearerIdentity | null, opts: AuthOptions): Context {
   // Per request, never cached at serve: the global store can be created while the server runs.
   const reach = sqliteReach(opts.hippoRoot, opts.store);
   // loadConfig caches by file mtime, so each request still sees an edit made while the server runs.

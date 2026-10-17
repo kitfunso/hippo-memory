@@ -19,7 +19,7 @@ import { extractPathTags } from '../../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../core/recall-scope.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../../util/same-text.js';
 import { requireGroup, type LessonWrites } from '../../store/port.js';
-import type { Context, StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -61,7 +61,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: StoreContext, opts: LearnOptions): Promise<LearnResult> {
+export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -117,7 +117,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
 /** The duplicate keys a batch skips: every readable row's with
  * `existing`, else only the rows holding a lesson's longest word. */
 async function knownKeys(
-  ctx: StoreContext,
+  ctx: Context,
   writes: LessonWrites,
   lessons: readonly string[],
   existing: readonly MemoryEntry[] | undefined,
@@ -150,7 +150,7 @@ function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMe
 }
 
 async function writeLessons(
-  ctx: StoreContext,
+  ctx: Context,
   lessons: readonly string[],
   opts: LearnOptions,
   config: HippoConfig,
@@ -197,7 +197,7 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 /** `hippo invalidate`: weakens the caller's tenant's memories that
  * reference `target.from`, or only the one `options.onlyId` names. */
 export function invalidateMemories(
-  ctx: StoreContext,
+  ctx: Context,
   target: InvalidationTarget,
   options: InvalidationOptions,
 ): InvalidationResult {

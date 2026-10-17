@@ -29,11 +29,11 @@ const STORE_KIT_TYPES = [
   'ActiveGoals', 'AmbientCandidateRequest', 'AmbientLoadResult', 'AmbientRecallRequest', 'AmbientStoreFilter', 'AmbientTallies',
   'ApiKeyListItem', 'ApiKeyListRow', 'ApiKeyRecord', 'AppendAuditOpts', 'AuditEvent', 'ClassResolution', 'ContextCandidateFilter',
   'ContextReads', 'ContinuityBlock', 'ContinuityKey', 'EmbeddingIndexState', 'EntryRemoval', 'EntryTarget', 'EntryWrite', 'EntryWrites',
-  'GetActiveGoalsOpts', 'Goal', 'GoalRecallLogRow', 'HippoDbContext', 'HippoStore', 'KeyAudit', 'KeyListQuery', 'KeyMint', 'KeyRevoke',
+  'GetActiveGoalsOpts', 'Goal', 'GoalRecallLogRow', 'HippoStore', 'KeyAudit', 'KeyListQuery', 'KeyMint', 'KeyRevoke',
   'KeysetPosition', 'KeyWrites', 'LastRecall', 'LastRecallWrites', 'ListApiKeysOpts', 'ListAuditAfterOpts', 'MemoryEntry', 'NewApiKey',
   'OptionalGroup', 'OriginFilter', 'OutcomeWrite', 'PhysicsParticle', 'PlanningFallacyEvidence', 'PredictionBaserate', 'RawArchive', 'RecallScopeFilter',
   'RecallSearchArgs', 'RecallTraceInput', 'RecallWrites', 'RecentOrigins', 'RetrievalPolicy', 'SelfKeyMint', 'SessionEvent', 'SessionHandoff',
-  'StoreContext', 'StoreGroup', 'StoreGroups', 'StrengthenOptions', 'SupersedeWrite', 'TaskSnapshot', 'TokenUse', 'VectorBackfillQuery', 'VectorCandidateSpec',
+  'StoreGroup', 'StoreGroups', 'StrengthenOptions', 'SupersedeWrite', 'TaskSnapshot', 'TokenUse', 'VectorBackfillQuery', 'VectorCandidateSpec',
   'VectorMatch', 'VectorReads', 'VectorRow', 'VectorRowWrite', 'VectorWrite', 'VectorWriteResult', 'VectorWrites',
   // The session and admin groups (port-groups.ts).
   'Card', 'CardComment', 'CardCreate', 'CardDetail', 'CardRun', 'CardStatus', 'Cards', 'CompleteGoalOpts',
