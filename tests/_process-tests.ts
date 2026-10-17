@@ -205,6 +205,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'remember-owner-caller.test.ts',
   'remember-private-scope-grant.test.ts',
   'remember-secret-warnings.test.ts',
+  'request-log-route-template.test.ts',
   'request-open-count.test.ts',
   'request-path-output-snapshot.test.ts',
   'route-table-gates.test.ts',
