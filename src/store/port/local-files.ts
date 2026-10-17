@@ -2,12 +2,14 @@
 import type { HippoStore } from '../port.js';
 import type { AgentImport } from './agent-import.js';
 import type { Consolidation } from './consolidation.js';
+import type { Diagnostics } from './diagnostics.js';
 import type { Learning } from './learning.js';
 import type { Promotion } from './promotion.js';
 import type { Sharing } from './sharing.js';
 
 export type { AgentImport, ContainerTx, ImportTarget } from './agent-import.js';
 export type { Consolidation } from './consolidation.js';
+export type { Diagnostics } from './diagnostics.js';
 export type { Learning } from './learning.js';
 export type { Promotion } from './promotion.js';
 export type { Sharing } from './sharing.js';
@@ -21,6 +23,7 @@ export interface LocalFiles {
   readonly promotion: Promotion;
   readonly learning: Learning;
   readonly sharing: Sharing;
+  readonly diagnostics: Diagnostics;
   /** The operator's global store, built at each call because a share may have to create it first. */
   globalStore(): HippoStore;
 }
