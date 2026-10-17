@@ -14,7 +14,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, 'next/**']
   workflow_call:
 
 # Read-only by default. Workflow does not need contents:write or id-token.
