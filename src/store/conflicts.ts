@@ -10,12 +10,15 @@ import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { BadRequestError } from '../core/api-errors.js';
-import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
-import { selectMemoryReach } from './tenant-lookup.js';
+import { canTouchScope } from '../core/recall-scope.js';
 import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { KeysetClause, KeysetPosition } from '../util/keyset.js';
+import { MAX_LIST_LIMIT } from '../util/limits.js';
 import type { DetectedConflict } from './port/consolidation.js';
+import type {
+  ConflictListQuery, ConflictMember, ConflictResolution, ConflictRow, ConflictRowPage,
+} from './port/conflicts.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -27,75 +30,102 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
-function selectConflictRowsInTenant(
+// Each member's columns the api's conflict rules read, aliased per side so one JOIN carries both.
+const MEMBER_COLS = ['id', 'scope', 'kind', 'superseded_by', 'origin_project'] as const;
+const memberCols = (alias: string, side: string): string =>
+  MEMBER_COLS.map((c) => `${alias}.${c} AS ${side}_${c}`).join(', ');
+const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memberCols('mb', 'b')}`;
+
+interface ConflictJoinRow extends MemoryConflictRow {
+  a_id: string | null;
+  a_scope: string | null;
+  a_kind: string | null;
+  a_superseded_by: string | null;
+  a_origin_project: string | null;
+  b_id: string | null;
+  b_scope: string | null;
+  b_kind: string | null;
+  b_superseded_by: string | null;
+  b_origin_project: string | null;
+}
+
+function memberOf(
+  id: string | null,
+  scope: string | null,
+  kind: string | null,
+  supersededBy: string | null,
+  originProject: string | null,
+): ConflictMember | null {
+  if (id === null || kind === null) return null;
+  return { scope, kind, superseded_by: supersededBy, origin_project: originProject };
+}
+
+function toConflictRow(r: ConflictJoinRow): ConflictRow {
+  return {
+    conflict: rowToMemoryConflict(r),
+    a: memberOf(r.a_id, r.a_scope, r.a_kind, r.a_superseded_by, r.a_origin_project),
+    b: memberOf(r.b_id, r.b_scope, r.b_kind, r.b_superseded_by, r.b_origin_project),
+  };
+}
+
+/** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no cross-tenant or stale pair
+ * surfaces; with none, every conflict comes back with whichever members still exist. */
+function conflictSelect(tenantId: string | null, filters: readonly KeysetClause[]): KeysetClause {
+  const join = tenantId === null ? 'LEFT JOIN' : 'JOIN';
+  const where: KeysetClause[] = tenantId === null
+    ? [...filters]
+    : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
+  return {
+    sql:
+      `SELECT ${CONFLICT_ROW_COLS} FROM memory_conflicts mc ${join} memories ma ON ma.id = mc.memory_a_id ` +
+      `${join} memories mb ON mb.id = mc.memory_b_id` +
+      (where.length > 0 ? ` WHERE ${where.map((f) => f.sql).join(' AND ')}` : ''),
+    params: where.flatMap((f) => f.params),
+  };
+}
+
+/** One page of conflicts, newest change first, each with both members' columns from the same JOIN. */
+export function conflictPageAt(
   db: DatabaseSyncLike,
-  status: string,
-  allStatuses: boolean,
-  tenantId: string,
-): MemoryConflictRow[] {
-  // Tenanted query: JOIN memories on both members and require each in-tenant, so no cross-tenant or stale pre-fix pair
-  // surfaces.
-  // SAFETY: both branches select CONFLICT_COLS_MC, MemoryConflictRow's columns.
-  return allStatuses
-    ? (db
-        .prepare(
-          `
-        SELECT ${CONFLICT_COLS_MC}
-        FROM memory_conflicts mc
-        JOIN memories ma ON ma.id = mc.memory_a_id
-        JOIN memories mb ON mb.id = mc.memory_b_id
-        WHERE ma.tenant_id = ? AND mb.tenant_id = ?
-        ORDER BY mc.updated_at DESC, mc.id DESC
-      `,
-        )
-        .all(tenantId, tenantId) as MemoryConflictRow[])
-    : (db
-        .prepare(
-          `
-        SELECT ${CONFLICT_COLS_MC}
-        FROM memory_conflicts mc
-        JOIN memories ma ON ma.id = mc.memory_a_id
-        JOIN memories mb ON mb.id = mc.memory_b_id
-        WHERE mc.status = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
-        ORDER BY mc.updated_at DESC, mc.id DESC
-      `,
-        )
-        .all(status, tenantId, tenantId) as MemoryConflictRow[]);
+  { tenantId, status, limit, after }: ConflictListQuery,
+): ConflictRowPage {
+  const filters: KeysetClause[] = [];
+  if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
+  if (after) filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
+  const select = conflictSelect(tenantId, filters);
+  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
+  const rows = db
+    .prepare(`${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC LIMIT ?`)
+    .all(...select.params, limit + 1) as ConflictJoinRow[];
+  const page = rows.slice(0, limit).map(toConflictRow);
+  const last = page[page.length - 1]?.conflict;
+  return { rows: page, next: rows.length > limit && last ? { key: last.updated_at, id: last.id } : null };
 }
 
-function selectConflictRowsUnscoped(db: DatabaseSyncLike, status: string, allStatuses: boolean): MemoryConflictRow[] {
-  // Unscoped query — legacy direct-mode (CLI, tests, consolidate).
-  // SAFETY: both branches select CONFLICT_COLS, MemoryConflictRow's columns.
-  return allStatuses
-    ? db.prepare(`
-        SELECT ${CONFLICT_COLS}
-        FROM memory_conflicts
-        ORDER BY updated_at DESC, id DESC
-      `).all() as MemoryConflictRow[]
-    : db.prepare(`
-        SELECT ${CONFLICT_COLS}
-        FROM memory_conflicts
-        WHERE status = ?
-        ORDER BY updated_at DESC, id DESC
-      `).all(status) as MemoryConflictRow[];
+/** Conflict `conflictId`, any status, when both its members are in `tenantId`. */
+export function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
+  const select = conflictSelect(tenantId, [{ sql: 'mc.id = ?', params: [conflictId] }]);
+  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
+  const row = db.prepare(select.sql).get(...select.params) as ConflictJoinRow | undefined;
+  return row ? toConflictRow(row) : null;
 }
 
-export function listMemoryConflictsAt(
-  db: DatabaseSyncLike,
-  status: string = 'open',
-  tenantId?: string,
-): MemoryConflict[] {
-  // '*' is a sentinel for no status filter; the 4 SQL branches below
-  // cover {tenanted | unscoped} x {all-statuses | specific-status}.
-  const allStatuses = status === '*';
-  const rows = tenantId !== undefined
-    ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
-    : selectConflictRowsUnscoped(db, status, allStatuses);
-  return rows.map(rowToMemoryConflict);
+/** Every conflict with `status` (tenant null: every tenant's), read a page at a time. */
+function everyConflictRowAt(db: DatabaseSyncLike, tenantId: string | null, status: string): ConflictRow[] {
+  const out: ConflictRow[] = [];
+  let after: KeysetPosition | undefined;
+  do {
+    const page = conflictPageAt(db, { tenantId, status, limit: MAX_LIST_LIMIT, after });
+    out.push(...page.rows);
+    after = page.next ?? undefined;
+  } while (after);
+  return out;
 }
 
+/** Every conflict with `status` under `hippoRoot`, for the callers that still read the store by folder. */
 export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
-  return onHandle(hippoRoot, (db) => listMemoryConflictsAt(db, status, tenantId), openStore);
+  const rows = onHandle(hippoRoot, (db) => everyConflictRowAt(db, tenantId ?? null, status), openStore);
+  return rows.map((r) => r.conflict);
 }
 
 // listMemoryConflicts' tenanted open set: both members in the tenant.
@@ -139,25 +169,17 @@ export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryI
   }, openStore);
 }
 
-/** Conflicts whose two rows `actor` may both touch; someone else's personal row hides its whole pair. */
-export function listTouchableConflictsAt(
-  db: DatabaseSyncLike,
-  status: string,
-  tenantId: string,
-  actor: { owner?: string },
-): MemoryConflict[] {
-  return listMemoryConflictsAt(db, status, tenantId).filter((c) =>
-    [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)),
-  );
-}
-
+/** Conflicts whose two rows `actor` may both touch. Only src/dashboard calls it, by folder; the api applies the same
+ * rule over `conflictPageAt`, and the dashboard's api slice deletes this. */
 export function listTouchableConflicts(
   hippoRoot: string,
   status: string,
   tenantId: string,
   actor: { owner?: string },
 ): MemoryConflict[] {
-  return onHandle(hippoRoot, (db) => listTouchableConflictsAt(db, status, tenantId, actor), openStore);
+  return onHandle(hippoRoot, (db) => everyConflictRowAt(db, tenantId, status)
+    .filter((r) => [r.a, r.b].every((m) => canTouchScope(actor, m?.scope ?? null)))
+    .map((r) => r.conflict), openStore);
 }
 type SameTenant = (a: string, b: string) => boolean;
 
@@ -326,17 +348,6 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
   return changedIds;
 }
 
-/** `rejectLoserValue` implies removal of the loser regardless of `forgetLoser`: a tombstoned value cannot stay live. */
-export interface ResolveConflictOpts {
-  /** Tombstone the loser's normalized digest + kind-aware remove it. */
-  rejectLoserValue?: boolean;
-  /** Actor for the tombstone + the new conflict_resolve audit row. Defaults to 'cli'. */
-  rejectedBy?: string;
-  /** Reason recorded on the tombstone (and passed to archiveRawMemory if the
-   *  loser is kind='raw'). Defaults to a conflict-context string. */
-  reason?: string;
-}
-
 /** Metadata shape of the `conflict_resolve` audit row; rejectedDigest
  * is set only when the loser's value was also tombstoned. */
 interface ConflictResolveMeta {
@@ -349,98 +360,69 @@ interface ConflictResolveMeta {
   rejectedDigest?: string;
 }
 
-// With tenantId, both members must be in-tenant and every memories mutation carries AND tenant_id = ?; a cross-tenant
-// probe returns null like a bad id.
-// Omitted tenantId = unscoped (CLI direct mode, tests).
-function conflictMemScope(tenantId?: string): MemScope {
-  return {
-    memScope: tenantId !== undefined ? ' AND tenant_id = ?' : '',
-    memArgs: tenantId !== undefined ? [tenantId] : [],
-  };
+// A side still in the tenant and still holding the scope the api decided on.
+const SIDE_HOLDS = 'EXISTS (SELECT 1 FROM memories WHERE id = ? AND tenant_id = ? AND scope IS ?)';
+
+/** Marks the conflict resolved while it is open, names this pair and each side holds its scope; false writes
+ * nothing. */
+function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: ConflictResolution): boolean {
+  const { conflictId, keep, loser } = resolution;
+  const pair = [keep.id, loser.id, loser.id, keep.id];
+  const sides = [keep.id, tenantId, keep.scope, loser.id, tenantId, loser.scope];
+  const claimed = db.prepare(
+    `UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ? AND status = 'open' ` +
+      `AND ((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) ` +
+      `AND ${SIDE_HOLDS} AND ${SIDE_HOLDS}`,
+  ).run(conflictId, ...pair, ...sides);
+  return Number(claimed.changes ?? 0) > 0;
 }
 
-function findResolvableConflict(
-  db: DatabaseSyncLike,
-  conflictId: number,
-  keepId: string,
-  tenantId?: string,
-): { conflict: MemoryConflict; loserId: string } | null {
-  const row = selectConflictRow(db, conflictId, tenantId);
-  if (!row) return null;
-
-  const conflict = rowToMemoryConflict(row);
-  if (conflict.status !== 'open') return null;
-
-  const loserId = keepId === conflict.memory_a_id
-    ? conflict.memory_b_id
-    : keepId === conflict.memory_b_id
-      ? conflict.memory_a_id
-      : null;
-
-  if (!loserId) return null;
-  return { conflict, loserId };
-}
-
-export interface ResolveConflictRequest {
-  readonly conflictId: number;
-  readonly keepId: string;
-  readonly forgetLoser?: boolean;
-  readonly tenantId?: string;
-}
-
-/** Resolve a conflict by keeping one memory and halving the loser's half-life; `--forget` removes the loser,
- * `opts.rejectLoserValue` also tombstones its
- * digest. Every path emits a `conflict_resolve` audit row. Returns the resolved conflict, or null if not found. */
+/** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one `conflict_resolve` audit row;
+ * false when another resolver got there first or a side moved since the api read it. */
 export function resolveConflictAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
-  { conflictId, keepId, forgetLoser = false, tenantId }: ResolveConflictRequest,
-  opts?: ResolveConflictOpts,
-): { conflict: MemoryConflict; loserId: string } | null {
-  const scope = conflictMemScope(tenantId);
-  const resolvable = findResolvableConflict(db, conflictId, keepId, tenantId);
-  if (!resolvable) return null;
-  const { conflict, loserId } = resolvable;
-
-  const target: ResolveTarget = { conflictId, keepId, loserId, scope, opts };
+  tenantId: string,
+  resolution: ConflictResolution,
+): boolean {
   const removal = withWriteScope(db, 'resolve_conflict', () => {
-    // Mark conflict as resolved
-    db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
-      .run(conflictId);
-
-    const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
-    const out = removeLoser ? removeConflictLoser(db, target) : weakenConflictLoser(db, target);
-
-    stripConflictRefs(db, target, out.loserRemoved);
-    auditConflictResolve(db, target, out, tenantId);
+    if (!claimConflict(db, tenantId, resolution)) return null;
+    const out = resolution.fate.kind === 'weaken'
+      ? weakenConflictLoser(db, tenantId, resolution)
+      : removeConflictLoser(db, tenantId, resolution);
+    stripConflictRefs(db, tenantId, resolution, out.loserRemoved);
+    auditConflictResolve(db, tenantId, resolution, out);
     return out;
   });
-  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keepId, loserId]).values()]);
-
-  if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loserId, removal);
-
-  return { conflict: { ...conflict, status: 'resolved' }, loserId };
+  if (removal === null) return false;
+  const { keep, loser } = resolution;
+  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keep.id, loser.id]).values()]);
+  if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loser.id, removal);
+  return true;
 }
 
+/** The dashboard's weaken-only resolve by folder, after it ran the reach, status, pair and liveness checks itself; the
+ * dashboard's api slice moves it to resolveMemoryConflict and deletes this. */
 export function resolveConflict(
   hippoRoot: string,
-  request: ResolveConflictRequest,
-  opts?: ResolveConflictOpts,
+  { conflictId, keepId, tenantId }: { readonly conflictId: number; readonly keepId: string; readonly tenantId: string },
+  opts: { readonly rejectedBy?: string } = {},
 ): { conflict: MemoryConflict; loserId: string } | null {
-  return onHandle(hippoRoot, (db) => resolveConflictAt(db, { hippoRoot }, request, opts), openStore);
-}
-
-interface MemScope {
-  memScope: string;
-  memArgs: string[];
-}
-
-interface ResolveTarget {
-  conflictId: number;
-  keepId: string;
-  loserId: string;
-  scope: MemScope;
-  opts: ResolveConflictOpts | undefined;
+  return onHandle(hippoRoot, (db) => {
+    const row = conflictByIdAt(db, tenantId, conflictId);
+    if (!row?.a || !row.b) return null;
+    const sides = [
+      { id: row.conflict.memory_a_id, scope: row.a.scope },
+      { id: row.conflict.memory_b_id, scope: row.b.scope },
+    ];
+    const keep = sides.find((side) => side.id === keepId);
+    const loser = sides.find((side) => side.id !== keepId);
+    if (!keep || !loser) return null;
+    const actor = opts.rejectedBy ?? CLI_ACTOR;
+    const resolution: ConflictResolution = { conflictId, keep, loser, fate: { kind: 'weaken' }, actor, reason: '' };
+    if (!resolveConflictAt(db, { hippoRoot }, tenantId, resolution)) return null;
+    return { conflict: { ...row.conflict, status: 'resolved' }, loserId: loser.id };
+  }, openStore);
 }
 
 /** What removing the loser did; drives the conflicts_with_json skip, the audit row and the mirror purge. */
@@ -452,24 +434,10 @@ interface LoserRemoval {
   extraRemovedRawIds: string[];
 }
 
-function selectConflictRow(
-  db: DatabaseSyncLike,
-  conflictId: number,
-  tenantId: string | undefined,
-): MemoryConflictRow | undefined {
-  // SAFETY: the branches select CONFLICT_COLS_MC and CONFLICT_COLS, MemoryConflictRow's columns.
-  return (tenantId !== undefined
-    ? db.prepare(`
-        SELECT ${CONFLICT_COLS_MC}
-        FROM memory_conflicts mc
-        JOIN memories ma ON ma.id = mc.memory_a_id
-        JOIN memories mb ON mb.id = mc.memory_b_id
-        WHERE mc.id = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
-      `).get(conflictId, tenantId, tenantId)
-    : db.prepare(`
-        SELECT ${CONFLICT_COLS}
-        FROM memory_conflicts WHERE id = ?
-      `).get(conflictId)) as MemoryConflictRow | undefined;
+interface LoserRow {
+  kind: string;
+  content: string;
+  tenant_id: string;
 }
 
 function emptyRemoval(): LoserRemoval {
@@ -482,55 +450,43 @@ function emptyRemoval(): LoserRemoval {
   };
 }
 
-function weakenConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
-  // Halve the loser's half-life (weakens it over time)
+function weakenConflictLoser(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution): LoserRemoval {
   db.prepare(
     `UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') ` +
-      `WHERE id = ?${t.scope.memScope}`,
-  ).run(t.loserId, ...t.scope.memArgs);
+      `WHERE id = ? AND tenant_id = ?`,
+  ).run(r.loser.id, tenantId);
   return emptyRemoval();
 }
 
-function removeConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
+function removeConflictLoser(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution): LoserRemoval {
   // Removal is kind-aware: a bare DELETE on a raw loser fires the append-only trigger, so use the same helpers as the
   // reject verb.
-  // loserRemoved / loserWasRaw drive the conflicts_with_json skip below and the post-commit mirror purge.
-  // extraRemoved* hold same-tenant duplicates of the loser that rejectLoserValue also removes, kept apart from loserId
-  // so audit and mirror purge cover them.
   const removal = emptyRemoval();
-  const { loserId, opts } = t;
-
-  // SAFETY: loserRow's shape matches the four columns named in the SELECT below.
+  const loserId = r.loser.id;
+  // SAFETY: loserRow's shape matches the three columns named in the SELECT below.
   const loserRow = db
-    .prepare(`SELECT kind, content, tenant_id, scope FROM memories WHERE id = ?${t.scope.memScope}`)
-    .get(loserId, ...t.scope.memArgs) as
-    { kind: string; content: string; tenant_id: string; scope: string | null } | undefined;
-
-  if (loserRow) {
-    const actor = opts?.rejectedBy ?? CLI_ACTOR;
-    const reason = opts?.reason ?? `resolveConflict ${t.conflictId}: kept ${t.keepId}`;
-
-    if (opts?.rejectLoserValue) {
-      removal.rejectedDigest = tombstoneLoserValue(db, t, loserRow, { actor, reason }, removal);
-    }
-
-    if (loserRow.kind === 'raw') {
-      archiveRawMemory(db, loserId, { reason, who: actor });
-      removal.loserWasRaw = true;
-    } else {
-      deleteEntryCore(db, loserId, loserRow.tenant_id, { actor, suppressForgetAudit: true });
-    }
-    removal.loserRemoved = true;
+    .prepare(`SELECT kind, content, tenant_id FROM memories WHERE id = ? AND tenant_id = ?`)
+    .get(loserId, tenantId) as LoserRow | undefined;
+  // The claim in this transaction saw the row, so it is there.
+  if (!loserRow) return removal;
+  const who = { actor: r.actor, reason: r.reason };
+  if (r.fate.kind === 'reject') {
+    removal.rejectedDigest = tombstoneLoserValue(db, r, r.fate.inReach, loserRow, who, removal);
   }
-  // loserRow undefined = tenant-scope mismatch (or already gone); matches
-  // the old tenant-scoped DELETE's silent 0-rows-affected behavior.
+  if (loserRow.kind === 'raw') {
+    archiveRawMemory(db, loserId, { reason: r.reason, who: r.actor });
+    removal.loserWasRaw = true;
+  } else {
+    deleteEntryCore(db, loserId, loserRow.tenant_id, { actor: r.actor, suppressForgetAudit: true });
+  }
+  removal.loserRemoved = true;
   return removal;
 }
 
 function recordRejectedLoserValue(
   db: DatabaseSyncLike,
-  t: ResolveTarget,
-  loserRow: { content: string; tenant_id: string },
+  r: ConflictResolution,
+  loserRow: LoserRow,
   digest: string,
   who: { actor: string; reason: string },
 ): void {
@@ -540,32 +496,29 @@ function recordRejectedLoserValue(
     reason: who.reason,
     rejectedBy: who.actor,
     rejectedAt: new Date().toISOString(),
-    sourceMemoryId: t.loserId,
+    sourceMemoryId: r.loser.id,
     normalizedChars: normalizeValueForRejection(loserRow.content).length,
   });
 }
 
-/** Removes the live same-tenant rows whose digest matches the rejected value into `removal`; `keepId` is spared. */
+/** Removes the live same-tenant rows `inReach` admits whose digest matches the rejected value into `removal`; `keep`
+ * is spared. */
 function removeDuplicatesOfRejectedValue(
   db: DatabaseSyncLike,
-  t: ResolveTarget,
-  loserRow: { kind: string; content: string; tenant_id: string; scope: string | null },
+  r: ConflictResolution,
+  inReach: (scope: string | null) => boolean,
+  loserRow: LoserRow,
   rejectedDigest: string,
-  who: { actor: string; reason: string },
   removal: LoserRemoval,
 ): void {
-  const { actor, reason } = who;
-  // Remove ALL live same-tenant rows whose digest matches (as reject-flow.ts rejectValue does), not just loserId; the
-  // O(N) scan is human-scale.
-  // Tenant-scoped ONLY, since tombstones are; `keepId` is excluded even if its content matches, because the human chose
-  // to keep it.
+  // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because the human chose it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
   // SHORTCUT: streams the tenant to hold only the matches; a stored digest column with a (tenant_id, digest) index
   // would read just those.
   // SAFETY: each row has the four columns named in the SELECT.
   const dupRows = db
     .prepare(`SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
-    .iterate(loserTenantId, t.loserId, t.keepId) as Iterable<{
+    .iterate(loserTenantId, r.loser.id, r.keep.id) as Iterable<{
     id: string;
     kind: string;
     content: string;
@@ -573,11 +526,10 @@ function removeDuplicatesOfRejectedValue(
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (rejectionDigest(dup.content) !== rejectedDigest) continue;
-    // Another person's personal row is outside this resolver's reach, as it is outside their recall.
-    if (isPersonalScope(dup.scope) && dup.scope !== loserRow.scope) continue;
+    if (rejectionDigest(dup.content) !== rejectedDigest || !inReach(dup.scope)) continue;
     dups.push({ id: dup.id, kind: dup.kind });
   }
+  const { actor, reason } = r;
   // Removed after the read ends, since deleting rows under an open cursor can skip or repeat rows.
   for (const dup of dups) {
     if (dup.kind === 'raw') {
@@ -593,80 +545,50 @@ function removeDuplicatesOfRejectedValue(
 /** Tombstones the loser's digest and removes its same-tenant duplicates into `removal`; returns the digest. */
 function tombstoneLoserValue(
   db: DatabaseSyncLike,
-  t: ResolveTarget,
-  loserRow: { kind: string; content: string; tenant_id: string; scope: string | null },
+  r: ConflictResolution,
+  inReach: (scope: string | null) => boolean,
+  loserRow: LoserRow,
   who: { actor: string; reason: string },
   removal: LoserRemoval,
 ): string {
-  if (isPersonalScope(loserRow.scope)) {
-    throw new BadRequestError(
-      `cannot reject the value of personal memory ${t.loserId}: a rejection reaches the whole tenant, ` +
-        `so its reason would show to everyone; resolve with forget instead`,
-    );
-  }
   const rejectedDigest = rejectionDigest(loserRow.content);
-  recordRejectedLoserValue(db, t, loserRow, rejectedDigest, who);
-
-  removeDuplicatesOfRejectedValue(db, t, loserRow, rejectedDigest, who, removal);
+  recordRejectedLoserValue(db, r, loserRow, rejectedDigest, who);
+  removeDuplicatesOfRejectedValue(db, r, inReach, loserRow, rejectedDigest, removal);
   return rejectedDigest;
 }
 
-function stripConflictRefs(db: DatabaseSyncLike, t: ResolveTarget, loserRemoved: boolean): void {
-  const { memScope, memArgs } = t.scope;
-  const { keepId, loserId } = t;
-  // Clean up conflicts_with references.
-  // SAFETY: keepRow's shape matches the single `conflicts_with_json` column selected above.
-  const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(
-    keepId,
-    ...memArgs
-  ) as { conflicts_with_json: string } | undefined;
-  if (keepRow) {
-    const refs = parseJsonArray(keepRow.conflicts_with_json, {
-      table: 'memories',
-      id: keepId,
-      column: 'conflicts_with_json',
-    });
-    const cleaned = refs.filter((r: string) => r !== loserId);
-    db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?${memScope}`)
-      .run(JSON.stringify(cleaned), keepId, ...memArgs);
-  }
+/** Drops `ref` from row `id`'s conflicts_with_json, when the row is in the tenant. */
+function dropConflictRef(db: DatabaseSyncLike, tenantId: string, id: string, ref: string): void {
+  // SAFETY: the single `conflicts_with_json` column named in the SELECT.
+  const row = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`)
+    .get(id, tenantId) as { conflicts_with_json: string } | undefined;
+  if (!row) return;
+  const refs = parseJsonArray(row.conflicts_with_json, { table: 'memories', id, column: 'conflicts_with_json' });
+  db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`)
+    .run(JSON.stringify(refs.filter((r: string) => r !== ref)), id, tenantId);
+}
 
-  if (!loserRemoved) {
-    // SAFETY: loserRow's shape matches the single `conflicts_with_json`
-    // column named in the SELECT below.
-    const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(
-      loserId,
-      ...memArgs
-    ) as { conflicts_with_json: string } | undefined;
-    if (loserRow) {
-      const refs = parseJsonArray(loserRow.conflicts_with_json, {
-        table: 'memories',
-        id: loserId,
-        column: 'conflicts_with_json',
-      });
-      const cleaned = refs.filter((r: string) => r !== keepId);
-      db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?${memScope}`)
-        .run(JSON.stringify(cleaned), loserId, ...memArgs);
-    }
-  }
+function stripConflictRefs(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution, loserRemoved: boolean): void {
+  dropConflictRef(db, tenantId, r.keep.id, r.loser.id);
+  if (!loserRemoved) dropConflictRef(db, tenantId, r.loser.id, r.keep.id);
 }
 
 function auditConflictResolve(
   db: DatabaseSyncLike,
-  t: ResolveTarget,
+  tenantId: string,
+  r: ConflictResolution,
   removal: LoserRemoval,
-  tenantId: string | undefined,
 ): void {
   const { loserRemoved, loserWasRaw, rejectedDigest, extraRemovedIds } = removal;
   // Every path (weaken, forget, reject) lands exactly one conflict_resolve audit row.
   const conflictResolveMeta: ConflictResolveMeta = {
-    conflictId: t.conflictId,
-    keepId: t.keepId,
-    loserId: t.loserId,
+    conflictId: r.conflictId,
+    keepId: r.keep.id,
+    loserId: r.loser.id,
     disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
-    rejected: Boolean(t.opts?.rejectLoserValue),
+    rejected: r.fate.kind === 'reject',
     // Every row this call removed, not just loserId, so the duplicate sweep (extraRemovedIds) is audited too.
-    removedIds: loserRemoved ? [t.loserId, ...extraRemovedIds] : [],
+    removedIds: loserRemoved ? [r.loser.id, ...extraRemovedIds] : [],
   };
   // Assigned only when present so the serialized audit payload keeps
   // omitting the key, exactly as the pre-migration object literal did.
@@ -674,9 +596,9 @@ function auditConflictResolve(
   // Fresh spread literal: ConflictResolveMeta is a closed interface, not assignable to audit()'s Record<string,
   // JsonValue> metadata otherwise.
   audit(db, 'conflict_resolve', {
-    targetId: t.keepId,
+    targetId: r.keep.id,
     metadata: { ...conflictResolveMeta },
-    actor: t.opts?.rejectedBy ?? CLI_ACTOR,
+    actor: r.actor,
     tenantId,
   });
 }

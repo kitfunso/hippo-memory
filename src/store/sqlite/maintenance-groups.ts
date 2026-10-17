@@ -3,7 +3,7 @@
 import { pruneAuditRowsAt } from '../audit.js';
 import { loadTextsHoldingWordsAt } from '../candidates.js';
 import { deleteEntriesAutomaticallyAt, memoriesBackingObjectsAt } from '../delete-and-batch.js';
-import { contentsWithTagAt, loadAllEntriesAt } from '../entry-reads.js';
+import { contentsWithTagAt } from '../entry-reads.js';
 import { writeEntriesSkippingRejectedAt, writeEntriesTogetherAt } from '../entry-writes.js';
 import { updateStatsAt } from '../index-and-stats.js';
 import { type Handles, openStore } from '../open.js';
@@ -18,14 +18,13 @@ export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMainte
       removals.length === 0 ? [] : on((db, own) => deleteEntriesAutomaticallyAt(db, own, removals, actor), openStore),
     pruneAuditRows: (prune) => on((db) => pruneAuditRowsAt(db, prune)),
     // Quality repair opens the store unmigrated, so it takes the folder and not a handle.
-    repairQuality: (tenantId, apply) => repairAutomaticMemories(files, { tenantId, apply }),
-    repairQualityOnce: (tenantId) => repairQualityOnce(files, tenantId),
+    repairQuality: (tenantId, apply, protect) => repairAutomaticMemories(files, { tenantId, apply, protect }),
+    repairQualityOnce: (tenantId, protect) => repairQualityOnce(files, tenantId, protect),
   };
 }
 
 export function sqliteLessonWrites({ on }: Handles): Sync<LessonWrites> {
   return {
-    tenantEntries: (tenantId) => on((db) => loadAllEntriesAt(db, tenantId), openStore),
     textsHoldingWords: (tenantId, words, ownScope) =>
       on((db) => loadTextsHoldingWordsAt(db, tenantId, words, undefined, touchableScopeSql('', ownScope)), openStore),
     contentsWithTag: (tenantId, tag, origins) => on((db) => contentsWithTagAt(db, tenantId, tag, origins), openStore),

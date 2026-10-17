@@ -5,16 +5,29 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { stripComments } from './lib/source-text.mjs';
+import ts from 'typescript';
+import { isTsSource, readFacts } from './lib/ts-facts.mjs';
 
-const FLAG = String.raw`flags\s*(?:\[[^\]]*\]|\.\w+)`;
+/** `flags.x` or `flags[k]`: the parsed-flags object read for one flag. */
+const isFlagRead = (n) => (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && ts.isIdentifier(n.expression) && n.expression.text === 'flags';
 
-/** Hand-rolled flag-to-text shapes. `as string[]` is a list cast, not a text read, so it passes. */
-const PATTERNS = [
-  new RegExp(String.raw`\bString\(\s*${FLAG}`),
-  new RegExp(String.raw`\$\{\s*${FLAG}\s*\}`),
-  new RegExp(String.raw`\b${FLAG}\s+as\s+string\b(?!\s*\[)`),
-];
+/** True when the expression starts with a flag read, as in `flags.x ?? ''` or `flags.x.trim()`. */
+function startsWithFlag(e) {
+  for (let n = e; ; ) {
+    if (isFlagRead(n)) return true;
+    if (ts.isBinaryExpression(n)) n = n.left;
+    else if (ts.isConditionalExpression(n)) n = n.condition;
+    else if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n) || ts.isCallExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n)) n = n.expression;
+    else return false;
+  }
+}
+
+/** `String(flags.x)`, a `${flags.x}` template span, or `flags.x as string`; `as string[]` is a list cast, not a text read. */
+function isHandRead(n) {
+  if (ts.isCallExpression(n)) return ts.isIdentifier(n.expression) && n.expression.text === 'String' && n.arguments[0] !== undefined && startsWithFlag(n.arguments[0]);
+  if (ts.isTemplateSpan(n)) return isFlagRead(n.expression);
+  return ts.isAsExpression(n) && n.type.kind === ts.SyntaxKind.StringKeyword && isFlagRead(n.expression);
+}
 
 /**
  * Returns the 1-based line numbers in a source text that read a flag as text by hand.
@@ -22,9 +35,16 @@ const PATTERNS = [
  * @returns {number[]}
  */
 export function handFlagLines(text) {
-  return stripComments(text)
-    .split('\n')
-    .flatMap((line, i) => (PATTERNS.some((re) => re.test(line)) ? [i + 1] : []));
+  // A flags.x read cannot exist without the word flags, so other files skip the parse.
+  if (!text.includes('flags')) return [];
+  const { sourceFile } = readFacts(text, 'file.ts', []);
+  const lines = new Set();
+  const visit = (n) => {
+    if (isHandRead(n)) lines.add(sourceFile.getLineAndCharacterOfPosition(n.getStart(sourceFile)).line + 1);
+    ts.forEachChild(n, visit);
+  };
+  visit(sourceFile);
+  return [...lines].sort((x, y) => x - y);
 }
 
 function listSourceFiles(dir) {
@@ -32,7 +52,7 @@ function listSourceFiles(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...listSourceFiles(p));
-    else if (/\.(?:ts|mts|cts)$/.test(name) && !name.endsWith('.d.ts')) out.push(p);
+    else if (isTsSource(name)) out.push(p);
   }
   return out;
 }

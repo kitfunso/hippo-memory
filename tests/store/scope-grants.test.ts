@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey, readApiKeyRecord } from '../../src/store/auth.js';
+import { createApiKey, readApiKeyRecord, revokeApiKey } from '../../src/store/auth.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -186,6 +186,48 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authRevoke(adminCtx, member.keyId);
     await expect(api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(/revoked/);
+  });
+
+  it('refuses a grant on a key another connection revokes after the api checks and before the write', async () => {
+    const member = mintKey(home, 'member');
+    const base: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const changeScopeGrant: typeof base.store.keyGrants.changeScopeGrant = (change) => {
+      const other = openHippoDb(home);
+      try {
+        revokeApiKey(other, member.keyId);
+      } finally {
+        closeHippoDb(other);
+      }
+      return base.store.keyGrants.changeScopeGrant(change);
+    };
+    const racing: FullContext = { ...base, store: { ...base.store, keyGrants: { changeScopeGrant } } };
+
+    const err = await api.authGrant(racing, member.keyId, PRIVATE_SCOPE).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(api.ConflictError);
+    expect(err).toMatchObject({ message: expect.stringMatching(/revoked/) });
+    const db = openHippoDb(home);
+    try {
+      expect(readApiKeyRecord(db, member.keyId)?.scopes ?? []).toEqual([]);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect((await api.auditList(base, { op: 'auth_grant' })).some((e) => e.targetId === member.keyId)).toBe(false);
+  });
+
+  it('refuses an open or personal scope in the api before the store is asked', async () => {
+    const member = mintKey(home, 'member');
+    const base: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const asked: string[] = [];
+    const changeScopeGrant: typeof base.store.keyGrants.changeScopeGrant = (change) => {
+      asked.push(change.scope);
+      return base.store.keyGrants.changeScopeGrant(change);
+    };
+    const counting: FullContext = { ...base, store: { ...base.store, keyGrants: { changeScopeGrant } } };
+
+    await expect(api.authGrant(counting, member.keyId, 'team:eng')).rejects.toThrow(api.BadRequestError);
+    await expect(api.authGrant(counting, member.keyId, 'personal:private:alice')).rejects.toThrow(api.BadRequestError);
+    await expect(api.authUngrant(counting, member.keyId, 'slack:public:general')).rejects.toThrow(api.BadRequestError);
+    expect(asked).toEqual([]);
   });
 
   it('CLI grant runs in the key\'s own tenant', () => {

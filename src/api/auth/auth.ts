@@ -1,6 +1,7 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
+import { isRestrictedScope } from '../../core/recall-scope.js';
 import { DEFAULT_KEY_TTL_DAYS, listApiKeys, mintApiKey } from '../../store/auth.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/index.js';
@@ -295,6 +296,12 @@ async function changeGrant(
 ): Promise<AuthGrantResult> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can change scope grants');
+  }
+  if (op === 'auth_grant' && /^personal:/i.test(scope)) {
+    throw new BadRequestError(`${scope} is a personal scope: only its owner reads it, and no grant can change that`);
+  }
+  if (!isRestrictedScope(scope)) {
+    throw new BadRequestError(`${scope} is not a restricted scope; it is already readable by default`);
   }
   const change = { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject };
   await ctx.store.keyGrants.changeScopeGrant(change);

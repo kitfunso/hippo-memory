@@ -13,7 +13,7 @@ const MAP = {
 const ROUTE_CALLS = ["import { requireGroup } from '../../x.js';", "export const r = (s) => requireGroup(s, 'g');", ''].join('\n');
 const ROUTE_CLEAN = ['// not requireGroup', "import { graphRows } from '../../api/graph.js';", 'export const r = graphRows;', ''].join('\n');
 const ROUTE_MAP = { order: ['low', 'high'], folders: { sub: 'high', server: 'high' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
-const NO_EDGES = { runtime: 0, typeOnly: 0, rootFiles: 2, edges: [] };
+const ROOT_CAP = { rootFiles: 2 };
 const CLI_MAP = { order: ['low', 'high'], folders: { sub: 'high', cli: 'high', store: 'low' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
 const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
 type DbAllowed = Record<string, { names: string[]; why: string }>;
@@ -57,11 +57,10 @@ const rows: Row[] = [
     output: ['a.ts:2 -> b.ts (low -> high, runtime)'],
   },
   {
-    name: 'import type upward lands in typeOnly and is listed as type',
+    name: 'a type-only upward import fails too and is listed as type',
     files: { 'src/a.ts': "import type { B } from './b.js';\nexport type A = B;\n", 'src/b.ts': 'export type B = 1;\n' },
-    baseline: { runtime: 0, typeOnly: 1, rootFiles: 2, edges: [{ from: 'a.ts', to: 'b.ts', kind: 'typeOnly' }] },
-    status: 0,
-    output: ['0 runtime and 1 type-only'],
+    status: 1,
+    output: ['a.ts:1 -> b.ts (low -> high, type)'],
   },
   {
     name: 'a dynamic upward import counts as runtime',
@@ -76,11 +75,11 @@ const rows: Row[] = [
     output: ['root file src/c.ts is not listed'],
   },
   {
-    name: 'one baseline edge fixed plus one new edge still fails',
-    files: { 'src/a.ts': "import './sub/y.js';\n", 'src/b.ts': '', 'src/sub/x.ts': '', 'src/sub/y.ts': '' },
-    baseline: { runtime: 1, typeOnly: 0, rootFiles: 2, edges: [{ from: 'a.ts', to: 'sub/x.ts', kind: 'runtime' }] },
+    name: 'root files past the cap in the baseline fail',
+    files: { 'src/a.ts': '', 'src/b.ts': '' },
+    baseline: { rootFiles: 1 },
     status: 1,
-    output: ['a.ts:1 -> sub/y.ts'],
+    output: ['rootFiles: 1 -> 2'],
   },
   {
     name: 'a route that calls requireGroup fails with file:line',
@@ -101,7 +100,7 @@ const rows: Row[] = [
     files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': ROUTE_CLEAN },
     map: ROUTE_MAP,
     status: 0,
-    output: ['Layer ratchet OK'],
+    output: ['Layer order OK'],
   },
   {
     name: 'a CLI runtime import of the store fails with file:line',
@@ -115,7 +114,7 @@ const rows: Row[] = [
     files: { ...CLI_BASE, 'src/cli/v.ts': "import type { S } from '../store/s.js';\nexport type V = S;\n" },
     map: CLI_MAP,
     status: 0,
-    output: ['Layer ratchet OK'],
+    output: ['Layer order OK'],
   },
   {
     name: 'an api file that imports the db layer fails with file:line and the name',
@@ -143,14 +142,14 @@ const rows: Row[] = [
     files: { ...DB_FILES, 'src/api/y.ts': "import { scope } from '../db/x.js';\n" },
     map: dbMap(SCOPE_ONLY),
     status: 0,
-    output: ['Layer ratchet OK'],
+    output: ['Layer order OK'],
   },
   {
     name: 'an allowlisted CLI store import with a reason passes',
     files: { ...CLI_BASE, 'src/cli/v.ts': "import { s } from '../store/s.js';\n", '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: 'a constant' }]) },
     map: CLI_MAP,
     status: 0,
-    output: ['Layer ratchet OK'],
+    output: ['Layer order OK'],
   },
   {
     name: 'an allowlist entry with no reason or no matching import fails',
@@ -196,7 +195,7 @@ const rows: Row[] = [
     files: { ...SQLITE_BASE, 'src/api/y.ts': "import type { S } from '../store/sqlite/store.js';\nexport type Y = S;\n" },
     map: SQLITE_MAP,
     status: 0,
-    output: ['Layer ratchet OK'],
+    output: ['Layer order OK'],
   },
 ];
 
@@ -206,7 +205,7 @@ describe('check-layers.mjs', () => {
     try {
       const all = {
         'layers.json': JSON.stringify(map ?? MAP),
-        '.layers-baseline.json': JSON.stringify(baseline ?? NO_EDGES),
+        '.layers-baseline.json': JSON.stringify(baseline ?? ROOT_CAP),
         'src/sub/keep.ts': '',
         ...files,
       };

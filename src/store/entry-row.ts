@@ -1,6 +1,8 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { type DatabaseSyncLike, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
+import {
+  type DatabaseSyncLike, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift, setFtsInSync,
+} from '../db/index.js';
 import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -109,6 +111,15 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   ];
 }
 
+// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts it.
+function markFtsDrifted(db: DatabaseSyncLike): void {
+  try {
+    setFtsInSync(db, false);
+  } catch (err) {
+    log.warnThenSample('fts-sync', `could not clear the FTS in-sync flag: ${errorMessage(err)}`, errorFields(err));
+  }
+}
+
 export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry, isNewRow = false): void {
   if (!isFtsAvailable(db)) return;
   try {
@@ -119,6 +130,7 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
       entry.tags.join(' ')
     );
   } catch (err) {
+    markFtsDrifted(db);
     // The memories table stays authoritative; a stale FTS row only costs recall quality, so the write goes on.
     log.warnThenSample(
       'fts-sync',
@@ -137,6 +149,7 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
   try {
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
   } catch (err) {
+    markFtsDrifted(db);
     log.warnThenSample(
       'fts-delete',
       `FTS index delete failed for ${id}; recall may return a stale hit: ${errorMessage(err)}`,
@@ -160,6 +173,7 @@ export function replaceFtsRows(
     } catch (err) {
       // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
       kept = new Set(staleIds);
+      markFtsDrifted(db);
       log.warnThenSample(
         'fts-delete',
         `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${errorMessage(err)}`,
@@ -174,6 +188,7 @@ export function replaceFtsRows(
     try {
       insert.run(row.id, row.content, row.tags.join(' '));
     } catch (err) {
+      markFtsDrifted(db);
       log.warnThenSample(
         'fts-sync',
         `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`,
@@ -188,7 +203,11 @@ export function replaceFtsRows(
 export function ftsDriftAt(db: DatabaseSyncLike, repair: boolean): { memories: number; fts: number } | null {
   if (!isFtsAvailable(db)) return null;
   const counts = ftsRowCounts(db);
-  if (counts === null || counts.memories === counts.fts) return null;
+  if (counts === null) return null;
+  if (counts.memories === counts.fts) {
+    setFtsInSync(db, true);
+    return null;
+  }
   if (repair) repairFtsDrift(db);
   return counts;
 }
