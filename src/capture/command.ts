@@ -12,7 +12,7 @@ import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
-import { extractFromTexts, type ExtractedItem } from './extract.js';
+import { extractFromTexts, isStandingRule, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
 export interface CaptureOptions {
@@ -284,13 +284,14 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
   // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.
-  // SHORTCUT: every stated rule pins; cap or age these pins if a store's pins outgrow the hook budget.
+  // Only standing instructions pin; descriptions, specs and one-off requests are stored unpinned.
+  // SHORTCUT: every standing rule pins; cap or age these pins if a store's pins outgrow the hook budget.
   const created = createMemory(item.content, {
     layer: Layer.Episodic,
     tags: item.tags,
     source: 'capture',
     confidence: 'observed',
-    pinned: item.fromUser === true && item.category === 'rule',
+    pinned: item.fromUser === true && item.category === 'rule' && isStandingRule(item.content),
     tenantId: options.tenantId,
     sourceSessionId: options.sessionId,
     baseHalfLifeDays,

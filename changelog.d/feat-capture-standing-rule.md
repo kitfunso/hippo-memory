@@ -1,0 +1,4 @@
+### Changed
+
+- **Capture pins a person's sentence only when it is a standing instruction.** A pin needs a sentence that opens with never, always or avoid (after an optional "in this project" or "from now on"), a universal rule ("every query must use bound parameters"), a rule label, or an explicit standing marker. Descriptions, pasted specs, one-off requests and sentences scoped to this build, plan or branch are still stored, but no longer pinned. Before, about a quarter of the pins from real sessions were standing rules; on captures the rule was not tuned on, 14 of 15 pins are.
+- **Capture now reads a correction as a rule.** A person's reply that opens with No, Yes, Right, Correct, Wrong or Not quite and gives a `because` reason ("No: run the linter first, because CI fails without it.") is captured and pinned, even when it holds no keyword like "always" or "never". Agent text extracts as before.
