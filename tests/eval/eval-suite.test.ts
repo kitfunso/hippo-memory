@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval/eval-suite.js';
-import { handleEval } from '../src/cli/eval.js';
-import { runInProcess } from './_helpers/run-in-process.js';
+import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../../src/eval/eval-suite.js';
+import { handleEval } from '../../src/cli/eval.js';
+import { runInProcess } from '../_helpers/run-in-process.js';
 
 describe('eval-suite scoring', () => {
   it('scores the synthetic corpus deterministically with every category present', async () => {

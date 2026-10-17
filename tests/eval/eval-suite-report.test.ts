@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectRegressions, formatResult, resultToBaseline, type EvalSuiteResult, type FeatureResult } from '../src/eval/eval-suite.js';
+import { detectRegressions, formatResult, resultToBaseline, type EvalSuiteResult, type FeatureResult } from '../../src/eval/eval-suite.js';
 
 const feature = (category: FeatureResult['category'], ndcgAt5: number, mrr = 0.8): FeatureResult =>
   ({ category, cases: 4, mrr, recallAt5: 0.9, ndcgAt5, passed: true });

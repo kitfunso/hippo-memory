@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { judgeAll, type JudgeOptions, type Judgment } from '../src/eval/judgment.js';
-import { envTypesafeApiKey } from '../src/util/env.js';
+import { judgeAll, type JudgeOptions, type Judgment } from '../../src/eval/judgment.js';
+import { envTypesafeApiKey } from '../../src/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
