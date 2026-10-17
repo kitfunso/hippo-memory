@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const HIPPO_BIN = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
@@ -41,10 +42,17 @@ function env(b: Box, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return { ...out, ...extra };
 }
 
-function hippo(b: Box, cwd: string, args: string[], opts: { extra?: Record<string, string>; input?: string } = {}): string {
+function hippoSpawned(b: Box, cwd: string, args: string[], opts: { extra?: Record<string, string>; input?: string } = {}): string {
   return execFileSync(process.execPath, [HIPPO_BIN, ...args], {
     cwd, env: env(b, opts.extra), input: opts.input ?? '', encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 60_000,
   });
+}
+
+/** In process, as hippoSpawned would run it: stdout back, or a throw on a non-zero exit. The first case keeps the spawn. */
+async function hippo(b: Box, cwd: string, args: string[], opts: { extra?: Record<string, string>; input?: string } = {}): Promise<string> {
+  const r = await runCliAs(args, { cwd, env: env(b, opts.extra), input: opts.input ?? '' });
+  if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+  return r.stdout;
 }
 
 function note(dir: string, file: string, body: string): void {
@@ -76,39 +84,39 @@ describe('hippo init', () => {
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    const out = hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
+    const out = hippoSpawned(b, b.project, ['init', '--no-hooks', '--no-schedule']);
     expect(out).toContain('Imported 2 agent memories (Claude Code 2).');
     expect(imported(join(b.project, '.hippo'))).toEqual([PROJECT_NOTE]);
     expect(imported(b.global)).toEqual([USER_NOTE]);
 
     const later = 'The staging database moved to the eu-central region.';
     note(projectNotes(b), 'staging.md', later);
-    expect(hippo(b, b.project, ['init', '--no-hooks', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
+    expect(hippoSpawned(b, b.project, ['init', '--no-hooks', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(join(b.project, '.hippo'))).toEqual([PROJECT_NOTE, later].sort());
   });
 
-  it('imports nothing with --no-learn, or with the tools variable set to none', () => {
+  it('imports nothing with --no-learn, or with the tools variable set to none', async () => {
     const b = box();
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule'], { extra: { HIPPO_AGENT_MEMORY_TOOLS: 'none' } });
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule'], { extra: { HIPPO_AGENT_MEMORY_TOOLS: 'none' } });
     expect(imported(join(b.project, '.hippo'))).toEqual([]);
     expect(imported(b.global)).toEqual([]);
   });
 
-  it('--global runs the user pass, also on a global store that already exists', () => {
+  it('--global runs the user pass, also on a global store that already exists', async () => {
     const b = box();
-    hippo(b, b.project, ['init', '--global', '--no-learn']);
+    await hippo(b, b.project, ['init', '--global', '--no-learn']);
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    expect(hippo(b, b.project, ['init', '--global'])).toContain('Already initialized global store');
+    expect(await hippo(b, b.project, ['init', '--global'])).toContain('Already initialized global store');
     expect(imported(b.global)).toEqual([USER_NOTE]);
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
   });
 
-  it('--scan runs each repository\'s project pass, then the user pass once, in one line', () => {
+  it('--scan runs each repository\'s project pass, then the user pass once, in one line', async () => {
     const b = box();
     const scan = tmp();
     const repos = ['alpha', 'beta'].map((name) => {
@@ -120,7 +128,7 @@ describe('hippo init', () => {
     });
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    const out = hippo(b, scan, ['init', '--scan', scan, '--no-schedule', '--days', '1']);
+    const out = await hippo(b, scan, ['init', '--scan', scan, '--no-schedule', '--days', '1']);
     expect(out.match(/Imported \d+ agent memor/g)).toEqual(['Imported 3 agent memor']);
     expect(out).toContain('Imported 3 agent memories (Claude Code 3).');
     for (const [i, repo] of repos.entries()) {
@@ -131,36 +139,36 @@ describe('hippo init', () => {
 });
 
 describe('hippo setup', () => {
-  it('imports the user notes into the global store; --dry-run writes nothing', () => {
+  it('imports the user notes into the global store; --dry-run writes nothing', async () => {
     const b = box();
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    expect(hippo(b, b.project, ['setup', '--dry-run', '--no-schedule'])).toContain('[dry-run] Imported 1 agent memory (Claude Code 1).');
+    expect(await hippo(b, b.project, ['setup', '--dry-run', '--no-schedule'])).toContain('[dry-run] Imported 1 agent memory (Claude Code 1).');
     expect(imported(b.global)).toEqual([]);
 
-    expect(hippo(b, b.project, ['setup', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
+    expect(await hippo(b, b.project, ['setup', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(b.global)).toEqual([USER_NOTE]);
   });
 });
 
 describe('hippo sleep', () => {
-  it('imports new notes, skips them on --no-learn, and writes nothing on --dry-run', () => {
+  it('imports new notes, skips them on --no-learn, and writes nothing on --dry-run', async () => {
     const b = box();
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     const local = join(b.project, '.hippo');
 
-    expect(hippo(b, b.project, ['sleep', '--dry-run'])).toContain('import --agents --dry-run');
-    hippo(b, b.project, ['sleep', '--no-learn']);
+    expect(await hippo(b, b.project, ['sleep', '--dry-run'])).toContain('import --agents --dry-run');
+    await hippo(b, b.project, ['sleep', '--no-learn']);
     expect(imported(local)).toEqual([]);
 
-    expect(hippo(b, b.project, ['sleep'])).toContain('Imported 1 agent memory (Claude Code 1).');
+    expect(await hippo(b, b.project, ['sleep'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
 
-  it('on a shared store, init and sleep skip learning with one line each and import nothing', () => {
+  it('on a shared store, init and sleep skip learning with one line each and import nothing', async () => {
     const b = box();
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
     const local = join(b.project, '.hippo');
     writeFileSync(join(local, 'config.json'), JSON.stringify({ sharedStore: true }));
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
@@ -168,7 +176,7 @@ describe('hippo sleep', () => {
 
     const skipped = "Shared store: skipped learning from this account's git commits and coding agents' own memories.";
     for (const args of [['init', '--no-hooks', '--no-schedule'], ['sleep'], ['sleep', '--dry-run']]) {
-      const out = hippo(b, b.project, args);
+      const out = await hippo(b, b.project, args);
       expect(out.split(skipped), args.join(' ')).toHaveLength(2);
       expect(out).not.toContain('Imported');
     }
@@ -178,13 +186,13 @@ describe('hippo sleep', () => {
 });
 
 describe('hippo import --agents', () => {
-  it('--dry-run prints each tool\'s home and folders and what would change, and writes nothing', () => {
+  it('--dry-run prints each tool\'s home and folders and what would change, and writes nothing', async () => {
     const b = box();
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     const local = join(b.project, '.hippo');
 
-    const dry = hippo(b, b.project, ['import', '--agents', '--dry-run']);
+    const dry = await hippo(b, b.project, ['import', '--agents', '--dry-run']);
     expect(dry).toContain('Agent memories (dry run, nothing written):');
     expect(dry).toContain(`Claude Code: ${join(b.home, '.claude')}`);
     expect(dry).toContain('1 note');
@@ -192,21 +200,21 @@ describe('hippo import --agents', () => {
     expect(dry).toContain(`Codex: ${join(b.home, '.codex')} (no memory folders found)`);
     expect(imported(local)).toEqual([]);
 
-    expect(hippo(b, b.project, ['import', '--agents'])).toContain('1 new');
+    expect(await hippo(b, b.project, ['import', '--agents'])).toContain('1 new');
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
 
-  it('in a folder without a store, imports as session end does: the project notes into the global store under its origin', () => {
+  it('in a folder without a store, imports as session end does: the project notes into the global store under its origin', async () => {
     const b = box();
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    const dry = hippo(b, b.project, ['import', '--agents', '--dry-run']);
+    const dry = await hippo(b, b.project, ['import', '--agents', '--dry-run']);
     expect(dry.toLowerCase()).toContain(`project ${projectNotes(b)}: 1 note`.toLowerCase());
     expect(dry).toContain('would be 2 new');
     expect(imported(b.global)).toEqual([]);
 
-    hippo(b, b.project, ['import', '--agents']);
+    await hippo(b, b.project, ['import', '--agents']);
     const byText = new Map(loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:')).map((e) => [e.content, e.origin_project]));
     expect(byText.get(PROJECT_NOTE)).toBe(deriveOriginProject(b.project));
     expect(byText.get(USER_NOTE)).toBe('');
@@ -215,9 +223,9 @@ describe('hippo import --agents', () => {
 });
 
 describe('hooks in a folder without a store', () => {
-  it('post-compact reads only the transcript folder, into the global store with the project as origin', () => {
+  it('post-compact reads only the transcript folder, into the global store with the project as origin', async () => {
     const b = box();
-    hippo(b, b.project, ['init', '--global', '--no-learn']);
+    await hippo(b, b.project, ['init', '--global', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
     const sub = join(b.project, 'packages', 'api');
@@ -229,7 +237,7 @@ describe('hooks in a folder without a store', () => {
     writeFileSync(transcript, '', 'utf8');
 
     const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: sub, trigger: 'auto' });
-    hippo(b, sub, ['post-compact'], { input: payload });
+    await hippo(b, sub, ['post-compact'], { input: payload });
 
     const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
@@ -238,9 +246,9 @@ describe('hooks in a folder without a store', () => {
     expect(rows[0].origin_project).toBe(origin);
   });
 
-  it('session end imports the project and transcript notes with the project as origin, then the user pass', () => {
+  it('session end imports the project and transcript notes with the project as origin, then the user pass', async () => {
     const b = box();
-    hippo(b, b.project, ['init', '--global', '--no-learn']);
+    await hippo(b, b.project, ['init', '--global', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
     const sub = join(b.project, 'packages', 'api');
@@ -251,7 +259,7 @@ describe('hooks in a folder without a store', () => {
     const transcript = join(session, 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    hippo(b, sub, ['__session-end-worker', '--transcript', transcript, '--session-id', 's1']);
+    await hippo(b, sub, ['__session-end-worker', '--transcript', transcript, '--session-id', 's1']);
 
     const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     const origin = deriveOriginProject(b.project);
@@ -263,7 +271,7 @@ describe('hooks in a folder without a store', () => {
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
   });
 
-  it('a worktree and its main checkout share one global row of the Claude folder they share, and a worktree that gets a store leaves it to the main checkout', () => {
+  it('a worktree and its main checkout share one global row of the Claude folder they share, and a worktree that gets a store leaves it to the main checkout', async () => {
     const b = box();
     const git = (cwd: string, ...args: string[]): void => { execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'ignore' }); };
     git(b.project, 'commit', '-q', '--allow-empty', '-m', 'base');
@@ -273,53 +281,53 @@ describe('hooks in a folder without a store', () => {
     const [main, wt] = [deriveOriginProject(b.project), deriveOriginProject(worktree)];
     expect(wt).toBe(main);
 
-    hippo(b, b.project, ['import', '--agents']);
-    hippo(b, worktree, ['import', '--agents']);
+    await hippo(b, b.project, ['import', '--agents']);
+    await hippo(b, worktree, ['import', '--agents']);
     const origins = (): string[] => (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : [])
       .filter((e) => e.content === PROJECT_NOTE).map((e) => e.origin_project ?? '').sort();
     expect(origins()).toEqual([main]);
 
-    hippo(b, worktree, ['init', '--no-hooks', '--no-schedule']);
+    await hippo(b, worktree, ['init', '--no-hooks', '--no-schedule']);
     expect(origins()).toEqual([main]);
     expect(imported(join(worktree, '.hippo'))).toEqual([PROJECT_NOTE]);
   });
 
-  it('handover finds the global copies a folder with no git wrote as user-global before its store existed', () => {
+  it('handover finds the global copies a folder with no git wrote as user-global before its store existed', async () => {
     const b = box();
     const plain = tmp();
     note(projectNotes(b, plain), 'schema.md', PROJECT_NOTE);
-    hippo(b, plain, ['import', '--agents']);
+    await hippo(b, plain, ['import', '--agents']);
     const globalRows = (): MemoryEntryRow[] => (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter((e) => e.content === PROJECT_NOTE);
     expect(globalRows().map((e) => e.origin_project)).toEqual(['']);
 
-    hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);
+    await hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);
     expect(imported(join(plain, '.hippo'))).toEqual([PROJECT_NOTE]);
     expect(globalRows()).toEqual([]);
   });
 
-  it('handover finds the global copies filed under a name merged into the project', () => {
+  it('handover finds the global copies filed under a name merged into the project', async () => {
     const b = box();
     const id = (name: string): void => writeFileSync(join(b.project, '.hippo-project.json'), JSON.stringify({ id: name }));
     id('old-id');
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
-    hippo(b, b.project, ['import', '--agents']);
+    await hippo(b, b.project, ['import', '--agents']);
     id('new-id');
-    hippo(b, b.project, ['projects', 'merge', 'old-id', 'new-id', '--global', '--apply']);
+    await hippo(b, b.project, ['projects', 'merge', 'old-id', 'new-id', '--global', '--apply']);
     expect(imported(b.global)).toEqual([PROJECT_NOTE]);
 
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
     expect(imported(join(b.project, '.hippo'))).toEqual([PROJECT_NOTE]);
     expect(imported(b.global)).toEqual([]);
   });
 
-  it('handover leaves the global copy of a note the new local store could not read', () => {
+  it('handover leaves the global copy of a note the new local store could not read', async () => {
     const b = box();
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
-    hippo(b, b.project, ['import', '--agents']);
+    await hippo(b, b.project, ['import', '--agents']);
     expect(imported(b.global)).toEqual([PROJECT_NOTE]);
 
     note(projectNotes(b), 'schema.md', `${PROJECT_NOTE}\n${'x'.repeat(300 * 1024)}`);
-    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
     expect(imported(join(b.project, '.hippo'))).toEqual([]);
     expect(imported(b.global)).toEqual([PROJECT_NOTE]);
   });

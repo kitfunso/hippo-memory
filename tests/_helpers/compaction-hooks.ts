@@ -6,6 +6,7 @@ import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { COMPACTION_MEMORY_TAG } from '../../src/core/memory.js';
 import { hippoRun } from './spawn-hippo.js';
+import { runCliAs } from './run-cli-as.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 export interface Scratch {
@@ -40,8 +41,8 @@ export function initProject(s: Scratch): void {
   expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], s.proj, s.env).status).toBe(0);
 }
 
-export function initGlobal(s: Scratch): void {
-  expect(runHippo(['init', '--global', '--no-hooks', '--no-schedule', '--no-learn'], s.proj, s.env).status).toBe(0);
+export async function initGlobal(s: Scratch): Promise<void> {
+  expect((await runCliAs(['init', '--global', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: s.proj, env: s.env })).status).toBe(0);
 }
 
 export interface FixturePayload {

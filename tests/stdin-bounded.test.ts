@@ -1,13 +1,13 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn, type SpawnSyncReturns } from 'child_process';
+import { spawn } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { compactionRows } from './_helpers/compaction-hooks.js';
-import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 import { waitFor } from './_helpers/wait-for.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
@@ -29,12 +29,9 @@ function transcriptJsonl(entries: unknown[]): string {
   return entries.map((e) => JSON.stringify(e)).join('\n') + '\n';
 }
 
-function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
-  return hippoRun(args, { cwd, env });
-}
-
-function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
-  const result = runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], cwd, env);
+// Setup only, so in process; every case under test spawns, since each one is about a real stdin pipe.
+async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const result = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd, env });
   expect(result.status).toBe(0);
 }
 
@@ -163,9 +160,9 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
   });
 
   afterEach(() => {

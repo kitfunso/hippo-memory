@@ -2,9 +2,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -13,8 +12,8 @@ import { buildSupportBundle } from '../src/support-bundle.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 import type { JsonObject } from '../src/store/working-memory.js';
 import type { JsonValue } from '../src/util/json.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 const origHippoHome = process.env.HIPPO_HOME;
 
@@ -367,33 +366,20 @@ describe('buildSupportBundle', () => {
 });
 
 describe('hippo support-bundle (CLI)', () => {
-  it('writes once, refuses to overwrite, and rejects a bare --out', () => {
+  it('writes once, refuses to overwrite, and rejects a bare --out', async () => {
     const home = tmp('hippo-bundle-cli-');
     const env = { ...process.env, HOME: home, USERPROFILE: home, HIPPO_HOME: join(home, 'global'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    execFileSync(process.execPath, [HIPPO_JS, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const hippo = (...args: string[]) => runCliAs(args, { cwd: home, env });
+    expect((await hippo('init', '--no-hooks', '--no-schedule', '--no-learn')).status).toBe(0);
 
     const target = join(home, 'x.json');
-    execFileSync(process.execPath, [HIPPO_JS, 'support-bundle', '--out', target], { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    expect((await hippo('support-bundle', '--out', target)).status).toBe(0);
     const first = readFileSync(target, 'utf8');
     expect(() => JSON.parse(first)).not.toThrow();
 
-    let status = 0;
-    try {
-      execFileSync(process.execPath, [HIPPO_JS, 'support-bundle', '--out', target], { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    } catch (e) {
-      // SAFETY: execFileSync attaches status to the thrown Error on a non-zero exit.
-      status = (e as { status?: number }).status ?? 1;
-    }
-    expect(status).toBe(1);
+    expect((await hippo('support-bundle', '--out', target)).status).toBe(1);
     expect(readFileSync(target, 'utf8')).toBe(first);
 
-    let bareStatus = 0;
-    try {
-      execFileSync(process.execPath, [HIPPO_JS, 'support-bundle', '--out'], { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    } catch (e) {
-      // SAFETY: execFileSync attaches status to the thrown Error on a non-zero exit.
-      bareStatus = (e as { status?: number }).status ?? 1;
-    }
-    expect(bareStatus).toBe(1);
+    expect((await hippo('support-bundle', '--out')).status).toBe(1);
   });
 });

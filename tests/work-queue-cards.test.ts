@@ -26,6 +26,7 @@ import { handleCard } from '../src/cli/card.js';
 import { parseArgs } from '../src/cli.js';
 import { COMMANDS } from '../src/cli/verbs.js';
 import { cardDetailOf } from './_helpers/card-detail.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
@@ -57,7 +58,7 @@ afterEach(() => {
 });
 
 describe('test 1: fresh store, single open', () => {
-  it('has all four card tables, the five new indexes, and schema_version 43', () => {
+  it('has all four card tables, the five new indexes, and schema_version 43', async () => {
     const db = openHippoDb(root);
     try {
       expect(columns(db, 'cards').map((c) => c.name)).toEqual(
@@ -80,7 +81,7 @@ describe('test 1: fresh store, single open', () => {
 });
 
 describe('test 2: a v42 store migrates to v43 with the four tables present, empty', () => {
-  it('gains cards/card_deps/card_runs/card_comments on next open', () => {
+  it('gains cards/card_deps/card_runs/card_comments on next open', async () => {
     initStore(root);
     const db1 = openHippoDb(root);
     try {
@@ -104,12 +105,12 @@ describe('test 2: a v42 store migrates to v43 with the four tables present, empt
 });
 
 describe('test 4: createCard initial status', () => {
-  it('no deps -> ready', () => {
+  it('no deps -> ready', async () => {
     const card = createCard(root, 'default', { title: 'No deps' });
     expect(card.status).toBe('ready');
   });
 
-  it('one backlog-status dep -> backlog', () => {
+  it('one backlog-status dep -> backlog', async () => {
     const parent = createCard(root, 'default', { title: 'Parent' });
     expect(parent.status).toBe('ready');
     // Force the parent to a non-done status so the child's pre-check sees a not-done parent.
@@ -123,7 +124,7 @@ describe('test 4: createCard initial status', () => {
     expect(child.status).toBe('backlog');
   });
 
-  it('dep on an already-done parent -> ready', () => {
+  it('dep on an already-done parent -> ready', async () => {
     const parent = createCard(root, 'default', { title: 'Done parent' });
     const db = openHippoDb(root);
     try {
@@ -144,7 +145,7 @@ describe('test 4: createCard initial status', () => {
 });
 
 describe('test 5: status-transition matrix', () => {
-  it('every (from, to) pair not in CARD_TRANSITIONS[from] throws; every pair in it does not', () => {
+  it('every (from, to) pair not in CARD_TRANSITIONS[from] throws; every pair in it does not', async () => {
     for (const from of ALL_STATUSES) {
       for (const to of ALL_STATUSES) {
         if (CARD_TRANSITIONS[from].includes(to)) {
@@ -156,7 +157,7 @@ describe('test 5: status-transition matrix', () => {
     }
   });
 
-  it('blocked -> running is accepted via claimCard', () => {
+  it('blocked -> running is accepted via claimCard', async () => {
     const card = createCard(root, 'default', { title: 'Blocked card' });
     const db = openHippoDb(root);
     try {
@@ -218,7 +219,7 @@ describe('test 6: concurrent claim', () => {
     await released;
   });
 
-  it('two sequential claims on the same ready card: the second returns null', () => {
+  it('two sequential claims on the same ready card: the second returns null', async () => {
     const card = createCard(root, 'default', { title: 'Sequential' });
     const first = claimCard(root, 'default', card.id, 'first');
     const second = claimCard(root, 'default', card.id, 'second');
@@ -228,7 +229,7 @@ describe('test 6: concurrent claim', () => {
 });
 
 describe('test 7: completeCard promotes only children whose parents are all done', () => {
-  it('promotes B, leaves C in backlog, closes the open run', () => {
+  it('promotes B, leaves C in backlog, closes the open run', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     const d = createCard(root, 'default', { title: 'D' });
     const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
@@ -253,7 +254,7 @@ describe('test 7: completeCard promotes only children whose parents are all done
 });
 
 describe('test 7b: claim -> block -> reclaim -> review -> complete closes exactly the live run', () => {
-  it('the blocked run keeps outcome blocked; the reclaimed run gets the final outcome', () => {
+  it('the blocked run keeps outcome blocked; the reclaimed run gets the final outcome', async () => {
     const card = createCard(root, 'default', { title: 'Reclaimed' });
     claimCard(root, 'default', card.id, 'r1');
     blockCard(root, 'default', card.id, 'waiting on input');
@@ -340,7 +341,7 @@ describe('test 8: completeCard from a non-review status returns null and touches
 });
 
 describe('Fix A: completeCard shelves a non-success outcome and releases no children', () => {
-  it('failure leaves the card shelved, the child in backlog, and closes the run with outcome failure', () => {
+  it('failure leaves the card shelved, the child in backlog, and closes the run with outcome failure', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
     claimCard(root, 'default', a.id, 'codex');
@@ -357,7 +358,7 @@ describe('Fix A: completeCard shelves a non-success outcome and releases no chil
     expect(runs[0]?.outcome).toBe('failure');
   });
 
-  it('partial leaves the card shelved, the child in backlog, and closes the run with outcome partial', () => {
+  it('partial leaves the card shelved, the child in backlog, and closes the run with outcome partial', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
     claimCard(root, 'default', a.id, 'codex');
@@ -374,7 +375,7 @@ describe('Fix A: completeCard shelves a non-success outcome and releases no chil
     expect(runs[0]?.outcome).toBe('partial');
   });
 
-  it('a shelved parent never releases a child even after every other parent completes', () => {
+  it('a shelved parent never releases a child even after every other parent completes', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     const c = createCard(root, 'default', { title: 'C' });
     const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id, c.id] });
@@ -391,7 +392,7 @@ describe('Fix A: completeCard shelves a non-success outcome and releases no chil
     expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
   });
 
-  it('createCard with dependsOn a shelved parent creates the child in backlog', () => {
+  it('createCard with dependsOn a shelved parent creates the child in backlog', async () => {
     const a = createCard(root, 'default', { title: 'A' });
     claimCard(root, 'default', a.id, 'codex');
     reviewCard(root, 'default', a.id);
@@ -437,7 +438,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     return Buffer.isBuffer(value) ? value.toString('utf8') : value;
   }
 
-  function runCli(cwd: string, env: Record<string, string>, ...args: string[]) {
+  function runCliSpawned(cwd: string, env: Record<string, string>, ...args: string[]) {
     try {
       const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
         cwd, env: { ...process.env, ...env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
@@ -449,6 +450,12 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       return { out: toUtf8(err.stdout) + toUtf8(err.stderr), status: err.status ?? 1 };
     }
   }
+  // In process: these cases read exit codes and printed bytes; the first CLI case keeps the built CLI pinned in a real child.
+  async function runCli(cwd: string, env: Record<string, string>, ...args: string[]) {
+    const r = await runCliAs(args, { cwd, env: { ...process.env, ...env } });
+    return { out: r.status === 0 ? r.stdout : r.stdout + r.stderr, status: r.status };
+  }
+
 
   function cardIdFrom(out: string): string {
     const id = out.match(/Created card (\S+)/)?.[1];
@@ -456,7 +463,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     return id;
   }
 
-  function setupCliHome() {
+  async function setupCliHome() {
     const home = mkdtempSync(join(tmpdir(), 'hippo-w2a-cli-'));
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
@@ -465,23 +472,23 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     execSync('git config user.name "Test User"', { cwd: home, stdio: 'ignore' });
     execSync('git config user.email "test@example.com"', { cwd: home, stdio: 'ignore' });
     execSync('git commit --allow-empty -m "init"', { cwd: home, stdio: 'ignore' });
-    const init = runCli(home, env, 'init');
+    const init = await runCli(home, env, 'init');
     expect(init.status, init.out).toBe(0);
     return { home, env };
   }
 
-  it('test 10: hippo card show --json contains the handoff created against that card id', () => {
-    const { home, env } = setupCliHome();
+  it('test 10: hippo card show --json contains the handoff created against that card id', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const create = runCliSpawned(home, env, 'card', 'create', '--title', 't');
       expect(create.status, create.out).toBe(0);
       const id = create.out.match(/Created card (\S+)/)?.[1];
       expect(id).toBeTruthy();
 
-      const handoff = runCli(home, env, 'handoff', 'create', '--summary', 's', '--card-id', id!);
+      const handoff = runCliSpawned(home, env, 'handoff', 'create', '--summary', 's', '--card-id', id!);
       expect(handoff.status, handoff.out).toBe(0);
 
-      const show = runCli(home, env, 'card', 'show', id!, '--json');
+      const show = runCliSpawned(home, env, 'card', 'show', id!, '--json');
       expect(show.status, show.out).toBe(0);
       const parsed = JSON.parse(show.out);
       expect(parsed.handoff.summary).toBe('s');
@@ -505,12 +512,12 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('a value-less --title exits 1 and creates no card', () => {
-    const { home, env } = setupCliHome();
+  it('a value-less --title exits 1 and creates no card', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title');
+      const create = await runCli(home, env, 'card', 'create', '--title');
       expect(create.status).toBe(1);
-      const list = runCli(home, env, 'card', 'list');
+      const list = await runCli(home, env, 'card', 'list');
       expect(list.status, list.out).toBe(0);
       expect(list.out).toContain('No cards found.');
     } finally {
@@ -518,29 +525,29 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('a value-less --depends-on exits 1', () => {
-    const { home, env } = setupCliHome();
+  it('a value-less --depends-on exits 1', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 't', '--depends-on');
+      const create = await runCli(home, env, 'card', 'create', '--title', 't', '--depends-on');
       expect(create.status).toBe(1);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
   });
 
-  it('a value-less --reason on card block exits 1 and leaves the card running', () => {
-    const { home, env } = setupCliHome();
+  it('a value-less --reason on card block exits 1 and leaves the card running', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = create.out.match(/Created card (\S+)/)?.[1];
       expect(id).toBeTruthy();
-      const claim = runCli(home, env, 'card', 'claim', id!, '--runtime', 'r');
+      const claim = await runCli(home, env, 'card', 'claim', id!, '--runtime', 'r');
       expect(claim.status, claim.out).toBe(0);
 
-      const block = runCli(home, env, 'card', 'block', id!, '--reason');
+      const block = await runCli(home, env, 'card', 'block', id!, '--reason');
       expect(block.status).toBe(1);
 
-      const show = runCli(home, env, 'card', 'show', id!, '--json');
+      const show = await runCli(home, env, 'card', 'show', id!, '--json');
       expect(show.status, show.out).toBe(0);
       expect(JSON.parse(show.out).card.status).toBe('running');
     } finally {
@@ -548,30 +555,30 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('a value-less --runtime on card claim exits 1', () => {
-    const { home, env } = setupCliHome();
+  it('a value-less --runtime on card claim exits 1', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = create.out.match(/Created card (\S+)/)?.[1];
       expect(id).toBeTruthy();
 
-      const claim = runCli(home, env, 'card', 'claim', id!, '--runtime');
+      const claim = await runCli(home, env, 'card', 'claim', id!, '--runtime');
       expect(claim.status).toBe(1);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
   });
 
-  it('Fix A CLI: card complete --outcome failure prints status shelved and no Promoted line', () => {
-    const { home, env } = setupCliHome();
+  it('Fix A CLI: card complete --outcome failure prints status shelved and no Promoted line', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = create.out.match(/Created card (\S+)/)?.[1];
       expect(id).toBeTruthy();
-      runCli(home, env, 'card', 'claim', id!, '--runtime', 'r1');
-      runCli(home, env, 'card', 'review', id!);
+      await runCli(home, env, 'card', 'claim', id!, '--runtime', 'r1');
+      await runCli(home, env, 'card', 'review', id!);
 
-      const complete = runCli(home, env, 'card', 'complete', id!, '--outcome', 'failure');
+      const complete = await runCli(home, env, 'card', 'complete', id!, '--outcome', 'failure');
       expect(complete.status, complete.out).toBe(0);
       expect(complete.out).toContain('(status: shelved)');
       expect(complete.out).not.toContain('Promoted to ready');
@@ -580,10 +587,10 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('card comment on an unknown id exits 1 with the friendly message, not a raw FK error', () => {
-    const { home, env } = setupCliHome();
+  it('card comment on an unknown id exits 1 with the friendly message, not a raw FK error', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const comment = runCli(home, env, 'card', 'comment', 'nope', '--body', 'x');
+      const comment = await runCli(home, env, 'card', 'comment', 'nope', '--body', 'x');
       expect(comment.status).toBe(1);
       expect(comment.out).toContain('No card found with id nope.');
       expect(comment.out).not.toContain('FOREIGN KEY');
@@ -592,10 +599,10 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix B CLI: card claim on an unknown id exits 1 with the unknown-id message', () => {
-    const { home, env } = setupCliHome();
+  it('Fix B CLI: card claim on an unknown id exits 1 with the unknown-id message', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const claim = runCli(home, env, 'card', 'claim', 'card_000000000000', '--runtime', 'r1');
+      const claim = await runCli(home, env, 'card', 'claim', 'card_000000000000', '--runtime', 'r1');
       expect(claim.status).toBe(1);
       expect(claim.out).toContain('unknown card id: card_000000000000');
     } finally {
@@ -603,13 +610,13 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix C CLI: card create --budget 0 exits 1 and creates no card', () => {
-    const { home, env } = setupCliHome();
+  it('Fix C CLI: card create --budget 0 exits 1 and creates no card', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 't', '--budget', '0');
+      const create = await runCli(home, env, 'card', 'create', '--title', 't', '--budget', '0');
       expect(create.status).toBe(1);
       expect(create.out).toContain('Invalid budget: 0 (expected a positive integer)');
-      const list = runCli(home, env, 'card', 'list');
+      const list = await runCli(home, env, 'card', 'list');
       expect(list.status, list.out).toBe(0);
       expect(list.out).toContain('No cards found.');
     } finally {
@@ -617,23 +624,23 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix D CLI: an unrecognized flag, a wrong name, or a glued --flag=value with a bad value, exits 1 and creates no card', () => {
-    const { home, env } = setupCliHome();
+  it('Fix D CLI: an unrecognized flag, a wrong name, or a glued --flag=value with a bad value, exits 1 and creates no card', async () => {
+    const { home, env } = await setupCliHome();
     try {
       // --depends-on=nope is a real flag now, so it fails on the parent lookup instead of on parsing.
-      const equalsForm = runCli(home, env, 'card', 'create', '--title', 't', '--depends-on=nope');
+      const equalsForm = await runCli(home, env, 'card', 'create', '--title', 't', '--depends-on=nope');
       expect(equalsForm.status).toBe(1);
       expect(equalsForm.out).toContain('unknown parent card id: nope');
 
-      const typo = runCli(home, env, 'card', 'create', '--title', 't', '--depend-on', 'x');
+      const typo = await runCli(home, env, 'card', 'create', '--title', 't', '--depend-on', 'x');
       expect(typo.status).toBe(1);
       expect(typo.out).toContain('Unknown flag --depend-on for hippo card create');
 
-      const protoKey = runCli(home, env, 'card', 'constructor', '--x');
+      const protoKey = await runCli(home, env, 'card', 'constructor', '--x');
       expect(protoKey.status).toBe(1);
       expect(protoKey.out).toContain('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
 
-      const list = runCli(home, env, 'card', 'list');
+      const list = await runCli(home, env, 'card', 'list');
       expect(list.status, list.out).toBe(0);
       expect(list.out).toContain('No cards found.');
     } finally {
@@ -641,28 +648,28 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix D CLI: every subcommand still accepts each flag it legitimately reads', () => {
-    const { home, env } = setupCliHome();
+  it('Fix D CLI: every subcommand still accepts each flag it legitimately reads', async () => {
+    const { home, env } = await setupCliHome();
     try {
-      const parent = runCli(home, env, 'card', 'create', '--title', 'parent');
+      const parent = await runCli(home, env, 'card', 'create', '--title', 'parent');
       expect(parent.status, parent.out).toBe(0);
       const parentId = cardIdFrom(parent.out);
       expect(parentId).toBeTruthy();
 
-      const create = runCli(home, env, 'card', 'create', '--title', 'child', '--repo', 'r', '--contract', 'c', '--budget', '5', '--depends-on', parentId);
+      const create = await runCli(home, env, 'card', 'create', '--title', 'child', '--repo', 'r', '--contract', 'c', '--budget', '5', '--depends-on', parentId);
       expect(create.status, create.out).toBe(0);
       const childId = cardIdFrom(create.out);
       expect(childId).toBeTruthy();
 
-      const list = runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');
+      const list = await runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');
       expect(list.status, list.out).toBe(0);
       const listed = JSON.parse(list.out);
       expect(listed.cards.some((c: { id: string }) => c.id === childId)).toBe(true);
 
-      const claim = runCli(home, env, 'card', 'claim', parentId, '--runtime', 'r1', '--session', 's1');
+      const claim = await runCli(home, env, 'card', 'claim', parentId, '--runtime', 'r1', '--session', 's1');
       expect(claim.status, claim.out).toBe(0);
 
-      const comment = runCli(home, env, 'card', 'comment', parentId, '--body', 'note', '--author', 'me');
+      const comment = await runCli(home, env, 'card', 'comment', parentId, '--body', 'note', '--author', 'me');
       expect(comment.status, comment.out).toBe(0);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -686,7 +693,7 @@ describe('test 11: the card verb is wired through the flag parser and the comman
 });
 
 describe('test 12: unknown dependsOn pre-check', () => {
-  it('throws and leaves zero rows in cards and card_deps', () => {
+  it('throws and leaves zero rows in cards and card_deps', async () => {
     expect(() => createCard(root, 'default', { title: 'x', dependsOn: ['nope'] })).toThrow('unknown parent card id: nope');
     const db = openHippoDb(root);
     try {
@@ -715,27 +722,27 @@ describe('test 13: addCardComment checks the card belongs to the caller\'s tenan
 });
 
 describe('Fix B: claim/block/review/complete throw on an unknown card id, keep null for the wrong state', () => {
-  it('claimCard throws for a nonexistent id and for a card read under another tenant', () => {
+  it('claimCard throws for a nonexistent id and for a card read under another tenant', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     expect(() => claimCard(root, 'default', 'nope', 'r1')).toThrow('unknown card id: nope');
     expect(() => claimCard(root, 'tenant2', card.id, 'r1')).toThrow(`unknown card id: ${card.id}`);
   });
 
-  it('blockCard throws for a nonexistent id and for a card read under another tenant', () => {
+  it('blockCard throws for a nonexistent id and for a card read under another tenant', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     claimCard(root, 'default', card.id, 'r1');
     expect(() => blockCard(root, 'default', 'nope', 'why')).toThrow('unknown card id: nope');
     expect(() => blockCard(root, 'tenant2', card.id, 'why')).toThrow(`unknown card id: ${card.id}`);
   });
 
-  it('reviewCard throws for a nonexistent id and for a card read under another tenant', () => {
+  it('reviewCard throws for a nonexistent id and for a card read under another tenant', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     claimCard(root, 'default', card.id, 'r1');
     expect(() => reviewCard(root, 'default', 'nope')).toThrow('unknown card id: nope');
     expect(() => reviewCard(root, 'tenant2', card.id)).toThrow(`unknown card id: ${card.id}`);
   });
 
-  it('completeCard throws for a nonexistent id and for a card read under another tenant', () => {
+  it('completeCard throws for a nonexistent id and for a card read under another tenant', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     claimCard(root, 'default', card.id, 'r1');
     reviewCard(root, 'default', card.id);
@@ -743,7 +750,7 @@ describe('Fix B: claim/block/review/complete throw on an unknown card id, keep n
     expect(() => completeCard(root, 'tenant2', card.id, 'success')).toThrow(`unknown card id: ${card.id}`);
   });
 
-  it('a card that exists but is in the wrong state still returns null, not throws', () => {
+  it('a card that exists but is in the wrong state still returns null, not throws', async () => {
     const parent = createCard(root, 'default', { title: 'parent' });
     const backlogChild = createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
     expect(claimCard(root, 'default', backlogChild.id, 'r1')).toBeNull();
@@ -755,7 +762,7 @@ describe('Fix B: claim/block/review/complete throw on an unknown card id, keep n
 });
 
 describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their inputs', () => {
-  it('createCard throws for an empty or whitespace-only title and commits nothing', () => {
+  it('createCard throws for an empty or whitespace-only title and commits nothing', async () => {
     const db = openHippoDb(root);
     try {
       expect(() => createCard(root, 'default', { title: '' })).toThrow('title must not be empty');
@@ -766,7 +773,7 @@ describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their in
     }
   });
 
-  it('createCard throws for a budget that is not a positive integer and commits nothing', () => {
+  it('createCard throws for a budget that is not a positive integer and commits nothing', async () => {
     const db = openHippoDb(root);
     try {
       expect(() => createCard(root, 'default', { title: 'x', budget: 0 })).toThrow('Invalid budget: 0 (expected a positive integer)');
@@ -778,7 +785,7 @@ describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their in
     }
   });
 
-  it('claimCard throws for an empty runtime and leaves the card unclaimed', () => {
+  it('claimCard throws for an empty runtime and leaves the card unclaimed', async () => {
     const card = createCard(root, 'default', { title: 'x' });
     expect(() => claimCard(root, 'default', card.id, '')).toThrow('runtime must not be empty');
     expect(loadCard(root, 'default', card.id)?.status).toBe('ready');

@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { repairAutomaticMemories, repairQualityOnce } from '../src/store/quality-repair.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -11,8 +10,8 @@ import { DatabaseSync } from '../src/db/sqlite.js';
 import { getMeta } from '../src/db/meta.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';
 
@@ -95,6 +94,7 @@ describe('repairQualityOnce', () => {
   });
 });
 
+// In process each case runs under 0.5 s, so the 30 s process-project timeout is a 60x margin.
 describe('the upgrade runs the repair once', () => {
   let dir: string;
   let local: string;
@@ -109,16 +109,17 @@ describe('the upgrade runs the repair once', () => {
     env = { ...process.env, HIPPO_HOME: global, HOME: dir, USERPROFILE: dir, APPDATA: join(dir, 'AppData', 'Roaming'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
-  const cli = (...args: string[]) => spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: dir, env, encoding: 'utf8' });
+  // In process, so coverage sees sleep and the daily runner; the runner's own steps still start real children.
+  const cli = (...args: string[]) => runCliAs(args, { cwd: dir, env });
 
-  it('hippo sleep cleans the project store once, after a dry run that changed nothing', () => {
+  it('hippo sleep cleans the project store once, after a dry run that changed nothing', async () => {
     const bad = seed(local, CUT);
     const doubtful = seed(local, DOUBTFUL);
-    const dry = cli('sleep', '--dry-run', '--no-learn');
+    const dry = await cli('sleep', '--dry-run', '--no-learn');
     expect(dry.stdout).not.toContain('once after the upgrade');
     expect(flag(local)).toBe('');
 
-    const first = cli('sleep', '--no-learn');
+    const first = await cli('sleep', '--no-learn');
     expect(first.status).toBe(0);
     expect(first.stdout).toContain('Set aside 1 automatic memory with a certain defect, once after the upgrade');
     expect(first.stdout).toContain('Bring one back: hippo dormant restore <id>\n');
@@ -127,21 +128,21 @@ describe('the upgrade runs the repair once', () => {
     expect(ids(local)).toContain(doubtful.id);
 
     seed(local, CUT);
-    expect(cli('sleep', '--no-learn').stdout).not.toContain('once after the upgrade');
-  }, 60000);
+    expect((await cli('sleep', '--no-learn')).stdout).not.toContain('once after the upgrade');
+  });
 
-  it('a store with only doubtful rows is reported without a "more"', () => {
+  it('a store with only doubtful rows is reported without a "more"', async () => {
     seed(local, DOUBTFUL);
     seed(local, 'Always check which branch the PR merges into');
-    const first = cli('sleep', '--no-learn');
+    const first = await cli('sleep', '--no-learn');
     expect(first.stdout).toContain('Checked old automatic memories once after the upgrade: 2 look doubtful and were kept; hippo audit repair lists them.');
     expect(flag(local)).toBe('1');
-  }, 60000);
+  });
 
-  it('a failed repair warns, lets the sleep finish and runs again at the next sleep', () => {
+  it('a failed repair warns, lets the sleep finish and runs again at the next sleep', async () => {
     const bad = seed(local, CUT);
     writeFileSync(join(local, 'backups'), 'not a folder');
-    const failed = cli('sleep', '--no-learn');
+    const failed = await cli('sleep', '--no-learn');
     expect(failed.status).toBe(0);
     expect(failed.stderr).toContain('memory quality repair skipped, tried again next time');
     expect(failed.stdout).toContain('Running consolidation');
@@ -149,16 +150,16 @@ describe('the upgrade runs the repair once', () => {
     expect(ids(local)).toContain(bad.id);
 
     rmSync(join(local, 'backups'));
-    expect(cli('sleep', '--no-learn').stdout).toContain('Set aside 1 automatic memory');
+    expect((await cli('sleep', '--no-learn')).stdout).toContain('Set aside 1 automatic memory');
     expect(ids(local)).not.toContain(bad.id);
-  }, 60000);
+  });
 
-  it('the daily runner cleans the global store once and names --global', () => {
+  it('the daily runner cleans the global store once and names --global', async () => {
     const bad = seed(global, CUT);
-    const first = cli('daily-runner');
+    const first = await cli('daily-runner');
     expect(first.stdout).toContain('Set aside 1 automatic memory with a certain defect, once after the upgrade');
     expect(first.stdout).toContain('Bring one back: hippo dormant restore <id> --global');
     expect(ids(global)).not.toContain(bad.id);
-    expect(cli('daily-runner').stdout).not.toContain('once after the upgrade');
-  }, 60000);
+    expect((await cli('daily-runner')).stdout).not.toContain('once after the upgrade');
+  });
 });

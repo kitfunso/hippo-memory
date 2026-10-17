@@ -22,6 +22,7 @@ import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -266,14 +267,16 @@ describe('hippo audit repair', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
   const cli = (...args: string[]) => spawnSync(process.execPath, [HIPPO_JS, 'audit', 'repair', ...args], { cwd: dir, env, encoding: 'utf8' });
+  // The preview case reads bytes only, so it runs in process; the busy-store case keeps the child, a lock held by another process.
+  const cliIn = (...args: string[]) => runCliAs(['audit', 'repair', ...args], { cwd: dir, env });
 
-  it('previews as JSON, lets --dry-run win over --apply, and names --global in the recovery line', () => {
+  it('previews as JSON, lets --dry-run win over --apply, and names --global in the recovery line', async () => {
     const bad = seedIn(local, 'Found local migration files to be');
     const globalBad = seedIn(global, 'Found local migration files to be');
-    expect(JSON.parse(cli('--json').stdout)).toMatchObject({ appliedIds: [], issues: [{ id: bad.id, disposition: 'set-aside' }] });
-    expect(JSON.parse(cli('--apply', '--dry-run', '--json').stdout)).toMatchObject({ appliedIds: [], backup: null });
+    expect(JSON.parse((await cliIn('--json')).stdout)).toMatchObject({ appliedIds: [], issues: [{ id: bad.id, disposition: 'set-aside' }] });
+    expect(JSON.parse((await cliIn('--apply', '--dry-run', '--json')).stdout)).toMatchObject({ appliedIds: [], backup: null });
     expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
-    const applied = cli('--apply', '--global');
+    const applied = await cliIn('--apply', '--global');
     expect(applied.stdout).toContain(`Moved 1 memories to dormant storage. Recovery: hippo dormant restore <id> --global.`);
     expect(loadEveryTenantEntries(global).map((entry) => entry.id)).not.toContain(globalBad.id);
     expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
