@@ -7,7 +7,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import {
-  PROMPT_HOOK, dispose, eventCount, eventsN, hippo, project, promptPayload, tableRows, writeConfig, type Project,
+  PROMPT_HOOK, dispose, eventCount, eventsN, hippo, hippoIn, project, promptPayload, tableRows, writeConfig, type Project,
 } from './_helpers/delivery-boundary.js';
 
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
@@ -30,10 +30,11 @@ function seedFacts(target: Project): void {
   });
 }
 
-function run(target: Project, args: string[], sessionId: string | null = 'ctx-1') {
+// In process unless `spawned`: C1 pins `hippo context` once in a real child, the rest read rows and bytes only.
+async function run(target: Project, args: string[], sessionId: string | null = 'ctx-1', spawned = false) {
   const env: NodeJS.ProcessEnv = { HIPPO_FAKE_NOW: FAKE_NOW };
   if (sessionId !== null) env.CLAUDE_CODE_SESSION_ID = sessionId;
-  return hippo(target, ['context', ...args], { env });
+  return spawned ? hippo(target, ['context', ...args], { env }) : hippoIn(target, ['context', ...args], { env });
 }
 
 interface TraceRow { id: number; query_hash: string }
@@ -57,8 +58,8 @@ afterEach(() => {
 });
 
 describe('what one hippo context call records', () => {
-  it('C1: a query leaves one sent context row that links the trace the call wrote', () => {
-    const r = run(p, QUERY);
+  it('C1: a query leaves one sent context row that links the trace the call wrote', async () => {
+    const r = await run(p, QUERY, 'ctx-1', true);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('rollback plan');
     const [e] = eventsN(p, 'ctx-1', 1);
@@ -74,8 +75,8 @@ describe('what one hippo context call records', () => {
     expect([e.prompt_hash, e.host_turn_id, e.selected_count]).toEqual([null, null, emitted.length]);
   });
 
-  it('C2: no query ranks by strength, so the row and its trace carry the hash of * and pool strength', () => {
-    const r = run(p, []);
+  it('C2: no query ranks by strength, so the row and its trace carry the hash of * and pool strength', async () => {
+    const r = await run(p, []);
     expect(r.status, r.stderr).toBe(0);
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
@@ -84,8 +85,8 @@ describe('what one hippo context call records', () => {
     expect(new Set(e.candidates.map((c) => c.pool))).toEqual(new Set(['strength']));
   });
 
-  it('C3: a query that returns nothing writes an empty trace, which the empty row joins by query hash, not by id', () => {
-    const r = run(p, ['zzqxv', 'wplmk']);
+  it('C3: a query that returns nothing writes an empty trace, which the empty row joins by query hash, not by id', async () => {
+    const r = await run(p, ['zzqxv', 'wplmk']);
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
@@ -94,19 +95,19 @@ describe('what one hippo context call records', () => {
     expect(e.query_hash).toBe(blockHash('zzqxv wplmk'));
   });
 
-  it('C4: a store with nothing to load writes no trace, so the empty row keeps the query hash and links none', () => {
+  it('C4: a store with nothing to load writes no trace, so the empty row keeps the query hash and links none', async () => {
     fs.rmSync(p.hippoRoot, { recursive: true, force: true });
     initStore(p.hippoRoot);
     writeConfig(p);
-    const r = run(p, QUERY);
+    const r = await run(p, QUERY);
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'ctx-1', 1);
     expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual(['empty', null, blockHash(QUERY.join(' '))]);
     expect(contextTraces(p)).toEqual([]);
   });
 
-  it('C5: the limit cut names the row it dropped, in the pool that ranked it', () => {
-    expect(run(p, [...QUERY, '--limit', '1']).status).toBe(0);
+  it('C5: the limit cut names the row it dropped, in the pool that ranked it', async () => {
+    expect((await run(p, [...QUERY, '--limit', '1'])).status).toBe(0);
     const [e] = eventsN(p, 'ctx-1', 1);
     const rows = e.candidates.map((c) => [c.outcome, c.pool, c.stage, c.reason]);
     expect(rows[0]).toEqual(['emitted', 'search', 'final', null]);
@@ -114,37 +115,37 @@ describe('what one hippo context call records', () => {
     expect([e.selected_count, e.considered_count]).toEqual([1, e.candidates.length]);
   });
 
-  it('C6: two calls in one session are turns 1 and 2, each linked to its own trace', () => {
-    expect(run(p, QUERY).status).toBe(0);
-    expect(run(p, ['deploy', 'windows']).status).toBe(0);
+  it('C6: two calls in one session are turns 1 and 2, each linked to its own trace', async () => {
+    expect((await run(p, QUERY)).status).toBe(0);
+    expect((await run(p, ['deploy', 'windows'])).status).toBe(0);
     const rows = eventsN(p, 'ctx-1', 2);
     const traces = contextTraces(p);
     expect(rows.map((e) => [e.turn_seq, e.duplicate_of, e.recall_trace_id])).toEqual([[1, null, traces[0].id], [2, null, traces[1].id]]);
   });
 
-  it('C7: no session id leaves an unnumbered missing row', () => {
-    expect(run(p, QUERY, null).status).toBe(0);
+  it('C7: no session id leaves an unnumbered missing row', async () => {
+    expect((await run(p, QUERY, null)).status).toBe(0);
     const [e] = eventsN(p, null, 1);
     expect([e.event_type, e.session_state, e.turn_seq, e.block_state]).toEqual(['context', 'missing', null, 'sent']);
   });
 
-  it('C8: a zero budget and a holdout session each record disabled and print nothing', () => {
-    const zero = run(p, [...QUERY, '--budget', '0'], 'ctx-zero');
+  it('C8: a zero budget and a holdout session each record disabled and print nothing', async () => {
+    const zero = await run(p, [...QUERY, '--budget', '0'], 'ctx-zero');
     writeConfig(p, { holdout: true });
-    const held = run(p, QUERY, 'ctx-held');
+    const held = await run(p, QUERY, 'ctx-held');
     expect([zero.stdout, held.stdout]).toEqual(['', '']);
     expect([eventsN(p, 'ctx-zero', 1)[0].block_state, eventsN(p, 'ctx-held', 1)[0].block_state]).toEqual(['disabled', 'disabled']);
   });
 
-  it('C9: a hook payload with a prompt still leaves a context row with no prompt facts', () => {
-    const r = hippo(p, ['context', ...QUERY], { input: promptPayload('ctx-hooked'), env: { HIPPO_FAKE_NOW: FAKE_NOW } });
+  it('C9: a hook payload with a prompt still leaves a context row with no prompt facts', async () => {
+    const r = await hippoIn(p, ['context', ...QUERY], { input: promptPayload('ctx-hooked'), env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     expect(r.status, r.stderr).toBe(0);
     const [e] = eventsN(p, 'ctx-hooked', 1);
     expect([e.event_type, e.runtime, e.session_state, e.prompt_hash, e.prompt_length]).toEqual(['context', 'claude-code', 'payload', null, 0]);
   });
 
-  it('C10: the per-prompt hook writes no trace, so its row links none', () => {
-    expect(hippo(p, PROMPT_HOOK, { input: promptPayload('ctx-hook') }).status).toBe(0);
+  it('C10: the per-prompt hook writes no trace, so its row links none', async () => {
+    expect((await hippoIn(p, PROMPT_HOOK, { input: promptPayload('ctx-hook') })).status).toBe(0);
     const [e] = eventsN(p, 'ctx-hook', 1);
     expect([e.event_type, e.surface, e.recall_trace_id, e.query_hash]).toEqual(['prompt-submit', 'hook', null, null]);
     expect(contextTraces(p)).toEqual([]);
@@ -170,9 +171,9 @@ describe('the ledger changes nothing a context call prints', () => {
     ['markdown', [...QUERY]],
     ['json', [...QUERY, '--format', 'json']],
     ['no query', []],
-  ])('C11: %s output is byte-identical with the ledger on and off', (_name, args) => {
-    const on = run(p, args);
-    const plain = run(off, args);
+  ])('C11: %s output is byte-identical with the ledger on and off', async (_name, args) => {
+    const on = await run(p, args);
+    const plain = await run(off, args);
     expect([on.status, plain.status]).toEqual([0, 0]);
     expect(on.stdout).not.toBe('');
     expect(on.stdout).toBe(plain.stdout);
@@ -183,10 +184,10 @@ describe('the ledger changes nothing a context call prints', () => {
     FROM recall_trace_results r JOIN recall_traces t ON t.id = r.trace_id WHERE t.pipeline = 'context' ORDER BY t.id, r.result_rank`);
   const retrievalCounts = (target: Project) => tableRows(target, 'SELECT id, retrieval_count FROM memories ORDER BY id');
 
-  it('I1: a query in both formats prints the same bytes and leaves the same trace results and retrieval counts', () => {
+  it('I1: a query in both formats prints the same bytes and leaves the same trace results and retrieval counts', async () => {
     for (const args of [[...QUERY], [...QUERY, '--format', 'json']]) {
-      const on = run(p, args);
-      const plain = run(off, args);
+      const on = await run(p, args);
+      const plain = await run(off, args);
       expect([on.status, plain.status], on.stderr + plain.stderr).toEqual([0, 0]);
       expect(on.stdout).not.toBe('');
       expect(on.stdout).toBe(plain.stdout);
@@ -198,15 +199,16 @@ describe('the ledger changes nothing a context call prints', () => {
     expect([eventCount(p), eventCount(off)]).toEqual([2, 0]);
   });
 
-  it('I2: a query that matches nothing prints the same output in both formats and writes the same empty traces', () => {
+  it('I2: a query that matches nothing prints the same output in both formats and writes the same empty traces', async () => {
     const miss = ['zzqxv', 'wplmk'];
-    const printed = [miss, [...miss, '--format', 'json']].map((args) => {
-      const on = run(p, args);
-      const plain = run(off, args);
+    const printed: string[] = [];
+    for (const args of [miss, [...miss, '--format', 'json']]) {
+      const on = await run(p, args);
+      const plain = await run(off, args);
       expect([on.status, plain.status], on.stderr + plain.stderr).toEqual([0, 0]);
       expect(on.stdout).toBe(plain.stdout);
-      return on.stdout;
-    });
+      printed.push(on.stdout);
+    }
     expect(printed[0]).toBe('');
     const traces = (target: Project) => tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`);
     expect(traces(off)).toHaveLength(2);

@@ -14,7 +14,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { runCliAs } from './_helpers/run-cli-as.js';
 import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -660,20 +660,10 @@ describe('memories that back a first-class object', () => {
 });
 
 describe('hippo dormant CLI', () => {
-  const CLI_PATH = join(__dirname, '..', 'dist', 'cli.js');
-
-  function runCli(cwd: string, ...args: string[]) {
-    try {
-      const out = execFileSync(process.execPath, [CLI_PATH, ...args], {
-        cwd, env: { ...process.env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      return { out, status: 0 };
-    } catch (e) {
-      // SAFETY: execFileSync attaches stdout/stderr/status to the thrown Error
-      // on a non-zero child exit (Node child_process sync error contract).
-      const err = e as { stdout?: string; stderr?: string; status?: number };
-      return { out: `${err.stdout ?? ''}${err.stderr ?? ''}`, status: err.status ?? 1 };
-    }
+  // In process, so coverage sees the dormant verb; out is stdout, plus stderr on a failure, as the spawned run gave.
+  async function runCli(cwd: string, ...args: string[]): Promise<{ out: string; status: number }> {
+    const r = await runCliAs(args, { cwd, env: { ...process.env } });
+    return r.status === 0 ? { out: r.stdout, status: 0 } : { out: `${r.stdout}${r.stderr}`, status: r.status ?? 1 };
   }
 
   it('lists, restores and forgets dormant memories', async () => {
@@ -688,34 +678,34 @@ describe('hippo dormant CLI', () => {
       writeEntry(hippoRoot, drop);
       await consolidate(hippoRoot, { now: new Date() });
 
-      const list = runCli(workspace, 'dormant');
+      const list = await runCli(workspace, 'dormant');
       expect(list.status).toBe(0);
       expect(list.out).toContain('2 dormant memories');
       expect(list.out).toContain(keep.id);
 
-      const search = runCli(workspace, 'dormant', 'zanzibar', '--json');
+      const search = await runCli(workspace, 'dormant', 'zanzibar', '--json');
       expect(search.status).toBe(0);
       // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (handleDormant).
       const parsed = JSON.parse(search.out) as { dormant: Array<{ id: string }> };
       expect(parsed.dormant.map((m) => m.id)).toEqual([keep.id]);
 
-      const restored = runCli(workspace, 'dormant', 'restore', keep.id);
+      const restored = await runCli(workspace, 'dormant', 'restore', keep.id);
       expect(restored.status).toBe(0);
       expect(restored.out).toContain(`Restored ${keep.id}`);
 
-      const forgotten = runCli(workspace, 'dormant', 'forget', drop.id);
+      const forgotten = await runCli(workspace, 'dormant', 'forget', drop.id);
       expect(forgotten.status).toBe(0);
       expect(forgotten.out).toContain(`Forgot dormant memory ${drop.id}`);
 
-      expect(runCli(workspace, 'dormant').out).toContain('No dormant memories');
-      expect(runCli(workspace, 'dormant', 'restore', drop.id).status).not.toBe(0);
+      expect((await runCli(workspace, 'dormant')).out).toContain('No dormant memories');
+      expect((await runCli(workspace, 'dormant', 'restore', drop.id)).status).not.toBe(0);
 
       // `hippo forget` on a dormant id points at the dormant command instead
       // of a bare "not found".
       writeEntry(hippoRoot, aged(createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
       await consolidate(hippoRoot, { now: new Date() });
       const [third] = await api.listDormant(ctxFor(hippoRoot));
-      const hint = runCli(workspace, 'forget', third.id);
+      const hint = await runCli(workspace, 'forget', third.id);
       expect(hint.status).not.toBe(0);
       expect(hint.out).toContain(`hippo dormant forget ${third.id}`);
     } finally {

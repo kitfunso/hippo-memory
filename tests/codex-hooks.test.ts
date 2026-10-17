@@ -13,6 +13,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import type { JsonValue } from '../src/util/json.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 const EM_DASH = String.fromCodePoint(0x2014);
@@ -220,13 +221,19 @@ function cliEnv(m: Machine, extraEnv: Record<string, string>): NodeJS.ProcessEnv
     ...extraEnv,
   });
 }
-function hippo(m: Machine, extraEnv: Record<string, string>, cwd: string, ...args: string[]): string {
-  const r = hippoRun(args, { cwd, env: cliEnv(m, extraEnv) });
+// In process; the first init case and the first hook turn keep a real child as the CLI pin.
+async function hippo(m: Machine, extraEnv: Record<string, string>, cwd: string, ...args: string[]): Promise<string> {
+  const r = await runCliAs(args, { cwd, env: cliEnv(m, extraEnv) });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }
 // Without --no-schedule init would register a real OS task, without --no-learn it would run git.
 const init = (m: Machine, extraEnv: Record<string, string> = {}) => hippo(m, extraEnv, m.repo, 'init', '--no-schedule', '--no-learn');
+function initSpawned(m: Machine): string {
+  const r = hippoRun(['init', '--no-schedule', '--no-learn'], { cwd: m.repo, env: cliEnv(m, {}) });
+  expect(r.status, r.stderr).toBe(0);
+  return r.stdout;
+}
 const SKIP = { HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
 const agentsMd = (m: Machine) => path.join(m.repo, 'AGENTS.md');
 
@@ -234,29 +241,29 @@ describe('hippo init and Codex', () => {
   it('writes no Codex hook and creates no folder when neither CODEX_HOME nor ~/.codex exists', () => {
     const m = machine();
     fs.writeFileSync(agentsMd(m), '# Agents\n');
-    const out = init(m);
+    const out = initSpawned(m);
     expect(out).toContain('Auto-installed codex hook in AGENTS.md');
     expect(fs.existsSync(m.codexDir)).toBe(false);
     expect(fs.readdirSync(m.root, { recursive: true }).map(String).filter((f) => path.basename(f) === 'hooks.json')).toEqual([]);
     expect(out).not.toContain(CODEX_TRUST_LINE);
   });
 
-  it('adds both groups to $CODEX_HOME/hooks.json and prints the trust reminder', () => {
+  it('adds both groups to $CODEX_HOME/hooks.json and prints the trust reminder', async () => {
     const m = machine();
     fs.writeFileSync(agentsMd(m), '# Agents\n');
     const codexHome = path.join(m.root, 'codex-home');
     fs.mkdirSync(codexHome);
-    const out = init(m, { CODEX_HOME: codexHome });
+    const out = await init(m, { CODEX_HOME: codexHome });
     expect(readJson(path.join(codexHome, 'hooks.json'))).toEqual(HIPPO_ONLY);
     expect(fs.existsSync(m.codexDir)).toBe(false);
     expect(out).toContain(CODEX_TRUST_LINE);
   });
 
-  it('writes no Codex hook and creates no folder when CODEX_HOME names a folder that does not exist', () => {
+  it('writes no Codex hook and creates no folder when CODEX_HOME names a folder that does not exist', async () => {
     const m = machine();
     fs.writeFileSync(agentsMd(m), '# Agents\n');
     const codexHome = path.join(m.root, 'codex-home');
-    const out = init(m, { CODEX_HOME: codexHome });
+    const out = await init(m, { CODEX_HOME: codexHome });
     expect(fs.existsSync(codexHome)).toBe(false);
     expect(out).not.toContain(CODEX_TRUST_LINE);
   });
@@ -285,12 +292,12 @@ describe('hippo init and Codex', () => {
     },
   ];
 
-  it.each(writes)('HIPPO_SKIP_AUTO_INTEGRATIONS=1 skips $name, which init writes without it', ({ setup, watched }) => {
+  it.each(writes)('HIPPO_SKIP_AUTO_INTEGRATIONS=1 skips $name, which init writes without it', async ({ setup, watched }) => {
     for (const skip of [true, false]) {
       const m = machine();
       setup(m);
       const before = snapshot(watched(m));
-      const out = init(m, skip ? SKIP : {});
+      const out = await init(m, skip ? SKIP : {});
       if (skip) {
         expect(snapshot(watched(m))).toBe(before);
         expect(out).toContain('HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');
@@ -300,7 +307,7 @@ describe('hippo init and Codex', () => {
     }
   });
 
-  it('init --scan with HIPPO_SKIP_AUTO_INTEGRATIONS=1 installs no user-level hook, and installs all three without it', () => {
+  it('init --scan with HIPPO_SKIP_AUTO_INTEGRATIONS=1 installs no user-level hook, and installs all three without it', async () => {
     for (const skip of [true, false]) {
       const m = machine();
       fs.mkdirSync(path.join(m.repo, '.git'));
@@ -308,7 +315,7 @@ describe('hippo init and Codex', () => {
         fs.writeFileSync(path.join(m.repo, file), text);
       }
       fs.mkdirSync(m.codexDir);
-      hippo(m, skip ? SKIP : {}, m.root, 'init', '--scan', m.root, '--no-schedule', '--no-learn');
+      await hippo(m, skip ? SKIP : {}, m.root, 'init', '--scan', m.root, '--no-schedule', '--no-learn');
       const written = [
         path.join(m.home, '.claude', 'settings.json'),
         path.join(m.home, '.config', 'opencode', 'plugins', 'hippo.ts'),
@@ -320,22 +327,22 @@ describe('hippo init and Codex', () => {
 });
 
 describe('hippo hook install codex and hippo setup', () => {
-  it('hook install codex adds both groups and the reminder with no codex launcher on PATH, and uninstall removes them', () => {
+  it('hook install codex adds both groups and the reminder with no codex launcher on PATH, and uninstall removes them', async () => {
     const m = machine();
     const env = { CODEX_HOME: path.join(m.root, 'codex-home') };
     const hooksFile = path.join(env.CODEX_HOME, 'hooks.json');
-    const out = hippo(m, env, m.repo, 'hook', 'install', 'codex');
+    const out = await hippo(m, env, m.repo, 'hook', 'install', 'codex');
     expect(readJson(hooksFile)).toEqual(HIPPO_ONLY);
     expect(out).toContain(CODEX_TRUST_LINE);
     expect(out).toContain('No codex launcher on PATH, so session-end capture was not set up');
-    expect(hippo(m, env, m.repo, 'hook', 'uninstall', 'codex')).toContain("Removed hippo's Codex memory hooks");
+    expect(await hippo(m, env, m.repo, 'hook', 'uninstall', 'codex')).toContain("Removed hippo's Codex memory hooks");
     expect(readJson(hooksFile)).toEqual({});
   });
 
-  it('setup adds both groups when ~/.codex exists, with the reminder', () => {
+  it('setup adds both groups when ~/.codex exists, with the reminder', async () => {
     const m = machine();
     fs.mkdirSync(m.codexDir);
-    const out = hippo(m, {}, m.repo, 'setup', '--no-schedule');
+    const out = await hippo(m, {}, m.repo, 'setup', '--no-schedule');
     expect(readJson(path.join(m.codexDir, 'hooks.json'))).toEqual(HIPPO_ONLY);
     expect(out).toContain(CODEX_TRUST_LINE);
   });
@@ -354,16 +361,17 @@ interface CodexPayload {
   source?: string;
 }
 
-function runCodexHook(m: Machine, command: string, payload: CodexPayload): string {
+async function runCodexHook(m: Machine, command: string, payload: CodexPayload, spawned = false): Promise<string> {
   const [bin, ...args] = command.split(' ');
   expect(bin).toBe('hippo');
-  const r = hippoRun(args, { cwd: payload.cwd, env: cliEnv(m, {}), input: JSON.stringify(payload) });
+  const opts = { cwd: payload.cwd, env: cliEnv(m, {}), input: JSON.stringify(payload) };
+  const r = spawned ? hippoRun(args, opts) : await runCliAs(args, opts);
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }
 
 describe('the installed Codex hooks, run with the payloads Codex sends', () => {
-  it('delivers a pinned global memory once from a projectless cwd', () => {
+  it('delivers a pinned global memory once from a projectless cwd', async () => {
     const m = machine();
     const globalStore = path.join(m.root, 'global');
     initStore(globalStore);
@@ -381,41 +389,41 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
       artifacts: [],
     });
     const env = { CODEX_HOME: path.join(m.root, 'codex-home') };
-    hippo(m, env, m.repo, 'hook', 'install', 'codex');
+    await hippo(m, env, m.repo, 'hook', 'install', 'codex');
     expect(readJson(path.join(env.CODEX_HOME, 'hooks.json'))).toEqual(HIPPO_ONLY);
     const command = PROMPT_GROUP.hooks[0].command;
     const base = { session_id: 'projectless-codex', transcript_path: null, cwd: m.repo, model: 'gpt-5-codex', permission_mode: 'default', hook_event_name: 'UserPromptSubmit' as const, prompt: 'what flag?' };
-    const first = runCodexHook(m, command, { ...base, turn_id: 't1' });
+    const first = await runCodexHook(m, command, { ...base, turn_id: 't1' }, true);
     const context = JSON.parse(first).hookSpecificOutput.additionalContext;
     expect(context).toContain('projectless hook remembers the staging flag');
     expect(context).toContain('[global]');
     expect(context).not.toContain('Foreign project handoff summary');
     expect(context).not.toContain('Resume the unrelated deployment');
-    expect(runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
+    expect(await runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
     fs.writeFileSync(path.join(globalStore, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
-    expect(runCodexHook(m, command, { ...base, session_id: 'projectless-disabled', turn_id: 't1' })).toBe('');
+    expect(await runCodexHook(m, command, { ...base, session_id: 'projectless-disabled', turn_id: 't1' })).toBe('');
     expect(fs.existsSync(path.join(m.repo, '.hippo'))).toBe(false);
   });
 
-  it('send the pinned block once, skip it while unchanged, and after a compaction restore the saved snapshot and send the block again', () => {
+  it('send the pinned block once, skip it while unchanged, and after a compaction restore the saved snapshot and send the block again', async () => {
     const m = machine();
-    hippo(m, {}, m.repo, 'init', '--no-hooks', '--no-schedule', '--no-learn');
-    hippo(m, {}, m.repo, 'remember', 'the release script needs the staging flag', '--pin');
-    hippo(m, {}, m.repo, 'snapshot', 'save', '--task', 'Ship the release', '--summary', 'tests pass', '--next-step', 'tag it', '--session', 'codex-1');
+    await hippo(m, {}, m.repo, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    await hippo(m, {}, m.repo, 'remember', 'the release script needs the staging flag', '--pin');
+    await hippo(m, {}, m.repo, 'snapshot', 'save', '--task', 'Ship the release', '--summary', 'tests pass', '--next-step', 'tag it', '--session', 'codex-1');
     const env = { CODEX_HOME: path.join(m.root, 'codex-home') };
-    hippo(m, env, m.repo, 'hook', 'install', 'codex');
+    await hippo(m, env, m.repo, 'hook', 'install', 'codex');
     expect(readJson(path.join(env.CODEX_HOME, 'hooks.json'))).toEqual(HIPPO_ONLY);
 
     const base = { session_id: 'codex-1', transcript_path: null, cwd: m.repo, model: 'gpt-5-codex', permission_mode: 'default' };
-    const prompt = (turn: string): string => runCodexHook(m, PROMPT_GROUP.hooks[0].command, { ...base, hook_event_name: 'UserPromptSubmit', turn_id: turn, prompt: 'what does the release need?' });
+    const prompt = (turn: string): Promise<string> => runCodexHook(m, PROMPT_GROUP.hooks[0].command, { ...base, hook_event_name: 'UserPromptSubmit', turn_id: turn, prompt: 'what does the release need?' });
     const context = (stdout: string): string => JSON.parse(stdout).hookSpecificOutput.additionalContext;
 
-    expect(context(prompt('t1'))).toContain('the release script needs the staging flag');
-    expect(prompt('t2')).toBe('');
-    const resumed = runCodexHook(m, COMPACT_GROUP.hooks[0].command, { ...base, hook_event_name: 'SessionStart', source: 'compact' });
+    expect(context(await prompt('t1'))).toContain('the release script needs the staging flag');
+    expect(await prompt('t2')).toBe('');
+    const resumed = await runCodexHook(m, COMPACT_GROUP.hooks[0].command, { ...base, hook_event_name: 'SessionStart', source: 'compact' });
     expect(resumed).toContain('## Restored after compaction');
     expect(resumed).toContain('Ship the release');
-    expect(context(prompt('t3'))).toContain('the release script needs the staging flag');
+    expect(context(await prompt('t3'))).toContain('the release script needs the staging flag');
   });
 });
 

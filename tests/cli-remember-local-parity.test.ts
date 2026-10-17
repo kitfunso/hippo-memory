@@ -1,6 +1,6 @@
 // Pins what the local remember pipeline of `hippo remember` and `hippo watch` stores, counts, embeds and prints on the built CLI with no
 // server: the `remembered` counter, each salience verdict, a refused --kind, extraction with no key and the embedding kick-off.
-// What a snapshot masks is listed in tests/_helpers/cli-parity-store.ts.
+// What a snapshot masks is listed in tests/_helpers/cli-parity-store.ts. The first case of each verb spawns the built CLI; the rest run it in process.
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,7 +10,8 @@ import { query, Store, type ExtraState } from './_helpers/cli-parity-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-const CASE_MS = 180_000;
+// A spawned case starts the built CLI up to five times, each a few seconds on a loaded Windows box; 60 s is twice that.
+const SPAWNED_CASE_MS = 60_000;
 const TEXT = 'the billing service retries a failed charge three times';
 const REJECTED = 'the billing service retries a failed charge nine times';
 const STDERR = 'connection refused on port 5432\n';
@@ -49,115 +50,115 @@ const REMEMBER_FLAGS: ReadonlyArray<[string, string[]]> = [
 ];
 
 describe('hippo remember counts each stored row once (built CLI, no server)', () => {
-  it.each(REMEMBER_FLAGS)('%s', (_label, flags) => {
-    const s = new Store();
-    s.run('remember', TEXT, ...flags);
+  it.each(REMEMBER_FLAGS)('%s', async (label, flags) => {
+    const s = new Store({ spawned: label === 'plain' });
+    await s.run('remember', TEXT, ...flags);
     s.expectPinned(globalCounter(s));
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 
-  it('two rows count two', () => {
+  it('two rows count two', async () => {
     const s = new Store();
-    s.run('remember', TEXT, '--tag', 'billing');
-    s.run('remember', 'the invoice worker sends a receipt after each charge', '--tag', 'billing');
+    await s.run('remember', TEXT, '--tag', 'billing');
+    await s.run('remember', 'the invoice worker sends a receipt after each charge', '--tag', 'billing');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('a --kind outside the two allowed stores nothing and counts nothing', () => {
+  it('a --kind outside the two allowed stores nothing and counts nothing', async () => {
     const s = new Store();
-    s.run('remember', TEXT, '--kind', 'raw');
-    s.run('remember', TEXT, '--kind', 'nonsense');
+    await s.run('remember', TEXT, '--kind', 'raw');
+    await s.run('remember', TEXT, '--kind', 'nonsense');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
   it('a rejected value is refused and not counted', async () => {
     const s = new Store();
     await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: REJECTED, reason: 'wrong' });
     s.settle();
-    s.run('remember', REJECTED);
+    await s.run('remember', REJECTED);
     s.expectPinned();
-  }, CASE_MS);
+  });
 });
 
 describe('hippo remember with the salience gate on (built CLI, no server)', () => {
-  it('skips a repeat of the same text without counting it, and --force and --pin each store it', () => {
+  it('skips a repeat of the same text without counting it, and --force and --pin each store it', async () => {
+    const s = new Store({ spawned: true });
+    configure(s.root, { salience: { enabled: true } });
+    await s.run('remember', TEXT);
+    await s.run('remember', TEXT);
+    await s.run('remember', TEXT, '--force');
+    await s.run('remember', TEXT, '--pin');
+    s.expectPinned();
+  }, SPAWNED_CASE_MS);
+
+  it('skips a text under the minimum length', async () => {
     const s = new Store();
     configure(s.root, { salience: { enabled: true } });
-    s.run('remember', TEXT);
-    s.run('remember', TEXT);
-    s.run('remember', TEXT, '--force');
-    s.run('remember', TEXT, '--pin');
+    await s.run('remember', 'abcd');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('skips a text under the minimum length', () => {
+  it('stores a near-duplicate whose value changed, at full strength', async () => {
     const s = new Store();
     configure(s.root, { salience: { enabled: true } });
-    s.run('remember', 'abcd');
+    await s.run('remember', TEXT);
+    await s.run('remember', 'the billing service retries a failed charge five times');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('stores a near-duplicate whose value changed, at full strength', () => {
-    const s = new Store();
-    configure(s.root, { salience: { enabled: true } });
-    s.run('remember', TEXT);
-    s.run('remember', 'the billing service retries a failed charge five times');
-    s.expectPinned();
-  }, CASE_MS);
-
-  it('starts a repeated error weak, with half the half-life, and counts it', () => {
+  it('starts a repeated error weak, with half the half-life, and counts it', async () => {
     const s = new Store();
     configure(s.root, { salience: { enabled: true } });
     for (let n = 1; n <= 4; n++) s.seed(`connection timeout on database shard ${n}`, { tags: ['error'] });
     s.settle();
-    s.run('remember', 'connection timeout on database shard 5', '--error');
+    await s.run('remember', 'connection timeout on database shard 5', '--error');
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('the gate of the global store judges a --global write', () => {
+  it('the gate of the global store judges a --global write', async () => {
     const s = new Store({ global: true });
     configure(s.home, { salience: { enabled: true } });
-    s.run('remember', TEXT, '--global');
-    s.run('remember', TEXT, '--global');
+    await s.run('remember', TEXT, '--global');
+    await s.run('remember', TEXT, '--global');
     s.expectPinned(globalCounter(s));
-  }, CASE_MS);
+  });
 });
 
 describe('hippo remember extraction with no key (built CLI, no server)', () => {
-  it('--extract says the key is missing and the row is still stored', () => {
-    const s = new Store();
+  it('--extract says the key is missing and the row is still stored', async () => {
+    const s = new Store({ spawned: true });
     s.env['ANTHROPIC_API_KEY'] = '';
-    s.run('remember', TEXT, '--extract');
+    await s.run('remember', TEXT, '--extract');
     s.expectPinned();
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 
-  it('extraction enabled in the config says the same without the flag', () => {
+  it('extraction enabled in the config says the same without the flag', async () => {
     const s = new Store();
     s.env['ANTHROPIC_API_KEY'] = '';
     configure(s.root, { extraction: { enabled: true } });
-    s.run('remember', TEXT);
+    await s.run('remember', TEXT);
     s.expectPinned();
-  }, CASE_MS);
+  });
 
-  it('a write the gate skips is not offered for extraction', () => {
+  it('a write the gate skips is not offered for extraction', async () => {
     const s = new Store();
     s.env['ANTHROPIC_API_KEY'] = '';
     configure(s.root, { salience: { enabled: true } });
-    s.run('remember', TEXT, '--extract');
-    s.run('remember', TEXT, '--extract');
+    await s.run('remember', TEXT, '--extract');
+    await s.run('remember', TEXT, '--extract');
     s.expectPinned();
-  }, CASE_MS);
+  });
 });
 
 describe('hippo watch never gates or extracts (built CLI, no server)', () => {
-  it('stores and counts a repeated failure twice with salience and extraction both on', () => {
-    const s = new Store();
+  it('stores and counts a repeated failure twice with salience and extraction both on', async () => {
+    const s = new Store({ spawned: true });
     s.env['ANTHROPIC_API_KEY'] = '';
     configure(s.root, { salience: { enabled: true }, extraction: { enabled: true } });
     failingScript(s);
-    s.run('watch', 'node', 'fail.js');
-    s.run('watch', 'node', 'fail.js');
+    await s.run('watch', 'node', 'fail.js');
+    await s.run('watch', 'node', 'fail.js');
     s.expectPinned();
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 });
 
 describe('embedding after a local write (built CLI, local embeddings server)', () => {
@@ -165,13 +166,14 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
   beforeAll(async () => { embeddings = await startHashedEmbeddings(); });
   afterAll(async () => { await embeddings.close(); });
 
+  // Spawned: watch exits before its embedding lands, which only a process that ends can show.
   it('remember leaves a vector for its row; watch exits before its own lands', async () => {
-    const s = new Store();
+    const s = new Store({ spawned: true });
     s.env['OPENAI_API_KEY'] = 'test-key-not-secret';
     configure(s.root, { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
     failingScript(s);
-    await s.runAsync('remember', TEXT);
-    await s.runAsync('watch', 'node', 'fail.js');
+    await s.run('remember', TEXT);
+    await s.run('watch', 'node', 'fail.js');
     s.expectPinned({ rows: query(s.root, 'SELECT id FROM memories ORDER BY rowid'), vectors: Object.keys(loadEmbeddingIndex(s.root)) });
-  }, CASE_MS);
+  }, SPAWNED_CASE_MS);
 });

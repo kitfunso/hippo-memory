@@ -5,9 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-
-const HIPPO_JS = join(__dirname, '..', 'bin', 'hippo.js');
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 function withScratchEnv(dir: string) {
   return { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
@@ -24,13 +22,12 @@ afterEach(() => {
 });
 
 describe('__session-end-worker awaits cmdSleep before finishing', () => {
-  it('a sleep failure is caught (not an unhandled rejection) and the close step still runs after it', () => {
+  it('a sleep failure is caught (not an unhandled rejection) and the close step still runs after it', async () => {
     dir = mkdtempSync(join(tmpdir(), 'hippo-worker-await-sleep-'));
     const env = withScratchEnv(dir);
 
-    const init = spawnSync(process.execPath, [HIPPO_JS, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-      cwd: dir, env, encoding: 'utf8',
-    });
+    // In process, so coverage sees the worker; a rejection it failed to catch would still fail the run.
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: dir, env });
     expect(init.status).toBe(0);
 
     // Corrupt hippo.db so cmdSleepCore's DB open throws synchronously and
@@ -38,10 +35,9 @@ describe('__session-end-worker awaits cmdSleep before finishing', () => {
     writeFileSync(join(dir, 'hippo.db'), 'not a sqlite database, deliberately corrupted for this test');
 
     const logFile = join(dir, 'worker-await.log');
-    const result = spawnSync(
-      process.execPath,
-      [HIPPO_JS, '__session-end-worker', '--log-file', logFile],
-      { cwd: dir, env, encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'SessionEnd' }) },
+    const result = await runCliAs(
+      ['__session-end-worker', '--log-file', logFile],
+      { cwd: dir, env, input: JSON.stringify({ hook_event_name: 'SessionEnd' }) },
     );
 
     // Pre-fix, an unhandled rejection kills the process non-zero; the fix exits clean.

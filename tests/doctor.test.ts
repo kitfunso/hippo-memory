@@ -6,8 +6,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { runCliAs } from './_helpers/run-cli-as.js';
 import { createHash } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -23,7 +23,6 @@ function sha256(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
 
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 const origHome = process.env.HIPPO_HOME;
 const origConfigDir = process.env.CLAUDE_CONFIG_DIR;
@@ -233,18 +232,9 @@ describe('hippo doctor', () => {
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
   });
 
-  it('exits 1 with --json when a check fails', () => {
+  it('exits 1 with --json when a check fails', async () => {
     const cwd = tmp('doctor-cli-');
-    let status = 0;
-    let out = '';
-    try {
-      out = execFileSync(process.execPath, [HIPPO_JS, 'doctor', '--json'], { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch (e) {
-      // SAFETY: execFileSync attaches stdout and status to the thrown Error on a non-zero exit.
-      const err = e as { stdout?: string; status?: number };
-      out = err.stdout ?? '';
-      status = err.status ?? 1;
-    }
+    const { stdout: out, status } = await runCliAs(['doctor', '--json'], { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd } });
     expect(status).toBe(1);
     expect(JSON.parse(out).checks.find((c: { id: string }) => c.id === 'store').status).toBe('fail');
   });
