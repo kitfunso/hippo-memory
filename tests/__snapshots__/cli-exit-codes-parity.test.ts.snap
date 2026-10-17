@@ -122,7 +122,7 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > github
 "$ hippo github backfill --repo acme/widgets -> 3
 --- stdout
 --- stderr
-backfill failed: GitHub 401 on https://api.github.com/repos/acme/widgets/issues?state=all&per_page=100: {"message":"Bad credentials"}
+backfill failed: GitHub 401 on https://api.github.com/repos/acme/widgets/issues: {"message":"Bad credentials"}
 "
 `;
 
