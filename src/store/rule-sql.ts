@@ -51,22 +51,26 @@ export function strengthSql(now: Date): string {
     ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
 }
 
-const sqlText = (s: string): string => `'${s.replace(/'/g, "''")}'`;
-// json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
-const keepPairSql = (p: KeepPair): string =>
-  `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN ` +
-  `tags_json ELSE '[]' END) ` +
-  `WHERE value = ${sqlText(p.tag)}) AND substr(source, 1, ${p.sourcePrefix.length}) = ${sqlText(p.sourcePrefix)})`;
-
-// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
-// source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
-export const AUTO_DELETABLE_SQL = `pinned = 0 AND kind != ` +
-`'raw'${KEEP_PAIRS.map((p) => ` AND NOT ${keepPairSql(p)}`).join('')}`;
-
 export interface SqlFragment {
   sql: string;
   params: string[];
 }
+
+// json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
+const keepPairSql = (p: KeepPair): SqlFragment => ({
+  sql:
+    `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN ` +
+    `tags_json ELSE '[]' END) WHERE value = ?) AND substr(source, 1, ${p.sourcePrefix.length}) = ?)`,
+  params: [p.tag, p.sourcePrefix],
+});
+const KEEP_PAIR_SQL = KEEP_PAIRS.map(keepPairSql);
+
+// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
+// source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
+export const AUTO_DELETABLE: SqlFragment = {
+  sql: `pinned = 0 AND kind != 'raw'${KEEP_PAIR_SQL.map((k) => ` AND NOT ${k.sql}`).join('')}`,
+  params: KEEP_PAIR_SQL.flatMap((k) => k.params),
+};
 
 /** SQL twin of the no-request arm of passesScopeFilterForRecall; `ownScope` is bound and compared with `=`, so `%` or
  * `_` in an owner match nothing extra. */

@@ -20,7 +20,7 @@ function asResult(content: string, score: number): SearchResult {
 describe('llmReranker', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubEnv('HIPPO_LLM_RERANKER_URL', 'http://mock');
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', 'http://localhost');
     vi.stubEnv('HIPPO_LLM_RERANKER_KEY', 'mock');
   });
 

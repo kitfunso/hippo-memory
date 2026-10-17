@@ -100,7 +100,7 @@ describe('typed errors from real domain paths keep their status and message', ()
     expect(r.body.error).toMatch(/is already superseded by/);
   });
 
-  it('ForbiddenError -> 403: a member key cannot mint keys', async () => {
+  it('ForbiddenError -> 403: a member key cannot revoke another key', async () => {
     const db = openHippoDb(home);
     let plaintext: string;
     try {
@@ -109,13 +109,12 @@ describe('typed errors from real domain paths keep their status and message', ()
       closeHippoDb(db);
     }
     const r = await call(handle, {
-      method: 'POST',
-      path: '/v1/auth/keys',
-      body: { role: 'member' },
+      method: 'DELETE',
+      path: '/v1/auth/keys/hk_someone_else',
       headers: { authorization: `Bearer ${plaintext}` },
     });
     expect(r.status).toBe(403);
-    expect(r.body.error).toBe('Only an admin key can create API keys');
+    expect(r.body.error).toBe('A member key can revoke only itself');
   });
 });
 

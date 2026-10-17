@@ -2,7 +2,8 @@ import { createHash } from 'crypto';
 import { matchesHmacSha256 } from '../hmac.js';
 
 export interface VerifyOptions {
-  rawBody: string;
+  /** The body's bytes as received; a string is hashed as its UTF-8 encoding. */
+  rawBody: string | Uint8Array;
   /** Value of X-Hub-Signature-256, e.g. 'sha256=ab12...' */
   signature: string;
   webhookSecret: string;
@@ -20,8 +21,8 @@ export function isWellFormedGitHubSignature(signature: string): boolean {
   return SIGNATURE_HEADER_RE.test(signature);
 }
 
-function verifyOne(rawBody: string, signature: string, secret: string): boolean {
-  return matchesHmacSha256('sha256=', rawBody, secret, signature);
+function verifyOne(rawBody: string | Uint8Array, signature: string, secret: string): boolean {
+  return matchesHmacSha256('sha256=', [rawBody], secret, signature);
 }
 
 export function verifyGitHubSignature(opts: VerifyOptions): boolean {

@@ -176,7 +176,8 @@ function plannedResult(db: DatabaseSyncLike, root: string, tenantId: string) {
 // refuse a person's copy.
 function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, now: Date, backup: string): boolean {
   const actor = 'quality-repair';
-  if (deleteEntryCore(db, entry.id, { actor, automatic: true, suppressForgetAudit: true }) === null) return false;
+  const removed = deleteEntryCore(db, entry.id, entry.tenant_id, { actor, automatic: true, suppressForgetAudit: true });
+  if (removed === null) return false;
   insertDormantRow(db, {
     entry,
     strength: calculateStrength(entry, now),

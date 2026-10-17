@@ -62,7 +62,7 @@ describe('/v1/auth/keys role rules', () => {
       const res = await post(member.plaintext, body);
       expect(res.status).toBe(403);
       // SAFETY: mapApiError sends { error: string } for every 403.
-      expect(((await res.json()) as { error: string }).error).toContain('Only an admin key');
+      expect(((await res.json()) as { error: string }).error).toContain('/v1/auth/keys requires admin role');
     }
   });
 

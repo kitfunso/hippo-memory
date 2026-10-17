@@ -510,6 +510,8 @@ function setupWrapperTool(tool: ToolDetection, dryRun: boolean): void {
     console.log(`  ${tool.name.padEnd(14)} wrapped launcher -> ${result.commandPath}`);
   } else if (result.status === 'already-installed') {
     console.log(`  ${tool.name.padEnd(14)} already wrapped -> ${result.commandPath}`);
+  } else if (result.status === 'foreign-metadata') {
+    console.log(`  ${tool.name.padEnd(14)} left alone: ${result.metadataPath} was not written by hippo`);
   } else {
     console.log(`  ${tool.name.padEnd(14)} not found on PATH -- skipping`);
   }

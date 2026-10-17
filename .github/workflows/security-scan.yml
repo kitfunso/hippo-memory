@@ -1,4 +1,4 @@
-# CodeQL static analysis and gitleaks secret scanning; both run free on this public repo.
+# CodeQL static analysis, gitleaks secret scanning and a weekly npm audit; all run free on this public repo.
 name: Security scan
 
 on:
@@ -32,6 +32,21 @@ jobs:
       - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: /language:javascript-typescript
+
+  # ci.yml audits every PR and push; the weekly run catches an advisory published against an unchanged lockfile.
+  npm-audit:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Dependency security audit
+        run: npm run audit:security
 
   gitleaks:
     runs-on: ubuntu-latest

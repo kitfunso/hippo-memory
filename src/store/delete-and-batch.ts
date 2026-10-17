@@ -1,7 +1,7 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry } from '../core/memory.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
-import { AUTO_DELETABLE_SQL } from './rule-sql.js';
+import { AUTO_DELETABLE, type SqlFragment } from './rule-sql.js';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard } from './rejection.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -33,9 +33,12 @@ export const MEMORY_BACKED_TABLES = [
 
 /** Deleting a memory that backs an object nulls the object's link, and no restore can repair it, so no automatic pass
  * may. */
-const AUTOMATIC_DELETE_SQL = `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map(
-  (t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`,
-).join('')}`;
+const AUTOMATIC_DELETE: SqlFragment = {
+  sql: `${AUTO_DELETABLE.sql}${MEMORY_BACKED_TABLES.map(
+    (t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`,
+  ).join('')}`,
+  params: AUTO_DELETABLE.params,
+};
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing
  * from an older schema is skipped. */
@@ -71,9 +74,9 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
 }
 
 /** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes RawAppendOnlyError. */
-function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, id: string): number {
+function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, params: readonly string[]): number {
   try {
-    return Number(db.prepare(sql).run(id).changes ?? 0);
+    return Number(db.prepare(sql).run(...params).changes ?? 0);
   } catch (cause) {
     throw isRawTriggerAbort(cause) ? new RawAppendOnlyError(cause) : cause;
   }
@@ -81,22 +84,23 @@ function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, id: st
 
 /** db-scoped delete core, composable inside a caller's transaction; NO filesystem I/O, mirrors are written post-commit.
  * `suppressForgetAudit` is set by rejectValue and resolveConflict (own audit row). Returns `{tenantId, dagParentId}`,
- * or null if absent or `automatic` refused it. */
+ * or null if the tenant holds no such row or `automatic` refused it. */
 export function deleteEntryCore(
   db: ReturnType<typeof openHippoDb>,
   id: string,
+  tenantId: string,
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
   // SAFETY: row's shape matches the three columns named in the SELECT above.
   const row = db
-    .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
-    .get(id) as DeleteTarget | undefined;
+    .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ? AND tenant_id = ?`)
+    .get(id, tenantId) as DeleteTarget | undefined;
   return row?.id ? deleteTargetRow(db, row, opts) : null;
 }
 
 interface DeleteTarget {
   id: string;
-  tenant_id?: string;
+  tenant_id: string;
   dag_parent_id?: string | null;
 }
 
@@ -105,24 +109,26 @@ function deleteTargetRow(
   row: DeleteTarget,
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
-  const { id } = row;
-  const guard = opts?.automatic ? ` AND ${AUTOMATIC_DELETE_SQL}` : '';
-  if (deleteMemoryRow(db, `DELETE FROM memories WHERE id = ?${guard}`, id) === 0) return null;
+  const { id, tenant_id: tenantId } = row;
+  const guard = opts?.automatic ? AUTOMATIC_DELETE : null;
+  // The tenant is in the WHERE so the DELETE itself cannot reach a row the read did not.
+  const sql = `DELETE FROM memories WHERE id = ? AND tenant_id = ?${guard ? ` AND ${guard.sql}` : ''}`;
+  if (deleteMemoryRow(db, sql, [id, tenantId, ...(guard?.params ?? [])]) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
     audit(db, 'forget', {
       targetId: id,
       metadata: opts?.reason ? { reason: opts.reason } : undefined,
       actor: opts?.actor ?? CLI_ACTOR,
-      tenantId: row.tenant_id,
+      tenantId,
     });
   }
   // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
-    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID, opts?.actor ?? CLI_ACTOR);
+    markSummaryDirtyInTx(db, row.dag_parent_id, tenantId, opts?.actor ?? CLI_ACTOR);
   }
-  return { tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, dagParentId: row.dag_parent_id ?? null };
+  return { tenantId, dagParentId: row.dag_parent_id ?? null };
 }
 
 /** Delete an entry from SQLite and mirrors; thin wrapper over `deleteEntryCore` (open, core, mirrors, close).
@@ -146,7 +152,11 @@ function deleteEntryOn(
   id: string,
   opts?: { actor?: string; reason?: string; automatic?: boolean },
 ): boolean {
-  const result = withWriteScope(db, 'delete_entry', () => deleteEntryCore(db, id, opts));
+  // A host-wide pass: the row's own tenant goes into the DELETE.
+  const result = withWriteScope(db, 'delete_entry', () => {
+    const row = selectDeleteTargets(db, [id]).get(id);
+    return row ? deleteTargetRow(db, row, opts) : null;
+  });
   if (!result) return false;
 
   purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
@@ -388,9 +398,13 @@ function selectAutoDeletableRows(
   const rows = db
     .prepare(
       `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders(ids.length)}) AND ` +
-      `${AUTOMATIC_DELETE_SQL}`,
+      `${AUTOMATIC_DELETE.sql}`,
     )
-    .all(...ids) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
+    .all(...ids, ...AUTOMATIC_DELETE.params) as Array<{
+      id: string;
+      dag_parent_id: string | null;
+      tenant_id: string | null;
+    }>;
   for (const row of rows) {
     if (row.dag_parent_id) {
       dirty.parents.add(row.dag_parent_id);

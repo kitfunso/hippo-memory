@@ -42,7 +42,7 @@ export interface CodexWrapperMetadata {
 }
 
 export interface EnsureCodexWrapperResult {
-  status: 'installed' | 'already-installed' | 'not-found' | 'source-checkout' | 'other-install';
+  status: 'installed' | 'already-installed' | 'not-found' | 'source-checkout' | 'other-install' | 'foreign-metadata';
   metadataPath?: string;
   realCodexPath?: string;
   commandPath?: string;
@@ -106,13 +106,30 @@ function isHippoCodexWrapperFile(filePath: string): boolean {
   return text !== null && text.includes(HIPPO_CODEX_WRAPPER_MARKER);
 }
 
+// The launchers detectRealCodexPath looks for, so the only originals the installer can have recorded.
+const CODEX_LAUNCHER_NAMES: readonly string[] =
+  process.platform === 'win32' ? ['codex.cmd', 'codex.ps1', 'codex.exe', 'codex'] : ['codex'];
+
+/** Metadata the installer could have written: each path is the install plan of one codex launcher, so the one rename it
+ * can drive is `codex.hippo-real<ext>` back onto that launcher. */
+function namesInstallerPaths(metadata: CodexWrapperMetadata): boolean {
+  const { originalCodexPath, realCodexPath, commandPath, backupPath } = metadata;
+  if (![originalCodexPath, realCodexPath, commandPath, backupPath].every(isJsonString)) return false;
+  if (!path.isAbsolute(originalCodexPath)) return false;
+  const name = path.basename(originalCodexPath);
+  if (!CODEX_LAUNCHER_NAMES.includes(process.platform === 'win32' ? name.toLowerCase() : name)) return false;
+  const plan = resolveCodexInstallPlan(originalCodexPath);
+  return (
+    pathEquals(backupPath, plan.backupPath) &&
+    pathEquals(realCodexPath, plan.backupPath) &&
+    pathEquals(commandPath, plan.commandPath)
+  );
+}
+
 function isCodexWrapperMetadataValid(metadata: CodexWrapperMetadata | null): metadata is CodexWrapperMetadata {
   if (!metadata) return false;
   return (
-    isJsonString(metadata.originalCodexPath) &&
-    isJsonString(metadata.realCodexPath) &&
-    isJsonString(metadata.commandPath) &&
-    isJsonString(metadata.backupPath) &&
+    namesInstallerPaths(metadata) &&
     fs.existsSync(metadata.realCodexPath) &&
     fs.existsSync(metadata.backupPath) &&
     isHippoCodexWrapperFile(metadata.commandPath)
@@ -203,6 +220,23 @@ function cleanupLegacyCodexPathWrappers(paths: CodexWrapperPaths): void {
   }
 }
 
+/** The Codex launcher `hippo codex-run` may start: only the backup the installer made, never a path the metadata
+ * names on its own say. */
+export function installedRealCodexPath(): string {
+  const { metadataPath } = resolveCodexWrapperPaths();
+  if (!fs.existsSync(metadataPath)) {
+    throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
+  }
+  const metadata = readCodexWrapperMetadata();
+  if (!isCodexWrapperMetadataValid(metadata)) {
+    throw new Error(
+      `${metadataPath} does not describe a Codex wrapper hippo installed, so Codex was not started. ` +
+        'Run `hippo hook install codex` again.',
+    );
+  }
+  return metadata.realCodexPath;
+}
+
 export function detectRealCodexPath(): string | null {
   const metadata = readCodexWrapperMetadata();
   if (isCodexWrapperMetadataValid(metadata)) return metadata.realCodexPath;
@@ -214,12 +248,8 @@ export function detectRealCodexPath(): string | null {
     .filter(Boolean)
     .filter((entry) => !pathEquals(entry, wrapperDir));
 
-  const names = process.platform === 'win32'
-    ? ['codex.cmd', 'codex.ps1', 'codex.exe', 'codex']
-    : ['codex'];
-
   for (const entry of entries) {
-    for (const name of names) {
+    for (const name of CODEX_LAUNCHER_NAMES) {
       const candidate = path.join(entry, name);
       if (fs.existsSync(candidate)) return candidate;
     }
@@ -263,8 +293,11 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
     uninstallCodexWrapper();
   }
 
-  if (!fs.existsSync(plan.backupPath)) {
+  // A launcher that is not our wrapper is the current codex, so it replaces any older backup a Codex update left.
+  if (!isHippoCodexWrapperFile(resolvedRealCodexPath)) {
     fs.renameSync(resolvedRealCodexPath, plan.backupPath);
+  } else if (!fs.existsSync(plan.backupPath)) {
+    throw new Error(`${resolvedRealCodexPath} is hippo's wrapper and the Codex it wrapped is gone; reinstall Codex.`);
   }
   writeCodexLauncherWrapper(plan.commandPath);
 
@@ -294,21 +327,33 @@ function installResult(metadataPath: string, metadata: CodexWrapperMetadata): Co
   };
 }
 
+/** Moves files only along the install plan of the recorded launcher, and never puts the backup over a launcher that is
+ * not our wrapper. */
+function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: string): boolean {
+  if (!namesInstallerPaths(metadata)) {
+    log.warn(`codex wrapper metadata ${metadataPath} names paths hippo never wrote; no launcher file was moved`);
+    return false;
+  }
+  const { originalCodexPath } = metadata;
+  const plan = resolveCodexInstallPlan(originalCodexPath);
+  let changed = false;
+  if (isHippoCodexWrapperFile(plan.commandPath)) {
+    fs.rmSync(plan.commandPath, { force: true });
+    changed = true;
+  }
+  if (!fs.existsSync(plan.backupPath)) return changed;
+  if (fs.existsSync(originalCodexPath)) {
+    log.warn(`kept ${plan.backupPath}: a newer codex launcher already sits at ${originalCodexPath}`);
+    return changed;
+  }
+  fs.renameSync(plan.backupPath, originalCodexPath);
+  return true;
+}
+
 export function uninstallCodexWrapper(): boolean {
   const paths = resolveCodexWrapperPaths();
-  let changed = false;
-
   const metadata = readCodexWrapperMetadata();
-  if (metadata) {
-    if (fs.existsSync(metadata.commandPath) && isHippoCodexWrapperFile(metadata.commandPath)) {
-      fs.rmSync(metadata.commandPath, { force: true });
-      changed = true;
-    }
-    if (fs.existsSync(metadata.backupPath)) {
-      fs.renameSync(metadata.backupPath, metadata.originalCodexPath);
-      changed = true;
-    }
-  }
+  let changed = metadata !== null && restoreCodexLauncher(metadata, paths.metadataPath);
 
   cleanupLegacyCodexPathWrappers(paths);
 
@@ -334,6 +379,13 @@ export function ensureCodexWrapperInstalled(): EnsureCodexWrapperResult {
   }
 
   if (metadata) {
+    const { metadataPath } = resolveCodexWrapperPaths();
+    // Metadata hippo never wrote could aim a repair at any file, so it changes nothing until the user reinstalls.
+    if (!namesInstallerPaths(metadata)) {
+      log.warn(`codex wrapper metadata ${metadataPath} names paths hippo never wrote, so the wrapper was not ` +
+        'repaired; run `hippo hook install codex` to replace it');
+      return { status: 'foreign-metadata', metadataPath };
+    }
     uninstallCodexWrapper();
   }
 

@@ -18,12 +18,12 @@ function resolveRequestId(header: string | string[] | undefined): string {
 }
 
 /**
- * One line per failed request; 4xx is the caller's mistake, a busy 503 is back-pressure and a 501 is a route not on
- * this store, so none logs as an error.
+ * One line per failed request, naming the route template since a path can hold caller data; 4xx is the caller's
+ * mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none logs as an error.
  */
 export function logRequestFailure<E>(req: IncomingMessage, err: E, status: number): void {
   const message = errorMessage(err);
-  const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
+  const line = `${req.method ?? 'GET'} ${accessRouteOf(req)} failed: ${message}`;
   // A 5xx that tells the caller when to retry is back-pressure too.
   if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) {
     log.warn(line, { status });
@@ -59,7 +59,7 @@ function watchSlowRequest(
   const timer = setTimeout(() => {
     // A reply already under way is a stream doing its job, not a stuck request.
     if (res.headersSent) return;
-    log.warn(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} is still running`, {
+    log.warn(`${req.method ?? 'GET'} ${accessRouteOf(req)} is still running`, {
       requestId,
       elapsedMs: Date.now() - startedAt,
     });

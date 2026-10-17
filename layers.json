@@ -39,7 +39,6 @@
     "cli.ts": "surface",
     "doctor.ts": "surface",
     "index.ts": "surface",
-    "postinstall.ts": "surface",
     "server.ts": "surface",
     "support-bundle.ts": "surface"
   },

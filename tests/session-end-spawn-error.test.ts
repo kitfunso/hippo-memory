@@ -1,10 +1,11 @@
 // The session-end worker can fail to start after spawn returns; that failure must be logged, never crash the hook.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeRoot } from './_helpers/make-root.js';
+import { installCodexWrapper } from '../src/hooks/codex-wrapper.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -33,15 +34,32 @@ describe('hippo session-end worker spawn', () => {
   });
 });
 
+/** Installs the wrapper under `dir` over a launcher that runs the real Node, since codex-run starts only what the
+ * installer recorded. */
+function installNodeAsCodex(bin: string): void {
+  fs.mkdirSync(bin, { recursive: true });
+  const ps = (s: string): string => `'${s.replace(/'/g, "''")}'`;
+  const launcher = path.join(bin, process.platform === 'win32' ? 'codex.ps1' : 'codex');
+  fs.writeFileSync(launcher, process.platform === 'win32'
+    ? `& ${ps(process.execPath)} @args\r\nexit $LASTEXITCODE\r\n`
+    : `#!/bin/sh\nexec "${process.execPath}" "$@"\n`);
+  fs.chmodSync(launcher, 0o755);
+  vi.stubEnv('HOME', dir);
+  vi.stubEnv('USERPROFILE', dir);
+  try {
+    installCodexWrapper(launcher);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}
+
 describe('hippo codex-run worker spawn', () => {
   it('runs the session-end work inline when the worker fails to start, and exits like Codex did', () => {
-    const logFile = path.join(dir, 'codex-sleep.log');
+    const logFile = path.join(dir, '.hippo', 'logs', 'codex-sleep.log');
     const fakeCodex = path.join(dir, 'fake-codex.mjs');
     fs.writeFileSync(fakeCodex, 'process.exit(7);\n');
-    const metadataPath = path.join(dir, '.hippo', 'integrations', 'codex.json');
-    fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
     // The real Node stands in for Codex, so only the worker spawn (through process.execPath) fails.
-    fs.writeFileSync(metadataPath, JSON.stringify({ realCodexPath: process.execPath, logFile }));
+    installNodeAsCodex(path.join(dir, 'real-bin'));
 
     const run = runWithMissingNode(['codex-run', '--', fakeCodex], 'debug');
 

@@ -81,7 +81,8 @@ describe('X-Request-Id', () => {
       expect(res.requestId).toBe('req-err-1');
       const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
       expect(logged).toHaveLength(1);
-      expect(logged[0]).toMatch(/^\[hippo\] info: GET \/v1\/memories\/a%2Fb failed: .* requestId=req-err-1 status=400\n$/);
+      // Refused before any route matched, so the line names no route and never repeats the path sent.
+      expect(logged[0]).toMatch(/^\[hippo\] info: GET unmatched failed: .* requestId=req-err-1 status=400\n$/);
     } finally {
       stderrSpy.mockRestore();
     }
