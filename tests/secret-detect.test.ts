@@ -72,7 +72,7 @@ describe('detectSecret patterns', () => {
     expect(flagged('npm_config_cache and hf_hub_download are names; the hk_ prefix marks hippo keys')).toBe(false);
   });
 
-  it('does not flag code snippets or prose in assignment position (post-merge review FPs)', () => {
+  it('does not flag code snippets or prose in assignment position', () => {
     // Both were verified false positives of the pre-fix generic pattern:
     // ordinary code-lesson memories would silently vanish from ambient
     // context everywhere. The value must now LOOK like a credential
@@ -221,7 +221,7 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
-  it('autoShare stats counts only shares actually withheld by the secret veto (v1.25.0)', () => {
+  it('autoShare stats counts only shares actually withheld by the secret veto', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     // Below the transfer bar: secret-flagged but never a share candidate, so
@@ -233,7 +233,7 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(stats.secretSkipped).toBe(1);
   });
 
-  it('autoShare fills stats identically under dryRun (v1.25.0)', () => {
+  it('autoShare fills stats identically under dryRun', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const stats = { secretSkipped: 0 };
     const candidates = autoShare(...sharingStores(projA), { minScore: 0.6, dryRun: true, stats });

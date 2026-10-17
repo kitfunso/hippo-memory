@@ -147,7 +147,7 @@ describe('api.recall anchoringHint', () => {
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(1);
   });
 
-  it('suppressedByInterference is INCREMENTED to 1 on R2 (was always 0 pre-v1.13.2)', async () => {
+  it('suppressedByInterference is INCREMENTED to 1 on R2 (it used to stay 0)', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [
       entry(111, memId),

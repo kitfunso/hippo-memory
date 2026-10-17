@@ -163,7 +163,7 @@ describe('JSON hook installer', () => {
       expect(cmd).not.toContain('hippo capture --last-session --log-file');
     });
 
-    it('migrates a legacy Stop entry from versions < 0.20.2', () => {
+    it('migrates a legacy Stop entry from older versions', () => {
       const { settings: settingsPath } = resolveJsonHookPaths('claude-code');
       fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
       fs.writeFileSync(

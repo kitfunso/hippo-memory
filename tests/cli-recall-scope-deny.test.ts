@@ -132,7 +132,7 @@ describe('cli recall scope default-deny', () => {
     expect(out).not.toContain(PRIV_GITHUB);
   });
 
-  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', async () => {
+  it('private rows cannot starve admitted rows out of the SQL candidate window', async () => {
     // 220 matching private rows > the 200-row default window. Pre-fix, the
     // window filled with private rows in SQL and the JS filter then emptied
     // it, so the one admitted row never surfaced. The SQL pre-window

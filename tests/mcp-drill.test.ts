@@ -103,7 +103,7 @@ describe('mcp hippo_drill', () => {
     expect(text).toContain('alpha detail event 0');
   });
 
-  it('errors on a leaf id (v1.6.4: distinguishable message)', async () => {
+  it('errors on a leaf id (distinguishable message)', async () => {
     const leaf = createMemory('plain leaf body', {
       layer: Layer.Buffer,
       confidence: 'observed',

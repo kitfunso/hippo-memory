@@ -152,7 +152,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
     }
   });
 
-  it('test 3b — pinned displacement under budget pressure (codex finding): a pinned entry occupying a recent slot must still inject once budget is tight', async () => {
+  it('test 3b: pinned displacement under budget pressure, a pinned entry occupying a recent slot must still inject once budget is tight', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });

@@ -143,7 +143,7 @@ describe('E1 driver', () => {
     for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
   });
 
-  it('is REPRODUCIBLE: identical (arm, seed) runs produce identical metrics (codex P1)', async () => {
+  it('is REPRODUCIBLE: identical (arm, seed) runs produce identical metrics', async () => {
     // The protocol intentionally creates score ties (identical-form
     // negatives); with random entry UUIDs, tie order differed across runs of
     // the same seed. Entry ids are now derived from (seed, protocol id) -

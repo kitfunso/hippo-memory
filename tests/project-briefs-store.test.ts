@@ -251,7 +251,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     } finally { closeHippoDb(db2); }
   });
 
-  it('refresh stays within the summary cap with many long receipts (codex P2 regression)', async () => {
+  it('refresh stays within the summary cap with many long receipts', async () => {
     // 50 receipts (the MAX_BRIEF_RECEIPTS scan cap) with long headlines would build
     // an ~11KB digest if rendered naively, exceeding MAX_BRIEF_SUMMARY_LEN (8192) and
     // making saveProjectBrief reject it. Budget-aware assembly must keep it bounded.

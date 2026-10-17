@@ -139,7 +139,7 @@ describe('resolveTenantForGitHub', () => {
     }
   });
 
-  it('codex P0 #4 regression: PAT-mode webhook (no installation_id) with non-empty github_installations and no repo match -> null', async () => {
+  it('regression: PAT-mode webhook (no installation_id) with non-empty github_installations and no repo match -> null', async () => {
     const db = openHippoDb(root);
     try {
       // Multi-tenant App install populated via installations table.

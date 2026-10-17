@@ -29,7 +29,7 @@ describe('RECALL_DEFAULT_DENY_SCOPES: single source of truth', () => {
     }
   });
 
-  it('contains unknown:legacy at v1.7.2 ship time (regression-pin)', () => {
+  it('contains unknown:legacy (regression pin)', () => {
     expect(RECALL_DEFAULT_DENY_SCOPES).toContain('unknown:legacy');
   });
 });

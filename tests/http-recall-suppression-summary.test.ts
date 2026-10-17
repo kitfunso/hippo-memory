@@ -81,7 +81,7 @@ describe('HTTP /v1/memories suppressionSummary', () => {
     expect(body.suppressionSummary!.droppedByBudget).toBeGreaterThanOrEqual(15);
   });
 
-  it('back-compat: TS RecallResult type accepts a pre-v1.12.13 payload without suppressionSummary', () => {
+  it('back-compat: TS RecallResult type accepts an old payload without suppressionSummary', () => {
     // Hand-construct a literal pre-v1.12.13-shaped response (no
     // suppressionSummary key). Cast to the new type and verify the field
     // is undefined (not throwing). This proves the field is forever

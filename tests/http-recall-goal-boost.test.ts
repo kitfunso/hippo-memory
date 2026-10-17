@@ -64,7 +64,7 @@ describe('HTTP /v1/memories session_id', () => {
     }
   });
 
-  it('session_id omitted: no boost, no goal_recall_log row (v1.7.3 baseline)', async () => {
+  it('session_id omitted: no boost, no goal_recall_log row (baseline)', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=auth`);
     expect(res.status).toBe(200);
     const db = openHippoDb(home);

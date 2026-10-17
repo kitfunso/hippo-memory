@@ -114,7 +114,7 @@ describe.each(NOUNS)('hippo $noun CLI', (k) => {
     expect(res.stderr).toContain(`Invalid --status: "bogus". Must be one of: ${k.states} | all.`);
   });
 
-  it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', async () => {
+  it('rejects a malformed id and does NOT mutate the wrong row', async () => {
     await ok(k.noun, ...k.keep);
     // parseInt("1abc") is 1, so a lenient parse would act on row 1.
     expect((await hippo(k.noun, 'close', '1abc')).status).toBe(1);

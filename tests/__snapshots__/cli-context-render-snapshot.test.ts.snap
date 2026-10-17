@@ -114,7 +114,7 @@ Results:
    New semantic:      0"
 `;
 
-exports[`renderSleepResult snapshots > secret-veto withheld line when secretSkipped > 0 (v1.25.0) 1`] = `
+exports[`renderSleepResult snapshots > secret-veto withheld line when secretSkipped > 0 1`] = `
 "Running consolidation...
 
 Results:

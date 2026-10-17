@@ -85,7 +85,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('No-terms path: honours the LIMIT parameter (self-review fix)', async () => {
+  it('No-terms path: honours the LIMIT parameter', async () => {
     // Self-review found the no-terms path was uncapped pre-v1.7.0 (codex
     // diff-pass only flagged the bottom-of-function full-store fallback).
     // Insert 50 raws, request limit=10, assert exactly 10 returned.
@@ -99,7 +99,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry (v1.7.1 INFO #3 + P1)', async () => {
+  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry', async () => {
     // P1[5]: verify stamped `created` survives writeEntry → roundtrip read.
     // upsertEntryRow (store/entry-row.ts) passes entry.created straight through;
     // a future normalizer would silently break this test. Anchor explicitly.
@@ -205,7 +205,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('Full-store fallback path: honours LIMIT (regression for codex P1 — pre-v1.7.0 was uncapped)', () => {
+  it('Full-store fallback path: honours LIMIT (regression: it was once uncapped)', () => {
     // Codex caught that the full-store fallback returned the entire tenant
     // store ignoring `limit`. Pre-v1.7.0 a query with no FTS hit and
     // limit=10 returned all 30 rows; the fix added LIMIT ?. This test

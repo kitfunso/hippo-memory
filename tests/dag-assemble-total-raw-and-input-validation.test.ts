@@ -207,7 +207,7 @@ describe('HTTP /v1/memories input validation', () => {
     safeRmSync(home);
   });
 
-  it('400 on fresh_tail_session_id > 256 chars (P1-3)', async () => {
+  it('400 on fresh_tail_session_id > 256 chars', async () => {
     const big = 'x'.repeat(257);
     const res = await fetch(`${handle.url}/v1/memories?q=test&fresh_tail_session_id=${big}`);
     expect(res.status).toBe(400);
@@ -219,7 +219,7 @@ describe('HTTP /v1/memories input validation', () => {
     expect(res.status).toBe(200);
   });
 
-  it('summarize_overflow=banana is treated as false (P1-4)', async () => {
+  it('summarize_overflow=banana is treated as false', async () => {
     // No fixture rows; just verify the request succeeds and the parse
     // doesn't throw. Pre-v1.6.3, banana → true; post-v1.6.3, banana → false.
     // Caller can't observe summarize_overflow directly in a row-less

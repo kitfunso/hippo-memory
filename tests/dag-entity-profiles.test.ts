@@ -426,7 +426,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(isDagSummary(l0)).toBe(false);
   });
 
-  it('test #14: buildEntityProfiles partitions clusters by tenantId (independent-review HIGH #1 lock)', async () => {
+  it('test #14: buildEntityProfiles partitions clusters by tenantId', async () => {
     // 3 alice L2s in tenant-A, 3 alice L2s in tenant-B with similar content
     const tenantAL2s = [
       'alice does python in tenant A repo one',

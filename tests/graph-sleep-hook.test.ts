@@ -201,7 +201,7 @@ describe('sleep enqueue-hook', () => {
     expect(loadPendingExtractionTenants(tc.hippoRoot)).toHaveLength(0);
   });
 
-  it('14. P1: a tenant still rebuilds when an earlier sleep phase deletes its queued mirror (codex)', async () => {
+  it('14. a tenant still rebuilds when an earlier sleep phase deletes its queued mirror', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     expect(pending(tc.hippoRoot)).toHaveLength(1);
     // Simulate dedup/audit removing the queued mirror mid-sleep: the queue row
@@ -218,7 +218,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(0); // its queue row cascade-deleted (mark = no-op)
   });
 
-  it('15. P2 fail-soft: a dirty-tenant snapshot failure does not abort core sleep (codex)', async () => {
+  it('15. fail-soft: a dirty-tenant snapshot failure does not abort core sleep', async () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     const phases: Partial<SleepPhases> = {
       loadPendingExtractionTenants: () => { throw new Error('boom: queue read failed'); },
@@ -230,7 +230,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
   });
 
-  it('16. atomic rebuild: applyGraphOps rolls back all writes on a throw (codex P2)', async () => {
+  it('16. atomic rebuild: applyGraphOps rolls back all writes on a throw', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     // A rebuild that inserts then throws must leave NO partial graph rows: the
     // whole transaction rolls back. This is what makes extractGraph atomic, so two

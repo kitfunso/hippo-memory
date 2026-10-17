@@ -152,7 +152,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     expect(text).not.toMatch(/WYSIATI:/);
   });
 
-  it('v1.13.3 top-placement guard: Cutoff block appears BEFORE the first memory row', async () => {
+  it('top-placement guard: Cutoff block appears BEFORE the first memory row', async () => {
     // Dogfood (docs/dogfood/2026-05-27-track-j-warnings.md) confirmed the
     // pre-v1.13.3 bottom-placement was the read-failure root cause. This
     // test locks the new top-placement so a future refactor cannot regress

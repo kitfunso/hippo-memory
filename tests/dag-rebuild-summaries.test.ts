@@ -490,7 +490,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(stillDirty.map((s) => s.id)).toContain(summary.id);
   });
 
-  it('test #10: REGRESSION LOCK — buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
+  it('test #10: REGRESSION LOCK: buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
     const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
     const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });

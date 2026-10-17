@@ -26,7 +26,7 @@ describe('sequential-learning hippo adapter refuses to run without a working CLI
     expect(storeDirOf(adapter)).toBeNull();
   });
 
-  it('init() rejects when the CLI prints to stdout and then exits non-zero (codex round 4 P1)', async () => {
+  it('init() rejects when the CLI prints to stdout and then exits non-zero', async () => {
     const adapter = await loadAdapter(join(process.cwd(), 'tests', 'fixtures', 'sl-adapter', 'fake-cli-fails-late.mjs'));
     await expect(adapter.init()).rejects.toThrow(/failed to start/);
     expect(storeDirOf(adapter)).toBeNull();

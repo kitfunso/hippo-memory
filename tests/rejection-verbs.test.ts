@@ -61,7 +61,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     }
   });
 
-  it('reject purges the trace-layer markdown mirror (P1 fix: removeEntryMirrors previously skipped Layer.Trace)', async () => {
+  it('reject purges the trace-layer markdown mirror', async () => {
     const trace = createMemory('trace: read config.ts -> rotated the deploy key -> success', {
       layer: Layer.Trace,
       traceOutcome: 'success',
@@ -119,7 +119,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     await expect(api.reject(ctx(), { memoryId: a.id, reason: '' })).rejects.toThrow();
   });
 
-  it('reject throws when both memoryId and value are given (P2 fix)', async () => {
+  it('reject throws when both memoryId and value are given', async () => {
     const a = createMemory('both forms supplied at once', { tags: [] });
     writeEntry(tmpDir, a);
     await expect(
@@ -127,7 +127,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     ).rejects.toThrow();
   });
 
-  it('unreject throws on a blank digest/prefix instead of matching every tombstone (P2 fix)', async () => {
+  it('unreject throws on a blank digest/prefix instead of matching every tombstone', async () => {
     const a = createMemory('to be rejected for the blank-unreject test', { tags: [] });
     writeEntry(tmpDir, a);
     await api.reject(ctx(), { memoryId: a.id, reason: 'setup for blank-unreject test' });
@@ -211,7 +211,7 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('rejectLoserValue removes a same-tenant same-digest duplicate but leaves an identical-content row in ANOTHER tenant untouched (P1 fix)', async () => {
+  it('rejectLoserValue removes a same-tenant same-digest duplicate but leaves an identical-content row in ANOTHER tenant untouched', async () => {
     const { aId, bId, conflictId } = seedConflict();
     const loserContent = 'Use && to chain commands in PowerShell';
 
@@ -365,7 +365,7 @@ describe('resolveConflict rejection wiring', () => {
   });
 });
 
-describe('cmdSupersede write-order contract (code-review round-1 high)', () => {
+describe('cmdSupersede write-order contract', () => {
   it('a refused successor write leaves the old row without a dangling superseded_by pointer', async () => {
     // Replicates cmdSupersede's REORDERED two-write flow (cli.ts): the
     // successor is written FIRST so the rejection guard fires before any

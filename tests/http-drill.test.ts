@@ -80,7 +80,7 @@ describe('GET /v1/recall/drill/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('422 for a leaf id (v1.6.4: distinguishable from missing)', async () => {
+  it('422 for a leaf id (distinguishable from missing)', async () => {
     const leaf = createMemory('plain leaf body', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,

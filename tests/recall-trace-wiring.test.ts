@@ -133,7 +133,7 @@ describe('api.recall — trace wiring', () => {
     }
   });
 
-  it('does NOT write last_trace_id (v1.11.5 no-side-effects contract, extended)', async () => {
+  it('does NOT write last_trace_id', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });

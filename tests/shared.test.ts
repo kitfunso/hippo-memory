@@ -89,7 +89,7 @@ describe('copyToGlobal', () => {
     expect(() => copyToGlobal(localRoot, 'nonexistent_id')).toThrow();
   });
 
-  it('honors opts.tenantId for cross-tenant isolation (v1.11.0 residue)', () => {
+  it('honors opts.tenantId for cross-tenant isolation', () => {
     const a = createMemory('tenant-a content', { tenantId: 'tenant-a' });
     const b = createMemory('tenant-b content', { tenantId: 'tenant-b' });
     writeEntry(localRoot, a);

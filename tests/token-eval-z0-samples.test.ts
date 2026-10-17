@@ -236,7 +236,7 @@ describe('reader sample labels and scoring', () => {
     expect(() => parseLabels('p01\tpass\n', ids, ['pass'])).toThrow('no label for p02');
   });
 
-  it('counts disagreements, leaves round 1 out of round 2, and re-scores round 1 against post-fix verdicts (27)', () => {
+  it('counts disagreements, leaves round 1 out of round 2, and re-scores round 1 against post-fix verdicts', () => {
     const s = synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
     expect(draw(s.out, s.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
     const r1 = pairsOf(s.out);
@@ -258,7 +258,7 @@ describe('reader sample labels and scoring', () => {
     expect(existsSync(join(s.out, 'g5', 'sealed', 'reader-r2.score.json'))).toBe(true);
   });
 
-  it('an args-only checker fix lets round 2 draw; the unchanged invocation does not (27c, 166)', () => {
+  it('an args-only checker fix lets round 2 draw; the unchanged invocation does not', () => {
     const lesson = (args: string[]) => ({ checkPath: join(CHECKS, 'toggle.mjs'), check: { script: 'toggle.mjs', args } });
     const [before, after] = [checkerIdentity(lesson([])), checkerIdentity(lesson(['--strict']))];
     expect(after).not.toBe(before);

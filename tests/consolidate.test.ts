@@ -389,7 +389,7 @@ describe('Merge pass', () => {
     expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
   });
 
-  it('does not flag the unrelated wording pairs reported in PR #11', async () => {
+  it('does not flag the unrelated wording pairs', async () => {
     initStore(tmpDir);
 
     const pairs = [

@@ -96,7 +96,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     }
   });
 
-  it('15. focus query finds an entity beyond the global limit window (codex P2)', async () => {
+  it('15. focus query finds an entity beyond the global limit window', async () => {
     // Many entities so that a small `limit`, under the old global-cap-then-filter,
     // would miss the focus entity / its neighbor. The by-name focus query (which
     // looks up the entity directly, then its bidirectional edges) must still find it.
@@ -111,7 +111,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     expect(m.edges.every((e) => ids.has(e.from) && ids.has(e.to))).toBe(true);
   });
 
-  it('16. focus subgraph includes neighbour-to-neighbour edges, not just focus-touching (codex P2)', async () => {
+  it('16. focus subgraph includes neighbour-to-neighbour edges, not just focus-touching', async () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolA', policyText: 'PolA works closely with PolB' });
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolB', policyText: 'a standalone policy' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB across the org now' });
@@ -126,7 +126,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     expect(interNeighbor).toBe(true);
   });
 
-  it('17. focus on a name shared by many entities is capped to the limit (codex P2)', async () => {
+  it('17. focus on a name shared by many entities is capped to the limit', async () => {
     for (let i = 0; i < 8; i++) await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { customer: 'Acme', note: `note ${i}` });
     await extractGraph(sqliteStore(home), T);
     const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Acme', limit: 3 });
@@ -134,7 +134,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     expect(m.truncated).toBe(true);
   });
 
-  it('18. focus truncation is reported when the neighbour scan hits the cap (codex P2)', async () => {
+  it('18. focus truncation is reported when the neighbour scan hits the cap', async () => {
     for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
     await extractGraph(sqliteStore(home), T);
@@ -265,7 +265,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
     expect(body.edges).toEqual([]);
   });
 
-  it('19. accepts a valid entity name longer than 256 chars (codex P2)', async () => {
+  it('19. accepts a valid entity name longer than 256 chars', async () => {
     const longName = 'Adopt ' + 'X'.repeat(300); // ~306 chars, within MAX_ENTITY_NAME_LEN (512)
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: longName });
     await extractGraph(sqliteStore(home), T);

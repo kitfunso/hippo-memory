@@ -70,7 +70,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(await res.text()).toContain('tenant contains invalid characters');
   });
 
-  it('round-trips an outcome row (pre-existing drift the v1.11.5 Set update closes)', async () => {
+  it('round-trips an outcome row (drift the Set update closed)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'outcome-target' });
     await outcome(ctx, [m1.id], true);

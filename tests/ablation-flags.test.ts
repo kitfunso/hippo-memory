@@ -172,7 +172,7 @@ describe('HIPPO_ABLATE_DECAY', () => {
     expect(calculateStrength(agedMemory(0), NOW, abl())).toBe(1.0);
   });
 
-  it('documents the co-ablation: outcome-slow is inert when decay is off (codex P2)', async () => {
+  it('documents the co-ablation: outcome-slow is inert when decay is off', async () => {
     // rewardFactor acts ONLY by scaling the effective half-life inside the
     // decay exponent; with decay := 1 there is nothing to modulate. The
     // decay-off arm is therefore "decay + outcome-slow off" BY CONSTRUCTION
@@ -216,7 +216,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     expect(result[0].confidence).toBe('stale'); // no stale->observed promotion
   });
 
-  it('physics mass recomputed under ablated rules ignores ALL recall history (codex round-7 P2)', async () => {
+  it('physics mass recomputed under ablated rules ignores ALL recall history', async () => {
     // The physicsSearch join recomputes mass as
     // computeMass(calculateStrength(entry, now), rc) under the flag; both
     // functions apply ablated semantics internally, so a heavily-recalled
@@ -241,7 +241,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     );
   });
 
-  it('neutralizes the READ side too: prior retrieval_count > 0 gives no boost (codex P2)', () => {
+  it('neutralizes the READ side too: prior retrieval_count > 0 gives no boost', () => {
     // A store written BEFORE the flag was set can carry counts; the ablated
     // arm must not let that history leak strengthening into rankings.
     const withHistory = agedMemory(10);
@@ -250,7 +250,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     expect(calculateStrength(withHistory, NOW, abl())).toBe(calculateStrength(without, NOW, abl()));
   });
 
-  it('neutralizes physics particle mass too: retrieval history cannot leak via gravity (codex round-5 P2)', async () => {
+  it('neutralizes physics particle mass too: retrieval history cannot leak via gravity', async () => {
     // Query gravity ranks the physics pool by particle mass, which scales with
     // retrieval_count; under the flag, mass must ignore retrieval history in
     // both the init and refresh paths (computeMass is the single shared site).
@@ -261,7 +261,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     expect(computeMass(0.8, 16)).toBeGreaterThan(computeMass(0.8, 0));
   });
 
-  it('anchors decay at created: prior clock resets cannot leak in (codex round-3 P2)', () => {
+  it('anchors decay at created: prior clock resets cannot leak in', () => {
     // Both memories created 30 days ago; one was "retrieved" 1 day ago by a
     // PRIOR unflagged run (persisted last_retrieved reset). Under the flag,
     // decay anchors at created, so both decay identically from creation.
@@ -322,7 +322,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     expect(marked.retrieval_count).toBe(1);
   });
 
-  it('silences replay reward bias too: outcome counts no longer skew replay priority (codex P2)', async () => {
+  it('silences replay reward bias too: outcome counts no longer skew replay priority', async () => {
     // Replay (a consolidation sub-pass) preferentially rehearses
     // outcome-positive memories and then strengthens them via markRetrieved -
     // an outcome-dependent lifecycle path that must also go quiet in the
@@ -399,7 +399,7 @@ describe('HIPPO_FAKE_NOW', () => {
     expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
   });
 
-  it('flows through search scoring, not just retrieval stamping (codex P2)', async () => {
+  it('flows through search scoring, not just retrieval stamping', async () => {
     // Without the search-default wiring, scoring would use the REAL clock while
     // markRetrieved stamps the fake one - inconsistent simulated time.
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
@@ -425,7 +425,7 @@ describe('HIPPO_FAKE_NOW', () => {
     expect(now).toBeLessThanOrEqual(Date.now());
   });
 
-  it('rejects non-canonical formats Date.parse would accept (codex P2)', () => {
+  it('rejects non-canonical formats Date.parse would accept', () => {
     // '1', locale dates, non-UTC ISO, millis-less forms, and ROLLED-OVER dates
     // (2026-02-31 silently becomes March 3 under V8 Date.parse) must NOT
     // become a fake clock - round-trip validation catches them all.
@@ -448,7 +448,7 @@ describe('HIPPO_FAKE_NOW', () => {
     }
   });
 
-  it('flows through the searchBothHybrid wrapper default too (codex P2)', async () => {
+  it('flows through the searchBothHybrid wrapper default too', async () => {
     // The wrapper destructures its own `now` default and passes it explicitly
     // into hybridSearch, so the inner fallback never runs - the wrapper default
     // itself must honor the fake clock.

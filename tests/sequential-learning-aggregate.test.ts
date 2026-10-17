@@ -41,7 +41,7 @@ describe('aggregate helpers', () => {
     expect(ciHalfWidth95([0.5])).toBe(0);
   });
 
-  it('ciHalfWidth95 rejects n<5 by returning 0 (codex P2 -- nonsense t-crit)', () => {
+  it('ciHalfWidth95 rejects n<5 by returning 0, a nonsense t-crit', () => {
     expect(ciHalfWidth95([0.5, 0.6])).toBe(0);
     expect(ciHalfWidth95([0.5, 0.6, 0.7])).toBe(0);
     expect(ciHalfWidth95([0.5, 0.6, 0.7, 0.8])).toBe(0);
@@ -180,7 +180,7 @@ describe('generateTasks(seed)', () => {
     expect(differingSlots).toBeGreaterThanOrEqual(Math.floor(trapPositions.length / 2));
   });
 
-  it('preserves total trap-encounter count (31 across all seeds — v1.8.0: 25 v1.7.x + 6 adversarial)', () => {
+  it('preserves total trap-encounter count (31 across all seeds: 25 original + 6 adversarial)', () => {
     for (const seed of [0, 1, 42, 100, 1000, 9999]) {
       const tasks = generateTasks(seed);
       const trapCount = tasks.filter((t: { trapCategory: string | null }) => t.trapCategory).length;

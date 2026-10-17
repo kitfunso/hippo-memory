@@ -237,7 +237,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(countRows(home, 'graph_extraction_queue')).toBe(0);
   });
 
-  it('REVERSE guard (codex P1+P2): a graph-referenced memory is immutable in kind/tenant (raw, superseded, or tenant move all ABORT)', () => {
+  it('REVERSE guard: a graph-referenced memory is immutable in kind/tenant (raw, superseded, or tenant move all ABORT)', () => {
     const md = addMemory(home, 'default', 'distilled');
     insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const db = openHippoDb(home);
@@ -264,7 +264,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     } finally { closeHippoDb(db2); }
   });
 
-  it('REVERSE guard (codex P2): a relation-endpoint entity cannot be moved cross-tenant via raw UPDATE', () => {
+  it('REVERSE guard: a relation-endpoint entity cannot be moved cross-tenant via raw UPDATE', () => {
     const md = addMemory(home, 'default', 'distilled');
     const mb = addMemory(home, 'tenant-b', 'distilled');
     const a = insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });

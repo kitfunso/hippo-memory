@@ -175,7 +175,7 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect(aprAfter[0].version).toBe(2);
   });
 
-  it('as-of returns a historically-valid superseded version (codex P2 #2)', async () => {
+  it('as-of returns a historically-valid superseded version', async () => {
     // v1 valid Jan-Dec, superseded in May by a successor effective from May.
     const v1 = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Hist', policyText: 'jan rule', validFrom: '2026-01-01', validTo: '2026-12-01' });
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Hist', policyText: 'may rule', validFrom: '2026-05-01', validTo: '2026-12-01', supersedesPolicyId: v1.id });
@@ -197,7 +197,7 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length).toBe(0);
   });
 
-  it('read-side date-only as-of resolves to end-of-day so a same-day policy is in force (codex P2 #1, round-2 fix)', async () => {
+  it('read-side date-only as-of resolves to end-of-day so a same-day policy is in force', async () => {
     const before = new Date().toISOString();
     const p = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Today', policyText: 'x' });
     // valid_from is the honest creation instant, NOT backdated to midnight.

@@ -135,7 +135,7 @@ describe('graph-recall engine', () => {
     expect(incl.map((r) => r.entry.id)).toContain(old.id); // surfaced when requested
   });
 
-  it('graph-edge superseded semantics: the newer (from) endpoint shows by default; the older (to) endpoint needs --include-superseded (codex P2)', async () => {
+  it('graph-edge superseded semantics: the newer (from) endpoint shows by default; the older (to) endpoint needs --include-superseded', async () => {
     // old <- new : insertRelationAt(from=new, to=old) means "new supersedes old".
     const oldD = mem(home, T, 'the older decision we moved on from');
     const newD = mem(home, T, 'the current decision in force');
@@ -167,7 +167,7 @@ describe('graph-recall engine', () => {
     expect(out).toHaveLength(1);
   });
 
-  it('asOf applies the FULL bi-temporal rule: a superseded reached row is dropped once its successor was valid as-of (codex P2)', async () => {
+  it('asOf applies the FULL bi-temporal rule: a superseded reached row is dropped once its successor was valid as-of', async () => {
     const seed = mem(home, T, 'current head decision');
     const pred = mem(home, T, 'the predecessor decision lineage');
     pred.valid_from = '2020-01-01T00:00:00.000Z';
@@ -190,7 +190,7 @@ describe('graph-recall engine', () => {
     expect(before.map((r) => r.entry.id)).toContain(pred.id);
   });
 
-  it('expands the GLOBAL store too: a seed whose graph lives in globalRoot surfaces its neighbour (codex P2)', async () => {
+  it('expands the GLOBAL store too: a seed whose graph lives in globalRoot surfaces its neighbour', async () => {
     const glob = makeRoot('graphrecall');
     try {
       // The seed + its graph live in the GLOBAL store; the local store has no entities.

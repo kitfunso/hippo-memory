@@ -246,7 +246,7 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(read(files.instructions)).toBe(`# Mine\n\n${copilotBlock()}\n`);
   });
 
-  it('upgrades the block hippo 1.67.0 wrote, and uninstall removes that block whether or not setup ran again', () => {
+  it('upgrades the block an older hippo wrote, and uninstall removes that block whether or not setup ran again', () => {
     const old = `# Mine\n\n${START}\n${COPILOT_INSTRUCTIONS_1_67_0}\n${END}\n`;
     writeFile(files.instructions, old);
     expect(installCopilot().instructions).toBe('written');

@@ -71,7 +71,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     }
   });
 
-  it('goalTag override SUPPRESSES the boost (mirrors the CLI v0.38 goalTag === \'\' gate)', async () => {
+  it("goalTag override SUPPRESSES the boost (mirrors the CLI goalTag === '' gate)", async () => {
     // Sanity: same setup as the first test but with goalTag set.
     const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
@@ -99,7 +99,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     }
   });
 
-  it('omitting sessionId preserves v1.7.3 behaviour (no boost, no log)', async () => {
+  it('omitting sessionId keeps the old behaviour (no boost, no log)', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     await retrieve(ctx, { query: 'auth', window: { limit: 10 } }); // no sessionId

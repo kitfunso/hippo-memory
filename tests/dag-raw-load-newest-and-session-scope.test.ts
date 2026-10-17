@@ -96,7 +96,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
   beforeEach(() => { root = makeRoot('v162-sess'); });
   afterEach(() => safeRmSync(root));
 
-  it('without sessionId: tenant-wide (legacy v1.5.2 behaviour)', () => {
+  it('without sessionId: tenant-wide (legacy behaviour)', () => {
     const a = makeRaw('row in session A', 'sess-A');
     a.created = '2026-01-01T00:00:00.000Z';
     const b = makeRaw('row in session B', 'sess-B');

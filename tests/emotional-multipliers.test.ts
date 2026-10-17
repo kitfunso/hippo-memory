@@ -264,7 +264,7 @@ describe('behavioral: env=0 ranking effect', () => {
     _resetLossAversionRatioCacheForTests();
   });
 
-  it('9. env=0.5 (v1.13.4-equivalent floor) reduces error-tagged memory strength vs default', async () => {
+  it('9. env=0.5 (the previous floor) reduces error-tagged memory strength vs default', async () => {
     // v1.13.5 + codex P1 fold: env=0.01 was originally used here but is
     // now rejected as invalid (below the 0.5 floor). Use env=0.5 (the
     // minimum valid ratio = v1.13.4 equivalent multiplier of 1.0 + 0.5*1.0
