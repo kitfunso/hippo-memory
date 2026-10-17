@@ -11,6 +11,8 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
+import { runCliAs } from './run-cli-as.js';
+import type { InProcessResult } from './run-in-process.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
@@ -80,7 +82,23 @@ export function hippoNoWorker(p: Project, args: string[], opts: RunOptions = {})
   });
 }
 
-export const sessionEndPayload = (sessionId: string, extra: { [field: string]: string } = {}): string =>
+/** `hippo` run through runCli in this process, for a case that reads rows and printed bytes but not the process. */
+export function hippoIn(p: Project, args: string[], opts: RunOptions = {}): Promise<InProcessResult> {
+  return runCliAs(args, { cwd: opts.cwd ?? p.cwd, env: { ...p.env, ...opts.env }, input: opts.input ?? '' });
+}
+
+/** hippoNoWorker in this process: the worker spawn reads process.execPath when it starts, so a missing one fails it. */
+export async function hippoInNoWorker(p: Project, args: string[], opts: RunOptions = {}): Promise<InProcessResult> {
+  const execPath = process.execPath;
+  process.execPath = path.join(p.dir, 'no-such-node');
+  try {
+    return await hippoIn(p, args, opts);
+  } finally {
+    process.execPath = execPath;
+  }
+}
+
+export const sessionEndPayload =(sessionId: string, extra: { [field: string]: string } = {}): string =>
   JSON.stringify({ session_id: sessionId, transcript_path: 'no-such-transcript.jsonl', hook_event_name: 'SessionEnd', reason: 'exit', ...extra });
 
 export interface AsyncRun { status: number | null; stdout: string; stderr: string }

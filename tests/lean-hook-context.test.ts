@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -15,18 +14,20 @@ import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 let home: string;
 let project: string;
 let env: NodeJS.ProcessEnv;
 
-function hippo(args: string[], input?: string): SpawnSyncReturns<string> {
-  const r = hippoRun(args, { cwd: project, env, input });
+// In process unless `spawned`: the first SessionStart case runs its hooks in a real child, the rest read bytes and rows.
+async function hippo(args: string[], input?: string, spawned = false): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  const r = spawned ? hippoRun(args, { cwd: project, env, input }) : await runCliAs(args, { cwd: project, env, input });
   expect(r.status, r.stderr).toBe(0);
   return r;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lean-'));
   project = path.join(home, 'project');
   fs.mkdirSync(project);
@@ -34,8 +35,8 @@ beforeEach(() => {
     ...process.env, HOME: home, USERPROFILE: home, APPDATA: home, HIPPO_HOME: path.join(home, 'global'),
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
-  hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
-  hippo(['hook', 'install', 'claude-code']);
+  await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
+  await hippo(['hook', 'install', 'claude-code']);
 });
 afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
 
@@ -53,10 +54,10 @@ interface HookPayload {
 }
 
 /** Runs an installed `hippo ...` command line against the built CLI, as Claude Code would. */
-function runHook(command: string, payload: HookPayload): SpawnSyncReturns<string> {
+async function runHook(command: string, payload: HookPayload, spawned = false): ReturnType<typeof hippo> {
   const [bin, ...args] = (command.match(/"[^"]*"|\S+/g) ?? []).map((a) => a.replace(/^"(.*)"$/, '$1'));
   expect(bin).toBe('hippo');
-  return hippo(args, JSON.stringify(payload));
+  return await hippo(args, JSON.stringify(payload), spawned);
 }
 
 /** What Claude Code adds to the model's context from a UserPromptSubmit hook's stdout. */
@@ -64,15 +65,15 @@ function additionalContext(stdout: string): string {
   return JSON.parse(stdout).hookSpecificOutput.additionalContext;
 }
 
-function remember(text: string, ...flags: string[]): string {
-  const id = /Remembered \[([^\]]+)\]/.exec(hippo(['remember', text, ...flags]).stdout)?.[1];
+async function remember(text: string, ...flags: string[]): Promise<string> {
+  const id = /Remembered \[([^\]]+)\]/.exec((await hippo(['remember', text, ...flags])).stdout)?.[1];
   expect(id).toBeTruthy();
   return id ?? '';
 }
 
-function promptContext(prompt: string): string {
+async function promptContext(prompt: string): Promise<string> {
   const [command] = installedCommands('UserPromptSubmit').filter((c) => c.includes('hippo context --pinned-only'));
-  return additionalContext(runHook(command, { session_id: 'lean-session', hook_event_name: 'UserPromptSubmit', prompt }).stdout);
+  return additionalContext((await runHook(command, { session_id: 'lean-session', hook_event_name: 'UserPromptSubmit', prompt })).stdout);
 }
 
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
@@ -86,17 +87,18 @@ function enablePromptRecall(): void {
 }
 
 describe('SessionStart hooks', () => {
-  it('keep the consolidation log out of the stdout Claude Code adds to the model context', () => {
+  it('keep the consolidation log out of the stdout Claude Code adds to the model context', async () => {
     const commands = installedCommands('SessionStart');
     const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
     expect(logFile).not.toBe('');
     // The SessionEnd worker leaves the output of a real sleep run in this log.
-    remember('the release script needs the staging flag or it publishes to production');
-    hippo(['sleep', '--log-file', logFile]);
+    await remember('the release script needs the staging flag or it publishes to production');
+    await hippo(['sleep', '--log-file', logFile]);
     const lines = fs.readFileSync(logFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
     expect(lines.length).toBeGreaterThan(0);
 
-    const runs = commands.map((c) => runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
+    const runs = [];
+    for (const c of commands) runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }, true));
     const stdout = runs.map((r) => r.stdout).join('');
     const stderr = runs.map((r) => r.stderr).join('');
 
@@ -107,16 +109,17 @@ describe('SessionStart hooks', () => {
     expect(fs.existsSync(logFile)).toBe(false);
   });
 
-  it('show the user one problems line and still keep the log out of the context', () => {
+  it('show the user one problems line and still keep the log out of the context', async () => {
     const commands = installedCommands('SessionStart');
     const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
-    remember('the release script needs the staging flag or it publishes to production');
-    hippo(['sleep', '--log-file', logFile]);
+    await remember('the release script needs the staging flag or it publishes to production');
+    await hippo(['sleep', '--log-file', logFile]);
     const lines = fs.readFileSync(logFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
     fs.mkdirSync(path.join(project, '.hippo', 'compactions-spool'), { recursive: true });
     fs.writeFileSync(path.join(project, '.hippo', 'compactions-spool', 'x.unreadable.bad'), '{');
 
-    const runs = commands.map((c) => runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
+    const runs = [];
+    for (const c of commands) runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
     const stdout = runs.map((r) => r.stdout).join('');
     const stderr = runs.map((r) => r.stderr).join('');
 
@@ -134,14 +137,14 @@ describe('a memory with a copy in the global store', () => {
   const older = 'the staging database resets every night at two in the morning UTC';
   const newest = 'run the migration check before tagging a release, it catches missing indexes';
 
-  it('reaches the prompt hook once, and the freed recent slot goes to the next memory', () => {
+  it('reaches the prompt hook once, and the freed recent slot goes to the next memory', async () => {
     // The freed slot is a newest-5 backfill, so pin the pre-1.55.0 default.
     fs.writeFileSync(path.join(project, '.hippo', 'config.json'), JSON.stringify({ pinnedInject: { promptRecall: false } }));
-    hippo(['promote', remember(rule, '--pin')]);
-    remember(older);
-    hippo(['share', remember(newest), '--force']);
+    await hippo(['promote', await remember(rule, '--pin')]);
+    await remember(older);
+    await hippo(['share', await remember(newest), '--force']);
 
-    const context = promptContext('what should I check before the release?');
+    const context = await promptContext('what should I check before the release?');
     expect(count(context, rule)).toBe(1);
     expect(count(context, newest)).toBe(1);
     expect(count(context, older)).toBe(1);
@@ -149,72 +152,72 @@ describe('a memory with a copy in the global store', () => {
 
     // Two recent slots: the copy of the newest memory used to take the second one.
     const narrow = additionalContext(
-      hippo(['context', '--pinned-only', '--include-recent', '2', '--format', 'additional-context']).stdout,
+      (await hippo(['context', '--pinned-only', '--include-recent', '2', '--format', 'additional-context'])).stdout,
     );
     expect(count(narrow, newest)).toBe(1);
     expect(count(narrow, older)).toBe(1);
   });
 
-  it('keeps the pinned copy when only the global one is pinned', () => {
-    remember(rule);
-    remember(rule, '--pin', '--global');
+  it('keeps the pinned copy when only the global one is pinned', async () => {
+    await remember(rule);
+    await remember(rule, '--pin', '--global');
 
-    const context = promptContext('what should I check before the release?');
+    const context = await promptContext('what should I check before the release?');
     expect(count(context, rule)).toBe(1);
     expect(context).toContain(`[global] ${rule}`);
   });
 
-  it('reaches the session-start context once', () => {
-    hippo(['promote', remember(rule, '--pin')]);
-    hippo(['share', remember(newest), '--force']);
+  it('reaches the session-start context once', async () => {
+    await hippo(['promote', await remember(rule, '--pin')]);
+    await hippo(['share', await remember(newest), '--force']);
 
-    const out = hippo(['context', '--budget', '1500']).stdout;
+    const out = (await hippo(['context', '--budget', '1500'])).stdout;
     expect(count(out, rule)).toBe(1);
     expect(count(out, newest)).toBe(1);
   });
 
-  it('is recalled once when the prompt hook recalls by the prompt', () => {
+  it('is recalled once when the prompt hook recalls by the prompt', async () => {
     enablePromptRecall();
-    hippo(['share', remember(older), '--force']);
+    await hippo(['share', await remember(older), '--force']);
 
-    const context = promptContext('when does the staging database reset?');
+    const context = await promptContext('when does the staging database reset?');
     expect(count(context, older)).toBe(1);
     expect(context).not.toContain('[global]');
   });
 
-  it('is not recalled by the prompt hook when a pinned copy is already injected', () => {
+  it('is not recalled by the prompt hook when a pinned copy is already injected', async () => {
     enablePromptRecall();
-    remember(older, '--pin');
-    remember(older, '--global');
+    await remember(older, '--pin');
+    await remember(older, '--global');
 
-    const context = promptContext('when does the staging database reset?');
+    const context = await promptContext('when does the staging database reset?');
     expect(count(context, older)).toBe(1);
     expect(context).not.toContain('[global]');
   });
 
-  it('comes back once from `hippo recall --multihop`', () => {
-    hippo(['share', remember(older), '--force']);
+  it('comes back once from `hippo recall --multihop`', async () => {
+    await hippo(['share', await remember(older), '--force']);
 
-    const out = JSON.parse(hippo(['recall', 'when does the staging database reset', '--multihop', '--json']).stdout);
+    const out = JSON.parse((await hippo(['recall', 'when does the staging database reset', '--multihop', '--json'])).stdout);
     expect(out.results.filter((r: { content: string }) => r.content === older)).toHaveLength(1);
   });
 
-  it('is not copied back into the project by `hippo sync`', () => {
-    hippo(['promote', remember(older)]);
+  it('is not copied back into the project by `hippo sync`', async () => {
+    await hippo(['promote', await remember(older)]);
 
-    expect(hippo(['sync']).stdout).toContain('Synced 0 global memories');
+    expect((await hippo(['sync'])).stdout).toContain('Synced 0 global memories');
     expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 
-  it('lands once in another project when `hippo sync` finds two global copies', () => {
-    const id = remember(older);
-    hippo(['promote', id]);
-    hippo(['promote', id]);
+  it('lands once in another project when `hippo sync` finds two global copies', async () => {
+    const id = await remember(older);
+    await hippo(['promote', id]);
+    await hippo(['promote', id]);
     project = path.join(home, 'other');
     fs.mkdirSync(project);
-    hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
 
-    hippo(['sync', '--cross-project']);
+    await hippo(['sync', '--cross-project']);
     expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 

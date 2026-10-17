@@ -1,5 +1,5 @@
 // End to end through bin/hippo.js: the session-end workers write the digest, and context prints the handoff or the digest, never both.
-import { spawn, type SpawnSyncReturns } from 'child_process';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -11,6 +11,7 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
@@ -24,7 +25,7 @@ let repo: string;
 let log: string;
 let env: NodeJS.ProcessEnv;
 
-beforeEach(() => {
+beforeEach(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-worker-'));
   repo = path.join(tmp, 'repo');
   const home = path.join(tmp, 'home');
@@ -38,15 +39,16 @@ beforeEach(() => {
   // A model CLI on PATH could answer a capture step; the digest must stand without one.
   env.PATH = (process.env.PATH ?? '').split(path.delimiter).filter((dir) => !/[\\/]npm[\\/]?$/i.test(dir)).join(path.delimiter);
   Object.assign(env, { HIPPO_HOME: path.join(tmp, 'global'), HOME: home, USERPROFILE: home, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' });
-  expect(hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']).status).toBe(0);
+  expect((await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn'])).status).toBe(0);
 });
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function hippo(args: string[], input?: string, cwd = repo): SpawnSyncReturns<string> {
-  return hippoRun(args, { cwd, env, input });
+// In process unless `spawned`: the first worker case and the concurrent pair run real children, the rest read rows and bytes.
+async function hippo(args: string[], input?: string, cwd = repo, spawned = false): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return spawned ? hippoRun(args, { cwd, env, input }) : runCliAs(args, { cwd, env, input });
 }
 
 function claudeTranscript(name: string, opts: { reply?: string; edited?: string; cwd?: string; prompt?: string } = {}): string {
@@ -65,21 +67,20 @@ function claudeTranscript(name: string, opts: { reply?: string; edited?: string;
 const workerArgs = (sessionId: string, transcript: string): string[] =>
   ['__session-end-worker', '--transcript', transcript, '--session-id', sessionId, '--log-file', log];
 
-function claudeWorker(sessionId: string, transcript: string): string {
-  expect(hippo(workerArgs(sessionId, transcript)).status).toBe(0);
+async function claudeWorker(sessionId: string, transcript: string, spawned = false): Promise<string> {
+  expect((await hippo(workerArgs(sessionId, transcript), undefined, repo, spawned)).status).toBe(0);
   return fs.readFileSync(log, 'utf8');
 }
 
 const digests = () => loadAllEntries(path.join(repo, '.hippo'), 'default').filter(isSessionDigestRow);
 
-// Each worker run spawns node and runs sleep, so a busy full suite can take several times the solo run.
-const SLOW = { timeout: 120_000 };
+// The slowest case runs about 2 s solo, so the 30 s process-project timeout leaves a 15x margin for a busy suite.
 
-describe('the Claude Code session-end worker', SLOW, () => {
-  it('writes one digest per session, a re-run keeps one, and the log never holds its text', () => {
+describe('the Claude Code session-end worker', () => {
+  it('writes one digest per session, a re-run keeps one, and the log never holds its text', async () => {
     const transcript = claudeTranscript('s1');
     for (let run = 0; run < 2; run++) {
-      const text = claudeWorker('S1', transcript);
+      const text = await claudeWorker('S1', transcript, run === 0);
       expect(text).toContain('digest: wrote 1 sentence(s), 1 file(s) for S1');
       expect(text).not.toContain('upload timeout');
     }
@@ -95,17 +96,17 @@ describe('the Claude Code session-end worker', SLOW, () => {
     expect(digests()).toHaveLength(1);
   });
 
-  it('skips a missing transcript and a session that ran outside the repo', () => {
-    expect(claudeWorker('S1', path.join(tmp, 'gone.jsonl'))).toContain('digest: skip: no transcript to read');
-    expect(claudeWorker('S1', claudeTranscript('away', { cwd: tmp }))).toContain('digest: skip: the session ran outside this repo');
+  it('skips a missing transcript and a session that ran outside the repo', async () => {
+    expect(await claudeWorker('S1', path.join(tmp, 'gone.jsonl'))).toContain('digest: skip: no transcript to read');
+    expect(await claudeWorker('S1', claudeTranscript('away', { cwd: tmp }))).toContain('digest: skip: the session ran outside this repo');
     expect(digests()).toEqual([]);
   });
 
-  it('a rejected digest stays rejected on the next run', () => {
+  it('a rejected digest stays rejected on the next run', async () => {
     const transcript = claudeTranscript('s1');
-    claudeWorker('S1', transcript);
-    expect(hippo(['reject', sessionDigestId('default', 'S1'), '--reason', 'not useful']).status).toBe(0);
-    const text = claudeWorker('S1', transcript);
+    await claudeWorker('S1', transcript);
+    expect((await hippo(['reject', sessionDigestId('default', 'S1'), '--reason', 'not useful'])).status).toBe(0);
+    const text = await claudeWorker('S1', transcript);
     expect(text).toContain('digest: skip: it matches a rejected value');
     expect(text).not.toContain('upload timeout');
     expect(digests()).toEqual([]);
@@ -133,9 +134,9 @@ function codexRollout(cwd: string): string[] {
   return ['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl'), '--started-at', '1', '--log-file', log];
 }
 
-describe('the Codex session-end worker', SLOW, () => {
-  it('keys the digest on the rollout name, uses the final answer and lists only patches that landed', () => {
-    expect(hippo(codexRollout(repo)).status).toBe(0);
+describe('the Codex session-end worker', () => {
+  it('keys the digest on the rollout name, uses the final answer and lists only patches that landed', async () => {
+    expect((await hippo(codexRollout(repo))).status).toBe(0);
     expect(fs.readFileSync(log, 'utf8')).toContain(`digest: wrote 1 sentence(s), 1 file(s) for ${ROLLOUT}`);
     expect(digests().map((d) => [d.id, d.source_session_id, d.content])).toEqual([
       [sessionDigestId('default', ROLLOUT), ROLLOUT, `${CODEX_REPLY}\nChanged: src/retry.ts`],
@@ -143,16 +144,16 @@ describe('the Codex session-end worker', SLOW, () => {
   });
 });
 
-describe('a folder with only the global store', SLOW, () => {
-  it('gets capture and the handoff in the global store, no digest anywhere, and no store of its own', () => {
+describe('a folder with only the global store', () => {
+  it('gets capture and the handoff in the global store, no digest anywhere, and no store of its own', async () => {
     const folder = path.join(env.USERPROFILE!, 'billing');
     fs.mkdirSync(path.join(folder, '.git'), { recursive: true });
     const globalRoot = path.join(tmp, 'global');
     initStore(globalRoot);
     const transcript = claudeTranscript('g1', { cwd: folder, prompt: `${RULE}; uploads keep timing out overnight.` });
-    expect(hippo(workerArgs('G1', transcript), undefined, folder).status).toBe(0);
+    expect((await hippo(workerArgs('G1', transcript), undefined, folder)).status).toBe(0);
     expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
-    expect(hippo(codexRollout(folder), undefined, folder).status).toBe(0);
+    expect((await hippo(codexRollout(folder), undefined, folder)).status).toBe(0);
     expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
 
     const global = loadAllEntries(globalRoot, 'default');
@@ -164,54 +165,55 @@ describe('a folder with only the global store', SLOW, () => {
   });
 });
 
-describe('context prints the handoff or the digest, never both', SLOW, () => {
-  const context = (format: 'additional-context' | 'json'): string => {
-    const result = hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], '');
+describe('context prints the handoff or the digest, never both', () => {
+  const context = async (format: 'additional-context' | 'json'): Promise<string> => {
+    const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], '');
     expect(result.status).toBe(0);
     return result.stdout;
   };
-  const memoryIds = (): string[] => JSON.parse(context('json')).memories.map((m: { id: string }) => m.id);
+  const memoryIds = async (): Promise<string[]> => JSON.parse(await context('json')).memories.map((m: { id: string }) => m.id);
 
-  it('hides the digest behind its own session handoff, even when it is the only memory', () => {
-    claudeWorker('S1', claudeTranscript('s1'));
+  it('hides the digest behind its own session handoff, even when it is the only memory', async () => {
+    await claudeWorker('S1', claudeTranscript('s1'));
     expect(loadAllEntries(path.join(repo, '.hippo'), 'default').map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
-    const text = context('additional-context');
+    const text = await context('additional-context');
     expect(text).toContain('## Session Handoff');
     expect(text).not.toContain('Changed:');
-    const json = JSON.parse(context('json'));
+    const json = JSON.parse(await context('json'));
     expect(json.sessionHandoff.sessionId).toBe('S1');
     expect(json.memories.map((m: { id: string }) => m.id)).not.toContain(sessionDigestId('default', 'S1'));
   });
 
-  it("shows an earlier session's digest under a later session's handoff", () => {
-    claudeWorker('S1', claudeTranscript('s1'));
-    claudeWorker('S2', claudeTranscript('s2', { reply: OTHER_REPLY, edited: 'queue.ts' }));
-    expect(JSON.parse(context('json')).sessionHandoff.sessionId).toBe('S2');
-    expect(memoryIds()).toContain(sessionDigestId('default', 'S1'));
-    expect(memoryIds()).not.toContain(sessionDigestId('default', 'S2'));
+  it("shows an earlier session's digest under a later session's handoff", async () => {
+    await claudeWorker('S1', claudeTranscript('s1'));
+    await claudeWorker('S2', claudeTranscript('s2', { reply: OTHER_REPLY, edited: 'queue.ts' }));
+    expect(JSON.parse(await context('json')).sessionHandoff.sessionId).toBe('S2');
+    expect(await memoryIds()).toContain(sessionDigestId('default', 'S1'));
+    expect(await memoryIds()).not.toContain(sessionDigestId('default', 'S2'));
   });
 
-  it('shows the digest in place of a handoff the budget drops, and never both at any budget', () => {
-    claudeWorker('S1', claudeTranscript('s1'));
-    const seen = [40, 60, 80, 100, 150, 200, 1500].map((budget) => {
-      const result = hippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'json', '--budget', String(budget)], '');
+  it('shows the digest in place of a handoff the budget drops, and never both at any budget', async () => {
+    await claudeWorker('S1', claudeTranscript('s1'));
+    const seen = [];
+    for (const budget of [40, 60, 80, 100, 150, 200, 1500]) {
+      const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'json', '--budget', String(budget)], '');
       expect(result.status).toBe(0);
       // Nothing fits the smallest budgets, and then context prints nothing at all.
       const json = result.stdout.trim() ? JSON.parse(result.stdout) : { memories: [] };
       const digest = json.memories.some((m: { id: string }) => m.id === sessionDigestId('default', 'S1'));
-      return { budget, handoff: json.sessionHandoff?.sessionId === 'S1', digest };
-    });
+      seen.push({ budget, handoff: json.sessionHandoff?.sessionId === 'S1', digest });
+    }
     expect(seen.filter((s) => s.handoff && s.digest)).toEqual([]);
     expect(seen.some((s) => !s.handoff && s.digest)).toBe(true);
     expect(seen.at(-1)).toMatchObject({ handoff: true, digest: false });
   });
 
-  it('shows the digest when its session handoff is scope-hidden', () => {
-    claudeWorker('S1', claudeTranscript('s1'));
+  it('shows the digest when its session handoff is scope-hidden', async () => {
+    await claudeWorker('S1', claudeTranscript('s1'));
     saveSessionHandoff(path.join(repo, '.hippo'), 'default', {
       version: 1, sessionId: 'S1', summary: 'private thread', scope: 'slack:private:C123', evidence: { derivedFrom: 'transcript' },
     });
-    expect(JSON.parse(context('json')).sessionHandoff).toBeNull();
-    expect(memoryIds()).toContain(sessionDigestId('default', 'S1'));
+    expect(JSON.parse(await context('json')).sessionHandoff).toBeNull();
+    expect(await memoryIds()).toContain(sessionDigestId('default', 'S1'));
   });
 });
