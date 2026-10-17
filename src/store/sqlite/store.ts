@@ -25,6 +25,7 @@ import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
 import { sqliteSharing } from './sharing-group.js';
 import { sqliteDiagnostics } from './diagnostics-group.js';
+import { sqliteGraphRebuild } from './graph-rebuild-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
@@ -84,6 +85,7 @@ export function sqliteSyncStore(
       learning: sqliteLearning(hippoRoot),
       sharing: sqliteSharing(hippoRoot),
       diagnostics: sqliteDiagnostics(hippoRoot),
+      graphRebuild: sqliteGraphRebuild(hippoRoot),
       globalStore: () => sqliteStore(resolveGlobalRootDir()),
     },
     ...sqliteBaseReads(hippoRoot),

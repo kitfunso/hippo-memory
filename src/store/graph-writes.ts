@@ -1,6 +1,6 @@
 // The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
 // the schema triggers are the backstop for a write that skips this module.
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
@@ -330,22 +330,16 @@ export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: nu
   db.prepare(`DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 }
 
-/** Runs one tenant's graph writes in `fn` on `txDb` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
+/** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
  * interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a
  * transaction. */
 export function runGraphRebuildTransaction<T>(
-  hippoRoot: string,
+  db: DatabaseSyncLike,
   tenantId: string,
   fn: (txDb: DatabaseSyncLike) => T,
-  opts?: { busyWaitMs?: number },
 ): T {
   assertTenantId('runGraphRebuildTransaction', tenantId);
-  const db = openHippoDb(hippoRoot, opts);
-  try {
-    return withWriteScope(db, 'graph_rebuild', () => fn(db));
-  } finally {
-    closeHippoDb(db);
-  }
+  return withWriteScope(db, 'graph_rebuild', () => fn(db));
 }
 
 /** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror memory `markGraphDirty`
