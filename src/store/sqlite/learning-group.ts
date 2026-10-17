@@ -17,8 +17,8 @@ export function sqliteLearning(on: OnHandle): Learning {
       tenantId === undefined
         ? on((db) => loadEveryTenantEntriesAt(db), openStore)
         : on((db) => loadAllEntriesAt(db, tenantId), openStore),
-    entriesMentioning: (tokens, tag, tenantId) =>
-      on((db) => loadEntriesMentioningAt(db, tokens, tag, tenantId), openStore),
+    entriesMentioning: (tokens, tag, tenantId, page) =>
+      on((db) => loadEntriesMentioningAt(db, tokens, tag, tenantId, page), openStore),
     readEntry: (id, tenantId) => on((db) => readEntryAt(db, id, tenantId), openStore),
     currentEntriesFromOrigins: (tenantId, origins) =>
       on((db) => loadCurrentEntriesFromOriginsAt(db, tenantId, origins), openStore),

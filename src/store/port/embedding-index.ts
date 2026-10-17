@@ -2,6 +2,7 @@
 // Vectors and particles carry no tenant, so each method covers the whole store.
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
+import type { EntryCursor } from './consolidation.js';
 
 export interface EmbeddingIndex {
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */
@@ -21,12 +22,19 @@ export interface EmbeddingIndex {
   saveVectors(rows: Iterable<readonly [string, readonly number[]]>, model: string): number;
   /** Replaces every stored vector with `index`, under `model` or else the stored identity. */
   replaceVectors(index: Record<string, number[]>, model?: string): void;
-  /** Drops the vectors of deleted memories, then answers the ids with no vector, by created then id. */
-  pruneListPending(): string[];
+  /** Drops the vectors of deleted memories. */
+  pruneOrphans(): void;
+  /** Up to `page.limit` ids with no vector, by created then id, after `page.after`; `next` is null on the last page. */
+  pendingIds(page: { readonly limit: number; readonly after?: EntryCursor }): PendingIdsPage;
   /** Replaces every particle with a fresh one per memory in `ids` that `index` holds a vector for; answers how many. */
   resetParticles(ids: readonly string[], index: Record<string, number[]>): number;
   /** A first particle for `entry` at `vector`, unless it has one. */
   seedParticle(entry: MemoryEntry, vector: number[]): void;
+}
+
+export interface PendingIdsPage {
+  readonly ids: string[];
+  readonly next: EntryCursor | null;
 }
 
 export interface StoredVectorSummary {

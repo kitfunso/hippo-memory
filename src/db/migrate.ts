@@ -38,7 +38,9 @@ export function assertBinaryCompatible(db: DatabaseSyncLike): void {
   assertMinBinary(getMeta(db, 'min_compatible_binary'));
 }
 
-const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
+const FTS_IN_SYNC_KEY = 'fts_in_sync';
+
+const META_DEFAULTS:ReadonlyArray<readonly [string, string]> = [
   ['schema_version', String(CURRENT_SCHEMA_VERSION)],
   ['last_retrieval_ids', '[]'],
   ['last_trace_id', ''],
@@ -46,6 +48,7 @@ const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
   ['total_recalled', '0'],
   ['total_forgotten', '0'],
   ['fts5_available', '0'],
+  [FTS_IN_SYNC_KEY, '0'],
 ];
 
 // Names come from our own constants and match \w+, so inlining them as literals is safe.
@@ -104,6 +107,30 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   return current ? { archiveTop: Number(probe.archive_top ?? 0), hasMemories: probe.has_memories !== null } : null;
 }
 
+const SETTLED_CHECK_SQL = `SELECT
+  (SELECT user_version FROM pragma_user_version) AS user_version,
+  (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
+  (SELECT value FROM meta WHERE key = 'min_compatible_binary') AS min_binary,
+  (SELECT MAX(id) FROM raw_archive) AS archive_top,
+  (SELECT 1 FROM memories LIMIT 1) AS has_memories`;
+
+/** For a store this process has proven: one cheap statement returns the open's facts when both schema stamps still
+ * name the current schema, else null; it refuses when another binary has since raised the minimum. */
+export function settledStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
+  // SAFETY: the SELECT names exactly these five columns and always returns one row.
+  const row = db.prepare(SETTLED_CHECK_SQL).get() as {
+    user_version: number;
+    schema_version: string | null;
+    min_binary: string | null;
+    archive_top: number | null;
+    has_memories: number | null;
+  };
+  assertMinBinary(row.min_binary);
+  const current = Number(row.user_version) === CURRENT_SCHEMA_VERSION
+    && Number(row.schema_version) === CURRENT_SCHEMA_VERSION;
+  return current ? { archiveTop: Number(row.archive_top ?? 0), hasMemories: row.has_memories !== null } : null;
+}
+
 /** Brings the store to the current schema; returns the probe's
  * facts when it was current already, null after any repair. */
 export function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): OpenFacts | null {
@@ -160,7 +187,7 @@ function healUserVersion(db: DatabaseSyncLike, version: number, busyWaitMs: numb
 }
 
 // A failed import leaves embeddings.json in place for the next open to retry; the store still opens.
-function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
+export function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
   try {
     importLegacyEmbeddingIndex(db, hippoRoot);
   } catch (err) {
@@ -229,11 +256,28 @@ export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: num
   return { memories: Number(memories), fts: Number(fts) };
 }
 
+/** Whether the last real count found `memories_fts` level with `memories` and no write since has failed to index a
+ * row; a read trusts this instead of counting both tables. */
+export function isFtsInSync(db: DatabaseSyncLike): boolean {
+  return getMeta(db, FTS_IN_SYNC_KEY, '0') === '1';
+}
+
+/** Records what a real count found (or what a failed index write now makes false); read-first so a steady store takes
+ * no write lock. */
+export function setFtsInSync(db: DatabaseSyncLike, inSync: boolean): void {
+  const flag = inSync ? '1' : '0';
+  if (getMeta(db, FTS_IN_SYNC_KEY) !== flag) setMeta(db, FTS_IN_SYNC_KEY, flag);
+}
+
 /** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did; sleep runs it
- * because a fast open does not. */
+ * because a fast open does not. Leaves the in-sync flag true. */
 export function repairFtsDrift(db: DatabaseSyncLike): boolean {
   const counts = ftsRowCounts(db);
-  if (counts === null || counts.memories === counts.fts) return false;
+  if (counts === null) return false;
+  if (counts.memories === counts.fts) {
+    setFtsInSync(db, true);
+    return false;
+  }
 
   // NOT IN reads the UNINDEXED id column once, not once per memory; one NULL id would make NOT IN match nothing.
   db.exec(`
@@ -247,5 +291,6 @@ export function repairFtsDrift(db: DatabaseSyncLike): boolean {
     DELETE FROM memories_fts
     WHERE id NOT IN (SELECT id FROM memories)
   `);
+  setFtsInSync(db, true);
   return true;
 }
