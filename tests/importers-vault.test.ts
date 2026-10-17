@@ -27,6 +27,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test
@@ -34,13 +35,11 @@ let vaultDir: string; // a scratch vault folder we mutate per-test
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'vault-imports');
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-store-'));
+  tmpDir = makeRoot('vault-store');
   vaultDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-src-'));
-  initStore(tmpDir);
 });
 
 afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
   fs.rmSync(vaultDir, { recursive: true, force: true });
 });
 
@@ -702,7 +701,7 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
     // Reach that store via a junction, so path.resolve(alias) !== the on-disk
     // path (exactly like a case-variant HIPPO_HOME on Windows). Only realpath
     // canonicalizes the alias back to realStore.
-    const aliasParent = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-hr-'));
+    const aliasParent = makeRoot('vault-hr', { init: false });
     const hippoAlias = path.join(aliasParent, 'store-alias');
     let created = true;
     try {
@@ -750,11 +749,6 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
         } catch {
           /* link already gone */
         }
-      }
-      try {
-        fs.rmdirSync(aliasParent);
-      } catch {
-        /* leave the empty temp dir for the OS to reap */
       }
     }
   });

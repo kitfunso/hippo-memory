@@ -1,24 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { rejectValue } from '../src/trust/reject-flow.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 const indexPath = (): string => path.join(root, 'index.json');
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-index-mirror-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  root = makeRoot('index-mirror');
 });
 
 // Pins the write-path-cost fix: no hippo path writes index.json.

@@ -13,7 +13,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -22,6 +21,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getContext } from '../src/api/index.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpRoot: string;
 let projA: string;
@@ -39,7 +39,7 @@ function contents(entries: Array<{ entry: { content: string } }>): string[] {
 }
 
 beforeEach(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ctx-iso-'));
+  tmpRoot = makeRoot('ctx-iso', { init: false });
   projA = path.join(tmpRoot, 'proj-a', '.hippo');
   fs.mkdirSync(projA, { recursive: true });
   initStore(projA);
@@ -69,7 +69,6 @@ afterEach(() => {
   } else {
     delete process.env.HIPPO_HOME;
   }
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('getContext origin partition (project A session)', () => {

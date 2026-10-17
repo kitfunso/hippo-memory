@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 // Built from parts so the repo's secret scan does not flag the test file.
@@ -17,8 +16,7 @@ let savedKey: string | undefined;
 let errorSpy: MockInstance<typeof console.error>;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-warn-'));
-  initStore(root);
+  root = makeRoot('embed-warn');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = KEY;
@@ -30,7 +28,6 @@ afterEach(() => {
   errorSpy.mockRestore();
   if (savedKey === undefined) delete process.env[KEY_ENV];
   else process.env[KEY_ENV] = savedKey;
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 function warnings(): string[] {

@@ -2,15 +2,13 @@
  * W2c C1: no more Access-Control-Allow-Origin, a loopback Host allowlist, and a mid-route throw no longer kills the server.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { initStore } from '../src/store/open.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   createCard,
@@ -23,6 +21,7 @@ import {
 } from '../src/store/cards.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/store/tenant.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
@@ -92,10 +91,7 @@ describe('dashboard entry', () => {
   let prevHippoHome: string | undefined;
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-dash-entry-'));
-    hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    ({ base: home, root: hippoRoot } = makeStore('dash-entry'));
     prevTenant = process.env.HIPPO_TENANT;
     prevHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(home, '.hippo-global');
@@ -114,7 +110,6 @@ describe('dashboard entry', () => {
     else process.env.HIPPO_TENANT = prevTenant;
     if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = prevHippoHome;
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('E1: a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
@@ -210,7 +205,7 @@ describe('card routes', () => {
   let prevHippoHome: string | undefined;
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-w2c-routes-'));
+    home = makeRoot('w2c-routes', { init: false });
     cwd = join(home, 'cwd');
     mkdirSync(cwd, { recursive: true });
     const globalDir = join(home, 'global');
@@ -288,7 +283,6 @@ describe('card routes', () => {
     else process.env.HIPPO_TENANT = prevTenant;
     if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = prevHippoHome;
-    rmSync(home, { recursive: true, force: true });
   });
 
   const host = () => `127.0.0.1:${port}`;

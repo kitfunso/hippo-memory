@@ -1,15 +1,13 @@
 // A memory row whose JSON column will not parse still reads, as empty, and the row is named once at warn so the damage can be found.
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { appendSessionEvent, listSessionEvents } from '../src/store/sessions.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TENANT = 'default';
 const PRIVATE_TEXT = 'private-tag-text';
@@ -17,9 +15,8 @@ const dirs: string[] = [];
 let stderr: MockInstance<typeof process.stderr.write>;
 
 function newRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-damaged-json-'));
+  const root = makeRoot('damaged-json');
   dirs.push(root);
-  initStore(root);
   return root;
 }
 

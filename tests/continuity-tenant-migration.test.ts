@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { v22 } from '../src/db/migrations/v22.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function rowsAs<T>(db: DatabaseSyncLike, sql: string): T[] {
   // SAFETY: T is pinned by each call site to the exact column list of the
@@ -22,7 +20,7 @@ function rowAs<T>(db: DatabaseSyncLike, sql: string): T {
 
 describe('schema migration v22: tenant_id + scope on continuity tables', () => {
   it('adds tenant_id NOT NULL DEFAULT default and scope (nullable) to session_events', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v22-'));
+    const home = makeRoot('v22');
     const db = openHippoDb(home);
     try {
       const cols = rowsAs<{ name: string; notnull: number; dflt_value: string | null }>(
@@ -37,12 +35,11 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       expect(scope!.notnull).toBe(0);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('adds tenant_id and scope to session_handoffs', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v22-'));
+    const home = makeRoot('v22');
     const db = openHippoDb(home);
     try {
       const cols = rowsAs<{ name: string; notnull: number; dflt_value: string | null }>(
@@ -52,12 +49,11 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       expect(cols.some((c) => c.name === 'scope')).toBe(true);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('creates the (tenant_id, session_id) composite indexes', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v22-'));
+    const home = makeRoot('v22');
     const db = openHippoDb(home);
     try {
       const idx = rowsAs<{ name: string }>(
@@ -68,12 +64,11 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       expect(names.has('idx_session_handoffs_tenant_session')).toBe(true);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('backfills tenant_id from task_snapshots.session_id when unambiguous', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v22-backfill-'));
+    const home = makeRoot('v22-backfill');
     const db = openHippoDb(home);
     try {
       const now = new Date().toISOString();
@@ -105,12 +100,11 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       expect(hf.tenant_id).toBe('tenantA');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('leaves rows at default when session_id is ambiguous across tenants', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-v22-ambiguous-'));
+    const home = makeRoot('v22-ambiguous');
     const db = openHippoDb(home);
     try {
       const now = new Date().toISOString();
@@ -136,7 +130,6 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       expect(evt.tenant_id).toBe('default');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

@@ -1,8 +1,5 @@
 // The delivery ledger writer (src/store/recall-trace.ts) and the recorder's row building, on a real SQLite store.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   readDeliveryEvents,
@@ -19,6 +16,7 @@ import {
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
 const MAX_LEDGER_WAIT_MS = 100;
@@ -88,14 +86,13 @@ function at(ms: number): string {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-delivery-writer-'));
+  root = makeRoot('delivery-writer');
   db = openHippoDb(root);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   closeHippoDb(db);
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('writeDeliveryEventOnHandle', () => {

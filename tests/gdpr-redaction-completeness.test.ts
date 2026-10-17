@@ -1,7 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import {
@@ -13,6 +12,7 @@ import { remember, archiveRaw, retrieve } from '../src/api/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { recordStatements, countMatching } from './_helpers/count-statements.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -54,11 +54,7 @@ describe('GDPR Path A completeness fixes', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-v039-completeness-'));
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('v039-completeness', { init: false });
   });
 
   // ---------------------------------------------------------------------------

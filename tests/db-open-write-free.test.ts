@@ -1,8 +1,6 @@
 // A store already at CURRENT_SCHEMA_VERSION must open write-free: same-value
 // meta upserts on every open turned a concurrent writer into a locked read.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
@@ -10,6 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { recordStatements } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this require + cast mirrors
@@ -26,8 +25,7 @@ const NEEDS_WRITE_LOCK = /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|BEGI
 
 let root: string;
 
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-open-write-free-')); });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+beforeEach(() => { root = makeRoot('open-write-free', { init: false }); });
 
 describe('openHippoDb on an already-current store is write-free', () => {
   it('runs no statement that needs the write lock, even while a second connection holds BEGIN IMMEDIATE', () => {

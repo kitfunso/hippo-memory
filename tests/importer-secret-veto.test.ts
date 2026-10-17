@@ -14,11 +14,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally, type Tally } from '../src/agent-memories/report.js';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { detectSecret } from '../src/util/secret-detect.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // An import asks git for the project's layout in a child process, once for each agent tool it reads.
 vi.setConfig({ testTimeout: 30_000 });
@@ -42,13 +42,11 @@ function writeMemoryFile(name: string, frontmatter: string, body: string): void 
 }
 
 beforeEach(() => {
-  hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-veto-store-'));
+  hippoRoot = makeRoot('secret-veto-store');
   homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-veto-home-'));
-  initStore(hippoRoot);
 });
 
 afterEach(() => {
-  fs.rmSync(hippoRoot, { recursive: true, force: true });
   fs.rmSync(homeDir, { recursive: true, force: true });
 });
 

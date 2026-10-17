@@ -10,11 +10,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -28,6 +24,7 @@ import { isDagSummary } from '../src/search/boosts.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {
@@ -98,12 +95,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e5-'));
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    hippoRoot = makeRoot('dag-e5');
   });
 
   it('test #1: buildEntityProfiles happy path — 3 L2 summaries -> 1 L3 profile', async () => {

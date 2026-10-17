@@ -1,25 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('schema migration v18', () => {
   it('migrates to schema version 20', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('creates goal_stack with all required columns', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
@@ -34,12 +31,11 @@ describe('schema migration v18', () => {
       }
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('enforces status CHECK', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       const insert = () => db.prepare(
@@ -49,12 +45,11 @@ describe('schema migration v18', () => {
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('enforces level CHECK 0..2', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       const insert = () => db.prepare(
@@ -64,12 +59,11 @@ describe('schema migration v18', () => {
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('enforces outcome_score CHECK 0..1', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       const insert = () => db.prepare(
@@ -79,12 +73,11 @@ describe('schema migration v18', () => {
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('creates retrieval_policy + goal_recall_log with FKs and indexes', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
@@ -108,12 +101,11 @@ describe('schema migration v18', () => {
       expect(idxNames.has('uniq_goal_recall_log_memory_goal')).toBe(true);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('FKs cascade: deleting a goal deletes its policy and recall log rows', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
+    const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
       db.prepare(`
@@ -132,7 +124,6 @@ describe('schema migration v18', () => {
       expect((db.prepare(`SELECT COUNT(*) AS c FROM goal_recall_log`).get() as { c: number }).c).toBe(0);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

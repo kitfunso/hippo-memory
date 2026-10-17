@@ -1,23 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { sharedLocalEmbedder } from '../src/embeddings/local.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-avail-'));
-  initStore(root);
+  root = makeRoot('embed-avail');
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('embedMemory when the provider availability probe throws', () => {

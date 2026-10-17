@@ -1,17 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { initStore } from '../src/store/open.js';
 import { appendSessionEvent, listSessionEvents, findPromotableSessions } from '../src/store/sessions.js';
 import { saveSessionHandoff, loadLatestHandoff, loadHandoffById } from '../src/store/handoffs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-continuity-iso-'));
-});
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('continuity-iso', { init: false });
 });
 
 describe('session_events tenant isolation', () => {

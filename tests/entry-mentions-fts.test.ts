@@ -1,14 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { DatabaseSync } from '../src/db/sqlite.js';
 import { getMeta, setMeta } from '../src/db/meta.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const CONTENTS = [
   'Use the café cache for sessions',
@@ -28,13 +26,11 @@ function setFts(root: string, flag: '0' | '1'): void {
 describe('loadEntriesMentioning on the FTS path', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-mentions-'));
-    initStore(root);
+    root = makeRoot('mentions');
     const db = new DatabaseSync(join(root, 'hippo.db'));
     try { expect(getMeta(db, 'fts5_available', '0')).toBe('1'); } finally { db.close(); }
     for (const content of CONTENTS) writeEntry(root, createMemory(content, { tags: ['Ops'] }));
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('matches the same rows for invalidation on both paths', () => {
     for (const from of TARGETS) {

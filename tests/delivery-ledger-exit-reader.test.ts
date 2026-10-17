@@ -1,7 +1,6 @@
 // The delivery reader on rows the real ledger writer built, plus the transcript parser and the CLI arguments.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,6 +19,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { fire } from './_helpers/host-transcript.js';
 import { trySymlink } from './_helpers/symlink.js';
 import { parseTranscript } from '../scripts/z10/transcript.mjs';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SCRIPT = path.resolve(__dirname, '..', 'scripts', 'z10-reconstruct.mjs');
 const STAGES: DeliveryStage[] = ['load', 'eligible', 'gate', 'budget', 'limit', 'final'];
@@ -32,12 +32,8 @@ interface Json { [key: string]: JsonValue }
 let dir: string;
 let tick = 0;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-z10-reader-'));
-  initStore(dir);
+  dir = makeRoot('z10-reader');
   tick = 0;
-});
-afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** Event inputs are 10 s apart so the writer's duplicate window never joins two of them. */

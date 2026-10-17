@@ -1,10 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../src/api/index.js';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { ingestEvent, type IngestEvent, type IngestInput } from '../src/connectors/github/ingest.js';
@@ -19,6 +15,7 @@ import type {
 } from '../src/connectors/github/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { stageScratchWinner } from './_helpers/race-winner.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // -- Test helpers ----------------------------------------------------------
 
@@ -115,17 +112,12 @@ async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Prom
 
 /** Ingests `input` as the loser of a race: another process holds the write lock with the second worker's rows, and commits them while this ingest waits. */
 async function ingestBehindAnotherWorker(root: string, input: IngestInput): Promise<LostRace> {
-  const scratch = mkdtempSync(join(tmpdir(), 'hippo-gh-winner-'));
-  try {
-    initStore(scratch);
-    const winner = await storeAsOtherWorker(scratch, input);
-    const staged = await stageScratchWinner(root, scratch, ['memories', 'github_event_log']);
-    const loser = await ingestEvent(ctx(root), input);
-    await staged.committed;
-    return { loser, winner };
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
+  const scratch = makeRoot('gh-winner');
+  const winner = await storeAsOtherWorker(scratch, input);
+  const staged = await stageScratchWinner(root, scratch, ['memories', 'github_event_log']);
+  const loser = await ingestEvent(ctx(root), input);
+  await staged.committed;
+  return { loser, winner };
 }
 
 // -- Tests -----------------------------------------------------------------
@@ -133,11 +125,7 @@ async function ingestBehindAnotherWorker(root: string, input: IngestInput): Prom
 describe('ingestEvent', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-gh-ingest-'));
-    initStore(root);
-  });
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('gh-ingest');
   });
 
   it('1. fresh ingest: writes a kind=raw memory and stamps github_event_log', async () => {

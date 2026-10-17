@@ -3,15 +3,12 @@
 // used. Same class as the 1.38.7 archive and 1.38.9 forget counter bugs.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { remember, retrieve } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -35,9 +32,7 @@ async function httpRecall(qs: string): Promise<Response> {
 
 beforeEach(async () => {
   __resetSessionRecallHistoryHttp();
-  home = mkdtempSync(join(tmpdir(), 'hippo-http-recall-count-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('http-recall-count');
   for (const content of ['alpha token one', 'alpha token two', 'alpha token three']) {
     await remember(ctx(), { content });
   }
@@ -46,7 +41,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('GET /v1/memories counts toward total_recalled', () => {

@@ -16,12 +16,8 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -30,13 +26,13 @@ import { runCli } from '../src/cli.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-df3-'));
-  initStore(home);
+  const home = makeRoot('df3');
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir so
   // hasGlobal=false inside api.getContext (same pattern as api-context.test.ts).
-  const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-df3-global-'));
+  const globalTmp = makeRoot('df3-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalTmp;
   return {
@@ -353,13 +349,12 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
   let hippoDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df3-cli-'));
+    tmpDir = makeRoot('df3-cli', { init: false });
     hippoDir = path.join(tmpDir, '.hippo');
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   /** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
@@ -410,19 +405,16 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
   let origHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-df3-dedupe-'));
-    initStore(home);
+    home = makeRoot('df3-dedupe');
     // An INITIALIZED global store, so api.getContext takes the hasGlobal path
     // and pinnedGlobal is populated.
-    globalTmp = mkdtempSync(join(tmpdir(), 'hippo-df3-dedupe-global-'));
-    initStore(globalTmp);
+    globalTmp = makeRoot('df3-dedupe-global');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalTmp;
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    rmSync(globalTmp, { recursive: true, force: true });
     if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
     else delete process.env.HIPPO_HOME;
   });

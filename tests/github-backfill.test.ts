@@ -11,11 +11,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
@@ -25,6 +21,7 @@ import {
   type GitHubBackfillPage,
 } from '../src/connectors/github/octokit-client.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const REPO = 'acme/demo';
 const TENANT = 'default';
@@ -162,10 +159,8 @@ function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): G
 describe('backfillRepo', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-gh-bf-'));
-    initStore(root);
+    root = makeRoot('gh-bf');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('1. fresh backfill ingests all three streams and advances all HWMs', async () => {
     const plan: FakePlan = {

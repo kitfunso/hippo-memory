@@ -3,10 +3,9 @@
  * Also covers confidence tiers, dedup, dry-run, --global, and min-length filter.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import {
   importChatGPT,
   importClaude,
@@ -15,8 +14,8 @@ import {
 } from '../src/importers/sources.js';
 import { importMarkdown } from '../src/importers/markdown.js';
 import { importEntries, ImportOptions } from '../src/importers/core.js';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -37,13 +36,8 @@ function writeTmp(name: string, content: string): string {
 }
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-import-test-'));
-  initStore(tmpDir);
+  tmpDir = makeRoot('import-test');
   tmpFiles = [];
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -355,10 +349,9 @@ describe('dry-run: nothing written', () => {
 
 describe('--global: writes to global store', () => {
   it('persists entries to a custom global root, not local root', () => {
-    const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-global-test-'));
+    const globalRoot = makeRoot('global-test');
     const prevHippoHome = process.env.HIPPO_HOME;
     try {
-      initStore(globalRoot);
       // importChatGPT({ global: true }) resolves its destination via
       // getGlobalRoot() -> HIPPO_HOME. Without this it writes into the
       // developer's real ~/.hippo store.
@@ -388,7 +381,6 @@ describe('--global: writes to global store', () => {
     } finally {
       if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
       else process.env.HIPPO_HOME = prevHippoHome;
-      fs.rmSync(globalRoot, { recursive: true, force: true });
     }
   });
 });

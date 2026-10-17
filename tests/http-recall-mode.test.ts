@@ -3,11 +3,7 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { loadLastRecall } from '../src/store/index-and-stats.js';
@@ -15,6 +11,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { retrieve, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -31,9 +28,7 @@ async function recallIds(qs: string): Promise<string[]> {
 
 beforeEach(async () => {
   __resetSessionRecallHistoryHttp();
-  home = mkdtempSync(join(tmpdir(), 'hippo-http-recall-mode-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('http-recall-mode');
   // The better BM25 match has decayed for years; hybrid scoring must see that.
   const old = '2020-01-01T00:00:00.000Z';
   const weak = { ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created: old, last_retrieved: old, half_life_days: 1 };
@@ -47,7 +42,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('GET /v1/memories honours mode and strengthens', () => {

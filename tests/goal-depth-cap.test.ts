@@ -1,21 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { activeGoalsWithPolicies, pushGoal, resumeGoal, suspendGoal } from '../src/store/goals.js';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('goal stack depth cap', () => {
   let root: string;
   const ctx = { sessionId: 's1', tenantId: 'default' };
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-b3-cap-'));
-    initStore(root);
+    root = makeRoot('b3-cap');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('auto-suspends the oldest active goal when pushing the 4th', () => {
     const g1 = pushGoal(root, { ...ctx, goalName: 'oldest' });

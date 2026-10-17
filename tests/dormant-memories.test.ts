@@ -41,6 +41,7 @@ import * as api from '../src/api/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -667,49 +668,43 @@ describe('hippo dormant CLI', () => {
   }
 
   it('lists, restores and forgets dormant memories', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'hippo-dormant-cli-'));
-    const hippoRoot = join(workspace, '.hippo');
-    try {
-      initStore(hippoRoot);
-      writeFileSync(join(hippoRoot, 'config.json'), DORMANT_ON, 'utf8');
-      const keep = aged(createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
-      const drop = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
-      writeEntry(hippoRoot, keep);
-      writeEntry(hippoRoot, drop);
-      await consolidate(hippoRoot, { now: new Date() });
+    const { base: workspace, root: hippoRoot } = makeStore('dormant-cli');
+    writeFileSync(join(hippoRoot, 'config.json'), DORMANT_ON, 'utf8');
+    const keep = aged(createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const drop = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    writeEntry(hippoRoot, keep);
+    writeEntry(hippoRoot, drop);
+    await consolidate(hippoRoot, { now: new Date() });
 
-      const list = await runCli(workspace, 'dormant');
-      expect(list.status).toBe(0);
-      expect(list.out).toContain('2 dormant memories');
-      expect(list.out).toContain(keep.id);
+    const list = await runCli(workspace, 'dormant');
+    expect(list.status).toBe(0);
+    expect(list.out).toContain('2 dormant memories');
+    expect(list.out).toContain(keep.id);
 
-      const search = await runCli(workspace, 'dormant', 'zanzibar', '--json');
-      expect(search.status).toBe(0);
-      // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (handleDormant).
-      const parsed = JSON.parse(search.out) as { dormant: Array<{ id: string }> };
-      expect(parsed.dormant.map((m) => m.id)).toEqual([keep.id]);
+    const search = await runCli(workspace, 'dormant', 'zanzibar', '--json');
+    expect(search.status).toBe(0);
+    // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (handleDormant).
+    const parsed = JSON.parse(search.out) as { dormant: Array<{ id: string }> };
+    expect(parsed.dormant.map((m) => m.id)).toEqual([keep.id]);
 
-      const restored = await runCli(workspace, 'dormant', 'restore', keep.id);
-      expect(restored.status).toBe(0);
-      expect(restored.out).toContain(`Restored ${keep.id}`);
+    const restored = await runCli(workspace, 'dormant', 'restore', keep.id);
+    expect(restored.status).toBe(0);
+    expect(restored.out).toContain(`Restored ${keep.id}`);
 
-      const forgotten = await runCli(workspace, 'dormant', 'forget', drop.id);
-      expect(forgotten.status).toBe(0);
-      expect(forgotten.out).toContain(`Forgot dormant memory ${drop.id}`);
+    const forgotten = await runCli(workspace, 'dormant', 'forget', drop.id);
+    expect(forgotten.status).toBe(0);
+    expect(forgotten.out).toContain(`Forgot dormant memory ${drop.id}`);
 
-      expect((await runCli(workspace, 'dormant')).out).toContain('No dormant memories');
-      expect((await runCli(workspace, 'dormant', 'restore', drop.id)).status).not.toBe(0);
+    expect((await runCli(workspace, 'dormant')).out).toContain('No dormant memories');
+    expect((await runCli(workspace, 'dormant', 'restore', drop.id)).status).not.toBe(0);
 
-      // `hippo forget` on a dormant id points at the dormant command instead
-      // of a bare "not found".
-      writeEntry(hippoRoot, aged(createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
-      await consolidate(hippoRoot, { now: new Date() });
-      const [third] = await api.listDormant(ctxFor(hippoRoot));
-      const hint = await runCli(workspace, 'forget', third.id);
-      expect(hint.status).not.toBe(0);
-      expect(hint.out).toContain(`hippo dormant forget ${third.id}`);
-    } finally {
-      rmSync(workspace, { recursive: true, force: true });
-    }
+    // `hippo forget` on a dormant id points at the dormant command instead
+    // of a bare "not found".
+    writeEntry(hippoRoot, aged(createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
+    await consolidate(hippoRoot, { now: new Date() });
+    const [third] = await api.listDormant(ctxFor(hippoRoot));
+    const hint = await runCli(workspace, 'forget', third.id);
+    expect(hint.status).not.toBe(0);
+    expect(hint.out).toContain(`hippo dormant forget ${third.id}`);
   });
 });

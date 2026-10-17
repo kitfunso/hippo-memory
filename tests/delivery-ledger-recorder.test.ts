@@ -2,7 +2,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -17,6 +16,7 @@ import {
 import { blockHash } from '../src/util/token-text.js';
 import { flushDeliveryRecorder } from '../src/api/prompt-hook.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
@@ -94,7 +94,7 @@ function storeCounts(root: string): string {
 beforeEach(() => {
   process.env.HIPPO_FAKE_NOW = '2026-07-01T00:00:00.000Z';
   _resetAblationCacheForTests();
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-delivery-recorder-'));
+  tmpRoot = makeRoot('delivery-recorder', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
   globalRoot = path.join(tmpRoot, 'global');
   fs.mkdirSync(local, { recursive: true });
@@ -110,7 +110,6 @@ afterEach(() => {
   delete process.env.HIPPO_HOME;
   delete process.env.HIPPO_FAKE_NOW;
   _resetAblationCacheForTests();
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 describe('the observer never changes getContext', () => {

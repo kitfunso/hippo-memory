@@ -8,17 +8,14 @@
  * VALID_AUDIT_OPS lockstep wiring (v1.11.5 CRIT A institutional rule).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { markSummaryDirtyInTx } from '../src/store/summary-dirty.js';
 import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
@@ -38,11 +35,7 @@ function markDirty(root: string, summaryId: string, tenantId: string, actor: str
 describe('v28 schema migration + dirty-flag plumbing', () => {
   let hippoRoot: string;
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e1-'));
-    initStore(hippoRoot);
-  });
-  afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
+    hippoRoot = makeRoot('dag-e1');
   });
 
   it('migration v28 is idempotent: each column once, schema version unchanged, a written value survives a reopen', () => {

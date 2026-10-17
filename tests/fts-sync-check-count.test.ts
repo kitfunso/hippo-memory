@@ -1,17 +1,14 @@
 // backfillFtsIndex counted the FTS5 virtual table itself on every open,
 // walking every document. Real SQLite store, no mocks.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'module';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { repairFtsDrift } from '../src/db/migrate.js';
 import { recordStatements } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
@@ -37,13 +34,8 @@ function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-f2-fts-count-'));
-  initStore(root);
+  root = makeRoot('f2-fts-count');
   writeEntry(root, createMemory('a distinctive gribblesnort memory row for the fts count test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('FTS sync check does not count the virtual table itself', () => {

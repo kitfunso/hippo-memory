@@ -1,18 +1,18 @@
 /** `hippo decide` and `hippo predict` through runCli: each record's full life on a real store, and the refusals. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
 import { initStore } from '../src/store/open.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let cwd: string;
 beforeEach(() => {
-  cwd = mkdtempSync(join(tmpdir(), 'hippo-decide-predict-'));
+  cwd = makeRoot('decide-predict', { init: false });
   mkdirSync(join(cwd, 'global-hippo'));
   initStore(join(cwd, '.hippo'));
   vi.stubEnv('HIPPO_HOME', join(cwd, 'global-hippo'));
@@ -24,7 +24,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(cwd, { recursive: true, force: true });
 });
 
 const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));

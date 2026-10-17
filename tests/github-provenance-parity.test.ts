@@ -8,11 +8,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
@@ -21,6 +17,7 @@ import type {
   GitHubIssueCommentEvent,
 } from '../src/connectors/github/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',
@@ -64,11 +61,8 @@ function makeIssueComment(i: number): IngestEvent {
 describe('GitHub connector — provenance coverage parity', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-gh-prov-'));
-    mkdirSync(join(root, '.hippo'), { recursive: true });
-    initStore(root);
+    root = makeRoot('gh-prov');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('every ingested GitHub raw row carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);

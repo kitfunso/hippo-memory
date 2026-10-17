@@ -3,11 +3,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const EVENT_COLUMNS = [
   'id', 'ts', 'ledger_version', 'tenant_id', 'runtime', 'event_type', 'surface', 'store_hash', 'write_store',
@@ -45,13 +43,12 @@ function insertEvent(db: DatabaseSyncLike, sessionId: string | null, turnSeq: nu
 }
 
 function withStore(fn: (db: DatabaseSyncLike, home: string) => void): void {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-delivery-mig-'));
+  const home = makeRoot('delivery-mig');
   const db = openHippoDb(home);
   try {
     fn(db, home);
   } finally {
     closeHippoDb(db);
-    rmSync(home, { recursive: true, force: true });
   }
 }
 
@@ -109,7 +106,7 @@ describe('delivery ledger schema v50', () => {
   });
 
   it('a v49 store re-migrates to v50 and min_compatible_binary is unchanged', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-delivery-mig-'));
+    const home = makeRoot('delivery-mig');
     // A value no migration writes, below the running binary, so any v50 write to it shows.
     const minBefore = '1.30.7';
     let db = openHippoDb(home);
@@ -130,7 +127,6 @@ describe('delivery ledger schema v50', () => {
       expect(meta(db, 'min_compatible_binary')).toBe(minBefore);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

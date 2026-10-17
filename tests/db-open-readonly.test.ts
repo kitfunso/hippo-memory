@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { closeHippoDb, openHippoDb, openHippoDbReadOnly } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('openHippoDbReadOnly', () => {
   it('reads audit_log from a store built with openHippoDb', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ro-'));
+    const root = makeRoot('ro');
     try {
       const db = openHippoDb(root);
       db.prepare(
@@ -27,14 +27,10 @@ describe('openHippoDbReadOnly', () => {
   });
 
   it('refuses a missing store and creates nothing', () => {
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ro-'));
+    const parent = makeRoot('ro', { init: false });
     const root = path.join(parent, 'absent');
-    try {
-      expect(() => openHippoDbReadOnly(root)).toThrow();
-      expect(fs.existsSync(root)).toBe(false);
-      expect(fs.readdirSync(parent)).toEqual([]);
-    } finally {
-      fs.rmSync(parent, { recursive: true, force: true });
-    }
+    expect(() => openHippoDbReadOnly(root)).toThrow();
+    expect(fs.existsSync(root)).toBe(false);
+    expect(fs.readdirSync(parent)).toEqual([]);
   });
 });

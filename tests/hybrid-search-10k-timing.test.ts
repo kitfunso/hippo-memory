@@ -14,6 +14,7 @@ import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ROWS = 10_000;
 const FEWER_ROWS = ROWS / 10;
@@ -35,13 +36,12 @@ function vector(seed: number): number[] {
 describe('hybrid recall at 10k rows', () => {
   const home = mkdtempSync(join(tmpdir(), 'hippo-10k-'));
   const fewer = mkdtempSync(join(tmpdir(), 'hippo-1k-'));
-  const global = mkdtempSync(join(tmpdir(), 'hippo-10k-global-'));
+  const global = makeRoot('10k-global', { init: false });
   afterAll(() => {
     vi.unstubAllGlobals();
     delete process.env.OPENAI_API_KEY;
     rmSync(home, { recursive: true, force: true });
     rmSync(fewer, { recursive: true, force: true });
-    rmSync(global, { recursive: true, force: true });
   });
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
