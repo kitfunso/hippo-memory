@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const TESTS = fileURLToPath(new URL('..', import.meta.url));
 const UI_SRC = fileURLToPath(new URL('../../ui/src', import.meta.url));
 // This file holds the shapes as sample text.
-const SELF = 'elapsed-time-upper-bounds.test.ts';
+const SELF = 'scripts/elapsed-time-upper-bounds.test.ts';
 const CLOCK = String.raw`(?:Date\.now\(\)|performance\.now\(\)|hrtime(?:\.bigint)?\(\))`;
 // A clock read minus a start time held in a variable; minus a constant is a moment in the past, not a duration.
 const CLOCK_DIFF = new RegExp(String.raw`${CLOCK}\s*-\s*[a-z_$][\w$.]*(?!\s*[*(/\w$.])`);
@@ -20,8 +20,8 @@ const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGr
 const ALLOWED = new Map([
   ['token-eval-z0-turns.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);', 'the bound is the same step\'s own span, taken in the same run, which a slow runner only widens'],
   ['token-eval-z0-codex-faults.test.ts: expect(wallMs + waitMs).toBeLessThanOrEqual(stepMs);', 'the bound is the same cell\'s own span, taken in the same run, which a slow runner only widens'],
-  ['audit-prune.test.ts: expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);', 'the value is a timestamp the code under test returns, bracketed by two clock reads taken around the call, which a slow runner only widens'],
-  ['company-brain-scorecard.test.ts: expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);', 'the value is a percentile computed from fixture timestamps, not a measured wall-clock span, so a slow runner cannot change it'],
+  ['db/audit-prune.test.ts: expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);', 'the value is a timestamp the code under test returns, bracketed by two clock reads taken around the call, which a slow runner only widens'],
+  ['store/company-brain-scorecard.test.ts: expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);', 'the value is a percentile computed from fixture timestamps, not a measured wall-clock span, so a slow runner cannot change it'],
 ]);
 
 /** The text between the bracket at `open` and the bracket that closes it. */
