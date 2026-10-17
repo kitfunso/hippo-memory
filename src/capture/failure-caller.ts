@@ -3,7 +3,6 @@
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';
-import { recordFailureAt, requestOutcomeAt, settleFailureOutcomeAt } from '../store/failure-log-at.js';
 import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../store/failure-log.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
@@ -78,41 +77,40 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   return { skip, text: truncateCodePointSafe(scrubForSharing(text), FAILURE_TEXT_MAX_CHARS) };
 }
 
-export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): CallerFailureResult {
+export async function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): Promise<CallerFailureResult> {
   const failure = checkedFailure(req);
   const key = bindCaller(ctx, req.sessionId, req.project);
-  const earlier = requestOutcomeAt(ctx.hippoRoot, ctx.tenantId, req.requestId, req.sessionId);
+  const earlier = await ctx.store.failureLog.requestOutcome(ctx.tenantId, req.requestId, req.sessionId);
   // A retry after a lost reply gets the first answer and writes
   // nothing; one whose store failed tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';
   try {
     const caller = { actor: key.owner, originProject: req.project.name, origins: key.project };
-    const outcome =
-      failure.skip === null ? storeLesson(ctx.hippoRoot, ctx.tenantId, failure.text, caller) : failure.skip;
+    const outcome = failure.skip === null ? await storeLesson(ctx, failure.text, caller) : failure.skip;
     logged = outcome;
     return { outcome };
   } finally {
     // The hash is of the text as stored, so a repeat counts against the lesson it repeats.
-    logOutcome(ctx, { ...req, text: failure.text }, key, logged, earlier !== null);
+    await logOutcome(ctx, { ...req, text: failure.text }, key, logged, earlier !== null);
   }
 }
 
 /** Runs after the outcome in its own try, so a log error never hides the store's error or its outcome. */
-function logOutcome(
+async function logOutcome(
   ctx: Context,
   req: CallerFailureRequest,
   key: ContinuityKey,
   outcome: FailureOutcome,
   retried: boolean,
-): void {
+): Promise<void> {
   try {
     // The request id allows one row, so a retry rewrites the first try's outcome.
     if (retried) {
-      settleFailureOutcomeAt(ctx.hippoRoot, ctx.tenantId, req.requestId, outcome);
+      await ctx.store.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
       return;
     }
-    recordFailureAt(ctx.hippoRoot, {
+    await ctx.store.failureLog.record({
       tenantId: ctx.tenantId, sessionId: req.sessionId, tool: req.tool, outcome, rule: req.rule,
       sigHash: req.text?.trim() ? failureHash(req.text) : null, detailHash: req.detailHash,
       ownerSubject: key.owner, originProject: req.project.name, requestId: req.requestId,

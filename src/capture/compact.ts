@@ -3,8 +3,9 @@ import * as path from 'path';
 import { type TaskSnapshot } from '../store/rows.js';
 import { isInitialized } from '../core/project-identity.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
-import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactionsAt } from './compaction-record.js';
-import { recordCompactionStart, recordSnapshotSaved } from '../store/compactions-record.js';
+import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
+import type { LocalFiles } from '../store/port.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
@@ -90,8 +91,9 @@ function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean
 
 /** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves a working-state
  * snapshot. Never extracts memories itself; SessionEnd capture owns that. */
-function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
+function runPreCompact(local: LocalFiles, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
+  const { hippoRoot } = local;
   // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call
   // that would create a store.
   if (!isInitialized(hippoRoot)) {
@@ -121,7 +123,7 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   }
 
   const closable = runtime === 'claude-code' && !vscode;
-  const recordId = markCompactionBoundary(hippoRoot, options, logFile, receipt.input, closable);
+  const recordId = markCompactionBoundary(local, options, logFile, receipt.input, closable);
 
   const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
   if (!transcriptPath) return;
@@ -130,13 +132,13 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
   if (!derived) return;
 
-  saveDerivedSnapshot(hippoRoot, logFile, sessionId, recordId, derived);
+  saveDerivedSnapshot(local, logFile, sessionId, recordId, derived);
 }
 
 /** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
  * the record id, or null without a record. */
 function markCompactionBoundary(
-  hippoRoot: string,
+  local: LocalFiles,
   options: PreCompactOptions,
   logFile: string,
   input: CaptureInput,
@@ -148,8 +150,7 @@ function markCompactionBoundary(
   let recordId: string | null = null;
   let printed: string | null = null;
   if (closable && sessionId !== null && sessionId !== '') {
-    recordId = recordCompactionStart(
-      hippoRoot,
+    recordId = local.compactionHooks.start(
       { sessionId, trigger: input.trigger, cwd: input.cwd, transcriptPath: input.transcriptPath },
       (message) => appendPreCompactLog(logFile, message),
     );
@@ -196,13 +197,14 @@ function resolvePreCompactTranscript(
 }
 
 function saveDerivedSnapshot(
-  hippoRoot: string,
+  local: LocalFiles,
   logFile: string,
   sessionId: string | null,
   recordId: string | null,
   derived: WorkingState,
 ): void {
   const tenantId = resolveTenantId({});
+  const { hippoRoot } = local;
 
   let existing: TaskSnapshot | null = null;
   try {
@@ -227,7 +229,7 @@ function saveDerivedSnapshot(
       saveActiveTaskSnapshot(hippoRoot, tenantId, { ...merged, source: 'pre-compact', session_id: sessionId });
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) {
-        recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
+        local.compactionHooks.markSnapshotSaved(tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
       }
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
@@ -250,7 +252,7 @@ export interface PreCompactOptions {
 export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   try {
-    runPreCompact(hippoRoot, options, logFile);
+    runPreCompact(sqliteSyncStore(hippoRoot).localFiles, options, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
   }
@@ -280,12 +282,13 @@ export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): 
       return null;
     }
     const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
+    const local = sqliteSyncStore(hippoRoot).localFiles;
     let line: string | null = null;
     let storeBusy = false;
     if (receipt.status !== 'received') {
       log(`skip: ${receipt.reason}`);
     } else {
-      const saved = saveCompaction(hippoRoot, receipt.input, log);
+      const saved = saveCompaction(local, receipt.input, log);
       line = postCompactLine(saved);
       storeBusy = saved.deferred;
       if (!storeBusy && receipt.input.transcriptPath !== null && options.afterSave) {
@@ -296,7 +299,7 @@ export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): 
         }
       }
     }
-    if (!storeBusy) replayCompactionsAt(hippoRoot, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
+    if (!storeBusy) replayCompactions(local, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
     return line;
   } catch (err) {
     log(`failed: ${errorMessage(err)}`);

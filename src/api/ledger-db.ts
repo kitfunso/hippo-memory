@@ -1,66 +1,54 @@
-// The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
-import { errorMessage, log, errorFields } from '../util/log.js';
-import {
-  lastSentOnSurface, noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, type LedgerTurn,
-} from '../store/ledger-turn.js';
-import { hasGroup, type StoreReach } from '../store/port.js';
+// The store the token ledger writes to for a caller; context, recall and the session hooks share it.
+import { noteLedgerRowSkipped, type LedgerTurn } from '../store/ledger-turn.js';
+import type { Ledger, LocalFiles, StoreReach } from '../store/port.js';
 import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
 import type { Context } from './types.js';
 
-/** The slice of a call's store reach that picks the ledger; a shared store has no `global`. */
-export type LedgerReach = Pick<StoreReach, 'hasLocal' | 'global'>;
+/** Where a call's ledger can sit: its own hippo.db, else the operator's global one; a shared store has no `global`. */
+export interface LedgerReach {
+  readonly local?: LocalFiles;
+  readonly global?: StoreReach['global'];
+}
 
-/** The ledger is SQLite-only: a local store needs a reach that says so and a SQLite store; no reach books nowhere. */
+/** The ledger is SQLite-only: a local one needs a reach that says the caller has a store and a SQLite store. */
 export function ledgerReachOf(ctx: Pick<Context, 'reach' | 'store'>, shared?: boolean): LedgerReach {
-  const hasLocal = ctx.reach?.hasLocal === true && hasGroup(ctx.store, 'localFiles');
-  return shared === true ? { hasLocal } : { hasLocal, global: ctx.reach?.global };
+  const local = ctx.reach?.hasLocal === true ? ctx.store.localFiles : undefined;
+  return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
 
-/** `hippoRoot` when the call has a store of its own, else the global store (the prompt hook fires where none is). */
-export function ledgerRoot(hippoRoot: string, reach: LedgerReach): string | null {
-  return reach.hasLocal ? hippoRoot : (reach.global?.root ?? null);
+/** The call's own hippo.db, else the global store's (the prompt hook fires where none is); null with neither. */
+export function ledgerFiles(reach: LedgerReach): LocalFiles | null {
+  return reach.local ?? reach.global?.store.localFiles ?? null;
 }
 
-/** Runs `call` on ledgerRoot's store root; undefined on any failure, since a ledger failure must not break recall. */
-export function onLedgerRoot<T>(
-  hippoRoot: string,
-  reach: LedgerReach,
-  call: (root: string) => T,
-): T | undefined {
-  let root: string | null = null;
+/** Runs `call` on ledgerFiles' ledger; undefined on any failure, since a ledger failure must not break recall. */
+export function onLedger<T>(reach: LedgerReach, call: (ledger: Ledger) => T): T | undefined {
+  const files = ledgerFiles(reach);
+  if (files === null) return undefined;
   try {
-    root = ledgerRoot(hippoRoot, reach);
-  } catch (error) {
-    // An unreadable store root means no ledger write; the ledger must never break context or recall.
-    log.debug(`token ledger skipped, store root unreadable: ${errorMessage(error)}`, errorFields(error));
-    return undefined;
-  }
-  if (root === null) return undefined;
-  try {
-    return call(root);
+    return call(files.ledger);
   } catch (error) {
     noteLedgerRowSkipped(error);
     return undefined;
   }
 }
 
-/** Books one row in ledgerRoot's store, best-effort. */
-export function bookTokenUse(hippoRoot: string, use: TokenUse, reach: LedgerReach): void {
-  onLedgerRoot(hippoRoot, reach, (root) => recordTokensAt(root, use));
+/** Books one row in ledgerFiles' store, best-effort. */
+export function bookTokenUse(use: TokenUse, reach: LedgerReach): void {
+  onLedger(reach, (ledger) => ledger.recordTokens(use));
 }
 
-/** Books a turn's rows and then its delivery event on one connection of ledgerRoot's store, best-effort. */
-export function bookLedgerTurn(hippoRoot: string, turn: LedgerTurn, reach: LedgerReach): void {
-  onLedgerRoot(hippoRoot, reach, (root) => recordLedgerTurn(root, turn));
+/** Books a turn's rows and then its delivery event on one connection of ledgerFiles' store, best-effort. */
+export function bookLedgerTurn(turn: LedgerTurn, reach: LedgerReach): void {
+  onLedger(reach, (ledger) => ledger.recordTurn(turn));
 }
 
-/** What the session last sent on `surface` in ledgerRoot's store; undefined with no ledger or a failed read. */
+/** What the session last sent on `surface` in ledgerFiles' store; undefined with no ledger or a failed read. */
 export function ledgerLastSent(
-  hippoRoot: string,
   tenantId: string,
   sessionId: string | null | undefined,
   surface: TokenSurface,
   reach: LedgerReach,
 ): LastSent | null | undefined {
-  return onLedgerRoot(hippoRoot, reach, (root) => lastSentOnSurface(root, tenantId, sessionId, surface));
+  return onLedger(reach, (ledger) => ledger.lastSent(tenantId, sessionId, surface));
 }

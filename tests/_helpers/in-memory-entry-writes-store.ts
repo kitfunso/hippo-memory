@@ -10,7 +10,7 @@ import {
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
 
-interface Tombstone {
+export interface Tombstone {
   readonly reason: string | null;
   readonly rejectedAt: string;
 }
@@ -34,6 +34,12 @@ export interface InMemoryEntryWritesStore extends StoreSide {
   readonly rawIdsFor: (artifactRef: string, tenantId: string) => string[];
   /** Archives every id in one staged write, with `companion` run before it commits: no reach check, and one failed id drops them all. */
   readonly archiveAllWith: (ids: readonly string[], by: Pick<RawArchive, 'actor' | 'reason'>, companion: () => void) => Promise<void>;
+  /** Runs `fn` on a staged copy of the rows and commits them with its audit rows only when it returns. */
+  readonly stage: <T>(actor: string, fn: (tx: Tx) => T) => Promise<T>;
+  /** The guard's tombstones by `tombstoneKey`, shared so a store built on this one adds and lifts them. */
+  readonly tombstones: Map<string, Tombstone>;
+  readonly rowById: (id: string) => MemoryEntry | undefined;
+  readonly allRows: () => MemoryEntry[];
 }
 
 /** One write's rows and audit rows, staged so a throw drops both, as a rolled-back transaction would. */
@@ -47,7 +53,7 @@ interface CopiedRows {
   readonly tombstones: Map<string, Tombstone>;
 }
 
-const tombstoneKey = (tenantId: string, digest: string): string => `${tenantId}\u0000${digest}`;
+export const tombstoneKey = (tenantId: string, digest: string): string => `${tenantId}\u0000${digest}`;
 
 function copyRows(hippoRoot: string): CopiedRows {
   const db = openHippoDb(hippoRoot);
@@ -65,7 +71,7 @@ function copyRows(hippoRoot: string): CopiedRows {
 }
 
 /** As hippo.db: a level 2 or 3 summary of the same tenant, live and clean, flips to dirty with one audit row. */
-function markParentDirty(tx: Tx, parentId: string, tenantId: string, actor: string): void {
+export function markParentDirty(tx: Tx, parentId: string, tenantId: string, actor: string): void {
   const parent = tx.rows.get(parentId);
   if (!parent || parent.tenant_id !== tenantId || (parent.dag_level !== 2 && parent.dag_level !== 3)) return;
   if (parent.summary_dirty === true || parent.kind === 'archived') return;
@@ -219,5 +225,6 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
   };
   return {
     store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten, writeWith, archiveWith, rawIdsFor, archiveAllWith,
+    stage: inTx, tombstones, rowById: (id) => structuredClone(memories.get(id)), allRows: () => structuredClone([...memories.values()]),
   };
 }

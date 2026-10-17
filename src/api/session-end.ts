@@ -4,7 +4,8 @@
 import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-import { readApiCalls, recordRereads, type TranscriptCalls } from '../store/token-ledger.js';
+import type { LocalFiles } from '../store/port.js';
+import { readApiCalls, type TranscriptCalls } from '../store/token-ledger.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
@@ -77,7 +78,17 @@ async function closeSnapshot(
   }
 }
 
-/** Books the ending session's re-reads in each store its ledger rows can land in (`ctx.hippoRoot` and global); returns
+/** The caller's hippo.db and the global one, each once; a store that is not hippo.db keeps no ledger. */
+function rereadLedgers(ctx: Context): LocalFiles[] {
+  const local = (ctx.reach?.hasLocal ?? true) ? ctx.store.localFiles : undefined;
+  const byRoot = new Map<string, LocalFiles>();
+  for (const files of [local, ctx.reach?.global?.store.localFiles]) {
+    if (files !== undefined) byRoot.set(path.resolve(files.hippoRoot), files);
+  }
+  return [...byRoot.values()];
+}
+
+/** Books the ending session's re-reads in each hippo.db its ledger rows can land in (the caller's and global); returns
  * the log lines. */
 export async function bookSessionRereads(
   ctx: Context,
@@ -91,15 +102,11 @@ export async function bookSessionRereads(
   } catch (err) {
     return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
   }
-  const roots = new Set(
-    [(ctx.reach?.hasLocal ?? true) ? ctx.hippoRoot : null, ctx.reach?.global?.root]
-      .flatMap((root) => (root ? [path.resolve(root)] : [])),
-  );
   const lines: string[] = [];
   let tokens = 0;
-  for (const root of roots) {
+  for (const { ledger } of rereadLedgers(ctx)) {
     try {
-      tokens += recordRereads(root, ctx.tenantId, sessionId, read.calls);
+      tokens += ledger.replaceRereads(ctx.tenantId, sessionId, read.calls);
     } catch (err) {
       lines.push(`re-read count failed: ${errorMessage(err)}`);
     }

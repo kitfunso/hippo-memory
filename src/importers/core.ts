@@ -10,7 +10,9 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { initStore } from '../store/open.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import { rejectionGuardRefuses } from '../store/rejected-values.js';
+import type { Sync } from '../store/port.js';
+import type { Rejections } from '../store/port/rejections.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { log } from '../util/log.js';
@@ -62,9 +64,10 @@ export function importEntries(
   tags: string[],
   options: ImportOptions
 ): ImportResult {
-  const { targetRoot, keys } = openImportTarget(options);
+  const target = openImportTarget(options);
+  const { keys } = target;
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
-  const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(target.targetRoot).defaultHalfLifeDays;
 
   let total = 0;
   let imported = 0;
@@ -87,7 +90,7 @@ export function importEntries(
       }
 
       const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
-      if (!writeOrProbeImport(targetRoot, entry, options)) {
+      if (!writeOrProbeImport(target, entry, options)) {
         rejected++;
         continue;
       }
@@ -103,8 +106,14 @@ export function importEntries(
   });
 }
 
+interface ImportTarget {
+  readonly targetRoot: string;
+  readonly keys: ReturnType<typeof storedTextKeys>;
+  readonly rejections: Sync<Rejections>;
+}
+
 /** The store the import writes to, made ready, with the text keys it already holds. */
-function openImportTarget(options: ImportOptions) {
+function openImportTarget(options: ImportOptions): ImportTarget {
   const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
 
   if (options.global) {
@@ -115,7 +124,8 @@ function openImportTarget(options: ImportOptions) {
     targetRoot,
     options.global ? undefined : options.tenantId,
   ));
-  return { targetRoot, keys };
+  // A published synchronous entry, so it reads the port as hippo.db answers it, without a Promise.
+  return { targetRoot, keys, rejections: sqliteSyncStore(targetRoot).rejections };
 }
 
 function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
@@ -157,9 +167,11 @@ function createImportEntry(
 }
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
-function writeOrProbeImport(targetRoot: string, entry: MemoryEntry, options: ImportOptions): boolean {
+function writeOrProbeImport(target: ImportTarget, entry: MemoryEntry, options: ImportOptions): boolean {
+  const { targetRoot, rejections } = target;
   if (options.dryRun) {
-    return !rejectionGuardRefuses(targetRoot, entry.tenant_id ?? DEFAULT_TENANT_ID, entry.id, entry.content);
+    const check = { tenantId: entry.tenant_id ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };
+    return !rejections.refusedAmong([check])[0];
   }
   // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {

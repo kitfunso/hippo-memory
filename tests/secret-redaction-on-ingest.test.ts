@@ -16,6 +16,7 @@ import { importMarkdown } from '../src/importers/markdown.js';
 import { importVault } from '../src/importers/vault.js';
 import { type ImportOptions, type ImportResult } from '../src/importers/core.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
+import { failureTarget } from './_helpers/failure-target.js';
 import { captureError, partitionLessons } from '../src/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { addWorkspace } from '../src/connectors/slack/workspaces.js';
@@ -144,7 +145,7 @@ describe('connector webhooks', () => {
   };
 
   it('an unroutable Slack message lands in the dead-letter table redacted, and replays once routed', async () => {
-    addWorkspace(root, { teamId: 'T_OTHER', tenantId: 'default' });
+    await addWorkspace(sqliteStore(root), { teamId: 'T_OTHER', tenantId: 'default' });
     const body = JSON.stringify({
       type: 'event_callback',
       team_id: 'T1',
@@ -160,7 +161,7 @@ describe('connector webhooks', () => {
     expect(row.signature).toBeNull();
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
-    addWorkspace(root, { teamId: 'T1', tenantId: 'default' });
+    await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
     expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { force: true })).ok).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
@@ -237,8 +238,8 @@ describe('importers', () => {
 });
 
 describe('machine-captured lessons', () => {
-  it('a tool failure that echoes a token is stored without it', () => {
-    const outcome = captureToolFailure(root, 'default', {
+  it('a tool failure that echoes a token is stored without it', async () => {
+    const outcome = await captureToolFailure(failureTarget(root), {
       tool_name: 'Bash',
       error: `fatal: Authentication failed for https://x-access-token:${GHP}@github.com/acme/repo.git`,
       tool_input: { command: 'git push origin main' },

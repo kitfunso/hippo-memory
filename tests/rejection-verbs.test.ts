@@ -18,6 +18,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import * as api from '../src/api/index.js';
 import { RejectedValueError } from '../src/core/api-errors.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -80,7 +81,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     writeEntry(tmpDir, a);
     await api.reject(ctx(), { memoryId: a.id, reason: 'listed test' });
 
-    const rows = listRejectionsForTenant(tmpDir, 'default');
+    const rows = (await listRejectionsForTenant(sqliteStore(tmpDir), 'default'));
     expect(rows.length).toBe(1);
     expect(rows[0]!.reason).toBe('listed test');
     expect(rows[0]!.sourceMemoryId).toBe(a.id);
@@ -99,9 +100,9 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     writeEntry(tmpDir, a);
     const rejectResult = await api.reject(ctx(), { memoryId: a.id, reason: 'temp' });
 
-    const unrejectResult = api.unreject(ctx(), rejectResult.digest);
+    const unrejectResult = await api.unreject(ctx(), rejectResult.digest);
     expect(unrejectResult.ok).toBe(true);
-    expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(0);
+    expect((await listRejectionsForTenant(sqliteStore(tmpDir), 'default')).length).toBe(0);
 
     expect(await api.remember(ctx(), { content: 'temporarily rejected' })).toMatchObject({ id: expect.any(String) });
   });
@@ -131,13 +132,13 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     const a = createMemory('to be rejected for the blank-unreject test', { tags: [] });
     writeEntry(tmpDir, a);
     await api.reject(ctx(), { memoryId: a.id, reason: 'setup for blank-unreject test' });
-    expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(1);
+    expect((await listRejectionsForTenant(sqliteStore(tmpDir), 'default')).length).toBe(1);
 
-    expect(() => api.unreject(ctx(), '')).toThrow();
-    expect(() => api.unreject(ctx(), '   ')).toThrow();
+    await expect(api.unreject(ctx(), '')).rejects.toThrow();
+    await expect(api.unreject(ctx(), '   ')).rejects.toThrow();
     // The tombstone must survive an accidental blank call, not get wiped by
     // an empty-string startsWith-matches-everything prefix scan.
-    expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(1);
+    expect((await listRejectionsForTenant(sqliteStore(tmpDir), 'default')).length).toBe(1);
   });
 });
 

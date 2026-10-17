@@ -42,5 +42,8 @@ export type {
   WorkingMemoryFilter,
   WorkingMemoryPush,
 } from './port-groups.js';
+export type { RejectionCheck, Rejections } from './port/rejections.js';
+export type { FailureLog } from './port/failure-log.js';
+export type { CallerItemsSaved, Compactions } from './port/compactions.js';
 export { hasGroup, requireGroup, type OptionalGroup } from './port.js';
 export { sqliteStore } from './sqlite/store.js';

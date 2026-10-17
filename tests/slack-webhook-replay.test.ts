@@ -5,6 +5,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
 import { createReplayWindow } from '../src/connectors/replay-window.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 import type { JsonValue } from '../src/util/json.js';
 
@@ -43,14 +44,14 @@ describe('POST /v1/connectors/slack/events replay', () => {
     const ts = String(Math.floor(Date.now() / 1000));
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'duplicate' } });
-    expect(listDlq(slackDlq, root, { tenantId: 'default' })).toHaveLength(1);
+    expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(1);
   });
 
   it('takes the same body under a new timestamp, since Slack signs each send afresh', async () => {
     const now = Math.floor(Date.now() / 1000);
     expect(await post(String(now - 1))).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await post(String(now))).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
-    expect(listDlq(slackDlq, root, { tenantId: 'default' })).toHaveLength(2);
+    expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(2);
   });
 });
 

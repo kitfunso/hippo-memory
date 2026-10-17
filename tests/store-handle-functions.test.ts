@@ -2,12 +2,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { latestCompactionRows } from '../src/store/compactions.js';
-import { markSnapshotSavedAt, saveCallerItems, startCompactionAt } from '../src/store/compaction-caller.js';
 import { failuresBySession } from '../src/store/failure-log.js';
-import { recordFailureAt, requestOutcomeAt, settleFailureOutcomeAt } from '../src/store/failure-log-at.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import type { Captures } from '../src/store/port.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
-import { withRejectionProbe } from '../src/store/rejection-probe.js';
-import { writeCapturedItems } from '../src/store/capture-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { duplicateKey } from '../src/util/same-text.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -42,52 +40,48 @@ function reject(text: string): void {
 }
 
 describe('failure log functions', () => {
-  it('recordFailureAt writes a row that a later read finds', () => {
-    recordFailureAt(root, { tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'a', detailHash: 'b' });
+  const log = () => sqliteSyncStore(root).failureLog;
+
+  it('record writes a row that a later read finds', () => {
+    log().record({ tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'a', detailHash: 'b' });
     expect(read((db) => failuresBySession(db, 'default', '1970-01-01T00:00:00.000Z')).map((r) => r.sessionId)).toEqual(['s1']);
   });
 
-  it('requestOutcomeAt reads a request outcome and settleFailureOutcomeAt rewrites it', () => {
-    recordFailureAt(root, { tenantId: 'default', sessionId: 's1', outcome: 'store-failed', requestId: 'r1' });
-    expect(requestOutcomeAt(root, 'default', 'r1', 's1')).toBe('store-failed');
-    settleFailureOutcomeAt(root, 'default', 'r1', 'stored');
-    expect(requestOutcomeAt(root, 'default', 'r1', 's1')).toBe('stored');
-    expect(requestOutcomeAt(root, 'default', 'unknown', 's1')).toBeNull();
+  it('requestOutcome reads a request outcome and settleOutcome rewrites it', () => {
+    log().record({ tenantId: 'default', sessionId: 's1', outcome: 'store-failed', requestId: 'r1' });
+    expect(log().requestOutcome('default', 'r1', 's1')).toBe('store-failed');
+    log().settleOutcome('default', 'r1', 'stored');
+    expect(log().requestOutcome('default', 'r1', 's1')).toBe('stored');
+    expect(log().requestOutcome('default', 'unknown', 's1')).toBeNull();
   });
 });
 
-describe('startCompactionAt and markSnapshotSavedAt', () => {
+describe('compactions.start and compactions.markSnapshotSaved', () => {
   it('inserts a started record and marks its snapshot saved', () => {
-    const id = startCompactionAt(root, 'default', { sessionId: 's1', originProject: 'acme/app', trigger: 'auto', cwd: null, transcriptPath: null });
+    const { compactions } = sqliteSyncStore(root);
+    const id = compactions.start('default', { sessionId: 's1', originProject: 'acme/app', trigger: 'auto', cwd: null, transcriptPath: null });
     expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]).toMatchObject({ id, status: 'started', snapshot_saved: 0 });
-    markSnapshotSavedAt(root, 'default', id);
+    compactions.markSnapshotSaved('default', id);
     expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]?.snapshot_saved).toBe(1);
   });
 });
 
-describe('saveCallerItems', () => {
+describe('compactions.saveCallerItems', () => {
   const req = {
     sessionId: 's1', trigger: 'auto', requestId: 'req-1', project: 'acme/app', owner: 'bob@acme', origins: ['acme/app'], baseHalfLifeDays: 365,
     items: ['The deploy script must run from the repo root, never from a subfolder.'],
   };
 
   it('writes the items once and answers a retry with the first count', () => {
-    expect(saveCallerItems(root, 'default', req, () => undefined)).toBe(1);
-    expect(saveCallerItems(root, 'default', req, () => undefined)).toBe(1);
+    const { compactions } = sqliteSyncStore(root);
+    expect(compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
+    expect(compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
   });
 });
 
-describe('withRejectionProbe', () => {
-  it('says true for a rejected value and false for any other', () => {
-    const text = 'the build server is at 10.0.0.9';
-    reject(text);
-    const answers = withRejectionProbe(root, (wouldReject) => [wouldReject('default', 'm1', text), wouldReject('default', 'm2', 'something else')]);
-    expect(answers).toEqual([true, false]);
-  });
-});
-
-describe('writeCapturedItems', () => {
+describe('localFiles.captures.write', () => {
+  const write = (...args: Parameters<Captures['write']>) => sqliteSyncStore(root).localFiles.captures.write(...args);
   const item = (content: string) => ({ content, makeEntry: () => createMemory(content, { source: 'capture' }) });
 
   it('writes new items, skips a repeat inside the batch and counts a rejected value', () => {
@@ -95,7 +89,7 @@ describe('writeCapturedItems', () => {
     reject(rejected);
     const keys = new Set<string>();
     const first = 'Always run the migration dry run before the real one.';
-    const outcomes = writeCapturedItems(root, [item(first), item(first), item(rejected)], keys, { lean: true });
+    const outcomes = write([item(first), item(first), item(rejected)], keys, { lean: true });
     expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
     expect(keys.has(duplicateKey(first))).toBe(true);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
@@ -106,7 +100,7 @@ describe('writeCapturedItems', () => {
     reject(rejected);
     const kept = 'Rotate the signing key before the old one expires.';
     const seen: string[] = [];
-    const outcomes = writeCapturedItems(root, [item(kept), item(kept), item(rejected)], new Set(), { lean: true, onCaptured: (e) => seen.push(e.content) });
+    const outcomes = write([item(kept), item(kept), item(rejected)], new Set(), { lean: true, onCaptured: (e) => seen.push(e.content) });
     expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
     expect(seen).toEqual([kept]);
   });
@@ -114,7 +108,7 @@ describe('writeCapturedItems', () => {
   it('skips an item whose text the store already holds without building its entry', () => {
     const held = 'Keep the changelog fragment in the same commit as the code.';
     let built = false;
-    const outcomes = writeCapturedItems(root, [{ content: held, makeEntry: () => ((built = true), createMemory(held)) }], new Set([duplicateKey(held)]), { lean: true });
+    const outcomes = write([{ content: held, makeEntry: () => ((built = true), createMemory(held)) }], new Set([duplicateKey(held)]), { lean: true });
     expect(outcomes).toEqual(['skipped']);
     expect(built).toBe(false);
   });

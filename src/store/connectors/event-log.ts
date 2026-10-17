@@ -2,8 +2,8 @@
 
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { EntryWrite, RawArchive } from '../port.js';
-import type { GitHubDlqInsert, GitHubRouting } from './github.js';
-import type { SlackDlqInsert, SlackTeamRoute } from './slack.js';
+import type { DlqItem as GitHubDlqItem, GitHubDlqInsert, GitHubRouting, HwmColumn, StoredCursors } from './github.js';
+import type { DlqItem as SlackDlqItem, SlackDlqInsert, SlackTeamRoute, SlackWorkspace } from './slack.js';
 import { placeholders } from '../../util/sql.js';
 import { onHandle } from '../open.js';
 
@@ -112,6 +112,13 @@ export interface ArtifactArchive {
 export type ConnectorDeadLetter =
   ({ readonly connector: 'slack' } & SlackDlqInsert) | ({ readonly connector: 'github' } & GitHubDlqInsert);
 
+export interface DeadLetterRows {
+  readonly slack: SlackDlqItem;
+  readonly github: GitHubDlqItem;
+}
+
+export type DeadLetterConnector = keyof DeadLetterRows;
+
 /** What a connector delivery reads and writes beside connectorWrites: the event log,
  * tenant routing, the dead-letter queue and the archive of a deleted artifact. */
 export interface ConnectorEvents {
@@ -137,4 +144,24 @@ export interface ConnectorEvents {
   }): Promise<GitHubRouting>;
   /** Appends the row and answers its id. */
   parkDeadLetter(letter: ConnectorDeadLetter): Promise<number>;
+  /** The tenant's rows in one queue, oldest first. */
+  deadLetters<C extends DeadLetterConnector>(
+    connector: C,
+    tenantId: string,
+    limit: number,
+  ): Promise<DeadLetterRows[C][]>;
+  deadLetter<C extends DeadLetterConnector>(connector: C, id: number): Promise<DeadLetterRows[C] | null>;
+  /** Adds one to the row's retry count and stamps its retry time. */
+  markDeadLetterRetried(connector: DeadLetterConnector, id: number): Promise<void>;
+  slackCursor(tenantId: string, channelId: string): Promise<string | null>;
+  saveSlackCursor(tenantId: string, channelId: string, latestTs: string): Promise<void>;
+  githubCursors(tenantId: string, repo: string): Promise<StoredCursors>;
+  saveGitHubHwm(tenantId: string, repo: string, column: HwmColumn, value: string): Promise<void>;
+  /** Sets each high-water mark the repository has not saved yet to `since`. */
+  seedGitHubCursors(tenantId: string, repo: string, since: string): Promise<void>;
+  slackWorkspaces(): Promise<SlackWorkspace[]>;
+  /** Maps the team to the tenant, replacing any mapping it had. */
+  registerSlackWorkspace(teamId: string, tenantId: string): Promise<SlackWorkspace>;
+  /** False when the team had no mapping. */
+  removeSlackWorkspace(teamId: string): Promise<boolean>;
 }

@@ -3,7 +3,7 @@
  *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
 import type { Context } from '../../api/index.js';
-import { readCursors, seedCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
+import type { HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
 import type {
@@ -260,7 +260,7 @@ async function backfillStream(
   });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    writeHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
+    await ctx.store.connectorEvents.saveGitHubHwm(ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
   }
   return { ingested: res.ingested, pages: res.pages };
 }
@@ -271,8 +271,9 @@ export async function backfillRepo(
 ): Promise<BackfillResult> {
   const sleep =
     opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  if (opts.sinceIso) seedCursors(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, opts.sinceIso);
-  const cursors = readCursors(ctx.hippoRoot, ctx.tenantId, opts.repoFullName);
+  const events = ctx.store.connectorEvents;
+  if (opts.sinceIso) await events.seedGitHubCursors(ctx.tenantId, opts.repoFullName, opts.sinceIso);
+  const cursors = await events.githubCursors(ctx.tenantId, opts.repoFullName);
   const repository = syntheticRepository(opts.repoFullName);
 
   const result: BackfillResult = {

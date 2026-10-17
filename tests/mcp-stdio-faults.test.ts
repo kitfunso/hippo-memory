@@ -9,6 +9,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { embedAll } from '../src/search/embed-memories.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
 let tmpHome: string;
@@ -193,7 +194,7 @@ describe('MCP stdio fault handling', () => {
       run.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
       expect(JSON.parse(await run.nextLine(10000)).id).toBe(1);
       // Recall embeds its query only when the store holds a vector to compare it with.
-      expect(await embedAll(embeddings.store)).toBe(1);
+      expect(await embedAll(sqliteSyncStore(embeddings.store).localFiles)).toBe(1);
       embeddings.hold();
       run.proc.stdin.write(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
       await embeddings.queryAsked;
@@ -222,7 +223,7 @@ describe('MCP stdio fault handling', () => {
       expect(JSON.parse(await seed.nextLine(10000)).id).toBe(1);
       seed.proc.stdin.end();
       expect(await seed.exited).toBe(0);
-      expect(await embedAll(embeddings.store)).toBe(1);
+      expect(await embedAll(sqliteSyncStore(embeddings.store).localFiles)).toBe(1);
       embeddings.hold();
       return start([serverPath], { HIPPO_REQUEST_DEADLINE_MS: '1500' });
     }

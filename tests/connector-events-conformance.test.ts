@@ -7,10 +7,13 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
-import { markGitHubEventSeen, type GitHubRouting } from '../src/store/connectors/github.js';
-import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';
+import { markGitHubEventSeen, type GitHubRouting, type StoredCursors } from '../src/store/connectors/github.js';
+import { markSlackEventSeen, type SlackTeamRoute, type SlackWorkspace } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import type { ConnectorDeadLetter, ConnectorEvent, ConnectorEventRecord, ConnectorWriteOutcome, DeletionTarget } from '../src/store/port.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import type {
+  ConnectorDeadLetter, ConnectorEvent, ConnectorEventRecord, ConnectorWriteOutcome, DeadLetterRows, DeletionTarget,
+} from '../src/store/port.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   inMemoryConnectorEventsStore, sqliteConnectorEventsSide, type ConnectorEventsSide, type ParkedLetter,
@@ -27,7 +30,9 @@ const REASON = 'source_deleted:github:issue_comment:d-1';
 
 type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind'>;
 type Archived = { readonly duplicate: boolean; readonly archived: number };
-type Value = ConnectorEventRecord | DeletionTarget | Archived | SlackTeamRoute | GitHubRouting | ConnectorWriteOutcome | Row[] | number | void;
+type Letter = DeadLetterRows['slack'] | DeadLetterRows['github'];
+type Value = ConnectorEventRecord | DeletionTarget | Archived | SlackTeamRoute | GitHubRouting | ConnectorWriteOutcome | Row[] | number | void
+  | Letter | Letter[] | null | string | StoredCursors | SlackWorkspace | SlackWorkspace[] | boolean;
 type Call = GroupCall<'connectorEvents', Value>;
 
 interface Side {
@@ -69,7 +74,7 @@ function seed(dir: string): Seeded {
 
 /** One workspace, one installation, and a repository two tenants registered, acme first. */
 function registerRoutes(root: string): void {
-  upsertSlackWorkspace(root, 'T_ACME', TENANT_A);
+  sqliteSyncStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT_A, '2026-01-01T00:00:00.000Z');
@@ -264,7 +269,10 @@ describe('ConnectorEvents.parkDeadLetter', () => {
       park({ connector: 'github', ...common }),
     ]);
     expect(values(side)).toEqual([1, 1, 2, 2]);
-    const row = { ...common, receivedAt: NOW, teamId: null, slackTimestamp: null, eventName: null, deliveryId: null, installationId: null, repoFullName: null };
+    const row = {
+      ...common, receivedAt: NOW, teamId: null, slackTimestamp: null, eventName: null, deliveryId: null, installationId: null, repoFullName: null,
+      retryCount: 0, retriedAt: null,
+    };
     expect(side.letters).toEqual([
       { ...row, connector: 'slack', id: 1, teamId: 'T_ACME', signature: 'v0=abc', slackTimestamp: '1700000000' },
       { ...row, connector: 'slack', id: 2, tenantId: '__unroutable__' },
@@ -272,5 +280,59 @@ describe('ConnectorEvents.parkDeadLetter', () => {
       { ...row, connector: 'github', id: 2 },
     ]);
     expect([newEvents(side), added(side)]).toEqual([[], []]);
+  });
+});
+
+describe('ConnectorEvents dead-letter reads', () => {
+  const common = { rawPayload: '{"half":', error: 'invalid JSON', bucket: 'parse_error', signature: null } as const;
+  const LETTERS = [
+    park({ connector: 'slack', ...common, tenantId: TENANT_A, teamId: 'T_ACME' }), park({ connector: 'slack', ...common, tenantId: TENANT_B }),
+    park({ connector: 'github', ...common, tenantId: TENANT_A, eventName: 'issues' }), park({ connector: 'slack', ...common, tenantId: TENANT_A }),
+  ];
+
+  it("list one queue's rows of the tenant oldest first up to the limit, read one by id, and count a retry on the row named", async () => {
+    const side = await conforms([
+      ...LETTERS, (g) => g.markDeadLetterRetried('slack', 1), (g) => g.markDeadLetterRetried('github', 9),
+      (g) => g.deadLetters('slack', TENANT_A, 10), (g) => g.deadLetters('slack', TENANT_A, 1), (g) => g.deadLetters('github', TENANT_B, 10),
+      (g) => g.deadLetter('github', 1), (g) => g.deadLetter('slack', 2), (g) => g.deadLetter('slack', 9),
+    ]);
+    // SAFETY: calls 6 to 10 are the three lists and two found rows, in that order.
+    const [slackA, retried, , github, slackB] = values(side).slice(6) as [Letter[], Letter[], Letter[], Letter, Letter];
+    expect(slackA.map((r) => [r.id, r.retryCount, r.retriedAt])).toEqual([[1, 1, NOW], [3, 0, null]]);
+    expect([retried.length, values(side)[8], values(side)[11]]).toEqual([1, [], null]);
+    expect([github, slackB]).toMatchObject([{ id: 1, tenantId: TENANT_A, eventName: 'issues', retryCount: 0 }, { id: 2, tenantId: TENANT_B, teamId: null }]);
+    expect([newEvents(side), added(side)]).toEqual([[], []]);
+  });
+});
+
+describe('ConnectorEvents backfill cursors', () => {
+  it("keep each tenant's Slack channel cursor and GitHub high-water marks, and a seed fills only the marks not yet saved", async () => {
+    const side = await conforms([
+      (g) => g.slackCursor(TENANT_A, 'C1'), (g) => g.saveSlackCursor(TENANT_A, 'C1', '1700.1'), (g) => g.saveSlackCursor(TENANT_A, 'C1', '1700.2'),
+      (g) => g.slackCursor(TENANT_A, 'C1'), (g) => g.slackCursor(TENANT_B, 'C1'),
+      (g) => g.githubCursors(TENANT_A, 'acme/demo'), (g) => g.saveGitHubHwm(TENANT_A, 'acme/demo', 'issue_comments_hwm', '2026-02-01T00:00:00Z'),
+      (g) => g.seedGitHubCursors(TENANT_A, 'acme/demo', '2026-01-01T00:00:00Z'), (g) => g.seedGitHubCursors(TENANT_A, 'acme/demo', '2025-01-01T00:00:00Z'),
+      (g) => g.githubCursors(TENANT_A, 'acme/demo'), (g) => g.githubCursors(TENANT_B, 'acme/demo'),
+    ]);
+    const none = { issues: null, issueComments: null, prReviewComments: null };
+    expect(values(side)).toEqual([
+      null, undefined, undefined, '1700.2', null, none, undefined, undefined, undefined,
+      { issues: '2026-01-01T00:00:00Z', issueComments: '2026-02-01T00:00:00Z', prReviewComments: '2026-01-01T00:00:00Z' }, none,
+    ]);
+    expect([newEvents(side), added(side)]).toEqual([[], []]);
+  });
+});
+
+describe('ConnectorEvents Slack workspace registry', () => {
+  it('registers a team, moves it to another tenant on a second register, lists by team and removes it once', async () => {
+    const side = await conforms([
+      (g) => g.registerSlackWorkspace('T_ZED', TENANT_B), (g) => g.registerSlackWorkspace('T_ACME', TENANT_B), (g) => g.slackWorkspaces(),
+      (g) => g.slackTeamRoute('T_ACME'), (g) => g.removeSlackWorkspace('T_ZED'), (g) => g.removeSlackWorkspace('T_ZED'), (g) => g.slackWorkspaces(),
+    ], registerRoutes);
+    const acme = { teamId: 'T_ACME', tenantId: TENANT_B, addedAt: NOW };
+    expect(values(side)).toEqual([
+      { teamId: 'T_ZED', tenantId: TENANT_B, addedAt: NOW }, acme, [acme, { teamId: 'T_ZED', tenantId: TENANT_B, addedAt: NOW }],
+      { tenantId: TENANT_B }, true, false, [acme],
+    ]);
   });
 });

@@ -18,6 +18,7 @@ import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryVectorWritesStore } from './_helpers/in-memory-vector-writes-store.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
@@ -93,7 +94,7 @@ beforeAll(async () => {
   }));
   for (const entry of seeded) writeEntry(fixture.dir, entry);
   oldIndexed = copyOf();
-  await embedAll(oldIndexed, undefined, provider('fake-old'));
+  await embedAll(sqliteSyncStore(oldIndexed).localFiles, undefined, provider('fake-old'));
 });
 
 afterAll(async () => {
@@ -119,7 +120,7 @@ describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryVectorWritesStore(copyOf());
-    const run = (): Promise<number> => withSqliteBlocked(memory.store.kind, () => embedAll(hippoRoot, undefined, provider('fake-a'), memory.store));
+    const run = (): Promise<number> => withSqliteBlocked(memory.store.kind, () => embedAll({ hippoRoot, store: memory.store }, undefined, provider('fake-a')));
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(await run()).toBe(0);
@@ -134,7 +135,7 @@ describe('embedAll with a store', () => {
     { name: 'a model change, which rebuilds the index and every particle', template: (): string => copyOf(oldIndexed), id: 'fake-new' },
   ])('leaves hippo.db as the no-store path does on $name', async ({ template, id }) => {
     const [plain, viaStore] = [template(), template()];
-    const counts = [await embedAll(plain, undefined, provider(id)), await embedAll(viaStore, undefined, provider(id), sqliteStore(viaStore))];
+    const counts = [await embedAll(sqliteSyncStore(plain).localFiles, undefined, provider(id)), await embedAll({ hippoRoot: viaStore, store: sqliteStore(viaStore) }, undefined, provider(id))];
     expect(counts).toEqual([4, 4]);
     const expected = indexOn(plain);
     expect(indexOn(viaStore)).toEqual(expected);
@@ -151,9 +152,9 @@ describe('embedAll with a store', () => {
       if (calls === 2) throw new Error('provider down');
       return vectorsFor('fake-a', texts);
     });
-    await expect(embedAll(root, undefined, flaky, sqliteStore(root))).rejects.toThrow('provider down');
+    await expect(embedAll({ hippoRoot: root, store: sqliteStore(root) }, undefined, flaky)).rejects.toThrow('provider down');
     expect(indexOn(root).vectors).toHaveLength(64);
-    expect(await embedAll(root, undefined, flaky, sqliteStore(root))).toBe(6);
+    expect(await embedAll({ hippoRoot: root, store: sqliteStore(root) }, undefined, flaky)).toBe(6);
     expect(indexOn(root).vectors).toHaveLength(70);
   });
 
@@ -165,7 +166,7 @@ describe('embedAll with a store', () => {
       await memory.store.vectorWrites.writeVectors({ tenantId: first.tenant_id, model: other, replaceIndex: true, rows: [{ memoryId: first.id, vector: [1, 0] }] });
       return vectorsFor('fake-a', texts);
     });
-    const running = withSqliteBlocked(memory.store.kind, () => embedAll(markedFolder(), undefined, racing, memory.store));
+    const running = withSqliteBlocked(memory.store.kind, () => embedAll({ hippoRoot: markedFolder(), store: memory.store }, undefined, racing));
     await expect(running).rejects.toThrow("the vector index was built by another embedding model; run 'hippo embed' to rebuild it");
     expect(await memory.store.vectors.embeddingIndexState()).toEqual({ storedModel: other, hasVectors: true });
     expect([...(await memory.store.vectors.storedVectors(seeded.map((e) => e.id))).keys()]).toEqual([first.id]);
@@ -177,7 +178,7 @@ describe('embedMemory with a store', () => {
     const hippoRoot = markedFolder(hashedConfig());
     const memory = inMemoryVectorWritesStore(copyOf());
     const entry = seeded[1];
-    await withSqliteBlocked(memory.store.kind, () => embedMemory(hippoRoot, entry, undefined, memory.store));
+    await withSqliteBlocked(memory.store.kind, () => embedMemory({ hippoRoot, store: memory.store }, entry));
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
     const expected = hashedVector(embeddingInputText(entry)).map(Math.fround);
     expect((await memory.store.vectors.storedVectors([entry.id])).get(entry.id)).toEqual(expected);
@@ -194,7 +195,7 @@ describe('embedMemory with a store', () => {
     const store: HippoStore = stale ? { ...memory.store, vectors: staleVectors } : memory.store;
     const ids = seeded.map((e) => e.id);
     const [before, requests] = [await memory.store.vectors.storedVectors(ids), embeddings.requests()];
-    await withSqliteBlocked(memory.store.kind, () => embedMemory(markedFolder(hashedConfig()), seeded[0], undefined, store));
+    await withSqliteBlocked(memory.store.kind, () => embedMemory({ hippoRoot: markedFolder(hashedConfig()), store }, seeded[0]));
     expect(embeddings.requests() - requests).toBe(asked);
     expect(await memory.store.vectors.storedVectors(ids)).toEqual(before);
     expect(before.size).toBe(4);

@@ -4,7 +4,7 @@
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
 import type { HippoStore } from '../store/index.js';
-import type { ConnectorDeadLetter } from '../store/port.js';
+import type { ConnectorDeadLetter, DeadLetterConnector, DeadLetterRows } from '../store/port.js';
 import type { JsonValue } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
 
@@ -32,18 +32,15 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: the tag that names its table to the store, its list, its one-row read and its retry
- * bump. `Own` is the columns only its table has. */
-export interface ConnectorDlq<Own, Bucket extends string, Item> {
+/** What one connector supplies: the queue its rows live in and the letter that parks a row there. `Own` is the columns
+ * only its table has. */
+export interface ConnectorDlq<C extends DeadLetterConnector, Own, Bucket extends string> {
+  readonly connector: C;
   readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
-  readonly list: (hippoRoot: string, tenantId: string, limit: number) => Item[];
-  readonly entry: (hippoRoot: string, id: number) => Item | null;
-  /** Adds one to `retry_count` and stamps `retried_at`. */
-  readonly bump: (hippoRoot: string, id: number) => void;
 }
 
 export async function parkInDlq<Own, Bucket extends string>(
-  dlq: ConnectorDlq<Own, Bucket, unknown>,
+  dlq: ConnectorDlq<DeadLetterConnector, Own, Bucket>,
   store: HippoStore,
   opts: ParkOptions<Bucket> & NoInfer<Own>,
 ): Promise<number> {
@@ -61,12 +58,12 @@ export async function parkInDlq<Own, Bucket extends string>(
   return store.connectorEvents.parkDeadLetter(letter);
 }
 
-export function listDlq<Item>(
-  dlq: ConnectorDlq<never, never, Item>,
-  hippoRoot: string,
+export function listDlq<C extends DeadLetterConnector>(
+  dlq: ConnectorDlq<C, never, never>,
+  store: HippoStore,
   opts: { tenantId: string; limit?: number },
-): Item[] {
-  return dlq.list(hippoRoot, opts.tenantId, opts.limit ?? DEFAULT_LIST_LIMIT);
+): Promise<DeadLetterRows[C][]> {
+  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, opts.limit ?? DEFAULT_LIST_LIMIT);
 }
 
 /** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome itself. */
@@ -92,27 +89,20 @@ export interface ReplayResult {
   reason?: string;
 }
 
-/** The columns a replay reads from any connector's row. */
-interface ParkedEntry {
-  readonly id: number;
-  readonly retryCount: number;
-  readonly rawPayload: string;
-}
-
 /** A replay that did not go through; `retryCount` is the row's count after any bump made. */
 function replayFailed(status: ReplayStatus, retryCount: number, reason: string): ReplayResult {
   return { ok: false, status, memoryId: null, retryCount, reason };
 }
 
 /** A replay that failed after the row was read: counts it exactly once, then reports the new count. */
-function failAndBump(
-  dlq: ConnectorDlq<never, never, unknown>,
-  hippoRoot: string,
+async function failAndBump(
+  dlq: ConnectorDlq<DeadLetterConnector, never, never>,
+  store: HippoStore,
   row: { id: number; retryCount: number },
   status: ReplayStatus,
   reason: string,
-): ReplayResult {
-  dlq.bump(hippoRoot, row.id);
+): Promise<ReplayResult> {
+  await store.connectorEvents.markDeadLetterRetried(dlq.connector, row.id);
   return replayFailed(status, row.retryCount + 1, reason);
 }
 
@@ -128,41 +118,41 @@ export type Reingest =
   | { readonly ok: false; readonly status: ReplayStatus; readonly reason: string };
 
 /** The parts of a replay only the connector knows. */
-export interface ReplaySteps<Item, Envelope extends JsonValue> {
-  readonly dlq: ConnectorDlq<never, never, Item>;
+export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends JsonValue> {
+  readonly dlq: ConnectorDlq<C, never, never>;
   /** Skipped under --force. */
-  readonly refuseSignature: (row: Item) => SignatureRefusal | null;
+  readonly refuseSignature: (row: DeadLetterRows[C]) => SignatureRefusal | null;
   readonly isEnvelope: (parsed: JsonValue) => parsed is Envelope;
   readonly notEnvelope: string;
-  readonly reingest: (row: Item, envelope: Envelope) => Promise<Reingest>;
+  readonly reingest: (row: DeadLetterRows[C], envelope: Envelope) => Promise<Reingest>;
 }
 
 /** Re-runs a parked row under today's secret and routing; every
  * attempt past the read is counted once, except a missing signature. */
-export async function replayParked<Item extends ParkedEntry, Envelope extends JsonValue>(
-  steps: ReplaySteps<Item, Envelope>,
-  hippoRoot: string,
+export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
+  steps: ReplaySteps<C, Envelope>,
+  store: HippoStore,
   id: number,
   force: boolean,
 ): Promise<ReplayResult> {
-  const row = steps.dlq.entry(hippoRoot, id);
+  const row = await store.connectorEvents.deadLetter(steps.dlq.connector, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
   const refusal = force ? null : steps.refuseSignature(row);
   if (refusal?.status === 'sig_missing') return replayFailed(refusal.status, row.retryCount, refusal.reason);
-  if (refusal) return failAndBump(steps.dlq, hippoRoot, row, refusal.status, refusal.reason);
+  if (refusal) return failAndBump(steps.dlq, store, row, refusal.status, refusal.reason);
 
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
-    return failAndBump(steps.dlq, hippoRoot, row, 'parse_error', `still unparseable: ${errorMessage(e)}`);
+    return failAndBump(steps.dlq, store, row, 'parse_error', `still unparseable: ${errorMessage(e)}`);
   }
-  if (!steps.isEnvelope(parsed)) return failAndBump(steps.dlq, hippoRoot, row, 'unhandled', steps.notEnvelope);
+  if (!steps.isEnvelope(parsed)) return failAndBump(steps.dlq, store, row, 'unhandled', steps.notEnvelope);
 
   const outcome = await steps.reingest(row, parsed);
-  if (!outcome.ok) return failAndBump(steps.dlq, hippoRoot, row, outcome.status, outcome.reason);
-  steps.dlq.bump(hippoRoot, row.id);
+  if (!outcome.ok) return failAndBump(steps.dlq, store, row, outcome.status, outcome.reason);
+  await store.connectorEvents.markDeadLetterRetried(steps.dlq.connector, row.id);
   const result: ReplayResult = {
     ok: true,
     status: outcome.status,

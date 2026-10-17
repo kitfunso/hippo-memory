@@ -6,6 +6,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 afterEach(() => {
@@ -40,7 +41,7 @@ async function expectWaitsUntilReleased(lockPath: string): Promise<void> {
   });
   // Date stays real: the reused-PID check compares lock mtime against the real process.uptime().
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  const pending = embedAll(root);
+  const pending = embedAll(sqliteSyncStore(root).localFiles);
   try {
     // setImmediate stays real; vi.waitFor would advance the fake clock and fire the poll before each check.
     for (let spins = 0; vi.getTimerCount() === 0; spins++) {
@@ -64,7 +65,7 @@ describe('embeddings.json cross-process lock', () => {
   it('breaks a lock left by a dead process and removes its own lock after', async () => {
     const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
     fs.writeFileSync(path.join(root, 'embeddings.lock'), String(deadPid));
-    expect(await embedAll(root)).toBe(1);
+    expect(await embedAll(sqliteSyncStore(root).localFiles)).toBe(1);
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
     expect(fs.existsSync(path.join(root, 'embeddings.lock'))).toBe(false);
   });
@@ -85,7 +86,7 @@ describe('embeddings.json cross-process lock', () => {
     fs.writeFileSync(lockPath, String(process.pid));
     const before = new Date(Date.now() - process.uptime() * 1000 - 60_000);
     fs.utimesSync(lockPath, before, before);
-    expect(await embedAll(root)).toBe(1);
+    expect(await embedAll(sqliteSyncStore(root).localFiles)).toBe(1);
   });
 
   it('waits for a worker thread that shares our PID', async () => {
@@ -101,11 +102,11 @@ describe('embeddings.json cross-process lock', () => {
       held = fs.readFileSync(lockPath, 'utf8');
       return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
     });
-    expect(await embedAll(root)).toBe(1);
+    expect(await embedAll(sqliteSyncStore(root).localFiles)).toBe(1);
     expect(held).toMatch(new RegExp(`^${process.pid}:.+`));
     fs.writeFileSync(lockPath, held);
     writeEntry(root, createMemory('a second memory to embed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    expect(await embedAll(root)).toBe(1);
+    expect(await embedAll(sqliteSyncStore(root).localFiles)).toBe(1);
     expect(fs.existsSync(lockPath)).toBe(false);
   });
 
@@ -115,7 +116,7 @@ describe('embeddings.json cross-process lock', () => {
       fs.writeFileSync(lockPath, '999999');
       return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
     });
-    expect(await embedAll(root)).toBe(1);
+    expect(await embedAll(sqliteSyncStore(root).localFiles)).toBe(1);
     expect(fs.readFileSync(lockPath, 'utf8')).toBe('999999');
   });
 });

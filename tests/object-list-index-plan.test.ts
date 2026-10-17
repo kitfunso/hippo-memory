@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { saveDecision, loadDecisions } from '../src/objects/decisions.js';
-import { loadAllEntries, loadLiveContentsBySourceAndTag } from '../src/store/entry-reads.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { CreateMemoryOptions, MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -13,6 +13,7 @@ import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
 const NEW_INDEXES = [...OBJECT_TABLES.map((t) => `idx_${t}_tenant_status_created`), 'idx_memories_source_tenant_created'];
@@ -116,7 +117,7 @@ describe('object list query plan', () => {
 describe('session digest read plan', () => {
   it('reads the digest rows through idx_memories_source_tenant_created, not the tenant walk', async () => {
     const root = newRoot();
-    const sql = await preparedSql(() => { loadLiveContentsBySourceAndTag(root, 'default', 'session-digest', 'session-digest', 's1'); }, 'instr(tags_json, ?)');
+    const sql = await preparedSql(() => { sqliteSyncStore(root).contextReads.liveContentsBySourceAndTag('default', 'session-digest', 'session-digest', 's1'); }, 'instr(tags_json, ?)');
     withDb(root, (db) => {
       const detail = plan(db, sql, 'default', 'session-digest', '"session-digest"', 's1');
       expect(detail).toContain('USING INDEX idx_memories_source_tenant_created (source=? AND tenant_id=?)');
@@ -144,7 +145,7 @@ describe('session digest read plan', () => {
       .filter((e) => e.source === 'session-digest' && e.tags.includes('session-digest') && !e.extracted_from && !e.superseded_by && e.source_session_id !== 's1')
       .map((e) => e.content);
     expect([...expected].sort()).toEqual(['digest from another session', 'digest with no session']);
-    expect(loadLiveContentsBySourceAndTag(root, 'default', 'session-digest', 'session-digest', 's1')).toEqual(expected);
+    expect(sqliteSyncStore(root).contextReads.liveContentsBySourceAndTag('default', 'session-digest', 'session-digest', 's1')).toEqual(expected);
   });
 });
 

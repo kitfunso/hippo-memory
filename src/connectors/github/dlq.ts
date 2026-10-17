@@ -1,12 +1,5 @@
 import type { Context } from '../../api/index.js';
-import {
-  githubDlqEntry,
-  markGitHubDlqRetried,
-  listGitHubDlq,
-  type DlqBucket,
-  type DlqItem,
-  type GitHubDlqInsert,
-} from '../../store/connectors/github.js';
+import type { DlqBucket, DlqItem, GitHubDlqInsert } from '../../store/connectors/github.js';
 import { replayParked, type ConnectorDlq, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
@@ -18,11 +11,9 @@ type GitHubOwnColumns = Pick<GitHubDlqInsert, 'eventName' | 'deliveryId' | 'inst
 
 /** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row
  * without re-reading the payload. */
-export const githubDlq: ConnectorDlq<GitHubOwnColumns, DlqBucket, DlqItem> = {
+export const githubDlq: ConnectorDlq<'github', GitHubOwnColumns, DlqBucket> = {
+  connector: 'github',
   letter: (row) => ({ connector: 'github', ...row }),
-  list: listGitHubDlq,
-  entry: githubDlqEntry,
-  bump: markGitHubDlqRetried,
 };
 
 export interface ReplayDlqOptions {
@@ -54,7 +45,7 @@ export async function replayDlqEntry(
   opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
   const { webhookSecret, previousSecret, ingestHook } = opts;
-  return replayParked<DlqItem, JsonValue & GitHubWebhookEnvelope>({
+  return replayParked<'github', JsonValue & GitHubWebhookEnvelope>({
     dlq: githubDlq,
     // The secret in effect now, not the one in effect when the row was parked.
     refuseSignature: (row) => (webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null),
@@ -72,7 +63,7 @@ export async function replayDlqEntry(
       });
       return { ok: true, status: 'replayed', memoryId };
     },
-  }, ctx.hippoRoot, id, opts.force === true);
+  }, ctx.store, id, opts.force === true);
 }
 
 function refuseSignature(

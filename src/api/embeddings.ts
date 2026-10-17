@@ -3,21 +3,22 @@
 
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { embedAll } from '../search/embed-memories.js';
-import { loadAllEntryIds } from '../store/entry-reads.js';
-import { loadEmbeddingIndex, resetStoredParticles, storedVectorSummary } from '../store/vector-index.js';
+import { requireGroup, type EmbeddingIndex } from '../store/port.js';
 import { configOf } from './config-of.js';
 import { requireHostAdmin, type Context } from './types.js';
+
+const indexOf = (ctx: Context): EmbeddingIndex => requireGroup(ctx.store, 'localFiles').embeddingIndex;
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
 export async function embedMissingMemories(ctx: Context, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
-  return embedAll(ctx.hippoRoot, undefined, provider, undefined, configOf(ctx).embeddings);
+  return embedAll(requireGroup(ctx.store, 'localFiles'), undefined, provider, configOf(ctx).embeddings);
 }
 
 /** How many vectors the store holds, live memory or not. */
 export function storedVectorCount(ctx: Context): number {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return storedVectorSummary(ctx.hippoRoot).ids.size;
+  return indexOf(ctx).summary().ids.size;
 }
 
 export interface EmbedCoverage {
@@ -30,12 +31,13 @@ export interface EmbedCoverage {
 /** Memory ids against vector ids, for the embed status and backfill lines. */
 export function embedCoverage(ctx: Context): EmbedCoverage {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return { memoryIds: loadAllEntryIds(ctx.hippoRoot), vectorIds: [...storedVectorSummary(ctx.hippoRoot).ids] };
+  const index = indexOf(ctx);
+  return { memoryIds: index.entryIds(), vectorIds: [...index.summary().ids] };
 }
 
 /** Re-seed every memory's physics particle from its vector; returns how many it reset. */
 export function resetPhysicsFromVectors(ctx: Context): number {
   requireHostAdmin(ctx, 'Resetting physics');
-  const vectors = loadEmbeddingIndex(ctx.hippoRoot);
-  return resetStoredParticles(ctx.hippoRoot, loadAllEntryIds(ctx.hippoRoot), vectors);
+  const index = indexOf(ctx);
+  return index.resetParticles(index.entryIds(), index.vectors());
 }

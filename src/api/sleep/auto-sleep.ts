@@ -1,7 +1,7 @@
 // When a write starts a background sleep; the MCP remember tool and the session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../util/log.js';
-import { countCreatedSinceLastSleep } from '../../store/index-and-stats.js';
+import type { HippoStore } from '../../store/port.js';
 import { resolveTenantId } from '../../store/tenant.js';
 import type { HippoConfig } from '../../core/config.js';
 
@@ -20,31 +20,42 @@ export interface AutoSleepDue {
   due: boolean;
 }
 
-/** Counts only when enabled: the count opens the store. */
-export function autoSleepDue(hippoRoot: string, tenantId: string, config: HippoConfig['autoSleep']): AutoSleepDue {
+export interface AutoSleepGate {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly config: HippoConfig['autoSleep'];
+  readonly allowed: boolean;
+}
+
+/** Counts only when enabled: the count reads the store. */
+export async function autoSleepDue(
+  store: HippoStore,
+  tenantId: string,
+  config: HippoConfig['autoSleep'],
+): Promise<AutoSleepDue> {
   const { enabled, threshold } = config;
-  const count = enabled ? countCreatedSinceLastSleep(hippoRoot, tenantId) : 0;
+  const count = enabled ? await store.reports.createdSinceLastSleep(tenantId, new Date()) : 0;
   return { enabled, count, threshold, due: enabled && count >= threshold };
 }
 
 /**
  * One run per store at a time; `allowed` is the caller's own gate. Consolidation is host-wide, so only the host tenant
- * may start it. */
-export function startAutoSleepIfDue(
-  hippoRoot: string,
-  tenantId: string,
-  config: HippoConfig['autoSleep'],
-  allowed: boolean,
+ * may start it. A failed count rejects; the run itself never does. */
+export async function startAutoSleepIfDue(
+  store: HippoStore,
+  { hippoRoot, tenantId, config, allowed }: AutoSleepGate,
   run: AutoSleepRunner,
-): void {
-  if (
-    !allowed ||
-    !config.enabled ||
-    tenantId !== resolveTenantId({}) ||
-    autoSleepInFlight.has(hippoRoot) ||
-    !autoSleepDue(hippoRoot, tenantId, config).due
-  ) return;
+): Promise<void> {
+  if (!allowed || !config.enabled || tenantId !== resolveTenantId({}) || autoSleepInFlight.has(hippoRoot)) return;
+  // Held from the count on, so two writes landing together never both start a sleep.
   autoSleepInFlight.add(hippoRoot);
+  let due = false;
+  try {
+    due = (await autoSleepDue(store, tenantId, config)).due;
+  } finally {
+    if (!due) autoSleepInFlight.delete(hippoRoot);
+  }
+  if (!due) return;
   // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
   const started = run(hippoRoot);
   started

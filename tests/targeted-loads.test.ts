@@ -9,7 +9,7 @@ import { listMemories } from '../src/api/memories/memories.js';
 import { loadContextCandidates } from '../src/store/candidates.js';
 import { loadAllEntries, loadEntryTextKeys, readEntry } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
-import { applyRejection } from '../src/store/rejected-values.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { storedTextKeys } from '../src/util/same-text.js';
 import { makeStore } from './_helpers/make-root.js';
@@ -121,12 +121,13 @@ describe('strengthenRetrieved', () => {
   });
 });
 
-describe('applyRejection', () => {
+describe('rejections.apply', () => {
   it('finds holders from text columns and reads whole rows only for the matches', async () => {
     await seed(5);
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
-    const { result, statements } = recordStatements(() => applyRejection(root, {
+    const { rejections } = sqliteSyncStore(root);
+    const { result, statements } = recordStatements(() => rejections.apply({
       tenantId: 'default', actor: 'tester', reason: 'wrong', textOf: () => '  The Deploy WINDOW is friday   afternoon ',
       inReach: () => true, successorOf: () => undefined,
     }));

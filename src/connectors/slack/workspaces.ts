@@ -1,28 +1,24 @@
-/**
- * Slack workspace registration helpers: the `slack_workspaces` table maps `team_id` to `tenant_id` (empty =
- * single-tenant, non-empty = fail-closed routing).
- * `add` is an upsert that overwrites an existing team_id's tenant on purpose, so moving a workspace needs no
- * delete+add.
- */
+// Slack workspace registration: `slack_workspaces` maps `team_id` to `tenant_id` (empty = single-tenant, non-empty =
+// fail-closed routing). `add` overwrites a team's tenant on purpose, so moving a workspace needs no delete first.
 
-import { upsertSlackWorkspace, type SlackWorkspace } from '../../store/connectors/slack.js';
+import type { HippoStore } from '../../store/index.js';
+import type { SlackWorkspace } from '../../store/connectors/slack.js';
 
 export type { SlackWorkspace };
-export {
-  listSlackWorkspaces as listWorkspaces,
-  removeSlackWorkspace as removeWorkspace,
-} from '../../store/connectors/slack.js';
 
 export interface AddWorkspaceOptions {
   teamId: string;
   tenantId: string;
 }
 
-/** Register or re-register a Slack team → tenant mapping. Upserts on
- *  team_id conflict (operators move workspaces between tenants). */
-export function addWorkspace(
-  hippoRoot: string,
-  opts: AddWorkspaceOptions,
-): SlackWorkspace {
-  return upsertSlackWorkspace(hippoRoot, opts.teamId, opts.tenantId);
+export function addWorkspace(store: HippoStore, opts: AddWorkspaceOptions): Promise<SlackWorkspace> {
+  return store.connectorEvents.registerSlackWorkspace(opts.teamId, opts.tenantId);
+}
+
+export function listWorkspaces(store: HippoStore): Promise<SlackWorkspace[]> {
+  return store.connectorEvents.slackWorkspaces();
+}
+
+export function removeWorkspace(store: HippoStore, teamId: string): Promise<boolean> {
+  return store.connectorEvents.removeSlackWorkspace(teamId);
 }

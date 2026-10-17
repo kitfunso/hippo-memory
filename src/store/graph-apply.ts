@@ -1,5 +1,5 @@
 // Applies a rebuild's op list through the row writers in graph-writes.ts, in one transaction per call.
-import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../db/index.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { clock } from '../util/write-budget.js';
 import { storedGraphOn } from './graph-reads.js';
 import type { DesiredRelation, GraphOp, StoredGraph } from './graph-rows.js';
@@ -88,36 +88,27 @@ function applyGraphOpsOn(
   return { next, skipped };
 }
 
-/**
- * Applies `ops` from index `opts.from` in one rebuild transaction and stops at the first op boundary past
- * `opts.holdMs`.
- *  Returns where the next chunk starts and how many ops were skipped as stale. */
-export function applyGraphOps(
-  hippoRoot: string,
+/** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary past `opts.holdMs`;
+ * returns where the next chunk starts and how many ops were skipped as stale. */
+export function applyGraphOpsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   ops: readonly GraphOp[],
   opts: ApplyGraphOpsOptions,
 ): ApplyGraphOpsResult {
-  // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise
-  // fail.
-  return runGraphRebuildTransaction(
-    hippoRoot,
-    tenantId,
-    (db) => applyGraphOpsOn(db, tenantId, ops, opts),
-    { busyWaitMs: SLEEP_DB_WAIT_MS },
-  );
+  return runGraphRebuildTransaction(db, tenantId, (tx) => applyGraphOpsOn(tx, tenantId, ops, opts));
 }
 
 /** Reads the stored graph, diffs it with `diff` and applies every op under one lock, so two concurrent rebuilds
  * serialize instead of both inserting a missing row. Returns how many ops were skipped as stale. */
-export function rebuildGraphUnderLock(
-  hippoRoot: string,
+export function rebuildGraphAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   memoryIds: readonly string[],
   diff: (stored: StoredGraph) => readonly GraphOp[],
 ): number {
-  return runGraphRebuildTransaction(hippoRoot, tenantId, (db) => {
-    const ops = diff(storedGraphOn(db, tenantId, memoryIds));
-    return applyGraphOpsOn(db, tenantId, ops, { from: 0, holdMs: Infinity }).skipped;
+  return runGraphRebuildTransaction(db, tenantId, (tx) => {
+    const ops = diff(storedGraphOn(tx, tenantId, memoryIds));
+    return applyGraphOpsOn(tx, tenantId, ops, { from: 0, holdMs: Infinity }).skipped;
   });
 }

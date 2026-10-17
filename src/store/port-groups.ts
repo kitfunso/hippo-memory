@@ -4,14 +4,17 @@ import type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { CardDetail } from './card-detail.js';
-import type { StrengthTallies } from './candidates.js';
+import type { StatusCounts, StrengthTallies } from './candidates.js';
 import type { ResolveConflictOpts, ResolveConflictRequest } from './conflicts.js';
 import type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from './dormant.js';
 import type { EntryCursor, EntryPage } from './entry-reads.js';
 import type { FailureSummary } from './failure-log.js';
 import type { CompleteGoalOpts, Goal, PushGoalOpts } from './goals.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
-import type { MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
+import type { FailureLog } from './port/failure-log.js';
+import type { Compactions } from './port/compactions.js';
+import type { Rejections } from './port/rejections.js';
+import type { LegacyStats, MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
 import type { ContinuityKey, SessionEventInput, SnapshotInput } from './sessions.js';
 import type { TokenSummary } from './token-ledger.js';
 import type { JsonObject, WorkingMemoryItem } from './working-memory.js';
@@ -175,6 +178,16 @@ export interface Reports {
   ): Promise<EntryPage>;
   /** Every row in the store, no tenant: host admin. */
   countEntries(): Promise<number>;
+  /** The store's lifetime counters and its recent sleep runs: host admin. */
+  stats(): Promise<LegacyStats>;
+  /** What `hippo status` counts over every row of every tenant, superseded ones too: host admin. */
+  statusCounts(now: Date, atRiskBelow: number): Promise<StatusCounts>;
+  /** Every superseded row, its successor and that row's extraction source, by created then id: host admin. */
+  correctionEntries(): Promise<MemoryEntry[]>;
+  /** Every kind='raw' row, by created then id: host admin. */
+  rawEntries(): Promise<MemoryEntry[]>;
+  /** Rows the tenant created since the last sleep of the store, looking back at most a day from `now`. */
+  createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }
 
 /** The groups StoreGroups gains beyond port.ts, each required and set whole. */
@@ -188,4 +201,7 @@ export interface SessionAndAdminGroups {
   readonly dormant: Dormant;
   /** Status, tokens, failures and the memory listings. */
   readonly reports: Reports;
+  readonly rejections: Rejections;
+  readonly failureLog: FailureLog;
+  readonly compactions: Compactions;
 }

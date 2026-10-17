@@ -19,6 +19,7 @@ import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { loadEmbeddingIndex, resetStoredParticles } from '../src/store/vector-index.js';
 import { recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
@@ -116,11 +117,11 @@ beforeAll(async () => {
   initStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
   rows.forEach((entry, i) => { if (!isLate(i)) writeEntry(partly, entry); });
-  await embedAll(partly, undefined, fake('fake-old'));
+  await embedAll(sqliteSyncStore(partly).localFiles, undefined, fake('fake-old'));
   rows.forEach((entry, i) => { if (isLate(i)) writeEntry(partly, entry); });
 
   indexedOld = copyOf(partly);
-  await embedAll(indexedOld, undefined, fake('fake-old'));
+  await embedAll(sqliteSyncStore(indexedOld).localFiles, undefined, fake('fake-old'));
   const db = openHippoDb(indexedOld);
   try {
     savePhysicsState(db, loadEveryTenantEntries(indexedOld).map((e) => initializeParticle(e, fakeVector('fake-old', e), new Date(SEEDED_AT))));
@@ -157,7 +158,7 @@ describe('embedAll backfill on hippo.db', () => {
     expect(new Set(pending.map((e) => e.tenant_id))).toEqual(new Set(TENANTS));
 
     const calls: string[][] = [];
-    expect(await embedAll(root, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(120);
+    expect(await embedAll(sqliteSyncStore(root).localFiles, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(120);
 
     expect(calls.map((texts) => texts.length)).toEqual([64, 56]);
     expect(calls.flat()).toEqual(pending.map((e) => embeddingInputText(e)));
@@ -173,7 +174,7 @@ describe('embedAll backfill on hippo.db', () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
     const calls: string[][] = [];
-    expect(await embedAll(root, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(0);
+    expect(await embedAll(sqliteSyncStore(root).localFiles, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(0);
     expect(calls).toEqual([]);
     expect(indexOn(root)).toEqual(before);
   }, SLOW);
@@ -183,7 +184,7 @@ describe('a model identity change on hippo.db', () => {
   it("embedAll rebuilds every tenant's vectors under the new model, saves its identity and resets every particle", async () => {
     const root = copyOf(indexedOld);
     expect(indexOn(root).particles.map((p) => p.lastSimulation)).toEqual(Array.from({ length: ROWS }, () => SEEDED_AT));
-    expect(await embedAll(root, undefined, fake('fake-new'))).toBe(ROWS);
+    expect(await embedAll(sqliteSyncStore(root).localFiles, undefined, fake('fake-new'))).toBe(ROWS);
     const state = indexOn(root);
     expect(state).toEqual(rebuiltState(root, 'fake-new', (e) => fakeVector('fake-new', e)));
     expect([state.vectors.length, state.particles.length]).toEqual([ROWS, ROWS]);
@@ -194,9 +195,9 @@ describe('a model identity change on hippo.db', () => {
     useHashedServer(viaAll);
     useHashedServer(viaOne);
     const before = indexOn(viaOne);
-    await embedMemory(viaOne, loadEveryTenantEntries(viaOne)[7]);
+    await embedMemory(sqliteSyncStore(viaOne).localFiles, loadEveryTenantEntries(viaOne)[7]);
     expect(indexOn(viaOne)).toEqual(before);
-    expect(await embedAll(viaAll)).toBe(ROWS);
+    expect(await embedAll(sqliteSyncStore(viaAll).localFiles)).toBe(ROWS);
     expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
   }, SLOW);
 
@@ -207,7 +208,7 @@ describe('a model identity change on hippo.db', () => {
     const failing = fake('fake-new', (texts) => {
       if (texts.includes(last)) throw new Error('provider down');
     });
-    await expect(embedAll(root, undefined, failing)).rejects.toThrow('provider down');
+    await expect(embedAll(sqliteSyncStore(root).localFiles, undefined, failing)).rejects.toThrow('provider down');
     expect(indexOn(root)).toEqual(before);
     expect(before.model).toBe(embeddingIndexIdentity('fake-old'));
   }, SLOW);
@@ -230,7 +231,7 @@ describe('rows held while embedding hippo.db', () => {
   ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded }) => {
     const root = copyOf(template());
     const calls: number[] = [];
-    const log = await recordStatementsAsync(() => embedAll(root, undefined, fake(id, (texts) => calls.push(texts.length))));
+    const log = await recordStatementsAsync(() => embedAll(sqliteSyncStore(root).localFiles, undefined, fake(id, (texts) => calls.push(texts.length))));
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
     expect(peakFullRowsRead(log.statements)).toBe(PAGE);

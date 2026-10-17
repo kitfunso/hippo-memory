@@ -7,6 +7,7 @@ import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
+import type { Ledger } from './port/ledger.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType =
   'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context' | 'tool-failure';
@@ -148,7 +149,7 @@ export interface DeliveryOutcomeInput {
 }
 
 export interface DeliveryRecorder extends DeliveryObserver {
-  readonly root: string;
+  readonly ledger: Ledger;
   delivered(outcome: DeliveryOutcomeInput): void;
   /** The failure log row id a `tool-failure` event links to; null when the log write threw. */
   logged(failureId: number | null): void;
@@ -158,8 +159,8 @@ export interface DeliveryRecorder extends DeliveryObserver {
 }
 
 export interface DeliveryRecorderInit {
-  /** The store the event is written to. */
-  root: string;
+  /** The ledger the event is written to when its turn hands no writer. */
+  ledger: Ledger;
   storeHash: string;
   writeStore: DeliveryWriteStore;
   tenantId: string;
@@ -491,7 +492,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);
 
   return {
-    root: init.root,
+    ledger: init.ledger,
     facts: (f) => guard(() => { state.facts = { ...f }; }),
     sections: (s, d) => guard(() => { state.shown = s; state.dropped = d; }),
     watchAdmit: (admit) => (e) => {

@@ -8,6 +8,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { hybridSearch } from '../src/entry/folder-search.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 afterEach(() => {
@@ -44,7 +45,7 @@ describe('hybridSearch BM25 fallback', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }))));
     const entry = createMemory('the deploy runs on fridays');
     writeEntry(root, entry);
-    await embedMemory(root, entry);
+    await embedMemory(sqliteSyncStore(root).localFiles, entry);
     useModel('another-model');
 
     const entries = loadAllEntries(root, 'default');
@@ -60,7 +61,7 @@ describe('hybridSearch BM25 fallback', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }))));
     const entry = createMemory('the deploy runs on fridays');
     writeEntry(root, entry);
-    await embedMemory(root, entry);
+    await embedMemory(sqliteSyncStore(root).localFiles, entry);
     vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream down', { status: 500 })));
 
     const entries = loadAllEntries(root, 'default');
