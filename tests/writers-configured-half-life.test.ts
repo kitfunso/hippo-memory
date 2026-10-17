@@ -144,7 +144,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   }],
   ['extracted facts', (root) => {
     const source = seed(root, 'Alice prefers dark mode and vim keybindings');
-    return added(root, () => storeExtractedFacts(root, source, [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }], loadConfig(root).defaultHalfLifeDays));
+    return added(root, () => storeExtractedFacts(sqliteSyncStore(root).localFiles.learning, source, [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }], loadConfig(root).defaultHalfLifeDays));
   }],
   ['sleep: auto-promoted trace', (root) => {
     appendSessionEvent(root, 'default', { session_id: 's1', event_type: 'action', content: 'ran the migration', source: 'agent' });

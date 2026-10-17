@@ -10,7 +10,7 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -470,7 +470,7 @@ describe('invalidation during git learning', () => {
     expect(target!.to).toBe('vite');
 
     // Invalidate matching memories
-    const result = invalidateMatching(tmpDir, target!);
+    const result = invalidateMatching(sqliteSyncStore(tmpDir).localFiles.learning, target!);
     expect(result.invalidated).toBe(1);
 
     // Verify the old memory was weakened

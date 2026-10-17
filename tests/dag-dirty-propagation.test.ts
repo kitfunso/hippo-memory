@@ -21,6 +21,7 @@ import { archiveRawMemory } from '../src/store/raw-archive.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });
@@ -63,7 +64,7 @@ describe('child-write dirty-flag propagation', () => {
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     db.close();
     // Act: invalidateMatching writes the fact back through writeEntry (L97).
-    invalidateMatching(hippoRoot, { from: 'FRED cache', to: null, type: 'removal' }, 'default');
+    invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'FRED cache', to: null, type: 'removal' }, 'default');
     // Assert: parent dirty again.
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });

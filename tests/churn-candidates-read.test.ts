@@ -10,6 +10,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 /** loadAllEntries' statement: every full row of one tenant. */
 const TENANT_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`;
@@ -73,7 +74,7 @@ describe('detectChurnStale candidate read', () => {
     const order = loadAllEntries(root, 'default').map((e) => e.id);
     const inOrder = (ids: Set<string>): string[] => order.filter((id) => ids.has(id));
     for (const legacyName of [undefined, 'legacy', '']) {
-      const result = detectChurnStale(root, NO_REFS_REPO, { tenantId: 'default', projectName: 'proj', legacyName, dryRun: true });
+      const result = detectChurnStale(sqliteSyncStore(root).localFiles.learning, NO_REFS_REPO, { tenantId: 'default', projectName: 'proj', legacyName, dryRun: true });
       expect(result.checked, `legacy ${legacyName}`).toBe(checked.size + (legacyName === 'legacy' ? legacyChecked.size : 0));
       expect(result.skippedPinned).toEqual(inOrder(pinned));
       expect(result.marked).toBe(0);
@@ -85,7 +86,7 @@ describe('detectChurnStale candidate read', () => {
     for (let i = 0; i < 30; i++) put(root, `other ${i}`, { origin_project: 'other' });
     const pinned = put(root, 'pinned', { pinned: true });
     put(root, 'current');
-    const { result, statements, rowsRead } = recordStatements(() => detectChurnStale(root, NO_REFS_REPO, { tenantId: 'default', projectName: 'proj' }));
+    const { result, statements, rowsRead } = recordStatements(() => detectChurnStale(sqliteSyncStore(root).localFiles.learning, NO_REFS_REPO, { tenantId: 'default', projectName: 'proj' }));
     expect(result.checked).toBe(1);
     expect(result.skippedPinned).toEqual([pinned]);
     expect(countMatching(statements, TENANT_READ)).toBe(0);

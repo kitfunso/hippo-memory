@@ -7,6 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { storeExtractedFacts, ExtractedFact } from '../src/learn/extract.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 let tmpDir: string;
 
@@ -35,7 +36,7 @@ describe('storeExtractedFacts', () => {
       { content: 'Bob prefers async standup meetings', tags: ['speaker:Bob', 'topic:standup'], valence: 'positive' },
     ];
 
-    const entries = storeExtractedFacts(dir, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const entries = storeExtractedFacts(sqliteSyncStore(dir).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
 
     expect(entries).toHaveLength(2);
 
@@ -67,7 +68,7 @@ describe('storeExtractedFacts', () => {
       { content: 'Deploy uses blue-green strategy', tags: ['speaker:Carol', 'topic:deploy'], valence: 'neutral' },
     ];
 
-    const entries = storeExtractedFacts(dir, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const entries = storeExtractedFacts(sqliteSyncStore(dir).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
     expect(entries).toHaveLength(1);
 
     const tags = entries[0]!.tags;
@@ -89,7 +90,7 @@ describe('storeExtractedFacts', () => {
     });
     writeEntry(dir, source);
 
-    const entries = storeExtractedFacts(dir, source, [], DEFAULT_HALF_LIFE_DAYS);
+    const entries = storeExtractedFacts(sqliteSyncStore(dir).localFiles.learning, source, [], DEFAULT_HALF_LIFE_DAYS);
     expect(entries).toHaveLength(0);
   });
 });

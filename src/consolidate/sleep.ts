@@ -33,7 +33,7 @@ export async function runConsolidation(
   local: LocalFiles,
   options: ConsolidateOptions & { config: HippoConfig },
 ): Promise<ConsolidationResult> {
-  const { hippoRoot, consolidation: store } = local;
+  const { learning, consolidation: store } = local;
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
   const result = newConsolidationResult(dryRun);
@@ -52,7 +52,7 @@ export async function runConsolidation(
   const decayOpts = sessionDecayOptions(store, config);
 
   const run: SleepRun = {
-    hippoRoot, store, now, dryRun, config, decayOpts, result, all, retirable,
+    learning, store, now, dryRun, config, decayOpts, result, all, retirable,
     tombstones: store.tombstoneChecks(dryRun),
     survivors: [],
     // Collect all writes/deletes and batch them at the end

@@ -14,6 +14,7 @@ import { markRetrieved } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { remember, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 let home: string;
 
@@ -35,7 +36,7 @@ describe('a deliberate stale tier survives being read', () => {
   it('a recall through getContext leaves an invalidated memory invalidated', async () => {
     const { id } = await remember(ctx(), { content: 'deploys go through the legacy pipeline' });
 
-    const result = invalidateMatching(home, { from: 'legacy pipeline', to: null, type: 'deprecation' });
+    const result = invalidateMatching(sqliteSyncStore(home).localFiles.learning, { from: 'legacy pipeline', to: null, type: 'deprecation' });
     expect(result.invalidated).toBe(1);
 
     const invalidated = readEntry(home, id)!;

@@ -20,6 +20,7 @@ import { invalidateMatching } from '../src/learn/invalidation.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
@@ -118,7 +119,7 @@ describe('invalidateMatching with onlyId', () => {
 
   it('weakens only the named row, as a pattern match over the tenant would', () => {
     const { root, rows } = seeded(5);
-    const result = invalidateMatching(root, target, 'default', { onlyId: rows[2]!.id });
+    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: rows[2]!.id });
     expect(result).toEqual({
       invalidated: 1, targets: [rows[2]!.id], skippedPinned: [], dryRun: false,
       preview: [{ id: rows[2]!.id, headline: 'row 2 about the zephyrine cache' }],
@@ -135,18 +136,18 @@ describe('invalidateMatching with onlyId', () => {
     const pinned = createMemory('pinned row about the zephyrine cache', { pinned: true });
     const plain = createMemory('plain row about the zephyrine cache');
     for (const row of [other, pinned, plain]) writeEntry(root, row);
-    expect(invalidateMatching(root, target, 'default', { onlyId: other.id }).targets).toEqual([]);
-    expect(invalidateMatching(root, target, undefined, { onlyId: other.id }).targets).toEqual([other.id]);
-    expect(invalidateMatching(root, target, 'default', { onlyId: pinned.id }).skippedPinned).toEqual([pinned.id]);
-    expect(invalidateMatching(root, target, 'default', { onlyId: 'no-such-id' }).invalidated).toBe(0);
-    expect(invalidateMatching(root, target, 'default', { onlyId: plain.id, dryRun: true }).targets).toEqual([plain.id]);
+    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: other.id }).targets).toEqual([]);
+    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { onlyId: other.id }).targets).toEqual([other.id]);
+    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: pinned.id }).skippedPinned).toEqual([pinned.id]);
+    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: 'no-such-id' }).invalidated).toBe(0);
+    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: plain.id, dryRun: true }).targets).toEqual([plain.id]);
     expect(loadEveryTenantEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(plain.confidence);
   });
 
   it('reads one memory row however many the tenant holds', () => {
     const read = [10, 200].map((n) => {
       const { root, rows } = seeded(n);
-      const { rowsRead, statements } = recordStatements(() => invalidateMatching(root, target, 'default', { onlyId: rows[0]!.id, dryRun: true }));
+      const { rowsRead, statements } = recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: rows[0]!.id, dryRun: true }));
       expect(statements.filter((sql) => sql.startsWith(FULL_ROW))).toEqual([`${FULL_ROW} WHERE id = ? AND tenant_id = ?`]);
       return rowsRead;
     });

@@ -23,6 +23,7 @@ import type { PhysicsParticle } from '../src/core/physics.js';
 import { loadConfig } from '../src/core/config.js';
 import * as api from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -130,7 +131,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-changed: a.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -144,8 +145,8 @@ describe('detectChurnStale', () => {
     commit(repoDir, AFTER_ANCHOR);
 
     const opts = { tenantId: 'default', projectName: 'github.com/acme/churn', dryRun: true };
-    expect(detectChurnStale(hippoRoot, repoDir, opts).preview).toHaveLength(0);
-    expect(detectChurnStale(hippoRoot, repoDir, { ...opts, legacyName: project }).preview).toHaveLength(1);
+    expect(detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, opts).preview).toHaveLength(0);
+    expect(detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { ...opts, legacyName: project }).preview).toHaveLength(1);
   });
 
   it('file-deleted: a tracked file removed after the anchor is evidence (--no-renames)', () => {
@@ -155,7 +156,7 @@ describe('detectChurnStale', () => {
     fs.rmSync(path.join(repoDir, 'b.ts'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-deleted: b.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -168,7 +169,7 @@ describe('detectChurnStale', () => {
     fs.renameSync(path.join(repoDir, 'old.ts'), path.join(repoDir, 'new.ts'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-deleted: old.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -181,7 +182,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'c.ts'), 'export function renamedFunction() {}\n');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('symbol-gone: `helperSymbolName`');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -194,7 +195,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { newscript: 'echo hi' } }));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('script-gone: oldscript');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -207,7 +208,7 @@ describe('detectChurnStale', () => {
     commit(repoDir, new Date(new Date(ANCHOR).getTime() - 1).toISOString());
     const mem = storeMemory('see d.ts for the setup', { created: ANCHOR });
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -217,7 +218,7 @@ describe('detectChurnStale', () => {
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see phantom-file-that-never-existed.ts for setup', { created: ANCHOR });
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -231,7 +232,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'n.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, root, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, root, { tenantId: 'default', projectName: project });
     expect(result.preview.map((p) => p.id)).toEqual([inside.id]);
     expect(readEntry(hippoRoot, outside.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -243,7 +244,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'o.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.preview[0]?.evidence).toBe('file-changed: o.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
@@ -255,7 +256,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), '{"version":"2.0.0"}');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.preview[0]?.evidence).toBe('file-changed: package.json');
   });
 
@@ -266,7 +267,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'q.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.error).toBeUndefined();
     expect(result.checked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -279,7 +280,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'e.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
     expect(result.skippedPinned).toContain(mem.id);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -292,7 +293,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'f.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -304,7 +305,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'g.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -316,9 +317,9 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'h.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const first = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const first = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(first.marked).toBe(1);
-    const second = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const second = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(second.marked).toBe(0);
     expect(second.alreadyMarked).toBe(1);
   });
@@ -330,7 +331,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'i.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
     expect(result.dryRun).toBe(true);
     expect(result.marked).toBe(1);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -346,7 +347,7 @@ describe('detectChurnStale', () => {
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
   });
 
@@ -364,7 +365,7 @@ describe('detectChurnStale', () => {
       env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
     });
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
     expect(result.preview[0]?.evidence).toBe('file-changed: m.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
@@ -383,7 +384,7 @@ describe('detectChurnStale', () => {
       env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
     });
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
     expect(result.preview[0]?.evidence).toBe('symbol-gone: `mergedAwaySymbol`');
   });
 
@@ -395,7 +396,7 @@ describe('detectChurnStale', () => {
     commit(repoDir, AFTER_ANCHOR);
     execFileSync('git', ['rm', '-q', '--cached', 'r.ts'], { cwd: repoDir });
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
     expect(result.preview[0]?.evidence).toBe('file-changed: r.ts');
   });
 
@@ -407,7 +408,7 @@ describe('detectChurnStale', () => {
     fs.rmSync(path.join(repoDir, 'package.json'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
     expect(result.preview[0]?.evidence).toBe('script-gone: goner');
   });
 });
