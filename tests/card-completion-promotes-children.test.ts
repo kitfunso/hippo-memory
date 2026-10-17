@@ -68,7 +68,8 @@ function seedFamily(children: number): Family {
   return { parent, promotable, others: otherIds.map(card) };
 }
 
-describe('completeCard child promotion', () => {
+// Each case writes a family of up to 100 cards and their dependency rows to a real store, one statement at a time.
+describe('completeCard child promotion', { timeout: 60_000 }, () => {
   it.each([1, 10, 100])('promotes the unblocked backlog children of a parent with %i children, in card_deps order', async (children) => {
     const family = seedFamily(children);
     const result = completeCard(root, TENANT, family.parent, 'success');
@@ -82,14 +83,14 @@ describe('completeCard child promotion', () => {
       expect(card(id)).toMatchObject({ status: 'ready', leaseUntil: null, heartbeatAt: null, assigneeRuntime: null });
     }
     expect(family.others.map((before) => card(before.id))).toEqual(family.others);
-  }, 60_000);
+  });
 
   it('promotes nothing when the parent is shelved', () => {
     const family = seedFamily(10);
     const result = completeCard(root, TENANT, family.parent, 'failure');
     expect(result?.promotedChildren).toEqual([]);
     expect([...family.promotable].map((id) => card(id).status)).toEqual([...family.promotable].map(() => 'backlog'));
-  }, 60_000);
+  });
 
   it("leaves another tenant's child of the same parent id in backlog", () => {
     const family = seedFamily(3);
@@ -105,7 +106,7 @@ describe('completeCard child promotion', () => {
     const result = completeCard(root, TENANT, family.parent, 'success');
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
     expect(loadCard(root, 'tenant-b', 'card_other')?.status).toBe('backlog');
-  }, 60_000);
+  });
 });
 
 /** Runs `fn` and returns the SQL of every statement it prepared, through a wrapper that calls the real prepare. */
@@ -124,6 +125,7 @@ function recordPrepares<T>(fn: () => T) {
 }
 
 describe('statements one completion prepares and runs', () => {
+  // Writes three families of 1, 10 and 100 cards to a real store.
   it('do not grow with the child count: one read of the children and one update for all it promotes', () => {
     const runs = [1, 10, 100].map((children) => {
       const family = seedFamily(children);

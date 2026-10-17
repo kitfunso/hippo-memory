@@ -32,7 +32,8 @@ const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((
 describe('scope SQL guard', () => {
   it('finds the patterns where they belong, so the scan is live', () => {
     expect(sources.length).toBeGreaterThan(50);
-    for (const file of SCOPE_MODULES) expect(hits(file).length, file).toBeGreaterThan(0);
+    // Each module spells its half of the rule once: the deny list, and the SQL that reads it.
+    for (const file of SCOPE_MODULES) expect(hits(file), file).toHaveLength(1);
   });
 
   it('no other source file spells the default-deny SQL or the legacy marker', () => {

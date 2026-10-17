@@ -250,7 +250,7 @@ describe('GDPR Path A completeness fixes', () => {
     const db = openHippoDb(root);
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
-      expect(events.length).toBeGreaterThan(0);
+      expect(events).toHaveLength(1);
       const meta = events[0].metadata;
       const expectedHash = createHash('sha256').update(distinctive).digest('hex').slice(0, 16);
       expect(meta.query_hash).toBe(expectedHash);

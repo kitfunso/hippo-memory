@@ -54,7 +54,7 @@ describe('serve() graceful stop', () => {
     expect(res.status).toBe(200);
     await stopped;
     await expect(fetch(`${handle.url}/health`)).rejects.toThrow();
-  }, 15000);
+  });
 
   it('closes a request that outlives the drain window so stop() still returns', async () => {
     const { resolver, asked } = watched(neverResolves);
@@ -72,7 +72,7 @@ describe('serve() graceful stop', () => {
     // The line names the window stop() waited, so the short one given above is the one it used.
     expect(warn.mock.calls.map(([line]) => line)).toContain('shutdown: 1 request(s) still running after 200 ms; closing them');
     expect(await pending).toBe('reset');
-  }, 15000);
+  });
 
   it('exits 1 when a signal-driven shutdown fails', async () => {
     const home = trackedRoot();
@@ -90,7 +90,7 @@ describe('serve() graceful stop', () => {
     const code = await new Promise<number | null>((done) => child.once('exit', done));
     expect(stderr).toMatch(/serve shutdown after SIGTERM failed: .*errorClass=/);
     expect(code).toBe(1);
-  }, 15000);
+  });
 
   it('on an uncaught exception, logs it, answers the request already running, then exits 1', async () => {
     const home = trackedRoot();
@@ -117,5 +117,5 @@ describe('serve() graceful stop', () => {
     expect(answer).toBe(200);
     expect(await closed).toBe(1);
     expect(stderr).toMatch(/serve uncaught exception: boom-serve .*errorClass=Error stack=/);
-  }, 15000);
+  });
 });

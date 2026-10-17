@@ -81,7 +81,8 @@ describe('what one hippo context call records', () => {
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
     expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual(['sent', trace.id, blockHash('*')]);
-    expect(e.candidates.length).toBeGreaterThan(0);
+    // The pin and the three facts, all inside the default budget.
+    expect(e.candidates).toHaveLength(4);
     expect(new Set(e.candidates.map((c) => c.pool))).toEqual(new Set(['strength']));
   });
 
@@ -193,7 +194,8 @@ describe('the ledger changes nothing a context call prints', () => {
       expect(on.stdout).toBe(plain.stdout);
     }
     const rows = resultRows(off);
-    expect(rows.length).toBeGreaterThan(0);
+    // Two traces, each holding the two postgres facts and the pin, the rows that name a query term.
+    expect(rows).toHaveLength(6);
     expect(resultRows(p)).toEqual(rows);
     expect(retrievalCounts(p)).toEqual(retrievalCounts(off));
     expect([eventCount(p), eventCount(off)]).toEqual([2, 0]);

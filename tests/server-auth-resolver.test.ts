@@ -511,7 +511,7 @@ describe('auth resolver stream', () => {
     }
     ac.abort();
     expect(buf).toContain('auth_revoked');
-  }, 10_000);
+  });
 
   it.each(['throws', 'hangs'] as const)(
     'keeps the stream open while the resolver %s, then closes it on a later revocation',
@@ -545,7 +545,6 @@ describe('auth resolver stream', () => {
       ac.abort();
       expect(text()).toContain('auth_revoked');
     },
-    10_000,
   );
 
   it('logs a warning when a heartbeat tick is skipped because the resolver is down', async () => {
@@ -567,7 +566,7 @@ describe('auth resolver stream', () => {
     ac.abort();
     expect(skipped()).toBe(true);
     expect(text()).not.toContain('event: closed');
-  }, 10_000);
+  });
 
   it('skips a heartbeat tick while a check is still in flight', async () => {
     const auth = heldResolver(2);

@@ -93,7 +93,7 @@ describe('server hardening', () => {
     } finally {
       ac.abort();
     }
-  }, 10_000);
+  });
 
   // ---- Fix 5.3: SSE auth-revoked closes stream -------------------------
   it('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
@@ -165,7 +165,7 @@ describe('server hardening', () => {
     } finally {
       ac.abort();
     }
-  }, 10_000);
+  });
 
   // ---- Fix 5.4: graceful shutdown awaits stop() ------------------------
   //
@@ -202,7 +202,7 @@ describe('server hardening', () => {
     // Mark handle stopped so afterEach doesn't double-stop. ServerHandle.stop
     // is a plain (non-readonly) field, so this is a direct reassignment.
     handle.stop = async () => {};
-  }, 10_000);
+  });
 
   // ---- Fix 5.5: PUBLIC_ROUTES bypass attempts --------------------------
   describe('PUBLIC_ROUTES bypass attempts', () => {

@@ -204,7 +204,7 @@ describe('consolidation leaves digests alone', () => {
       expect(semantic).toEqual([]);
       expect(loadAllEntries(hippoRoot, 'default').filter((e) => e.superseded_by)).toEqual([]);
     } else {
-      expect(result.merged).toBeGreaterThan(0);
+      expect(result.merged).toBe(3);
     }
   });
 

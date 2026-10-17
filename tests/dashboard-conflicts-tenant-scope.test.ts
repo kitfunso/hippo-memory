@@ -55,7 +55,7 @@ describe('dashboard conflicts are tenant-scoped', () => {
     expect(own.conflicts[0].other.id).toBe(a2.id);
 
     expect((await get(dash.port, `/api/memory/${b1.id}`)).status).toBe(404);
-  }, 15_000);
+  });
 
   it('passes the running tenant to every conflict load, so later filters are not the only guard', async () => {
     const { a1 } = seedTwoTenants();
@@ -69,5 +69,5 @@ describe('dashboard conflicts are tenant-scoped', () => {
     await get(dash.port, `/api/memory/${a1.id}`);
     expect(loadOwn).toHaveBeenCalled();
     expect(loadOwn.mock.calls.every(([, tenantId]) => tenantId === 'tenant_a')).toBe(true);
-  }, 15_000);
+  });
 });

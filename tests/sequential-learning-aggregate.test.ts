@@ -50,7 +50,8 @@ describe('aggregate helpers', () => {
   });
 
   it('ciHalfWidth95 produces a positive bound for n=5 with variance', () => {
-    expect(ciHalfWidth95([0.1, 0.2, 0.3, 0.4, 0.5])).toBeGreaterThan(0);
+    // t(4) = 2.776 times sd sqrt(0.025), over sqrt(5).
+    expect(ciHalfWidth95([0.1, 0.2, 0.3, 0.4, 0.5])).toBeCloseTo(0.19629, 5);
   });
 
   it('aggregatePhases averages early/mid/late across seeds', () => {
@@ -65,7 +66,8 @@ describe('aggregate helpers', () => {
     expect(agg.late.mean).toBeCloseTo(0.10, 5);
     // Only n=3 -> ci95 returns 0 (below the n=5 floor)
     expect(agg.late.ci95).toBe(0);
-    expect(agg.late.std).toBeGreaterThan(0);
+    // Late is 0.10 +/- 0.05 around a 0.10 mean: sqrt(0.005 / 2).
+    expect(agg.late.std).toBeCloseTo(0.05, 10);
   });
 
   it('aggregatePhases reports a positive ci95 when n>=5 with variance', () => {
@@ -77,7 +79,8 @@ describe('aggregate helpers', () => {
       { early: 0.65, mid: 0.35, late: 0.10 },
     ];
     const agg = aggregatePhases(seeds);
-    expect(agg.late.ci95).toBeGreaterThan(0);
+    // Late has mean 0.11 and sample variance 0.017 / 4, so 2.776 * sqrt(0.00425 / 5).
+    expect(agg.late.ci95).toBeCloseTo(0.08093, 5);
   });
 });
 
@@ -98,9 +101,10 @@ describe('pairedPermutationCI', () => {
     const xsA = [0.80, 0.85, 0.78, 0.82, 0.79, 0.81, 0.83, 0.84, 0.80, 0.82];
     const xsB = [0.20, 0.25, 0.18, 0.22, 0.19, 0.21, 0.23, 0.24, 0.20, 0.22];
     const { deltaMean, ciLow, ciHigh } = pairedPermutationCI(xsA, xsB);
-    expect(deltaMean).toBeGreaterThan(0.5);
-    expect(ciLow).toBeGreaterThan(0);
-    expect(ciHigh).toBeGreaterThan(ciLow);
+    expect(deltaMean).toBeCloseTo(0.6, 10);
+    // Every diff is 0.6, so the sign-flip quantiles are -0.36 and +0.36; the fixed seed puts the resample mean at -0.003912.
+    expect(ciLow).toBeCloseTo(0.243912, 6);
+    expect(ciHigh).toBeCloseTo(0.963912, 6);
   });
 
   it('throws on length mismatch', () => {

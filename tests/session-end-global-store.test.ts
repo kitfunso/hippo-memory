@@ -72,8 +72,9 @@ describe('__session-end-worker with no store in the folder', () => {
 
     expect(runSessionEnd('sess-global-origin').status).toBe(0);
 
+    // Capture splits the turn into sentences, and only the 'Never' sentence holds the rule.
     const saved = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE));
-    expect(saved.length).toBeGreaterThan(0);
+    expect(saved).toHaveLength(1);
     expect(saved.every((e) => e.origin_project === 'work')).toBe(true);
   });
 
@@ -193,7 +194,7 @@ describe('__codex-session-end-worker with no store in the folder', () => {
     expect(runCodexWorker(writeCodexHome()).status).toBe(0);
 
     const saved = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE));
-    expect(saved.length).toBeGreaterThan(0);
+    expect(saved).toHaveLength(1);
     expect(saved.every((e) => e.origin_project === 'work')).toBe(true);
   });
 

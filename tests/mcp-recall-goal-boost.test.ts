@@ -92,7 +92,8 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
         sessionId,
       )!.c;
-      expect(count).toBeGreaterThan(0);
+      // One tagged memory and one goal; the log keeps one row per (memory, goal) however many bands boost it.
+      expect(count).toBe(1);
     } finally {
       closeHippoDb(db);
     }

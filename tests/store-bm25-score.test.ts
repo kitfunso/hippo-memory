@@ -26,9 +26,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// The LIKE case seeds 6,000 rows, in two transactions, since store size is the thing it varies.
-vi.setConfig({ testTimeout: 30_000 });
-
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -79,7 +76,7 @@ describe('loadSearchEntries bm25_score', () => {
   it('No-terms path: empty query returns entries with bm25_score undefined', () => {
     writeEntry(root, makeRaw('any content'));
     const results = loadSearchEntries(root, '', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((e) => e.content)).toEqual(['any content']);
     for (const e of results) {
       expect(e.bm25_score).toBeUndefined();
     }
@@ -140,7 +137,7 @@ describe('loadSearchEntries bm25_score', () => {
     // FTS5 matches whole tokens, so a part-word is the only route to LIKE that leaves the FTS index untouched.
     writeEntry(root, makeRaw('alphabet soup contents'));
     const results = loadSearchEntries(root, 'alphab', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(1);
     // Anchor: the expected row must come back via the LIKE branch.
     expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
     // No FTS path → no bm25_score on any returned row.
@@ -157,6 +154,7 @@ describe('loadSearchEntries bm25_score', () => {
     expect(results[0]!.bm25_score).toEqual(expect.any(Number));
   });
 
+  // Seeds 6,000 rows, in two transactions, since store size is the thing it varies.
   it('LIKE fallback path: a query matching nothing tests the same number of rows however large the store', () => {
     const db = openHippoDb(root);
     try {
@@ -175,12 +173,13 @@ describe('loadSearchEntries bm25_score', () => {
         // The LIKE predicate lowers content and tags once per term for each row it tests.
         return lowered / 2;
       });
-      expect(rowsTested[0]).toBeGreaterThan(0);
+      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/search-rows.ts).
+      expect(rowsTested[0]).toBe(2000);
       expect(rowsTested[1]).toBe(rowsTested[0]);
     } finally {
       closeHippoDb(db);
     }
-  });
+  }, 30_000);
 
   it('Full-store fallback path: terms with no match → no FTS hit, no LIKE hit → fallback returns all rows with bm25_score undefined', () => {
     writeEntry(root, makeRaw('one row'));
@@ -196,7 +195,7 @@ describe('loadSearchEntries bm25_score', () => {
       200,
       'default',
     );
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((e) => e.content).sort()).toEqual(['another row', 'one row']);
     // None of the returned rows should carry bm25_score because we did
     // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
     // → full-store fallback).

@@ -100,7 +100,7 @@ beforeAll(async () => {
   }
   // Unasserted here, so a store that disagrees fails the test that reads the state and not the whole file.
   baseline = (await onBothStores(fixture, 'quarantine', inMemoryQuarantineStore, STATE)).sqlite;
-}, 60_000);
+});
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });

@@ -107,12 +107,13 @@ describe('token ledger helpers', () => {
 });
 
 describe('per-prompt hook: stable rendering and inject only on change', () => {
+  const PIN = 'NEVER force-push to master because it rewrites shared history';
   let tmpDir: string;
   let hippoDir: string;
 
   beforeEach(() => {
     ({ base: tmpDir, root: hippoDir } = makeStore('hook-dedup'));
-    writeEntry(hippoDir, createMemory('NEVER force-push to master because it rewrites shared history', { pinned: true, layer: Layer.Episodic }));
+    writeEntry(hippoDir, createMemory(PIN, { pinned: true, layer: Layer.Episodic }));
   });
 
   // In process unless `spawned`, with hippoOut's throw on a non-zero exit; the first case pins the hook in a real child.
@@ -150,7 +151,8 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     const hook = summary.surfaces.find((s: { surface: string }) => s.surface === 'hook');
     expect(hook.injected).toBe(3);
     expect(hook.skipped).toBe(3);
-    expect(hook.tokensAvoided).toBeGreaterThan(0);
+    // Each skipped block holds the pin's text; its confidence label and date, which read the clock, make up the rest.
+    expect(hook.tokensAvoided).toBeGreaterThanOrEqual(3 * Math.ceil(PIN.length / 4));
     expect(hook.tokensAvoided).toBe((hook.tokens / 3) * 3);
   });
 
@@ -187,12 +189,14 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     const surfaces = summary.surfaces.map((s: { surface: string }) => s.surface);
     expect(surfaces).toContain('context');
     expect(surfaces).toContain('recall');
-    expect(summary.totalTokens).toBeGreaterThan(0);
+    // Context and recall each print the pin's text inside formatting whose wording the renderer owns.
+    expect(summary.totalTokens).toBeGreaterThanOrEqual(2 * Math.ceil(PIN.length / 4));
     expect(await run(['tokens'])).toContain('Memory text handed to agents');
   });
 });
 
 describe('ledger on the HTTP and MCP surfaces', () => {
+  const NOTE = 'the zanzibar gateway needs the legacy auth header';
   let home: string;
   let globalHome: string;
 
@@ -200,7 +204,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
     home = makeRoot('ledger-http');
     globalHome = makeRoot('ledger-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalHome);
-    writeEntry(home, createMemory('the zanzibar gateway needs the legacy auth header', { layer: Layer.Episodic }));
+    writeEntry(home, createMemory(NOTE, { layer: Layer.Episodic }));
   });
 
   function surfaces(): Record<string, number> {
@@ -219,8 +223,10 @@ describe('ledger on the HTTP and MCP surfaces', () => {
       await handle.stop();
     }
     const got = surfaces();
-    expect(got.http_recall).toBeGreaterThan(0);
-    expect(got.http_context).toBeGreaterThan(0);
+    // Recall books the bare text of its one result, 49 characters at four per token.
+    expect(got.http_recall).toBe(13);
+    // Context prices the printed line around the same text, so it costs more; the label and date read the clock.
+    expect(got.http_context).toBeGreaterThan(13);
   });
 
   it('records MCP recall', async () => {
@@ -228,6 +234,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
-    expect(surfaces().mcp_recall).toBeGreaterThan(0);
+    // The tool's text holds the note itself inside headings whose wording the formatter owns.
+    expect(surfaces().mcp_recall).toBeGreaterThanOrEqual(Math.ceil(NOTE.length / 4));
   });
 });

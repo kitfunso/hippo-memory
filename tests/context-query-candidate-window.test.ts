@@ -9,6 +9,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { DeliveryObserver } from '../src/store/delivery-recorder.js';
 import { getContext, adminActor } from '../src/api/index.js';
+import { DEFAULT_CONTEXT_BUDGET } from '../src/api/context.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
@@ -34,6 +35,13 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
   }
 }
 
+// Every seeded row prices at 10 or 11 tokens and each window holds more than the default budget fits, so the count
+// lands in this band; which rows rank first sets the exact spot.
+function expectBudgetFilled(count: number): void {
+  expect(count).toBeGreaterThanOrEqual(Math.floor(DEFAULT_CONTEXT_BUDGET / 11));
+  expect(count).toBeLessThanOrEqual(Math.floor(DEFAULT_CONTEXT_BUDGET / 10));
+}
+
 /** Counts every row the loader hands to admission, which is every row the search can rank. */
 function admitCounter() {
   const seen = new Set<string>();
@@ -55,6 +63,7 @@ let global = '';
 // Built per call: the reach is probed against whatever HIPPO_HOME the test stubbed just before.
 const ctxNow = (): FullContext => apiCtx(local, 'default', adminActor('test'));
 
+// Writes 11,000 rows to real stores, and a runner's disk sets how long that takes.
 beforeAll(() => {
   local = makeRoot('ctx-window-local');
   global = makeRoot('ctx-window-global');
@@ -76,7 +85,7 @@ describe('getContext with a query reads the FTS candidate window', () => {
     const counter = admitCounter();
     const result = await getContext(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
 
-    expect(result.entries.length).toBeGreaterThan(0);
+    expectBudgetFilled(result.entries.length);
     expect(counter.calls()).toBe(DEFAULT_SEARCH_CANDIDATE_LIMIT);
     for (const r of result.entries) expect(counter.seen.has(r.entry.id)).toBe(true);
   });
@@ -87,7 +96,7 @@ describe('getContext with a query reads the FTS candidate window', () => {
     const result = await getContext(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
 
     // Both stores hold more matches than the window, so each fills it exactly.
-    expect(result.entries.length).toBeGreaterThan(0);
+    expectBudgetFilled(result.entries.length);
     expect(counter.calls()).toBe(2 * DEFAULT_SEARCH_CANDIDATE_LIMIT);
     for (const r of result.entries) expect(counter.seen.has(r.entry.id)).toBe(true);
   });
@@ -110,7 +119,7 @@ describe('getContext with a query labels each result local or global', () => {
     vi.stubEnv('HIPPO_HOME', global);
     const { result, statements, rowsRead } = await recordStatementsAsync(() => getContext(ctxNow(), { q: QUERY, currentProject: '' }));
 
-    expect(result.entries.length).toBeGreaterThan(0);
+    expectBudgetFilled(result.entries.length);
     expect(countMatching(statements, INDEX_READ)).toBe(0);
     expect(rowsRead).toBeLessThan(ROWS / 4);
   });

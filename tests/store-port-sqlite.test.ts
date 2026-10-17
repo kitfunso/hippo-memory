@@ -138,6 +138,7 @@ function seedTeam(root: string): void {
   saveSessionHandoff(root, TEAM, { version: 1, sessionId: 'alice-proj-a', summary: 'bob hands off on her session', nextAction: 'merge' }, { owner: 'bob', project: ['proj-a'] });
 }
 
+// Seeds recall-port-only-parity's branches plus a team, a goal and vectors into real stores, so the runner's disk sets its time.
 beforeAll(async () => {
   templates = await seedTemplates((root) => {
     seedPortBranches(root);
@@ -146,7 +147,6 @@ beforeAll(async () => {
     pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-beta', policy: { policyType: 'recency-first', weightRecency: 1.5 } });
     seedVectors(root);
   });
-  // The same seed as recall-port-only-parity plus more, which ran past the 30 s hook default on windows-latest CI.
 }, 120_000);
 
 afterAll(() => {
@@ -516,7 +516,7 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
     } finally {
       rmSync(s.home, { recursive: true, force: true });
     }
-  }, 60_000);
+  });
 });
 
 describe('a recall whose store read fails mid-way', () => {
@@ -560,5 +560,5 @@ describe('a recall whose store read fails mid-way', () => {
     } finally {
       rmSync(s.home, { recursive: true, force: true });
     }
-  }, 60_000);
+  });
 });

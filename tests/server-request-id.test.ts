@@ -189,5 +189,5 @@ describe('a request still unanswered past the slow threshold', () => {
       stderrSpy.mockRestore();
       await slow.stop();
     }
-  }, 20000);
+  });
 });

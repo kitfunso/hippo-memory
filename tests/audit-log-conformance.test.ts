@@ -94,7 +94,7 @@ function seedAuditRows(dir: string): void {
 beforeAll(() => {
   fixture = seedTwoTenants();
   seedAuditRows(fixture.dir);
-}, 60_000);
+});
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });
@@ -228,5 +228,5 @@ describe('GET /v1/audit over serve()', () => {
     expect(idsAt(7)).toEqual(BULK_IDS);
     expect(onHippoDb.map((r) => r.next !== null)).toEqual([false, false, false, true, false, true, false, false, false, false, false]);
     expect(await runServed((root) => inMemoryAuditLogStore(root).store)).toEqual(onHippoDb);
-  }, 120_000);
+  });
 });

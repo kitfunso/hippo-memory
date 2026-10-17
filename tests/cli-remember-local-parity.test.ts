@@ -10,8 +10,6 @@ import { query, Store, type ExtraState } from './_helpers/cli-parity-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-// A spawned case starts the built CLI up to five times, each a few seconds on a loaded Windows box; 60 s is twice that.
-const SPAWNED_CASE_MS = 60_000;
 const TEXT = 'the billing service retries a failed charge three times';
 const REJECTED = 'the billing service retries a failed charge nine times';
 const STDERR = 'connection refused on port 5432\n';
@@ -54,7 +52,7 @@ describe('hippo remember counts each stored row once (built CLI, no server)', ()
     const s = new Store({ spawned: label === 'plain' });
     await s.run('remember', TEXT, ...flags);
     s.expectPinned(globalCounter(s));
-  }, SPAWNED_CASE_MS);
+  });
 
   it('two rows count two', async () => {
     const s = new Store();
@@ -88,7 +86,7 @@ describe('hippo remember with the salience gate on (built CLI, no server)', () =
     await s.run('remember', TEXT, '--force');
     await s.run('remember', TEXT, '--pin');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('skips a text under the minimum length', async () => {
     const s = new Store();
@@ -129,7 +127,7 @@ describe('hippo remember extraction with no key (built CLI, no server)', () => {
     s.env['ANTHROPIC_API_KEY'] = '';
     await s.run('remember', TEXT, '--extract');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('extraction enabled in the config says the same without the flag', async () => {
     const s = new Store();
@@ -158,7 +156,7 @@ describe('hippo watch never gates or extracts (built CLI, no server)', () => {
     await s.run('watch', 'node', 'fail.js');
     await s.run('watch', 'node', 'fail.js');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 });
 
 describe('embedding after a local write (built CLI, local embeddings server)', () => {
@@ -175,5 +173,5 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     await s.run('remember', TEXT);
     await s.run('watch', 'node', 'fail.js');
     s.expectPinned({ rows: query(s.root, 'SELECT id FROM memories ORDER BY rowid'), vectors: Object.keys(loadEmbeddingIndex(s.root)) });
-  }, SPAWNED_CASE_MS);
+  });
 });

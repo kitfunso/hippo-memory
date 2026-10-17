@@ -182,6 +182,7 @@ if (workerData.during === 'statement') {
 `;
 
 describe('a writer thread killed inside an open transaction on a WAL database', () => {
+  // A worker thread starts, writes until it is killed, and the file is reopened and checked; CI runners take tens of seconds.
   it.each(['between statements', 'statement'])('leaves the file consistent with none of its rows, and the next write lands (killed during: %s)', async (during) => {
     const root = newRoot();
     const file = getHippoDbPath(root);

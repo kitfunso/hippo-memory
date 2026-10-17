@@ -261,6 +261,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE memories SET kind = 'superseded' WHERE id = ?`).run(free)).not.toThrow();
+      expect(db2.prepare(`SELECT kind FROM memories WHERE id = ?`).get(free)).toEqual({ kind: 'superseded' });
     } finally { closeHippoDb(db2); }
   });
 
@@ -284,6 +285,8 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE entities SET tenant_id = 'tenant-b', memory_id = ?, source_kind = 'distilled' WHERE id = ?`).run(mb, c.id)).not.toThrow();
+      expect(db2.prepare(`SELECT tenant_id, memory_id, source_kind FROM entities WHERE id = ?`).get(c.id))
+        .toEqual({ tenant_id: 'tenant-b', memory_id: mb, source_kind: 'distilled' });
     } finally { closeHippoDb(db2); }
   });
 

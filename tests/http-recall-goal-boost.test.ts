@@ -58,7 +58,8 @@ describe('HTTP /v1/memories session_id', () => {
     const db = openHippoDb(home);
     try {
       const count = countGoalRecallLogRows(db, sessionId);
-      expect(count).toBeGreaterThan(0);
+      // One tagged memory and one goal; the log keeps one row per (memory, goal).
+      expect(count).toBe(1);
     } finally {
       closeHippoDb(db);
     }

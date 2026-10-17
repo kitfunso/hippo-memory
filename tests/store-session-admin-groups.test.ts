@@ -58,7 +58,8 @@ describe('cards group', () => {
     const card = sync.create(T, { title: 'wire the port' });
     expect((await served.load(T, card.id))?.title).toBe('wire the port');
     const claimed = await served.claim(T, card.id, 'claude');
-    expect(claimed?.runId).toBeGreaterThan(0);
+    // The first row in a fresh store's AUTOINCREMENT card_runs table.
+    expect(claimed?.runId).toBe(1);
     await served.comment(T, card.id, 'me', 'looks good');
     const detail = await served.detail(T, card.id);
     expect(detail?.comments).toHaveLength(1);

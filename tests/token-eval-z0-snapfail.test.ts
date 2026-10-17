@@ -20,6 +20,7 @@ const busyPreSession: typeof cpSync = (from, to, opts) => {
 };
 
 describe('a failed snapshot copy', () => {
+  // A two-task run over a real git repo with fake Claude sessions, one of them retried after a limit.
   it('marks the snapshot unrestorable and the retry unrestored, and the run goes on', async () => {
     const { out } = isolate('snapfail');
     const r = makeRepo();
@@ -36,5 +37,5 @@ describe('a failed snapshot copy', () => {
     expect(pre.restorable).toBe(false);
     expect(pre.copyErrors.map((e) => e.code)).toContain('EBUSY');
     expect(said.some((m) => /n1 A2 seed1: pre-session copy of \w+ failed \(EBUSY\)/.test(m))).toBe(true);
-  }, 300_000);
+  }, 122_000);
 });

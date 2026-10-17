@@ -103,8 +103,8 @@ describe('textOverlap (Jaccard)', () => {
 
   it('returns partial overlap for related strings', () => {
     const o = textOverlap('cache error in pipeline', 'pipeline cache failure');
-    expect(o).toBeGreaterThan(0);
-    expect(o).toBeLessThan(1);
+    // Shared {cache, pipeline} over the union {cache, error, in, pipeline, failure}.
+    expect(o).toBe(2 / 5);
   });
 });
 

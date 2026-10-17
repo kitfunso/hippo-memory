@@ -106,7 +106,7 @@ describe('hippo dashboard listener', () => {
     );
     expect(run.stdout).toBe('');
     expect(run.status).toBe(1);
-  }, 90_000);
+  });
 
   it("listens under the API server's socket deadlines", async () => {
     const root = makeRoot('dashboard-listener');
@@ -146,5 +146,5 @@ describe('hippo dashboard listener', () => {
     expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toEqual({ atSignal: 1, atExit: 0 });
     expect(watched.stderr()).toMatch(/received SIG(INT|TERM), shutting down/);
     expect(watched.stderr()).not.toContain('did not finish within');
-  }, 60_000);
+  });
 });

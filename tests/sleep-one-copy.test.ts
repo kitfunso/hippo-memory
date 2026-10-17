@@ -105,7 +105,8 @@ describe('sleep after consolidation', () => {
       return countMatching(statements, HOST_WIDE_READ);
     };
     const withoutShare = await wholeReads(true);
-    expect(withoutShare).toBeGreaterThan(0);
+    // Consolidation's one read, then the first page of dedup, the audit and ambient: three rows fit one page each.
+    expect(withoutShare).toBe(4);
     expect(await wholeReads(false)).toBe(withoutShare);
   });
 });

@@ -102,7 +102,6 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
   }
 }
 
-// Seeding three stores row by row ran past the 30 s hook default on windows-latest CI.
 beforeAll(async () => {
   templates = await seedTemplates((root) => {
     seedPortBranches(root);
@@ -110,7 +109,7 @@ beforeAll(async () => {
     const key = { owner: 'localhost:cli', project: [PROJECT] };
     saveActiveTaskSnapshot(root, TENANT, { task: KEYED_TASK, summary: 'cutover planned', next_step: 'run the canary', session_id: SESSION }, key);
   });
-}, 120_000);
+});
 
 afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });
@@ -139,5 +138,5 @@ describe('recall over the port matches recall on hippo.db', () => {
     const inProcess = await runPass(scenario, sqliteStore);
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);
-  }, 120_000);
+  });
 });

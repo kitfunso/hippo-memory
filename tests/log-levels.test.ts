@@ -165,5 +165,5 @@ describe('a command that fails at the top level', () => {
     const debug = run('debug');
     expect(debug.status).toBe(1);
     expect(ownStderr(debug.stderr)).toMatch(/Error: file is not a database\n {2}thrown as Error\nError: file is not a database\n\s+at /);
-  }, 60000);
+  });
 });

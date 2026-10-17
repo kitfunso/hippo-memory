@@ -63,7 +63,8 @@ describe('policies store (bi-temporal first-class object)', () => {
   it('savePolicy creates memory + policies row + policy_create audit; v1; valid_from defaults to creation instant', async () => {
     const before = new Date().toISOString();
     const p = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Retention', policyText: 'Delete logs after 90d' });
-    expect(p.id).toBeGreaterThan(0);
+    // The first row of a fresh AUTOINCREMENT table.
+    expect(p.id).toBe(1);
     expect(p.memoryId).not.toBeNull();
     expect(p.policyName).toBe('Retention');
     expect(p.policyText).toBe('Delete logs after 90d');

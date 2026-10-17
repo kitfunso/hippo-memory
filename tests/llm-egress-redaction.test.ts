@@ -39,8 +39,8 @@ function hit(content: string): SearchResult {
   return { entry: createMemory(content), score: 1, bm25: 1, cosine: 0, tokens: 10 };
 }
 
-function expectScrubbed(): void {
-  expect(bodies.length).toBeGreaterThan(0);
+function expectScrubbed(requests: number): void {
+  expect(bodies).toHaveLength(requests);
   for (const body of bodies) {
     expect(body).not.toContain('AKIA');
     expect(body).not.toContain(BEARER);
@@ -74,13 +74,13 @@ describe('secret redaction before memory text leaves the box', () => {
       apiKey: 'k',
       fetcher: capture({ content: [{ text: 'a refined principle' }] }),
     });
-    expectScrubbed();
+    expectScrubbed(1);
   });
 
   it('dag summaries and fact extraction scrub their input', async () => {
     await generateDagSummary(TEXT, [TEXT], { apiKey: 'k', fetcher: capture({ content: [{ text: 'a summary line' }] }) });
     await extractFacts(TEXT, { apiKey: 'k', fetcher: capture({ content: [{ text: '[]' }] }) });
-    expectScrubbed();
+    expectScrubbed(2);
   });
 
   it('the hosted rerankers scrub the query and every candidate', async () => {
@@ -90,8 +90,7 @@ describe('secret redaction before memory text leaves the box', () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'test-' + 'k'.repeat(8));
     vi.stubGlobal('fetch', capture({ answers: { c1: { noul: 0.5 } } }));
     await createJevReranker(async () => [])(TEXT, [hit(TEXT)]);
-    expect(bodies).toHaveLength(2);
-    expectScrubbed();
+    expectScrubbed(2);
   });
 
   it('an API embedder scrubs what it sends', async () => {
@@ -99,6 +98,6 @@ describe('secret redaction before memory text leaves the box', () => {
     writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai' } }));
     vi.stubGlobal('fetch', capture({ data: [{ embedding: [1, 0] }] }));
     await resolveEmbeddingProvider(loadConfig(root).embeddings).embed([TEXT], 'passage');
-    expectScrubbed();
+    expectScrubbed(1);
   });
 });

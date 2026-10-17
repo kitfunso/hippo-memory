@@ -14,8 +14,6 @@ import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVec
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.
-vi.setConfig({ testTimeout: 30_000 });
 
 let root: string;
 

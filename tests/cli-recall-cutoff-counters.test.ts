@@ -214,10 +214,13 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
     const returned = out.results.length;
 
     expect(returned, 'a small budget must truncate').toBeLessThan(s.totalCandidates);
+    // Every printed row costs more than the 40-token budget leaves, so only the one-row floor survives of the 40.
+    expect(returned).toBe(1);
+    expect(s.totalCandidates).toBe(40);
     expect(
       s.droppedByBudget,
       'budget/rank drops must be counted - this read 0 in production',
-    ).toBeGreaterThan(0);
+    ).toBe(39);
     expect(
       s.totalCandidates,
       'published invariant must close on the budget path too',

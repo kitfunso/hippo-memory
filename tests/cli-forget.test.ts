@@ -78,7 +78,7 @@ describe('cli forget: raw memory archive', () => {
       try {
         expect(db.prepare(`SELECT id FROM memories WHERE id = 'mem_rawa3b'`).get()).toBeUndefined();
         const events = queryAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 });
-        expect(events.length).toBeGreaterThan(0);
+        expect(events).toHaveLength(1);
       } finally {
         closeHippoDb(db);
       }

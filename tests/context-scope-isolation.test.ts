@@ -101,7 +101,7 @@ describe('getContext origin partition (project A session)', () => {
     const got = contents(result.entries);
     expect(got).not.toContain(BRAVO);
     expect(got).not.toContain(LEGACY);
-    expect(got.length).toBeGreaterThan(0);
+    expect([...got].sort()).toEqual([ALPHA, GLOBAL_PREF]);
   });
 
   it('annotates returned entries with origin and category', async () => {
@@ -152,7 +152,8 @@ describe('getContext origin partition (project A session)', () => {
     });
     const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
     const got = contents(result.entries);
-    expect(got.length).toBeGreaterThan(0);
+    // The two admitted rows cost 12 and 13 tokens, so both fit the 60-token budget once the bulk row is out.
+    expect([...got].sort()).toEqual([ALPHA, GLOBAL_PREF]);
     expect(got.join('\n')).not.toContain('filler text for bulk');
   });
 

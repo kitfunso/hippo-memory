@@ -201,10 +201,12 @@ describe('recall through the vector reads of a store other than hippo.db', () =>
     // hippo.db's own reply shows the vector arm ran: a row no query word matches is in it, and no filtered row is.
     const shown = shownIds(onHippoDb);
     expect(onHippoDb.replies.every((r) => r.status === 200)).toBe(true);
-    expect(onHippoDb.requests).toBeGreaterThan(0);
+    // Hybrid embeds the query once; physics embeds it, then its classic pool (the seeded rows with no usable particle)
+    // goes through hybrid, which embeds it again.
+    expect(onHippoDb.requests).toBe(physics ? 2 : 1);
     expect(shown).toContain(VECTOR_ONLY);
     expect(shown.filter((id) => HIDDEN_IDS.includes(id))).toEqual([]);
-  }, 60_000);
+  });
 });
 
 describe('when the vector arm cannot run, both stores fall back to BM25 alike', () => {
@@ -228,14 +230,14 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
     expect([onHippoDb.requests, onMemory.requests]).toEqual([requests, requests]);
     expect(onHippoDb.replies[0]!.status).toBe(200);
     expect(shownIds(onHippoDb)).not.toContain(VECTOR_ONLY);
-  }, 60_000);
+  });
 
   it('a stale index names the rebuild each store needs', async () => {
     const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
     const onMemory = await runPass([http('hybrid')], false, 'memory', staleModel);
     expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed' ts=");
     expect(onMemory.log).toContain("run 'hippo embed' on the SQLite store, then rebuild the 'in-memory' database from it");
-  }, 60_000);
+  });
 });
 
 describe('the in-memory vector reads answer as sqliteStore does', () => {
@@ -297,7 +299,7 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
     expect(viaViews[0]![2]).toBeGreaterThan(0.999);
     expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: views }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
     expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: copies }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
-  }, 60_000);
+  });
 
   it('storedVectors, embeddingIndexState and physicsParticles', async () => {
     const some = ['mem_l_8d', 'mem_l_api', 'mem_l_zero', ORPHAN, 'mem_missing'];

@@ -246,7 +246,12 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(lesson('A2')).toBe(true);
     expect(lesson('A5')).toBe(false);
     expect(store('A2').length).toBeGreaterThan(store('A5').length);
-    expect(get('A2', 'a2').hippo.sent).toBeGreaterThan(0);
+    // The stand-in prices what it received at 2000 plus a quarter of its length; hippo books its static and recall blocks
+    // apart, each rounded up, so its count is within one of that, and the block holds at least the lesson.
+    const sent = get('A2', 'a2').hippo.sent;
+    const received = raw('A2', 'a2').modelUsage['fake-model'].cacheCreationInputTokens - 2000;
+    expect(Math.abs(sent - received)).toBeLessThanOrEqual(1);
+    expect(sent).toBeGreaterThanOrEqual(Math.ceil(store('A2').find((e: { content: string }) => e.content.includes('operator flipped'))!.content.length / 4));
     expect(get('A0', 'a2').hippo).toBeNull();
 
     // No future: the workspace history ends at the task's base, never the fix.

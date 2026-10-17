@@ -58,7 +58,8 @@ describe('api.recall continuity flag', () => {
     expect(result.continuity!.activeSnapshot?.task).toBe('Ship the recall continuity slice');
     expect(result.continuity!.sessionHandoff?.nextAction).toBe('Pick up at Task 3.');
     expect(result.continuity!.recentSessionEvents).toHaveLength(1);
-    expect(result.continuityTokens).toBeGreaterThan(0);
+    // Snapshot 8 + 11 + 6, handoff 7 + 5 + artifact 4, event 9, each at Math.ceil(len/4).
+    expect(result.continuityTokens).toBe(50);
   });
 
   it('returns continuity block with nulls/empty when no continuity state exists', async () => {

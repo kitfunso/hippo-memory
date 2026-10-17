@@ -70,7 +70,9 @@ describe('serve() non-loopback host guard', () => {
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', '1');
     handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
+    // Port 0 lets the OS pick a free port, so only its range is fixed.
     expect(handle.port).toBeGreaterThan(0);
+    expect(handle.port).toBeLessThanOrEqual(65535);
   });
 
   it('warns once at start that an allowed network bind without TLS is cleartext, and stays quiet on loopback', async () => {
@@ -95,7 +97,9 @@ describe('serve() non-loopback host guard', () => {
     });
 
     it('starts and binds the requested non-loopback host', () => {
+      // Port 0 lets the OS pick a free port, so only its range is fixed.
       expect(handle!.port).toBeGreaterThan(0);
+      expect(handle!.port).toBeLessThanOrEqual(65535);
     });
 
     it('GET /health is public: 200 with no auth', async () => {

@@ -81,10 +81,9 @@ describe('api.getContext', () => {
 
       const result = await getContext(ctx, { budget: 1500 });
 
-      expect(result.entries.length).toBeGreaterThan(0);
-      expect(result.entries.length).toBeLessThanOrEqual(5);
-      expect(result.tokens).toBeGreaterThan(0);
-      expect(result.tokens).toBeLessThanOrEqual(1500);
+      // All five fit the budget; estimateTokens is ceil(chars / 4), so each 25-character text costs 7.
+      expect(result.entries).toHaveLength(5);
+      expect(result.tokens).toBe(35);
       expect(result.tokens).toBe(result.entries.reduce((sum, e) => sum + e.tokens, 0));
       // Strongest first ordering
       for (let i = 1; i < result.entries.length; i++) {

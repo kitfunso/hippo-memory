@@ -89,9 +89,9 @@ describe('BM25-mismatch sim — adversarial categories disjoint from existing re
         // If top1Score === 0, all categories tie at zero (degenerate); that's NOT a mismatch — query just isn't lexically anywhere.
         if (top1Score === 0) continue;
 
-        // If top1Score > 0, at least one new-category should be at the top tier.
+        // If top1Score > 0, the query's own category is the one new category at the top tier.
         const newAtTop = top1Ids.filter((id) => NEW_IDS.includes(id));
-        expect(newAtTop.length).toBeGreaterThan(0);
+        expect(newAtTop).toEqual([nc.id]);
       }
     }
   });

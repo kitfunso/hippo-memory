@@ -12,7 +12,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -33,8 +33,6 @@ import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-// The one case ingests 200 webhook events, each its own write to a real store.
-vi.setConfig({ testTimeout: 90_000 });
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -244,6 +242,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  // Ingests 200 webhook events and replays them, each its own write to a real store.
   it('ingests the stream cleanly and enforces every security boundary', async () => {
     const ctx = ctxFor(root);
     const deliveries = buildDeliveryStream();
@@ -262,7 +261,8 @@ describe('GitHub connector — 200-event smoke test', () => {
     const deletable = deliveries.filter((d): d is GeneratedDelivery & { artifactRef: string } =>
       Boolean(d.artifactRef),
     );
-    expect(deletable.length).toBeGreaterThanOrEqual(5);
+    // The 60 issue comments and 50 review comments carry an artifactRef.
+    expect(deletable).toHaveLength(110);
     const toDelete = deletable.slice(0, 5);
     const toDeleteIds = new Set(toDelete.map((d) => d.deliveryId));
 
@@ -349,7 +349,8 @@ describe('GitHub connector — 200-event smoke test', () => {
     }
 
     const withScope = await retrieve(ctx, { query: privateMarker, filter: { scope: SCOPE_PRIVATE } });
-    expect(withScope.results.length).toBeGreaterThan(0);
+    // The marker is unique to one delivery, so exactly its row matches.
+    expect(withScope.results).toHaveLength(1);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
 
     // ---- (7) Replay defense with a fresh deliveryId per delivery ---------
@@ -404,6 +405,8 @@ describe('GitHub connector — 200-event smoke test', () => {
       query: 'cross-scope-canary-payload-1234',
       filter: { scope: 'acme:private:demo' },
     });
-    expect(canaryScoped.results.length).toBeGreaterThan(0);
-  });
+    // The canary is the only row in its scope.
+    expect(canaryScoped.results).toHaveLength(1);
+    expect(canaryScoped.results[0].content).toBe('cross-scope-canary-payload-1234');
+  }, 90_000);
 });

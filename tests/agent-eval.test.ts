@@ -314,8 +314,6 @@ function hitRateByPhase(results: SimResult[]) {
 
 const tasks = generateTasks();
 
-// The simulation is pure CPU, so a loaded Windows runner can stretch it past the 5 s unit default.
-const SIM_MS = 30_000;
 
 describe('Agent evaluation: sequential learning benchmark', () => {
   it('generates 50 tasks with 25+ trap encounters', () => {
@@ -339,7 +337,7 @@ describe('Condition: no memory (baseline)', () => {
     results = simulate(tasks, 'none');
     const rate = trapHitRate(results);
     expect(rate).toBe(1.0);
-  }, SIM_MS);
+  });
 
   it('no improvement over time (flat hit rate)', () => {
     const phases = hitRateByPhase(results);
@@ -363,7 +361,7 @@ describe('Condition: static memory (pre-loaded)', () => {
     const rate = trapHitRate(results);
     // Static should catch many (lessons pre-loaded) but rate is flat across phases
     expect(rate).toBeLessThan(0.5); // catches >50% of traps
-  }, SIM_MS);
+  });
 
   it('hit rate is roughly flat across phases (no learning)', () => {
     const phases = hitRateByPhase(results);
@@ -388,7 +386,7 @@ describe('Condition: hippo (learns from mistakes)', () => {
     results = simulate(tasks, 'hippo');
     const rate = trapHitRate(results);
     expect(rate).toBeLessThan(1.0);
-  }, SIM_MS);
+  });
 
   it('late-phase hit rate is lower than early-phase (agent learns)', () => {
     const phases = hitRateByPhase(results);

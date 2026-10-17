@@ -152,6 +152,7 @@ describe('loadAmbientCandidates', () => {
   const at = (s: number): string => new Date(Date.UTC(2026, 0, 1) + s * 1000).toISOString();
   const admit = (e: MemoryEntry): boolean => !e.content.startsWith('refused');
 
+  // Writes up to 260 rows one commit at a time into two stores.
   it('reads past a window of refused rows without reading the rest of the store', () => {
     const read = [130, 260].map((older) => {
       const root = freshRoot('hp-ambient');

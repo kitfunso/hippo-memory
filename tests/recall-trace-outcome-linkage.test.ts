@@ -116,7 +116,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'explicit-trace-opt-target' });
       const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', window: { limit: 5 } });
-      expect(recallResult.results.length).toBeGreaterThan(0);
+      expect(recallResult.results).toHaveLength(1);
 
       const db = openHippoDb(home);
       let traceId: number;
@@ -199,7 +199,9 @@ describe('storage overhead smoke (success criterion 3)', () => {
       const after = dbSizeBytes();
 
       const growth = after - before;
-      expect(growth).toBeGreaterThan(0); // sanity: traces were actually written
+      // Growth depends on page reuse, so only a floor is fixed: SQLite grows the file in whole 4096-byte pages.
+      expect(growth).toBeGreaterThanOrEqual(4096);
+      expect(growth % 4096).toBe(0);
       expect(growth).toBeLessThan(250 * 1024);
     } finally {
       restore();

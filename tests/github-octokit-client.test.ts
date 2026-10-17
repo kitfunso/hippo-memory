@@ -145,7 +145,7 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   it('throws on a body over the byte cap', async () => {
     const err = await failure(paddedJsonResponse('[', ']', GITHUB_CAP_BYTES));
     expectNamesTheReply(err, new RegExp(`reply over ${GITHUB_CAP_BYTES} bytes`));
-  }, 60_000);
+  });
 
   it('still returns the items and the next link of a well-formed page', async () => {
     const reply = new Response(JSON.stringify([{ id: 1 }, { id: 2 }]), { status: 200, headers: { link: '<https://api.github.com/x?page=2>; rel="next"' } });

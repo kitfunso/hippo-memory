@@ -83,7 +83,7 @@ describe('agent memory sync: concurrent first imports', () => {
     expect(outs.reduce((n, o) => n + o.imported, 0)).toBe(NOTES);
     expect(agentRows(w.local)).toHaveLength(NOTES);
     expect(new Set(liveRows(w.local).map((e) => e.source)).size).toBe(NOTES);
-  }, 120_000);
+  });
 
   it('four projects\' sleeps racing on the user pass give one global row per Codex bullet', async () => {
     codexSummary(w, ...Array.from({ length: NOTES }, (_, i) => `- Preference ${i}: run check ${i + 100} before merging.`));
@@ -97,5 +97,5 @@ describe('agent memory sync: concurrent first imports', () => {
     expect(outs.reduce((n, o) => n + o.imported, 0)).toBe(NOTES);
     expect(agentRows(w.global)).toHaveLength(NOTES);
     expect(new Set(liveRows(w.global).map((e) => e.source)).size).toBe(NOTES);
-  }, 120_000);
+  });
 });

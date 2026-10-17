@@ -67,8 +67,9 @@ describe('hippo recall --continuity', () => {
     expect(parsed.continuity.activeSnapshot.task).toBe('Wire continuity into recall');
     expect(parsed.continuity.sessionHandoff.nextAction).toBe('Resume on Task 4 step 2.');
     expect(parsed.continuity.recentSessionEvents).toHaveLength(1);
-    expect(parsed.continuityTokens).toBeGreaterThan(0);
-    expect(parsed.results.length).toBeGreaterThanOrEqual(1);
+    // Snapshot 64 + handoff 47 + trail 45: the seeded texts plus fixed-width ISO stamps, each printed with a newline.
+    expect(parsed.continuityTokens).toBe(156);
+    expect(parsed.results).toHaveLength(1);
   });
 
   it('text: prints snapshot/handoff/trail headings above the memory list', async () => {

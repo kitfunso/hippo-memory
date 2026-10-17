@@ -205,7 +205,8 @@ describe('HTTP input validation', () => {
       // /v1/audit answers auditList's event array as the whole body.
       return Array.isArray(r.json) ? r.json.length : -1;
     };
-    expect(await since('2020-01-01T00:00:00Z')).toBeGreaterThan(0);
+    // Only the seven beforeAll creates are certain; earlier tests' writes add more depending on which ran.
+    expect(await since('2020-01-01T00:00:00Z')).toBeGreaterThanOrEqual(7);
     expect(await since('2999-01-01T00:00:00Z')).toBe(0);
   });
 

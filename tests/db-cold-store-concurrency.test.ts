@@ -86,5 +86,5 @@ describe('openHippoDb on a cold store under concurrent processes', () => {
     expect(failed.map((r) => r.stderr.split('\n').find((l) => l.includes('Error')) ?? `exit ${r.code}`)).toEqual([]);
     expect(results.map((r) => r.stdout)).toEqual(results.map(() => String(getCurrentSchemaVersion())));
     expect(existsSync(join(root, 'hippo.db'))).toBe(true);
-  }, 120000);
+  });
 });

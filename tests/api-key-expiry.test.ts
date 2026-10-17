@@ -259,5 +259,5 @@ describe('expired keys over MCP and the stream', () => {
     }
     ac.abort();
     expect(buf).toContain('auth_revoked');
-  }, 10_000);
+  });
 });

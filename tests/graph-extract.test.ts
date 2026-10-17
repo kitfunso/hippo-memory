@@ -245,7 +245,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal in Q3, wants RetryPolicy' });
     await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib for Acme Corp' });
     const first = await extractGraph(sqliteStore(home), 'default');
-    expect(first.references).toBeGreaterThan(0);
+    // Both active decisions and the note name RetryPolicy, and the brief names Acme Corp; superseded rows make none.
+    expect(first.references).toBe(4);
 
     expect(graphWritesDuring(async () => await extractGraph(sqliteStore(home), 'default'))).toEqual([]);
   });
@@ -301,7 +302,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
     const r = await extractGraphChunked(sqliteStore(home), 'default', budget(0, closeOlderOnce));
 
-    expect(pauses).toBeGreaterThan(0);
+    // A zero hold commits one op per chunk, and the two entity inserts need one pause between them.
+    expect(pauses).toBe(1);
     expect(loadEntities(home, 'default', { limit: 10 }).map((e) => e.name)).toEqual(['Newer call']);
     expect(r.skipped).toBe(1);
   });

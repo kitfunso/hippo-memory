@@ -54,6 +54,7 @@ describe('hybrid recall at 10k rows', () => {
     saveEmbeddingIndex(store, Object.fromEntries(entries.map((e, i) => [e.id, vector(i + 1)])));
   }
 
+  // Three times the measured seed of 11k rows and their 384-dim vectors.
   beforeAll(() => {
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
@@ -62,8 +63,9 @@ describe('hybrid recall at 10k rows', () => {
     const queryVector = vector(7);
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));
-  }, 120_000);
+  }, 65_000);
 
+  // Each case scans every stored 384-dim vector, which a shared CI runner takes seconds over.
   it('a recall over ten times the rows runs no more statements and reads at most ten times the rows', async () => {
     let t0 = performance.now();
     const atRows = await recordStatementsAsync(() => recall(home));
@@ -71,7 +73,8 @@ describe('hybrid recall at 10k rows', () => {
     t0 = performance.now();
     const atFewer = await recordStatementsAsync(() => recall(fewer));
     console.log(`hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`);
-    expect(atFewer.result.length).toBeGreaterThan(0);
+    // The 20 rows that name the query plus the 50 nearest vectors, none of them shared, all inside the budget.
+    expect(atFewer.result).toHaveLength(70);
     // The smaller recall ran its vector scan too, so the two counts compare like with like.
     expect(atFewer.rowsRead).toBeGreaterThanOrEqual(FEWER_ROWS);
     // A query per row scored, or per chunk of rows, grows the statements with the store.
@@ -81,7 +84,8 @@ describe('hybrid recall at 10k rows', () => {
 
   it('one recall reads each stored vector once and few other rows', async () => {
     const { result, statements, rowsRead } = await recordStatementsAsync(recallOnce);
-    expect(result.length).toBeGreaterThan(0);
+    // The 200 rows that name the query plus the 50 nearest vectors, less row 2500, which is both.
+    expect(result).toHaveLength(249);
     // Every stored vector is read, so the ceilings below measure a recall that ran its vector scan.
     expect(rowsRead).toBeGreaterThanOrEqual(ROWS);
     // About 1.3 times what one recall does; a second vector scan or a whole-store load of memories passes it.

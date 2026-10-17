@@ -10,7 +10,7 @@ import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 12_000 });
 
 function callTool(
   reqId: number,

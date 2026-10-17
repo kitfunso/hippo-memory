@@ -15,16 +15,16 @@ describe('compareEntryIdentity', () => {
   it('orders by content ascending when content differs', () => {
     const a = { content: 'apple', id: 'zzz' };
     const b = { content: 'banana', id: 'aaa' };
-    expect(compareEntryIdentity(a, b)).toBeLessThan(0);
-    expect(compareEntryIdentity(b, a)).toBeGreaterThan(0);
+    expect(compareEntryIdentity(a, b)).toBe(-1);
+    expect(compareEntryIdentity(b, a)).toBe(1);
   });
 
   it('falls back to id ascending when content is identical', () => {
     const a = { content: 'same text', id: 'b-id' };
     const b = { content: 'same text', id: 'a-id' };
     // content ties -> id decides: 'a-id' < 'b-id'
-    expect(compareEntryIdentity(a, b)).toBeGreaterThan(0);
-    expect(compareEntryIdentity(b, a)).toBeLessThan(0);
+    expect(compareEntryIdentity(a, b)).toBe(1);
+    expect(compareEntryIdentity(b, a)).toBe(-1);
   });
 
   it('returns 0 for fully identical content and id', () => {
@@ -40,8 +40,9 @@ describe('compareEntryIdentity', () => {
     const a = { content: 'Bravo', id: '1' };
     const b = { content: 'alpha', id: '2' };
     expect(a.content < b.content).toBe(true); // sanity: JS default string compare is byte order
-    expect(compareEntryIdentity(a, b)).toBeLessThan(0); // a (Bravo) sorts first
-    expect('Bravo'.localeCompare('alpha')).toBeGreaterThan(0); // localeCompare disagrees
+    expect(compareEntryIdentity(a, b)).toBe(-1); // a (Bravo) sorts first
+    // localeCompare disagrees; the spec fixes only the sign of its result, never the magnitude.
+    expect(Math.sign('Bravo'.localeCompare('alpha'))).toBe(1);
   });
 
   it('ranks layer semantic -> episodic -> trace -> buffer on a content tie, unknown layers last', () => {
@@ -54,31 +55,32 @@ describe('compareEntryIdentity', () => {
   it('prefers more distinct tags, then the sorted tag list, before falling to id', () => {
     const richer = { content: 'same', id: 'z', tags: ['x', 'y'] };
     const poorer = { content: 'same', id: 'a', tags: ['x'] };
-    expect(compareEntryIdentity(richer, poorer)).toBeLessThan(0);
+    // The tag count step returns the count difference, one here.
+    expect(compareEntryIdentity(richer, poorer)).toBe(-1);
 
     // duplicate tags do not count twice: ['a', 'a'] ties ['b'] on count, then 'a' < 'b'
     const dupA = { content: 'same', id: 'z', tags: ['a', 'a'] };
     const oneB = { content: 'same', id: 'a', tags: ['b'] };
-    expect(compareEntryIdentity(dupA, oneB)).toBeLessThan(0);
+    expect(compareEntryIdentity(dupA, oneB)).toBe(-1);
 
     // tag order inside the array is irrelevant: equal sets fall through to id
     const ab = { content: 'same', id: 'b', tags: ['a', 'b'] };
     const ba = { content: 'same', id: 'a', tags: ['b', 'a'] };
-    expect(compareEntryIdentity(ab, ba)).toBeGreaterThan(0);
+    expect(compareEntryIdentity(ab, ba)).toBe(1);
 
     // tags are compared element-wise, so a NUL inside a tag cannot make two
     // different tag sets collide and fall through to the random id
     const nulInSecond = { content: 'same', id: 'z', tags: ['a', 'b\0c'] };
     const nulInFirst = { content: 'same', id: 'a', tags: ['a\0b', 'c'] };
-    expect(compareEntryIdentity(nulInSecond, nulInFirst)).toBeLessThan(0);
-    expect(compareEntryIdentity(nulInFirst, nulInSecond)).toBeGreaterThan(0);
+    expect(compareEntryIdentity(nulInSecond, nulInFirst)).toBe(-1);
+    expect(compareEntryIdentity(nulInFirst, nulInSecond)).toBe(1);
   });
 
   it('orders by source ascending after layer and tags tie', () => {
     const a = { content: 'same', id: 'z', layer: 'episodic', tags: ['t'], source: 'src-a' };
     const b = { content: 'same', id: 'a', layer: 'episodic', tags: ['t'], source: 'src-b' };
-    expect(compareEntryIdentity(a, b)).toBeLessThan(0);
-    expect(compareEntryIdentity(b, a)).toBeGreaterThan(0);
+    expect(compareEntryIdentity(a, b)).toBe(-1);
+    expect(compareEntryIdentity(b, a)).toBe(1);
   });
 
   it('is a total order: three different starting orders sort to one sequence', () => {
@@ -102,15 +104,15 @@ describe('compareScoredResults', () => {
   it('orders by score descending when scores differ', () => {
     const a = { score: 1, entry: { content: 'z', id: 'z' } };
     const b = { score: 2, entry: { content: 'a', id: 'a' } };
-    expect(compareScoredResults(a, b)).toBeGreaterThan(0); // b (higher score) first
+    expect(compareScoredResults(a, b)).toBe(1); // b (higher score) first
   });
 
   it('falls back to compareEntryIdentity on an exact score tie', () => {
     const a = { score: 5, entry: { content: 'zebra', id: 'x' } };
     const b = { score: 5, entry: { content: 'apple', id: 'y' } };
     // scores tie -> content decides: 'apple' < 'zebra'
-    expect(compareScoredResults(a, b)).toBeGreaterThan(0); // b (apple) sorts first
-    expect(compareScoredResults(b, a)).toBeLessThan(0);
+    expect(compareScoredResults(a, b)).toBe(1); // b (apple) sorts first
+    expect(compareScoredResults(b, a)).toBe(-1);
   });
 
   it('produces a stable full sort across repeated ties (order-independent of input array order)', () => {
@@ -131,15 +133,15 @@ describe('comparePhysicsResultsBy', () => {
     const cmp = comparePhysicsResultsBy<{ memoryId: string; s: number }>((r) => r.s);
     const a = { memoryId: 'm1', s: 1 };
     const b = { memoryId: 'm2', s: 2 };
-    expect(cmp(a, b)).toBeGreaterThan(0); // b (higher score) first
+    expect(cmp(a, b)).toBe(1); // b (higher score) first
   });
 
   it('falls back to memoryId ascending on an exact score tie (no content available)', () => {
     const cmp = comparePhysicsResultsBy<{ memoryId: string; s: number }>((r) => r.s);
     const a = { memoryId: 'mem-z', s: 5 };
     const b = { memoryId: 'mem-a', s: 5 };
-    expect(cmp(a, b)).toBeGreaterThan(0); // b (mem-a) sorts first
-    expect(cmp(b, a)).toBeLessThan(0);
+    expect(cmp(a, b)).toBe(1); // b (mem-a) sorts first
+    expect(cmp(b, a)).toBe(-1);
   });
 
   it('supports two independent passes over the same array with different score fields', () => {

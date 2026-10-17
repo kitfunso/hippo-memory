@@ -290,7 +290,7 @@ describe('the per-address scrypt bucket', () => {
     expect(flood.slice(0, 40)).toEqual(Array(40).fill(UNAUTHORISED));
     expect(flood[40]).toEqual({ status: 429, retryAfter: '1' });
     expect(scryptRunsSince(before)).toBe(40);
-  }, 60_000);
+  });
 
   it('never charges a token that ran no scrypt, so a colleague behind the same address keeps a proved key while junk floods it', async () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
@@ -323,7 +323,7 @@ describe('the per-address scrypt bucket', () => {
     // The bucket is empty, yet the developer's key passes, because its secret is already proved.
     expect(await office(dev)).toEqual(OK);
     expect(scryptRunsSince(before)).toBe(39);
-  }, 60_000);
+  });
 
   it('keys an IPv6 address on its /64, so rotating inside one /64 buys no fresh scrypt budget', async () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');

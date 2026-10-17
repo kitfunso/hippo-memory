@@ -76,7 +76,7 @@ beforeAll(async () => {
   aroundHub = { entities: [e.hub, e.spoke1, e.spoke2, e.secret, e.shared], relations: without(newest.relations, newest.relations[1]!) };
   // Unasserted here, so a store that disagrees fails the test that reads the rows and not the whole file.
   auditBefore = (await onBothStores(fixture, 'graphReads', inMemoryGraphReadsStore, [])).sqlite.audit;
-}, 120_000);
+});
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });

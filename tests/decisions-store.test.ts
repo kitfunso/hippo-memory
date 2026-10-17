@@ -71,7 +71,7 @@ describe('decisions store (first-class object)', () => {
       decisionText: 'use Postgres',
       context: 'scale and JSONB',
     });
-    expect(d.id).toBeGreaterThan(0);
+    expect(d.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
     expect(d.memoryId).not.toBeNull();
     expect(d.tenantId).toBe('default');
     expect(d.decisionText).toBe('use Postgres');

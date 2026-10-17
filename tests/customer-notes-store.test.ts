@@ -43,7 +43,8 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
 
   it('saveCustomerNote creates memory + row + customer_note_create audit; v1', async () => {
     const n = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal call notes' });
-    expect(n.id).toBeGreaterThan(0);
+    // The first row of a fresh AUTOINCREMENT table.
+    expect(n.id).toBe(1);
     expect(n.memoryId).not.toBeNull();
     expect(n.customer).toBe('Acme Corp');
     expect(n.note).toBe('renewal call notes');

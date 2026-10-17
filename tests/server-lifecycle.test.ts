@@ -80,7 +80,9 @@ describe('server lifecycle', () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
     try {
+      // Port 0 asks the OS for any free port, so only the TCP range is fixed.
       expect(handle.port).toBeGreaterThan(0);
+      expect(handle.port).toBeLessThanOrEqual(65_535);
       expect(handle.url).toBe(`http://127.0.0.1:${handle.port}`);
     } finally {
       await handle.stop();

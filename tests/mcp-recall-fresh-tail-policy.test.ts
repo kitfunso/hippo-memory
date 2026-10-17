@@ -9,9 +9,9 @@
  * propagates to whichever transport invoked it. This test asserts:
  *   1. The throw reaches the call site as a RecallContractError with the
  *      typed `.code` field intact (no swallowing inside MCP dispatch).
- *   2. Both stdio (src/mcp/server.ts:836) and HTTP-MCP
- *      (src/server.ts:1292) transports already map the thrown Error to
- *      JSON-RPC code -32603 with `err.message` preserved.
+ *   2. Both transports, stdio and HTTP-MCP, answer the throw through
+ *      mcpErrorResponse: a JSON-RPC -32603 error that keeps the typed
+ *      error's message.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -116,7 +116,11 @@ describe('mcp hippo_recall fresh-tail policy', () => {
       result?: { content: Array<{ text: string }> };
     };
     expect(r.error).toBeUndefined();
-    expect(r.result?.content?.[0]?.text).toBeDefined();
+    const text = r.result?.content?.[0]?.text ?? '';
+    // 'event' matches every sess-A row, so the ranked list shows all three and the tail section repeats none.
+    expect(text).toContain('Found 3 memories:');
+    for (let i = 0; i < 3; i++) expect(text).toContain(`\nevent ${i}\n`);
+    expect(text).not.toContain('[tail]');
   });
 
   it('env unset, no session_id, fresh_tail_count > 0 → no error (back-compat)', async () => {

@@ -69,7 +69,8 @@ describe('MCP auto-sleep', () => {
       await remember(root, 'the deploy moved to friday');
     }, { busyWaitMs: 250 });
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
-    expect(seen.length).toBeGreaterThan(0);
+    // One episodic memory is one extraction call; no later LLM pass has the facts or summaries it needs.
+    expect(seen).toHaveLength(1);
     for (const s of seen) {
       expect(s.open).toBe(true);
       expect(s.scope).not.toBe(callScope);

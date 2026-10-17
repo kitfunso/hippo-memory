@@ -78,7 +78,8 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
     const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
-    expect(b.id).toBeGreaterThan(0);
+    // The first row in a fresh store's AUTOINCREMENT table.
+    expect(b.id).toBe(1);
     expect(b.memoryId).not.toBeNull();
     expect(b.repo).toBe('hippo');
     expect(b.summary).toBe('agent-memory lib');

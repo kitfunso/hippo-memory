@@ -129,9 +129,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       // MCP's totalCandidates comes from loadAllEntries (all rows in tenant)
       // so it should be 30 (all our seeded rows).
       expect(totalCandidates).toBe(30);
-      // Shown count is bounded by physics/hybrid budget (200 tokens).
-      expect(totalShown).toBeGreaterThan(0);
-      expect(totalShown).toBeLessThan(30);
+      // Each printed row costs about 75 tokens, so two fit the 200-token budget and a third does not.
+      expect(totalShown).toBe(2);
     }
   });
 

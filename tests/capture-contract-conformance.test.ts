@@ -27,6 +27,15 @@ const READERS = new Map<string, (fixture: Fixture) => CaptureReceipt>([
   ['copilot/session-end', (f) => readSessionEnd(normalizeHookPayload(f.stdin ?? undefined), f.timedOut, 'copilot')],
 ]);
 
+// Pinned so a deleted fixture fails here instead of quietly shrinking what each reader is checked against.
+const FIXTURE_COUNTS = new Map<string, number>([
+  ['claude-code/pre-compact', 17],
+  ['vscode/stop', 10],
+  ['claude-code/post-compact', 14],
+  ['claude-code/session-end', 16],
+  ['copilot/session-end', 3],
+]);
+
 const ROOT = path.join(fileURLToPath(new URL('.', import.meta.url)), 'fixtures', 'capture');
 const subdirs = (dir: string): string[] =>
   fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
@@ -40,7 +49,7 @@ describe('capture contract conformance', () => {
 
   for (const dir of fixtureDirs) {
     const files = fs.readdirSync(path.join(ROOT, dir)).filter((f) => f.endsWith('.json'));
-    it(`${dir} has fixtures`, () => expect(files.length).toBeGreaterThan(0));
+    it(`${dir} has fixtures`, () => expect(files.length).toBe(FIXTURE_COUNTS.get(dir)));
     for (const file of files) {
       it(`${dir}/${file}`, () => {
         // SAFETY: fixtures are checked-in files in this shape; a wrong shape fails the toEqual below.

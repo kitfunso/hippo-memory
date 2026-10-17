@@ -47,7 +47,7 @@ describe('HTTP /v1/memories rerank-trace wire-format', () => {
     // RecallResult produced by src/api/index.ts's recall(), checked immediately by
     // the assertions that follow.
     const body = (await res.json()) as RecallResult;
-    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.results).toHaveLength(2);
     for (const item of body.results) {
       expect(item.rerankPipeline).toBe('api');
     }
@@ -60,7 +60,7 @@ describe('HTTP /v1/memories rerank-trace wire-format', () => {
     // RecallResult produced by src/api/index.ts's recall(), checked immediately by
     // the assertions that follow.
     const body = (await res.json()) as RecallResult;
-    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.results).toHaveLength(2);
     for (const item of body.results) {
       expect(item.rerankPipeline).toBeUndefined();
       expect(item.rerankTrace).toBeUndefined();

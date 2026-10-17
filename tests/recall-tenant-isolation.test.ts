@@ -35,5 +35,5 @@ describe('cross-tenant recall isolation', () => {
     expect(aOut).not.toContain('beta-secret-xyz');
     expect(bOut).toContain('beta-secret-xyz');
     expect(bOut).not.toContain('alpha-secret-xyz');
-  }, 30_000);
+  });
 });

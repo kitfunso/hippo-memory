@@ -101,7 +101,7 @@ describe('routed writes under a busy store', () => {
     const result = await withLockHeld(home, 1200, () => client.remember(url, undefined, { content: 'remember-busy-canary' }));
     expect(result.id).toBeTruthy();
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
-  }, 15_000);
+  });
 
   it('forget: a lock held across the first tries ends in one removal counted once', async () => {
     const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary' });
@@ -109,21 +109,21 @@ describe('routed writes under a busy store', () => {
     await expect(withLockHeld(home, 1200, () => client.forget(url, undefined, id))).resolves.toEqual({ ok: true, id });
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
     expect(forgottenTotal(home)).toBe(before + 1);
-  }, 15_000);
+  });
 
   it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw' });
     await expect(withLockHeld(home, 1200, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({ ok: true });
     expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
-  }, 15_000);
+  });
 
   it('promote: a held global lock ends in exactly one global copy and one promote audit row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary' });
     const result = await withLockHeld(globalHome, 1200, () => client.promote(url, undefined, id));
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`, result.globalId)).toBe(1);
-  }, 15_000);
+  });
 
   it('the stats counter after a committed removal skips a busy store with one warning instead of throwing', async () => {
     _resetLogOnceForTests();

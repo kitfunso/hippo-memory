@@ -246,6 +246,5 @@ describe('server concurrency — recall + write under single-writer', () => {
         await handle.stop();
       }
     },
-    120_000, // each GET strengthens its results, so all 550 requests are write transactions
   );
 });

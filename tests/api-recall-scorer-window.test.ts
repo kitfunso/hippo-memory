@@ -102,11 +102,12 @@ describe('RecallOptions.scorerWindow', () => {
     // Ranked items mark isFreshTail on the recent set; a row may be both
     // a BM25 hit AND fresh-tail. The returned `results` length is
     // baseRanked + freshRanked-not-already-in-baseRanked + summaryRanked.
-    expect(result.results.length).toBeGreaterThanOrEqual(3);
-    // Some isFreshTail items should appear when freshTailCount=5 against
-    // a 10-row population.
+    // Write-clock ties decide how many of the 3 base rows are also among the 5 newest, so the total sits in [5, 8].
+    expect(result.results.length).toBeGreaterThanOrEqual(5);
+    expect(result.results.length).toBeLessThanOrEqual(8);
+    // Each of the 5 newest raws is marked in the base band or added after it.
     const freshOnes = result.results.filter((r) => r.isFreshTail);
-    expect(freshOnes.length).toBeGreaterThan(0);
+    expect(freshOnes).toHaveLength(5);
   });
 
   it('scorerWindow=1 (smallest legal value) is accepted and honoured', async () => {

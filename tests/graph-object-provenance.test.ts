@@ -384,6 +384,13 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // Forgetting the now-orphaned mirror afterwards must not throw - and with the object-status
     // checks removed from the UPDATE trigger, even a lingering row (if removal had failed soft)
     // would not block the SET NULL. Core sleep/forget stays safe.
-    expect(() => deleteEntry(home, decision.memoryId!)).not.toThrow();
+    expect(deleteEntry(home, decision.memoryId!)).toBe(true);
+    const db = openHippoDb(home);
+    try {
+      expect(db.prepare(`SELECT id FROM memories WHERE id = ?`).get(decision.memoryId!)).toBeUndefined();
+      // The closed decision outlives its mirror: the FK set its memory_id to NULL instead of blocking the delete.
+      expect(db.prepare(`SELECT memory_id, status FROM decisions WHERE id = ?`).get(decision.id))
+        .toEqual({ memory_id: null, status: 'closed' });
+    } finally { closeHippoDb(db); }
   });
 });

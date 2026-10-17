@@ -153,7 +153,7 @@ describe('MCP stdio fault handling', () => {
     const list = JSON.parse(await run.nextLine(5000));
     expect(list.id).toBe(3);
     expect(run.proc.exitCode).toBeNull();
-  }, 15000);
+  });
 
   it('answers a frame that has an id and no string method with -32600, and only logs one that has neither', async () => {
     const run = start([serverPath]);
@@ -172,7 +172,7 @@ describe('MCP stdio fault handling', () => {
     const dropped = droppedLines();
     expect(dropped[0]).toMatch(/^\[hippo\] warn: mcp: dropped a frame with no method and no id/);
     expect(run.proc.exitCode).toBeNull();
-  }, 15000);
+  });
 
   it('exits 0 without a crash trace when the client closes its end of stdout', async () => {
     const run = start([serverPath]);
@@ -184,7 +184,7 @@ describe('MCP stdio fault handling', () => {
     }
     expect(await exitWithin(run, 10000)).toBe(0);
     expect(run.stderr()).not.toMatch(/uncaught exception|EPIPE/);
-  }, 15000);
+  });
 
   it('sends the reply of a call still running when stdin closes, then exits 0', async () => {
     // The endpoint answers at once while the store is seeded, then holds the recall's query embedding until the test has closed stdin.
@@ -210,7 +210,7 @@ describe('MCP stdio fault handling', () => {
     } finally {
       embeddings.close();
     }
-  }, 30000);
+  });
 
   describe('a call still running at its request deadline', () => {
     const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
@@ -262,7 +262,7 @@ describe('MCP stdio fault handling', () => {
       } finally {
         embeddings.close();
       }
-    }, 45000);
+    });
 
     it('is only logged when it has no id, since a notification is never answered', async () => {
       const embeddings = await heldEmbeddings();
@@ -278,7 +278,7 @@ describe('MCP stdio fault handling', () => {
       } finally {
         embeddings.close();
       }
-    }, 45000);
+    });
   });
 
   it('refuses a frame over 1 MB with a parse error, buffers none of it, and keeps serving', async () => {
@@ -300,7 +300,7 @@ describe('MCP stdio fault handling', () => {
     run.proc.stdin.write(`yyy\n${list(2)}`);
     expect(JSON.parse(await run.nextLine(10000)).id).toBe(2);
     expect(run.proc.exitCode).toBeNull();
-  }, 40000);
+  });
 
   it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
     const run = start([serverPath]);
@@ -325,19 +325,19 @@ describe('MCP stdio fault handling', () => {
     await dribble(`${list(3)}\n${list(4)}\n`, 17);
     expect(JSON.parse(await run.nextLine(10000)).id).toBe(3);
     expect(JSON.parse(await run.nextLine(10000)).id).toBe(4);
-  }, 40000);
+  });
 
   it('exits non-zero and logs the stack on an uncaught exception', async () => {
     const run = start([crashScript("throw new Error('boom-uncaught');")]);
     const code = await exitWithin(run, 8000);
     expect(code).toBe(1);
     expect(run.stderr()).toMatch(/mcp uncaught exception: boom-uncaught .*errorClass=Error stack=Error: boom-uncaught\s+at /);
-  }, 15000);
+  });
 
   it('exits non-zero and logs the stack on an unhandled rejection', async () => {
     const run = start([crashScript("Promise.reject(new TypeError('boom-rejected'));")]);
     const code = await exitWithin(run, 8000);
     expect(code).toBe(1);
     expect(run.stderr()).toMatch(/mcp unhandled rejection: boom-rejected .*errorClass=TypeError stack=TypeError: boom-rejected\s+at /);
-  }, 15000);
+  });
 });

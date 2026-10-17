@@ -230,7 +230,8 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     for (const arm of ['A0', 'A1', 'A2', 'A4', 'A5']) {
       const get = (id: string) => find(recs, arm, id);
       expect(get('t1'), arm).toMatchObject({ kind: 'teach', set: 'R', teachTurns: 1, correctionTurns: 0, teachForm: 'confirmation', lessons: [{ lessonId: 'f1-l1', first: 'pass', final: 'pass', staleFollow: null }] });
-      expect(get('t1').usage?.extra.outputTokens, arm).toBeGreaterThan(0);
+      // The confirmation resume is priced from its result, where the fake always reports 50 output tokens.
+      expect(get('t1').usage?.extra.outputTokens, arm).toBe(50);
       expect(get('t2'), arm).toMatchObject({ teachForm: 'correction', lessons: [{ lessonId: 'f1-l2', first: 'fail', final: 'pass' }] });
       expect(get('a1'), arm).toMatchObject({ kind: 'apply', applyIndex: 1, afterReversal: false, tasksSinceTeach: 2, teachTurns: 0, correctionTurns: 1, teachForm: null, lessons: [{ first: 'fail', final: 'pass', staleFollow: null }] });
       expect(get('a3'), arm).toMatchObject({ applyIndex: 2, afterReversal: true, tasksSinceTeach: 2, lessons: [{ lessonId: 'f1-l2', staleFollow: true }] });
@@ -511,7 +512,8 @@ describe('session evidence', () => {
     const rows = lib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').filter((x: { sessionId: string }) => [t1.sessionId, t1.resumeSessionId].includes(x.sessionId));
     lib.closeHippoDb(db);
     expect(rows).toHaveLength(2);
-    for (const x of rows) expect(x.injections, x.sessionId).toBeGreaterThan(0);
+    // n0's memory is the store's one row and matches each prompt, so each turn books its recall block and no static one.
+    for (const x of rows) expect(x.injections, x.sessionId).toBe(1);
     const total = (k: 'sent' | 'skipped' | 'injections') => rows.reduce((n: number, x: Record<string, number>) => n + x[k], 0);
     expect(t1.hippo).toEqual({ sessionId: t1.sessionId, sent: total('sent'), skipped: total('skipped'), injections: total('injections') });
   }, 300_000);

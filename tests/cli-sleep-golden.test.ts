@@ -88,5 +88,5 @@ describe('cli sleep golden output', () => {
 
   it.each(CASES)('$name', (c) => {
     expect(run(c)).toMatchSnapshot();
-  }, 60_000);
+  });
 });

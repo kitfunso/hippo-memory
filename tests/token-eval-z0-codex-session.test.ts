@@ -202,10 +202,11 @@ describe('the rollout parser (test 5)', () => {
     expect(s.threadId).toBeNull();
     expect(s.rollouts.agent).toHaveLength(1);
     expect(s.usage!.usage).toEqual({ inputTokens: 500, cacheWriteTokens: 0, cacheReadTokens: 200, outputTokens: 40 });
-  }, 30_000);
+  });
 });
 
 describe('the memory wait and the memories switch (tests 13, 14)', () => {
+  // Three fake Codex sessions, two of them polling memories for a stable window of up to 10 s.
   it('waits until memories are stable, waits not at all under none, and says when it timed out', async () => {
     const polled = setup('wait', { codexMemoryWait: 'poll:1500:10000' });
     const s = await runCodexSession(polled.ctx, polled.run, xTask('MEMWRITE:800'), () => false);
@@ -221,7 +222,7 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
     expect(t.wait.timedOut).toBe(true);
     // timedOut is only set when the 600 ms timeout fires before the 5000 ms stable window, so the wait ended on the timeout.
     expect(t.wait.ms).toBeGreaterThanOrEqual(600);
-  }, 60_000);
+  }, 51_000);
 
   it('writes the memories feature as the flag says, and the session reads that config', async () => {
     for (const [flag, want] of [['off', 'memories = false'], ['on', 'memories = true']]) {
@@ -229,7 +230,7 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
       await runCodexSession(ctx, run, xTask('plain'), () => false);
       expect(fakeSeen(log)[0].config).toContain(want);
     }
-  }, 30_000);
+  });
 });
 
 describe('the Codex login (test 15)', () => {
@@ -245,7 +246,7 @@ describe('the Codex login (test 15)', () => {
     expect(hits).toContain('runs/seqX/X1/seed1/codex-home/memories/auth-note.md');
     expect(filesHolding(out, op.tokens)).toEqual([]);
     expect(sha(op.authFile)).toBe(before);
-  }, 30_000);
+  });
 
   it('keeps a refreshed login for the next session and never writes the operator file', async () => {
     const { log, op, ctx, run } = setup('refresh');
@@ -259,7 +260,7 @@ describe('the Codex login (test 15)', () => {
     expect(tokenSweep(ctx.codexVault, [run.dirs.root], run.dirs.root)).toEqual([]);
     closeVault(ctx.codexVault);
     expect(existsSync(ctx.codexVault.dir)).toBe(false);
-  }, 30_000);
+  });
 
   it('deletes Codex own token files by CODEX_TOKEN_FILES before the sweep', async () => {
     const plain = setup('logauth');
@@ -269,7 +270,7 @@ describe('the Codex login (test 15)', () => {
     await runCodexSession(listed.ctx, listed.run, xTask('LOG_AUTH'), () => false);
     expect(readdirSync(listed.run.dirs.codexHome)).not.toContain('logs_2.sqlite');
     expect(tokenSweep(listed.ctx.codexVault, [listed.run.dirs.root], listed.out)).toEqual([]);
-  }, 30_000);
+  });
 
   it('keeps sweeping past a file it cannot read, and names it without any token text', async () => {
     const { out, op, ctx } = setup('sweepfault');
@@ -322,7 +323,7 @@ describe('the launcher behind hippo\'s wrapper (test 24)', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0].home).toBe(run.dirs.home);
     expect(seen[0].envKeys).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
-  }, 30_000);
+  });
 
   it('refuses a wrapper with no metadata, or one whose real codex is a wrapper too', () => {
     const bare = operator('wrapbare');
@@ -348,7 +349,7 @@ describe('the rollout set of one session (test 25)', () => {
     const dflt = setup('stray');
     const d = await runCodexSession(dflt.ctx, dflt.run, xTask('MEMGEN STRAY'), () => false);
     expect([d.rollouts.agent.length, d.rollouts.internal.length, d.rollouts.stray.length]).toEqual([1, 0, 2]);
-  }, 30_000);
+  });
 });
 
 describe('setup faults stop the run (tests 26, 27)', () => {
@@ -360,12 +361,12 @@ describe('setup faults stop the run (tests 26, 27)', () => {
     expect(message).toMatch(/login failed.*log in to Codex again/);
     for (const tok of op.tokens) expect(message).not.toContain(tok);
     expect(existsSync(join(run.dirs.codexHome, 'auth.json'))).toBe(false);
-  }, 30_000);
+  });
 
   it('throws when the session called an MCP or app tool', async () => {
     const { run, ctx } = setup('mcp');
     await expect(runCodexSession(ctx, run, xTask('MCP_TOOL'), () => false)).rejects.toThrow(/MCP or app tools \(mcp__codex_app__list_threads\)/);
-  }, 30_000);
+  });
 
   it('retries a limit on the error event only, never on NOISE stdout, with the raw limit file redacted', async () => {
     vi.stubEnv('FAKE_CODEX_STATE', join(tmp('z0-codex-state-'), 'limit-once'));
@@ -378,5 +379,5 @@ describe('setup faults stop the run (tests 26, 27)', () => {
     const raw = readFileSync(join(run.rawDir, 'a2.limit1.txt'), 'utf8');
     expect(raw).toMatch(/usage limit/);
     for (const tok of op.tokens) expect(raw).not.toContain(tok);
-  }, 30_000);
+  });
 });

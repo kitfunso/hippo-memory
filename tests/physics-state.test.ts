@@ -462,8 +462,8 @@ describe('initializeParticle', () => {
     // Velocity should be zero vector of same dimension
     expect(particle.velocity).toEqual([0, 0, 0]);
 
-    // Mass derived from strength and retrieval_count
-    expect(particle.mass).toBeGreaterThan(0);
+    // Mass derived from strength and retrieval_count: a row read at its own creation has strength 1, times 1 + 0.1 * log2(3 + 1).
+    expect(particle.mass).toBeCloseTo(1.2, 10);
 
     // Charge from emotional_valence 'negative' => -0.5
     expect(particle.charge).toBeCloseTo(-0.5, 10);
@@ -619,7 +619,8 @@ describe('refreshParticleProperties', () => {
 
     // Mass should be recomputed (not 999)
     expect(particle.mass).not.toBe(999);
-    expect(particle.mass).toBeGreaterThan(0);
+    // Strength 1 at age zero, with the retrieval gain for five retrievals.
+    expect(particle.mass).toBeCloseTo(1 + 0.1 * Math.log2(6), 10);
 
     // Charge for 'negative' => -0.5
     expect(particle.charge).toBeCloseTo(-0.5, 10);

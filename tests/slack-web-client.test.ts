@@ -78,7 +78,7 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
   it('throws on a body over the byte cap', async () => {
     const err = await failure(paddedJsonResponse('{"ok":true,"messages":[]', '}', SLACK_CAP_BYTES));
     expectNamesTheReply(err, new RegExp(`reply over ${SLACK_CAP_BYTES} bytes`));
-  }, 60_000);
+  });
 
   it('still reads a well-formed page: other entries dropped, the channel stamped, a missing cursor null', async () => {
     const body = { ok: true, messages: [{ type: 'message', text: 'hi', ts: '1.1' }, null, 'x', { type: 'reaction', ts: '1.2' }, { type: 'message' }] };

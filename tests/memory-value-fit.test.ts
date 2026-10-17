@@ -290,7 +290,7 @@ describe('computeFit (real fixture)', () => {
     // SAFETY: same return shape, without the weights.
     const unfitted = evaluateStore(rows, [0.3]) as Scored;
     expect(fitted.N).toBe(rows.length);
-    expect(fitted.goldCount).toBeGreaterThan(0);
+    expect(fitted.goldCount).toBe(1);
     // The fitted run adds exactly the 'weighted' scorer to the unfitted set.
     expect(Object.keys(fitted.perScorer).sort()).toEqual([...Object.keys(unfitted.perScorer), 'weighted'].sort());
     for (const [name, byBudget] of Object.entries(fitted.perScorer)) {

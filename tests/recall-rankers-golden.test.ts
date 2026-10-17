@@ -129,7 +129,7 @@ describe('recall ranker goldens', () => {
   it.each(BAND)('band ranker: %s', async (_name, opts) => {
     const ids = await onStore(async (s) => (await retrieve(ctxOf(s), opts)).results.map((r) => stable(r.id)));
     expect(ids).toMatchSnapshot();
-  }, 60_000);
+  });
 
   it.each(WIDE)('MCP wide ranker: %s', async (_name, opts) => {
     const got = await onStore(async (s) => {
@@ -146,7 +146,7 @@ describe('recall ranker goldens', () => {
       return { ranked: ranked.map(stable), band: result.results.map((r) => stable(r.id)) };
     });
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   it.each(CORE)('CLI core ranker: %s', async (_name, query, c) => {
     const got = await onStore(async (s) => {
@@ -166,5 +166,5 @@ describe('recall ranker goldens', () => {
       return ranked;
     });
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 });

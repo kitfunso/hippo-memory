@@ -177,14 +177,23 @@ describe('memory page', () => {
   });
 
   it('answers 400 for each invalid query value', async () => {
-    const bad = [
-      'limit=0', 'limit=501', 'limit=10abc', 'limit=1.5', 'offset=-1', 'offset=abc', 'sort=nope', 'dir=up',
-      'chip=all,risk', 'layers=', 'layers=episodic,nope', 'amin=5&amax=1', 'smin=x', `q=${'a'.repeat(201)}`,
+    const limit = 'limit must be a whole number from 1 to 500';
+    const offset = 'offset must be a whole number from 0 to 9007199254740991';
+    const layers = 'layers must be a comma list of buffer, episodic, semantic, trace';
+    const bad: Array<[string, string]> = [
+      ['limit=0', limit], ['limit=501', limit], ['limit=10abc', limit], ['limit=1.5', limit],
+      ['offset=-1', offset], ['offset=abc', offset],
+      ['sort=nope', 'sort must be one of content, layer, strength, retrievals, last, age, confidence, scope'],
+      ['dir=up', 'dir must be one of asc, desc'],
+      ['chip=all,risk', 'chip must be one of all, risk, pinned, conflict'],
+      ['layers=', layers], ['layers=episodic,nope', layers],
+      ['amin=5&amax=1', 'amin must not exceed amax'], ['smin=x', 'smin must be a number'],
+      [`q=${'a'.repeat(201)}`, 'q must be at most 200 characters'],
     ];
-    for (const query of bad) {
+    for (const [query, message] of bad) {
       const reply = await get(dash.port, `/api/projects/${encodeURIComponent('p:alpha')}/memories?${query}`);
       expect(reply.status, query).toBe(400);
-      expect(parse<{ error: string }>(reply).error.length).toBeGreaterThan(0);
+      expect(parse<{ error: string }>(reply).error, query).toBe(message);
     }
   });
 });
