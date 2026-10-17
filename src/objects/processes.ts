@@ -25,7 +25,7 @@ export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessS
 export const MAX_PROCESS_STEPS = 200;
 export const MAX_PROCESS_STEP_LEN = 2000;
 
-export interface SaveProcessOpts {
+export interface SaveProcessOptions {
   processName: string;
   steps: string[];
   description?: string;
@@ -37,7 +37,7 @@ export interface SaveProcessOpts {
   extraTags?: string[];
 }
 
-export interface ListProcessesOpts {
+export interface ListProcessesOptions {
   status?: ProcessStatus;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
@@ -84,7 +84,7 @@ function buildProcessContent(processName: string, steps: string[], description?:
   return content;
 }
 
-export const PROCESS: SavableDescriptor<'process', SaveProcessOpts> = {
+export const PROCESS: SavableDescriptor<'process', SaveProcessOptions> = {
   kind: 'process',
   label: 'process',
   plural: 'processes',
@@ -116,7 +116,7 @@ export function saveProcess(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SaveProcessOpts,
+  opts: SaveProcessOptions,
   actor: string = 'cli',
 ): Promise<Process> {
   return saveObject(objects, PROCESS, { baseHalfLifeDays, tenantId, actor }, opts);
@@ -143,7 +143,7 @@ export function loadProcessById(
 export function loadProcesses(
   objects: Objects,
   tenantId: string,
-  opts: ListProcessesOpts = {},
+  opts: ListProcessesOptions = {},
 ): Promise<Process[]> {
   return listObjects(objects, PROCESS, tenantId, opts);
 }

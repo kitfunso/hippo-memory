@@ -18,10 +18,10 @@ export const OWN_SCOPE = `personal:private:${OWNER}`;
 
 export const ago = (hours: number): string => new Date(Date.parse(CONTEXT_NOW) - hours * 3_600_000).toISOString();
 
-type SeedOpts = Parameters<typeof seeded>[4];
+type SeedOptions = Parameters<typeof seeded>[4];
 
 function inTenant(tenantId: string, origin: string | null) {
-  return (content: string, id: string, hours: number, extra: Partial<MemoryEntry> = {}, opts: SeedOpts = {}): MemoryEntry =>
+  return (content: string, id: string, hours: number, extra: Partial<MemoryEntry> = {}, opts: SeedOptions = {}): MemoryEntry =>
     seeded(content, id, ago(hours), { tenant_id: tenantId, origin_project: origin, ...extra }, opts);
 }
 

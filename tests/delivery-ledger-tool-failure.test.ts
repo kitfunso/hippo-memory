@@ -13,9 +13,9 @@ import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
 import { trySymlink } from './_helpers/symlink.js';
-import { dispose, hippo, project, withDb, type Config as ProjectConfig, type Project, type RunOpts } from './_helpers/delivery-boundary.js';
+import { dispose, hippo, project, withDb, type Config as ProjectConfig, type Project, type RunOptions } from './_helpers/delivery-boundary.js';
 import {
-  configure, expectVerdict, fire, listingOf, seed, verdictOf, writeHostTranscript, type ReadOpts, type TurnSpec, type Verdict,
+  configure, expectVerdict, fire, listingOf, seed, verdictOf, writeHostTranscript, type ReadOptions, type TurnSpec, type Verdict,
 } from './_helpers/host-transcript.js';
 
 // Each case spawns the built CLI several times.
@@ -71,7 +71,7 @@ const payload = (session: string, over: Over = {}): string => JSON.stringify({
 });
 
 /** One `hippo capture-error` run; the hook prints nothing and always exits 0. */
-function fail(at: Project, session: string, over: Over = {}, opts: RunOpts & { args?: string[] } = {}) {
+function fail(at: Project, session: string, over: Over = {}, opts: RunOptions & { args?: string[] } = {}) {
   const { args = ['capture-error'], ...run } = opts;
   const r = hippo(at, args, { ...run, input: payload(session, over) });
   expect([r.status, r.stdout]).toEqual([0, '']);
@@ -98,7 +98,7 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
 
 const list = (session: string, extra: { store?: string; global?: string | false; tenant?: string } = {}) =>
   listingOf({ store: p.hippoRoot, session, ...extra });
-const read = (session: string, memory: string, extra: ReadOpts & { store?: string } = {}) =>
+const read = (session: string, memory: string, extra: ReadOptions & { store?: string } = {}) =>
   verdictOf({ store: p.hippoRoot, session, memory, ...extra });
 const doc = (session: string, specs: TurnSpec[]): string => writeHostTranscript(p, specs, { name: session });
 

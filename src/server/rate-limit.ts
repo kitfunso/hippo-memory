@@ -12,7 +12,7 @@ export interface RateLimiter {
   readonly retryAfterSec: number;
 }
 
-export interface RateLimiterOpts {
+export interface RateLimiterOptions {
   /** Sustained refill rate in tokens per second. */
   ratePerSec: number;
   /** Bucket capacity — the largest burst a fresh client may spend at once. */
@@ -58,7 +58,7 @@ function spend(b: Bucket): boolean {
  * so a client rotating source addresses can neither grow it without bound nor evict its own throttled bucket to get a
  * fresh one.
  */
-export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
+export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
   const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
   // SHORTCUT: one process, buckets reset on restart; a shared store table if the server runs as several processes.
   const buckets = new Map<string, Bucket>();

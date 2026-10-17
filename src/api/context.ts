@@ -46,7 +46,7 @@ import {
   type ContextPools,
   type ContextSource,
 } from './context-select.js';
-import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
 import { tokenPurse } from './recall/render.js';
 import { type Context, type StoreContext, ownerOrSubject } from './types.js';
@@ -175,7 +175,7 @@ interface TaskSections {
  * events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
   ctx: StoreContext,
-  opts: ContextOpts = {},
+  opts: ContextOptions = {},
 ): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
@@ -245,7 +245,7 @@ function warnIsolationIgnored(hippoRoot: string): void {
 }
 
 /** Which stores this read can draw on, and what kind the primary one is. */
-function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
+function storesInReach(ctx: Context, opts: ContextOptions, local: ContextSource) {
   const other = hasGroup(local.store, 'localFiles') ? undefined : local.store;
   // No reach means an integrator's own store: one project, no global store beside it.
   const reach: StoreReach =
@@ -270,7 +270,7 @@ function globalSource(ctx: Context): ContextSource {
 }
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
-function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
+function entryPricer(cost: ContextOptions['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
   return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number =>
     cost
       ? cost.entry({
@@ -283,7 +283,7 @@ function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['cur
       : estimateTokens(entry.content);
 }
 
-function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
+function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
   const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
   const query = (opts.q ?? '').trim() || NO_QUERY;
@@ -334,7 +334,7 @@ function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): Con
 }
 
 /** The prompt-recall candidate request the ambient loads carry, when the prompt has any terms. */
-function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecallRequest | undefined {
+function promptRecallRequest(opts: ContextOptions, plan: ContextPlan): AmbientRecallRequest | undefined {
   const { pinnedInject } = plan.config;
   const promptRecallTerms = plan.promptRecallPending && pinnedInject.enabled
     ? Array.from(promptTokens(opts.prompt ?? ''))
@@ -349,7 +349,7 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
 }
 
 /** Reports the block's facts to the observer and returns the budget left after the fixed headers. */
-function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): number {
+function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
   obs?.facts({
@@ -377,7 +377,7 @@ interface RawTaskState {
 const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] };
 
 // Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
-async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): Promise<RawTaskState> {
+async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: ContextPlan): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store, reads } = plan.local;
   // On a shared store task state is one person's, keyed by owner
@@ -402,7 +402,7 @@ async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPl
 // one that does not fit is dropped, as an oversize entry is.
 async function loadTaskSections(
   ctx: Context,
-  opts: ContextOpts,
+  opts: ContextOptions,
   plan: ContextPlan,
   startLeft: number,
 ): Promise<TaskSections> {
@@ -429,7 +429,7 @@ async function loadTaskSections(
   return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left: left() };
 }
 
-function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
+function ambientAdmission(opts: ContextOptions, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
     // A printed handoff already carries the session's closing message, which its digest would print a second time.
@@ -541,7 +541,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
 }
 
 // Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.
-async function traceEmptyContext(ctx: StoreContext, opts: ContextOpts, plan: ContextPlan): Promise<void> {
+async function traceEmptyContext(ctx: StoreContext, opts: ContextOptions, plan: ContextPlan): Promise<void> {
   // No snapshot in this branch, so the caller's own id is the only session to stamp.
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -568,7 +568,7 @@ interface RecordedRetrieval {
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
   ctx: StoreContext,
-  opts: ContextOpts,
+  opts: ContextOptions,
   plan: ContextPlan,
   selected: ContextResultEntry[],
   activeSnapshot: TaskSnapshot | null,

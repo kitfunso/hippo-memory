@@ -10,7 +10,7 @@ import {
   assemble as apiAssemble,
   getContext as apiGetContext,
   type StoreContext,
-  type RecallOpts,
+  type RecallOptions,
   type RecallSuppressionSummary,
 } from '../api/index.js';
 import { autoDetectContext } from '../api/context-auto.js';
@@ -51,13 +51,13 @@ import { noteRecall, sessionRing, shownRecallRows } from '../api/recall/finish.j
 
 // Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread
 // once, which keeps per-field omission without the `...(cond ? { field } : {})` pattern.
-interface AssembleExtraOpts {
+interface AssembleExtraOptions {
   budget?: number;
   freshTailCount?: number;
   scope?: string;
 }
 
-interface DrillDownExtraOpts {
+interface DrillDownExtraOptions {
   limit?: number;
   budget?: number;
   depth?: number;
@@ -125,7 +125,7 @@ function fitMcpRecall(
   return shrinkToFit(fitted.length, 1, limits.budget, (n) => render(fitted.slice(0, n)), (r) => r.text);
 }
 
-function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOpts['showRanked']> {
+function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOptions['showRanked']> {
   const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and
@@ -235,7 +235,7 @@ export async function runAssembleTool(
   const explicitScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
     : undefined;
-  const assembleExtra: AssembleExtraOpts = {};
+  const assembleExtra: AssembleExtraOptions = {};
   if (Number.isFinite(budget) && budget > 0) assembleExtra.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
@@ -261,7 +261,7 @@ export async function runDrillTool({ args, ctx, hippoRoot, tenantId, store }: To
     actor: mcpActor(ctx),
     store,
   };
-  const drillExtra: DrillDownExtraOpts = {};
+  const drillExtra: DrillDownExtraOptions = {};
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
   if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;

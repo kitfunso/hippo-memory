@@ -2,7 +2,7 @@
 // X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast
 // path: the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
-import type { RememberOpts, StoreContext } from '../../api/index.js';
+import type { RememberOptions, StoreContext } from '../../api/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { rememberWithEventLog, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
@@ -36,7 +36,7 @@ export interface IngestInput {
   deliveryId: string;
 }
 
-function transformEvent(event: IngestEvent): RememberOpts | null {
+function transformEvent(event: IngestEvent): RememberOptions | null {
   switch (event.eventName) {
     case 'issues':
       return issueEventToRememberOpts(event.payload);

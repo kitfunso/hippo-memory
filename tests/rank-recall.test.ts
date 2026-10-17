@@ -12,7 +12,7 @@ import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
-import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/api/recall/pipeline.js';
+import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 
 let home: string;
@@ -22,7 +22,7 @@ function seeded(content: string, id: string, extra: Partial<MemoryEntry> = {}, o
   return { ...createMemory(content, opts), id, strength: 1, ...extra };
 }
 
-function opts(extra: Partial<RankRecallOpts> = {}): RankRecallOpts {
+function opts(extra: Partial<RankRecallOptions> = {}): RankRecallOptions {
   const config = loadConfig(hippoRoot);
   return {
     query: 'deploy',
@@ -105,7 +105,7 @@ describe('rankRecall re-rank stages', () => {
   const put = (id: string, content: string, extra: Partial<MemoryEntry> = {}): void => {
     writeEntry(hippoRoot, { ...createMemory(content), id, strength: 1, ...extra });
   };
-  const rank = (extra: Partial<RankRecallOpts> = {}) => rankRecall(ctx(), opts(extra));
+  const rank = (extra: Partial<RankRecallOptions> = {}) => rankRecall(ctx(), opts(extra));
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-rank-rerank-'));

@@ -56,7 +56,7 @@ export interface PlanningFallacyOutput {
 
 export type AutodebiasMode = 'off' | 'regex';
 
-export interface ComputePlanningFallacyHintOpts {
+export interface ComputePlanningFallacyHintOptions {
   /** Override env; undefined reads process.env.HIPPO_AUTODEBIAS per call (so tests can toggle it).
    *  'off' short-circuits to null before the regex gate. */
   mode?: AutodebiasMode;
@@ -71,7 +71,7 @@ export interface PlanningFallacyDecision {
 /** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no claim matches. */
 export function detectPlanningClaim(
   queryText: string,
-  opts: ComputePlanningFallacyHintOpts = {},
+  opts: ComputePlanningFallacyHintOptions = {},
 ): ForwardClaimMatch | null {
   // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module
   // reload.

@@ -6,7 +6,7 @@ import { ledgerRoot, onLedgerRoot, type LedgerReach } from './ledger-db.js';
 import { pilotArmOnRoot } from '../store/ledger-turn.js';
 import { hashArm, type PilotArm } from '../store/pilot-arm.js';
 
-export interface SessionArmOpts {
+export interface SessionArmOptions {
   readonly reach: LedgerReach;
   /**
    * Only the caller tenant's arm row counts, so a caller holding another tenant's session id cannot claim that
@@ -20,7 +20,7 @@ export interface SessionArmOpts {
 /** The session's arm, or null at rate 0, with no session id, or with no store.
  *  `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash. */
 export function sessionPilotArm(
-  hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean, opts: SessionArmOpts,
+  hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean, opts: SessionArmOptions,
 ): PilotArm | null {
   if (sessionId === undefined || sessionId.trim() === '') return null;
   const root = ledgerRoot(hippoRoot, opts.reach);

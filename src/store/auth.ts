@@ -108,7 +108,7 @@ function verifyKey(plaintext: string, stored: string): boolean {
 const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =
   promisify(scrypt);
 
-export interface CreateApiKeyOpts {
+export interface CreateApiKeyOptions {
   tenantId: string;
   label?: string;
   /** 'admin' | 'member'. Defaults to 'member', like the API layer. */
@@ -162,7 +162,7 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
   ).run(key.keyId, key.keyHash, key.tenantId, key.label, key.createdAt, key.role, key.ownerSubject, key.expiresAt);
 }
 
-export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): CreateApiKeyResult {
+export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOptions): CreateApiKeyResult {
   const { keyId, plaintext, keyHash } = mintApiKey();
   insertApiKey(db, {
     keyId,

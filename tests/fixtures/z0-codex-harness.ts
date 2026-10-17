@@ -48,10 +48,10 @@ export function wrapOperator(op: Operator, { metadata = true }: { metadata?: boo
   return { real, sentinel };
 }
 
-export interface CodexOpts { codexModel?: string | null; codexHookTrust?: string; codexMemoryWait?: string; codexMemories?: string; codexTokenFiles?: string[]; codexInternalSources?: string[]; codexWrapperWaitMs?: number }
+export interface CodexOptions { codexModel?: string | null; codexHookTrust?: string; codexMemoryWait?: string; codexMemories?: string; codexTokenFiles?: string[]; codexInternalSources?: string[]; codexWrapperWaitMs?: number }
 
 /** A ctx holding only what a Codex session reads: the codexContext fields plus the limit and timeout settings. */
-export function codexCtx(op: Operator, opts: CodexOpts = {}, extra: { sessionTimeoutMs?: number; limitMaxWaits?: number } = {}) {
+export function codexCtx(op: Operator, opts: CodexOptions = {}, extra: { sessionTimeoutMs?: number; limitMaxWaits?: number } = {}) {
   const fields = codexContext({ codexBin: op.launcher, codexAuth: op.authFile, codexModel: 'gpt-fake', codexMemoryWait: 'none', ...opts }, op.env);
   return { ...fields, sessionTimeoutMs: extra.sessionTimeoutMs ?? 60_000, limitWaitMs: 0, limitMaxWaits: extra.limitMaxWaits ?? 2, log: () => {} };
 }
@@ -105,7 +105,7 @@ export function xTrio(r: FixtureRepo, prompts: Record<string, string> = {}) {
 export const xLimit = (runs = 1) => runs * 480_000;
 
 /** runAll over fake-claude teaches and fake-codex applies, with the operator's launcher and login and no memory wait. */
-export async function xRun(s: ReturnType<typeof xSpec>, arms: string[], out: string, op: Operator, extra: RunExtra & CodexOpts = {}) {
+export async function xRun(s: ReturnType<typeof xSpec>, arms: string[], out: string, op: Operator, extra: RunExtra & CodexOptions = {}) {
   return runAll({
     spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {},
     codexBin: op.launcher, codexAuth: op.authFile, codexModel: 'gpt-fake', codexMemoryWait: 'none', ...extra,

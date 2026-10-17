@@ -1,5 +1,5 @@
 // /v1/policies routes.
-import { policiesAsOf, POLICY, type SavePolicyOpts } from '../../objects/policies.js';
+import { policiesAsOf, POLICY, type SavePolicyOptions } from '../../objects/policies.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
@@ -18,7 +18,7 @@ import {
 // it reaches the Date parser.
 const MAX_DATE_LEN = 64;
 
-const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
+const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOptions> = {
   noun: 'policy',
   field: 'policy',
   listField: 'policies',

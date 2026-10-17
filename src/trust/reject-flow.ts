@@ -14,7 +14,7 @@ import {
   type RejectionSource,
 } from '../store/rejected-values.js';
 
-export interface RejectFlowOpts {
+export interface RejectFlowOptions {
   hippoRoot: string;
   tenantId: string;
   actor: string;
@@ -32,7 +32,7 @@ export interface RejectFlowOpts {
 
 export type RejectFlowResult = AppliedRejection;
 
-function assertRejectOpts(opts: RejectFlowOpts): void {
+function assertRejectOpts(opts: RejectFlowOptions): void {
   if (!opts.reason.trim()) {
     throw new Error(
       'reject requires a non-empty --reason (the tombstone stores no content; reason is its only identity).',
@@ -53,7 +53,7 @@ function assertRejectOpts(opts: RejectFlowOpts): void {
   }
 }
 
-function contentToReject(opts: RejectFlowOpts, row: RejectionSource | undefined): string {
+function contentToReject(opts: RejectFlowOptions, row: RejectionSource | undefined): string {
   if (opts.memoryId === undefined) return opts.value!;
   if (!row || row.tenant_id !== opts.tenantId) {
     throw new Error(`memory not found: ${opts.memoryId}`);
@@ -66,7 +66,7 @@ function contentToReject(opts: RejectFlowOpts, row: RejectionSource | undefined)
 }
 
 /** Every row but another person's personal one, which is outside the caller's recall and so outside its reject. */
-function inReach(opts: RejectFlowOpts, scope: string | null | undefined): boolean {
+function inReach(opts: RejectFlowOptions, scope: string | null | undefined): boolean {
   return !isPersonalScope(scope) || scope === opts.ownScope;
 }
 
@@ -74,7 +74,7 @@ function inReach(opts: RejectFlowOpts, scope: string | null | undefined): boolea
  * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that
  * holds it.
  */
-export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
+export function rejectValue(opts: RejectFlowOptions): RejectFlowResult {
   assertRejectOpts(opts);
   return applyRejection(opts.hippoRoot, {
     tenantId: opts.tenantId,

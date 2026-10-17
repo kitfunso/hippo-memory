@@ -10,7 +10,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
-import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
+import { rankRecall, type RankRecallOptions } from '../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { pushGoal, activeGoalsWithPolicies } from '../src/store/goals.js';
 import { updateStats, appendConsolidationRun } from '../src/store/index-and-stats.js';
@@ -53,7 +53,7 @@ function onDb(root: string, write: (db: ReturnType<typeof openHippoDb>) => void)
 }
 
 describe('rankRecall with a global store', () => {
-  function recallOpts(root: string): RankRecallOpts {
+  function recallOpts(root: string): RankRecallOptions {
     return {
       query: 'zephyrine cache', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: loadConfig(root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },

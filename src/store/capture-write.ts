@@ -16,7 +16,7 @@ export interface CaptureItem {
   readonly makeEntry: () => MemoryEntry;
 }
 
-export interface CaptureWriteOpts {
+export interface CaptureWriteOptions {
   readonly actor?: string;
   /** No stats, as in a server process. */
   readonly lean: boolean;
@@ -30,7 +30,7 @@ export function writeCapturedItems(
   hippoRoot: string,
   items: readonly CaptureItem[],
   keys: Set<string>,
-  opts: CaptureWriteOpts,
+  opts: CaptureWriteOptions,
 ): CapturedOutcome[] {
   const db = openStore(hippoRoot);
   try {

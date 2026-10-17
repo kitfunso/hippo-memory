@@ -12,7 +12,7 @@ import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey } from './client-ip.js';
 import { noteAccess } from './request.js';
-import type { ResolvedServeOpts } from './types.js';
+import type { ResolvedServeOptions } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { blockHash } from '../util/token-text.js';
 import { MINUTE_MS } from '../util/time.js';
@@ -95,7 +95,7 @@ function mcpContextFor(
   return mcpCtx;
 }
 
-export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
+export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOptions): Promise<void> {
   // Same Context the /v1/* routes use, so tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor;
   // else executeTool walks from cwd and reads HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
   const ctx = await buildContextWithAuth(req, opts);
@@ -158,7 +158,7 @@ function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map
 export async function handleMcpStream(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: ResolvedServeOpts,
+  opts: ResolvedServeOptions,
   streamSlots: Map<string, number>,
 ): Promise<void> {
   await requireAuth(req, opts);
@@ -179,7 +179,7 @@ export async function handleMcpStream(
   keepStreamAlive(req, res, opts);
 }
 
-function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): void {
+function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOptions): void {
   const heartbeatMs = envMcpSseHeartbeatMs() ?? DEFAULT_SSE_HEARTBEAT_MS;
   const maxAgeMs = (envMcpSseMaxAgeSec() ?? DEFAULT_SSE_MAX_AGE_SEC) * 1000;
   const startedAt = Date.now();

@@ -12,7 +12,7 @@ import { savePhysicsState } from '../src/db/physics-state.js';
 import { loadConfig } from '../src/core/config.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
-import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
+import { rankRecall, type RankRecallOptions } from '../src/api/recall/pipeline.js';
 import type { SearchResult } from '../src/core/search-types.js';
 
 const TENANT = 'default';
@@ -102,7 +102,7 @@ describe('physicsSearch with asOf', () => {
 });
 
 describe('rankRecall in physics mode with asOf', () => {
-  const opts = (explain: boolean, usePhysics: boolean): RankRecallOpts => ({
+  const opts = (explain: boolean, usePhysics: boolean): RankRecallOptions => ({
     query: 'deploy pipeline',
     budget: 100_000,
     cost: (r) => r.tokens,

@@ -14,7 +14,7 @@ const UNROUTABLE_TENANT = '__unroutable__';
 const DEFAULT_BUCKET = 'parse_error';
 
 /** What a caller hands over to park one payload, whatever the connector. */
-export interface ParkOpts<Bucket extends string> {
+export interface ParkOptions<Bucket extends string> {
   /** null when no tenant was resolved for the payload. */
   tenantId: string | null;
   rawPayload: string;
@@ -45,7 +45,7 @@ export interface ConnectorDlq<Own, Bucket extends string, Item> {
 export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<Own, Bucket, unknown>,
   store: HippoStore,
-  opts: ParkOpts<Bucket> & NoInfer<Own>,
+  opts: ParkOptions<Bucket> & NoInfer<Own>,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
   // A redacted body can never match its signature, so the row keeps none and replay needs --force.

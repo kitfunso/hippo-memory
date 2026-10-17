@@ -1,6 +1,6 @@
 // /v1/project-briefs routes.
 import {
-  briefFromReceipts, MAX_CHANGE_SUMMARY_LEN, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts,
+  briefFromReceipts, MAX_CHANGE_SUMMARY_LEN, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOptions,
 } from '../../objects/project-briefs.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
@@ -17,7 +17,7 @@ import {
   type VersionedRouteConfig,
 } from './object-routes.js';
 
-const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> = {
+const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOptions> = {
   noun: 'project brief',
   field: 'brief',
   listField: 'briefs',

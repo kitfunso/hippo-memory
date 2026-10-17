@@ -4,7 +4,7 @@ import type { AmbientTallies } from '../core/ambient.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
 import type { ScopeGrantChange } from './key-writes.js';
-import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
+import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOptions } from './audit.js';
 import type { QualityRepairResult } from './quality-repair.js';
 import type { LocalFiles } from './port/local-files.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
@@ -29,7 +29,7 @@ import type {
   Skill,
 } from '../core/object-types.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
-import type { Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
+import type { Prediction, PredictionBaserate, SavePredictionOptions } from './predictions.js';
 import type { ClosureState } from '../core/prediction.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
 import type { ScopeActor } from '../core/recall-scope.js';
@@ -280,7 +280,7 @@ export interface KeyGrants {
 
 /** A claim to save and the memory row that mirrors it into recall: core builds it with
  * `predictionMirror` in the tenant the save names, so every store keeps the same row. */
-export interface PredictionSave extends SavePredictionOpts {
+export interface PredictionSave extends SavePredictionOptions {
   readonly mirror: MemoryEntry;
 }
 
@@ -508,7 +508,7 @@ export interface AuditLog {
   /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and
    * by `since` (ts at or after it); `limit` is clamped to 1..10001 and defaults to
    * 100, and `after` resumes below the (ts, id) position a page ended on. */
-  listAuditEvents(query: QueryAuditOpts): Promise<AuditEvent[]>;
+  listAuditEvents(query: QueryAuditOptions): Promise<AuditEvent[]>;
 }
 
 /** What GET /ready asks of a store. */

@@ -56,7 +56,7 @@ export interface RankRecallCtx extends RankSource {
 }
 
 /** Search-engine choice and tuning. */
-export interface RecallSearchOpts {
+export interface RecallSearchOptions {
   usePhysics: boolean;
   physicsConfig: PhysicsConfig;
   multihop: boolean;
@@ -83,7 +83,7 @@ export interface RecallReranker { fn: RerankerFn; topK: number }
 export type RankStage = 'expand' | 'rerank' | 'salience' | 'outcome' | 'layer';
 
 /** Everything that shapes one ranking, already parsed and validated. */
-export interface RankRecallOpts {
+export interface RankRecallOptions {
   query: string;
   /** Tokens the engines may spend, priced by `cost`. */
   budget: number;
@@ -98,7 +98,7 @@ export interface RankRecallOpts {
   explicitScope: string | null;
   /** Scope used for boosting only, never for filtering. */
   activeScope: string | null;
-  search: RecallSearchOpts;
+  search: RecallSearchOptions;
   graphHops?: RecallGraphHops;
   evcAdaptive?: boolean;
   filterConflicts?: boolean;
@@ -155,7 +155,7 @@ interface RankState {
  * (notes go to `ctx.note`). The caller supplies the cost function and reranker in `opts` and persists the returned
  * goal-log rows.
  */
-export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Promise<RankRecallResult> {
+export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): Promise<RankRecallResult> {
   const pool = await loadRecallPool(ctx, opts);
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };
   const done = (halted: boolean): RankRecallResult => ({
@@ -188,7 +188,7 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Prom
   return done(false);
 }
 
-async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): Promise<RecallPool> {
+async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOptions): Promise<RecallPool> {
   // An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half below.
   const requested = opts.explicitScope || undefined;
   const loadSuperseded = opts.includeSuperseded || Boolean(opts.asOf);
@@ -215,8 +215,8 @@ async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): Promise
 
 function graphStreamSearch(
   ctx: RankRecallCtx,
-  opts: RankRecallOpts,
-  graphStream: NonNullable<RankRecallOpts['search']['graphStream']>,
+  opts: RankRecallOptions,
+  graphStream: NonNullable<RankRecallOptions['search']['graphStream']>,
   pool: RecallPool,
 ): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
@@ -244,7 +244,7 @@ function graphStreamSearch(
   });
 }
 
-function multihopPoolSearch(opts: RankRecallOpts, pool: RecallPool): SearchResult[] {
+function multihopPoolSearch(opts: RankRecallOptions, pool: RecallPool): SearchResult[] {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
@@ -262,7 +262,7 @@ function multihopPoolSearch(opts: RankRecallOpts, pool: RecallPool): SearchResul
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
 
-function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOpts) {
+function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOptions) {
   const requested = opts.explicitScope || undefined;
   return {
     tenantId: ctx.tenantId,
@@ -272,7 +272,7 @@ function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOpts) {
   };
 }
 
-async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: RecallPool): Promise<SearchResult[]> {
+async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: RecallPool): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
   const { mmr, mmrLambda, minResults, explain } = search;
   if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, pool);
@@ -321,7 +321,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
 
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
 async function expandGraph(
-  ctx: RankRecallCtx, opts: RankRecallOpts, graph: RecallGraphHops, state: RankState,
+  ctx: RankRecallCtx, opts: RankRecallOptions, graph: RecallGraphHops, state: RankState,
 ): Promise<void> {
   if (graph.hops <= 0) return;
   // Expansion both adds neighbours and evicts weak base rows, so compare id sets: a net count would hide both.
@@ -345,7 +345,7 @@ async function expandGraph(
 }
 
 /** Appends one rerank step to a re-scored row when `why` is on. */
-function traced<R extends SearchResult>(opts: RankRecallOpts, prev: SearchResult, next: R, step: RerankStep): R {
+function traced<R extends SearchResult>(opts: RankRecallOptions, prev: SearchResult, next: R, step: RerankStep): R {
   if (opts.why) next.rerankTrace = [...(prev.rerankTrace ?? []), step];
   return next;
 }
@@ -355,7 +355,7 @@ function byScore(results: SearchResult[]): SearchResult[] {
   return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
 
-function demoteConflictPeers(opts: RankRecallOpts, state: RankState): void {
+function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
   // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
   state.results = byScore(
@@ -373,7 +373,7 @@ function demoteConflictPeers(opts: RankRecallOpts, state: RankState): void {
   );
 }
 
-function applyValueAware(opts: RankRecallOpts, state: RankState): void {
+function applyValueAware(opts: RankRecallOptions, state: RankState): void {
   // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
   state.results = byScore(
     state.results.map((r) => {
@@ -395,7 +395,7 @@ function applyValueAware(opts: RankRecallOpts, state: RankState): void {
   );
 }
 
-function applyUtilityRank(opts: RankRecallOpts, state: RankState): void {
+function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
   // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for
   // length.
   state.results = byScore(
@@ -415,7 +415,7 @@ function applyUtilityRank(opts: RankRecallOpts, state: RankState): void {
   );
 }
 
-function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
+function applyPfcRerankers(opts: RankRecallOptions, state: RankState): void {
   if (opts.evcAdaptive && state.results.length >= 2) state.results = evcAdaptive(opts.query, state.results);
   if (opts.filterConflicts) {
     dropUnless(state, (r) => !r.entry.superseded_by);
@@ -469,7 +469,7 @@ function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
 }
 
 async function applyReranker(
-  opts: RankRecallOpts,
+  opts: RankRecallOptions,
   reranker: RecallReranker,
   results: SearchResult[],
 ): Promise<SearchResult[]> {
@@ -488,7 +488,7 @@ async function applyReranker(
   return [...withPostRank, ...results.slice(topK)];
 }
 
-async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankState): Promise<void> {
+async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, state: RankState): Promise<void> {
   const goalTag = opts.goalTag ?? '';
   if (goalTag) {
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
@@ -528,7 +528,7 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: 
 }
 
 /** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
-function applySalience(opts: RankRecallOpts, threshold: number, results: SearchResult[]): SearchResult[] {
+function applySalience(opts: RankRecallOptions, threshold: number, results: SearchResult[]): SearchResult[] {
   return byScore(
     results.map((r) => {
       const count = r.entry.retrieval_count ?? 0;

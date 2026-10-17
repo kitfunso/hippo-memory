@@ -168,10 +168,10 @@ function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResu
   return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: 'member', expiresAt: key.expiresAt };
 }
 
-type KeyListOpts = { active: boolean; limit?: number; after?: KeysetPosition };
+type KeyListOptions = { active: boolean; limit?: number; after?: KeysetPosition };
 
 /** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
-export async function authListRows(ctx: StoreContext, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
+export async function authListRows(ctx: StoreContext, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
   return listRows(ctx, ctx.store, opts);
 }
 
@@ -182,7 +182,7 @@ export function authListAllTenants(ctx: Context, active: boolean): ApiKeyListIte
   return listApiKeys(ctx.hippoRoot, { active });
 }
 
-async function listRows(ctx: Context, store: HippoStore, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
+async function listRows(ctx: Context, store: HippoStore, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
   const keyWrites = store.keyWrites;
   const keyId = memberKeyIdOf(ctx.actor);
   const record = keyId === null ? undefined : await store.findApiKey(keyId);

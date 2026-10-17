@@ -40,7 +40,7 @@ export interface SavableDescriptor<K extends SavableKind, W> extends ObjectDescr
   readonly draft: (opts: W) => ObjectDraft<K>;
 }
 
-export interface ObjectListOpts<K extends ObjectKind> {
+export interface ObjectListOptions<K extends ObjectKind> {
   status?: ObjectByKind[K]['status'];
   /** The value the kind's one filter column must equal: a customer note's customer, a project brief's repo. */
   filter?: string;

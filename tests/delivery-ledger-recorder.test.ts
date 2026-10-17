@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type ContextOpts } from '../src/api/index.js';
+import { getContext, type ContextOptions } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { HippoConfig } from '../src/core/config.js';
@@ -53,10 +53,10 @@ function eventOf(rec: DeliveryRecorder): DeliveryEventInput {
   return input;
 }
 
-const baseOpts: ContextOpts = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT, prompt: PROMPT, currentSessionId: 's1' };
+const baseOpts: ContextOptions = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT, prompt: PROMPT, currentSessionId: 's1' };
 
 /** Runs getContext without and then with an observer, asserts both results match, and returns the event. */
-async function observed(opts: ContextOpts = baseOpts): Promise<DeliveryEventInput> {
+async function observed(opts: ContextOptions = baseOpts): Promise<DeliveryEventInput> {
   const without = await getContext(ctx, opts);
   const rec = recorder();
   const withObs = await getContext(ctx, { ...opts, deliveryObserver: rec });
@@ -114,7 +114,7 @@ afterEach(() => {
 });
 
 describe('the observer never changes getContext', () => {
-  const scenarios: Array<[string, ContextOpts, boolean]> = [
+  const scenarios: Array<[string, ContextOptions, boolean]> = [
     ['include-recent 5', baseOpts, true],
     ['budget pressure', { ...baseOpts, budget: 40 }, true],
     ['an empty store', baseOpts, false],

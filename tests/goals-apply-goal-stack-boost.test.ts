@@ -16,7 +16,7 @@ import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
-import type { GoalStackBoostOpts } from '../src/search/goal-boost.js';
+import type { GoalStackBoostOptions } from '../src/search/goal-boost.js';
 import { sessionGoalBoost } from './_helpers/session-goal-boost.js';
 import { remember } from '../src/api/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
@@ -25,7 +25,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 interface ScoredRow { entry: MemoryEntry; score: number; }
 
 /** Boosts, then writes the log rows the boost earned on the same handle. */
-function boostAndLog(root: string, db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoostOpts): ScoredRow[] {
+function boostAndLog(root: string, db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoostOptions): ScoredRow[] {
   const boost = sessionGoalBoost(root, db, rows, opts);
   writeGoalRecallLog(db, boost.log);
   return boost.results;

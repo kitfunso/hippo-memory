@@ -31,6 +31,7 @@ export type MemoryKind = (typeof MEMORY_KINDS)[number];
 // chronologically.
 // A markdown rebuild keeps legacy offsets as written, so importers should normalize on write.
 
+// Row fields stay snake_case because they match the stored and wire shape; option types are camelCase.
 export interface MemoryEntry {
   id: string;
   created: string;         // ISO 8601

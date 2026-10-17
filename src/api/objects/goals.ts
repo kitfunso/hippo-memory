@@ -4,10 +4,10 @@ import type { CompleteGoalOpts, Goal, PushGoalOpts } from '../../store/goals.js'
 import { requireHostAdmin, type StoreContext } from '../types.js';
 
 /** What a new goal carries; its tenant is always the caller's. */
-export type GoalPushOpts = Omit<PushGoalOpts, 'tenantId'>;
+export type GoalPushOptions = Omit<PushGoalOpts, 'tenantId'>;
 
 /** Push a goal onto `sessionId`'s stack in the caller's tenant. */
-export function goalPush(ctx: StoreContext, opts: GoalPushOpts): Promise<Goal> {
+export function goalPush(ctx: StoreContext, opts: GoalPushOptions): Promise<Goal> {
   return ctx.store.goals.push(ctx.tenantId, opts);
 }
 

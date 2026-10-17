@@ -328,7 +328,7 @@ export interface PromptHookRequest {
   readonly printedHash?: string;
 }
 
-export interface PromptHookOpts {
+export interface PromptHookOptions {
   /** The store serves many people, so the caller is not its owner: no global store, no user-global recent rows,
    *  task state only for the caller's own owner and project, and no ledger rows outside this store. */
   readonly sharedStore?: true;
@@ -359,7 +359,7 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
  * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
  * any arm is booked. */
 export async function promptHookContext(
-  ctx: StoreContext, req: PromptHookRequest, opts: PromptHookOpts = {},
+  ctx: StoreContext, req: PromptHookRequest, opts: PromptHookOptions = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;

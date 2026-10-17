@@ -221,7 +221,7 @@ describe('HTTP /v1/memories input validation', () => {
     // Caller can't observe summarize_overflow directly in a row-less
     // recall, but the 200 status confirms the parser doesn't reject the
     // input — and a follow-up test in the JS API path covers the
-    // semantic effect via RecallOpts.summarizeOverflow.
+    // semantic effect via RecallOptions.summarizeOverflow.
     const res = await fetch(`${handle.url}/v1/memories?q=test&summarize_overflow=banana`);
     expect(res.status).toBe(200);
   });

@@ -5,7 +5,7 @@ import {
   PIN, PROMPT_HOOK, dispose, hippo, hippoNoWorker, preCompactPayload, project, sessionEndPayload, tableRows, type Project,
 } from './_helpers/delivery-boundary.js';
 import {
-  configure, expectVerdict, fire, seed, verdictOf, writeHostTranscript, type Config, type Oracle, type ReadOpts, type TurnSpec, type Verdict,
+  configure, expectVerdict, fire, seed, verdictOf, writeHostTranscript, type Config, type Oracle, type ReadOptions, type TurnSpec, type Verdict,
 } from './_helpers/host-transcript.js';
 
 const PROMPT = 'how should the postgres migration rollback plan work';
@@ -24,7 +24,7 @@ afterEach(() => {
 
 const rows = (sql: string) => tableRows(p, sql);
 const pinId = (): string => String(rows('SELECT id FROM memories WHERE pinned = 1')[0].id);
-const read = (session: string, memory: string, extra: ReadOpts = {}) =>
+const read = (session: string, memory: string, extra: ReadOptions = {}) =>
   verdictOf({ store: p.hippoRoot, session, memory, ...extra });
 const events = (session: string) => rows(
   `SELECT id, turn_seq, duplicate_of, block_state, session_state, event_type, prompt_hash, emitted_hash, static_hash, rejected_count, rejected_unlisted, filtered_count

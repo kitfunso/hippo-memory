@@ -3,7 +3,7 @@ import {
   CUSTOMER_NOTE,
   MAX_CHANGE_SUMMARY_LEN,
   MAX_CUSTOMER_LEN,
-  type SaveCustomerNoteOpts,
+  type SaveCustomerNoteOptions,
 } from '../../objects/customer-notes.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
@@ -19,7 +19,7 @@ import {
   type VersionedRouteConfig,
 } from './object-routes.js';
 
-const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = {
+const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOptions> = {
   noun: 'customer note',
   field: 'note',
   listField: 'notes',

@@ -19,7 +19,7 @@ export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStat
   'closed',
 ]);
 
-export interface SavePolicyOpts {
+export interface SavePolicyOptions {
   policyName: string;
   policyText: string;
   /** ISO-8601; normalized to canonical datetime. Defaults to now when omitted. */
@@ -34,7 +34,7 @@ export interface SavePolicyOpts {
   extraTags?: string[];
 }
 
-export interface ListPoliciesOpts {
+export interface ListPoliciesOptions {
   status?: PolicyStatus;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
@@ -80,7 +80,7 @@ function buildPolicyContent(
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
 
-export const POLICY: SavableDescriptor<'policy', SavePolicyOpts> = {
+export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
   kind: 'policy',
   label: 'policy',
   plural: 'policies',
@@ -115,7 +115,7 @@ export function savePolicy(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SavePolicyOpts,
+  opts: SavePolicyOptions,
   actor: string = 'cli',
 ): Promise<Policy> {
   return saveObject(objects, POLICY, { baseHalfLifeDays, tenantId, actor }, opts);
@@ -142,7 +142,7 @@ export function loadPolicyById(
 export function loadPolicies(
   objects: Objects,
   tenantId: string,
-  opts: ListPoliciesOpts = {},
+  opts: ListPoliciesOptions = {},
 ): Promise<Policy[]> {
   return listObjects(objects, POLICY, tenantId, opts);
 }

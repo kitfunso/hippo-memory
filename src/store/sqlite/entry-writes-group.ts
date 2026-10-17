@@ -5,7 +5,7 @@ import { appendAuditEvent } from '../audit.js';
 import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
-import { archiveRawMemory, type ArchiveOpts } from '../raw-archive.js';
+import { archiveRawMemory, type ArchiveOptions } from '../raw-archive.js';
 import { ownScopeTouches } from '../../core/recall-scope.js';
 import { recordTraceOutcome } from '../recall-trace.js';
 import { RejectedValueError } from '../../core/api-errors.js';
@@ -86,7 +86,7 @@ export function applyOutcomeAt(hippoRoot: string, outcome: OutcomeWrite, traceId
 export function archiveRawAt(
   hippoRoot: string,
   archive: RawArchive,
-  afterArchive?: ArchiveOpts['afterArchive'],
+  afterArchive?: ArchiveOptions['afterArchive'],
 ): string {
   const archivedAt = onHandle(hippoRoot, (db) => {
     const at = withWriteScope(db, 'archive_raw_in_reach', () => {

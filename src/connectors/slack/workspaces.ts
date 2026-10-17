@@ -13,7 +13,7 @@ export {
   removeSlackWorkspace as removeWorkspace,
 } from '../../store/connectors/slack.js';
 
-export interface AddWorkspaceOpts {
+export interface AddWorkspaceOptions {
   teamId: string;
   tenantId: string;
 }
@@ -22,7 +22,7 @@ export interface AddWorkspaceOpts {
  *  team_id conflict (operators move workspaces between tenants). */
 export function addWorkspace(
   hippoRoot: string,
-  opts: AddWorkspaceOpts,
+  opts: AddWorkspaceOptions,
 ): SlackWorkspace {
   return upsertSlackWorkspace(hippoRoot, opts.teamId, opts.tenantId);
 }

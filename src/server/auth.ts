@@ -11,7 +11,7 @@ import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '..
 import { MAX_ID_LEN } from '../util/limits.js';
 import { clientLimitKey } from './client-ip.js';
 import { keyCheckBounds } from './key-check-bounds.js';
-import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
+import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types.js';
 import { isJsonString } from '../util/json.js';
 import { MINUTE_MS } from '../util/time.js';
 import { isLoopbackAddress } from '../util/net.js';
@@ -96,11 +96,11 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
   return { kind: 'bearer', token };
 }
 
-type AuthOpts = Pick<
-  ResolvedServeOpts,
+type AuthOptions = Pick<
+  ResolvedServeOptions,
   'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'
 > &
-  Partial<Pick<ResolvedServeOpts, 'failedAuthLimiter' | 'keylessLocalRole'>>;
+  Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter' | 'keylessLocalRole'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -180,7 +180,7 @@ const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
 /** Runs only before scrypt, so junk, unknown, revoked and expired
  * tokens and a proven key's re-check never spend a colleague's budget. */
-function chargeScryptRun(req: IncomingMessage, opts: AuthOpts): void {
+function chargeScryptRun(req: IncomingMessage, opts: AuthOptions): void {
   const limiter = opts.failedAuthLimiter;
   // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
   if (limiter && !limiter.check(clientLimitKey(req))) {
@@ -189,7 +189,7 @@ function chargeScryptRun(req: IncomingMessage, opts: AuthOpts): void {
 }
 
 /** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
-async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts): Promise<BearerIdentity> {
+async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOptions): Promise<BearerIdentity> {
   // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's identity.
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
@@ -217,7 +217,7 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts
 }
 
 /** The auth check without a charge: the bearer's identity, or null for the keyless local fallback. */
-async function checkAuth(req: IncomingMessage, opts: AuthOpts): Promise<BearerIdentity | null> {
+async function checkAuth(req: IncomingMessage, opts: AuthOptions): Promise<BearerIdentity | null> {
   const auth = readAuthHeader(req);
   if (auth.kind === 'malformed') {
     throw new HttpError(401, 'invalid api key');
@@ -264,7 +264,7 @@ function warnCallerLimited(key: string, tenantId: string, person: string): void 
   log.warn('caller over its rate limit; its further 429s this minute are not logged', { tenant: tenantId, person });
 }
 
-function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
+function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
   const limiter = opts.callerLimiter;
   if (!limiter) return;
   const person = ownerOrSubject(actor);
@@ -276,7 +276,7 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
 
 /** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) on bad ones.
  * Reads the store only for an API-key-shaped Bearer (or any Bearer with no resolver), so keyless calls stay cheap. */
-export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<StoreContext> {
+export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOptions): Promise<StoreContext> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts);
   if (id !== null) chargeCaller(id.tenantId, ctx.actor, opts);
@@ -285,20 +285,20 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
 
 /** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and
  * must re-check right before it acts. */
-export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<StoreContext> {
+export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOptions): Promise<StoreContext> {
   return contextFor(await checkAuth(req, opts), opts);
 }
 
 /** The keyless local caller: any process on this machine can reach
  * loopback, so it is a member unless the operator names admin. */
-function keylessLocalActor(opts: AuthOpts): Actor {
+function keylessLocalActor(opts: AuthOptions): Actor {
   const role = opts.keylessLocalRole ?? envKeylessLocalRole();
   return role === 'admin'
     ? { subject: 'localhost:cli', role: 'admin', hostAdmin: true }
     : { subject: 'localhost:cli', role: 'member' };
 }
 
-function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
+function contextFor(id: BearerIdentity | null, opts: AuthOptions): StoreContext {
   // Per request, never cached at serve: the global store can be created while the server runs.
   const reach = sqliteReach(opts.hippoRoot, opts.store);
   // loadConfig caches by file mtime, so each request still sees an edit made while the server runs.
@@ -319,7 +319,7 @@ function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
 
 /** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws
  * HttpError 401 like buildContextWithAuth. A keyless local request passes only under HIPPO_ALLOW_KEYLESS_LOCAL=1. */
-export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
+export async function requireAuth(req: IncomingMessage, opts: AuthOptions): Promise<void> {
   const id = await checkAuth(req, opts);
   if (id !== null) chargeCaller(id.tenantId, bearerActor(id), opts);
 }
@@ -328,7 +328,7 @@ export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise
  * denial closes the stream. */
 export async function heartbeatVerdict(
   req: IncomingMessage,
-  opts: AuthOpts,
+  opts: AuthOptions,
 ): Promise<'ok' | 'revoked' | 'unavailable'> {
   try {
     await checkAuth(req, opts);

@@ -1,7 +1,7 @@
 // List, get, close and supersede handlers shared by the typed-object routes; each route file passes one config.
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
-import type { ObjectDescriptor, ObjectListOpts, SavableDescriptor } from '../../objects/descriptor.js';
+import type { ObjectDescriptor, ObjectListOptions, SavableDescriptor } from '../../objects/descriptor.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import { closeObject, listObjects, objectById } from '../../objects/lifecycle.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../core/object-types.js';
@@ -79,7 +79,7 @@ export async function listRoute<K extends ObjectKind>(
   const filter = cfg.filterParam === undefined ? null : query.get(cfg.filterParam);
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const listOpts: ObjectListOpts<K> = { limit: limit + 1, after, filter: filter?.trim() || undefined };
+  const listOpts: ObjectListOptions<K> = { limit: limit + 1, after, filter: filter?.trim() || undefined };
   if (status !== 'all') {
     const states = cfg.object.states;
     if (!isSetMember(states, status)) {

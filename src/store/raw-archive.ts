@@ -5,7 +5,7 @@ import { isFtsAvailable, withWriteScope } from '../db/index.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 
-export interface ArchiveOpts {
+export interface ArchiveOptions {
   reason: string;
   who: string;
   /** Hook run inside the archive SAVEPOINT after the audit row and before RELEASE (the Slack deletion connector marks
@@ -38,7 +38,7 @@ function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
   return row;
 }
 
-function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): string {
+function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOptions): string {
   // GDPR: raw_archive stores ONLY metadata, never the original content; the archive_raw audit row is the compliance
   // trail, so the content is unrecoverable from here on.
   const archivedAt = new Date().toISOString();
@@ -62,7 +62,7 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
 
 // Emit the archive_raw audit inside the SAVEPOINT so it commits atomically with the row deletion, attributed to the
 // row's own tenant_id, not whatever HIPPO_TENANT the calling shell has set.
-function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
+function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOptions): void {
   try {
     appendAuditEvent(db, {
       tenantId: String(row.tenant_id ?? DEFAULT_TENANT_ID),
@@ -80,7 +80,7 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
 /** The only way to remove a `kind='raw'` row: snapshots it into `raw_archive`, flips `kind` to 'archived' so the
  * append-only trigger allows the delete, all in one write scope that nests in an outer transaction. Throws if the row
  * is missing or not raw; returns the archived_at. */
-export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): string {
+export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOptions): string {
   const row = loadRawRow(db, id);
 
   // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here

@@ -9,7 +9,7 @@
  *
  *   #2 (pre-existing in v1.5.2): loadFreshRawMemories was tenant-wide
  *      only. Multi-session tenants surfaced cross-session rows tagged
- *      isFreshTail=true. Now accepts an optional sessionId; RecallOpts
+ *      isFreshTail=true. Now accepts an optional sessionId; RecallOptions
  *      gains freshTailSessionId for callers who want the correct shape.
  */
 
@@ -148,7 +148,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
   });
 });
 
-describe('HTTP /v1/memories accepts new RecallOpts', () => {
+describe('HTTP /v1/memories accepts new RecallOptions', () => {
   // Codex round 2 caught that pre-v1.6.2 the HTTP recall route silently
   // ignored freshTailCount, freshTailSessionId, and summarizeOverflow. They
   // were JS-API-only. Now wired through query params.

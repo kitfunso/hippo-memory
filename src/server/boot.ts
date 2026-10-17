@@ -47,7 +47,7 @@ import {
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { dispatchAddonRoute, dispatchPublicJson, dispatchV1Route } from './route-table.js';
-import type { RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
+import type { RateLimitSpec, ResolvedServeOptions, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
 // listening, a string only for pipe/unix-socket listeners (never used here).
@@ -72,7 +72,7 @@ interface HandleRequestOptions {
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: ResolvedServeOpts,
+  opts: ResolvedServeOptions,
   options: HandleRequestOptions,
 ): Promise<void> {
   const { startedAt, streamSlots, limiter } = options;
@@ -476,7 +476,7 @@ function servedOptsFor(
   routes: NonNullable<ServeOpts['routes']>,
   publicJsonBodies: ReadonlyMap<string, string>,
   { callerLimiter, failedAuthLimiter }: BootedLimiters,
-): ResolvedServeOpts {
+): ResolvedServeOptions {
   const store = opts.store ?? workerSqliteStore(opts.hippoRoot);
   return {
     ...opts,
@@ -491,7 +491,7 @@ function servedOptsFor(
 }
 
 function acceptingServer(
-  served: ResolvedServeOpts,
+  served: ResolvedServeOptions,
   holder: StoreHolder,
   inflight: Set<ServerResponse>,
   options: HandleRequestOptions,

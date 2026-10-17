@@ -7,7 +7,7 @@ import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
 import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, holmVerdicts, inSets, meanBootstrap, repeatMistake, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';
 import { analyzeZ0, buildReport, renderText } from '../scripts/token-eval/z0-analyze.mjs';
-import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOpts, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
+import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOptions, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
 
 const BASE = generate();
 const fresh = (): Generated => structuredClone(BASE);
@@ -35,7 +35,7 @@ const hypOf = (a: ReturnType<typeof blind>) => {
   expect(a.status).toBe('valid');
   return real(computeHypotheses(a.filtered, PRICES, STAT));
 };
-const hyp = (opts: GenOpts) => hypOf(blind(generate(opts)));
+const hyp = (opts: GenOptions) => hypOf(blind(generate(opts)));
 let h1Win: ReturnType<typeof hyp> | undefined;
 /** The run in which A2 wins H1; two cases read it, so it is built once. */
 const winHyp = () => (h1Win ??= hyp({ knobs: { A2: { fail: 0.1 } } }));

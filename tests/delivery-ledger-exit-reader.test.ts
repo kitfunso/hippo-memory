@@ -13,7 +13,7 @@ import type { DeliveryCandidateInput, DeliveryEventInput, DeliveryRejectReason, 
 import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
-import { seed, verdictOf, writeHostTranscript, type ReadOpts, type Verdict } from './_helpers/host-transcript.js';
+import { seed, verdictOf, writeHostTranscript, type ReadOptions, type Verdict } from './_helpers/host-transcript.js';
 import { dispose, hippo, project, type Project } from './_helpers/delivery-boundary.js';
 import { upsertEntryRow } from '../src/store/entry-row.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -68,7 +68,7 @@ function write(input: DeliveryEventInput): number {
   }
 }
 
-const read = (session: string, memory: string, extra: ReadOpts = {}) => verdictOf({ store: dir, session, memory, ...extra });
+const read = (session: string, memory: string, extra: ReadOptions = {}) => verdictOf({ store: dir, session, memory, ...extra });
 const present = (content = 'a lesson that was written before every turn here') => seed(dir, content, { created: CREATED });
 // SAFETY: writeHostTranscript reads only the project's dir.
 const transcript = (specs: Parameters<typeof writeHostTranscript>[1]): string => writeHostTranscript({ dir } as Project, specs, { noise: false });

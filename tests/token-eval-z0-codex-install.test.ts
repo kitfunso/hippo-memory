@@ -9,7 +9,7 @@ import { checkHomes, runDirs } from '../scripts/token-eval/homes.mjs';
 import { HIPPO_JS, pathKey } from '../scripts/token-eval/exec.mjs';
 import { cleanup, tmp, isolate, makeRepo, find } from './fixtures/z0-harness.js';
 import { operator, wrapOperator, codexCtx, codexRun, xRun, xTrio, xIsolate, xRecords, xLimit, fakeSeen } from './fixtures/z0-codex-harness.js';
-import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
+import type { CodexCtx, CodexOptions } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
 
@@ -28,7 +28,7 @@ const metaFile = (run: { dirs: { home: string } }) => join(run.dirs.home, '.hipp
 const hooksFile = (run: { dirs: { codexHome: string } }) => join(run.dirs.codexHome, 'hooks.json');
 
 /** An isolated operator and ctx; `x2(seed)` is a fresh X2 run with its launcher, under one out dir. */
-function setup(name: string, opts: CodexOpts = {}) {
+function setup(name: string, opts: CodexOptions = {}) {
   const { out } = isolate(name);
   const op = operator(name);
   const ctx = codexCtx(op, opts);

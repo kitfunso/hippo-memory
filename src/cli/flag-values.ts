@@ -1,7 +1,7 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
 import { resolveListLimit } from '../util/limits.js';
-import type { RecallSearchOpts } from '../api/recall/pipeline.js';
+import type { RecallSearchOptions } from '../api/recall/pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { fail } from './exit.js';
 
@@ -117,7 +117,7 @@ export interface CommandContext {
   readonly flags: CliFlags;
 }
 
-export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
+export type EngineFlags = Pick<RecallSearchOptions, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');

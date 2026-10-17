@@ -16,7 +16,7 @@ const SCOPE_PRIVATE = 'github:private:acme/secret';
 
 const ctxFor = (root: string, tenantId = 'default'): FullContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
 
-interface SeedOpts {
+interface SeedOptions {
   tenantId?: string;
   artifactRef?: string;
   scope?: string;
@@ -24,7 +24,7 @@ interface SeedOpts {
   content: string;
 }
 
-async function seedMemory(root: string, opts: SeedOpts): Promise<string> {
+async function seedMemory(root: string, opts: SeedOptions): Promise<string> {
   const ctx = ctxFor(root, opts.tenantId ?? 'default');
   const result = await remember(ctx, {
     content: opts.content,

@@ -13,7 +13,7 @@ import type { RecallTraceInput } from '../../store/recall-trace.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
-import type { ContextOpts } from '../context-types.js';
+import type { ContextOptions } from '../context-types.js';
 import type { Context, StoreContext } from '../types.js';
 import { configAtRoot, configOf } from '../config-of.js';
 import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
@@ -26,7 +26,7 @@ import {
   recordShownRecall,
   strengthenOf,
 } from './finish.js';
-import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './types.js';
+import type { CliCoreRanker, CliCoreRecall, RecallOptions, RecallResult, ShownCliCore } from './types.js';
 
 const MAX_RECALL_LIMIT = 1000;
 // recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote cost.
@@ -60,20 +60,20 @@ export function toolParams(args: Readonly<Record<string, JsonValue>>): RequestPa
 }
 
 /** The recall options every surface passes through to retrieve(). */
-export type SharedRecallOpts = Pick<
-  RecallOpts,
+export type SharedRecallOptions = Pick<
+  RecallOptions,
   'query' | 'scope' | 'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId'
 > & { includeContinuity: boolean };
 
 export interface ParsedRecallRequest {
-  readonly opts: SharedRecallOpts;
+  readonly opts: SharedRecallOptions;
   readonly limit: number | undefined;
-  readonly mode: RecallOpts['mode'];
+  readonly mode: RecallOptions['mode'];
   readonly explain: boolean;
 }
 
 export type ParsedContextRequest = Pick<
-  ContextOpts,
+  ContextOptions,
   'q' | 'budget' | 'limit' | 'pinnedOnly' | 'scope' | 'includeRecent' | 'crossProject'
 >;
 
@@ -123,7 +123,7 @@ function limitParam(params: RequestParams): number | undefined {
   return limit;
 }
 
-function modeParam(params: RequestParams): RecallOpts['mode'] {
+function modeParam(params: RequestParams): RecallOptions['mode'] {
   const value = params.get('mode');
   if (value === undefined || value === null) return undefined;
   const mode = RECALL_MODES.find((m) => m === value);
@@ -197,7 +197,7 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
 
 export async function retrieveWithCliCore(
   ctx: StoreContext,
-  opts: RecallOpts,
+  opts: RecallOptions,
   core: CliCoreRanker,
 ): Promise<RecallResult> {
   // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
@@ -262,7 +262,7 @@ interface ShownRanking {
 async function recordShown(
   ctx: StoreContext,
   store: HippoStore,
-  opts: RecallOpts,
+  opts: RecallOptions,
   core: CliCoreRecall,
   done: ShownRanking,
 ): Promise<void> {
@@ -332,7 +332,7 @@ async function idsNotHeld(store: HippoStore, ids: readonly string[], tenantId: s
 // An empty list is traced too, so a coverage gap still reaches the training corpus.
 function traceOf(
   ctx: Context,
-  opts: RecallOpts,
+  opts: RecallOptions,
   core: CliCoreRecall,
   shown: readonly SearchResult[],
 ): RecallTraceInput {

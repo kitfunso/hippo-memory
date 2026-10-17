@@ -25,7 +25,7 @@ export const githubDlq: ConnectorDlq<GitHubOwnColumns, DlqBucket, DlqItem> = {
   bump: markGitHubDlqRetried,
 };
 
-export interface ReplayDlqOpts {
+export interface ReplayDlqOptions {
   /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
   webhookSecret?: string;
   /** Previous webhook secret during rotation, passed to verifyGitHubSignature.previousSecret so old-secret DLQ rows
@@ -51,7 +51,7 @@ export type IngestHook = (
 export async function replayDlqEntry(
   ctx: StoreContext,
   id: number,
-  opts: ReplayDlqOpts & { ingestHook?: IngestHook } = {},
+  opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
   const { webhookSecret, previousSecret, ingestHook } = opts;
   return replayParked<DlqItem, JsonValue & GitHubWebhookEnvelope>({

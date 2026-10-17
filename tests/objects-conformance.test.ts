@@ -112,7 +112,7 @@ interface Draft {
   readonly save: ObjectSave;
 }
 
-interface DraftOpts {
+interface DraftOptions {
   readonly at?: string;
   readonly group?: string;
   readonly tenantId?: string;
@@ -120,7 +120,7 @@ interface DraftOpts {
   readonly changeSummary?: string;
 }
 
-function saving(c: KindCase, n: number, opts: DraftOpts = {}): Draft {
+function saving(c: KindCase, n: number, opts: DraftOptions = {}): Draft {
   const { at = T1, group = 'alpha', tenantId = TENANT_A } = opts;
   const mirror = objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, c.kind, { content: `${c.kind} ${n}`, tags: ['conformance'] });
   return { n, group, tenantId, save: { mirror, fields: c.fields(n, group), supersedesId: opts.supersedesId, changeSummary: opts.changeSummary, actor: ACTOR, at } };
@@ -303,7 +303,7 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
 
   /** Ids 1 to 8, id 5 in the other tenant: three instants each shared by two of the tenant's rows, then 1 closed and 2 superseded by 8. Odd ids hold the alpha filter value. */
   const seed = (): Call[] => {
-    const row = (n: number, at: string, opts: DraftOpts = {}): Call => save(c, saving(c, n, { at, group: odd(n) ? 'alpha' : 'beta', ...opts }));
+    const row = (n: number, at: string, opts: DraftOptions = {}): Call => save(c, saving(c, n, { at, group: odd(n) ? 'alpha' : 'beta', ...opts }));
     return [
       row(1, T1), row(2, T1), row(3, T2), row(4, T2), row(5, T2, { tenantId: TENANT_B }), row(6, T3), row(7, T3),
       retire(c, 1, T4), row(8, T4, { supersedesId: 2 }),
@@ -357,14 +357,14 @@ interface Opening {
   readonly open: IncidentOpen;
 }
 
-interface OpeningOpts {
+interface OpeningOptions {
   readonly at?: string;
   readonly tenantId?: string;
   readonly context?: string;
   readonly links?: readonly string[];
 }
 
-function opening(n: number, opts: OpeningOpts = {}): Opening {
+function opening(n: number, opts: OpeningOptions = {}): Opening {
   const { at = T1, tenantId = TENANT_A } = opts;
   const mirror = objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, 'incident', { content: `incident ${n}`, tags: ['conformance'] });
   return { n, tenantId, open: { mirror, fields: { incidentText: `incident ${n}`, context: opts.context, linkedMemoryIds: opts.links ?? [] }, actor: ACTOR, at } };
@@ -536,7 +536,7 @@ describe('Objects, the incident kind', () => {
   });
 });
 
-interface PutOpts {
+interface PutOptions {
   readonly at?: string;
   readonly tenantId?: string;
   readonly supersedesId?: number;
@@ -546,7 +546,7 @@ interface PutOpts {
 }
 
 /** A save whose fields and mirror the caller picks, for the reads that turn on them. */
-function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutOpts = {}) {
+function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutOptions = {}) {
   const { at = T1, tenantId = TENANT_A } = opts;
   const mirror: MemoryEntry = { ...objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, kind, { content: `${kind} at ${at}`, tags: opts.tags ?? [] }), ...opts.mirror };
   const saved: ObjectSave<K> = { mirror, fields, supersedesId: opts.supersedesId, actor: ACTOR, at };
@@ -559,7 +559,7 @@ function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutO
 
 describe('Objects, the policies in force at an instant', () => {
   const day = (monthDay: string): string => `2026-${monthDay}T00:00:00.000Z`;
-  const policy = (policyName: string, from: string, to: string | null, opts: PutOpts = {}): Call =>
+  const policy = (policyName: string, from: string, to: string | null, opts: PutOptions = {}): Call =>
     put('policy', { policyName, policyText: `${policyName} from ${from}`, validFrom: day(from), validTo: to === null ? null : day(to) }, opts).call;
   const inForce = (asOf: string, more: { name?: string; limit?: number; tenantId?: string } = {}): Call => async (g) =>
     (await g.policiesInForce(more.tenantId ?? TENANT_A, { asOf, name: more.name, limit: more.limit ?? 10 })).map((p) => p.id);
@@ -608,7 +608,7 @@ describe('Objects, the policies in force at an instant', () => {
 });
 
 describe('Objects, the active skills by name', () => {
-  const skill = (name: string, opts: PutOpts = {}): Call => put('skill', { name, instructions: `how to ${name}`, trigger: null }, opts).call;
+  const skill = (name: string, opts: PutOptions = {}): Call => put('skill', { name, instructions: `how to ${name}`, trigger: null }, opts).call;
   const names = (limit: number, tenantId = TENANT_A): Call => async (g) => (await g.activeSkillsByName(tenantId, limit)).map((s) => `${s.id} ${s.skillName}`);
 
   it('orders names by their bytes, then by id, under, at and over the cap, and leaves out a replaced, a closed and a foreign skill', async () => {
@@ -627,7 +627,7 @@ describe('Objects, the active skills by name', () => {
 
 describe('Objects, the receipts a brief refresh cites', () => {
   const TAG = 'path:acme/web';
-  const decision = (opts: PutOpts) => put('decision', { decisionText: 'noted', context: undefined }, opts);
+  const decision = (opts: PutOptions) => put('decision', { decisionText: 'noted', context: undefined }, opts);
   const receiptOf = (mirror: MemoryEntry): BriefReceipt => ({ id: mirror.id, created: mirror.created, source: mirror.source, content: mirror.content });
   const receipts = (tag: string, limit = 10, tenantId = TENANT_A): Call => (g) => g.briefReceipts(tenantId, tag, limit);
   /** Newest first, the larger id first on a shared instant. */

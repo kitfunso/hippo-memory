@@ -16,7 +16,7 @@ import type { Context } from '../types.js';
 export type { MergeResult, ProjectCollision, ProjectSummary, RepairResult } from '../../sharing/project-merge.js';
 export type { ProjectFold } from '../../agent-memories/project-folds.js';
 
-export interface MergeProjectNamesOpts {
+export interface MergeProjectNamesOptions {
   from: string;
   into: string;
   /** Plans in a transaction that rolls back: nothing is written, mirrors and backup included. */
@@ -36,7 +36,7 @@ export function listProjectNames(ctx: Context): ProjectSummary[] {
  * Folds project `from` into `into`, backed up and audited as `ctx.actor`; throws on user-global, unknown or equal
  * names.
  */
-export function mergeProjectNames(ctx: Context, opts: MergeProjectNamesOpts): MergeResult {
+export function mergeProjectNames(ctx: Context, opts: MergeProjectNamesOptions): MergeResult {
   return onProjects(ctx, (store) => mergeProjects(store, opts));
 }
 

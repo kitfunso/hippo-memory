@@ -102,7 +102,7 @@ interface SourceRow {
 }
 
 /** The slice of each loader's options extraction uses, assignable to every loader's own. */
-interface SourceLoadOpts {
+interface SourceLoadOptions {
   status: 'active' | 'superseded';
   limit: number;
 }
@@ -120,7 +120,7 @@ export interface LoadedType {
  *  either load is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
-  load: (objects: Objects, tenant: string, opts: SourceLoadOpts) => Promise<T[]>,
+  load: (objects: Objects, tenant: string, opts: SourceLoadOptions) => Promise<T[]>,
   nameOf: (row: T) => string,
   textOf: (row: T) => string,
 ): (objects: Objects, tenantId: string) => Promise<LoadedType> {

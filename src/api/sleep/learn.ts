@@ -41,7 +41,7 @@ export const MCP_LEARN: LearnProfile = Object.freeze({
   full: false,
 });
 
-export interface LearnOpts {
+export interface LearnOptions {
   repoPath: string;
   days: number;
   profile: LearnProfile;
@@ -61,7 +61,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: StoreContext, opts: LearnOpts): Promise<LearnResult> {
+export async function learn(ctx: StoreContext, opts: LearnOptions): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -152,7 +152,7 @@ function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMe
 async function writeLessons(
   ctx: StoreContext,
   lessons: readonly string[],
-  opts: LearnOpts,
+  opts: LearnOptions,
   config: HippoConfig,
 ): Promise<LessonCounts> {
   const { tenantId } = ctx;

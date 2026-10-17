@@ -96,7 +96,7 @@ export interface Estimate {
 }
 
 /** Options shared by the bootstrap functions. */
-export interface BootstrapOpts {
+export interface BootstrapOptions {
   /** Resamples. Default 5000. */
   iterations?: number;
   /** Two-sided level, e.g. 0.05 for a 95% interval. Default 0.05. */
@@ -126,7 +126,7 @@ function mean(xs: number[]): number {
  * Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an interval excluding
  * zero is the bar for a real difference.
  */
-export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Estimate {
+export function pairedBootstrap(diffs: number[], opts: BootstrapOptions = {}): Estimate {
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
   const alpha = opts.alpha ?? DEFAULT_ALPHA;
   if (diffs.length === 0) return { estimate: 0, low: 0, high: 0, iterations: 0 };
@@ -147,7 +147,7 @@ export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Esti
  */
 export function clusteredPairedBootstrap(
   diffsByCluster: ReadonlyMap<string, number[]>,
-  opts: BootstrapOpts = {},
+  opts: BootstrapOptions = {},
 ): Estimate {
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
   const alpha = opts.alpha ?? DEFAULT_ALPHA;
@@ -201,7 +201,7 @@ function costPerResolved(outcomes: ArmOutcome[]): number {
 export function costPerResolvedDelta(
   control: ArmOutcome[],
   treatment: ArmOutcome[],
-  opts: BootstrapOpts = {},
+  opts: BootstrapOptions = {},
 ): CostPerResolvedDelta {
   if (control.length !== treatment.length) {
     throw new Error('control and treatment must list the same tasks in the same order');
@@ -279,7 +279,7 @@ export interface TestedEstimate extends Estimate {
 }
 
 /** Options for {@link twoLevelBootstrap}. */
-export interface TwoLevelOpts extends BootstrapOpts {
+export interface TwoLevelOptions extends BootstrapOptions {
   /** Resamples. Default 10,000. */
   readonly iterations?: number;
   /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
@@ -318,7 +318,7 @@ function twoSidedP(samples: readonly number[], nullValue: number): number {
 export function twoLevelBootstrap<T>(
   repos: readonly Repository<T>[],
   statistic: (units: readonly T[]) => number,
-  opts: TwoLevelOpts = {},
+  opts: TwoLevelOptions = {},
 ): TestedEstimate {
   const requested = opts.iterations ?? DEFAULT_TWO_LEVEL_ITERATIONS;
   if (!Number.isInteger(requested) || requested <= 0) {

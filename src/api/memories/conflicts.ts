@@ -10,7 +10,7 @@ import { isQuarantineScope } from '../../trust/quarantine.js';
 import { requireHostAdmin, type StoreContext } from '../types.js';
 import type { TenantReach } from './memories.js';
 
-export interface ResolveMemoryConflictOpts {
+export interface ResolveMemoryConflictOptions {
   /** One of the conflict's two memories; the other is the loser. */
   keepId: string;
   /** Delete the loser instead of halving its half-life. */
@@ -41,7 +41,7 @@ function isLive(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): b
 export async function resolveMemoryConflict(
   ctx: StoreContext,
   conflictId: number,
-  opts: ResolveMemoryConflictOpts,
+  opts: ResolveMemoryConflictOptions,
 ): Promise<ResolveMemoryConflictResult> {
   // Read with every status, so a resolved conflict answers 409 while one holding another person's personal row stays a
   // 404.

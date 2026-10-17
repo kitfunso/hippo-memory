@@ -31,7 +31,7 @@ export interface AvailabilityHint {
   source: 'j2-recency';
 }
 
-export interface DetectAvailabilityBiasOpts {
+export interface DetectAvailabilityBiasOptions {
   /** The returned matched results (the top-K the agent will see). */
   topK: readonly AgeRef[];
   /** The full matched candidate pool the top-K was drawn from. */
@@ -73,7 +73,7 @@ function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] 
  * Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older and older matches were
  * passed over; else null.
  * Entries with an unparseable `created` are dropped so a malformed row cannot poison the medians with NaN. */
-export function detectAvailabilityBias(opts: DetectAvailabilityBiasOpts): AvailabilityHint | null {
+export function detectAvailabilityBias(opts: DetectAvailabilityBiasOptions): AvailabilityHint | null {
   const now = opts.now ?? Date.now();
   const recencyWindowMs = opts.recencyWindowMs ?? DEFAULT_RECENCY_WINDOW_MS;
   const recentFractionThreshold =

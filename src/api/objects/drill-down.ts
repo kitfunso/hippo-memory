@@ -10,7 +10,7 @@ import type { StoreContext } from '../types.js';
 
 const DEFAULT_DRILL_DOWN_LIMIT = 50;
 
-export interface DrillDownOpts {
+export interface DrillDownOptions {
   /** Cap on number of children returned. Default 50. */
   limit?: number;
   /** Token budget: children append in created order until the next would exceed it (cost: printed line under `cost`,
@@ -65,7 +65,7 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
 export async function drillDown(
   ctx: StoreContext,
   summaryId: string,
-  opts: DrillDownOpts = {},
+  opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {
   const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
@@ -98,7 +98,7 @@ function isDrillable(row: MemoryEntry): boolean {
 
 function drillResult(
   { summary, levels, sizes: counted }: SummaryDescendants,
-  opts: DrillDownOpts,
+  opts: DrillDownOptions,
   limit: number,
 ): DrillDownResult {
   const collected = levels.flat();
@@ -142,7 +142,7 @@ interface CappedChildren {
 function capChildren(
   all: DrillDownChild[],
   fixed: number,
-  opts: DrillDownOpts,
+  opts: DrillDownOptions,
   limit: number,
 ): CappedChildren {
   let children = all;

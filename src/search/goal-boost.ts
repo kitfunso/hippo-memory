@@ -9,7 +9,7 @@ const FIRST_MATCH_BOOST = 2.0;
 const EXTRA_MATCH_BOOST = 0.5;
 
 /** Options of {@link boostByGoals}. */
-export interface GoalStackBoostOpts {
+export interface GoalStackBoostOptions {
   sessionId: string;
   tenantId: string;
   limit: number;
@@ -68,7 +68,7 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
   boosted: R[],
   matchesByEntryId: Map<string, string[]>,
   goalsByTag: Map<string, Goal>,
-  opts: GoalStackBoostOpts,
+  opts: GoalStackBoostOptions,
 ): GoalRecallLogRow[] {
   const { sessionId, tenantId, limit } = opts;
   const recalledAt = new Date().toISOString();
@@ -94,7 +94,7 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],
   active: ActiveGoals,
-  opts: GoalStackBoostOpts,
+  opts: GoalStackBoostOptions,
 ): GoalStackBoost<R> {
   const { trace } = opts;
   if (active.goals.length === 0) return { results, log: [] };

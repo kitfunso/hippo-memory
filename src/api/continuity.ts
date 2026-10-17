@@ -16,7 +16,7 @@ export type SnapshotSaveInput = SnapshotInput;
 export type SessionEventAppendInput = SessionEventInput;
 
 /** What a session event listing filters on. */
-export type SessionEventListOpts = Parameters<Sessions['listEvents']>[1];
+export type SessionEventListOptions = Parameters<Sessions['listEvents']>[1];
 
 /** Save the caller's active task snapshot. */
 export function snapshotSave(ctx: Ctx, input: SnapshotSaveInput): Promise<TaskSnapshot> {
@@ -39,7 +39,7 @@ export function sessionEventAppend(ctx: Ctx, event: SessionEventAppendInput): Pr
 }
 
 /** List the caller's session events. */
-export function sessionEventList(ctx: Ctx, opts: SessionEventListOpts): Promise<SessionEvent[]> {
+export function sessionEventList(ctx: Ctx, opts: SessionEventListOptions): Promise<SessionEvent[]> {
   return ctx.store.sessions.listEvents(ctx.tenantId, opts);
 }
 

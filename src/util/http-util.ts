@@ -73,7 +73,7 @@ export function bodyDeadlineMs(): number {
   return envBodyTimeoutMs() ?? DEFAULT_BODY_DEADLINE_MS;
 }
 
-export interface ReadBodyOpts {
+export interface ReadBodyOptions {
   /** Defaults to 1 MB. */
   maxBytes?: number;
   /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults to bodyDeadlineMs(). */
@@ -86,7 +86,7 @@ export interface ReadBodyOpts {
  */
 export function readBody(
   req: IncomingMessage,
-  { maxBytes = MAX_BODY_BYTES, deadlineMs = bodyDeadlineMs() }: ReadBodyOpts = {},
+  { maxBytes = MAX_BODY_BYTES, deadlineMs = bodyDeadlineMs() }: ReadBodyOptions = {},
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = [];

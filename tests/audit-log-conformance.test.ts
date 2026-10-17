@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent, listAuditEventsAfter, type AuditOp, type QueryAuditOpts } from '../src/store/audit.js';
+import { appendAuditEvent, listAuditEventsAfter, type AuditOp, type QueryAuditOptions } from '../src/store/audit.js';
 import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -56,7 +56,7 @@ async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   });
 }
 
-const list = (query: Partial<QueryAuditOpts> = {}): Call<AuditEvent[]> => (g) => g.listAuditEvents({ tenantId: TENANT_A, ...query });
+const list = (query: Partial<QueryAuditOptions> = {}): Call<AuditEvent[]> => (g) => g.listAuditEvents({ tenantId: TENANT_A, ...query });
 const ids = (rows: readonly AuditEvent[]): number[] => rows.map((row) => row.id);
 const below = (second: number, id: number): KeysetPosition => ({ key: at(second), id });
 

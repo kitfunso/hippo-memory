@@ -5,7 +5,7 @@
  * native fetch failure.
  */
 
-import type { RememberOpts, RememberResult } from '../api/index.js';
+import type { RememberOptions, RememberResult } from '../api/index.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
@@ -109,7 +109,7 @@ async function readReply<T>(
 export async function remember(
   serverUrl: string,
   apiKey: string | undefined,
-  opts: RememberOpts,
+  opts: RememberOptions,
 ): Promise<RememberResult> {
   const res = await sendWrite(`${serverUrl}/v1/memories`, {
     method: 'POST',

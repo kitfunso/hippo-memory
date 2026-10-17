@@ -13,10 +13,10 @@ import type { AvailabilityHint } from '../availability.js';
 import type { AppendAuditOpts } from '../../store/audit.js';
 import type { HippoStore } from '../../store/port.js';
 import type { CallerProject } from '../prompt-hook.js';
-import type { RankRecallOpts, RankRecallResult } from './pipeline.js';
+import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
 
-export interface RecallOpts {
+export interface RecallOptions {
   query: string;
   limit?: number;
   /** Candidates the scorer loads (default: the store's 200-row window), decoupled from `limit`; NOT a hard cap, as
@@ -43,7 +43,7 @@ export interface RecallOpts {
   includeContinuity?: boolean;
   project?: CallerProject; // keeps rows to this project and user-global ones, and keys the continuity block
   /** With an active goal stack for `(ctx.tenantId, sessionId)` and `goalTag` unset, `api.recall` applies the goal-stack
-   * boost; undefined means no boost. Lives on RecallOpts, not Context, because Context is shared by
+   * boost; undefined means no boost. Lives on RecallOptions, not Context, because Context is shared by
    * remember/recall/assemble/outcome and the boost is recall-only. */
   sessionId?: string;
   /** Explicit goal-tag override: when set, the goal-stack boost is SUPPRESSED (mirrors the CLI's `goalTag === ''`
@@ -80,7 +80,7 @@ export interface RecallOpts {
 }
 
 interface CliCoreRanking {
-  rank: Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'>;
+  rank: Omit<RankRecallOptions, 'query' | 'sessionId' | 'goalTag'>;
   /** A second store searched beside `ctx.store`: ranking reads `globalStore` with `globalRoot`'s config, and its
    * recall rows go to it. */
   sources?: { readonly globalRoot: string; readonly globalStore: HippoStore };
@@ -102,7 +102,7 @@ export interface CliCoreInspection extends CliCoreRanking {
 }
 
 /** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on
- * hippo.db. Of the other RecallOpts it reads `query`, `sessionId` and `goalTag`. */
+ * hippo.db. Of the other RecallOptions it reads `query`, `sessionId` and `goalTag`. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
 /** `results`: the rows the caller shows, best first; `audit`: its hint rows, written
@@ -147,7 +147,7 @@ export interface RecallResultItem {
    * than the BM25 match; render them in a separate "recent" band. */
   isFreshTail?: boolean;
   /** Ordered lifecycle re-ranking steps that mutated this row's `score` after candidate generation (on the api
-   * pipeline, only goal-boost). Populated ONLY when `RecallOpts.explain` is set; absent otherwise. */
+   * pipeline, only goal-boost). Populated ONLY when `RecallOptions.explain` is set; absent otherwise. */
   rerankTrace?: RerankStep[];
   /** Pipeline that produced `rerankTrace`: 'api' when api.recall set `explain`; the CLI carries its trace on
    * `SearchResult` and leaves this absent. */

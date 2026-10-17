@@ -50,7 +50,7 @@ function defaultHeaders(body: string, eventName: string, deliveryId: string) {
   };
 }
 
-interface IssueBodyOpts {
+interface IssueBodyOptions {
   action?: string;
   number?: number;
   installationId?: number | null;
@@ -65,7 +65,7 @@ interface GitHubIssueEventPayload {
   installation?: { id: number };
 }
 
-function issueBody(opts: IssueBodyOpts = {}): string {
+function issueBody(opts: IssueBodyOptions = {}): string {
   const obj: GitHubIssueEventPayload = {
     action: opts.action ?? 'opened',
     issue: {

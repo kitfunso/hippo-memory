@@ -40,7 +40,7 @@ export interface Prediction {
   createdAt: string;
 }
 
-export interface SavePredictionOpts {
+export interface SavePredictionOptions {
   classTag: string;
   claimText: string;
   estimateValue?: number;
@@ -48,13 +48,13 @@ export interface SavePredictionOpts {
   targetDate?: string;
 }
 
-export interface ClosePredictionOpts {
+export interface ClosePredictionOptions {
   closureState: ClosureState;
   actualValue?: number;
   closureNote?: string;
 }
 
-export interface ListPredictionsOpts {
+export interface ListPredictionsOptions {
   closureState?: ClosureState;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
@@ -98,7 +98,7 @@ function rowToPrediction(row: PredictionRow): Prediction {
 }
 
 /** The memory row that mirrors a claim into recall, built here alone so every store keeps the same row for it. */
-export function predictionMirror(tenantId: string, claim: SavePredictionOpts, baseHalfLifeDays: number): MemoryEntry {
+export function predictionMirror(tenantId: string, claim: SavePredictionOptions, baseHalfLifeDays: number): MemoryEntry {
   return createMemory(claim.claimText, {
     tags: ['prediction', claim.classTag],
     layer: Layer.Semantic,
@@ -142,7 +142,7 @@ function insertPredictionRow(
   db: DatabaseSyncLike,
   memoryId: string,
   tenantId: string,
-  opts: SavePredictionOpts,
+  opts: SavePredictionOptions,
   stamp: PredictionStamp,
 ): PredictionRow {
   const { now, actor } = stamp;
@@ -182,7 +182,7 @@ function insertPredictionRow(
 function auditPredictionCreate(
   db: DatabaseSyncLike,
   who: { tenantId: string; actor: string; predictionId: number },
-  opts: SavePredictionOpts,
+  opts: SavePredictionOptions,
 ): void {
   // GDPR-light audit metadata: prediction_id + class_tag + flags only.
   // No claim_text in metadata; the predictions table holds it canonically.
@@ -206,7 +206,7 @@ export function closePrediction(
   hippoRoot: string,
   tenantId: string,
   id: number,
-  opts: ClosePredictionOpts,
+  opts: ClosePredictionOptions,
   actor: string = 'cli',
 ): Prediction {
   assertTenantId('closePrediction', tenantId);
@@ -231,7 +231,7 @@ function closeOpenPredictionRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
-  opts: ClosePredictionOpts,
+  opts: ClosePredictionOptions,
   stamp: PredictionStamp,
 ): PredictionRow {
   const { now, actor } = stamp;
@@ -311,7 +311,7 @@ export function loadPredictionsByClass(
   hippoRoot: string,
   tenantId: string,
   classTag: string,
-  opts: ListPredictionsOpts = {},
+  opts: ListPredictionsOptions = {},
 ): Prediction[] {
   assertTenantId('loadPredictionsByClass', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;

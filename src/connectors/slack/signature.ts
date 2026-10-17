@@ -2,7 +2,7 @@ import { matchesHmacSha256 } from '../hmac.js';
 
 const DEFAULT_SKEW_SECONDS = 5 * 60;
 
-export interface VerifyOpts {
+export interface VerifyOptions {
   rawBody: string;
   timestamp: string;
   signature: string;
@@ -27,7 +27,7 @@ function verifyOne(
   return matchesHmacSha256('v0=', `v0:${timestamp}:${rawBody}`, secret, signature);
 }
 
-export function verifySlackSignature(opts: VerifyOpts): boolean {
+export function verifySlackSignature(opts: VerifyOptions): boolean {
   const { rawBody, timestamp, signature, signingSecret, previousSecret } = opts;
   const now = opts.now ?? Math.floor(Date.now() / 1000);
   const skew = opts.skewSeconds ?? DEFAULT_SKEW_SECONDS;

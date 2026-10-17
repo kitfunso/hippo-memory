@@ -25,7 +25,7 @@ import {
   type PromptRecallGate,
 } from '../core/prompt-recall.js';
 import type { DeliveryObserver } from '../store/delivery-recorder.js';
-import type { ContextCost, ContextOpts, ContextResultEntry } from './context-types.js';
+import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
 import type { Context } from './types.js';
 
@@ -125,7 +125,7 @@ interface PromptCandidate {
  * too.
  */
 export function selectPinned(
-  opts: ContextOpts,
+  opts: ContextOptions,
   plan: ContextPlan,
   left: number,
   pools: ContextPools,
@@ -237,7 +237,7 @@ interface BackfillFromPromptOptions {
 // Overlap a candidate needs with the prompt when the config sets none.
 const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
 
-function backfillFromPrompt(opts: ContextOpts, plan: ContextPlan, options: BackfillFromPromptOptions): void {
+function backfillFromPrompt(opts: ContextOptions, plan: ContextPlan, options: BackfillFromPromptOptions): void {
   const { pinnedCfg, candidates, picked, recentBudget } = options;
   const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
   const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';

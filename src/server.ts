@@ -12,7 +12,7 @@ import {
 } from './api/index.js';
 import {
   promptHookContext as renderPromptHook,
-  type PromptHookOpts,
+  type PromptHookOptions,
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
@@ -35,7 +35,7 @@ async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult
 async function promptHookContext(
   ctx: Context,
   req: PromptHookRequest,
-  opts?: PromptHookOpts,
+  opts?: PromptHookOptions,
 ): ReturnType<typeof renderPromptHook> {
   const filled = withStore(ctx);
   // Only hippo.db has a global store beside it; an add-on's own store reads as one project.

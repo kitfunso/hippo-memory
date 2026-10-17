@@ -26,7 +26,7 @@ export async function forget(ctx: StoreContext, id: string): Promise<ForgetResul
 // Reject administration is Context-based and tenant-checked; it shares
 // one transaction flow with `hippo reject` via src/trust/reject-flow.ts.
 
-export interface RejectOpts {
+export interface RejectOptions {
   /** By-id form: reject the CURRENT content of an existing memory. */
   memoryId?: string;
   /** Pre-emptive form: reject a value not currently stored (or already gone). */
@@ -43,7 +43,7 @@ export interface RejectResult {
 /** Tombstones a value's normalized digest so a matching write is refused everywhere until `unreject`; pass exactly one
  * of `memoryId` or `value`. `memoryId` also removes every live tenant row with that digest (not others' personal rows);
  * `reason` is required. Throws on an unknown id or both/neither. */
-export async function reject(ctx: StoreContext, opts: RejectOpts): Promise<RejectResult> {
+export async function reject(ctx: StoreContext, opts: RejectOptions): Promise<RejectResult> {
   if (opts.memoryId !== undefined) {
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too, but pre-checking
     // keeps the error message consistent.
@@ -58,12 +58,12 @@ export async function reject(ctx: StoreContext, opts: RejectOpts): Promise<Rejec
 
 /** `hippo reject` on the host: every row it removed and the rows that kept their other texts. A personal row by id
  * answers with the personal refusal rather than reject's not-found, as the operator can see that row. */
-export function rejectOnHost(ctx: Context, opts: RejectOpts): RejectFlowResult {
+export function rejectOnHost(ctx: Context, opts: RejectOptions): RejectFlowResult {
   requireHostAdmin(ctx, 'Rejecting with the removal report');
   return applyReject(ctx, opts);
 }
 
-function applyReject(ctx: Context, opts: RejectOpts): RejectFlowResult {
+function applyReject(ctx: Context, opts: RejectOptions): RejectFlowResult {
   // SHORTCUT: the tombstone write is hippo.db only, as the port has no rejection group; one when a served store needs
   // reject.
   return rejectValue({

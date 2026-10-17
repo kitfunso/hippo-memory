@@ -23,7 +23,7 @@ export const MAX_CUSTOMER_LEN = 256;
 const MAX_NOTE_LEN = 8192;
 export const MAX_CHANGE_SUMMARY_LEN = 4096;
 
-export interface SaveCustomerNoteOpts {
+export interface SaveCustomerNoteOptions {
   customer: string;
   note: string;
   /** The delta note for a supersession; ignored (stored NULL) on a fresh create. */
@@ -34,7 +34,7 @@ export interface SaveCustomerNoteOpts {
   extraTags?: string[];
 }
 
-export interface ListCustomerNotesOpts {
+export interface ListCustomerNotesOptions {
   status?: NoteStatus;
   /** Filter to a single customer. */
   customer?: string;
@@ -49,7 +49,7 @@ function buildNoteContent(customer: string, note: string): string {
   return `${customer}\n\n${note}`;
 }
 
-export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteOpts> = {
+export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteOptions> = {
   kind: 'customer_note',
   label: 'note',
   plural: 'notes',
@@ -87,7 +87,7 @@ export function saveCustomerNote(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SaveCustomerNoteOpts,
+  opts: SaveCustomerNoteOptions,
   actor: string = 'cli',
 ): Promise<CustomerNote> {
   return saveObject(objects, CUSTOMER_NOTE, { baseHalfLifeDays, tenantId, actor }, opts);
@@ -114,7 +114,7 @@ export function loadCustomerNoteById(
 export function loadCustomerNotes(
   objects: Objects,
   tenantId: string,
-  opts: ListCustomerNotesOpts = {},
+  opts: ListCustomerNotesOptions = {},
 ): Promise<CustomerNote[]> {
   return listObjects(objects, CUSTOMER_NOTE, tenantId, {
     status: opts.status,
