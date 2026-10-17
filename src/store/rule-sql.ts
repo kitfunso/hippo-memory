@@ -9,24 +9,20 @@ import {
   KEEP_PAIRS,
   MAX_WRONG_HALVINGS,
   RETRIEVAL_BOOST_SLOPE,
-  REWARD_SLOPE,
   applyLossAversionRatio,
   type EmotionalValence,
   type KeepPair,
 } from '../core/memory.js';
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../core/recall-scope.js';
 import { placeholders } from '../util/sql.js';
+import { REWARD_FACTOR_SQL } from '../db/decay-key.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
 /** calculateRewardFactor as SQL over `memories` columns; strengthSql and the context-candidate rank both build on it,
  * so the slope has one source. */
 export function rewardFactorSql(): string {
-  if (isOutcomeSlowAblated()) return '1.0';
-  const pos = 'COALESCE(outcome_positive, 0)';
-  const neg = 'COALESCE(outcome_negative, 0)';
-  return `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${pos} - ${neg}) / (${pos} + ` +
-  `${neg} + 1.0) END)`;
+  return isOutcomeSlowAblated() ? '1.0' : REWARD_FACTOR_SQL;
 }
 
 /** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in
