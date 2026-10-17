@@ -10,7 +10,14 @@ export {
 } from './busy.js';
 export { getSchemaVersion, getMeta, setMeta, isFtsAvailable } from './meta.js';
 export { countTableRows, pruneConsolidationRuns, CONSOLIDATION_RUNS_KEPT } from './tables.js';
-export { getCurrentSchemaVersion, IncompatibleBinaryError, ftsRowCounts, repairFtsDrift } from './migrate.js';
+export {
+  getCurrentSchemaVersion,
+  IncompatibleBinaryError,
+  ftsRowCounts,
+  isFtsInSync,
+  repairFtsDrift,
+  setFtsInSync,
+} from './migrate.js';
 export {
   getHippoDbPath,
   HOOK_DB_WAIT_MS,

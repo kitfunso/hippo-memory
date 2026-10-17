@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { ftsRowCounts, isFtsAvailable, type DatabaseSyncLike } from '../db/index.js';
+import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
@@ -306,7 +306,7 @@ export function loadEntriesMentioningAt(
   }
   const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
-  const ftsQuery = plainTag && isFtsAvailable(db) && ftsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
+  const ftsQuery = plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
   const where = ftsQuery === null
     ? clauses.join(' OR ')
     : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
@@ -319,11 +319,6 @@ export function loadEntriesMentioningAt(
     )
     .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery])) as MemoryRow[];
   return rows.map(rowToEntry);
-}
-
-function ftsInSync(db: DatabaseSyncLike): boolean {
-  const counts = ftsRowCounts(db);
-  return counts !== null && counts.memories === counts.fts;
 }
 
 /** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
