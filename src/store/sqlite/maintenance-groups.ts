@@ -13,7 +13,6 @@ import { touchableScopeSql } from '../rule-sql.js';
 
 export function sqliteAuditMaintenance(hippoRoot: string): Sync<AuditMaintenance> {
   return {
-    tenantEntries: (tenantId) => loadAllEntries(hippoRoot, tenantId),
     objectBackedIds: () => memoriesBackingObjects(hippoRoot),
     deleteAutomatically: (removals, actor) => deleteEntriesAutomatically(hippoRoot, removals, actor),
     pruneAuditRows: (prune) => pruneAuditRows(hippoRoot, prune),

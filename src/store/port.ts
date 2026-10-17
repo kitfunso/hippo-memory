@@ -634,8 +634,6 @@ export type { AgentImport, Consolidation, ContainerTx, ImportTarget, LocalFiles 
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {
-  /** Every memory of the tenant, in `loadAllEntries` order. */
-  tenantEntries(tenantId: string): Promise<MemoryEntry[]>;
   /** The ids of every memory a typed object row names, in any tenant; an automatic pass never deletes one. */
   objectBackedIds(): Promise<Set<string>>;
   /** Deletes each removal's row with its own forget row, leaving a pinned, raw, kept or object-backing row; resolves to
