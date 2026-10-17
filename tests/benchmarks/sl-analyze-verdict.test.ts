@@ -1,6 +1,6 @@
 // tests/sl-analyze-verdict.test.ts
 import { describe, it, expect } from 'vitest';
-import { computeVerdict } from '../benchmarks/sequential-learning/analyze-v1.7.7.mjs';
+import { computeVerdict } from '../../benchmarks/sequential-learning/analyze-v1.7.7.mjs';
 
 describe('computeVerdict', () => {
   it('returns SUPPORTED when delta >= 0.10 AND ciLow > 0 AND sanity passes AND tiePass', () => {

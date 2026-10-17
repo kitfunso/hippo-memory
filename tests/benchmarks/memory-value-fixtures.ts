@@ -17,13 +17,13 @@
 import * as fs from 'node:fs';
 import { vi } from 'vitest';
 
-import { formatLmeDate, questionDir } from '../benchmarks/memory-value/common.mjs';
-import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
-import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
-import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
-import { metaPathFor } from '../benchmarks/memory-value/common.mjs';
-import { readJson } from '../benchmarks/memory-value/common.mjs';
-import { _resetAblationCacheForTests } from '../dist/core/ablation.js';
+import { formatLmeDate, questionDir } from '../../benchmarks/memory-value/common.mjs';
+import { ingestQuestion } from '../../benchmarks/memory-value/ingest.mjs';
+import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
+import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
+import { metaPathFor } from '../../benchmarks/memory-value/common.mjs';
+import { readJson } from '../../benchmarks/memory-value/common.mjs';
+import { _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 
 // HIPPO_MV_SCRATCH_ROOT is included here (not just the ablation vars) so the
 // cross-ingest determinism test can never leak its scratch-root override

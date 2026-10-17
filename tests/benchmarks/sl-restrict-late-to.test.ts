@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hitRateByPhase, parseRestrictLateTo } from '../benchmarks/sequential-learning/run.mjs';
+import { hitRateByPhase, parseRestrictLateTo } from '../../benchmarks/sequential-learning/run.mjs';
 
 // Synthetic 25-trap result fixture. Hit pattern: alternate hit/miss for clarity.
 function buildTrapResults(hitPattern: boolean[]): Array<{trapCategory: string|null, trapHit: boolean}> {

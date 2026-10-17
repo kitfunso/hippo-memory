@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { runIncidentRecallEval } from '../benchmarks/e1.3/incident-recall-eval.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { runIncidentRecallEval } from '../../benchmarks/e1.3/incident-recall-eval.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 describe('slack incident recall (success criterion)', () => {
   let root: string;

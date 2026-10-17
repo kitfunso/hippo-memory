@@ -10,11 +10,11 @@ import {
   ciHalfWidth95,
   aggregatePhases,
   pairedPermutationCI,
-} from '../benchmarks/sequential-learning/aggregate.mjs';
+} from '../../benchmarks/sequential-learning/aggregate.mjs';
 import {
   generateTasks,
   TRAP_PLACEMENTS,
-} from '../benchmarks/sequential-learning/traps.mjs';
+} from '../../benchmarks/sequential-learning/traps.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure aggregator math

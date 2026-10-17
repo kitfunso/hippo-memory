@@ -17,10 +17,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
-import { CONFIG } from '../benchmarks/memory-value/config.mjs';
-import { evaluateAll, buildScorers, evaluateStore } from '../benchmarks/memory-value/evaluate.mjs';
-import { featuresPathFor, readJsonl, writeJsonl } from '../benchmarks/memory-value/common.mjs';
-import { mulberry32 } from '../scripts/lib/prng.mjs';
+import { CONFIG } from '../../benchmarks/memory-value/config.mjs';
+import { evaluateAll, buildScorers, evaluateStore } from '../../benchmarks/memory-value/evaluate.mjs';
+import { featuresPathFor, readJsonl, writeJsonl } from '../../benchmarks/memory-value/common.mjs';
+import { mulberry32 } from '../../scripts/lib/prng.mjs';
 import {
   FIT_DIMS,
   runES,
@@ -35,7 +35,7 @@ import {
   verifyFrozenWeights,
   recencyVector,
   initVectorForRestart,
-} from '../benchmarks/memory-value/fit.mjs';
+} from '../../benchmarks/memory-value/fit.mjs';
 
 import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
 

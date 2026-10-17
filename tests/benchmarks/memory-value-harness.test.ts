@@ -36,17 +36,17 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { CONFIG } from '../benchmarks/memory-value/config.mjs';
-import { computeSplit } from '../benchmarks/memory-value/split.mjs';
-import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
-import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
-import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
-import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
-import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
-import { computeSchemaFit } from '../dist/core/memory.js';
+import { CONFIG } from '../../benchmarks/memory-value/config.mjs';
+import { computeSplit } from '../../benchmarks/memory-value/split.mjs';
+import { ingestQuestion } from '../../benchmarks/memory-value/ingest.mjs';
+import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
+import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
+import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../../benchmarks/memory-value/evaluate.mjs';
+import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../../benchmarks/memory-value/common.mjs';
+import { computeSchemaFit } from '../../dist/core/memory.js';
 
-import type { MemoryEntry } from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
+import type { MemoryEntry } from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
 
 afterEach(() => {

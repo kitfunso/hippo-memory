@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import hippoAdapter from '../benchmarks/sequential-learning/adapters/hippo.mjs';
-import baselineAdapter from '../benchmarks/sequential-learning/adapters/baseline.mjs';
-import staticAdapter from '../benchmarks/sequential-learning/adapters/static.mjs';
+import hippoAdapter from '../../benchmarks/sequential-learning/adapters/hippo.mjs';
+import baselineAdapter from '../../benchmarks/sequential-learning/adapters/baseline.mjs';
+import staticAdapter from '../../benchmarks/sequential-learning/adapters/static.mjs';
 
 describe('sequential-learning adapter recall budget', () => {
   // Starts the built CLI nine times: init, six stores and two recalls.

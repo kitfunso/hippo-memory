@@ -27,13 +27,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { CONFIG } from '../benchmarks/memory-value/config.mjs';
-import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
-import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
-import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
-import { evaluateAll } from '../benchmarks/memory-value/evaluate.mjs';
-import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../benchmarks/memory-value/common.mjs';
-import { _resetAblationCacheForTests } from '../dist/core/ablation.js';
+import { CONFIG } from '../../benchmarks/memory-value/config.mjs';
+import { ingestQuestion } from '../../benchmarks/memory-value/ingest.mjs';
+import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
+import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
+import { evaluateAll } from '../../benchmarks/memory-value/evaluate.mjs';
+import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../../benchmarks/memory-value/common.mjs';
+import { _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 
 import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
 

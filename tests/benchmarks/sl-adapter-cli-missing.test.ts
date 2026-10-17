@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { storeDirOf } from './fixtures/sl-adapter/store-dir.js';
+import { storeDirOf } from '../fixtures/sl-adapter/store-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -11,7 +11,7 @@ afterEach(() => {
 async function loadAdapter(cli: string) {
   vi.stubEnv('HIPPO_BENCH_CLI', cli);
   vi.resetModules();
-  const { default: adapter } = await import('../benchmarks/sequential-learning/adapters/hippo.mjs');
+  const { default: adapter } = await import('../../benchmarks/sequential-learning/adapters/hippo.mjs');
   return adapter;
 }
 
