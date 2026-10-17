@@ -19,7 +19,7 @@ import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
- * tests/dormant-memories.test.ts pins it to the schema. */
+ * tests/store/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = [
   'predictions',
   'decisions',

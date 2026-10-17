@@ -269,12 +269,12 @@ the same as any other registered artifact.
 
 ## Tests
 
-`tests/memory-value-harness.test.ts` — deterministic smoke against real
+`tests/benchmarks/memory-value-harness.test.ts` — deterministic smoke against real
 SQLite scratch stores (a hand-specified 2-question fixture, not the seeded
 `--smoke` generator, so retention numbers are hand-verifiable). Run via the
 normal `npm test`.
 
-`tests/memory-value-fit.test.ts` — `fit.mjs` mechanism tests: `runES`
+`tests/benchmarks/memory-value-fit.test.ts` — `fit.mjs` mechanism tests: `runES`
 against synthetic objectives (tie discipline, sigma-halving schedule,
 termination), `selectWinner`'s tie-break, `bootstrapCI` against a
 hand-computable toy input, and `computeFit`/`runIntegrityGate` against the

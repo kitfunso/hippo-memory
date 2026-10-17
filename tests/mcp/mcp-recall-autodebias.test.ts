@@ -1,0 +1,108 @@
+/**
+ * J3.2 — MCP hippo_recall planning-fallacy hint text block.
+ *
+ * Asserts the MCP handler prepends a "## Planning fallacy hint" block to
+ * the response text when the query carries a forward-claim phrase AND a
+ * class resolves. Reads from apiResult.planningFallacyHint (single source
+ * of truth — NOT recomputed, since the value is pipeline-invariant; only
+ * one audit row fires per recall).
+ *
+ * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 7, Task 9).
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { rmSync } from 'node:fs';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import { savePrediction } from '../_helpers/save-prediction.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { closePrediction } from '../_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+type HippoRecallToolArgs = {
+  query: string;
+};
+
+function callTool(
+  reqId: number,
+  name: string,
+  args: HippoRecallToolArgs,
+  ctx: McpContext,
+) {
+  return handleMcpRequest(
+    {
+      jsonrpc: '2.0',
+      id: reqId,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    },
+    ctx,
+  );
+}
+
+function extractText(res: McpResponse | null): string {
+  // SAFETY: hippo_recall's MCP tool result envelope always carries
+  // result.content per src/mcp/server.ts; McpResponse.result is typed
+  // unknown at the transport layer since it varies per tool.
+  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
+  return r?.result?.content?.[0]?.text ?? '';
+}
+
+function seedBaserate(home: string): void {
+  const estimateVsActual: Array<[number, number]> = [[2, 4], [3, 6], [4, 8]];
+  for (const [est, act] of estimateVsActual) {
+    const p = savePrediction(home, 'default', {
+      classTag: 'migration-effort',
+      claimText: `migration effort ${est} days`,
+      estimateValue: est,
+    });
+    closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+  }
+}
+
+describe('mcp hippo_recall planningFallacyHint text block', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = makeRoot('mcp-j32');
+    vi.stubEnv('HIPPO_HOME', home);
+    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
+  });
+
+  it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {
+    seedBaserate(home);
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
+    const text = extractText(res);
+    expect(text).toContain('## Planning fallacy hint');
+    expect(text).toContain('migration-effort');
+    expect(text).toContain('Class: migration-effort');
+    // detectedPhrase wrapped in JSON.stringify quotes for render safety.
+    expect(text.toLowerCase()).toContain('detected:');
+  });
+
+  it('does NOT prepend the hint block when query has no forward-claim phrase', async () => {
+    seedBaserate(home);
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    const res = await callTool(1, 'hippo_recall', { query: 'show me the auth flow' }, ctx);
+    const text = extractText(res);
+    expect(text).not.toContain('## Planning fallacy hint');
+  });
+
+  it('does NOT prepend the hint block when HIPPO_AUTODEBIAS=off', async () => {
+    seedBaserate(home);
+    vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
+    const text = extractText(res);
+    expect(text).not.toContain('## Planning fallacy hint');
+  });
+});

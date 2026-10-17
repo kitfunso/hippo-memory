@@ -1,0 +1,674 @@
+/**
+ * AT1 T3 acceptance-critical tests: docs/plans/2026-08-15-at1-rejected-value-tombstone.md
+ * §7 (tests) + the six cases assigned to T3.
+ *
+ * Real DB, per the project convention (mirrors tests/db/rejection-guard.test.ts
+ * and tests/core/rejection-verbs.test.ts, which already cover guard mechanics,
+ * verbs, and resolveConflict — none of that is repeated here).
+ *
+ * Six cases:
+ *   1. Acceptance (roadmap-verbatim): reject-by-id then capture re-assertion.
+ *   2. Refused supersede: CAS rollback + one reject_refusal audit row.
+ *   3. Copy-path: syncGlobalToLocal skips a locally-rejected value.
+ *   4. Rebuild resurrection pin: a stale markdown mirror cannot resurrect.
+ *   5. Migration v41 idempotence (fresh re-open + a v40-shaped upgrade).
+ *   6. AT5 paired case: reject removes a value from recall, permanently.
+ */
+
+import type { FullContext } from '../_helpers/api-ctx.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { readEntry } from '../../src/store/entry-reads.js';
+import { appendSessionEvent } from '../../src/store/sessions.js';
+import { Layer} from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
+import { rejectionDigest, normalizeValueForRejection, insertRejectedValue, findRejectedValue } from '../../src/store/rejection.js';
+import { RejectedValueError } from '../../src/core/api-errors.js';
+import { cmdCapture } from '../../src/capture/command.js';
+import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { autoShare } from '../../src/sharing/share.js';
+import * as api from '../../src/api/index.js';
+import { consolidate } from '../../src/index.js';
+import { importEntries } from '../../src/importers/core.js';
+import { importVault } from '../../src/importers/vault.js';
+import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { sharingStores } from '../_helpers/sharing-stores.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+function ctx(hippoRoot: string, tenantId: string = 'default'): FullContext {
+  return apiCtx(hippoRoot, tenantId, { subject: 'cli', role: 'admin' });
+}
+
+describe('case 1: acceptance (roadmap-verbatim)', () => {
+  it('reject X by id -> capture re-assertion refused, 2 siblings written, one reject_refusal audit row, extraction does not throw; supersession unchanged', async () => {
+    const home = makeRoot('rejection-acceptance');
+
+    // Seed X, then reject it by id — removes the row and tombstones its digest.
+    const xContent = 'use bearer tokens for outbound api calls';
+    const x = createMemory(xContent, { layer: Layer.Episodic });
+    writeEntry(home, x);
+    await api.reject(ctx(home), { memoryId: x.id, reason: 'no longer approved for outbound calls' });
+    expect(readEntry(home, x.id)).toBeNull();
+
+    // A transcript re-asserting X among 3 extractable decision items.
+    const fixturePath = join(home, 'transcript-fixture.txt');
+    writeFileSync(
+      fixturePath,
+      [
+        `decision: ${xContent}`,
+        // Siblings need a specificity signal (number/proper-noun/path/code)
+        // per audit.ts's isContentWorthStoring gate (hasNoSpecificity) — a
+        // vague under-40-char sentence with no digits gets filtered before
+        // it ever reaches the rejection guard, which would silently turn
+        // this into a 1-item extraction instead of the intended 3.
+        'decision: cache dns lookups for 5 minutes',
+        'decision: rotate deploy keys every 90 days',
+      ].join('\n'),
+      'utf8',
+    );
+
+    expect(() =>
+      cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false }),
+    ).not.toThrow();
+
+    const contents = loadEveryTenantEntries(home).map((e) => e.content);
+    expect(contents).not.toContain(xContent);
+    expect(contents.some((c) => c.includes('cache dns lookups'))).toBe(true);
+    expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);
+
+    const db = openHippoDb(home);
+    try {
+      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      expect(refusals.length).toBe(1);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    // Supersession unchanged for non-rejected values: api.supersede.
+    const u = createMemory('unrelated baseline for api supersede', { layer: Layer.Episodic });
+    writeEntry(home, u);
+    const supersedeResult = await api.supersede(ctx(home), u.id, 'unrelated baseline, revised');
+    expect(supersedeResult.ok).toBe(true);
+    expect(readEntry(home, u.id)!.superseded_by).toBe(supersedeResult.newId);
+    expect(readEntry(home, supersedeResult.newId)!.content).toBe('unrelated baseline, revised');
+
+    // cmdSupersede-style 2-write flow (cli.ts's cmdSupersede pattern,
+    // replicated inline — cmdSupersede itself is not exported): mutate
+    // old.superseded_by then writeEntry both rows.
+    const v = createMemory('second unrelated baseline', { layer: Layer.Episodic });
+    writeEntry(home, v);
+    const vNew = createMemory('second unrelated baseline, revised', { layer: Layer.Episodic });
+    v.superseded_by = vNew.id;
+    expect(() => {
+      writeEntry(home, v);
+      writeEntry(home, vNew);
+    }).not.toThrow();
+    expect(readEntry(home, v.id)!.superseded_by).toBe(vNew.id);
+    expect(readEntry(home, vNew.id)!.content).toBe('second unrelated baseline, revised');
+  });
+});
+
+describe('case 2: refused supersede audit surface', () => {
+  it('api.supersede onto a rejected successor value throws, CAS rolls back (superseded_by unchanged), one reject_refusal audit row', async () => {
+    const home = makeRoot('rejection-acceptance');
+    const old = createMemory('supersede baseline content', { layer: Layer.Episodic });
+    writeEntry(home, old);
+
+    const yContent = 'rejected successor content for supersede';
+    await api.reject(ctx(home), { value: yContent, reason: 'pre-emptively rejected successor' });
+
+    await expect(api.supersede(ctx(home), old.id, yContent)).rejects.toThrow(RejectedValueError);
+
+    // CAS rolled back: the old row's superseded_by pointer is untouched.
+    const stored = readEntry(home, old.id);
+    expect(stored).not.toBeNull();
+    expect(stored!.superseded_by).toBeNull();
+
+    const db = openHippoDb(home);
+    try {
+      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      expect(refusals.length).toBe(1);
+      expect(refusals[0]!.metadata.digest).toBe(rejectionDigest(yContent));
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+});
+
+describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
+  it('global store holds Z; local store rejects Z; sync skips Z, syncs siblings, and counts the skip', async () => {
+    const globalRoot = makeRoot('rejection-acceptance-global');
+    const localRoot = makeRoot('rejection-acceptance-local');
+    const zContent = 'value rejected locally but present globally';
+    const z = createMemory(zContent, { layer: Layer.Episodic });
+    const s1 = createMemory('sibling one synced from global', { layer: Layer.Episodic });
+    const s2 = createMemory('sibling two synced from global', { layer: Layer.Episodic });
+    writeEntry(globalRoot, z);
+    writeEntry(globalRoot, s1);
+    writeEntry(globalRoot, s2);
+
+    await api.reject(ctx(localRoot), { value: zContent, reason: 'rejected locally, must not sync from global' });
+
+    // mockRestore() (unlike a bare unspy) also clears recorded call
+    // history, so every assertion against errorSpy must run BEFORE it —
+    // restore happens last, after the spy has served its purpose.
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
+
+    const localContents = loadEveryTenantEntries(localRoot).map((e) => e.content);
+    expect(localContents).not.toContain(zContent);
+    expect(localContents).toContain('sibling one synced from global');
+    expect(localContents).toContain('sibling two synced from global');
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 rejected value'));
+    errorSpy.mockRestore();
+  });
+});
+
+describe('case 4: legacy-mirror resurrection pin', () => {
+  it('a stale markdown mirror of a rejected raw row is skipped when the emptied store opens, not resurrected', async () => {
+    const home = makeRoot('rejection-acceptance');
+
+    // Rejecting the only row empties `memories`, the one state in which bootstrapLegacyStore scans the mirrors.
+    const rawContent = 'raw transcript content later rejected and archived';
+    const rawEntry = createMemory(rawContent, { layer: Layer.Episodic, kind: 'raw' });
+    writeEntry(home, rawEntry);
+
+    const mirrorPath = join(home, Layer.Episodic, `${rawEntry.id}.md`);
+    expect(existsSync(mirrorPath)).toBe(true);
+    const mirrorSnapshot = readFileSync(mirrorPath, 'utf8');
+
+    await api.reject(ctx(home), { memoryId: rawEntry.id, reason: 'raw content rejected' });
+    expect(readEntry(home, rawEntry.id)).toBeNull();
+    // Post-commit purge removed the mirror (reuses the api.archiveRaw pattern).
+    expect(existsSync(mirrorPath)).toBe(false);
+
+    // Construct the resurrection precondition explicitly: a mirror the
+    // purge missed (best-effort purge failure, or a not-yet-synced copy).
+    writeFileSync(mirrorPath, mirrorSnapshot, 'utf8');
+
+    const dbBefore = openHippoDb(home);
+    let refusalsBefore: number;
+    try {
+      refusalsBefore = queryAuditEvents(dbBefore, { tenantId: 'default', op: 'reject_refusal' }).length;
+    } finally {
+      closeHippoDb(dbBefore);
+    }
+
+    initStore(home);
+
+    // Value stays absent — the guard skipped the stale-mirror re-insert.
+    expect(readEntry(home, rawEntry.id)).toBeNull();
+
+    const dbAfter = openHippoDb(home);
+    try {
+      const refusalsAfter = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+      expect(refusalsAfter.length).toBe(refusalsBefore + 1);
+    } finally {
+      closeHippoDb(dbAfter);
+    }
+  });
+});
+
+describe('case 5: migration v41 idempotence', () => {
+  it('fresh store stays at schema_version 41 across re-open; rejected_values data survives', () => {
+    const home = makeRoot('rejection-acceptance');
+    const digest = rejectionDigest('idempotence-check value');
+
+    const db1 = openHippoDb(home);
+    try {
+      expect(getSchemaVersion(db1)).toBe(LATEST_SCHEMA_VERSION);
+      insertRejectedValue(db1, {
+        tenantId: 'default',
+        digest,
+        reason: 'idempotence check',
+        rejectedBy: 'test',
+        rejectedAt: new Date().toISOString(),
+        normalizedChars: normalizeValueForRejection('idempotence-check value').length,
+      });
+    } finally {
+      closeHippoDb(db1);
+    }
+
+    // Re-open: runMigrations runs again (it is invoked unconditionally from
+    // openHippoDb) but migration.version=41 <= currentVersion=41 is
+    // skipped — a no-op that must not disturb existing data.
+    const db2 = openHippoDb(home);
+    try {
+      expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
+      const row = findRejectedValue(db2, 'default', digest);
+      expect(row).not.toBeNull();
+      expect(row!.reason).toBe('idempotence check');
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+
+  it('a v40-shaped store (schema_version rolled back, rejected_values dropped) upgrades cleanly to 41 on re-open, without touching min_compatible_binary', () => {
+    const home = makeRoot('rejection-acceptance');
+    let minCompatBefore: string | undefined;
+    const db1 = openHippoDb(home);
+    try {
+      expect(getSchemaVersion(db1)).toBe(LATEST_SCHEMA_VERSION);
+      // SAFETY: row's shape matches the single `value` column named in
+      // the SELECT above.
+      minCompatBefore = (
+        db1.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
+          | { value?: string }
+          | undefined
+      )?.value;
+
+      // Simulate a v40-shaped store: roll the version marker back and drop
+      // the v41 table, leaving everything else (including
+      // min_compatible_binary) untouched.
+      db1.exec(`DROP TABLE IF EXISTS rejected_values`);
+      db1.prepare(`UPDATE meta SET value = '40' WHERE key = 'schema_version'`).run();
+    } finally {
+      closeHippoDb(db1);
+    }
+
+    const db2 = openHippoDb(home); // re-open re-runs runMigrations
+    try {
+      expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
+      expect(() =>
+        insertRejectedValue(db2, {
+          tenantId: 'default',
+          digest: rejectionDigest('post-upgrade value'),
+          reason: 'post-upgrade check',
+          rejectedBy: 'test',
+          rejectedAt: new Date().toISOString(),
+          normalizedChars: normalizeValueForRejection('post-upgrade value').length,
+        }),
+      ).not.toThrow();
+
+      // SAFETY: row's shape matches the single `value` column named in
+      // the SELECT above.
+      const minCompatAfter = (
+        db2.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
+          | { value?: string }
+          | undefined
+      )?.value;
+      expect(minCompatAfter).toBe(minCompatBefore);
+    } finally {
+      closeHippoDb(db2);
+    }
+  });
+});
+
+describe('case 6: reject removes a value from recall, permanently', () => {
+  it('reject removes a value from recall; re-remember attempt is refused; recall stays clean', async () => {
+    const home = makeRoot('rejection-acceptance');
+    const wContent = 'do not use the deprecated zynthkey rotation script for staging credentials';
+    const remembered = await api.remember(ctx(home), { content: wContent });
+
+    const before = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
+    expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
+
+    await api.reject(ctx(home), { memoryId: remembered.id, reason: 'staging creds process changed' });
+
+    const afterReject = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
+    expect(afterReject.results.some((r) => r.content === wContent)).toBe(false);
+
+    let caught: unknown;
+    try {
+      await api.remember(ctx(home), { content: wContent });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(RejectedValueError);
+
+    const afterReattempt = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
+    expect(afterReattempt.results.some((r) => r.content === wContent)).toBe(false);
+  });
+});
+
+describe('consolidation-loop fix: merge tombstone check', () => {
+  it('a rejected would-be-merged content digest makes consolidate skip that merge: no semantic row with that digest, sources not demoted/deleted, skip counted', async () => {
+    const home = makeRoot('rejection-acceptance-consolidate');
+    // Disable replay: it independently rehearses (and half-life-boosts)
+    // survivors regardless of the merge pass, which would confound the
+    // "sources not demoted" half_life_days assertion below.
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+
+    // longText is the newer of the two, so mergeContents' newest-first
+    // sort deterministically puts it first in the 2-entry merge.
+    const shortText = 'migrate the billing database before the next release window';
+    const longText = 'migrate the billing database before the next release window with full backups enabled';
+    const e1 = { ...createMemory(shortText, { layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
+    const e2 = createMemory(longText, { layer: Layer.Episodic });
+    writeEntry(home, e1);
+    writeEntry(home, e2);
+
+    const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
+    const mergedDigest = rejectionDigest(mergedContent);
+    const db = openHippoDb(home);
+    try {
+      insertRejectedValue(db, {
+        tenantId: 'default',
+        digest: mergedDigest,
+        reason: 'pre-rejected merge rollup',
+        rejectedBy: 'test',
+        rejectedAt: new Date().toISOString(),
+        normalizedChars: normalizeValueForRejection(mergedContent).length,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const result = await consolidate(home, { dryRun: false });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
+    );
+    errorSpy.mockRestore();
+
+    expect(result.semanticCreated).toBe(0);
+
+    const allAfter = loadEveryTenantEntries(home);
+    // No row anywhere carries the rejected merge digest.
+    expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
+
+    // Sources survive, UNMERGED: still present, still episodic, half-life
+    // untouched (the demotion loop never ran for this cluster).
+    const e1After = allAfter.find((e) => e.id === e1.id);
+    const e2After = allAfter.find((e) => e.id === e2.id);
+    expect(e1After).toBeDefined();
+    expect(e2After).toBeDefined();
+    expect(e1After!.layer).toBe(Layer.Episodic);
+    expect(e2After!.layer).toBe(Layer.Episodic);
+    expect(e1After!.half_life_days).toBe(e1.half_life_days);
+    expect(e2After!.half_life_days).toBe(e2.half_life_days);
+
+    const dbAfter = openHippoDb(home);
+    try {
+      const refusals = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+      expect(refusals.length).toBe(1);
+    } finally {
+      closeHippoDb(dbAfter);
+    }
+  });
+});
+
+describe('import dry-run tombstone accuracy', () => {
+  it('importEntries dry-run counts a tombstoned chunk as rejected (not imported), writes nothing, and agrees with a real run', async () => {
+    const home = makeRoot('rejection-acceptance-import-dryrun');
+    const rejectedChunk = 'never re-import this specific chunk of text again please';
+    const otherChunk = 'a completely different unrelated chunk of text here';
+    await api.reject(ctx(home), { value: rejectedChunk, reason: 'pre-emptive dry-run test tombstone' });
+
+    const dryResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
+      hippoRoot: home,
+      dryRun: true,
+    });
+    expect(dryResult.rejected).toBe(1);
+    expect(dryResult.imported).toBe(1);
+    expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
+
+    const realResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
+      hippoRoot: home,
+      dryRun: false,
+    });
+    expect(realResult.rejected).toBe(1);
+    expect(realResult.imported).toBe(1);
+    const contents = loadEveryTenantEntries(home).map((e) => e.content);
+    expect(contents).not.toContain(rejectedChunk);
+    expect(contents).toContain(otherChunk);
+  });
+
+  it('importVault dry-run counts a tombstoned note as rejected (not imported), writes nothing, and agrees with a real run', async () => {
+    const home = makeRoot('rejection-acceptance-vault-dryrun');
+    const vault = mkdtempSync(join(tmpdir(), 'hippo-rejection-acceptance-vault-notes-'));
+    try {
+      const rejectedNote = 'never re-import this specific vault note body again please';
+      const otherNote = 'a completely different unrelated vault note body here';
+      writeFileSync(join(vault, 'rejected.md'), rejectedNote);
+      writeFileSync(join(vault, 'other.md'), otherNote);
+      await api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
+
+      const dryResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
+      expect(dryResult.rejected).toBe(1);
+      expect(dryResult.imported).toBe(1);
+      expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
+
+      const realResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
+      expect(realResult.rejected).toBe(1);
+      expect(realResult.imported).toBe(1);
+      const contents = loadEveryTenantEntries(home).map((e) => e.content);
+      expect(contents).not.toContain(rejectedNote);
+      expect(contents).toContain(otherNote);
+    } finally {
+      rmSync(vault, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('capture dry-run tombstone accuracy', () => {
+  it('capture dry-run reports a tombstoned extraction as rejected and writes nothing, agreeing with a real run', async () => {
+    const home = makeRoot('rejection-acceptance-capture-dryrun');
+    // Digit signal so audit.ts's isContentWorthStoring specificity gate
+    // (hasNoSpecificity) doesn't filter these before they ever reach the
+    // rejection guard — same fixture-construction rule as case 1 above.
+    const rejectedContent = 'use bearer tokens for outbound api calls to port 8443';
+    await api.reject(ctx(home), { value: rejectedContent, reason: 'pre-emptive dry-run capture tombstone' });
+
+    const fixturePath = join(home, 'capture-dryrun-fixture.txt');
+    writeFileSync(
+      fixturePath,
+      [
+        `decision: ${rejectedContent}`,
+        'decision: rotate deploy keys every 90 days',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: true, global: false });
+    const dryLogs = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    logSpy.mockRestore();
+
+    expect(dryLogs).toContain(', 1 rejected)');
+    expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
+
+    // Real run agrees: the tombstoned item is refused, the sibling lands.
+    cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false });
+    const contents = loadEveryTenantEntries(home).map((e) => e.content);
+    expect(contents).not.toContain(rejectedContent);
+    expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);
+  });
+});
+
+describe('auto-promoted trace tombstone check', () => {
+  it('reject an auto-promoted trace -> next consolidate does not recreate it: skip counted, one reject_refusal audit, no trace row', async () => {
+    const home = makeRoot('rejection-acceptance-trace');
+    const sid = 'test-session-rejected-trace';
+    appendSessionEvent(home, 'default', {
+      session_id: sid, event_type: 'action', content: 'read config.ts', source: 'agent',
+    });
+    appendSessionEvent(home, 'default', {
+      session_id: sid,
+      event_type: 'session_complete',
+      content: 'success',
+      source: 'agent',
+      metadata: { summary: 'rotated the deploy key' },
+    });
+
+    const firstResult = await consolidate(home, { now: new Date() });
+    expect(firstResult.promotedTraces).toBe(1);
+
+    const traceBefore = loadEveryTenantEntries(home).find((e) => e.layer === Layer.Trace);
+    expect(traceBefore).toBeDefined();
+
+    await api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
+    expect(readEntry(home, traceBefore!.id)).toBeNull();
+
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const secondResult = await consolidate(home, { now: new Date() });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('skipped 1 auto-promoted trace'),
+    );
+    errorSpy.mockRestore();
+
+    // Not recreated, and not counted as promoted.
+    expect(secondResult.promotedTraces).toBe(0);
+    const tracesAfter = loadEveryTenantEntries(home).filter((e) => e.layer === Layer.Trace);
+    expect(tracesAfter).toHaveLength(0);
+
+    const db = openHippoDb(home);
+    try {
+      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      expect(refusals.length).toBe(1);
+      expect(refusals[0]!.metadata.sourceSessionId).toBe(sid);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+});
+
+describe('merge tombstone check uses the destination tenant', () => {
+  // T1 landing fix (2026-08-15 hardening pass, consolidate.ts): merge rows
+  // now stamp the CLUSTER'S OWN tenant, not always 'default' — both cases
+  // below were written against the pre-fix 'default' landing and are
+  // updated here to the new landing tenant (plan test point e).
+  it('a tombstone in the cluster tenant blocks the merge, now that merge rows land in their source tenant', async () => {
+    const home = makeRoot('rejection-acceptance-merge-tenant');
+    // Disable replay: see the sibling "consolidation-loop fix" test above.
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+
+    const shortText = 'rotate the staging tls certificates before expiry';
+    const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
+    const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
+    const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+    writeEntry(home, e1);
+    writeEntry(home, e2);
+
+    const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
+    const mergedDigest = rejectionDigest(mergedContent);
+
+    // Tombstone lives in 'tenant-a' — the cluster's own tenant, and (post
+    // T1 fix) the tenant createMemory's semantic entry actually stamps.
+    const db = openHippoDb(home);
+    try {
+      insertRejectedValue(db, {
+        tenantId: 'tenant-a',
+        digest: mergedDigest,
+        reason: 'pre-rejected in the actual destination tenant',
+        rejectedBy: 'test',
+        rejectedAt: new Date().toISOString(),
+        normalizedChars: normalizeValueForRejection(mergedContent).length,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const result = await consolidate(home, { dryRun: false });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
+    );
+    errorSpy.mockRestore();
+
+    expect(result.semanticCreated).toBe(0);
+    const allAfter = loadEveryTenantEntries(home);
+    expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
+
+    const dbAfter = openHippoDb(home);
+    try {
+      const refusals = queryAuditEvents(dbAfter, { tenantId: 'tenant-a', op: 'reject_refusal' });
+      expect(refusals.length).toBe(1);
+    } finally {
+      closeHippoDb(dbAfter);
+    }
+  });
+
+  it('a tombstone in an unrelated tenant does not falsely block the merge', async () => {
+    const home = makeRoot('rejection-acceptance-merge-tenant');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+
+    const shortText = 'archive the quarterly billing export before cleanup';
+    const longText = 'archive the quarterly billing export before cleanup and confirm checksum';
+    const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
+    const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+    writeEntry(home, e1);
+    writeEntry(home, e2);
+
+    const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
+    const mergedDigest = rejectionDigest(mergedContent);
+
+    // Tombstone lives in an unrelated tenant ('default') — the write now
+    // lands in 'tenant-a' (the cluster's own tenant), so this must NOT
+    // block.
+    const db = openHippoDb(home);
+    try {
+      insertRejectedValue(db, {
+        tenantId: 'default',
+        digest: mergedDigest,
+        reason: 'rejected in an unrelated tenant only',
+        rejectedBy: 'test',
+        rejectedAt: new Date().toISOString(),
+        normalizedChars: normalizeValueForRejection(mergedContent).length,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const result = await consolidate(home, { dryRun: false });
+
+    expect(result.semanticCreated).toBe(1);
+    const allAfter = loadEveryTenantEntries(home);
+    const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
+    expect(semantic).toBeDefined();
+    expect(semantic!.tenant_id).toBe('tenant-a');
+  });
+});
+
+describe('autoShare per-candidate rejection containment', () => {
+  it('one rejected + one clean candidate: the sleep-facing autoShare call completes, the clean one shares, the rejected one is counted', async () => {
+    const localRoot = makeRoot('rejection-acceptance-autoshare-local');
+    const globalRoot = makeRoot('rejection-acceptance-autoshare-global');
+    // autoShare -> shareMemory resolves its destination via
+    // getGlobalRoot()/HIPPO_HOME (same pattern as shared.test.ts's
+    // copyToGlobal describe block).
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+
+    const rejectedContent = 'never re-share this specific finding to the global store again';
+    const cleanContent = 'a completely different clean finding worth sharing globally';
+    const rejectedEntry = createMemory(rejectedContent, { layer: Layer.Episodic });
+    const cleanEntry = createMemory(cleanContent, { layer: Layer.Episodic });
+    writeEntry(localRoot, rejectedEntry);
+    writeEntry(localRoot, cleanEntry);
+
+    // Reject in the GLOBAL store, the store shareMemory -> writeEntry
+    // actually writes into.
+    await api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
+
+    const stats = { secretSkipped: 0, rejectedSkipped: 0 };
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const shared = autoShare(...sharingStores(localRoot), { minScore: 0, stats });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('skipped 1 candidate(s) refused'),
+    );
+    errorSpy.mockRestore();
+
+    // The clean candidate shared; the rejected one did not abort the batch.
+    expect(shared.length).toBe(1);
+    expect(shared[0]!.content).toBe(cleanContent);
+    expect(stats.rejectedSkipped).toBe(1);
+
+    const globalContents = loadEveryTenantEntries(globalRoot).map((e) => e.content);
+    expect(globalContents).toContain(cleanContent);
+    expect(globalContents).not.toContain(rejectedContent);
+  });
+});

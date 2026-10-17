@@ -110,7 +110,7 @@ Every method returns a Pydantic v2 model. Failed HTTP responses raise `HippoErro
 
 - **`/v1/sleep` is loopback-only + admin-gated on the server side.** The route refuses non-loopback connections (v1.11.4) and member-role Bearer tokens (v1.12.0 sub-1). This SDK is intended for use against a co-located `hippo serve` with an admin key.
 - **`/v1/sleep` operates host-wide (cross-tenant).** Matches the CLI's `hippo sleep` semantic. Per-tenant scoping deferred until non-loopback serving lands.
-- **`recall` does NOT populate `last_retrieval_ids` — by design** (locked in hippo-memory v1.11.5). To prime the last-recall outcome path, call `get_context` first. The CLI's `hippo recall` populates it because the CLI is interactive (user is about to run `hippo outcome --good`); the SDK is programmatic and SDK callers batch recall calls, where overwriting `last_retrieval_ids` each call would break the outcome workflow. Source: `api.ts:412-421` JSDoc + `tests/api-recall-no-side-effects.test.ts`.
+- **`recall` does NOT populate `last_retrieval_ids` — by design** (locked in hippo-memory v1.11.5). To prime the last-recall outcome path, call `get_context` first. The CLI's `hippo recall` populates it because the CLI is interactive (user is about to run `hippo outcome --good`); the SDK is programmatic and SDK callers batch recall calls, where overwriting `last_retrieval_ids` each call would break the outcome workflow. Source: `api.ts:412-421` JSDoc + `tests/api/api-recall-no-side-effects.test.ts`.
 - **Server connector webhook routes (`/v1/connectors/{slack,github}/events`)** are not wrapped in the SDK — they are server-side facing, not client-shaped.
 
 ## Versioning

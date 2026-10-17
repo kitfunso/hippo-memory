@@ -1,0 +1,121 @@
+import type { FullContext } from '../_helpers/api-ctx.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  backfillChannel,
+  type SlackHistoryFetcher,
+  type SlackHistoryPage,
+} from '../../src/connectors/slack/backfill.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+
+describe('backfillChannel cursor / oldest semantics', () => {
+  let root: string;
+  beforeEach(() => {
+    root = makeRoot('slack-bfc');
+  });
+
+  it('does NOT feed latest_ts as Slack cursor (would be opaque-token mismatch)', async () => {
+    // Seed slack_cursors with a prior latest_ts.
+    const db = openHippoDb(root);
+    try {
+      db.prepare(
+        `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)`,
+      ).run('default', 'C1', '1700000000.000100', new Date().toISOString());
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const calls: Array<{ cursor: string | null; oldest: string | undefined }> = [];
+    const fetcher: SlackHistoryFetcher = async ({ cursor, oldest }) => {
+      calls.push({ cursor, oldest });
+      return { messages: [], next_cursor: null };
+    };
+
+    await backfillChannel(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      fetcher,
+    });
+
+    expect(calls).toHaveLength(1);
+    // First page MUST have cursor=null (Slack mints the next-page token); the
+    // resume bound rides on `oldest`, NOT `cursor`.
+    expect(calls[0].cursor).toBeNull();
+    expect(calls[0].oldest).toBe('1700000000.000100');
+  });
+
+  it('subsequent pages within one run pass the next_cursor unchanged, oldest undefined', async () => {
+    const calls: Array<{ cursor: string | null; oldest: string | undefined }> = [];
+    const fetcher: SlackHistoryFetcher = async ({ cursor, oldest }) => {
+      calls.push({ cursor, oldest });
+      if (!cursor) {
+        return {
+          messages: [
+            { type: 'message', channel: 'C1', user: 'U1', text: 'pageone msg', ts: '1.1' },
+          ],
+          next_cursor: 'OPAQUE_PAGE2_TOKEN',
+        };
+      }
+      if (cursor === 'OPAQUE_PAGE2_TOKEN') {
+        return {
+          messages: [
+            { type: 'message', channel: 'C1', user: 'U1', text: 'pagetwo msg', ts: '2.2' },
+          ],
+          next_cursor: null,
+        };
+      }
+      throw new Error('unexpected cursor');
+    };
+
+    await backfillChannel(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      fetcher,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].cursor).toBeNull();
+    expect(calls[0].oldest).toBeUndefined(); // No prior cursor row, so no resume bound.
+    expect(calls[1].cursor).toBe('OPAQUE_PAGE2_TOKEN');
+    expect(calls[1].oldest).toBeUndefined(); // Page 2+ never sets oldest.
+  });
+  it('a rerun resumes at the stored cursor instead of re-paging history', async () => {
+    // TODOS v0.38.0 asked for a "stop at cursor" mode on the claim that backfill
+    // drains a channel every run. It does not: the persisted cursor is replayed as
+    // `oldest`, so Slack bounds the range server-side. This pins that.
+    const mkPage = (tss: string[], next: string | null): SlackHistoryPage => ({
+      messages: tss.map((ts) => ({ ts, text: `m${ts}`, user: 'U1', type: 'message', channel: 'C1' })),
+      next_cursor: next,
+    });
+
+    let firstRun = 0;
+    const seed: SlackHistoryFetcher = async () => {
+      firstRun++;
+      return firstRun === 1 ? mkPage(['300.0', '200.0'], 'PAGE2') : mkPage(['100.0'], null);
+    };
+    const r1 = await backfillChannel(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      fetcher: seed,
+    });
+    expect(r1.pages).toBe(2); // Fresh channel: drains, which is what backfill means.
+
+    const calls: Array<{ cursor: string | null; oldest?: string }> = [];
+    const rerun: SlackHistoryFetcher = async ({ cursor, oldest }) => {
+      calls.push({ cursor, oldest });
+      return mkPage([], null);
+    };
+    await backfillChannel(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      fetcher: rerun,
+    });
+
+    expect(calls).toHaveLength(1); // Caught up: one page, no walk back through history.
+    expect(calls[0].oldest).toBe('300.0'); // Newest ts from run 1, replayed as the bound.
+    expect(calls[0].cursor).toBeNull();
+  });
+});

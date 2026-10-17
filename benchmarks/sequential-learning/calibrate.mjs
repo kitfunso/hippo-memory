@@ -130,7 +130,7 @@ function parseArgs() {
 function deriveCalibrationSeeds(n) {
   // Post-review P1-1 -- offset bumped from 100 to 10000 for larger input
   // distance vs hypothesis seeds (1000+i for i in 0..19). Pairwise non-collision
-  // verified by tests/sl-calibrate.test.ts.
+  // verified by tests/benchmarks/sl-calibrate.test.ts.
   return Array.from({ length: n }, (_, i) =>
     (Math.imul(0x9E3779B9, (1000 + 10000 + i) >>> 0)) >>> 0,
   );

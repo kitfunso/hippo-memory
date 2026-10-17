@@ -1,0 +1,80 @@
+// MCP auto-sleep: a remember that lands while a sleep runs on the same store must not start a second one.
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { handleMcpRequest } from '../../src/mcp/server.js';
+import { currentRequestStores, runWithRequestStores, type RequestStores } from '../../src/db/index.js';
+import { sleepRuns } from '../_helpers/sleep-runs.js';
+import { cliStdioHost } from '../../src/cli/api-context.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+const roots: string[] = [];
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+});
+
+function remember(hippoRoot: string, text: string) {
+  return handleMcpRequest(
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
+    cliStdioHost.contextFor(hippoRoot, 'default'),
+  );
+}
+
+describe('MCP auto-sleep', () => {
+  it('runs one sleep per store at a time, and the next once that one settles', async () => {
+    const root = makeRoot('mcp-autosleep');
+    roots.push(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
+    // A sleep sends each new episodic memory to fact extraction, so holding that reply keeps the sleep running.
+    const sent: string[] = [];
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      sent.push(String(init?.body));
+      await held;
+      return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+    }));
+
+    await remember(root, 'the deploy moved to friday');
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    await remember(root, 'alice owns the billing service');
+    release();
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
+    expect(sent.filter((body) => body.includes('alice owns the billing service'))).toEqual([]);
+
+    await remember(root, 'alice reviews every schema change');
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(2));
+  });
+
+  it("runs in its own open scope, not the tool call's, with the caller's lock wait", async () => {
+    const root = makeRoot('mcp-autosleep-scope');
+    roots.push(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
+    const seen: { scope: RequestStores | undefined; open: boolean }[] = [];
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      const scope = currentRequestStores();
+      seen.push({ scope, open: scope !== undefined && !scope.closed });
+      return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+    }));
+
+    // HTTP POST /mcp wraps the call in a 250 ms scope; the tool call joins it.
+    let callScope: RequestStores | undefined;
+    await runWithRequestStores(async () => {
+      callScope = currentRequestStores();
+      await remember(root, 'the deploy moved to friday');
+    }, { busyWaitMs: 250 });
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
+    // One episodic memory is one extraction call; no later LLM pass has the facts or summaries it needs.
+    expect(seen).toHaveLength(1);
+    for (const s of seen) {
+      expect(s.open).toBe(true);
+      expect(s.scope).not.toBe(callScope);
+      expect(s.scope?.busyWaitMs).toBe(250);
+    }
+  });
+});

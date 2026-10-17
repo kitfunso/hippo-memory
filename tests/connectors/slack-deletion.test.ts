@@ -1,0 +1,85 @@
+import type { FullContext } from '../_helpers/api-ctx.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { ingestMessage } from '../../src/connectors/slack/ingest.js';
+import { handleMessageDeleted } from '../../src/connectors/slack/deletion.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+
+describe('handleMessageDeleted', () => {
+  let root: string;
+  beforeEach(() => { root = makeRoot('slack-del');  });
+
+  it('archives the matching kind=raw row via archiveRawMemory', async () => {
+    const ingested = await ingestMessage(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      message: { type: 'message', channel: 'C1', user: 'U1', text: 'doomed', ts: '1700.0001' },
+      eventId: 'Ev1',
+    });
+    expect(ingested.status).toBe('ingested');
+
+    const result = await handleMessageDeleted(ctx(root), {
+      teamId: 'T1',
+      channelId: 'C1',
+      deletedTs: '1700.0001',
+      eventId: 'EvDel1',
+    });
+    expect(result.status).toBe('archived');
+
+    const remaining = loadEveryTenantEntries(root).filter((e) => e.id === ingested.memoryId);
+    expect(remaining).toHaveLength(0);
+
+    // raw_archive table now has the row.
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: literal SELECT of these two known columns from the
+      // raw_archive row archiveRawMemory just wrote for this memory.
+      const arch = db.prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as
+        | { memory_id: string; reason: string }
+        | undefined;
+      expect(arch).toBeDefined();
+      expect(arch!.reason).toContain('source_deleted');
+    } finally { closeHippoDb(db); }
+  });
+
+  it('returns not_found for unknown artifact_ref (idempotent on replay)', async () => {
+    const r = await handleMessageDeleted(ctx(root), {
+      teamId: 'T1', channelId: 'C1', deletedTs: '9999.9999', eventId: 'EvDel2',
+    });
+    expect(r.status).toBe('not_found');
+  });
+
+  it('cross-tenant deletion event cannot archive another tenants row', async () => {
+    // Ingest under tenant 'acme'.
+    const acmeCtx: FullContext = apiCtx(root, 'acme', { subject: 'connector:slack', role: 'admin' });
+    const ingested = await ingestMessage(acmeCtx, {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      message: { type: 'message', channel: 'C1', user: 'U1', text: 'acme secret', ts: '1700.0001' },
+      eventId: 'EvAcme1',
+    });
+    expect(ingested.status).toBe('ingested');
+
+    // Fire deletion under tenant 'default' for the same artifact_ref.
+    const defaultCtx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+    const r = await handleMessageDeleted(defaultCtx, {
+      teamId: 'T1', channelId: 'C1', deletedTs: '1700.0001', eventId: 'EvDelCross',
+    });
+    expect(r.status).toBe('not_found');
+
+    // Acme row is still there; raw_archive has no row.
+    const remaining = loadEveryTenantEntries(root).filter((e) => e.id === ingested.memoryId);
+    expect(remaining).toHaveLength(1);
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: literal COUNT(*) query against the known raw_archive schema
+      // always returns a single { c } row.
+      const archCount = db.prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as { c: number };
+      expect(Number(archCount.c)).toBe(0);
+    } finally { closeHippoDb(db); }
+  });
+});

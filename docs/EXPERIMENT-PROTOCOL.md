@@ -2855,7 +2855,7 @@ carry the not-shown answer result next to the ranking win.
 
 The "Standing" bullet near the top of this file says `src/judgment.ts` ships
 behind `TYPESAFE_API_KEY`. It does not. `src/judgment.ts` and
-`tests/judgment.test.ts` are untracked campaign files with no call site in
+`tests/eval/judgment.test.ts` are untracked campaign files with no call site in
 `src/`, and they are not part of the release.
 
 # LANE 21 PRE-REGISTRATION: can recall say "nothing here answers this"? Declared 2026-09-19, BEFORE the run

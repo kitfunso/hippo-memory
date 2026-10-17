@@ -1,0 +1,131 @@
+// Every automatic delete (sleep's dedupe, audit and consolidation flush, and the automatic deleteEntry that `hippo audit --fix`
+// also calls) leaves a memory that backs a decision, incident or other object in place: deleting it would null the object's link.
+import type { FullContext } from '../_helpers/api-ctx.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { sleep } from '../../src/api/index.js';
+import { auditMemories } from '../../src/core/memory-audit.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { saveDecision } from '../../src/objects/decisions.js';
+import { deduplicateStore } from '../../src/consolidate/dedupe.js';
+import { openIncident } from '../../src/objects/incidents.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { objectsAt } from '../_helpers/objects-at.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { loadConfig } from '../../src/core/config.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry, memoriesBackingObjects } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/open.js';
+
+const roots: string[] = [];
+
+function newRoot(): string {
+  const root = makeRoot('object-memories');
+  roots.push(root);
+  writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));
+  return root;
+}
+
+afterEach(() => {
+  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+});
+
+const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' }));
+
+function run(root: string, sql: string, ...params: string[]): void {
+  const db = openHippoDb(root);
+  try {
+    db.prepare(sql).run(...params);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function linkOf(root: string, table: string, objectId: number): string | null {
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: row's shape matches the single memory_id column named in the SELECT.
+    return (db.prepare(`SELECT memory_id FROM ${table} WHERE id = ?`).get(objectId) as { memory_id: string | null }).memory_id;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+const SAVERS = [
+  ['decision', 'decisions', async (root: string) => await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', 'incidents', async (root: string) => await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+] as const;
+
+describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
+  it('outlives a stronger copy of its text through sleep dedupe, and the link holds', async () => {
+    const root = newRoot();
+    const object = await save(root);
+    const backing = readEntry(root, object.memoryId!)!;
+    const copy = { ...createMemory(backing.content), strength: 1, retrieval_count: 9 };
+    writeEntry(root, copy);
+    run(root, `UPDATE memories SET strength = 0.2 WHERE id = ?`, backing.id);
+
+    const dry = await sleep(ctxFor(root), { dryRun: true, noShare: true });
+    expect(dry.deduped?.removed ?? 0).toBe(0);
+    await sleep(ctxFor(root), { noShare: true });
+
+    expect(readEntry(root, backing.id)).not.toBeNull();
+    expect(linkOf(root, table, object.id)).toBe(backing.id);
+  });
+
+  it('outlives the sleep quality audit when its text reads as junk, and only warns', async () => {
+    const root = newRoot();
+    const object = await save(root);
+    run(root, `UPDATE memories SET content = 'nope' WHERE id = ?`, object.memoryId!);
+
+    const backingSet = memoriesBackingObjects(root);
+    expect(auditMemories(loadAllEntries(root, 'default'), backingSet).issues).toMatchObject([
+      { memoryId: object.memoryId, severity: 'warning', reason: expect.stringContaining('backs an object') },
+    ]);
+    const result = await sleep(ctxFor(root), { noShare: true });
+
+    expect(result.audit?.errorsRemoved ?? 0).toBe(0);
+    expect(readEntry(root, object.memoryId!)).not.toBeNull();
+    expect(linkOf(root, table, object.id)).toBe(object.memoryId);
+  });
+
+  it('is refused by an automatic delete and removed by an explicit one', async () => {
+    const root = newRoot();
+    const object = await save(root);
+
+    expect(deleteEntry(root, object.memoryId!, { automatic: true })).toBe(false);
+    expect(readEntry(root, object.memoryId!)).not.toBeNull();
+    expect(deleteEntry(root, object.memoryId!)).toBe(true);
+  });
+
+  it('is skipped by the consolidation flush, as a delete and as a dormant move', async () => {
+    const root = newRoot();
+    const object = await save(root);
+    const plain = createMemory('the staging cluster restarts on sundays');
+    writeEntry(root, plain);
+    const backing = readEntry(root, object.memoryId!)!;
+    const move = { entry: backing, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
+
+    expect(batchWriteAndDelete(root, [], [backing.id, plain.id])).toEqual([plain.id]);
+    expect(batchWriteAndDelete(root, [], [], { dormant: [move] })).toEqual([]);
+    expect(readEntry(root, backing.id)).not.toBeNull();
+    expect(linkOf(root, table, object.id)).toBe(backing.id);
+  });
+});
+
+it('control: a plain weaker copy is still removed by dedupe', () => {
+  const root = newRoot();
+  const text = 'the build cache lives in /var/cache/hippo on the CI runners';
+  const keeper = { ...createMemory(text), strength: 1 };
+  const copy = { ...createMemory(text), strength: 0.2 };
+  writeEntry(root, keeper);
+  writeEntry(root, copy);
+
+  expect(deduplicateStore(sqliteConsolidation(handlesOf(root))).removed).toBe(1);
+  expect(readEntry(root, copy.id)).toBeNull();
+});

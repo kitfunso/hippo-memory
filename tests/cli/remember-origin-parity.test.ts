@@ -1,0 +1,92 @@
+// The CLI thin client sends no project, so a routed remember stamps what the direct path stamps on the same store.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { handleRemember } from '../../src/cli/remember.js';
+import { initStore } from '../../src/store/open.js';
+import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
+import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import type { JsonValue } from '../../src/util/json.js';
+import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+let tmp: string;
+let handle: ServerHandle | null = null;
+
+/** `<tmp>/proj/.hippo` inside a git checkout, so the folder stamp is `proj`; no embedder, so a write starts no model load. */
+function projectStore(config: Record<string, JsonValue>): string {
+  fs.mkdirSync(path.join(tmp, 'proj', '.git'), { recursive: true });
+  const store = path.join(tmp, 'proj', '.hippo');
+  fs.mkdirSync(store, { recursive: true });
+  initStore(store);
+  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ ...config, embeddings: { enabled: false } }));
+  return store;
+}
+
+/** The real direct path, `hippo remember` with no server up; `force` skips the salience gate, which is not under test. */
+async function directRemember(store: string, text: string): Promise<string> {
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  try {
+    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags: { force: true } });
+  } finally {
+    log.mockRestore();
+  }
+  const row = loadAllEntries(store, 'default').find((e) => e.content === text);
+  expect(row).toBeDefined();
+  return row?.id ?? '';
+}
+
+/** `hippo remember` with a server up: the CLI itself decides to route and builds the body, so the test fails if it stops routing. */
+async function thinRemember(store: string, text: string): Promise<string> {
+  handle = await serve({ hippoRoot: store, port: 0 });
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  let printed = '';
+  try {
+    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags: {} });
+  } finally {
+    printed = log.mock.calls.map((c) => String(c[0])).join(' ');
+    log.mockRestore();
+  }
+  expect(printed).toMatch(/Remembered \[.*\] \(via http/);
+  const row = loadAllEntries(store, 'default').find((e) => e.content === text);
+  expect(row).toBeDefined();
+  return row?.id ?? '';
+}
+
+async function bothOrigins(store: string): Promise<ReadonlyArray<string | null | undefined>> {
+  const direct = await directRemember(store, 'the build cache lives under the shared drive');
+  const thin = await thinRemember(store, 'the release branch is cut on thursdays');
+  return [readEntry(store, direct)?.origin_project, readEntry(store, thin)?.origin_project];
+}
+
+beforeEach(() => {
+  tmp = makeRoot('origin-parity', { init: false });
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
+  _resetProjectIdentityCacheForTests();
+  _resetSharedStoreCacheForTests();
+});
+
+afterEach(async () => {
+  await handle?.stop();
+  handle = null;
+  _resetSharedStoreCacheForTests();
+});
+
+describe('remember origin: direct path and thin client agree', () => {
+  it('both stamp the folder project on a store that is not shared', async () => {
+    expect(await bothOrigins(projectStore({}))).toEqual(['proj', 'proj']);
+  });
+
+  it('both stamp NULL on a shared store', async () => {
+    expect(await bothOrigins(projectStore({ sharedStore: true }))).toEqual([null, null]);
+  });
+});

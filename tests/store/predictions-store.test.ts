@@ -1,0 +1,287 @@
+/**
+ * E2 prediction first-class object — store-layer tests.
+ * Docs: docs/plans/2026-05-26-e2-prediction-object.md
+ *
+ * Covers what only predictions have; SAVEPOINT rollback and the INSERT tenant trigger run per table in typed-object-store.test.ts.
+ * 1. savePrediction creates both memory and predictions row
+ * 2. closePrediction updates the row + emits audit
+ * 3. ON DELETE SET NULL: forget the memory, prediction survives with NULL memory_id
+ * 4. loadPredictionsByClass filters by class + closure_state
+ * 5. loadOpenPredictions excludes closed
+ * 6. VALID_CLOSURE_STATES rejection at the closePrediction layer
+ * 7. Tenant scoping: cross-tenant load returns empty
+ * 8. UPDATE trigger, re-close and missing-id guards; the closure_state CHECK constraint
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { Layer} from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { savePrediction } from '../_helpers/save-prediction.js';
+import { VALID_CLOSURE_STATES } from '../../src/core/prediction.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import {
+  deleteEntry, closePrediction, loadPredictionById, loadPredictionsByClass, loadOpenPredictions,
+} from '../_helpers/root-forms.js';
+
+function safeRmSync(p: string): void {
+  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+}
+
+describe('predictions store (first-class object)', () => {
+  let home: string;
+  beforeEach(() => { home = makeRoot('predictions'); });
+  afterEach(() => safeRmSync(home));
+
+  it('savePrediction creates both memory and predictions row', () => {
+    const pred = savePrediction(home, 'default', {
+      classTag: 'migration-effort',
+      claimText: 'migration takes 2 days',
+      estimateValue: 2,
+      estimateUnit: 'days',
+      targetDate: '2026-06-15',
+    });
+
+    expect(pred.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
+    expect(pred.memoryId).toMatch(/^sem_/); // the mirror is a semantic-layer memory
+    expect(pred.tenantId).toBe('default');
+    expect(pred.classTag).toBe('migration-effort');
+    expect(pred.claimText).toBe('migration takes 2 days');
+    expect(pred.estimateValue).toBe(2);
+    expect(pred.estimateUnit).toBe('days');
+    expect(pred.targetDate).toBe('2026-06-15');
+    expect(pred.actualValue).toBeNull();
+    expect(pred.closureState).toBe('open');
+    expect(pred.closedAt).toBeNull();
+
+    // Memory mirror exists with the prediction tag
+    const db = openHippoDb(home);
+    try {
+      // SAFETY: the query selects the id/content/tags_json columns from memories,
+      // whose schema types those as TEXT/TEXT/TEXT (JSON-encoded array) respectively.
+      const memRow = db.prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`).get(pred.memoryId!) as { id: string; content: string; tags_json: string } | undefined;
+      expect(memRow).toBeDefined();
+      expect(memRow!.content).toBe('migration takes 2 days');
+      // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
+      // writeEntry/savePrediction in this codebase.
+      const tags = JSON.parse(memRow!.tags_json) as string[];
+      expect(tags).toContain('prediction');
+      expect(tags).toContain('migration-effort');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('closePrediction updates the row + emits predict_close audit', () => {
+    const pred = savePrediction(home, 'default', {
+      classTag: 'rollout-risk',
+      claimText: 'low risk rollout',
+      estimateValue: 0.1,
+    });
+
+    const closed = closePrediction(home, 'default', pred.id, {
+      closureState: 'closed',
+      actualValue: 0.4,
+      closureNote: 'higher than expected',
+    });
+
+    expect(closed.id).toBe(pred.id);
+    expect(closed.closureState).toBe('closed');
+    expect(closed.actualValue).toBe(0.4);
+    expect(closed.closureNote).toBe('higher than expected');
+    expect(closed.closedAt).toBeDefined();
+    expect(closed.closedAt).not.toBeNull();
+
+    // Audit row landed
+    const db = openHippoDb(home);
+    try {
+      // SAFETY: the query selects op/target_id/metadata_json from audit_log, whose
+      // schema types those columns TEXT/TEXT/TEXT.
+      const auditRows = db.prepare(
+        `SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
+      ).all(String(pred.id)) as Array<{ op: string; target_id: string; metadata_json: string }>;
+      expect(auditRows.length).toBe(1);
+      // SAFETY: predict_close audit metadata is always the flat object built at the
+      // predict_close appendAuditEvent call site with these three fields.
+      const meta = JSON.parse(auditRows[0].metadata_json) as { prediction_id: number; closure_state: string; has_actual: boolean };
+      expect(meta.closure_state).toBe('closed');
+      expect(meta.has_actual).toBe(true);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('ON DELETE SET NULL: forgetting the memory orphans the prediction (memory_id NULL)', () => {
+    const pred = savePrediction(home, 'default', {
+      classTag: 'test-class',
+      claimText: 'soft-link test',
+      estimateValue: 1,
+    });
+    expect(pred.memoryId).not.toBeNull();
+
+    // Forget the backing memory via deleteEntry (one of the 4 deletion paths
+    // round-1 CRIT identified)
+    deleteEntry(home, pred.memoryId!);
+
+    // Prediction row still exists, memory_id is now NULL
+    const reloaded = loadPredictionById(home, 'default', pred.id);
+    expect(reloaded).not.toBeNull();
+    expect(reloaded!.memoryId).toBeNull();
+    expect(reloaded!.claimText).toBe('soft-link test');
+    expect(reloaded!.closureState).toBe('open');
+  });
+
+  it('loadPredictionsByClass filters by class + closure_state', () => {
+    savePrediction(home, 'default', { classTag: 'a', claimText: 'open-a-1' });
+    savePrediction(home, 'default', { classTag: 'a', claimText: 'open-a-2' });
+    savePrediction(home, 'default', { classTag: 'b', claimText: 'open-b-1' });
+
+    const aOpen = loadPredictionsByClass(home, 'default', 'a', { closureState: 'open' });
+    expect(aOpen.length).toBe(2);
+    expect(aOpen.every((p) => p.classTag === 'a')).toBe(true);
+    expect(aOpen.every((p) => p.closureState === 'open')).toBe(true);
+
+    const bOpen = loadPredictionsByClass(home, 'default', 'b');
+    expect(bOpen.length).toBe(1);
+    expect(bOpen[0].classTag).toBe('b');
+  });
+
+  it('loadOpenPredictions excludes closed', () => {
+    const p1 = savePrediction(home, 'default', { classTag: 'x', claimText: 'first prediction' });
+    savePrediction(home, 'default', { classTag: 'x', claimText: 'second prediction' });
+    closePrediction(home, 'default', p1.id, { closureState: 'closed', actualValue: 1 });
+
+    const open = loadOpenPredictions(home, 'default');
+    expect(open.length).toBe(1);
+    expect(open[0].closureState).toBe('open');
+    expect(open[0].claimText).toBe('second prediction');
+  });
+
+  it('VALID_CLOSURE_STATES rejection: invalid state throws at closePrediction', () => {
+    const pred = savePrediction(home, 'default', { classTag: 'x', claimText: 'open prediction text' });
+    expect(() => {
+      closePrediction(home, 'default', pred.id, {
+        // @ts-expect-error — runtime validation test
+        closureState: 'closed-clean',
+      });
+    }).toThrow(/closureState must be one of/);
+
+    expect(VALID_CLOSURE_STATES.has('open')).toBe(true);
+    expect(VALID_CLOSURE_STATES.has('closed')).toBe(true);
+    expect(VALID_CLOSURE_STATES.has('closed-unknown')).toBe(true);
+    // @ts-expect-error - 'closed-clean' is deliberately outside the closure-state set
+    expect(VALID_CLOSURE_STATES.has('closed-clean')).toBe(false);
+  });
+
+  it('tenant scoping: cross-tenant load returns empty', () => {
+    savePrediction(home, 'tenant-a', { classTag: 'x', claimText: 'a-mem' });
+    savePrediction(home, 'tenant-b', { classTag: 'x', claimText: 'b-mem' });
+
+    const aResults = loadPredictionsByClass(home, 'tenant-a', 'x');
+    const bResults = loadPredictionsByClass(home, 'tenant-b', 'x');
+    const cResults = loadPredictionsByClass(home, 'tenant-c', 'x');
+
+    expect(aResults.length).toBe(1);
+    expect(aResults[0].claimText).toBe('a-mem');
+    expect(bResults.length).toBe(1);
+    expect(bResults[0].claimText).toBe('b-mem');
+    expect(cResults.length).toBe(0);
+  });
+
+  it('UPDATE trigger blocks tenant_id-only mutation', () => {
+    // Create memory under tenant-a + a prediction referencing it
+    const memA = createMemory('tenant-a prediction memory', {
+      tags: ['prediction', 'x'],
+      layer: Layer.Semantic,
+      confidence: 'observed',
+      source: 'prediction',
+      kind: 'distilled',
+      tenantId: 'tenant-a',
+    });
+    writeEntry(home, memA);
+
+    const db = openHippoDb(home);
+    try {
+      db.prepare(`
+        INSERT INTO predictions(memory_id, tenant_id, class_tag, claim_text, closure_state, created_at)
+        VALUES (?, 'tenant-a', 'x', 'open prediction', 'open', ?)
+      `).run(memA.id, new Date().toISOString());
+
+      // Attempt UPDATE that mutates tenant_id only (memory_id unchanged).
+      // Pre-fix: trigger only fired when memory_id changed; this would silently land.
+      // Post-fix: WHEN clause covers tenant_id changes too, trigger ABORTs.
+      expect(() => {
+        db.prepare(`UPDATE predictions SET tenant_id = 'tenant-b' WHERE memory_id = ?`).run(memA.id);
+      }).toThrow(/tenant_id must match memories\.tenant_id/);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('closePrediction rejects already-closed predictions', () => {
+    const pred = savePrediction(home, 'default', {
+      classTag: 'reclose-test',
+      claimText: 'predict and close once',
+      estimateValue: 1,
+    });
+
+    // First close succeeds
+    closePrediction(home, 'default', pred.id, {
+      closureState: 'closed',
+      actualValue: 2,
+      closureNote: 'first close',
+    });
+
+    // Second close throws — cannot re-close
+    expect(() => {
+      closePrediction(home, 'default', pred.id, {
+        closureState: 'closed',
+        actualValue: 99,
+        closureNote: 'should be rejected',
+      });
+    }).toThrow(/already closed/);
+
+    // Confirm the original close survived (actual_value unchanged)
+    const reloaded = loadPredictionById(home, 'default', pred.id);
+    expect(reloaded!.actualValue).toBe(2);
+    expect(reloaded!.closureNote).toBe('first close');
+
+    // Confirm only ONE predict_close audit landed (not two)
+    const db = openHippoDb(home);
+    try {
+      // SAFETY: the query selects only the id column from audit_log, an INTEGER
+      // primary key.
+      const auditRows = db.prepare(
+        `SELECT id FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
+      ).all(String(pred.id)) as Array<{ id: number }>;
+      expect(auditRows.length).toBe(1);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('closePrediction throws clear error on missing id', () => {
+    expect(() => {
+      closePrediction(home, 'default', 99999, {
+        closureState: 'closed',
+        actualValue: 1,
+      });
+    }).toThrow(/not found for tenant/);
+  });
+
+  it('CHECK constraint rejects an unknown closure_state', () => {
+    const db = openHippoDb(home);
+    try {
+      expect(() => {
+        db.prepare(`
+          INSERT INTO predictions(tenant_id, class_tag, claim_text, closure_state, created_at)
+          VALUES ('default', 'x', 'check-violation', 'invalid-state', ?)
+        `).run(new Date().toISOString());
+      }).toThrow(/CHECK constraint failed/);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+});

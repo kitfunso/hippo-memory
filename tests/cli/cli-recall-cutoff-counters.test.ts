@@ -1,0 +1,268 @@
+// tests/cli/cli-recall-cutoff-counters.test.ts
+//
+// C5 (2026-08-24 follow-up, episode 01M0SB83EW4JF1RCFC1GAWTAQN): the CLI
+// `hippo recall` path dropped almost every candidate and reported it via
+// counters that never moved. `droppedByBudgetCountCmd` was computed from
+// `results.length - limit` (src/cli.ts) AFTER the search call, but `results`
+// had already been ranked and truncated by hybridSearch/physicsSearch, so
+// the counter read 0 while hundreds of candidates silently vanished. The
+// `Cutoff:` line (guarded on `clauses.length > 0`) never printed as a result.
+//
+// This suite asserts the fix at the level the plan's acceptance criteria
+// name:
+//   1. The invariant `totalCandidates == droppedPreRank + droppedByBudget +
+//      returned` holds across several --limit/query combinations, driven
+//      through the real CLI entry against a real seeded store.
+//   2. The `Cutoff:` line actually PRINTS in CLI text output when a recall
+//      is truncated (the specific gap: no prior test drove the CLI summary
+//      output at all).
+//   3. The line does NOT print when nothing was truncated (guard against
+//      always-on noise).
+//
+// Same isolation harness as tests/api/goal-retrieval-policy.test.ts: per-test cwd
+// tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1,
+// initStore + api.remember for seeding, the CLI entry run in process for
+// the recall itself (real DB, real CLI, project convention).
+
+import type { FullContext } from '../_helpers/api-ctx.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { rmSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
+import { remember } from '../../src/api/index.js';
+import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { runCli } from '../../src/cli.js';
+import { runInProcess } from '../_helpers/run-in-process.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+/** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
+  vi.stubEnv('HIPPO_HOME', globalRoot);
+  vi.stubEnv('HIPPO_TENANT', 'default');
+  vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
+}
+
+function ctxFor(root: string): FullContext {
+  return apiCtx(root, 'default', { subject: 'c5-test', role: 'admin' });
+}
+
+/** Seed `count` distinct memories that all match `keyword`. */
+async function seedMatchingMemories(env: TestEnv, keyword: string, count: number): Promise<void> {
+  const ctx = ctxFor(env.hippoRoot);
+  for (let i = 0; i < count; i++) {
+    await remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
+  }
+}
+
+interface SuppressionSummary {
+  totalCandidates: number;
+  droppedPreRank: number;
+  droppedByBudget: number;
+}
+
+type RecallJson = { results: unknown[]; suppressionSummary: SuppressionSummary };
+
+async function recallJsonBudget(env: TestEnv, query: string, budget: number): Promise<RecallJson> {
+  const raw = await hippo(env.cwd, env.globalRoot, 'recall', query, '--json', '--budget', String(budget));
+  return JSON.parse(raw.slice(raw.indexOf('{')));
+}
+
+async function recallJson(env: TestEnv, query: string, limit: number): Promise<RecallJson> {
+  const raw = await hippo(env.cwd, env.globalRoot, 'recall', query, '--json', '--limit', String(limit));
+  return JSON.parse(raw.slice(raw.indexOf('{')));
+}
+
+function recallText(env: TestEnv, query: string, limit: number): Promise<string> {
+  return hippo(env.cwd, env.globalRoot, 'recall', query, '--why', '--limit', String(limit));
+}
+
+describe('cmdRecall candidate accounting closes', () => {
+  let env: TestEnv;
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+  });
+
+  it.each([
+    { keyword: 'widgetalpha', seeded: 30, limit: 5 },
+    { keyword: 'widgetbeta', seeded: 30, limit: 15 },
+    { keyword: 'widgetgamma', seeded: 12, limit: 4 },
+  ])(
+    'totalCandidates == droppedPreRank + droppedByBudget + returned ($keyword, limit=$limit)',
+    async ({ keyword, seeded, limit }) => {
+      env = makeEnv(`c5-${keyword}`);
+      await seedMatchingMemories(env, keyword, seeded);
+
+      const out = await recallJson(env, keyword, limit);
+      const s = out.suppressionSummary;
+      const returned = out.results.length;
+
+      expect(s.totalCandidates).toBe(s.droppedPreRank + s.droppedByBudget + returned);
+      // Sanity: the invariant should not be trivially true by everything
+      // being zero — this recall must actually have candidates and a cut.
+      expect(s.totalCandidates).toBeGreaterThanOrEqual(seeded);
+      expect(returned).toBeLessThanOrEqual(limit);
+    },
+  );
+
+  it('invariant also holds when nothing is truncated (droppedByBudget == 0)', async () => {
+    env = makeEnv('c5-notrunc');
+    await seedMatchingMemories(env, 'widgetdelta', 5);
+
+    const out = await recallJson(env, 'widgetdelta', 100);
+    const s = out.suppressionSummary;
+    const returned = out.results.length;
+
+    expect(s.totalCandidates).toBe(s.droppedPreRank + s.droppedByBudget + returned);
+    expect(s.droppedByBudget).toBe(0);
+  });
+});
+
+
+
+describe('graph-expanded recall keeps the published accounting honest', () => {
+  let home: string;
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  // The graph fix has to be proven by EXECUTION, with a real edge. Two
+  // earlier attempts to verify it used fixtures with no entity relations, so
+  // the hops path added nothing and the checks were vacuous. This seeds the
+  // same shape as tests/graph/graph-recall.test.ts: B is lexically orthogonal to
+  // the query and reachable only through a supersedes edge.
+  it('a row surfaced by edge is included in the published total and the invariant closes', async () => {
+    // Same root convention as makeEnv: the store ROOT is the .hippo directory
+    // itself. initStore(home) with a bare dir leaves cwd/.hippo uninitialized
+    // and the CLI exits "No .hippo directory found".
+    home = makeRoot('c5-graph', { init: false });
+    const root = join(home, '.hippo');
+    const globalRoot = join(home, 'global-hippo');
+    mkdirSync(globalRoot, { recursive: true });
+    initStore(root);
+    const T = 'default';
+    const mk = (text: string) => {
+      const m = createMemory(text, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T,
+      });
+      writeEntry(root, m, { actor: 'test' });
+      return m;
+    };
+    const a = mk('decision quokka about cache invalidation strategy');
+    const b = mk('wholly unrelated wording xyzzy plugh frobnicate');
+    const ea = insertEntityAt(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
+    const eb = insertEntityAt(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
+    insertRelationAt(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+
+    // cwd is `home` so no stray local store joins the recall: this test pins
+    // the SINGLE-store graph case. (A worktree cwd would silently merge its
+    // local .hippo - remember() writes to cwd/.hippo, HIPPO_HOME only moves
+    // the global store. That exact confusion made two earlier probes invalid.)
+    const raw = await hippo(home, globalRoot, 'recall', 'quokka', '--hops', '1', '--json');
+    const d = JSON.parse(raw.slice(raw.indexOf('{')));
+    const s: SuppressionSummary = d.suppressionSummary;
+    const rows: Array<{ entry?: { id: string }; id?: string }> = d.memories ?? d.results ?? [];
+    const ids = rows.map((r) => (r.entry ?? r).id);
+
+    // the edge must actually fire, or this test proves nothing
+    expect(ids, 'graph neighbour must be surfaced by edge').toContain(b.id);
+    // the graph-added row must be inside the PUBLISHED total, not only the
+    // internal arithmetic - this is what broke: total said 1, returned said 2
+    expect(
+      s.totalCandidates,
+      'published invariant must close when the graph adds an out-of-pool row',
+    ).toBe(s.droppedPreRank + s.droppedByBudget + rows.length);
+    expect(s.totalCandidates, 'total must count the edge-surfaced row').toBeGreaterThanOrEqual(rows.length);
+  });
+});
+
+describe('BUDGET-driven truncation is counted (the measured failure)', () => {
+  let env: TestEnv;
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+  });
+
+  // THE GAP THIS FILE ORIGINALLY MISSED. Every other test here passes
+  // --limit, and the OLD code counted the --limit slice correctly, so those
+  // tests pass on master and prove only that the wording changed.
+  //
+  // The measured production failure was budget/rank driven with NO --limit:
+  // totalCandidates 400, returned 3, droppedByBudget 0, Cutoff line silent.
+  // This is the case that must go red without the derivation fix.
+  it('reports drops when a small --budget truncates and --limit is never passed', async () => {
+    env = makeEnv('c5-budget-gap');
+    await seedMatchingMemories(env, 'widgetbudget', 40);
+
+    const out = await recallJsonBudget(env, 'widgetbudget', 40);
+    const s = out.suppressionSummary;
+    const returned = out.results.length;
+
+    expect(returned, 'a small budget must truncate').toBeLessThan(s.totalCandidates);
+    // Every printed row costs more than the 40-token budget leaves, so only the one-row floor survives of the 40.
+    expect(returned).toBe(1);
+    expect(s.totalCandidates).toBe(40);
+    expect(
+      s.droppedByBudget,
+      'budget/rank drops must be counted - this read 0 in production',
+    ).toBe(39);
+    expect(
+      s.totalCandidates,
+      'published invariant must close on the budget path too',
+    ).toBe(s.droppedPreRank + s.droppedByBudget + returned);
+  });
+});
+
+describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
+  let env: TestEnv;
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+  });
+
+  it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', async () => {
+    env = makeEnv('c5-print-gap');
+    await seedMatchingMemories(env, 'widgetepsilon', 30);
+
+    const output = await recallText(env, 'widgetepsilon', 5);
+
+    // This is the specific gap the plan names: no prior test drove the CLI
+    // summary output, so the line's guard (`clauses.length > 0`) being
+    // permanently false went uncaught.
+    //
+    // The wording is asserted deliberately. It used to read "dropped to fit
+    // limit", which named a control the caller often never passed - review
+    // caught it printing that for a `--budget 20` command with no --limit
+    // flag at all. The residual covers rank, budget AND limit, so the text
+    // must not single one out.
+    expect(output).toMatch(/^Cutoff: showing \d+ of \d+ candidates;/m);
+    expect(output).toMatch(/not shown \(rank, budget or limit\)/);
+    expect(output, 'must not name a control the caller may never have passed')
+      .not.toMatch(/dropped to fit limit/);
+  });
+
+  it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', async () => {
+    env = makeEnv('c5-no-print');
+    await seedMatchingMemories(env, 'widgetzeta', 3);
+
+    const output = await recallText(env, 'widgetzeta', 100);
+
+    expect(output).not.toMatch(/^Cutoff:/m);
+  });
+});

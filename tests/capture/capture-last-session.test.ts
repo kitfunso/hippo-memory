@@ -1,0 +1,433 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { fileURLToPath } from 'url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { spawnSync } from 'child_process';
+import { summariseTranscript, resolveLastSessionTranscript } from '../../src/capture/transcript.js';
+import { trySymlink } from '../_helpers/symlink.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+/**
+ * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
+ */
+function withTmpDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-capture-test-'));
+  return {
+    dir,
+    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+function transcriptJsonl(entries: unknown[]): string {
+  return entries.map((e) => JSON.stringify(e)).join('\n') + '\n';
+}
+
+describe('summariseTranscript', () => {
+  it('extracts plain-string user messages and assistant text blocks', () => {
+    const jsonl = transcriptJsonl([
+      { type: 'permission-mode', permissionMode: 'default' }, // should be ignored
+      { type: 'user', message: { role: 'user', content: 'please add feature X' } },
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'internal monologue' }, // skipped
+            { type: 'text', text: 'Sure, implementing feature X now.' },
+            { type: 'tool_use', name: 'Edit', input: {} }, // skipped
+          ],
+        },
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', content: 'noisy tool output' }], // skipped
+        },
+      },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('please add feature X');
+    expect(summary).toContain('Sure, implementing feature X now.');
+    expect(summary).not.toContain('internal monologue');
+    expect(summary).not.toContain('noisy tool output');
+  });
+
+  it('extracts user and assistant text from Codex rollout transcripts', () => {
+    const jsonl = transcriptJsonl([
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'developer',
+          content: [{ type: 'input_text', text: 'developer instructions' }],
+        },
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'please build the codex wrapper' }],
+        },
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          phase: 'commentary',
+          content: [{ type: 'output_text', text: 'I am adding the failing tests first.' }],
+        },
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'agent_message',
+          message: 'duplicate commentary copy that should not be required',
+          phase: 'commentary',
+        },
+      },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('please build the codex wrapper');
+    expect(summary).toContain('I am adding the failing tests first.');
+    expect(summary).not.toContain('developer instructions');
+  });
+
+  it('keeps only the last 20 user messages (tail only)', () => {
+    const entries = Array.from({ length: 30 }, (_, i) => ({
+      type: 'user',
+      message: { role: 'user', content: `msg ${i}` },
+    }));
+    const summary = summariseTranscript(transcriptJsonl(entries));
+
+    expect(summary).not.toContain('msg 0');
+    expect(summary).not.toContain('msg 9');
+    expect(summary).toContain('msg 10');
+    expect(summary).toContain('msg 29');
+  });
+
+  it('returns empty string when the transcript has no user/assistant messages', () => {
+    const jsonl = transcriptJsonl([
+      { type: 'permission-mode', permissionMode: 'default' },
+      { type: 'system', content: 'system msg' },
+    ]);
+    expect(summariseTranscript(jsonl)).toBe('');
+  });
+
+  it('tolerates malformed JSONL lines', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'hello' } }),
+      'not valid json',
+      '',
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'world' } }),
+    ].join('\n');
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('hello');
+    expect(summary).toContain('world');
+  });
+
+  it('drops promptSource: system lines but keeps queued ones', () => {
+    const jsonl = transcriptJsonl([
+      { type: 'user', message: { role: 'user', content: 'please fix the login bug' }, promptSource: 'queued' },
+      { type: 'user', message: { role: 'user', content: 'Task notification: session idle timeout reached' }, promptSource: 'system' },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('please fix the login bug');
+    expect(summary).not.toContain('session idle timeout reached');
+  });
+
+  it('keeps VS Code prompts stored as text blocks, minus IDE context and interrupt notices', () => {
+    const jsonl = transcriptJsonl([
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '<ide_selection>const limit = 10;</ide_selection>' },
+            { type: 'text', text: 'raise the webhook rate limit' },
+          ],
+        },
+      },
+      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('raise the webhook rate limit');
+    expect(summary).not.toContain('const limit');
+    expect(summary).not.toContain('Request interrupted');
+  });
+});
+
+describe('resolveLastSessionTranscript', () => {
+  let tmp: { dir: string; cleanup: () => void };
+  let prevHome: string | undefined;
+  let prevUserProfile: string | undefined;
+
+  beforeEach(() => {
+    tmp = withTmpDir();
+    prevHome = process.env.HOME;
+    prevUserProfile = process.env.USERPROFILE;
+    vi.stubEnv('HOME', tmp.dir);
+    vi.stubEnv('USERPROFILE', tmp.dir);
+  });
+
+  afterEach(() => {
+    vi.stubEnv('HOME', prevHome);
+    vi.stubEnv('USERPROFILE', prevUserProfile);
+    tmp.cleanup();
+  });
+
+  it('prefers an explicit transcript path when the file exists', () => {
+    const file = path.join(tmp.dir, 'explicit.jsonl');
+    fs.writeFileSync(file, '{}');
+    expect(resolveLastSessionTranscript(file, undefined, { mayScan: true })).toBe(file);
+  });
+
+  it('falls back to stdin JSON payload with transcript_path (Claude Code SessionEnd shape)', () => {
+    const file = path.join(tmp.dir, 'from-stdin.jsonl');
+    fs.writeFileSync(file, '{}');
+    const payload = JSON.stringify({
+      session_id: 'abc',
+      transcript_path: file,
+      cwd: tmp.dir,
+    });
+    expect(resolveLastSessionTranscript(undefined, payload, { mayScan: true })).toBe(file);
+  });
+
+  it('reads a payload that starts with a byte-order mark', () => {
+    const file = path.join(tmp.dir, 'from-bom-stdin.jsonl');
+    fs.writeFileSync(file, '{}');
+    const payload = '\uFEFF' + JSON.stringify({ session_id: 'abc', transcript_path: file, cwd: tmp.dir });
+    expect(resolveLastSessionTranscript(undefined, payload, { mayScan: false })).toBe(file);
+  });
+
+  it('auto-discovers the newest transcript under ~/.claude/projects/', () => {
+    const projects = path.join(tmp.dir, '.claude', 'projects', 'proj-a');
+    fs.mkdirSync(projects, { recursive: true });
+    const older = path.join(projects, 'older.jsonl');
+    const newer = path.join(projects, 'newer.jsonl');
+    fs.writeFileSync(older, '{}');
+    fs.writeFileSync(newer, '{}');
+    // Force older mtime into the past so newer wins deterministically
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(older, past, past);
+
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(newer);
+  });
+
+  it('skips an entry that vanished after the listing and still finds the newest transcript', (ctx) => {
+    const projects = path.join(tmp.dir, '.claude', 'projects');
+    const proj = path.join(projects, 'proj-a');
+    fs.mkdirSync(proj, { recursive: true });
+    const real = path.join(proj, 'real.jsonl');
+    fs.writeFileSync(real, '{}');
+    // A dangling link lists fine and then fails stat with ENOENT, as a file deleted between the two calls does.
+    if (!trySymlink(path.join(tmp.dir, 'gone.jsonl'), path.join(proj, 'gone.jsonl'))
+      || !trySymlink(path.join(tmp.dir, 'gone-dir'), path.join(projects, 'gone-dir'), 'dir')) return ctx.skip();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(real);
+  });
+
+  it('returns null when no transcript can be located', () => {
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
+  });
+
+  // os.homedir() would still name a real profile, so with no home variable and no CLAUDE_CONFIG_DIR the scan must not start.
+  it('scans nothing when CLAUDE_CONFIG_DIR, HOME and USERPROFILE are all unset', () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', undefined);
+    vi.stubEnv('HOME', undefined);
+    vi.stubEnv('USERPROFILE', undefined);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
+  });
+
+  it('scans $CLAUDE_CONFIG_DIR/projects when it is set, and not ~/.claude/projects', () => {
+    const config = path.join(tmp.dir, 'elsewhere');
+    const mine = path.join(config, 'projects', 'proj-a', 'mine.jsonl');
+    const decoy = path.join(tmp.dir, '.claude', 'projects', 'proj-b', 'decoy.jsonl');
+    for (const file of [mine, decoy]) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '{}');
+    }
+    fs.utimesSync(mine, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    vi.stubEnv('CLAUDE_CONFIG_DIR', config);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(mine);
+  });
+
+  it('does not throw on non-JSON stdin text', () => {
+    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
+  });
+
+  // Another project's newest transcript, which only a manual run may pick up.
+  function plantOtherProjectTranscript(): string {
+    const dir = path.join(tmp.dir, '.claude', 'projects', 'other-project');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'newest.jsonl');
+    fs.writeFileSync(file, '{}');
+    return file;
+  }
+
+  it('a named transcript that is missing returns null instead of scanning every project', () => {
+    plantOtherProjectTranscript();
+    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined, { mayScan: true })).toBeNull();
+  });
+
+  it('a payload without a readable transcript_path returns null instead of scanning', () => {
+    plantOtherProjectTranscript();
+    const gone = JSON.stringify({ session_id: 'abc', transcript_path: path.join(tmp.dir, 'gone.jsonl') });
+    expect(resolveLastSessionTranscript(undefined, gone, { mayScan: true })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), { mayScan: true })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
+  });
+
+  it('scans only when the caller allows it: no path, no stdin text, mayScan true', () => {
+    const planted = plantOtherProjectTranscript();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, '  \n', { mayScan: true })).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: false })).toBeNull();
+  });
+
+  it('never scans when the caller says mayScan false, even with a newer transcript planted', () => {
+    const older = plantOtherProjectTranscript();
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(older, past, past);
+    const newer = path.join(path.dirname(older), 'newer.jsonl');
+    fs.writeFileSync(newer, '{}');
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: false })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, '  \n', { mayScan: false })).toBeNull();
+  });
+});
+
+describe('session workers never capture a transcript they were not handed', () => {
+  let tmp: { dir: string; cleanup: () => void };
+
+  // In process, so coverage sees both workers; the capture end-to-end case below keeps the real child.
+  beforeEach(async () => {
+    tmp = withTmpDir();
+    const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
+    expect(init.status).toBe(0);
+    const other = path.join(tmp.dir, '.claude', 'projects', 'other-project');
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(
+      path.join(other, 'newest.jsonl'),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n',
+    );
+  });
+
+  afterEach(() => {
+    tmp.cleanup();
+  });
+
+  async function runWorker(args: string[]): Promise<string> {
+    const logFile = path.join(tmp.dir, 'worker.log');
+    const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
+    const result = await runCliAs([...args, '--log-file', logFile], { cwd: tmp.dir, env });
+    expect(result.status).toBe(0);
+    return fs.readFileSync(logFile, 'utf8');
+  }
+
+  it('the session-end worker skips capture without --transcript', async () => {
+    const log = await runWorker(['__session-end-worker']);
+    expect(log).toContain('skip capture: no transcript for this session');
+    expect(log).not.toContain('capturing session');
+  });
+
+  it('positive control: the session-end worker captures the transcript it is handed', async () => {
+    const handed = path.join(tmp.dir, '.claude', 'projects', 'other-project', 'newest.jsonl');
+    const log = await runWorker(['__session-end-worker', '--transcript', handed]);
+    expect(log).toContain('capturing session');
+  });
+
+  it('the Codex worker skips capture when no Codex transcript is found', async () => {
+    const codexHome = path.join(tmp.dir, '.codex');
+    const log = await runWorker(['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl')]);
+    expect(log).toContain('skip capture: no Codex transcript for this session');
+    expect(log).not.toContain('capturing session');
+  });
+});
+
+describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
+  let tmp: { dir: string; cleanup: () => void };
+
+  beforeEach(() => {
+    tmp = withTmpDir();
+  });
+
+  afterEach(() => {
+    tmp.cleanup();
+  });
+
+  it('tees banner + completion message to the log file and appends (does not truncate)', () => {
+    const transcript = path.join(tmp.dir, 't.jsonl');
+    fs.writeFileSync(
+      transcript,
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: "let's go with PostgreSQL" },
+      }) + '\n',
+    );
+
+    const logFile = path.join(tmp.dir, 'session.log');
+    // Simulate `hippo sleep --log-file` having already written its output —
+    // capture runs second in the SessionEnd sequence and must append.
+    fs.writeFileSync(logFile, '[hippo] sleep complete\n', 'utf8');
+
+    // Init a hippo store in the tmp cwd so capture doesn't bail out
+    // on `No .hippo directory found`.
+    const binPath = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
+    const init = spawnSync(
+      process.execPath,
+      [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'],
+      {
+        cwd: tmp.dir,
+        // HIPPO_HOME isolates the global store. `hippo init` registers the
+        // workspace into <globalRoot>/workspaces.json; without this it writes
+        // the developer's real ~/.hippo registry.
+        env: { ...process.env, HIPPO_HOME: tmp.dir },
+        stdio: 'ignore',
+      },
+    );
+    expect(init.status).toBe(0);
+
+    // Spawn the actual CLI so we exercise the same code path the hook runs.
+    // Use --dry-run so no hippo store writes are needed; we only care that
+    // the tee wrapper captures stdout.
+    const result = spawnSync(
+      process.execPath,
+      [
+        binPath,
+        'capture',
+        '--last-session',
+        '--transcript',
+        transcript,
+        '--log-file',
+        logFile,
+        '--dry-run',
+      ],
+      {
+        cwd: tmp.dir,
+        env: { ...process.env, HIPPO_HOME: tmp.dir },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf8',
+      },
+    );
+
+    expect(result.status).toBe(0);
+
+    const contents = fs.readFileSync(logFile, 'utf8');
+    expect(contents).toContain('[hippo] sleep complete');   // preserved
+    expect(contents).toContain('capturing session...');      // banner appended
+    expect(contents).toContain('[hippo] capture complete');  // completion marker
+  });
+});

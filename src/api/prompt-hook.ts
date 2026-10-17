@@ -1,6 +1,6 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
 // hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
-// CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
+// CLI parity case in tests/store/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { type HippoConfig, isSharedStore } from '../core/config.js';
