@@ -113,7 +113,8 @@ export function buildSnapshot({ source, commit, out, forbidSet = 'default', drop
   }
   if (rulesOut) manifest.history = writeHistory(source, full, manifest.ruleFiles.filter((rel) => fs.existsSync(path.join(rulesOut, rel))), rulesOut, forbid);
   git(['-C', out, 'init', '-q', '-b', 'main']);
-  retryObjectLock(() => git(['-C', out, 'add', '-A'], { stdio: ['ignore', 'pipe', 'pipe'] }));
+  // Forced: the source tracks some files its own .gitignore matches, and tests that pass at the source read them.
+  retryObjectLock(() => git(['-C', out, 'add', '-A', '-f'], { stdio: ['ignore', 'pipe', 'pipe'] }));
   git(['-C', out, 'commit', '-q', '--no-gpg-sign', '-m', 'snapshot'], { env: { ...process.env, ...IDENTITY } });
   return { ...manifest, snapshotCommit: git(['-C', out, 'rev-parse', 'HEAD']) };
 }
