@@ -176,7 +176,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'mcp-stdio.test.ts',
   'mcp-store-ready-tools.test.ts',
   'mcp-two-repo-isolation.test.ts',
-  'objects-conformance.test.ts',
+  'objects/objects-conformance.test.ts',
   'open-core-guard.test.ts',
   'openclaw-package.test.ts',
   'openclaw-plugin.test.ts',
