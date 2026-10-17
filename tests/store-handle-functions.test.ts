@@ -8,9 +8,8 @@ import { initStore } from '../src/store/open.js';
 import { latestCompactionRows } from '../src/store/compactions.js';
 import { failuresBySession } from '../src/store/failure-log.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import type { Captures } from '../src/store/port.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
-import { withRejectionProbe } from '../src/store/rejection-probe.js';
-import { writeCapturedItems } from '../src/store/capture-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { duplicateKey } from '../src/util/same-text.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -89,16 +88,8 @@ describe('compactions.saveCallerItems', () => {
   });
 });
 
-describe('withRejectionProbe', () => {
-  it('says true for a rejected value and false for any other', () => {
-    const text = 'the build server is at 10.0.0.9';
-    reject(text);
-    const answers = withRejectionProbe(root, (wouldReject) => [wouldReject('default', 'm1', text), wouldReject('default', 'm2', 'something else')]);
-    expect(answers).toEqual([true, false]);
-  });
-});
-
-describe('writeCapturedItems', () => {
+describe('localFiles.captures.write', () => {
+  const write = (...args: Parameters<Captures['write']>) => sqliteSyncStore(root).localFiles.captures.write(...args);
   const item = (content: string) => ({ content, makeEntry: () => createMemory(content, { source: 'capture' }) });
 
   it('writes new items, skips a repeat inside the batch and counts a rejected value', () => {
@@ -106,7 +97,7 @@ describe('writeCapturedItems', () => {
     reject(rejected);
     const keys = new Set<string>();
     const first = 'Always run the migration dry run before the real one.';
-    const outcomes = writeCapturedItems(root, [item(first), item(first), item(rejected)], keys, { lean: true });
+    const outcomes = write([item(first), item(first), item(rejected)], keys, { lean: true });
     expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
     expect(keys.has(duplicateKey(first))).toBe(true);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
@@ -117,7 +108,7 @@ describe('writeCapturedItems', () => {
     reject(rejected);
     const kept = 'Rotate the signing key before the old one expires.';
     const seen: string[] = [];
-    const outcomes = writeCapturedItems(root, [item(kept), item(kept), item(rejected)], new Set(), { lean: true, onCaptured: (e) => seen.push(e.content) });
+    const outcomes = write([item(kept), item(kept), item(rejected)], new Set(), { lean: true, onCaptured: (e) => seen.push(e.content) });
     expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
     expect(seen).toEqual([kept]);
   });
@@ -125,7 +116,7 @@ describe('writeCapturedItems', () => {
   it('skips an item whose text the store already holds without building its entry', () => {
     const held = 'Keep the changelog fragment in the same commit as the code.';
     let built = false;
-    const outcomes = writeCapturedItems(root, [{ content: held, makeEntry: () => ((built = true), createMemory(held)) }], new Set([duplicateKey(held)]), { lean: true });
+    const outcomes = write([{ content: held, makeEntry: () => ((built = true), createMemory(held)) }], new Set([duplicateKey(held)]), { lean: true });
     expect(outcomes).toEqual(['skipped']);
     expect(built).toBe(false);
   });

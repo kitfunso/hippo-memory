@@ -1,6 +1,7 @@
 // The LocalFiles group, kept apart from port.ts so each SQLite-only member lands here.
 import type { HippoStore } from '../port.js';
 import type { AgentImport } from './agent-import.js';
+import type { Captures } from './captures.js';
 import type { CompactionHooks } from './compaction-hooks.js';
 import type { Consolidation } from './consolidation.js';
 import type { Diagnostics } from './diagnostics.js';
@@ -12,6 +13,7 @@ import type { Promotion } from './promotion.js';
 import type { Sharing } from './sharing.js';
 
 export type { AgentImport, ContainerTx, ImportTarget } from './agent-import.js';
+export type { Captures } from './captures.js';
 export type { CompactionHooks } from './compaction-hooks.js';
 export type { Consolidation } from './consolidation.js';
 export type { Diagnostics } from './diagnostics.js';
@@ -28,6 +30,7 @@ export interface LocalFiles {
   readonly hippoRoot: string;
   readonly consolidation: Consolidation;
   readonly agentImport: AgentImport;
+  readonly captures: Captures;
   readonly compactionHooks: CompactionHooks;
   readonly promotion: Promotion;
   readonly learning: Learning;

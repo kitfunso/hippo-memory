@@ -2,14 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
-import { writeCapturedItems } from '../store/capture-write.js';
 import { embedMemory } from '../search/embed-memories.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
+import type { LocalFiles, Sync } from '../store/port.js';
+import type { Rejections } from '../store/port/rejections.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { initStore } from '../store/open.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { withRejectionProbe } from '../store/rejection-probe.js';
 import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -125,13 +125,24 @@ function cmdCaptureCore(
 
   const keys = storedKeysInView(targetRoot, options, extracted);
 
+  printCaptureTally(options, captureFromCli(targetRoot, options, extracted, keys));
+}
+
+/** The CLI's store is the target folder's hippo.db, built once here. */
+function captureFromCli(
+  targetRoot: string,
+  options: CaptureOptions,
+  extracted: readonly ExtractedItem[],
+  keys: Set<string>,
+): CaptureTally {
   const writeOpts: CaptureWriteOptions = {
-    dryRun: options.dryRun,
-    tenantId: useGlobal ? undefined : options.tenantId,
+    tenantId: options.global ? undefined : options.tenantId,
     originProject: options.originProject,
     lean: false,
   };
-  printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
+  const store = sqliteSyncStore(targetRoot);
+  if (!options.dryRun) return captureExtractedItems(store.localFiles, writeOpts, extracted, keys);
+  return previewCapture(store.rejections, writeOpts, extracted, keys, loadConfig(targetRoot).defaultHalfLifeDays);
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
@@ -224,7 +235,6 @@ export interface CaptureTally {
 
 /** What a capture's rows carry. The CLI passes no tenant for the global store, so `global` never reaches the writes. */
 export interface CaptureWriteOptions {
-  readonly dryRun: boolean;
   readonly tenantId: string | undefined;
   readonly originProject: ProjectRef | undefined;
   readonly sessionId?: string;
@@ -235,52 +245,59 @@ export interface CaptureWriteOptions {
 }
 
 export function captureExtractedItems(
-  targetRoot: string,
+  local: LocalFiles,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
-  const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
-  const local = sqliteSyncStore(targetRoot).localFiles;
+  const baseHalfLifeDays = loadConfig(local.hippoRoot).defaultHalfLifeDays;
+  const items = extracted.map((item) => ({
+    content: item.content,
+    makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
+  }));
+  const outcomes = local.captures.write(
+    items,
+    keys,
+    {
+      actor: options.actor,
+      lean: options.lean,
+      onCaptured: options.lean ? undefined : (entry) => void embedMemory(local, entry),
+    },
+  );
+  for (const outcome of outcomes) tally[outcome]++;
+  return tally;
+}
 
-  if (!options.dryRun) {
-    const outcomes = writeCapturedItems(
-      targetRoot,
-      extracted.map((item) => ({
-        content: item.content,
-        makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
-      })),
-      keys,
-      {
-        actor: options.actor,
-        lean: options.lean,
-        onCaptured: options.lean ? undefined : (entry) => void embedMemory(local, entry),
-      },
-    );
-    for (const outcome of outcomes) tally[outcome]++;
-    return tally;
-  }
-  // Dry run probes the same checkRejectionGuard the real write uses, on a read-only handle,
-  // so a tombstoned item previews as rejected rather than captured.
-  return withRejectionProbe(targetRoot, (wouldReject) => {
-    for (const item of extracted) {
-      if (keys.has(duplicateKey(item.content))) {
-        tally.skipped++;
-        console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
-        continue;
-      }
-      const entry = captureEntry(item, options, baseHalfLifeDays);
-      if (wouldReject(entry.tenant_id ?? 'default', entry.id, entry.content)) {
-        console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
-        tally.rejected++;
-        continue;
-      }
+/** A dry run asks the store the same rejected-value question the write's gate does, so a tombstoned item previews as
+ * rejected rather than captured. */
+function previewCapture(
+  rejections: Sync<Rejections>,
+  options: CaptureWriteOptions,
+  extracted: readonly ExtractedItem[],
+  keys: ReadonlySet<string>,
+  baseHalfLifeDays: number,
+): CaptureTally {
+  const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
+  const fresh = extracted.filter((item) => !keys.has(duplicateKey(item.content)));
+  const refused = rejections.refusedAmong(fresh.map((item) => {
+    const entry = captureEntry(item, options, baseHalfLifeDays);
+    return { tenantId: entry.tenant_id ?? 'default', entryId: entry.id, content: entry.content };
+  }));
+  let next = 0;
+  for (const item of extracted) {
+    if (keys.has(duplicateKey(item.content))) {
+      tally.skipped++;
+      console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
+    } else if (refused[next++] === true) {
+      console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
+      tally.rejected++;
+    } else {
       console.log(`  [capture] (${item.category}) ${item.content}`);
       tally.captured++;
     }
-    return tally;
-  });
+  }
+  return tally;
 }
 
 function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHalfLifeDays: number): MemoryEntry {
