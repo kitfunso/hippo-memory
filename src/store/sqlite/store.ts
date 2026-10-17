@@ -21,6 +21,7 @@ import { sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteConsolidation } from './consolidation-group.js';
 import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
+import { sqliteSharing } from './sharing-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
@@ -83,6 +84,8 @@ export function sqliteSyncStore(
       agentImport: sqliteAgentImport,
       promotion: sqlitePromotion(hippoRoot),
       learning: sqliteLearning(hippoRoot),
+      sharing: sqliteSharing(hippoRoot),
+      globalStore: () => sqliteStore(resolveGlobalRootDir()),
     },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),

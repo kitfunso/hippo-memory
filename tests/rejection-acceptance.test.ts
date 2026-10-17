@@ -39,6 +39,7 @@ import { importEntries } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -176,7 +177,7 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
       // history, so every assertion against errorSpy must run BEFORE it —
       // restore happens last, after the spy has served its purpose.
       const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const count = syncGlobalToLocal(localRoot, globalRoot);
+      const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
       expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
       const localContents = loadEveryTenantEntries(localRoot).map((e) => e.content);
@@ -728,7 +729,7 @@ describe('autoShare per-candidate rejection containment', () => {
 
       const stats = { secretSkipped: 0, rejectedSkipped: 0 };
       const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const shared = autoShare(localRoot, { minScore: 0, stats });
+      const shared = autoShare(...sharingStores(localRoot), { minScore: 0, stats });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 candidate(s) refused'),
       );

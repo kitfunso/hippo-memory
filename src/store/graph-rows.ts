@@ -29,8 +29,6 @@ export const VALID_QUEUE_STATES: ReadonlySet<GraphQueueStatus> = new Set<GraphQu
   'pending', 'processed', 'skipped',
 ]);
 
-export const MAX_ENTITY_NAME_LEN = 512;
-
 export interface Entity {
   id: number;
   tenantId: string;

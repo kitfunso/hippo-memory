@@ -2,7 +2,6 @@
   "src/api/recall/request.ts": 1,
   "src/api/sleep/sleep-run.ts": 1,
   "src/cli.ts": 1,
-  "src/consolidate/merge.ts": 1,
   "src/db/backup.ts": 1,
   "src/server/auth.ts": 2,
   "src/store/audit-event.ts": 1,

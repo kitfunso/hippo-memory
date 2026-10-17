@@ -24,6 +24,7 @@ import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 function makeL2Summary(
   content: string,
@@ -281,7 +282,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     // Empty global root (no global path; the function tolerates missing dir)
     const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-e4-global-empty-'));
     try {
-      const results = await searchBothHybrid('shared-test', hippoRoot, globalRoot, { explain: true });
+      const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), { explain: true });
       const sResult = findResult(results, summary.id);
       const br = sResult?.breakdown;
       expect(br?.summaryDeboost).toBeCloseTo(0.85);

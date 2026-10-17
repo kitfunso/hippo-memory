@@ -16,6 +16,7 @@ import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templat
 import { keyFor, onDb } from './store-worker-server.js';
 import { apiCtx } from './api-ctx.js';
 import { objectsAt } from './objects-at.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 
 export const EMBEDDING_MODEL = 'hashed-16';
@@ -55,9 +56,9 @@ function seedVectors(root: string): void {
 async function seedGraph(root: string): Promise<void> {
   await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
   await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: 'We adopt RetryPolicy across all services' });
-  await extractGraph(objectsAt(root), root, TENANT);
+  await extractGraph(sqliteStore(root), TENANT);
   await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, OTHER_TENANT, { policyName: 'AcmePolicy', policyText: 'page the owner first' });
-  await extractGraph(objectsAt(root), root, OTHER_TENANT);
+  await extractGraph(sqliteStore(root), OTHER_TENANT);
 }
 
 /** A connector's flagged text, which lands under a quarantine scope with a pending record; returns the memory id. */

@@ -73,7 +73,7 @@ async function measure(label, root) {
   const started = performance.now();
   let result;
   try {
-    result = await extractGraphChunked(sqliteStore(root).objects, root, TENANT);
+    result = await extractGraphChunked(sqliteStore(root), TENANT);
   } finally {
     timer.restore();
   }

@@ -11,6 +11,7 @@ import { BadRequestError } from '../src/core/api-errors.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const TEAM = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 const MINE = 'gotcha: the staging vpn drops idle sessions after ten minutes, reconnect first';
@@ -59,17 +60,17 @@ describe('share and promote refuse personal rows', () => {
   });
 
   it('share refuses a personal row with a 400 and the exact text; a team row still shares', () => {
-    const err = refusal(() => shareMemory(hippoRoot, mine.id));
+    const err = refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id));
     expect(err.status).toBe(400);
     expect(err.message).toBe(`Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`);
-    expect(shareMemory(hippoRoot, team.id)?.content).toBe(TEAM);
+    expect(shareMemory(...sharingStores(hippoRoot), team.id)?.content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
 
   it('autoShare skips the personal row and shares the team row in the same run', () => {
     expect(transferScore(mine)).toBeGreaterThanOrEqual(0.6);
     expect(transferScore(team)).toBeGreaterThanOrEqual(0.6);
-    expect(autoShare(hippoRoot).map((e) => e.content)).toEqual([TEAM]);
+    expect(autoShare(...sharingStores(hippoRoot)).map((e) => e.content)).toEqual([TEAM]);
     expect(globalContents()).toEqual([TEAM]);
   });
 });

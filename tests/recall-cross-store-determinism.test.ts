@@ -29,6 +29,7 @@ import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise
@@ -161,12 +162,12 @@ describe('recall cross-store determinism', () => {
     const emptyGlobalA = path.join(os.tmpdir(), 'hippo-tiebreak-no-such-global-a');
     const emptyGlobalB = path.join(os.tmpdir(), 'hippo-tiebreak-no-such-global-b-x');
 
-    const resultsA = await searchBothHybrid(QUERY, storeA, emptyGlobalA, {
+    const resultsA = await searchBothHybrid(QUERY, ...sharingStores(storeA, emptyGlobalA), {
       budget: 100_000,
       now: NOW,
       localBump: 1.0, // remove the local-bias multiplier so this mirrors the plain hybridSearch case
     });
-    const resultsB = await searchBothHybrid(QUERY, storeB, emptyGlobalB, {
+    const resultsB = await searchBothHybrid(QUERY, ...sharingStores(storeB, emptyGlobalB), {
       budget: 100_000,
       now: NOW,
       localBump: 1.0,

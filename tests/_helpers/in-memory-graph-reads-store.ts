@@ -1,4 +1,4 @@
-// A store other than hippo.db for the GraphReads group: it copies entities, relations and each memory's scope out of hippo.db once, then
+// A store other than hippo.db for the GraphReads group: it copies entities, relations and each memory's scope and kind out of hippo.db once, then
 // walks them in memory from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -8,7 +8,7 @@ import { canReadScope } from '../../src/core/recall-scope.js';
 import { type HippoStore } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';
+import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow, type StoredGraph } from '../../src/store/graph-rows.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
@@ -25,6 +25,8 @@ interface Copied {
   readonly relations: Relation[];
   /** `tenant` then a NUL then the memory id, to that memory's scope. */
   readonly scopes: Map<string, string | null>;
+  /** Memory id to kind, across tenants. */
+  readonly kinds: Map<string, string>;
 }
 
 const memoryKey = (tenantId: string, id: string): string => `${tenantId}\u0000${id}`;
@@ -38,8 +40,8 @@ function copyRows(hippoRoot: string): Copied {
       // SAFETY: as above.
       const relations = (db.prepare(`SELECT ${RELATION_COLS} FROM relations`).all() as RelationRow[]).map(rowToRelation);
       // SAFETY: as above.
-      const memories = db.prepare('SELECT tenant_id, id, scope FROM memories').all() as { tenant_id: string; id: string; scope: string | null }[];
-      return { entities, relations, scopes: new Map(memories.map((m) => [memoryKey(m.tenant_id, m.id), m.scope])) };
+      const memories = db.prepare('SELECT tenant_id, id, scope, kind FROM memories').all() as { tenant_id: string; id: string; scope: string | null; kind: string }[];
+      return { entities, relations, scopes: new Map(memories.map((m) => [memoryKey(m.tenant_id, m.id), m.scope])), kinds: new Map(memories.map((m) => [m.id, m.kind])) };
     } finally {
       closeHippoDb(db);
     }
@@ -81,6 +83,22 @@ function fromName(entities: Entity[], relations: Relation[], name: string, limit
   return { entities: found, relations: among, truncated: named.length >= limit || joined.length >= limit || among.length >= limit || leftOver };
 }
 
+/** The provenance columns a rebuild diffs, as hippo.db names them. */
+const sourceColumns = (row: Entity | Relation) => ({
+  memory_id: row.memoryId, source_kind: row.sourceKind, source_object_type: row.sourceObjectType ?? null, source_object_id: row.sourceObjectId ?? null,
+});
+
+function storedGraphOf({ entities, relations, kinds }: Copied, tenantId: string, memoryIds: readonly string[]): StoredGraph {
+  const byId = (a: { id: number }, b: { id: number }): number => a.id - b.id;
+  return {
+    kinds: new Map(memoryIds.flatMap((id) => (kinds.has(id) ? [[id, kinds.get(id)!] as const] : []))),
+    entities: entities.filter((e) => e.tenantId === tenantId).sort(byId).map((e) => ({ id: e.id, entity_type: e.entityType, name: e.name, ...sourceColumns(e) })),
+    relations: relations.filter((r) => r.tenantId === tenantId).sort(byId).map((r) => ({
+      id: r.id, from_entity_id: r.fromEntityId, to_entity_id: r.toEntityId, rel_type: r.relType, ...sourceColumns(r),
+    })),
+  };
+}
+
 function wholeGraph(entities: Entity[], relations: Relation[], limit: number): GraphRows {
   const newest = { entities: [...entities].sort(newestFirst).slice(0, limit), relations: [...relations].sort(newestFirst).slice(0, limit) };
   return { ...newest, truncated: newest.entities.length >= limit || newest.relations.length >= limit };
@@ -117,6 +135,9 @@ export function inMemoryGraphReadsStore(hippoRoot: string): InMemoryGraphReadsSt
         for (const r of touching.sort(newestFirst).slice(0, limit)) byId.set(r.id, r);
       }
       return structuredClone([...byId.values()]);
+    },
+    async storedGraph(tenantId, memoryIds) {
+      return structuredClone(storedGraphOf(copied, tenantId, memoryIds));
     },
   };
   return { store: { ...base.store, graphReads }, auditRows: base.auditRows };

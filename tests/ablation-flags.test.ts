@@ -26,6 +26,7 @@ import { hybridSearch } from '../src/search/hybrid.js';
 import { outcomeMultiplier } from '../src/search/boosts.js';
 import { markRetrieved } from '../src/core/memory.js';
 import { evalNow, isOutcomeSlowAblated, strengthAblation, _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 // Core no longer reads the environment: each call hands it the flags the test just set.
 const abl = () => ({ ablation: strengthAblation() });
@@ -462,7 +463,7 @@ describe('HIPPO_FAKE_NOW', () => {
       const { writeEntry } = await import('../src/store/entry-writes.js');
       initStore(tmp);
       writeEntry(tmp, m);
-      const results = await searchBothHybrid('wrapper clock consistency check', tmp, path.join(tmp, 'no-global'), {
+      const results = await searchBothHybrid('wrapper clock consistency check', ...sharingStores(tmp, path.join(tmp, 'no-global')), {
         budget: 10000,
         explain: true,
       });

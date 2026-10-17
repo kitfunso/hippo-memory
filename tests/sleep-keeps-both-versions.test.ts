@@ -33,6 +33,7 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { loadConfig } from '../src/core/config.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -600,7 +601,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_NEW);
     write(root, LONG_OLD.replace(' ', '  '));
 
-    expect(autoShare(root, { minScore: 0, dryRun: true }).map((e) => e.content)).toEqual([LONG_NEW]);
+    expect(autoShare(...sharingStores(root), { minScore: 0, dryRun: true }).map((e) => e.content)).toEqual([LONG_NEW]);
   });
 
   it('search across the local and global stores', async () => {
@@ -611,7 +612,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_NEW);
     const contents = (rs: { entry: MemoryEntry }[]): string[] => rs.map((r) => r.entry.content).sort();
 
-    expect(contents(await searchBothHybrid('dev server port', root, getGlobalRoot()))).toEqual([LONG_NEW, LONG_OLD].sort());
+    expect(contents(await searchBothHybrid('dev server port', ...sharingStores(root, getGlobalRoot())))).toEqual([LONG_NEW, LONG_OLD].sort());
   });
 
   it('the salience gate', () => {

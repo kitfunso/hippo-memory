@@ -19,6 +19,7 @@ import { _resetLogOnceForTests } from '../src/util/log.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -166,7 +167,7 @@ describe("a recall's query embedding", () => {
     embeddings.setFault('stall');
     const before = embeddings.requests();
 
-    const ranked = await searchBothHybrid(QUERY, local, global, { budget: 1_000_000, tenantId: TENANT, recallScope: {}, scope: null });
+    const ranked = await searchBothHybrid(QUERY, ...sharingStores(local, global), { budget: 1_000_000, tenantId: TENANT, recallScope: {}, scope: null });
 
     expect([...new Set(ranked.map((r) => r.entry.content))]).toEqual([LEXICAL]);
     expect(embeddings.requests() - before).toBe(1);

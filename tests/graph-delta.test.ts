@@ -14,6 +14,7 @@ import type { EntityType, SourceObjectType } from '../src/store/graph-rows.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
@@ -29,7 +30,7 @@ function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
 
 async function deltaOf(home: string, tenant: string = T): Promise<GraphOp[]> {
   const derived = deriveGraph(await loadGraphSources(objectsAt(home), tenant));
-  return readGraphDelta(home, tenant, derived);
+  return readGraphDelta(sqliteStore(home).graphReads, tenant, derived);
 }
 
 const opNames = (ops: GraphOp[]): string[] => ops.map((o) => o.op);
@@ -151,7 +152,7 @@ describe('graph delta', () => {
   it.each(CROSS_OBJECT_FIXTURES)('deriveGraph gives, by natural key, the rows the rebuild writes: %s', async (_, setup) => {
     await setup(home);
     for (const tenant of [T, 'tenantA', 'tenantB']) {
-      await extractGraph(objectsAt(home), home, tenant);
+      await extractGraph(sqliteStore(home), tenant);
       expect(await derivedByKey(home, tenant)).toEqual(storedByKey(home, tenant));
     }
   });
@@ -161,7 +162,7 @@ describe('graph delta', () => {
     const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'We adopt RetryPolicy for billing' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'We adopt RetryPolicy everywhere', supersedesDecisionId: d1.id });
     deleteEntry(home, (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'RetryPolicy also covers search' })).memoryId!);
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
 
     expect(await deltaOf(home)).toEqual([]);
   });
@@ -169,7 +170,7 @@ describe('graph delta', () => {
   it('a renamed decision gives one entity update and no relation operations', async () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'We adopt RetryPolicy for billing' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     onStore(home, (db) => db.prepare(`UPDATE decisions SET decision_text = ? WHERE id = ?`).run('We adopt RetryPolicy for all billing jobs', d.id));
 
     const ops = await deltaOf(home);
@@ -181,7 +182,7 @@ describe('graph delta', () => {
   it('a closed decision gives one entity delete and no inserts', async () => {
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Keep this one' });
     const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Close this one' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     // Flipped in SQL: closeDecision also drops the graph row itself, which would leave nothing to diff.
     onStore(home, (db) => db.prepare(`UPDATE decisions SET status = 'closed' WHERE id = ?`).run(gone.id));
 
@@ -190,7 +191,7 @@ describe('graph delta', () => {
 
   it('a duplicate current entity gives one delete', async () => {
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     const dup = insertEntityAt(home, T, { entityType: 'decision', name: 'Adopt Postgres', memoryId: d.memoryId, sourceObject: { type: 'decision', id: d.id } });
 
     expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: dup.id }]);
@@ -198,7 +199,7 @@ describe('graph delta', () => {
 
   it('an entity with no source object gives one delete', async () => {
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     const loose = insertEntityAt(home, T, { entityType: 'system', name: 'Postgres', memoryId: d.memoryId });
 
     expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: loose.id }]);

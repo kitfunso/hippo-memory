@@ -23,6 +23,7 @@ import { loadEntities } from '../src/store/graph-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
@@ -91,7 +92,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
       decisionText: 'Adopt the Data Retention Policy for all log pipelines',
     });
 
-    const r = await extractGraph(objectsAt(home), home, T);
+    const r = await extractGraph(sqliteStore(home), T);
     expect(r.entities).toBe(2);
     expect(r.references).toBe(1); // the decision references the policy by name
 
@@ -127,7 +128,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // NULL); the decision row stays active and authoritative.
     deleteEntry(home, decision.memoryId!);
 
-    const r = await extractGraph(objectsAt(home), home, T);
+    const r = await extractGraph(sqliteStore(home), T);
     expect(r.entities).toBe(2); // BOTH still extracted (the forgotten-mirror decision survives)
     expect(r.references).toBe(1); // the references arc is preserved (provenance is the object)
 
@@ -159,7 +160,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Retire this one' });
     await closeDecision(objectsAt(home), T, gone.id);
 
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     const ents = entityRows(home);
     expect(ents.length).toBe(1);
     expect(ents[0].source_object_id).toBe(keep.id);
@@ -261,7 +262,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     deleteEntry(home, v2.memoryId!);
     deleteEntry(home, decision.memoryId!);
 
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     const rels = relationRows(home);
     const sup = rels.find((r) => r.rel_type === 'supersedes')!;
     const ref = rels.find((r) => r.rel_type === 'references')!;
@@ -320,7 +321,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
   it('P2 round-4 (codex): an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', async () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     const polEnt = entityRows(home).find((e) => e.source_object_type === 'policy')!;
     const db = openHippoDb(home);
     try {
@@ -353,7 +354,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the Data Retention Policy widely' });
     // Forget the decision mirror, then extract -> the decision is in the graph, mirrorless.
     deleteEntry(home, decision.memoryId!);
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     expect(entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id)).toBe(true);
     expect(relationRows(home).length).toBe(1); // decision -> policy references arc
 
@@ -373,7 +374,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // (sleep deletes memories BEFORE the graph drain), the FK ON DELETE SET NULL fires the
     // BEFORE UPDATE trigger - which must NOT abort the delete on the object's (closed) status.
     const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the retention rule for logs' });
-    await extractGraph(objectsAt(home), home, T);
+    await extractGraph(sqliteStore(home), T);
     expect(entityRows(home).length).toBe(1); // entity created with a live mirror + object (active)
 
     // Close removes the object's graph rows DIRECTLY (deterministic), so it never lingers.

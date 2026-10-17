@@ -9,7 +9,7 @@ import type { QualityRepairResult } from './quality-repair.js';
 import type { LocalFiles } from './port/local-files.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
-import type { Entity, Relation } from './graph-rows.js';
+import type { Entity, Relation, StoredGraph } from './graph-rows.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import type { JsonValue } from '../util/json.js';
@@ -23,6 +23,7 @@ import type {
   ObjectByKind,
   ObjectFields,
   ObjectKind,
+  ObjectRefusal,
   Policy,
   SavableKind,
   Skill,
@@ -352,20 +353,6 @@ export interface ObjectSave<K extends SavableKind = SavableKind> {
   readonly at: string;
 }
 
-/** Why a save or close wrote nothing: the tenant holds no such row (`missing`), the row's `status` is not one the write
- * may start from, another writer moved it between the check and the write (`raced`), or the written row could not be
- * read back (`vanished`). Core turns each into its own error text. */
-export type ObjectRefusal =
-  | { readonly refused: 'missing' }
-  | { readonly refused: 'status'; readonly status: string }
-  | { readonly refused: 'raced' }
-  | { readonly refused: 'vanished' };
-
-/** Tells a refusal from the row a write answered; no row carries a `refused` key. */
-export function isObjectRefusal<T extends object>(written: T | ObjectRefusal): written is ObjectRefusal {
-  return 'refused' in written;
-}
-
 /** An incident to open and the memory that mirrors it into recall, built as `ObjectSave` has it. */
 export interface IncidentOpen {
   readonly mirror: MemoryEntry;
@@ -617,6 +604,8 @@ export interface GraphReads {
   neighborRelations(
     tenantId: string, entityIds: readonly number[], opts: { readonly limit: number },
   ): Promise<Relation[]>;
+  /** The tenant's entities and relations, each id ascending, and the kind of each of `memoryIds` held in any tenant. */
+  storedGraph(tenantId: string, memoryIds: readonly string[]): Promise<StoredGraph>;
 }
 
 export type {

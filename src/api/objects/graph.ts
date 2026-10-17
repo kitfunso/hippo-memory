@@ -1,5 +1,5 @@
 import { BadRequestError } from '../../core/api-errors.js';
-import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
+import { MAX_ENTITY_NAME_LEN } from '../../core/entity-name.js';
 import type { GraphRows } from '../../store/port.js';
 import type { StoreContext } from '../types.js';
 

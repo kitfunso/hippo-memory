@@ -17,6 +17,7 @@ import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { loadConfig } from '../src/core/config.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -110,7 +111,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     const entry = createMemory('deterministic no-embed share test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'] });
     writeEntry(localRoot, entry);
 
-    const shared = shareMemory(localRoot, entry.id, { force: true });
+    const shared = shareMemory(...sharingStores(localRoot), entry.id, { force: true });
     expect(shared).not.toBeNull();
     expect(shared!.id).toMatch(/^g_/);
 
@@ -122,7 +123,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     const entry = createMemory('deterministic no-embed autoshare test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
-    const shared = autoShare(localRoot, { minScore: 0 });
+    const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
     expect(shared.length).toBe(1);
 
     const index = loadEmbeddingIndex(globalRoot);
@@ -134,7 +135,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     const entry = createMemory('deterministic no-embed sync test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(globalRoot, entry);
 
-    const count = syncGlobalToLocal(localRoot, globalRoot);
+    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
     expect(count).toBe(1);
 
     const index = loadEmbeddingIndex(localRoot);
@@ -169,7 +170,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     const entry = createMemory('awaited batch sync test content unique alpha', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(globalRoot, entry);
 
-    const count = syncGlobalToLocal(localRoot, globalRoot);
+    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
     expect(count).toBe(1);
 
     // syncGlobalToLocal already fired its own embedAll(localRoot); this call
@@ -188,7 +189,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     const entry = createMemory('awaited batch autoshare test content unique beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
-    const shared = autoShare(localRoot, { minScore: 0 });
+    const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
     expect(shared.length).toBe(1);
 
     await embedAll(globalRoot);

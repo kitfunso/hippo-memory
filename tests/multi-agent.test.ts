@@ -11,6 +11,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { sqliteStore } from '../src/store/index.js';
 import { transferScore, listPeers } from '../src/sharing/share.js';
 
 let localDir: string;
@@ -85,7 +86,7 @@ describe('transferScore', () => {
 
 describe('listPeers', () => {
   it('returns empty when global store is empty', () => {
-    const peers = listPeers(globalDir);
+    const peers = listPeers(sqliteStore(globalDir));
     expect(peers).toEqual([]);
   });
 
@@ -102,7 +103,7 @@ describe('listPeers', () => {
     entry3.source = 'shared:projectB:2026-03-27T02:00:00Z';
     writeEntry(globalDir, entry3);
 
-    const peers = listPeers(globalDir);
+    const peers = listPeers(sqliteStore(globalDir));
     expect(peers.length).toBe(2);
 
     const projectA = peers.find((p) => p.project === 'projectA');
@@ -124,7 +125,7 @@ describe('listPeers', () => {
     e.source = 'shared:smallProject:2026-03-27T00:00:00Z';
     writeEntry(globalDir, e);
 
-    const peers = listPeers(globalDir);
+    const peers = listPeers(sqliteStore(globalDir));
     expect(peers[0].project).toBe('bigProject');
     expect(peers[0].count).toBe(5);
   });

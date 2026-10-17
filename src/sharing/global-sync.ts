@@ -4,10 +4,8 @@ import { BadRequestError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../core/agent-memory-tools.js';
-import { writeEntriesSkippingRejected } from '../store/entry-writes.js';
-import { loadEntriesByIds, loadEntryTextKeys } from '../store/entry-reads.js';
+import { requireGroup, type HippoStore, type LocalFiles } from '../store/port.js';
 import { chunked } from '../util/chunked.js';
-import { withRequestStoresSync } from '../db/request-stores.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
@@ -17,52 +15,52 @@ import { logEmbedAllFailure } from './search-both.js';
 
 /**
  * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and
- * share copy under a new ID).
+ * share copy under a new ID). The caller's request scope keeps it to one open per store.
  *  Returns the count of newly copied entries. */
 export function syncGlobalToLocal(
-  localRoot: string,
-  globalRoot: string,
+  store: HippoStore,
+  global: HippoStore,
   opts: { includeCrossProject?: boolean } = {},
 ): number {
+  const local = requireGroup(store, 'localFiles');
+  const localRoot = local.hippoRoot;
   if (isSharedStore(localRoot)) {
     throw new BadRequestError(
       `Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, ` +
         `whose rows would reach every member.`,
     );
   }
-  if (!fs.existsSync(globalRoot)) return 0;
+  const from = requireGroup(global, 'localFiles');
+  if (!fs.existsSync(from.hippoRoot)) return 0;
 
-  return withRequestStoresSync(() => copyMissingRows(localRoot, globalRoot, opts.includeCrossProject === true));
+  return copyMissingRows(local, from, opts.includeCrossProject === true);
 }
 
 const textKey = (e: { tenant_id: string; content: string }): string => `${e.tenant_id}\n${e.content}`;
 
-/**
- * One open per store and one transaction: id, tenant and text decide which rows to read whole, and the copies commit
- * together.
- */
-function copyMissingRows(localRoot: string, globalRoot: string, includeCrossProject: boolean): number {
+/** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together. */
+function copyMissingRows(local: LocalFiles, from: LocalFiles, includeCrossProject: boolean): number {
   // Host-wide read: the global union is copied into a tenant-scoped local store, and each copy keeps its own tenant.
-  const localKeys = loadEntryTextKeys(localRoot);
+  const localKeys = local.sharing.textKeys();
   const localIds = new Set(localKeys.map((k) => k.id));
   const localText = new Set(localKeys.map(textKey));
   // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
-  const candidates = loadEntryTextKeys(globalRoot).filter((k) =>
+  const candidates = from.sharing.textKeys().filter((k) =>
     !localIds.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !localText.has(textKey(k)));
   if (candidates.length === 0) return 0;
   const byId = new Map(
     chunked(candidates.map((k) => k.id))
-      .flatMap((ids) => loadEntriesByIds(globalRoot, ids))
+      .flatMap((ids) => from.sharing.entriesByIds(ids))
       .map((e) => [e.id, e]),
   );
 
   // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret
   // rows never copied.
   // origin_project is preserved on the copy (the write stamps it only when missing).
-  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(localRoot)));
+  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(local.hippoRoot)));
   // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
   let rejected = 0;
-  const count = writeEntriesSkippingRejected(localRoot, (put) => {
+  const count = local.sharing.writeSkippingRejected((put) => {
     for (const { id } of candidates) {
       const entry = byId.get(id);
       // A row the global store dropped between the two reads, or a text an earlier copy in this batch already brought
@@ -76,7 +74,7 @@ function copyMissingRows(localRoot: string, globalRoot: string, includeCrossProj
       else rejected++;
     }
   });
-  finishSyncDown(localRoot, count, rejected);
+  finishSyncDown(local.hippoRoot, count, rejected);
   return count;
 }
 

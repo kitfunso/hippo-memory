@@ -3,6 +3,7 @@
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
+import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import {
   type EntityType,
@@ -12,7 +13,6 @@ import {
   type SourceObjectRef,
   GRAPH_ENTITY_TYPES,
   GRAPH_RELATION_TYPES,
-  MAX_ENTITY_NAME_LEN,
   type Entity,
   type Relation,
   type InsertEntityOpts,

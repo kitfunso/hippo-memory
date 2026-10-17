@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { sqliteStore } from '../src/store/index.js';
 import { listPeers } from '../src/sharing/share.js';
 import { Layer } from '../src/core/memory.js';
 import type { MemoryEntry } from '../src/core/memory.js';
@@ -72,7 +73,7 @@ describe('listPeers tenant scoping', () => {
   });
 
   it('no tenantId arg: returns host-wide peers (back-compat)', () => {
-    const peers = listPeers(globalRoot);
+    const peers = listPeers(sqliteStore(globalRoot));
     const map = new Map(peers.map((p) => [p.project, p.count]));
     expect(map.get('projectA')).toBe(2);
     expect(map.get('projectB')).toBe(1);
@@ -81,7 +82,7 @@ describe('listPeers tenant scoping', () => {
   });
 
   it('tenantId=acme: filters to projects whose memories carry tenant_id=acme', () => {
-    const peers = listPeers(globalRoot, 'acme');
+    const peers = listPeers(sqliteStore(globalRoot), 'acme');
     const map = new Map(peers.map((p) => [p.project, p.count]));
     expect(map.get('projectA')).toBe(2);
     expect(map.get('projectB')).toBe(1);
@@ -90,20 +91,20 @@ describe('listPeers tenant scoping', () => {
   });
 
   it('tenantId=globex: filters to projectC only', () => {
-    const peers = listPeers(globalRoot, 'globex');
+    const peers = listPeers(sqliteStore(globalRoot), 'globex');
     expect(peers).toHaveLength(1);
     expect(peers[0]!.project).toBe('projectC');
     expect(peers[0]!.count).toBe(2);
   });
 
   it('tenantId=unknown-tenant: returns empty array', () => {
-    const peers = listPeers(globalRoot, 'never-existed');
+    const peers = listPeers(sqliteStore(globalRoot), 'never-existed');
     expect(peers).toEqual([]);
   });
 
   it('tenantId=undefined explicit: equivalent to omitting the arg', () => {
-    const a = listPeers(globalRoot);
-    const b = listPeers(globalRoot, undefined);
+    const a = listPeers(sqliteStore(globalRoot));
+    const b = listPeers(sqliteStore(globalRoot), undefined);
     expect(b).toEqual(a);
   });
 });

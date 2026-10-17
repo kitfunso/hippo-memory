@@ -1,7 +1,7 @@
 // hippo.db's half of the GraphReads store group: one read snapshot around the walk the CLI graph commands run.
 import { canReadScope } from '../../core/recall-scope.js';
 import {
-  loadEntitiesByIds, loadEntitiesByMemoryId, loadNeighborRelations, withGraphReadSnapshot,
+  loadEntitiesByIds, loadEntitiesByMemoryId, loadNeighborRelations, loadStoredGraph, withGraphReadSnapshot,
 } from '../graph-reads.js';
 import { graphViewRows } from '../graph-view-rows.js';
 import type { GraphReads, Sync } from '../port.js';
@@ -20,5 +20,6 @@ export function sqliteGraphReads(hippoRoot: string): Sync<GraphReads> {
     entitiesByIds: (tenantId, ids) => loadEntitiesByIds(hippoRoot, tenantId, ids),
     neighborRelations: (tenantId, entityIds, { limit }) =>
       loadNeighborRelations(hippoRoot, tenantId, entityIds, { limit }),
+    storedGraph: (tenantId, memoryIds) => loadStoredGraph(hippoRoot, tenantId, memoryIds),
   };
 }

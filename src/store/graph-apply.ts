@@ -1,5 +1,5 @@
 // Applies a rebuild's op list through the row writers in graph-writes.ts, in one transaction per call.
-import type { DatabaseSyncLike } from '../db/index.js';
+import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../db/index.js';
 import { clock } from '../util/write-budget.js';
 import { storedGraphOn } from './graph-reads.js';
 import type { DesiredRelation, GraphOp, StoredGraph } from './graph-rows.js';
@@ -96,13 +96,15 @@ export function applyGraphOps(
   hippoRoot: string,
   tenantId: string,
   ops: readonly GraphOp[],
-  opts: ApplyGraphOpsOptions & { readonly busyWaitMs?: number },
+  opts: ApplyGraphOpsOptions,
 ): ApplyGraphOpsResult {
+  // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise
+  // fail.
   return runGraphRebuildTransaction(
     hippoRoot,
     tenantId,
     (db) => applyGraphOpsOn(db, tenantId, ops, opts),
-    { busyWaitMs: opts.busyWaitMs },
+    { busyWaitMs: SLEEP_DB_WAIT_MS },
   );
 }
 

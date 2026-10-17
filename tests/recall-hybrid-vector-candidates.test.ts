@@ -18,6 +18,7 @@ import { retrieve, getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -98,14 +99,14 @@ describe('hybrid recall candidates with stored vectors', () => {
   it('searchBothHybrid default recall', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const res = await searchBothHybrid(QUERY, s.home, s.global, { budget: 100000, tenantId: TENANT, recallScope: {}, scope: null });
+    const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), { budget: 100000, tenantId: TENANT, recallScope: {}, scope: null });
     expect(labels(s, res.map((r) => r.entry.id))).toEqual(EXPECTED.sharedDefault);
   });
 
   it('searchBothHybrid with an explicit additive scope', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const res = await searchBothHybrid(QUERY, s.home, s.global, {
+    const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
       budget: 100000, tenantId: TENANT, recallScope: { requested: 'team:alpha', additive: true }, scope: null,
     });
     expect(labels(s, res.map((r) => r.entry.id))).toEqual(EXPECTED.sharedAdditive);

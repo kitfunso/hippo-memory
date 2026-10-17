@@ -1,6 +1,5 @@
 {
   "src/cli/sleep.ts": 2,
-  "src/postinstall.ts": 1,
   "src/store/index-and-stats.ts": 1,
   "src/store/mirrors.ts": 1
 }

@@ -20,6 +20,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
@@ -51,7 +52,7 @@ describe('git-learned rows and the global store', () => {
 
   it('autoShare copies the ordinary error row and skips the git-learned one', () => {
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = autoShare(hippoRoot, { stats });
+    const shared = autoShare(...sharingStores(hippoRoot), { stats });
     expect(shared.map((e) => e.content)).toEqual([ORDINARY]);
     expect(globalContents()).toEqual([ORDINARY]);
     expect(stats.neverAutoShareSkipped).toBe(1);
@@ -65,7 +66,7 @@ describe('git-learned rows and the global store', () => {
   });
 
   it('a hand-run share of a git-learned row still copies it', () => {
-    expect(shareMemory(hippoRoot, seed.id)?.content).toBe(SEED);
+    expect(shareMemory(...sharingStores(hippoRoot), seed.id)?.content).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
 
@@ -82,7 +83,7 @@ describe('git-learned rows and the global store', () => {
     const recalled = { ...fact, retrieval_count: 3 };
     writeEntry(hippoRoot, recalled);
     expect(transferScore(recalled)).toBeGreaterThanOrEqual(0.6);
-    autoShare(hippoRoot);
+    autoShare(...sharingStores(hippoRoot));
     expect(globalContents()).toEqual([ORDINARY]);
   });
 

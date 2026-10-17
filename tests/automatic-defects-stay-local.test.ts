@@ -9,6 +9,7 @@ import { autoShare, transferScore } from '../src/sharing/share.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const DEFECT = 'Found local migration files to be';
 
@@ -36,7 +37,7 @@ describe('automatic rows with a certain defect stay local', () => {
     const typed = createMemory(DEFECT, { tags: ['error'], layer: Layer.Episodic });
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
-    expect(autoShare(root, { dryRun: true }).map((entry) => entry.id)).toEqual([typed.id]);
+    expect(autoShare(...sharingStores(root), { dryRun: true }).map((entry) => entry.id)).toEqual([typed.id]);
   });
 
   it('the DAG pass summarises sound extracted facts and leaves a defective one out', async () => {

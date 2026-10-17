@@ -19,6 +19,7 @@ import {
   summaryWith,
   type Scratch,
 } from './_helpers/compaction-hooks.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 let s: Scratch;
 let logFile: string;
@@ -280,7 +281,7 @@ describe('the global store fallback', () => {
     fs.mkdirSync(path.join(other, '.git'), { recursive: true });
     const otherRoot = path.join(other, '.hippo');
     initStore(otherRoot);
-    expect(syncGlobalToLocal(otherRoot, s.globalRoot)).toBe(0);
+    expect(syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot))).toBe(0);
   });
 
   it('a folder with no project marker gives user-global rows', () => {

@@ -170,6 +170,7 @@ export const SESSION_VERBS = {
   peers                    List projects contributing to global store`],
   }),
   sync: verb(() => import('../transfer.js'), 'handleSync', {
+    scoped: true,
     flags: { switches: ['cross-project'] },
     usage: [`
   sync                     Pull global memories into local project`],

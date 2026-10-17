@@ -17,6 +17,7 @@ import { updateStats, appendConsolidationRun } from '../src/store/index-and-stat
 import { finishRecallAt } from '../src/store/sqlite/last-recall-group.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
 import { flushStatsMirrors } from '../src/store/mirrors.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const roots: string[] = [];
 
@@ -74,7 +75,7 @@ describe('rankRecall with a global store', () => {
     const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local)));
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
-    const reloaded = await searchBothHybrid('zephyrine cache', local, global, {
+    const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {
       budget: 4000, cost: (r) => r.tokens, explain: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, scope: null, tenantId: 'default',
       includeSuperseded: false, recallScope: {},
     });

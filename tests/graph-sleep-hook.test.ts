@@ -32,6 +32,7 @@ import { sleep, adminActor } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
@@ -158,9 +159,9 @@ describe('sleep enqueue-hook', () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the primary application datastore' });
     // Inject an extractGraph that enqueues a NEW item (id > watermark) mid-rebuild.
     const phases: Partial<SleepPhases> = {
-      extractGraph: async (objects, root, tid) => {
-        if (tid === T) await saveDecision(objects, loadConfig(root).defaultHalfLifeDays, tid, { decisionText: 'Adopt Redis as the shared caching tier' });
-        return realExtractGraph(objects, root, tid);
+      extractGraph: async (store, tid) => {
+        if (tid === T) await saveDecision(store.objects, loadConfig(tc.hippoRoot).defaultHalfLifeDays, tid, { decisionText: 'Adopt Redis as the shared caching tier' });
+        return realExtractGraph(store, tid);
       },
     };
     await runSleep(tc.ctx, { noShare: true }, phases);
@@ -174,9 +175,9 @@ describe('sleep enqueue-hook', () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantFail', { decisionText: 'TenantFail standardizes on the GraphQL API gateway' });
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantOk', { decisionText: 'TenantOk migrates services onto the gRPC mesh' });
     const phases: Partial<SleepPhases> = {
-      extractGraph: (objects, root, tid) => {
+      extractGraph: (store, tid) => {
         if (tid === 'tenantFail') throw new Error('boom: extract failed for tenantFail');
-        return realExtractGraph(objects, root, tid);
+        return realExtractGraph(store, tid);
       },
     };
     const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
@@ -256,7 +257,7 @@ describe('sleep enqueue-hook', () => {
     }
     const queued = pending(tc.hippoRoot).length;
     const stopAtSecondChunk: Partial<SleepPhases> = {
-      extractGraph: async (objects, root, tid) => await extractGraphChunked(objects, root, tid, {
+      extractGraph: async (store, tid) => await extractGraphChunked(store, tid, {
         ...WRITE_BUDGET,
         holdMs: 0,
         pause: async () => { throw new Error('stopped between chunks'); },
@@ -273,14 +274,14 @@ describe('sleep enqueue-hook', () => {
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
     const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));
-    expect(readGraphDelta(tc.hippoRoot, T, desired)).toEqual([]);
+    expect(await readGraphDelta(sqliteStore(tc.hippoRoot).graphReads, T, desired)).toEqual([]);
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 
   it('18. stale ops a rebuild skipped show in the details', async () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     const phases: Partial<SleepPhases> = {
-      extractGraph: async (objects, root, tid) => ({ ...(await realExtractGraph(objects, root, tid)), skipped: 2 }),
+      extractGraph: async (store, tid) => ({ ...(await realExtractGraph(store, tid)), skipped: 2 }),
     };
 
     const r = await runSleep(tc.ctx, { noShare: true }, phases);
