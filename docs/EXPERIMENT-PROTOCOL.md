@@ -3088,3 +3088,201 @@ Jev presence is closed as an abstain cut on this evidence. It stays on record as
 Jev score beat the best free score on something other than ranking. The pinned rule applies: another run on
 this query set is a run of the same kind and is not justified. Reopening needs a new input (the clean
 no-answer set) and Keith's yes on the spend.
+
+---
+
+# LANE 22 PRE-REGISTRATION (ROADMAP CLF4): does free CLEF rank like the paid reranker? Declared 2026-10-04, before any scored call
+
+## Why this is a new input, not a rerun
+
+Lanes 15 and 21 closed what Jev can do on this query set. CLEF (`@cf/cloudflare/clef-flash`, shipped as
+`--reranker clef-flash` in 1.59.0) is a different model reached through a different transport, and it costs
+nothing inside the Workers AI free allocation. The question is new: does a free model reproduce the ranking
+win that only a paid model has shown here. One shape check ran before this was written: one sizing call on
+one query (5,962 input tokens, 40 of 40 answers, 39 distinct scores). It decided the split below and was
+not scored.
+
+## Design
+
+- `scripts/rerank-3arm-ab.mjs` with `RERANK_ARM=clef-flash`: arms base, repaired cross-encoder and
+  clef-flash on one shared candidate set per query, depth 40, NOW pinned to `2026-09-18T14:31:52.073Z`.
+- Corpus: a frozen copy of `~/.hippo` taken 2026-10-04T07:25Z (`VACUUM INTO` plus `embeddings.json` and
+  `config.json`), 6,826 entries, passed as `RERANK_HIPPO_ROOT`. The live store is never read.
+- Queries: the 303 paraphrase queries, 283 usable on this corpus (20 targets gone).
+- Spend: 0 USD. clef-flash costs 8,182 neurons per million input tokens and the free allocation is 10,000
+  neurons a day. The 283 requests measure 8.4M characters, about 1.67M tokens or 13,700 neurons, so the run
+  is split over two UTC days: `RERANK_MAX_CALLS=142` on day 1, the rest on day 2, answers cached per query in
+  `RERANK_CACHE_DIR`. A fallback is never cached. No verdict prints until all 283 are scored.
+- Transport: Workers AI with the wrangler OAuth login, which carries `ai:write`.
+
+## Metrics and decision rule
+
+Paired bootstrap over queries, 2,000 draws, seed 4242, one contrast for the verdict at alpha 0.0125
+(98.75% interval), as in Lane 15.
+
+- **Primary, the verdict:** clef-flash minus cross-encoder on R@1.
+  - CLEF RANKS: the interval excludes zero upward.
+  - CROSS-ENCODER RANKS: the interval excludes zero downward.
+  - TIE: the interval holds zero; a tie goes to the local model.
+- **Declared secondaries, reported, never the verdict:** clef-flash minus cross-encoder on recall@budget
+  (the product metric, Lane 15) and on memories needed to reach a 60% hit rate (the Amendment 4 depth
+  read, computed from the saved ranks).
+- **Void:** any query that falls back, or a degenerate arm, voids the run (the script's own checks).
+- Jev is not re-run (paid). Lane 15's +0.2033 and Lane 21's Jev R@1 0.5886 were measured on stores of under
+  2,100 entries, so they are context only and cannot enter a contrast.
+
+## Predictions, declared now
+
+1. clef-flash beats the cross-encoder on R@1, with a point delta between +0.10 and +0.25.
+2. recall@budget ties (interval holds zero), as it did for Jev.
+
+## What a verdict does and does not do
+
+No default changes on this lane. CLEF RANKS earns a task-level lane (does the answer reach the model), the
+ROADMAP's adoption bar; TIE or CROSS-ENCODER RANKS closes clef-flash as a ranking upgrade on this store.
+
+## Trial ledger
+
+One new verdict contrast on a query set already used by Lanes 9a, 12, 13, 15, 19 and 21. N = 21. Not
+independent of those lanes.
+
+## Run log
+
+- Day 1, 2026-10-04: 142 calls, 846,604 input tokens (about 6,930 neurons), 142 answers cached, 0 fallbacks
+  cached. The cross-encoder arm did not load in that run: the fresh worktree lacked the optional
+  `@xenova/transformers`, and the warm-up guard watched `console.warn` while the logger writes to stderr, so
+  it missed the fallback. The CLEF answers do not depend on that arm. Fixed before any verdict: version
+  2.17.2 installed (the one earlier lanes used), and the guard now checks the scores the warm-up returns.
+  Checked both ways: with the package hidden the run stops; with it present a zero-call run loads the model
+  in 2.5 s and resumes 142 cached answers.
+  [Corrected 2026-10-08: "The CLEF answers do not depend on that arm" is wrong. The same missing package
+  feeds the embedding leg of `hybridSearch`, so the day 1 candidate sets were keyword-only. See Day 2.]
+- Day 2, 2026-10-08: 141 calls, 141 ok, 0 failed, 0 partial, 0 fallbacks, 1,404,488 input tokens by the
+  runner's count. The run printed a verdict. That verdict is void (next section): the 142 day 1 answers
+  were scored on keyword-only candidate sets, and the resume path merged them into day 2's hybrid sets.
+  DEVIATION, spend: Cloudflare's usage analytics show 11,472 neurons for the day against the 10,000 free
+  allocation. The call cap held; the tokens per call did not match the plan.
+
+---
+
+# LANE 22 RUN OF 2026-10-08: VOID. No verdict. Half the CLEF answers were scored on the wrong candidate sets.
+
+Run: `scripts/rerank-3arm-ab.mjs` with `RERANK_ARM=clef-flash`, on 2026-10-04 and 2026-10-08. The as-run
+output, the 283 cached answers, an id manifest per day, both run logs and the frozen store are archived
+outside the repo (`Documents/hippo-evals/lane22/`); rerank result files are not tracked here.
+Regenerate every number below with no spend: `lane22-headcheck.mjs`, `lane22-interim.mjs` and
+`lane22-asrun-size.mjs` in that archive read the cache and the result file and make no call.
+
+## Status
+
+**VOID. The lane has no verdict.** The run printed "CLEF-FLASH CLEARS THE GATE", R@1 +0.0919
+[0.0247, 0.1590], and a recall@budget loss of -0.0601 [-0.1095, -0.0106]. Neither number is a result.
+Do not cite either.
+
+## What went wrong
+
+1. On 2026-10-04 the worktree lacked `@xenova/transformers`. The Day 1 entry recorded that the
+   cross-encoder did not load. It missed the second effect: without the package `hybridSearch` has no
+   query embedding and builds its candidates from keyword match alone. All 142 day 1 CLEF answers score
+   keyword-only heads.
+2. On 2026-10-08 the package was present, so base, the cross-encoder and the 141 new CLEF calls all used
+   hybrid candidate sets.
+3. The resume path matched a cached answer to its query by id and never compared the candidates. It merged
+   each day 1 head with the day 2 tail. A merged list holds some memories twice and drops others. Where the
+   target was dropped, CLEF lost a hit it was never given to rank.
+
+Evidence: cached head ids against the head of 40 the runner builds, with the package present and hidden.
+
+| Embedding package | Day 1 answers that match, of 142 | Day 2 answers that match, of 141 |
+|---|---|---|
+| present (the 8 Oct state) | 0 | 141, same order |
+| hidden (the 4 Oct state) | 142, same order | 0 |
+
+The first five day 1 mismatches share 14 to 25 of 40 ids with the hybrid head.
+
+Every integrity check the script ran passed: 0 fallbacks, 0 failed, 0 partial, both rerank arms
+non-degenerate. None of them compares candidate sets, so none could see this.
+
+## What is valid
+
+- **Base and cross-encoder on all 283.** Both were computed on 8 Oct on hybrid sets. Base: R@1 0.2862,
+  recall@budget 0.6643. Cross-encoder: R@1 0.3640, recall@budget 0.6502. Cross-encoder minus base: R@1
+  +0.0777 [0.0106, 0.1519], recall@budget -0.0141 [-0.0424, 0.0106].
+- **The 141 CLEF answers of 8 Oct.** They are kept.
+
+## Interim diagnostic on the 141 valid queries. Not the declared analysis, not a verdict.
+
+The 141 are rows 142 to 282 of the run order, the ones the day 1 call cap left unanswered. They are not a
+random draw: base R@1 is 0.3333 on this half and 0.2394 on the other. Same bootstrap as the lane (2,000
+draws, seed 4242, 98.75% interval). These numbers were seen before the re-run, and the completed lane must
+say so.
+
+| Metric | base | cross-encoder | clef-flash | clef-flash minus cross-encoder |
+|---|---|---|---|---|
+| R@1 (the primary) | 0.3333 | 0.3688 | 0.5248 | +0.1560 [0.0638, 0.2553] |
+| recall@budget | 0.6454 | 0.6241 | 0.6738 | +0.0496 [0.0142, 0.0993] |
+| R@5 | 0.4823 | 0.5248 | 0.6383 | +0.1135 [0.0355, 0.1915] |
+| MRR | 0.4012 | 0.4393 | 0.5785 | +0.1393 [0.0661, 0.2152] |
+
+clef-flash minus base on recall@budget: +0.0284 [0.0000, 0.0709].
+
+| Memories read to reach a hit rate | base | cross-encoder | clef-flash |
+|---|---|---|---|
+| 50% | 7 | 4 | 1 |
+| 60% | 15 | 14 | 2 |
+| 70% | never within 40 | never within 40 | never within 40 |
+
+The target is in the head of 40 for 95 of the 141, and clef-flash keeps all 95 inside the budget cut
+(0.6738). Target in the clef-flash cut only: 7. In the cross-encoder cut only: 0. clef-flash latency p50:
+726 ms.
+
+For contrast, the 142 void queries show clef-flash recall@budget 0.5070 against 0.6761 for the
+cross-encoder, with 25 targets in the cross-encoder cut only and 1 the other way. That gap is the merge
+fault, and it produced the false recall loss in the printed table.
+
+## Spend
+
+| | 2026-10-04 | 2026-10-08 |
+|---|---|---|
+| Calls | 142, plus 1 sizing call | 141 |
+| Request characters sent | 4,207,222 | 3,816,245 |
+| Input tokens, runner's count | 846,604 | 1,404,488 |
+| Input tokens, Cloudflare analytics | 787,516 over 134 sampled calls | 1,402,174 over 141 calls |
+| Neurons, Cloudflare analytics | 6,443 | 11,472 |
+
+DEVIATION: 8 Oct ran 1,472 neurons over the free allocation. If the account is billed for overage that is
+about 0.016 USD; the wrangler login cannot read the plan, so billed or not is not established.
+
+The plan assumed 5,962 tokens a call, the sizing call's count. Day 1's runner total is exactly 142 x 5,962,
+which is what one fixed figure reported for every call would give, whatever the request size. Day 1 was
+therefore no measure of tokens per request. 8 Oct averaged 9,961 tokens a call at 2.72 characters a token.
+Why day 1 reported a fixed figure is not established.
+
+## Runner fixes, each checked with no call
+
+1. **Embedding guard.** The run exits 1 with `EMBEDDINGS UNAVAILABLE` when neither embedding package is
+   installed. Check: package hidden, exit 1.
+2. **Stale-answer check.** A cached answer counts only when its 40 ids equal the current head's ids;
+   otherwise the query is asked again. Check: both caps at 0 on the as-run cache prints
+   `INCOMPLETE: 141/283 queries scored (141 cached, 142 cached answers stale, 0 new calls, 0 input tokens)`.
+3. **`RERANK_MAX_TOKENS`.** No new call starts once the run's reported input tokens reach the cap. Four
+   calls run at once, so a run can pass the cap by up to three calls. Check: cap 0 on an empty cache gives
+   0 of 283 scored and 0 calls; a value that is not a whole number exits 1.
+4. **Neurons line.** The run prints its neurons beside the dollar line, which read $0.0000 on 8 Oct.
+
+## Completing the lane
+
+The decision rule, seed, query set, corpus and NOW are unchanged. The 142 stale queries are asked again on
+hybrid sets: 3,727,522 request characters, about 1.37M tokens at 8 Oct's rate, about 11,200 neurons. That
+is over one day's allocation, so it takes two more UTC days at `RERANK_MAX_TOKENS=1100000` (about 9,000
+neurons a day), and no call on a day whose allocation is already spent. The verdict is what the runner
+prints once all 283 answers match their candidate sets.
+
+Sizing correction: the pre-registration's 8.4M characters was measured on 4 Oct on keyword-only sets. The
+hybrid sets measure 7,543,767 characters.
+
+## Trial ledger
+
+The void run adds no verdict contrast. N stays 21. The interim read is one unplanned look at the primary
+contrast on half the queries. The completed run's interval will not be adjusted for it; read it with that
+in mind.
