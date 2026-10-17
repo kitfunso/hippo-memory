@@ -38,6 +38,10 @@ import {
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 type Kind = 'local' | 'wide';
 interface Outcome<T> { value: T; rows: unknown; opens: number }
 /** JSON.stringify throws a TypeError on it, so an audit row carrying it fails mid-write. */

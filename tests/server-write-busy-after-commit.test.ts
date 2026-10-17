@@ -1,5 +1,5 @@
 // A busy store never fails a routed write that already committed, and a busy 503 always means nothing landed, so the thin client may replay it.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -11,6 +11,14 @@ import { serve } from '../src/server.js';
 import * as client from '../src/cli/client.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {

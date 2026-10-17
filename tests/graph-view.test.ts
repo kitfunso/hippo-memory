@@ -6,7 +6,7 @@
  * deterministic layout, the self-contained HTML viewer (XSS-escaped), the JSON
  * Canvas export, and the GET /v1/graph route. Real SQLite, no mocks.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { saveDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
@@ -24,6 +24,14 @@ import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const T = 'default';
 

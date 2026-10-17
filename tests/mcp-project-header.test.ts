@@ -1,5 +1,5 @@
 // HTTP MCP on a shared store reads the caller's project from two percent-encoded headers and answers a bad one 400 before any JSON-RPC.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
@@ -13,6 +13,14 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface Reply { readonly status: number; readonly text: string; readonly scoped: string | string[] | undefined }
 

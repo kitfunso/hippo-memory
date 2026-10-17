@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, vi, beforeEach } from 'vitest';
 import { mintAdminKey } from './_helpers/admin-server.js';
 import { rmSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,6 +11,10 @@ import { boundPort } from './_helpers/listen.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 import { makeStore } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
 
 /**
  * Headline parity test for A1: when `hippo serve` is running, CLI invocations

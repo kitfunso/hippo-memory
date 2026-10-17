@@ -6,6 +6,14 @@ import { join } from 'node:path';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let home: string;
 let handle: ServerHandle;
 let savedLevel: string | undefined;

@@ -6,6 +6,14 @@ import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['Forwarded', 'for=203.0.113.7;proto=https'],
   ['X-Forwarded-For', '203.0.113.7'],

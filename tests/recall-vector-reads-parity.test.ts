@@ -25,6 +25,10 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_h
 import { inMemoryVectorStore } from './_helpers/in-memory-vector-store.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 const MODEL = 'hashed-16';
 const IDENTITY = embeddingIndexIdentity(`openai:${MODEL}`);
 const QUERY = 'deploy';

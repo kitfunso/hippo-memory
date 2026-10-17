@@ -11,6 +11,14 @@ import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let tmp: string;
 let handle: ServerHandle | null = null;
 const origHome = process.env.HIPPO_HOME;

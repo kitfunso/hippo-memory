@@ -17,6 +17,10 @@ import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 describe('POST /v1/sleep admin-role gate', () => {
   let home: string;
   let globalHome: string;

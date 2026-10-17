@@ -6,6 +6,14 @@ import { createApiKey, revokeApiKey } from '../src/store/auth.js';
 import { log } from '../src/util/log.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // v0.39 commit 5 — Server hardening regressions:
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
 //     caps stream age. MCP_SSE_HEARTBEAT_MS makes the interval testable.

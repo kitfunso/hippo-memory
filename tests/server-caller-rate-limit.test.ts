@@ -11,6 +11,14 @@ import { Socket } from 'node:net';
 import { clientLimitKey } from '../src/server/client-ip.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CALLER_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
 const saved = new Map(ENV_KEYS.map((k) => [k, process.env[k]]));
 

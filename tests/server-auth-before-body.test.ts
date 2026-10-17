@@ -1,10 +1,18 @@
 // No unauthenticated caller can make the server buffer a large body or wait long for one: every keyed route checks
 // the credential before it reads. The two webhook routes take no API key, so they check the signing secret and the signature headers first.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /** Sends headers that promise a 2 MB body plus a few bytes of it, never the rest, and resolves with the status line. */
 function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): Promise<string> {

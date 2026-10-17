@@ -34,8 +34,6 @@ for (const k of AGENT_HOME_KEYS) delete process.env[k];
 delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
 const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
-// Most server tests speak as the keyless local caller; the tests of the key-required default delete this.
-process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
 // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
 process.env.HIPPO_SKIP_SCHEDULE = '1';
 
@@ -65,7 +63,7 @@ export default defineConfig({
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
       HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
-      HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_SKIP_SCHEDULE: '1',
+      HIPPO_SKIP_SCHEDULE: '1',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),

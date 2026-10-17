@@ -1,6 +1,6 @@
 // A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -12,6 +12,14 @@ import { cliStdioHost } from '../src/cli/api-context.js';
 import { retrieve, remember } from '../src/api/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeStore } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;

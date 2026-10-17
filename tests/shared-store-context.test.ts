@@ -18,6 +18,14 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const REFUSAL = 'hippo_context needs a project on a shared store; use hippo_recall';
 const GATE = "hippo_context needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header";
 const ROWS = {
