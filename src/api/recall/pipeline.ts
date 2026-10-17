@@ -17,6 +17,7 @@ import type { RerankerFn } from '../../rerankers/types.js';
 import { currentEntries } from '../../search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../search/boosts.js';
 import { hybridSearch, vectorSourceOf } from '../../search/hybrid.js';
+import { applyReranker } from '../../search/rerank.js';
 import { searchByEngine } from '../../search/engine.js';
 import type { HippoConfig } from '../../core/config.js';
 import {
@@ -176,7 +177,7 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
   if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
   applyPfcRerankers(opts, state);
   if (opts.haltBefore === 'rerank') return done(true);
-  if (opts.reranker) state.results = await applyReranker(opts, opts.reranker, state.results);
+  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results);
   await applyGoalBoosts(ctx, opts, state);
   if (opts.haltBefore === 'salience') return done(true);
   if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
@@ -396,8 +397,6 @@ function applyValueAware(opts: RankRecallOptions, state: RankState): void {
 }
 
 function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
-  // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for
-  // length.
   state.results = byScore(
     state.results.map((r) => {
       const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
@@ -430,10 +429,13 @@ const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
 const GOAL_TAG_BOOST = 1.5;
+// The near-duplicate check looks at this many top hits; the re-ordered pool is three times that, at least 9.
+const NEAR_DUPLICATE_WINDOW = 3;
+const NEAR_DUPLICATE_POOL_MIN = 9;
 
 /** When the top hits are near-duplicates (same topic, different facts), surface the newest on-topic row first. */
 function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
-  const slice = results.slice(0, Math.min(3, results.length));
+  const slice = results.slice(0, Math.min(NEAR_DUPLICATE_WINDOW, results.length));
   let pairs = 0;
   let overlapSum = 0;
   for (let i = 0; i < slice.length; i++) {
@@ -443,7 +445,7 @@ function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
     }
   }
   if ((pairs > 0 ? overlapSum / pairs : 0) < NEAR_DUPLICATE_OVERLAP_MIN) return results;
-  const poolSize = Math.min(results.length, Math.max(slice.length * 3, 9));
+  const poolSize = Math.min(results.length, Math.max(slice.length * NEAR_DUPLICATE_WINDOW, NEAR_DUPLICATE_POOL_MIN));
   const pool = results.slice(0, poolSize);
   const scoreFloor = pool.reduce((m, r) => Math.max(m, r.score), 0) * SCORE_FLOOR_FRACTION;
   // Query coverage catches the differently phrased update a score floor alone would miss.
@@ -468,24 +470,20 @@ function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
   return [...onTopic, ...offTopic, ...results.slice(poolSize)];
 }
 
-async function applyReranker(
+function applyRecallReranker(
   opts: RankRecallOptions,
   reranker: RecallReranker,
   results: SearchResult[],
 ): Promise<SearchResult[]> {
-  const { fn, topK } = reranker;
-  const rerankInput = results.slice(0, topK).map((r, i) => ({ ...r, preRerankRank: i + 1 }));
-  const reranked = await fn(opts.query, rerankInput, { topK });
   // The reranker's score becomes `score` so later stages that sort by score keep its order.
-  const withPostRank = reranked.map((r, i) =>
+  return applyReranker(opts.query, results, reranker.fn, { topK: reranker.topK }, (r) =>
     traced(
       opts,
       r,
-      { ...r, score: r.rerankScore, postRerankRank: i + 1 },
+      { ...r, score: r.rerankScore },
       { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
     ),
   );
-  return [...withPostRank, ...results.slice(topK)];
 }
 
 async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, state: RankState): Promise<void> {

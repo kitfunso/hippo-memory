@@ -25,6 +25,7 @@ import {
 import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
 import { fail } from './exit.js';
+import { plural } from '../util/format.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
@@ -38,7 +39,7 @@ function noteScopeHidden(
   const hidden = scopeHiddenCount(ctx, query, globalRoot, requested);
   if (hidden > 0) {
     printError(
-      `[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`,
+      `[note] ${plural(hidden, 'candidate')} hidden by recall scope policy (pass an explicit --scope to inspect).`,
     );
   }
 }

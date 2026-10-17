@@ -3,6 +3,7 @@ import { detectSecret } from '../util/secret-detect.js';
 import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
+import { plural } from '../util/format.js';
 
 const STRENGTH_DECIMALS = 4;
 
@@ -75,7 +76,7 @@ function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string
     .map(([id]) => id);
   if (nonFiniteIds.length > 0) {
     result.details.push(
-      `  ⚠️ memory-value: skipped ${nonFiniteIds.length} entr${nonFiniteIds.length === 1 ? 'y' : 'ies'} ` +
+      `  ⚠️ memory-value: skipped ${plural(nonFiniteIds.length, 'entry', 'entries')} ` +
       `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
     );
   }

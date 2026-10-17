@@ -46,7 +46,7 @@ export function claudeCheckoutRoot(top: string, gitDir: string, common: string):
 export function claudeFolderName(root: string): string {
   const full = path.resolve(root);
   const name = full.replace(/[^a-zA-Z0-9]/g, '-');
-  if (name.length <= 200) return name;
+  if (name.length <= NAME_SLUG_MAX_CHARS) return name;
   let hash = 0;
   for (let i = 0; i < full.length; i++) hash = ((hash << 5) - hash + full.charCodeAt(i)) | 0;
   return `${name.slice(0, NAME_SLUG_MAX_CHARS)}-${Math.abs(hash).toString(36)}`;

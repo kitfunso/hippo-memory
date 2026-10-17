@@ -118,17 +118,9 @@ let _lossAversionRatioCache: number | undefined;
 function getLossAversionRatio(): number {
   if (_lossAversionRatioCache !== undefined) return _lossAversionRatioCache;
   const raw = envLossAversionRatio();
-  if (raw === undefined || raw === '') {
-    _lossAversionRatioCache = 1.0;
-    return 1.0;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < LOSS_AVERSION_RATIO_MIN) {
-    _lossAversionRatioCache = 1.0;
-    return 1.0;
-  }
-  _lossAversionRatioCache = parsed;
-  return parsed;
+  const parsed = raw === undefined || raw === '' ? 1.0 : Number(raw);
+  _lossAversionRatioCache = Number.isFinite(parsed) && parsed >= LOSS_AVERSION_RATIO_MIN ? parsed : 1.0;
+  return _lossAversionRatioCache;
 }
 
 /**

@@ -21,6 +21,7 @@ import { promoteSessionTraces, replayPass } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../util/time.js';
+import { plural } from '../util/format.js';
 
 export type ConsolidateOptions = {
   dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget;
@@ -169,7 +170,7 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
 
   if (detectedConflicts.length > 0) {
     result.details.push(
-      `  ⚠️ detected ${detectedConflicts.length} memory conflict${detectedConflicts.length === 1 ? '' : 's'}`,
+      `  ⚠️ detected ${plural(detectedConflicts.length, 'memory conflict')}`,
     );
   }
 
@@ -204,7 +205,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     const auditFailures = run.store.auditEachRow(rescuedEntries.map(rescueEvent));
     if (auditFailures > 0) {
       result.details.push(
-        `  ⚠️ memory-value: ${auditFailures} mv_rescue audit row${auditFailures === 1 ? '' : 's'} ` +
+        `  ⚠️ memory-value: ${plural(auditFailures, 'mv_rescue audit row')} ` +
         `failed to write (the rescue itself still landed)`,
       );
     }
@@ -213,7 +214,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, { errorClass: errorFields(err).errorClass });
     result.details.push(
       `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
-      `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,
+      `(${plural(rescuedEntries.length, 'rescue')} not audited)`,
     );
   }
 }

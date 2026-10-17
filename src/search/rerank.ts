@@ -1,5 +1,5 @@
 import { cosineOf } from '../core/cosine.js';
-import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
+import type { RerankerFn, RerankerOptions, RerankResult } from '../rerankers/types.js';
 import type { SearchResult } from '../core/search-types.js';
 
 const DEFAULT_RERANK_TOP_K = 50;
@@ -81,13 +81,15 @@ export function applyMmrWindow(
   return [...mmrRerank(head, embeddingIndex, lambda, explain), ...tail];
 }
 
-/** Runs the reranker over the top `topK` (default 50) and stamps pre and post ranks; see src/rerankers/types.ts. */
+/** Reranks the top `topK` (default 50), stamps pre and post ranks, then maps each head row through `onRanked`. */
 export async function applyReranker(
   query: string, ordered: SearchResult[], reranker: RerankerFn, rerankerOptions?: RerankerOptions,
+  onRanked?: (ranked: RerankResult) => SearchResult,
 ): Promise<SearchResult[]> {
   const topK = rerankerOptions?.topK ?? DEFAULT_RERANK_TOP_K;
   const head = ordered.slice(0, topK).map((r, i) => ({ ...r, preRerankRank: i + 1 }));
   const tail = ordered.slice(topK);
   const reranked = await reranker(query, head, { ...rerankerOptions, topK });
-  return [...reranked.map((r, i) => ({ ...r, postRerankRank: i + 1 })), ...tail];
+  const ranked = reranked.map((r, i) => ({ ...r, postRerankRank: i + 1 }));
+  return [...(onRanked ? ranked.map(onRanked) : ranked), ...tail];
 }

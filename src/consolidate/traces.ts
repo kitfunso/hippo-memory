@@ -10,6 +10,7 @@ import { log } from '../util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
+import { plural } from '../util/format.js';
 
 // 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no
 // trace (idempotent via source_session_id)
@@ -44,7 +45,7 @@ export function promoteSessionTraces(run: SleepRun): void {
 
   if (result.promotedTraces > 0) {
     result.details.push(
-      `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed ` +
+      `  🧬 promoted ${plural(result.promotedTraces, 'trace')} from completed ` +
       `session${result.promotedTraces === 1 ? '' : 's'}`,
     );
   }
@@ -167,7 +168,7 @@ export function replayPass(run: SleepRun): void {
   }
   run.result.replayed = rehearsed.length;
   run.result.details.push(
-    `  💭 replayed ${rehearsed.length} memor${rehearsed.length === 1 ? 'y' : 'ies'}: ` +
+    `  💭 replayed ${plural(rehearsed.length, 'memory', 'memories')}: ` +
     rehearsed.map((e) => e.id).join(', ')
   );
   if (!run.dryRun) {

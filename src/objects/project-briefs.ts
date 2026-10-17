@@ -12,6 +12,7 @@ import { checkText, requireLine } from './fields.js';
 import { closeObject, listObjects, objectById, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../core/object-types.js';
 import type { ObjectListQuery, Objects } from '../store/port.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { BriefStatus, ProjectBrief } from '../core/object-types.js';
 
@@ -100,7 +101,7 @@ export function saveProjectBrief(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveProjectBriefOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<ProjectBrief> {
   return saveObject(objects, PROJECT_BRIEF, { baseHalfLifeDays, tenantId, actor }, opts);
 }
@@ -110,7 +111,7 @@ export function closeProjectBrief(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<ProjectBrief> {
   return closeObject(objects, PROJECT_BRIEF, tenantId, id, actor);
 }

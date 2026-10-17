@@ -57,6 +57,7 @@ import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../util/escape.js';
 import { fail } from './exit.js';
+import { plural } from '../util/format.js';
 
 // Hook install/uninstall
 
@@ -556,7 +557,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   if (isInitialized(globalRoot)) {
     const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) {
-      console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
+      console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
     }
     await repairQualityOnceAt(globalRoot, tenantId);
   }
@@ -568,8 +569,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     return;
   }
 
-  const plural = workspaces.length === 1 ? '' : 's';
-  console.log(`Running daily maintenance across ${workspaces.length} registered workspace${plural}...`);
+  console.log(`Running daily maintenance across ${plural(workspaces.length, 'registered workspace')}...`);
 
   let processed = 0;
   let failed = 0;
@@ -593,8 +593,8 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     }
   });
 
-  console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ` +
-    `${failed} command failure${failed === 1 ? '' : 's'}.`);
+  console.log(`Daily maintenance complete: ${plural(processed, 'workspace')} processed, ` +
+    `${plural(failed, 'command failure')}.`);
   // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
   if (failed > 0) process.exitCode = 1;
 }

@@ -41,6 +41,7 @@ import {
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
+import { plural } from '../util/format.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -491,7 +492,7 @@ export function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): voi
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {
     const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
-    console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to ${scopeLabel}:\n`);
+    console.log(`${plural(peers.length, 'project')} contributing to ${scopeLabel}:\n`);
     for (const p of peers) {
       console.log(
         `  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  ` +

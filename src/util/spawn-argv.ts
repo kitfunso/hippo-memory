@@ -1,9 +1,9 @@
 // Starting a command from an argv list with no shell, Windows .cmd and .bat shims included, so no argument is ever
 // parsed as shell syntax.
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { envPath, envPathExt } from './env.js';
+import { isFile } from './real-path.js';
 
 /** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */
 export function quoteCmdArg(arg: string): string {
@@ -22,10 +22,6 @@ export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): s
 }
 
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
-
-function isFile(candidate: string): boolean {
-  return fs.statSync(candidate, { throwIfNoEntry: false })?.isFile() === true;
-}
 
 /**
  * The file `command` names on win32: as given when it has a folder, else the first hit on PATH (never the working

@@ -12,6 +12,7 @@ import { type JsonValue, isJsonString } from '../util/json.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Process, ProcessStatus } from '../core/object-types.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Process, ProcessStatus } from '../core/object-types.js';
 
@@ -117,7 +118,7 @@ export function saveProcess(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveProcessOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Process> {
   return saveObject(objects, PROCESS, { baseHalfLifeDays, tenantId, actor }, opts);
 }
@@ -127,7 +128,7 @@ export function closeProcess(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Process> {
   return closeObject(objects, PROCESS, tenantId, id, actor);
 }

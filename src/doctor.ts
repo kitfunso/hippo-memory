@@ -22,6 +22,7 @@ import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
 import { DAY_MS } from './util/time.js';
+import { plural } from './util/format.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -162,7 +163,7 @@ function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck
     : {
         id: 'sleep',
         status: 'pass',
-        detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}`,
+        detail: `last sleep ${days === 0 ? 'today' : `${plural(days, 'day')} ago`}`,
       };
 }
 
@@ -204,7 +205,7 @@ function compactionsCheck(
   const stuck = summarised + started;
   const { counts: spool, unread } = readSpool(store, now, spoolFs);
   const spooled = spool.waiting + spool.stale + spool.bad > 0;
-  const recorded = `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck`;
+  const recorded = `${plural(total, 'compaction')} recorded, none stuck`;
   if (stuck === 0 && !spooled && unread === '') return { id: 'compactions', status: 'pass', detail: recorded };
   const fix = [
     stuck + spool.waiting + spool.stale > 0 ? 'hippo sleep   (replays them)' : '',
@@ -216,7 +217,7 @@ function compactionsCheck(
   const unfinished =
     stuck === 0
       ? `${recorded} in the store`
-      : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes ` +
+      : `${plural(stuck, 'compaction')} unfinished after 10 minutes ` +
         `(${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
   const note = spooled
     ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad`

@@ -69,6 +69,7 @@ import {
 } from './print.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
@@ -522,7 +523,7 @@ async function presentRecall(
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);
   const audit = shownRecallRows(
-    { tenantId: o.tenantId, actor: 'cli' },
+    { tenantId: o.tenantId, actor: CLI_ACTOR },
     {
       query,
       ring: fit.anchorRing,

@@ -12,6 +12,7 @@ import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { onHandle, openStore } from './open.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export interface WriteEntryOptions {
   actor?: string;
@@ -72,7 +73,7 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
     for (const entry of stamped) writeEntryMirrors(hippoRoot, entry);
   } catch (error) {
     // The scope has unwound, so the refusal row outlives the rollback, as writeEntryOn's does.
-    if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, 'cli');
+    if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, CLI_ACTOR);
     throw error;
   } finally {
     closeHippoDb(db);
@@ -86,7 +87,7 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
 export function writeEntriesSkippingRejected(
   hippoRoot: string,
   fill: (put: (entry: MemoryEntry) => boolean) => void,
-  actor = 'cli',
+  actor = CLI_ACTOR,
 ): number {
   const written: MemoryEntry[] = [];
   onHandle(hippoRoot, (db) => {
@@ -138,7 +139,7 @@ function writeEntryOn(
     // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands
     // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
     if (error instanceof RejectedValueError) {
-      auditRejectionRefusal(db, error, opts?.actor ?? 'cli');
+      auditRejectionRefusal(db, error, opts?.actor ?? CLI_ACTOR);
     }
     throw error;
   }
@@ -159,7 +160,7 @@ export function writeEntryDbOnly(
     if (opts?.afterWrite) {
       opts.afterWrite(db, entry.id);
     }
-    auditEntryWrite(db, entry, opts?.actor ?? 'cli');
+    auditEntryWrite(db, entry, opts?.actor ?? CLI_ACTOR);
   });
 }
 

@@ -10,6 +10,7 @@ import { checkText, requireLine } from './fields.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Skill, SkillStatus } from '../core/object-types.js';
 import type { Objects } from '../store/port.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Skill, SkillStatus } from '../core/object-types.js';
 
@@ -105,7 +106,7 @@ export function saveSkill(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveSkillOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Skill> {
   return saveObject(objects, SKILL, { baseHalfLifeDays, tenantId, actor }, opts);
 }
@@ -115,7 +116,7 @@ export function closeSkill(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Skill> {
   return closeObject(objects, SKILL, tenantId, id, actor);
 }

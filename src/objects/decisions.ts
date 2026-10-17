@@ -13,6 +13,7 @@ import type { EntryWrites, Objects } from '../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../core/object-types.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Decision, DecisionStatus } from '../core/object-types.js';
 
@@ -68,7 +69,7 @@ export function saveDecision(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveDecisionOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Decision> {
   return saveObject(objects, DECISION, { baseHalfLifeDays, tenantId, actor }, opts);
 }
@@ -77,7 +78,11 @@ export function saveDecision(
  * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked
  * stale, tagged `superseded`.
  */
-export function weakenSupersededMemory(writes: EntryWrites, entry: MemoryEntry, actor: string = 'cli'): Promise<void> {
+export function weakenSupersededMemory(
+  writes: EntryWrites,
+  entry: MemoryEntry,
+  actor: string = CLI_ACTOR,
+): Promise<void> {
   const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
   const halved = Math.max(1, Math.floor(entry.half_life_days / 2));
   return writes.writeEntry({ entry: { ...entry, half_life_days: halved, confidence: 'stale', tags }, actor });
@@ -88,7 +93,7 @@ export function closeDecision(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Decision> {
   return closeObject(objects, DECISION, tenantId, id, actor);
 }

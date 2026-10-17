@@ -8,6 +8,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { CustomerNote, NoteStatus } from '../core/object-types.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { CustomerNote, NoteStatus } from '../core/object-types.js';
 
@@ -88,7 +89,7 @@ export function saveCustomerNote(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveCustomerNoteOptions,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<CustomerNote> {
   return saveObject(objects, CUSTOMER_NOTE, { baseHalfLifeDays, tenantId, actor }, opts);
 }
@@ -98,7 +99,7 @@ export function closeCustomerNote(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<CustomerNote> {
   return closeObject(objects, CUSTOMER_NOTE, tenantId, id, actor);
 }

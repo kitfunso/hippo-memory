@@ -10,6 +10,7 @@ import { onHandle, openStore } from './open.js';
 import { chunked } from '../util/chunked.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 import { placeholders } from '../util/sql.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private
 // MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
@@ -279,7 +280,7 @@ export function clearSummaryDirtyAfterBuild(
   hippoRoot: string,
   summaryId: string,
   tenantId: string,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
   source: string = 'buildDag-clean',
 ): void {
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);

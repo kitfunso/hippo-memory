@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { errorMessage } from '../util/log.js';
+import { isFile } from '../util/real-path.js';
 
 export const MAX_ITEM_BYTES = 256 * 1024;
 const MAX_DEPTH = 8;
@@ -63,10 +64,6 @@ function walk(root: string, rel: string, depthLeft: number, out: string[]): void
     if (entry.isFile() || (entry.isSymbolicLink() && isFile(path.join(root, child)))) out.push(child);
     else if (entry.isDirectory() && depthLeft > 0) walk(root, child, depthLeft - 1, out);
   }
-}
-
-function isFile(p: string): boolean {
-  return fs.statSync(p, { throwIfNoEntry: false })?.isFile() === true;
 }
 
 export interface Frontmatter {

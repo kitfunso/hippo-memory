@@ -9,6 +9,7 @@ import type { ObjectDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, objectMirror } from './lifecycle.js';
 import { isObjectRefusal, type Incident, type IncidentStatus, type ObjectRefusal } from '../core/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../store/port.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Incident, IncidentStatus } from '../core/object-types.js';
 
@@ -131,7 +132,7 @@ export function closeIncident(
   objects: Objects,
   tenantId: string,
   id: number,
-  actor: string = 'cli',
+  actor: string = CLI_ACTOR,
 ): Promise<Incident> {
   return closeObject(objects, INCIDENT, tenantId, id, actor);
 }

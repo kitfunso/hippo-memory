@@ -7,6 +7,7 @@ import { detectSecret } from '../util/secret-detect.js';
 import { auditRejectionRefusal } from './audit-event.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly } from './entry-writes.js';
+import { CLI_ACTOR } from '../core/actor.js';
 
 export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
 
@@ -27,7 +28,7 @@ export function gatedWrite(
     return 'written';
   } catch (err) {
     if (!(err instanceof RejectedValueError)) throw err;
-    auditRejectionRefusal(db, err, opts?.actor ?? 'cli');
+    auditRejectionRefusal(db, err, opts?.actor ?? CLI_ACTOR);
     return 'skipped:rejected';
   }
 }
