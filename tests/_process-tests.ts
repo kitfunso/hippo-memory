@@ -56,6 +56,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'cli-write-verbs-parity.test.ts',
   'cmd-arg-quoting.test.ts',
   'codex-hooks.test.ts',
+  'codex-run-metadata.test.ts',
   'codex-wrapper.test.ts',
   'comment-history-ratchet.test.ts',
   'compact-resume-text.test.ts',

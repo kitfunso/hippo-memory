@@ -1,6 +1,6 @@
 ### Security
 
-- **The Codex wrapper never moves a file that hippo did not write.** Metadata at `~/.hippo/integrations/codex.json` that names any other path is logged and left alone, and a Codex update is no longer swapped back for the copy hippo saved.
+- **The Codex wrapper never moves or starts a file that hippo did not write.** Metadata at `~/.hippo/integrations/codex.json` that names any other path is logged and left alone, `hippo codex-run` refuses it and names the file, and a Codex update is no longer swapped back for the copy hippo saved.
 - **The embeddings base URL and both rerankers share one outbound URL rule.** Each takes https, or http only to this machine, and refuses a URL with a user name or password in it.
 - **Slack and GitHub webhook signatures are checked over the body bytes as sent.** A body that is not valid UTF-8 no longer verifies against a signature over its decoded text.
 - **`POST /v1/sleep` refuses a request from a proxy or a page, even on this machine.** `POST /v1/auth/keys` refuses a member key before it reads the body.

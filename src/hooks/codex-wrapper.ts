@@ -220,6 +220,23 @@ function cleanupLegacyCodexPathWrappers(paths: CodexWrapperPaths): void {
   }
 }
 
+/** The Codex launcher `hippo codex-run` may start: only the backup the installer made, never a path the metadata
+ * names on its own say. */
+export function installedRealCodexPath(): string {
+  const { metadataPath } = resolveCodexWrapperPaths();
+  if (!fs.existsSync(metadataPath)) {
+    throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
+  }
+  const metadata = readCodexWrapperMetadata();
+  if (!isCodexWrapperMetadataValid(metadata)) {
+    throw new Error(
+      `${metadataPath} does not describe a Codex wrapper hippo installed, so Codex was not started. ` +
+        'Run `hippo hook install codex` again.',
+    );
+  }
+  return metadata.realCodexPath;
+}
+
 export function detectRealCodexPath(): string | null {
   const metadata = readCodexWrapperMetadata();
   if (isCodexWrapperMetadataValid(metadata)) return metadata.realCodexPath;
