@@ -75,7 +75,6 @@ function withDb(root: string, fn: (db: ReturnType<typeof openHippoDb>) => void):
 }
 
 function seedVectorStore(root: string): void {
-  initStore(root);
   const rows = [...ADMITTED, ...HIDDEN];
   for (const r of rows) writeEntry(root, r.entry);
   const index = Object.fromEntries(rows.map((r): [string, number[]] => [r.entry.id, [...r.vector]]));
@@ -156,7 +155,9 @@ async function runPass(calls: readonly Call[], physics: boolean, backing: Backin
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   const dir = makeRoot('vector-reads', { init: false });
-  seedVectorStore(join(dir, 'local'));
+  const local = join(dir, 'local');
+  initStore(local);
+  seedVectorStore(local);
   initStore(join(dir, 'global'));
   templates = { dir, goalId: 'no-goal-in-this-seed' };
 });

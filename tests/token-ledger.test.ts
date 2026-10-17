@@ -5,8 +5,7 @@
  * Real SQLite, the built CLI, a real HTTP server on port 0. No mocks.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -196,19 +195,12 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
 describe('ledger on the HTTP and MCP surfaces', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('ledger-http');
-    globalHome = mkdtempSync(join(tmpdir(), 'hippo-ledger-global-'));
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    globalHome = makeRoot('ledger-global', { init: false });
+    vi.stubEnv('HIPPO_HOME', globalHome);
     writeEntry(home, createMemory('the zanzibar gateway needs the legacy auth header', { layer: Layer.Episodic }));
-  });
-  afterEach(() => {
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   function surfaces(): Record<string, number> {

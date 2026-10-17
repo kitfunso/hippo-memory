@@ -3,8 +3,7 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
@@ -255,24 +254,20 @@ describe('supersede keeps the old row\'s scope', () => {
   });
 
   it('CLI supersede: the successor of a private row stays in that scope', async () => {
-    const cliHome = mkdtempSync(join(tmpdir(), 'hippo-scope-grants-cli-'));
-    try {
-      const env = { HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-      execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: cliHome, env: { ...process.env, ...env } });
-      const hippoDir = join(cliHome, '.hippo');
-      const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE, tenantId: 'default' });
-      writeEntry(hippoDir, old);
+    const cliHome = makeRoot('scope-grants-cli', { init: false });
+    const env = { HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: cliHome, env: { ...process.env, ...env } });
+    const hippoDir = join(cliHome, '.hippo');
+    const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE, tenantId: 'default' });
+    writeEntry(hippoDir, old);
 
-      execFileSync('node', [HIPPO_BIN, 'supersede', old.id, 'kowalski payroll rollout moved to friday'], {
-        cwd: cliHome, env: { ...process.env, ...env },
-      });
+    execFileSync('node', [HIPPO_BIN, 'supersede', old.id, 'kowalski payroll rollout moved to friday'], {
+      cwd: cliHome, env: { ...process.env, ...env },
+    });
 
-      const refreshed = readEntry(hippoDir, old.id, 'default');
-      const successor = refreshed?.superseded_by ? readEntry(hippoDir, refreshed.superseded_by, 'default') : null;
-      expect(successor?.scope).toBe(PRIVATE_SCOPE);
-    } finally {
-      rmSync(cliHome, { recursive: true, force: true });
-    }
+    const refreshed = readEntry(hippoDir, old.id, 'default');
+    const successor = refreshed?.superseded_by ? readEntry(hippoDir, refreshed.superseded_by, 'default') : null;
+    expect(successor?.scope).toBe(PRIVATE_SCOPE);
   });
 });
 

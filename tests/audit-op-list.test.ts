@@ -1,16 +1,15 @@
 /** `hippo audit list --op` and GET /v1/audit?op= accept a real op and reject an unknown one. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
-import { makeStore } from './_helpers/make-root.js';
+import { makeStore, makeRoot } from './_helpers/make-root.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -21,7 +20,7 @@ describe('audit op filter', () => {
 
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('audit-op'));
-    globalHome = mkdtempSync(join(tmpdir(), 'hippo-audit-op-global-'));
+    globalHome = makeRoot('audit-op-global', { init: false });
     // writeEntry appends a 'remember' audit row, so an accepted op has a row to return.
     writeEntry(hippoRoot, createMemory('audit op filter seed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     vi.stubEnv('HIPPO_HOME', globalHome);
@@ -29,7 +28,6 @@ describe('audit op filter', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   function runAuditList(op: string) {

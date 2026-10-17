@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// Fails when a test file builds a store by hand: it calls mkdtempSync and then initStore, openStore or openHippoDb on a path
-// built from that temp dir. makeRoot and makeStore in tests/_helpers/make-root.ts make the dir, init the store and remove it,
-// so a store is built one way in every test. A temp dir for a fake home, a vault or a plain file stays a mkdtempSync.
+// Fails when a test file builds a store by hand, in any of three shapes: initStore, openStore or openHippoDb on a path built
+// from a mkdtempSync dir; a mkdtempSync dir handed to a hippo CLI call as its cwd or as HIPPO_HOME, so the CLI builds the store
+// there; or one of the three called on a function's own parameter, so the store's dir was made somewhere else.
+// makeRoot and makeStore in tests/_helpers/make-root.ts make the dir, init the store and remove it, so a store is built one
+// way in every test. A temp dir for a fake home, a vault or a plain file stays a mkdtempSync.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,6 +12,7 @@ import ts from 'typescript';
 
 const STORE_OPENERS = new Set(['initStore', 'openStore', 'openHippoDb']);
 const PATH_FUNCTIONS = new Set(['join', 'resolve', 'dirname', 'normalize', 'realpathSync', 'native']);
+const SPAWNERS = new Set(['spawn', 'spawnSync', 'execFile', 'execFileSync', 'exec', 'execSync', 'fork']);
 
 const calleeName = (call) =>
   ts.isIdentifier(call.expression) ? call.expression.text : ts.isPropertyAccessExpression(call.expression) ? call.expression.name.text : '';
@@ -39,13 +42,24 @@ function readNames(node) {
   return names;
 }
 
+const propertyNamed = (obj, name) =>
+  obj.properties.find((p) => (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) && p.name.getText() === name);
+const valueOf = (p) => (ts.isShorthandPropertyAssignment(p) ? p.name : p.initializer);
+
+/** True when the call is inside a function that takes the name as a parameter. */
+function isParameter(call, name) {
+  for (let p = call.parent; p; p = p.parent) {
+    if (ts.isFunctionLike(p) && p.parameters.some((param) => ts.isIdentifier(param.name) && param.name.text === name)) return true;
+  }
+  return false;
+}
+
 /**
- * Returns one entry per initStore, openStore or openHippoDb call in a test source whose argument is built from a mkdtempSync result.
+ * Returns one entry per hand-built store in a test source: see the three shapes at the top of this file.
  * @param {string} text
  * @returns {{ line: number, call: string }[]}
  */
 export function handBuiltStores(text) {
-  if (!text.includes('mkdtempSync')) return [];
   const sf = ts.createSourceFile('test.ts', text, ts.ScriptTarget.Latest, true);
   const fromTemp = (e) => {
     let found = false;
@@ -64,11 +78,23 @@ export function handBuiltStores(text) {
       if (!tainted.has(name) && isPathExpression(init) && [...readNames(init)].some((r) => tainted.has(r))) { tainted.add(name); grew = true; }
     }
   }
+  const isTemp = (e) => fromTemp(e) || [...readNames(e)].some((r) => tainted.has(r));
+  // The dir itself, not a path inside it: a CLI given the dir builds its store there.
+  const isTempDir = (e) => (ts.isIdentifier(e) && tainted.has(e.text)) || (ts.isCallExpression(e) && e.arguments.length === 1 && PATH_FUNCTIONS.has(calleeName(e)) && isTempDir(e.arguments[0])) || (ts.isCallExpression(e) && calleeName(e) === 'mkdtempSync');
   const hits = [];
+  const hit = (n) => hits.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, call: n.getText().slice(0, 60) });
   visit(sf, (n) => {
-    if (!ts.isCallExpression(n) || !STORE_OPENERS.has(calleeName(n))) return;
-    if (n.arguments.some((a) => fromTemp(a) || [...readNames(a)].some((r) => tainted.has(r)))) {
-      hits.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, call: n.getText().slice(0, 60) });
+    if (!ts.isCallExpression(n)) return;
+    const name = calleeName(n);
+    if (STORE_OPENERS.has(name)) {
+      if (n.arguments.some(isTemp) || (name !== 'openHippoDb' && n.arguments.some((a) => ts.isIdentifier(a) && isParameter(n, a.text)))) hit(n);
+    } else if (n.expression.getText() === 'vi.stubEnv') {
+      if (n.arguments[0]?.getText() === "'HIPPO_HOME'" && n.arguments[1] && isTempDir(n.arguments[1])) hit(n);
+    } else if (SPAWNERS.has(name) && /hippo/i.test(n.getText())) {
+      const opts = n.arguments.filter(ts.isObjectLiteralExpression);
+      const env = opts.map((o) => propertyNamed(o, 'env')).filter(Boolean).map(valueOf).filter(ts.isObjectLiteralExpression);
+      const cwdOrHome = [...opts.map((o) => propertyNamed(o, 'cwd')), ...[...opts, ...env].map((o) => propertyNamed(o, 'HIPPO_HOME'))].filter(Boolean);
+      if (cwdOrHome.some((p) => isTempDir(valueOf(p)))) hit(n);
     }
   });
   return hits;
