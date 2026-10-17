@@ -1,0 +1,365 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { promote } from '../../src/api/memories/promote.js';
+import { shareMemory, autoShare } from '../../src/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { embedAll } from '../../src/search/embed-memories.js';
+import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
+import { isEmbeddingAvailable } from '../../src/embeddings/local.js';
+import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
+import { loadConfig } from '../../src/core/config.js';
+import { sharingStores } from '../_helpers/sharing-stores.js';
+import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
+
+// docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
+// store by promote/share/autoShare/sync/import must enter that store's
+// embedding index under the same best-effort contract as `remember`.
+
+const HIPPO_BIN = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
+// Xenova/all-MiniLM-L6-v2, the default local embedding model these stores use, emits 384 numbers.
+const MINILM_DIMENSIONS = 384;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeTmpStore(): string {
+  const dir = makeRoot('gre');
+  return dir;
+}
+
+function disableEmbeddings(root: string): void {
+  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }), 'utf8');
+}
+
+function cleanUp(...dirs: string[]): void {
+  for (const d of dirs) {
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+}
+
+let _embeddingFunctional: boolean | null = null;
+
+// isEmbeddingAvailable() only proves the package resolves; one real embed call (cached) proves the pipeline loads
+// before a test depends on a vector.
+async function embeddingIsFunctional(): Promise<boolean> {
+  if (_embeddingFunctional !== null) return _embeddingFunctional;
+  if (!isEmbeddingAvailable()) {
+    _embeddingFunctional = false;
+    return false;
+  }
+  const probeRoot = makeRoot('gre-probe');
+  const provider = resolveEmbeddingProvider(loadConfig(probeRoot).embeddings);
+  const [vector] = await provider.embed(['embedding functional probe'], 'passage');
+  _embeddingFunctional = Array.isArray(vector) && vector.length > 0;
+  return _embeddingFunctional;
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic: embeddings.enabled=false on the destination store
+// ---------------------------------------------------------------------------
+
+describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
+  let localRoot: string;
+  let globalRoot: string;
+
+  beforeEach(() => {
+    localRoot = makeTmpStore();
+    globalRoot = makeTmpStore();
+    disableEmbeddings(globalRoot);
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+  });
+
+  afterEach(() => {
+    cleanUp(localRoot, globalRoot);
+  });
+
+  it('promote succeeds and writes no embedding index entry', () => {
+    const entry = createMemory('deterministic no-embed promote test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(localRoot, entry);
+
+    const promoted = promote(apiCtx(localRoot), entry.id);
+    expect(promoted.globalId).toMatch(/^g_/);
+
+    // provider.isAvailable() is synchronous and false here (config-disabled),
+    // so embedMemory's fire-and-forget call returns before any fs write,
+    // no waitFor needed, the absence is observable immediately.
+    const index = loadEmbeddingIndex(globalRoot);
+    expect(index[promoted.globalId]).toBeUndefined();
+  });
+
+  it('shareMemory succeeds and writes no embedding index entry', () => {
+    const entry = createMemory('deterministic no-embed share test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'] });
+    writeEntry(localRoot, entry);
+
+    const shared = shareMemory(...sharingStores(localRoot), entry.id, { force: true });
+    expect(shared).not.toBeNull();
+    expect(shared!.id).toMatch(/^g_/);
+
+    const index = loadEmbeddingIndex(globalRoot);
+    expect(index[shared!.id]).toBeUndefined();
+  });
+
+  it('autoShare succeeds and writes no embedding index entry (skipEmbed + batch embedAll no-op)', () => {
+    const entry = createMemory('deterministic no-embed autoshare test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(localRoot, entry);
+
+    const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
+    expect(shared.length).toBe(1);
+
+    const index = loadEmbeddingIndex(globalRoot);
+    expect(index[shared[0].id]).toBeUndefined();
+  });
+
+  it('syncGlobalToLocal succeeds and writes no embedding index entry on the local store', () => {
+    disableEmbeddings(localRoot);
+    const entry = createMemory('deterministic no-embed sync test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(globalRoot, entry);
+
+    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    expect(count).toBe(1);
+
+    const index = loadEmbeddingIndex(localRoot);
+    expect(index[entry.id]).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Awaited batch producers (embeddings available)
+// ---------------------------------------------------------------------------
+
+describe('global-row-embeddings: awaited batch producers', () => {
+  let localRoot: string;
+  let globalRoot: string;
+
+  beforeEach(() => {
+    localRoot = makeTmpStore();
+    globalRoot = makeTmpStore();
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+  });
+
+  afterEach(() => {
+    cleanUp(localRoot, globalRoot);
+  });
+
+  it('syncGlobalToLocal-copied rows gain vectors after an awaited embedAll(localRoot)', async (ctx) => {
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
+    const entry = createMemory('awaited batch sync test content unique alpha', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(globalRoot, entry);
+
+    const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    expect(count).toBe(1);
+
+    // syncGlobalToLocal already fired its own embedAll(localRoot); this call
+    // is idempotent and, because embed writes are serialized through the
+    // module's embed lock, awaiting it guarantees the earlier fire-and-forget
+    // call has also settled by the time this resolves.
+    await embedAll(sqliteSyncStore(localRoot).localFiles);
+
+    const index = loadEmbeddingIndex(localRoot);
+    expect(index[entry.id]).toBeDefined();
+    expect(index[entry.id]).toHaveLength(MINILM_DIMENSIONS);
+  }, 60_000);
+
+  it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
+    const entry = createMemory('awaited batch autoshare test content unique beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(localRoot, entry);
+
+    const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
+    expect(shared.length).toBe(1);
+
+    await embedAll(sqliteSyncStore(globalRoot).localFiles);
+
+    const index = loadEmbeddingIndex(globalRoot);
+    expect(index[shared[0].id]).toBeDefined();
+    expect(index[shared[0].id]).toHaveLength(MINILM_DIMENSIONS);
+  }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
+// Fire-and-forget integration (single-row producers, no explicit embedAll)
+// ---------------------------------------------------------------------------
+
+describe('global-row-embeddings: fire-and-forget integration', () => {
+  let localRoot: string;
+  let globalRoot: string;
+
+  beforeEach(() => {
+    localRoot = makeTmpStore();
+    globalRoot = makeTmpStore();
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+  });
+
+  afterEach(() => {
+    cleanUp(localRoot, globalRoot);
+  });
+
+  it('promote fire-and-forget embed eventually lands in the global index', async (ctx) => {
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
+    const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(localRoot, entry);
+
+    const promoted = promote(apiCtx(localRoot), entry.id);
+
+    // Generous timeout: first-run model load can be slow.
+    await vi.waitFor(() => {
+      const index = loadEmbeddingIndex(globalRoot);
+      expect(index[promoted.globalId]).toBeDefined();
+    }, { timeout: 30_000, interval: 250 });
+  }, 35_000);
+});
+
+describe('global-row-embeddings: the first promote, before any global store exists', () => {
+  let localRoot: string;
+  let globalRoot: string;
+  let embeddings: HashedEmbeddings;
+
+  beforeEach(async () => {
+    embeddings = await startHashedEmbeddings();
+    localRoot = makeTmpStore();
+    globalRoot = makeRoot('gre-noglobal', { init: false });
+    // Only hippo.db marks a store as initialized, so the context's reach has no global store yet.
+    const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
+    fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify(config), 'utf8');
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+  });
+
+  afterEach(async () => {
+    await embeddings.close();
+    cleanUp(localRoot, globalRoot);
+    vi.unstubAllEnvs();
+  });
+
+  it('embeds the copy into the global store the promote created', async () => {
+    const entry = createMemory('first promote embeds into a new global store', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(localRoot, entry);
+    const ctx = apiCtx(localRoot);
+    expect(ctx.reach?.global).toBeUndefined();
+
+    const promoted = promote(ctx, entry.id);
+
+    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toBeDefined(), { timeout: 10_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hippo embed --global (CLI)
+// ---------------------------------------------------------------------------
+
+describe('global-row-embeddings: hippo embed --global CLI', () => {
+  it('embeds a seeded global row from a cwd with no local store, without requireInit failing', async () => {
+    const home = makeRoot('gre-cli-home', { init: false });
+    const cwd = makeRoot('gre-cli-cwd', { init: false });
+    const globalRoot = path.join(home, '.hippo');
+    const env = { ...process.env, HIPPO_HOME: globalRoot };
+
+    try {
+      // Seed an unembedded global row directly, bypassing the CLI, so the
+      // row predates any embed call.
+      initStore(globalRoot);
+      const entry = createMemory('cli embed --global test content delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      writeEntry(globalRoot, entry);
+
+      // In process, so coverage sees the embed verb; the promote wiring case below keeps the real child.
+      const { status: exitCode, stderr } = await runCliAs(['embed', '--global'], { cwd, env });
+
+      // Ungated: cwd has no local .hippo at all, so --global must skip
+      // requireInit entirely (the r1 must-fix), regardless of embedding
+      // availability in this environment.
+      expect(stderr).not.toMatch(/No \.hippo directory found/);
+
+      if (isEmbeddingAvailable()) {
+        expect(exitCode).toBe(0);
+        const index = loadEmbeddingIndex(globalRoot);
+        expect(index[entry.id]).toBeDefined();
+      }
+    } finally {
+      cleanUp(home, cwd);
+    }
+  }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
+// promote producer wiring (subprocess, real node process)
+// ---------------------------------------------------------------------------
+
+describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
+  // Real-process counterpart of the in-process "fire-and-forget integration"
+  // test above; it covers the built CLI path. Spawns real `node` subprocesses
+  // (same pattern as the "hippo embed --global CLI" test above) so the actual
+  // promote -> embedMemory fire is exercised end-to-end: init, remember,
+  // embed (warms the local vector + model cache), promote, then poll the
+  // GLOBAL store's embedding index for the minted g_ id. A producer-wiring
+  // regression (wrong root, dropped void embed call) would fail this test even
+  // when every in-process test above is skipping.
+  it('promoting a remembered row lands a vector in the GLOBAL embedding index', async () => {
+    const home = makeRoot('gre-wiring-home', { init: false });
+    const cwd = makeRoot('gre-wiring-cwd', { init: false });
+    const globalRoot = path.join(home, '.hippo');
+    const env = { ...process.env, HIPPO_HOME: globalRoot };
+
+    try {
+      execFileSync(
+        'node',
+        [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'],
+        { cwd, env, encoding: 'utf-8' },
+      );
+
+      const nonce = `wiring-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const rememberOut = execFileSync(
+        'node',
+        [HIPPO_BIN, 'remember', `${nonce} wiring probe`],
+        { cwd, env, encoding: 'utf-8' },
+      );
+      const rememberMatch = rememberOut.match(/Remembered \[(\S+)\]/);
+      expect(rememberMatch).not.toBeNull();
+      const localId = rememberMatch![1];
+
+      // Ensures the local vector exists (deterministic, not racing remember's
+      // own fire-and-forget embed) and warms the on-disk model cache before
+      // promote runs.
+      if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
+
+      const promoteOut = execFileSync(
+        'node',
+        [HIPPO_BIN, 'promote', localId],
+        { cwd, env, encoding: 'utf-8' },
+      );
+      const promoteMatch = promoteOut.match(/Promoted \S+ to global store as (\S+)/);
+      expect(promoteMatch).not.toBeNull();
+      const globalId = promoteMatch![1];
+      expect(globalId).toMatch(/^g_/);
+
+      if (isEmbeddingAvailable()) {
+        // Bounded poll (<=60s): promote's embed fire is best-effort
+        // fire-and-forget, but `execFileSync` only returns once the `promote`
+        // subprocess has fully exited, and that process has no explicit
+        // process.exit() call on the success path (cli.ts's main() returns
+        // naturally), so Node's event loop keeps it alive until the floating
+        // embedMemory promise settles — same reasoning as handleImport's batch
+        // embed comment (src/cli.ts:6086-6093). The poll is a safety margin,
+        // not a requirement to wait out a race.
+        await vi.waitFor(() => {
+          const index = loadEmbeddingIndex(globalRoot);
+          expect(index[globalId]).toBeDefined();
+          expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
+        }, { timeout: 60_000, interval: 250 });
+      }
+    } finally {
+      cleanUp(home, cwd);
+    }
+  }, 90_000);
+});
