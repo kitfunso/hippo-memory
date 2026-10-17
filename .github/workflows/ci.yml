@@ -298,17 +298,28 @@ jobs:
       - run: npm ci
       - run: npm run build
       # EXPERIMENT arm 3: test stores on a RAM disk, the Windows twin of TMPDIR=/dev/shm on Linux (#214).
+      # Arsenal Image Mounter, not ImDisk: an ImDisk volume skips the mount manager, so Node's realpath.native fails on it with EISDIR.
       - name: Temp dir on a RAM disk
         if: runner.os == 'Windows'
+        timeout-minutes: 5
         run: |
           $t = [Diagnostics.Stopwatch]::StartNew()
-          choco install imdisk -y --no-progress
-          if ($LASTEXITCODE) { throw "choco install imdisk failed: $LASTEXITCODE" }
-          imdisk -a -s 4G -m R: -p "/fs:ntfs /q /y"
-          if ($LASTEXITCODE) { throw "imdisk mount failed: $LASTEXITCODE" }
+          $src = 'https://github.com/ArsenalRecon/Arsenal-Image-Mounter/raw/master'
+          $aim = Join-Path $env:RUNNER_TEMP 'aim'
+          Invoke-WebRequest "$src/Command%20line%20applications/aim_ll.zip" -OutFile "$aim-ll.zip"
+          Invoke-WebRequest "$src/DriverSetup/DriverFiles.zip" -OutFile "$aim-drv.zip"
+          Expand-Archive "$aim-ll.zip" "$aim\ll"
+          Expand-Archive "$aim-drv.zip" "$aim\drv"
+          Set-StorageSetting -NewDiskPolicy OnlineAll
+          & "$aim\ll\x64\aim_ll.exe" --install "$aim\drv"
+          if ($LASTEXITCODE) { throw "aim_ll --install failed: $LASTEXITCODE" }
+          & "$aim\ll\x64\aim_ll.exe" -a -t vm -s 4G -m R: -p "/fs:ntfs /q /y"
+          if ($LASTEXITCODE) { throw "aim_ll attach failed: $LASTEXITCODE" }
           "RAM disk install and mount: $([int]$t.Elapsed.TotalSeconds) s"
           $d = 'R:\tmp'
           New-Item -ItemType Directory -Force $d | Out-Null
+          node -e "console.log('realpath.native', require('fs').realpathSync.native(process.argv[1]))" $d
+          if ($LASTEXITCODE) { throw "realpath.native fails on the RAM disk" }
           "TEMP=$d" >> $env:GITHUB_ENV
           "TMP=$d" >> $env:GITHUB_ENV
       # EXPERIMENT: record which disk backs each drive and whether Defender scans it.
