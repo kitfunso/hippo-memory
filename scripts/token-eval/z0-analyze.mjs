@@ -153,7 +153,7 @@ const pct = (x) => `${(100 * x).toFixed(1)}%`;
 const est = (e) => {
   if (isString(e)) return e;
   const twin = e.bootstrap ? `, bootstrap [${f3(e.bootstrap.low)}, ${f3(e.bootstrap.high)}]` : '';
-  return `${f3(e.estimate)} [${f3(e.low)}, ${f3(e.high)}]${e.df === undefined ? '' : ` t(${e.df})`}${twin}`;
+  return `${f3(e.estimate)} [${f3(e.low)}, ${f3(e.high)}]${e.df === undefined ? '' : ` t(${Number(e.df.toFixed(1))})`}${twin}`;
 };
 const pairText = (p) => (isString(p) ? p : `violation ${est(p.violation)} (${p.violation.units} units); excluded ${est(p.excluded)} (${p.excluded.units} units)`);
 

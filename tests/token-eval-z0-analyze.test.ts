@@ -2,9 +2,9 @@
  * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.test.ts. */
 import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval/eval-stats.js';
-import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus } from '../scripts/token-eval/z0-records.mjs';
+import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus, validateRecord } from '../scripts/token-eval/z0-records.mjs';
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
-import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, holmVerdicts, inSets, repeatMistake, repeatT, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
+import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, harmT, holmVerdicts, inSets, repeatMistake, repeatT, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';
 import { analyzeZ0, buildReport, renderText } from '../scripts/token-eval/z0-analyze.mjs';
 import { ARMS, GRADING, PRICES, at, crash, generate, jsonl, planOf, type GenOpts, type Generated, type Z0Record, type PlanCell } from './fixtures/z0-gen.js';
@@ -66,6 +66,40 @@ describe('Z0 records contract', () => {
     const { records, plan } = fresh();
     expect(() => validateCorpus([...parse(records), ...parse(records)], plan)).toThrow(/duplicate record for cell .*: runs\.jsonl line 1 and runs\.jsonl line 1$/);
     expect(() => parsePlan('[]', 'plan.json')).toThrow(/^plan\.json: the plan has no cells$/);
+  });
+
+  it('Amendment 2 item 5: seeds above 3 belong to A1, A2, A5, X2 and X3, up to 9, in records and plan cells', () => {
+    const { records, plan } = fresh();
+    const recordAt = (arm: string, seed: number) => ({ ...records.find((r) => r.arm === arm)!, seed });
+    const cellAt = (arm: string, seed: number) => ({ ...plan.find((c) => c.arm === arm)!, seed });
+    const above3 = (arm: string, seed: number) => new RegExp(`seed ${seed} is not run for ${arm}: only A1, A2, A5, X2 and X3 take seeds above 3 \\(Amendment 2 item 5\\)`);
+    const cases: [string, number, RegExp | null][] = [
+      ['A2', 6, null], ['A1', 9, null], ['X2', 9, null], ['X3', 4, null], ['A5', 4, null], ['X1', 3, null], ['A0', 2, null],
+      ['A1', 10, /seed must be an integer from 1 to 9/], ['A2', 0, /seed must be an integer from 1 to 9/],
+      ['A0', 3, /seed 3 is not run for A0 \(prereg 124\)/], ['A0', 4, /seed 4 is not run for A0 \(prereg 124\)/],
+      ['A4', 4, /seed 4 is not run for A4 \(prereg 124\)/], ['X4', 3, /seed 3 is not run for X4 \(prereg 124\)/],
+      ['X1', 4, above3('X1', 4)],
+    ];
+    for (const [arm, seed, error] of cases) {
+      const fromRecord = () => validateRecord(recordAt(arm, seed));
+      const fromCell = () => parsePlan(JSON.stringify([cellAt(arm, seed)]), 'plan.json');
+      for (const load of [fromRecord, fromCell]) {
+        if (error === null) expect(load, `${arm} seed ${seed}`).not.toThrow();
+        else expect(load, `${arm} seed ${seed}`).toThrow(error);
+      }
+    }
+  });
+
+  it('Amendment 2 item 5: wave 1 and wave 2 records load against two plan files and analyze as one corpus', () => {
+    const wave1 = fresh();
+    // The seed rule gave A1, A2 and A5 five seeds: wave 2 repeats their seed-3 sessions as seeds 4 and 5.
+    const late = [4, 5].flatMap((seed) => wave1.records.filter((r) => ['A1', 'A2', 'A5'].includes(r.arm) && r.seed === 3).map((r) => ({ ...structuredClone(r), seed })));
+    const both = { records: [...wave1.records, ...late], plan: [...wave1.plan, ...planOf(late)] };
+    const plans = [wave1.plan, planOf(late)].flatMap((cells) => parsePlan(JSON.stringify(cells), 'plan.json'));
+    expect(() => validateCorpus(parse(both.records), plans)).not.toThrow();
+    expect(analyze(both).status).toBe('valid');
+    const seedsOf = (arm: string): number[] => [...new Set<number>(scoredOf(both).flatMap((r: Z0Record) => (r.arm === arm ? [r.seed] : [])))].sort((x, y) => x - y);
+    expect([seedsOf('A0'), seedsOf('A1'), seedsOf('A2'), seedsOf('X2')]).toEqual([[1, 2], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5], [1, 2, 3]]);
   });
 
   it('25: a timeout or an na final is never resolved, before or after drops', () => {
@@ -256,20 +290,35 @@ describe('Z0 hypotheses', () => {
   });
 
   it('5: H1 band cases on fixed unit differences, CI asserted before the verdict', () => {
+    // Consecutive values fill one repository's family-by-seed table (2 seeds); the t test reads the families and seeds inside it.
     const read = (vals: number[], repos: number) => {
-      const e = repeatT(vals.map((value, i) => ({ repo: `r${i % repos}`, family: `f${i}`, value })), STAT);
-      expect([e.df, e.bootstrap.iterations]).toEqual([repos - 1, STAT.iterations]);
+      const per = vals.length / repos;
+      const units = vals.map((value, i) => ({ repo: `r${Math.floor(i / per)}`, family: `r${Math.floor(i / per)}f${Math.floor((i % per) / 2)}`, seed: 1 + (i % 2), value }));
+      const e = repeatT(units, STAT);
+      // The Amendment 1 view keeps the repos - 1 df; the decision test carries the Satterthwaite df.
+      expect([e.across!.t.df, e.across!.perRepository.length, e.bootstrap.iterations]).toEqual([repos - 1, repos, STAT.iterations]);
+      expect(e.df).toBeGreaterThan(0);
       return { e, v: verdict(e, e.p, SPECS.H1) };
     };
-    const tie = read(Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? 0.1 : -0.1)), 8);
-    expect(tie.e.low >= -0.15 && tie.e.high <= 0.15 && tie.e.low <= 0 && tie.e.high >= 0).toBe(true);
+    const tie = read(Array.from({ length: 64 }, (_, i) => (Math.floor(i / 2) % 2 === 0 ? 0.1 : -0.1)), 8);
+    expect(tie.e.low >= -0.15 && tie.e.high <= 0.15 && tie.e.low < 0 && tie.e.high > 0).toBe(true);
     expect(tie.v.verdict).toBe('tie');
-    const small = read(Array.from({ length: 40 }, (_, i) => -0.05 + 0.01 * ((i % 3) - 1)), 8);
+    const small = read(Array.from({ length: 48 }, (_, i) => -0.05 + 0.01 * ((i % 3) - 1)), 8);
     expect(small.e.p).toBeLessThan(0.05);
     expect(small.v).toEqual({ verdict: 'win', reachesMinimum: false });
-    const wide = read([-0.4, -0.3, -0.1, 0, 0.1, 0.3], 3);
+    const wide = read([-0.4, -0.3, -0.1, 0, 0.1, 0.3, -0.3, 0.2, -0.2, 0.1, 0.4, -0.1], 3);
     expect(wide.e.low < -0.15 && wide.e.high > -0.15).toBe(true);
     expect(wide.v.verdict).toBe('inconclusive');
+  });
+
+  it('5b: repeatT adds the across-repositories view and the bootstrap twin only when iterations is set', () => {
+    const units = Array.from({ length: 24 }, (_, i) => ({ repo: `r${i % 3}`, family: `f${i % 3}-${Math.floor(i / 6)}`, seed: 1 + (Math.floor(i / 3) % 2), value: 0.02 * (i % 5) - 0.04 }));
+    const plain = repeatT(units, {});
+    expect([Object.keys(plain).includes('across'), Object.keys(plain).includes('bootstrap'), plain.df! > 0]).toEqual([false, false, true]);
+    const full = repeatT(units, STAT);
+    expect([full.across!.perRepository.length, full.across!.t.df]).toEqual([3, 2]);
+    expect([full.estimate, full.p, full.low, full.high]).toEqual([plain.estimate, plain.p, plain.low, plain.high]);
+    expect(full.across!.t.estimate).toBeCloseTo(full.across!.perRepository.reduce((s: number, x: number) => s + x, 0) / 3, 12);
   });
 
   it('6: H3 is the ratio of summed costs on heterogeneous tasks, with its splits and no verdict', () => {
@@ -281,14 +330,19 @@ describe('Z0 hypotheses', () => {
     const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
     expect(h.H3.estimate).toBeCloseTo(sum(t!) / sum(c!), 12);
     expect(Math.abs(sum(t!.map((x, i) => x / c![i]!)) / t!.length - h.H3.estimate)).toBeGreaterThan(0.05);
-    // Amendment 1: H3 sits outside the Holm family, so it gets a t interval over the 6 repositories and no verdict.
-    expect([Object.keys(h.verdicts), h.H3.df, h.H3.nullValue]).toEqual([['H1', 'H2'], 5, 1]);
-    // Every repository runs the same cost sequence, so the cluster spread is 0; the bootstrap twin resamples families.
-    expect([h.H3.low, h.H3.high, h.H3.se, h.H3.p]).toEqual([h.H3.estimate, h.H3.estimate, 0, 0]);
+    // Amendment 2: H3 sits outside the Holm family, so it gets a fixed-repository t interval (family is the unit) and no verdict.
+    expect([Object.keys(h.verdicts), h.H3.nullValue]).toEqual([['H1', 'H2'], 1]);
+    // Every seed repeats the cost sequence, so only the family term is left: df is the pooled family df, 6 repositories x 7.
+    expect(h.H3.df).toBeCloseTo(42, 9);
+    // Families hold different mixes of heavy tasks, so the spread is no longer 0 as it was between repositories.
+    expect(h.H3.se).toBeGreaterThan(0);
+    expect([h.H3.low < h.H3.estimate, h.H3.estimate < h.H3.high, h.H3.p < 0.001]).toEqual([true, true, true]);
     expect(h.H3.bootstrap.estimate).toBeCloseTo(h.H3.estimate, 12);
     expect(h.H3.bootstrap.high - h.H3.bootstrap.low).toBeGreaterThan(0.01);
+    // The stratified twin resamples families inside each repository, so it should land near the t interval.
+    expect([h.H3.bootstrap.low, h.H3.bootstrap.high]).toEqual([expect.closeTo(h.H3.low, 1), expect.closeTo(h.H3.high, 1)]);
     expect([h.H3.firstSession.estimate, h.H3.extra.estimate].every(Number.isFinite)).toBe(true);
-    expect([h.H3.firstSession.df, h.H3.extra.df]).toEqual([5, 5]);
+    expect([h.H3.firstSession.df, h.H3.extra.df].every((d) => d !== undefined && d > 0)).toBe(true);
   });
 
   it('7: H4 fails on cost or on resolve and leads the report', () => {
@@ -300,6 +354,23 @@ describe('Z0 hypotheses', () => {
     const both = hyp({ knobs: { A1: { resolve: 1 }, A2: { resolve: 1, fail: 0.9, cost: (s) => (s.set === 'N' ? 1.2 : 0.96) } } });
     const losses = ['H1', 'H2'].filter((h) => both.verdicts[h].final.verdict === 'loss');
     expect([both.H4.gate.pass, losses[0], both.order.indexOf('H4')]).toEqual([false, 'H1', losses.length]);
+  });
+
+  it('7b: harmT passes the gate on a small clean set N: cost ratio 1 and equal resolves', () => {
+    // 4 repositories x 3 tasks x 2 seeds. The treatment arm costs +0.1, -0.1 and +0 against the control on the three tasks,
+    // so the pooled ratio is 1 with a little spread across families; both arms resolve the same cells.
+    const units = ['a', 'b', 'c', 'd'].flatMap((repo) => [0, 1, 2].flatMap((task) => [1, 2].map((seed) => {
+      const base = 2 + 0.5 * seed;
+      const resolved = (task + seed) % 3 === 0 ? 0 : 1;
+      return { repo, family: `${repo}-n${task}`, seed, set: 'N', t: { cost: base + [0.1, -0.1, 0][task]!, resolved }, c: { cost: base, resolved } };
+    })));
+    const h = harmT(units, STAT);
+    expect(h.costRatio.estimate).toBeCloseTo(1, 12);
+    expect(h.costRatio.se).toBeGreaterThan(0);
+    expect(h.costRatio.high).toBeLessThan(1.1);
+    expect([h.resolveDiff.estimate, h.resolveDiff.low, h.resolveDiff.high]).toEqual([0, 0, 0]);
+    expect(h.gate).toMatchObject({ pass: true, costOk: true, resolveOk: true });
+    expect([h.costRatio.bootstrap.iterations, h.resolveDiff.bootstrap.iterations]).toEqual([STAT.iterations, STAT.iterations]);
   });
 
   it('29: H4 is not run without set N in the plan, and fails when filters leave set N empty', () => {
@@ -335,7 +406,8 @@ describe('Z0 hypotheses', () => {
   });
 
   it('18, 19: attribution words a winning H1 only, the behaviour sentence when A5 is not planned; H2 reads Codex apply records only', () => {
-    const behaviour = hyp({ knobs: { A2: { fail: 0.1 }, A5: { fail: 0.1 } } });
+    // A5 matches A2 exactly (both never fail): at fail 0.1 each, one realisation gave A2 minus A5 a narrow interval just under 0.
+    const behaviour = hyp({ knobs: { A2: { fail: 0 }, A5: { fail: 0 } } });
     expect([behaviour.verdicts.H1.final.verdict, behaviour.attribution.sentence]).toEqual(['win', BEHAVIOUR_SENTENCE]);
     expect(winHyp().attribution.sentence).toBe(LESSONS_SENTENCE);
     // A2 beats A5 here, yet a tie gets no sentence. A1 and A2 never fail, so the tie is exact: a t interval

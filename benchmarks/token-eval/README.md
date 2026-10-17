@@ -84,6 +84,8 @@ This is the only harness that can support a savings claim. It runs real Claude C
 
 Default seeds are A0 and A4 2, the others 3; `--seeds N` lowers every arm to at most N (smoke and calibration runs) and never raises an arm past its prereg count, since the analyzer refuses an A0 or A4 seed 3. Set X adds four Codex arms, X1 to X4; **Set X** below covers them.
 
+Wave 2 (Amendment 2 item 5): after wave 1, `z0-seed-rule.mjs` picks a seed count from 3 to 9 for A1, A2 and A5 and another for X2 and X3. `--seed-rule FILE` runs seeds 4 up to each listed arm's count into a new `--out` with its own `plan.json`; pass `--arms` with the rule's arms only. It refuses a rule that stopped, and with every count at 3 it prints `wave 2 has no sessions`. The analyzer takes both waves' `--plan` and `--runs` files.
+
 **1. Draft tasks from a repository's history** (small bug-fix commits with tests make the best tasks):
 
 ```bash
@@ -116,6 +118,7 @@ The tasks file is `{ "families": [...], "sequences": [ { "id", "cluster", "repo"
 **Checkers.** `check.script` is resolved against the tasks file's folder, so the agent never sees it. The runner runs `node <script> <args>` in the workspace with a 120 s timeout and these variables:
 - `CHECK_PRE_COMMIT`: the workspace as on disk before the session, after every runner write (checkout, setup, A4 lines, hippo's init block, carried files). `CHECK_POST_COMMIT`: the workspace as on disk right before this check. Grade with `git diff $CHECK_PRE_COMMIT $CHECK_POST_COMMIT`, which shows a file the agent never staged and never shows a runner write.
 - `CHECK_COMMANDS`: a JSON file listing every Bash and PowerShell command the agent ran in the task, resume and subagents included (`<session>/subagents/*.jsonl`). Commands are grouped by transcript: each session's own commands in order, then each of its subagents' in turn, so a checker should not rely on order across a subagent boundary.
+- `CHECK_RESUME_COMMANDS`: set only on a final check after a resume. A JSON file listing the commands the agent ran after the teach or correction message: what each transcript gained since the first check, new subagents included. The correction asks the agent to fix it, so a rule about commands judges these; a checker can fall back to `CHECK_COMMANDS` when none of them bear on the rule, as when a confirmed session runs nothing more. A reader pair for a final check shows the same split.
 - `CHECK_LESSON_ID`: the lesson being checked.
 
 Exit 0 is pass, 1 fail, 3 na. Any other exit, a timeout or a failure to start makes the record `invalid: 'checker'`, with the checker's output in `raw/<seq>/<arm>/seed<n>/<task>.checker.txt`.

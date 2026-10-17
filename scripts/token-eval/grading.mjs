@@ -54,7 +54,7 @@ export function saveGrading(ctx, run, step, stage, turns, record) {
     kind: role.kind, lessonId: role.lessonId ?? null, staleLessonId: turns?.staleLesson?.id ?? null, stubRef: stubRefOf(run.s.id, t, run.arm), stub: stage.commit, ...commits,
     finalChecked, ...held,
     verdicts: { first: turns?.first ?? null, final: turns?.final ?? null, staleFollow: turns?.staleFollow ?? null },
-    acceptancePassed: record.acceptancePassed, commandsFirst: turns?.commandsFirst ?? null, commandsFinal: turns?.commandsFinal ?? null, commandsStale: turns?.commandsStale ?? null,
+    acceptancePassed: record.acceptancePassed, commandsFirst: turns?.commandsFirst ?? null, commandsFinal: turns?.commandsFinal ?? null, commandsResume: turns?.commandsResume ?? null, commandsStale: turns?.commandsStale ?? null,
     checkers: Object.fromEntries(lessons.map((l) => [l.id, checkerIdentity(l)])),
   }, null, 2)}\n`);
   if (stage.surfaceText !== undefined) fs.writeFileSync(path.join(dir, `${t.id}.surfaces.txt`), stage.surfaceText);
