@@ -7,6 +7,8 @@ import { initStore } from '../../src/store/open.js';
 export interface MakeRootOptions {
   /** Written to `<root>/config.json`, where the store reads its config. */
   config?: object;
+  /** False for a test that opens, migrates or refuses a folder that is not a store yet: only the temp dir is made. */
+  init?: boolean;
 }
 
 export interface MadeStore {
@@ -22,10 +24,11 @@ afterAll(() => {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function build(label: string, rootOf: (base: string) => string, config?: object): MadeStore {
+function build(label: string, rootOf: (base: string) => string, { config, init = true }: MakeRootOptions): MadeStore {
   const base = mkdtempSync(join(tmpdir(), `hippo-${label}-`));
   made.push(base);
   const root = rootOf(base);
+  if (!init) return { base, root };
   mkdirSync(join(base, '.hippo'), { recursive: true });
   initStore(root);
   if (config) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
@@ -34,10 +37,10 @@ function build(label: string, rootOf: (base: string) => string, config?: object)
 
 /** A temp dir that is itself the store root, with an empty `.hippo` folder inside; removed after the file's last test. */
 export function makeRoot(label: string, opts: MakeRootOptions = {}): string {
-  return build(label, (base) => base, opts.config).root;
+  return build(label, (base) => base, opts).root;
 }
 
 /** A temp project dir holding the store at `<base>/.hippo`, as `hippo init` lays it out; removed after the file's last test. */
 export function makeStore(label: string, opts: MakeRootOptions = {}): MadeStore {
-  return build(label, (base) => join(base, '.hippo'), opts.config);
+  return build(label, (base) => join(base, '.hippo'), opts);
 }
