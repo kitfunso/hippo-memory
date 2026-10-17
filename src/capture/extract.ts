@@ -195,7 +195,3 @@ export function extractFromTexts(texts: readonly string[], userTexts = 0): Extra
       return true;
     });
 }
-
-export function extractFromText(text: string): ExtractedItem[] {
-  return extractFromTexts([text]);
-}

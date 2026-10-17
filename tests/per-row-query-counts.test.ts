@@ -32,7 +32,7 @@ import { buildDag } from '../src/consolidate/dag.js';
 import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
 import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { writeSessionDigest } from '../src/capture/session-digest.js';
+import { recordSessionDigest } from '../src/capture/session-digest.js';
 import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
@@ -561,7 +561,7 @@ describe('hippo_status', () => {
   });
 });
 
-describe('writeSessionDigest', () => {
+describe('recordSessionDigest', () => {
   it('reads no full row to find the text hippo could have injected', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-digest');
@@ -572,8 +572,9 @@ describe('writeSessionDigest', () => {
         cwd: path.dirname(root),
         edits: [],
       };
-      const { result, statements } = recordStatements(() => writeSessionDigest(root, scan, { key: 's1', tenantId: 'default' }));
-      expect(result.written).toBe(true);
+      const log: string[] = [];
+      const { statements } = recordStatements(() => recordSessionDigest(root, scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) }));
+      expect(log.join('\n')).toMatch(/^digest: wrote /);
       expect(countMatching(statements, TENANT_READ)).toBe(0);
     }
   });

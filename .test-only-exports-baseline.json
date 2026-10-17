@@ -1,14 +1,7 @@
 {
-  "count": 25,
+  "count": 18,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
-    "src/capture/extract.ts:extractFromText",
-    "src/capture/session-digest.ts:MAX_DIGEST_CHARS",
-    "src/capture/session-digest.ts:_setDigestExistsProbeForTests",
-    "src/capture/session-digest.ts:buildSessionDigest",
-    "src/capture/session-digest.ts:realFsPath",
-    "src/capture/session-digest.ts:repoRelative",
-    "src/capture/session-digest.ts:writeSessionDigest",
     "src/cli/github.ts:cmdGitHubBackfill",
     "src/cli/refine-llm.ts:refineSemanticMemory",
     "src/cli/scheduler.ts:loadWorkspaceRegistry",

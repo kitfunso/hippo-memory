@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { extractFromText } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 import { loadConfig } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { gatedWrite } from '../src/store/gated-write.js';
@@ -134,7 +134,7 @@ describe('capture on the shared gated write', () => {
 
   it('counts a rejected item, still writes the rest, and skips a repeat on the next run', () => {
     initProject(s);
-    const items = extractFromText(text);
+    const items = extractFromTexts([text]);
     expect(items).toHaveLength(3);
     reject(items[1]!.content);
 

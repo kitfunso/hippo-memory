@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { extractFromText } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
 import { lessonFromFailure, failureSignature } from '../src/capture/failure-reading.js';
@@ -42,7 +42,7 @@ function run(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string
 
 describe('transcript mining', () => {
   it('keeps a comma-split decision as one whole sentence', () => {
-    expect(extractFromText('Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.').map((i) => i.content))
+    expect(extractFromTexts(['Decision: we use pnpm, never npm, because the lockfile is pnpm-lock.yaml.']).map((i) => i.content))
       .toEqual(['we use pnpm, never npm, because the lockfile is pnpm-lock.yaml']);
   });
 

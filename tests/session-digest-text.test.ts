@@ -1,32 +1,48 @@
-// How a session digest picks its sentences and the files it lists. Pure functions over temp dirs; no store.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+// How a session digest picks its sentences and the files it lists, read back from the row a fresh store keeps.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
-import {
-  MAX_DIGEST_CHARS,
-  buildSessionDigest,
-  digestSentences,
-  realFsPath,
-  type DigestEdit,
-} from '../src/capture/session-digest.js';
+import { isSessionDigestRow } from '../src/core/session-digest-row.js';
+import { digestSentences, recordSessionDigest, type DigestEdit } from '../src/capture/session-digest.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+
+// The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
+const MAX_DIGEST_CHARS = 1200;
+// A run that stores nothing for one of these reasons did so because of its text, never its setup.
+const TEXT_SKIPS = new Set(['digest: skip: nothing left after the filters', 'digest: skip: no final message and no edits']);
 
 let tmp: string;
 let repo: string;
+let hippoRoot: string;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-text-'));
-  repo = String(realFsPath(path.join(tmp, 'repo')));
-  fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(tmp, 'repo', 'src'), { recursive: true });
+  repo = fs.realpathSync.native(path.join(tmp, 'repo'));
+  hippoRoot = path.join(repo, '.hippo');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+/** The digest a session ending on `finalText` stores, '' for none. A fresh store each call, so no earlier digest echoes. */
 function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] } = {}): string {
-  return buildSessionDigest({ finalText, echoTexts: opts.echo ?? [], edits: opts.edits ?? [], repoRoot: repo })?.content ?? '';
+  fs.rmSync(hippoRoot, { recursive: true, force: true });
+  initStore(hippoRoot);
+  const turns = (opts.echo ?? ['go']).map((text) => ({ role: 'user' as const, text }));
+  const log: string[] = [];
+  recordSessionDigest(hippoRoot, { turns, finalText, cwd: repo, edits: opts.edits ?? [] }, {
+    key: 's1', tenantId: 'default', log: (line) => log.push(line),
+  });
+  const line = log.join('\n');
+  if (!line.startsWith('digest: wrote ') && !TEXT_SKIPS.has(line)) throw new Error(line);
+  return loadAllEntries(hippoRoot, 'default').find(isSessionDigestRow)?.content ?? '';
 }
 
 const lines = (text: string): string[] => text.split('\n').filter(Boolean);

@@ -1,5 +1,6 @@
 // Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond the major version.
 export { _resetAblationCacheForTests } from '../core/ablation.js';
+export { _setDigestExistsProbeForTests } from '../capture/session-digest.js';
 export { _resetSharedStoreCacheForTests } from '../core/config.js';
 export { _resetLossAversionRatioCacheForTests } from '../core/memory.js';
 export { _resetProjectIdentityCacheForTests } from '../core/project-identity.js';

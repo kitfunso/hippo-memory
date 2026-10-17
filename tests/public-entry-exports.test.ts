@@ -221,7 +221,7 @@ describe('published runtime exports', () => {
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex requireGroup
       sqliteStore
       tallyAmbientEntries",
-        "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests",
+        "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests",
       }
     `);
   });

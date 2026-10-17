@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFromText } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
 
 /**
@@ -59,7 +59,7 @@ describe('every pattern family still extracts', () => {
 
   for (const [name, text] of EXPECT_NULL) {
     it(`${name} is still a known non-match`, () => {
-      const got = extractFromText(text)[0]?.content ?? null;
+      const got = extractFromTexts([text])[0]?.content ?? null;
       expect(got, `${name} started matching - intended, or a silent change?`).toBeNull();
     });
   }
@@ -73,7 +73,7 @@ describe('every pattern family still extracts', () => {
 
   for (const [name, text] of cases) {
     it(`${name} extracts without duplication`, () => {
-      const got = extractFromText(text)[0]?.content ?? null;
+      const got = extractFromTexts([text])[0]?.content ?? null;
       expect(got, `${name} stopped extracting`).toBeTruthy();
       expect(got!, `${name} duplicated a word`).not.toMatch(DUPLICATED_WORD);
     });

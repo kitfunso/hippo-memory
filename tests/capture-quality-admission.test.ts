@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
-import { extractFromText, extractFromTexts } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 import { sessionTail, summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../src/learn/autolearn.js';
 import { getContext } from '../src/api/index.js';
@@ -23,8 +23,8 @@ const captureTurns = (turns: readonly SessionTurn[]) => {
 
 describe('capture retains complete supported assertions', () => {
   it('rejects the reported fragment, outcome and stripped build commit', () => {
-    expect(extractFromText('Error: Found local migration files to be')).toEqual([]);
-    expect(extractFromText('Rule: succeeds (inserts or updates)')).toEqual([]);
+    expect(extractFromTexts(['Error: Found local migration files to be'])).toEqual([]);
+    expect(extractFromTexts(['Rule: succeeds (inserts or updates)'])).toEqual([]);
     const parsed = extractLessons('0f26e3e chore: bump build 78 for testflight deploy');
     expect(parsed).toEqual(['bump build 78 for testflight deploy']);
     expect(partitionLessons(parsed)).toEqual({ kept: [], dropped: parsed });
@@ -40,7 +40,7 @@ describe('capture retains complete supported assertions', () => {
       'Never touch the generated config, because the deploy step rewrites it.',
     ];
     for (const statement of statements) {
-      const [item] = extractFromText(statement);
+      const [item] = extractFromTexts([statement]);
       expect(item?.content, statement).toBe(statement.replace(/^Decision: /, '').replace(/\.$/, ''));
     }
   });
@@ -49,18 +49,18 @@ describe('capture retains complete supported assertions', () => {
     const supported = `Always preserve the source assertion because ${'the data matters '.repeat(14)}and the reviewer needs its full context.`;
     expect(supported.length).toBeGreaterThan(200);
     expect(supported.length).toBeLessThan(500);
-    expect(extractFromText(supported)[0]?.content).toBe(supported.slice(0, -1));
-    expect(extractFromText(`Always preserve ${'the original data '.repeat(35)}before changing it.`)).toEqual([]);
+    expect(extractFromTexts([supported])[0]?.content).toBe(supported.slice(0, -1));
+    expect(extractFromTexts([`Always preserve ${'the original data '.repeat(35)}before changing it.`])).toEqual([]);
   });
 
   it('excludes fenced and quoted output while retaining inline code', () => {
     const text = ['```text', 'Error: migrate users to the production database.', '```', '> Never touch the generated config, because the deploy step rewrites it.', 'Never call `write(a, b)` before validating the tenant.'].join('\n');
-    expect(extractFromText(text).map((item) => item.content)).toEqual(['Never call `write(a, b)` before validating the tenant']);
+    expect(extractFromTexts([text]).map((item) => item.content)).toEqual(['Never call `write(a, b)` before validating the tenant']);
   });
 
   it('joins wrapped reasons and conditions without mining a wrapped error log', () => {
     const text = ['The API must retry after HTTP 429', 'because the provider enforces a per-account quota.', '', 'LegacyDbPushMissingRemoteError: Found local migration files to be', 'inserted before the last migration on remote database.'].join('\n');
-    expect(extractFromText(text).map((item) => item.content)).toEqual(['The API must retry after HTTP 429 because the provider enforces a per-account quota']);
+    expect(extractFromTexts([text]).map((item) => item.content)).toEqual(['The API must retry after HTTP 429 because the provider enforces a per-account quota']);
   });
 
   it('does not manufacture a source assertion by clipping a transcript turn', () => {
@@ -122,7 +122,7 @@ describe('capture retains complete supported assertions', () => {
       '```',
       'The fallback (never used in prod) must stay behind the feature flag.',
     ].join('\n');
-    expect(extractFromText(text).map((item) => item.content)).toEqual([
+    expect(extractFromTexts([text]).map((item) => item.content)).toEqual([
       'Never edit the lockfile by hand',
       'Always run the linter before you push',
       'Never skip the migration check on release branches',
