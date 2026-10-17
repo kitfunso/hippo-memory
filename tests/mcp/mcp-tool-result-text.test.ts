@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { makeStore } from './_helpers/make-root.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { makeStore } from '../_helpers/make-root.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 

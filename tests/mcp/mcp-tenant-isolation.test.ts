@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { queryAuditEvents } from '../src/store/audit.js';
-import { remember as apiRemember } from '../src/api/index.js';
-import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
-import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { apiCtx } from './_helpers/api-ctx.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
+import { remember as apiRemember } from '../../src/api/index.js';
+import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/mcp/server.js';
+import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 

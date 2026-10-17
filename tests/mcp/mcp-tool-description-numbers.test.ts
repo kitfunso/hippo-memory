@@ -1,8 +1,8 @@
 // A tool description that states a default must state the value the code reads, and hippo_outcome states no fixed half-life delta.
 import { describe, expect, it } from 'vitest';
-import { TOOLS } from '../src/mcp/tools.js';
-import { DEFAULT_CONFIG } from '../src/core/config.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../src/store/rows.js';
+import { TOOLS } from '../../src/mcp/tools.js';
+import { DEFAULT_CONFIG } from '../../src/core/config.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/store/rows.js';
 
 function descriptions(toolName: string): string {
   const tool = TOOLS.find((t) => t.name === toolName);
@@ -26,7 +26,7 @@ describe('MCP tool description numbers', () => {
   });
 
   it('the OpenClaw plugin states no fixed half-life delta either', async () => {
-    const { default: register } = await import('../extensions/openclaw-plugin/index.js');
+    const { default: register } = await import('../../extensions/openclaw-plugin/index.js');
     type ToolCtx = { readonly workspaceDir?: string };
     type Tool = { readonly name: string; readonly execute: unknown };
     const registrations: Array<Tool | ((ctx: ToolCtx) => Tool)> = [];

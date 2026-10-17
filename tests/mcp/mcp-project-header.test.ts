@@ -4,15 +4,15 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../src/entry/project-identity.js';
-import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
-import { serve, type ServerHandle } from '../src/server.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
+import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/project-identity.js';
+import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { initStore } from '../../src/store/open.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

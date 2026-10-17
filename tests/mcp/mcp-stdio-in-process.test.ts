@@ -2,11 +2,11 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
-import { startStdioLoop } from '../src/mcp/stdio.js';
-import { cliStdioHost } from '../src/cli/api-context.js';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { captureWrites, fire, recordListeners, stubExit, type Listener } from './_helpers/process-stubs.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { startStdioLoop } from '../../src/mcp/stdio.js';
+import { cliStdioHost } from '../../src/cli/api-context.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

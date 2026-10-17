@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { serve, type ServerHandle } from '../src/server.js';
-import { waitFor } from './_helpers/wait-for.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { waitFor } from '../_helpers/wait-for.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

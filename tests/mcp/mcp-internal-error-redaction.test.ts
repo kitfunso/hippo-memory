@@ -1,10 +1,10 @@
 // An MCP tool that throws an untyped error must not hand its internal text to the client; typed API errors keep theirs.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { serve, type ServerHandle } from '../src/server.js';
-import { mcpErrorResponse } from '../src/mcp/server.js';
-import { NotFoundError } from '../src/core/api-errors.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { mcpErrorResponse } from '../../src/mcp/server.js';
+import { NotFoundError } from '../../src/core/api-errors.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

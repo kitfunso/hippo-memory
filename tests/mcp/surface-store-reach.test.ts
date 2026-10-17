@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const SRC = join(import.meta.dirname, '..', 'src');
+const SRC = join(import.meta.dirname, '..', '..', 'src');
 
 function tsFilesUnder(dir: string): string[] {
   return readdirSync(join(SRC, dir), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts')).map((f) => `${dir}/${f.replaceAll('\\', '/')}`);

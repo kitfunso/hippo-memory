@@ -6,10 +6,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { embedAll } from '../src/search/embed-memories.js';
-import { waitFor } from './_helpers/wait-for.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { embedAll } from '../../src/search/embed-memories.js';
+import { waitFor } from '../_helpers/wait-for.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
 let tmpHome: string;

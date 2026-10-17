@@ -3,9 +3,9 @@ import * as path from 'path';
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseFrame } from '../src/mcp/framing.js';
-import { TOOLS } from '../src/mcp/tools.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { parseFrame } from '../../src/mcp/framing.js';
+import { TOOLS } from '../../src/mcp/tools.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
