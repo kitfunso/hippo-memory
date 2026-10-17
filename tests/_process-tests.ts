@@ -207,6 +207,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'remember-secret-warnings.test.ts',
   'request-open-count.test.ts',
   'request-path-output-snapshot.test.ts',
+  'route-table-gates.test.ts',
   'sbom.test.ts',
   'scheduler-test-isolation.test.ts',
   'scheduler-windows-task.test.ts',

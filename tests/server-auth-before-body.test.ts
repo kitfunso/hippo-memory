@@ -5,6 +5,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { connect } from 'node:net';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
+
+/** An admin key, since only an admin passes the mint route's gate to its body read. */
+function adminKey(root: string): string {
+  const db = openHippoDb(root);
+  try {
+    return createApiKey(db, { tenantId: 'default', label: 'mint-body', role: 'admin' }).plaintext;
+  } finally {
+    closeHippoDb(db);
+  }
+}
 
 /** Sends headers that promise a 2 MB body plus a few bytes of it, never the rest, and resolves with the status line. */
 function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): Promise<string> {
@@ -88,11 +100,11 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     expect(await statusBeforeBodyArrives(handle.port, path)).toBe('HTTP/1.1 401 Unauthorized');
   });
 
-  // Past auth (a keyless loopback store accepts the caller) the key mint still reads under its own 4 KB cap and short deadline.
+  // Past the admin gate the key mint still reads under its own 4 KB cap and short deadline.
   it('POST /v1/auth/keys answers 413 for a body over its 4 KB cap', async () => {
     const res = await fetch(`${handle.url}/v1/auth/keys`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${adminKey(root)}` },
       body: JSON.stringify({ label: 'x'.repeat(5000) }),
     });
     expect(res.status).toBe(413);
@@ -101,7 +113,8 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   it('POST /v1/auth/keys answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {
     await handle.stop();
     handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
-    expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys', '')).toBe('HTTP/1.1 408 Request Timeout');
+    const credential = `Authorization: Bearer ${adminKey(root)}\r\n`;
+    expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys', credential)).toBe('HTTP/1.1 408 Request Timeout');
   });
 
   // Past auth (a keyless loopback store accepts the caller) every other route reads through one shared reader, so one route stands for all.
