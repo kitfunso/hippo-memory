@@ -53,5 +53,5 @@ describe('SSE heartbeat when its tick throws', () => {
     } finally {
       ac.abort();
     }
-  }, 10_000);
+  });
 });

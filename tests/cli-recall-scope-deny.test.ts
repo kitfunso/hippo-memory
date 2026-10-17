@@ -155,7 +155,7 @@ describe('cli recall scope default-deny', () => {
     const out = await hippo(home, 'recall', 'windowstarve', '--limit', '10');
     expect(out).toContain('windowstarve admitted public row');
     expect(out).not.toContain('private filler');
-  }, 20_000);
+  });
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
     const res = await runInProcess(() => handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }));

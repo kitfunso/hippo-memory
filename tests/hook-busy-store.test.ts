@@ -59,7 +59,7 @@ describe('context hook while another process holds the store write lock', () => 
     expect(warnings).toHaveLength(1);
     // WAL readers never wait on the writer, so the memories still go out; only the ledger rows are skipped.
     expect(run.stdout).toContain('rollback plan');
-  }, 60000);
+  });
 
   it('injects as usual once the lock is gone', () => {
     const payload = JSON.stringify({ session_id: 'sess-busy-2', prompt: 'postgres migration rollback plan' });
@@ -68,7 +68,7 @@ describe('context hook while another process holds the store write lock', () => 
     expect(run.stdout).toContain('rollback plan');
     expect(run.stderr).not.toContain('store busy');
     expect(run.lockWaitAskedMs).toBe(0);
-  }, 60000);
+  });
 });
 
 describe('lock wait per command kind', () => {

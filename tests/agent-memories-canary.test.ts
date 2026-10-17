@@ -176,7 +176,7 @@ describe('agent memory sync: real homes are never read', () => {
     expect(out.warnings.filter((line) => line.includes(decoy))).toEqual([]);
     expect(liveTexts(w.local)).toEqual([CLEAN_PROJECT]);
     expect(liveTexts(w.global)).toEqual([CLEAN_STORELESS, `User Profile: ${CLEAN_BULLET}`].sort());
-  }, 120_000);
+  });
 
   it('the decoys are real: the process machine and the decoy home each import a canary from every tool', async () => {
     await Promise.all([runWorker('env', ctrlEnv, {}), runWorker('home', ctrlHome, {})]);
@@ -188,5 +188,5 @@ describe('agent memory sync: real homes are never read', () => {
       const projectTags = new Set(liveRows(run.local).flatMap((e) => e.tags));
       expect(['claude-code-memory', 'gemini-memory', 'copilot-memory', 'qwen-code-memory'].filter((t) => !projectTags.has(t)), run.local).toEqual([]);
     }
-  }, 120_000);
+  });
 });

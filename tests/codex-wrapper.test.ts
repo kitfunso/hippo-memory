@@ -441,5 +441,5 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     expect(readLog()).not.toContain('skip capture');
     expect(saved().some((c) => c.includes(SENTINEL))).toBe(true);
     expect(saved().some((c) => c.includes(DECOY))).toBe(false);
-  }, 60_000);
+  });
 });

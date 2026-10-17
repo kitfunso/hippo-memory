@@ -272,8 +272,7 @@ describe('what one hook call records', () => {
       expect(rows.map((e) => e.turn_seq)).toEqual(rows.map((_, i) => i + 1));
       expect(rows.length + (stderrBySession.get(sessionId)?.length ?? 0)).toBe(3);
     }
-  // Six spawned hooks take about 2 s solo; 20 s is a 10x margin for a busy runner.
-  }, 20_000);
+  });
 
   it('F6: no session anywhere is missing, an env session is env, and a sub-agent keeps the parent session without a turn', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });

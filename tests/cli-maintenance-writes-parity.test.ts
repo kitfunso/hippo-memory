@@ -13,8 +13,6 @@ import { recordTokenUse, type TokenSurface } from '../src/store/token-ledger.js'
 import { query, Store, type ExtraState, type Row } from './_helpers/cli-parity-store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-// A spawned case starts the built CLI up to six times, each a few seconds on a loaded Windows box; 90 s is twice that.
-const SPAWNED_CASE_MS = 90_000;
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 
 type Refined = Awaited<ReturnType<typeof refineStore>>;
@@ -39,13 +37,14 @@ describe('hippo watch (built CLI, no server)', () => {
     writeFileSync(join(s.cwd, 'ok.js'), "process.stdout.write('done\\n');\n");
   }
 
+  // The process pin for watch: two spawned runs of the built CLI, each running a failing child.
   it('stores a failed command, and a second failure of it beside the first', async () => {
     const s = new Store({ spawned: true });
     scripts(s);
     await s.run('watch', 'node', 'fail.js');
     await s.run('watch', 'node', 'fail.js');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  }, 32_000);
 
   it('a failure that matches a rejected value is not stored', async () => {
     const s = new Store();
@@ -63,7 +62,7 @@ describe('hippo watch (built CLI, no server)', () => {
     scripts(s);
     await s.run('watch', 'node', 'ok.js');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('a folder with no store', async () => {
     const s = new Store({ init: false });
@@ -98,7 +97,7 @@ describe('hippo audit --fix (built CLI, no server)', () => {
     await s.run('audit', '--fix');
     await s.run('audit', '--fix');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('--dry-run removes nothing, and neither does a run without --fix', async () => {
     const s = new Store();
@@ -149,7 +148,7 @@ describe('hippo sleep (built CLI, no server)', () => {
     await s.run('sleep', '--no-learn', '--no-share');
     await s.run('sleep', '--no-learn', '--no-share');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('--dry-run counts the errors and removes nothing', async () => {
     const s = new Store();
@@ -210,7 +209,7 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     await s.run('decide', 'use sqlite for the ledger', '--supersedes', oldId);
     await s.run('decide', 'use duckdb for the ledger', '--supersedes', oldId);
     s.expectPinned({ decisions: decisions(s) });
-  }, SPAWNED_CASE_MS);
+  });
 
   it('weakens a plain memory that no decision row names', async () => {
     const s = new Store();
@@ -251,7 +250,7 @@ describe('hippo projects (built CLI, no server)', () => {
     await s.run('projects', 'repair');
     await s.run('projects', 'rename');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('a folder with no store', async () => {
     const s = new Store({ init: false });
@@ -292,13 +291,14 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
     return { rereadLog, ledger: { local: ledger(s.root), global: ledger(s.home) } };
   }
 
+  // The process pin for session end: two spawned runs over a project store and the global store.
   it('books the project store and the global store, and a second pass leaves the same rows', async () => {
     const s = new Store({ global: true, spawned: true });
     book(s.root, 'hook', 100);
     book(s.home, 'hook_recall', 30);
     await endSession(s);
     s.expectPinned(await endSession(s));
-  }, SPAWNED_CASE_MS);
+  }, 42_000);
 
   it('a store that refuses the rows is logged, and the other store is still counted', async () => {
     const s = new Store({ global: true });

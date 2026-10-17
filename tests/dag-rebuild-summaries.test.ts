@@ -23,8 +23,6 @@ import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js'
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// The cap cases seed up to 75 rows and marks in a real store, so their time follows the runner's disk.
-vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.

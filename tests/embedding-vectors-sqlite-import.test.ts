@@ -13,8 +13,6 @@ import type { EmbeddingProvider } from '../src/embeddings/provider.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.
-vi.setConfig({ testTimeout: 30_000 });
 
 let root: string;
 

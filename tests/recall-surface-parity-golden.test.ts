@@ -153,7 +153,7 @@ describe('recall surface parity goldens', () => {
       return { output: r!.output, local: rowsOf(s.root), globalAudit: auditOps(s.globalRoot) };
     });
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   // D6: the goal-stack boost and the goal_recall_log rows a session recall writes.
   it.each(SURFACES)('%s: recall with a session that has an active goal', async (surface) => {
@@ -162,7 +162,7 @@ describe('recall surface parity goldens', () => {
       return { output: r!.output, local: rowsOf(s.root) };
     });
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   // D11: each surface keeps its own session ring, so hints and their audit rows follow the surface's own history.
   it.each(SURFACES)('%s: anchoring hints over repeated recalls in one session', async (surface) => {
@@ -172,7 +172,7 @@ describe('recall surface parity goldens', () => {
       return { hints: out.map((r) => r.hint), audit: auditOps(s.root) };
     });
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   it('rings do not cross surfaces: a repeat on another surface is a first recall there', async () => {
     const got = await onFreshStore('local', async (s) => {
@@ -183,7 +183,7 @@ describe('recall surface parity goldens', () => {
     });
     for (const surface of SURFACES) expect(got[surface]![0]).toBeNull();
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   // D7: the audit rows are written first, so a recall the store cannot audit records nothing; only the CLI still answers.
   it('a recall whose audit row the store refuses leaves no hint row, strengthen, trace or count', async () => {
@@ -214,7 +214,7 @@ describe('recall surface parity goldens', () => {
     expect(http.out.output.status).toBe(500);
     expect(http.after.ledger).toEqual(http.before.ledger);
     expect(mcp.out).toBe('recall audit refused');
-  }, 60_000);
+  });
 
   // D2: candidate windows on a store with 230 matching rows.
   // A store per surface: a recall rewrites the rows it returns, and that write time breaks the next surface's ties.
@@ -230,7 +230,7 @@ describe('recall surface parity goldens', () => {
       (await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }])).map(windowOf));
     const got = { cli, mcpHead, http, httpScorerWindow50 };
     expect(got).toMatchSnapshot();
-  }, 120_000);
+  });
 
   // D8: MCP's 'recall' audit row counts the rows the budget let it show, as CLI and HTTP count the rows they return.
   it('mcp audit counts the rows shown', async () => {
@@ -243,7 +243,7 @@ describe('recall surface parity goldens', () => {
     });
     expect(got.auditResults).toBe(Number(/\d+/.exec(got.shownHeading ?? '0')![0]));
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   // D4: HTTP scores are list positions in every mode; hybrid only reorders.
   it('http scores are positions in bm25, hybrid and physics modes', async () => {
@@ -252,7 +252,7 @@ describe('recall surface parity goldens', () => {
       return out.map((r) => r.output.body.results.map((x) => [x.id, x.score]));
     });
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 
   // D6: under showRanked the boost runs on the ranked list and again on the window band's position scores.
   it('mcp path applies the goal boost twice', async () => {
@@ -274,7 +274,7 @@ describe('recall surface parity goldens', () => {
     });
     expect(got.bandScore).toBeGreaterThan(got.positionScore);
     expect(got).toMatchSnapshot();
-  }, 60_000);
+  });
 });
 
 // D12-D17: the same bad input on MCP and HTTP (RECALL_INPUTS). MCP answers with text, an isError result or a raw throw; HTTP with a status.
@@ -332,12 +332,12 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
   it.each(RECALL_INPUTS)('recall: %s', async (_name, args) => {
     const got = { mcp: await mcpOutcome(s.root, 'hippo_recall', args), http: await httpOutcome(handle, '/v1/memories', args) };
     expect(normalize(got, s)).toMatchSnapshot();
-  }, 60_000);
+  });
 
   it.each(CONTEXT_INPUTS)('context: %s', async (_name, args) => {
     const got = { mcp: await mcpOutcome(s.root, 'hippo_context', args), http: await httpOutcome(handle, '/v1/context', args) };
     expect(normalize(got, s)).toMatchSnapshot();
-  }, 60_000);
+  });
 });
 
 // D18: on a shared store MCP recall keeps to the caller's repo, while GET /v1/memories takes no project.
@@ -371,5 +371,5 @@ describe('shared store recall, MCP vs HTTP', () => {
       vi.unstubAllEnvs();
       _resetSharedStoreCacheForTests();
     }
-  }, 60_000);
+  });
 });

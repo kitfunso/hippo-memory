@@ -252,7 +252,7 @@ describe('confidence facets', () => {
     expect(page.rows.find((m) => m.id === e.id)?.confidence).toBe('observed');
     expect(detail.confidence).toBe('observed');
     expect(detail.agedOut).toBe(true);
-  }, 15_000);
+  });
 
   it('renders the pair on hippo trace, the surface that reads without retrieving', async () => {
     const e = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
@@ -318,5 +318,5 @@ describe('confidence facets', () => {
       { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
     );
     expect(JSON.stringify(res)).toContain('[stale]');
-  }, 30_000);
+  });
 });

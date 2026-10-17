@@ -216,8 +216,6 @@ describe('POST /v1/outcome', () => {
     const m2 = await remember(ctx, { content: 'boundary-mem-2' });
     const m3 = await remember(ctx, { content: 'boundary-mem-3' });
     // Pad with fake ids that will silently miss (still within cap).
-    // 997 readEntry-misses + 3 real takes ~5-10 seconds on real SQLite —
-    // bump timeout above vitest default 5s.
     const ids = [m1.id, m2.id, m3.id, ...Array(997).fill(0).map((_, i) => `mem_pad_${i}`)];
     expect(ids.length).toBe(1000);
     const res = await fetch(`${handle.url}/v1/outcome`, {
@@ -228,7 +226,7 @@ describe('POST /v1/outcome', () => {
     expect(res.status).toBe(200);
     const body = await jsonAs<{ applied: number }>(res);
     expect(body.applied).toBe(3); // only the 3 real ids applied
-  }, 30_000);
+  });
 
   it('1MB+ body returns 413 from body cap before id cap fires', async () => {
     // Synthesise ~1.2MB of ids — body cap (1MB) at the HTTP layer fires

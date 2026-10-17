@@ -21,8 +21,6 @@ import {
 import { loadConfig } from '../src/core/config.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
-// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
-vi.setConfig({ testTimeout: 30_000 });
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';

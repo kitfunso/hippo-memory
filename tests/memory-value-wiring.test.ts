@@ -40,8 +40,6 @@ import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
 import { mulberry32 } from './_helpers/property.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// Each case seeds a real store and runs a full sleep on it, so its time follows the runner's disk.
-vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -624,6 +622,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
 // (h) scale characterization (~2,000 entries, 3 tenants)
 // ---------------------------------------------------------------------------
 describe('(h) scale characterization', () => {
+  // Seeds about 2,000 rows over three tenants and runs a full sleep on them twice.
   it('deterministic, deletes-subset, per-tenant isolation at ~2,000 entries / 3 tenants; reports rescue rate', async () => {
     const rand = mulberry32(20260810);
     const wordBank = [
@@ -826,7 +825,7 @@ describe('(h) scale characterization', () => {
       expect(meta2!.keepN).toBe(meta1.keepN);
       expect(meta2!.score).toBe(meta1.score);
     }
-  }, 60_000);
+  }, 42_000);
 });
 
 /** Parses entry ids out of decay-pass detail lines (review-round F7: parity

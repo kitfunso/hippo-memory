@@ -236,7 +236,7 @@ beforeAll(async () => {
   seededLastRecall = lastRecallMeta(local);
   globalRows = contextRowsOf(global);
   embeddings = await startHashedEmbeddings();
-}, 120_000);
+});
 
 afterAll(async () => {
   await embeddings.close();
@@ -321,7 +321,7 @@ describe('getContext on hippo.db returns and records what each case lists', () =
     expect(pass.rows.local.traceResults).toHaveLength(traced ?? 0);
     expect(pass.stats).toEqual(recalled === undefined ? null : expect.stringContaining(`"total_recalled": ${recalled},`));
     expect(pass.rows.global?.retrieved).toEqual(globalRetrieved.map((id) => expect.objectContaining({ id, retrieval_count: 1 })));
-  }, 120_000);
+  });
 });
 
 describe('the recall getContext records on hippo.db', () => {
@@ -335,7 +335,7 @@ describe('the recall getContext records on hippo.db', () => {
     expect(idsOf(pass)).toContain('mem_a_own_0');
     expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 1 }));
     expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 0 }));
-  }, 120_000);
+  });
 
   it('strengthens the row in the global store when the local store holds its id for another tenant', async () => {
     const copyToOtherTenant = (root: string, globalRoot: string): void => {
@@ -345,7 +345,7 @@ describe('the recall getContext records on hippo.db', () => {
     expect(idsOf(pass)).toContain('mem_g_note');
     expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 0 }));
     expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 1 }));
-  }, 120_000);
+  });
 
   it('saves the ids with no trace id, never the previous one, when the trace write fails', async () => {
     const refuseTraces = (root: string): void => {
@@ -363,7 +363,7 @@ describe('the recall getContext records on hippo.db', () => {
       { key: 'last_retrieval_ids', value: JSON.stringify(idsOf(pass)) },
       { key: 'last_trace_id', value: '' },
     ]);
-  }, 120_000);
+  });
 });
 
 describe('getContext on a store held in memory, with hippo.db blocked', () => {
@@ -383,5 +383,5 @@ describe('getContext on a store held in memory, with hippo.db blocked', () => {
     if (c.storeReads?.includes('physicsParticles') || c.storeReads?.includes('nearestEntries')) {
       expect(embeddings.requests()).toBeGreaterThan(before);
     }
-  }, 120_000);
+  });
 });

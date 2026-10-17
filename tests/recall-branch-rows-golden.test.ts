@@ -98,5 +98,5 @@ describe('recall branch replies and rows match the code before the store port', 
     } finally {
       rmSync(s.home, { recursive: true, force: true });
     }
-  }, 60_000);
+  });
 });

@@ -128,7 +128,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
 
     adapterHandle = await spawnAdapter(hippoHandle.port);
     baseUrl = adapterHandle.baseUrl;
-  }, 30_000);
+  });
 
   afterAll(async () => {
     stopAdapter(adapterHandle);
@@ -444,7 +444,7 @@ describe('rate-limit key forwarding and status pass-through', () => {
 
     rlAdapterHandle = await spawnAdapter(rlHippoHandle.port);
     rlBaseUrl = rlAdapterHandle.baseUrl;
-  }, 30_000);
+  });
 
   afterAll(async () => {
     stopAdapter(rlAdapterHandle);

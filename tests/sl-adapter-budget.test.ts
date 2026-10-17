@@ -4,11 +4,12 @@ import baselineAdapter from '../benchmarks/sequential-learning/adapters/baseline
 import staticAdapter from '../benchmarks/sequential-learning/adapters/static.mjs';
 
 describe('sequential-learning adapter recall budget', () => {
+  // Starts the built CLI nine times: init, six stores and two recalls.
   it('hippo adapter honors the budget arg with OBSERVABLE result-count delta at extreme budgets (post-review P0-6)', async () => {
     await hippoAdapter.init();
     try {
-      // Seed with many memories so an extreme-low budget collapses the result set.
-      for (let i = 0; i < 30; i++) {
+      // One more memory than the adapter's five-result cap, so budget 2000 fills the cap and budget 1 must cut it.
+      for (let i = 0; i < 6; i++) {
         await hippoAdapter.store(`lesson ${i}: do not commit broken code, item ${i}`, [
           'lesson',
           `lesson_${i}`,
@@ -20,13 +21,14 @@ describe('sequential-learning adapter recall budget', () => {
       // an OBSERVABLE delta (not just <=), so the test cannot pass if --budget
       // is silently ignored. If hippo's --budget enforcement is strict, tiny=0;
       // if lenient (returns at least 1 hit), it MUST be strictly fewer than wide.
-      expect(wide.length).toBeGreaterThanOrEqual(3); // sanity: 30 memories, query matches
+      expect(wide.length).toBeGreaterThanOrEqual(3); // sanity: 6 memories, query matches
       expect(tiny.length).toBeLessThan(wide.length); // STRICT inequality, not <=
     } finally {
       await hippoAdapter.cleanup();
     }
-  }, 60_000);
+  }, 61_000);
 
+  // Starts the built CLI three times: init, the store and the recall.
   it('hippo adapter defaults to 2000 when budget arg is omitted (backward compat)', async () => {
     await hippoAdapter.init();
     try {
@@ -37,7 +39,7 @@ describe('sequential-learning adapter recall budget', () => {
     } finally {
       await hippoAdapter.cleanup();
     }
-  }, 30_000);
+  }, 27_000);
 
   it('baseline adapter ignores the budget arg cleanly', async () => {
     await baselineAdapter.init();

@@ -13,7 +13,7 @@
  * (codex P2-2: don't rely on a "miss" to fall through).
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { loadRecallSearchEntriesFromDb, loadSearchEntries } from '../src/store/search-rows.js';
@@ -22,8 +22,6 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// The LIKE case seeds 6,000 rows, in two transactions, since store size is the thing it varies.
-vi.setConfig({ testTimeout: 30_000 });
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -159,6 +157,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
+  // Seeds 6,000 rows, in two transactions, since store size is the thing it varies.
   it('LIKE fallback path: a query matching nothing tests the same number of rows however large the store', () => {
     const db = openHippoDb(root);
     try {
@@ -182,7 +181,7 @@ describe('loadSearchEntries bm25_score', () => {
     } finally {
       closeHippoDb(db);
     }
-  });
+  }, 6_000);
 
   it('Full-store fallback path: terms with no match → no FTS hit, no LIKE hit → fallback returns all rows with bm25_score undefined', () => {
     writeEntry(root, makeRaw('one row'));

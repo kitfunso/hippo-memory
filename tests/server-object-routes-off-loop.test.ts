@@ -230,7 +230,7 @@ describe('the worker-backed typed-object routes against the in-process store', (
     expect(bodyOf['supersede a missing decision']).toContain('999');
     expect(bodyOf['open an incident on an unknown memory']).toContain('linked memory <memory> not found for tenant default');
     expect(onWorkers.mirrors.length).toBeGreaterThan(10);
-  }, 120_000);
+  });
 
   it('answers an object write behind a held write lock with the same 503 and Retry-After, and an object read with its 200', async () => {
     const busy: readonly Step[] = [
@@ -260,7 +260,7 @@ describe('the worker-backed typed-object routes against the in-process store', (
     expect(onWorkers).toEqual(inProcess);
     expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(statuses(busy));
     expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
-  }, 120_000);
+  });
 });
 
 describe('the server-thread block of the object routes', () => {
@@ -282,7 +282,7 @@ describe('the server-thread block of the object routes', () => {
 
     expect(replies.map((reply) => [reply.label, reply.status])).toEqual(statuses(steps));
     expect(blockedLines(info)).toEqual([]);
-  }, 120_000);
+  });
 
   it('fails every one of them when its handler opens hippo.db on the server thread', async () => {
     const root = newRoot('object-routes');
@@ -300,7 +300,7 @@ describe('the server-thread block of the object routes', () => {
     expect(answered).toEqual(steps.map(([label]) => [label, 501]));
     expect(blockedLines(info)).toHaveLength(steps.length);
     expect([auditRows(root, keyIds), storedRows(root), mirrorFiles(root)]).toEqual(before);
-  }, 120_000);
+  });
 });
 
 describe('an object write waiting for the write lock', () => {
@@ -338,7 +338,7 @@ describe('an object write waiting for the write lock', () => {
     expect([...new Set(ops.filter((op) => op.startsWith('objects.')))].sort()).toEqual([
       'objects.activeSkillsByName', 'objects.briefReceipts', 'objects.listObjects', 'objects.objectById', 'objects.openIncident', 'objects.policiesInForce', 'objects.saveObject',
     ]);
-  }, 120_000);
+  });
 });
 
 describe('what an object save does after its commit, on the writer thread', () => {

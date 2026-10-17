@@ -61,7 +61,7 @@ beforeAll(() => {
   // Every row matches the query; all but the last OWN_ROWS come from another project.
   fill(local, ROWS, 'local', (i) => (i >= ROWS - OWN_ROWS ? 'proj' : 'other'));
   fill(global, 1_000, 'global', () => '');
-}, 600_000);
+});
 
 afterAll(() => {
   rmSync(local, { recursive: true, force: true });

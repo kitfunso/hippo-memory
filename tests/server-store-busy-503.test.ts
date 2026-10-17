@@ -59,7 +59,7 @@ describe('server under a held write lock', () => {
       body: JSON.stringify({ content: 'written after the lock is released' }),
     });
     expect(ok.status).toBe(200);
-  }, 20000);
+  });
 
   it("opens a store worker's connection with the wait its executor passed and tries a write behind the lock once", async () => {
     const { port1, port2 } = new MessageChannel();

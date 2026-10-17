@@ -62,7 +62,7 @@ describe('updateStats under concurrent writers', () => {
     } finally {
       closeHippoDb(db);
     }
-  }, 60_000);
+  });
 
   it('a write to one counter does not roll back another', async () => {
     root = makeRoot('stats-clobber');
@@ -75,5 +75,5 @@ describe('updateStats under concurrent writers', () => {
     const stats = loadStats(root);
     expect(stats.total_remembered).toBe(60);
     expect(stats.total_forgotten).toBe(60);
-  }, 60_000);
+  });
 });

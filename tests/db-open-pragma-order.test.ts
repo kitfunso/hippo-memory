@@ -106,5 +106,5 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
       expect(report.errors).toEqual([]);
       expect(report.windowWrites).toBeGreaterThan(0);
     }
-  }, 15_000);
+  });
 });

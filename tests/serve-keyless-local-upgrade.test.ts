@@ -89,7 +89,7 @@ describe('hippo serve says its key rule at start', () => {
   ])('with %s', async (_name, env, line) => {
     const { stdout } = await startServe(env);
     expect(stdout.split(/\r?\n/)).toContain(line);
-  }, 60_000);
+  });
 });
 
 describe('a routed CLI write against a server on the new default', () => {
@@ -111,7 +111,7 @@ describe('a routed CLI write against a server on the new default', () => {
     expect(keyed.stderr).not.toContain('auth required');
     expect(keyed.status).toBe(0);
     expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);
-  }, 90_000);
+  });
 
   it('works with no key once the server is started with HIPPO_ALLOW_KEYLESS_LOCAL=1', async () => {
     await startServe({ HIPPO_ALLOW_KEYLESS_LOCAL: '1' });
@@ -119,11 +119,11 @@ describe('a routed CLI write against a server on the new default', () => {
     expect(run.stderr).not.toContain('auth required');
     expect(run.status).toBe(0);
     expect(rememberActors()).toEqual(['localhost:cli']);
-  }, 60_000);
+  });
 
   it('is untouched when no server runs: the CLI writes to the store itself', () => {
     const run = hippoRun(['remember', 'upgrade-canary-direct'], { cwd: workspace, env: childEnv() });
     expect(run.status).toBe(0);
     expect(rememberActors()).toEqual(['cli']);
-  }, 60_000);
+  });
 });

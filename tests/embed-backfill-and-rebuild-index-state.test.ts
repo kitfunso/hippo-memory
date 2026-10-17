@@ -26,7 +26,6 @@ const FAKE_NOW = '2026-03-01T12:00:00.000Z';
 const TENANTS = ['tenant-a', 'tenant-b'];
 const ROWS = 300;
 const HASHED_ID = 'openai:hashed-16';
-const SLOW = 120_000;
 const PAGE = 64;
 
 let home: string;
@@ -109,6 +108,7 @@ function rebuiltState(root: string, providerId: string, vectorOf: (entry: Memory
   };
 }
 
+// Three times the measured seed: 300 rows written one commit at a time, then embedded twice.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   home = makeRoot('embed-index-state', { init: false });
@@ -127,7 +127,7 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-}, SLOW);
+}, 18_000);
 
 afterAll(async () => {
   await embeddings.close();
@@ -167,7 +167,7 @@ describe('embedAll backfill on hippo.db', () => {
       model,
       particles: [],
     });
-  }, SLOW);
+  });
 
   it('embeds nothing on a second run', async () => {
     const root = copyOf(indexedOld);
@@ -176,7 +176,7 @@ describe('embedAll backfill on hippo.db', () => {
     expect(await embedAll(root, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(0);
     expect(calls).toEqual([]);
     expect(indexOn(root)).toEqual(before);
-  }, SLOW);
+  });
 });
 
 describe('a model identity change on hippo.db', () => {
@@ -187,7 +187,7 @@ describe('a model identity change on hippo.db', () => {
     const state = indexOn(root);
     expect(state).toEqual(rebuiltState(root, 'fake-new', (e) => fakeVector('fake-new', e)));
     expect([state.vectors.length, state.particles.length]).toEqual([ROWS, ROWS]);
-  }, SLOW);
+  });
 
   it('embedAll rebuilds a 300-row index, and embedMemory leaves it alone past the inline reindex cap', async () => {
     const [viaAll, viaOne] = [copyOf(indexedOld), copyOf(indexedOld)];
@@ -198,7 +198,7 @@ describe('a model identity change on hippo.db', () => {
     expect(indexOn(viaOne)).toEqual(before);
     expect(await embedAll(viaAll)).toBe(ROWS);
     expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
-  }, SLOW);
+  });
 
   it('keeps the old vectors, identity and particles when the provider fails part way through the rebuild', async () => {
     const root = copyOf(indexedOld);
@@ -210,7 +210,7 @@ describe('a model identity change on hippo.db', () => {
     await expect(embedAll(root, undefined, failing)).rejects.toThrow('provider down');
     expect(indexOn(root)).toEqual(before);
     expect(before.model).toBe(embeddingIndexIdentity('fake-old'));
-  }, SLOW);
+  });
 });
 
 /** The most full memory rows one statement of a run can hand back: the length of its id list, or the whole store when it has none. */
@@ -234,7 +234,7 @@ describe('rows held while embedding hippo.db', () => {
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
     expect(peakFullRowsRead(log.statements)).toBe(PAGE);
-  }, SLOW);
+  });
 
   it("resets particles from ids for both tenants' embedded rows, reading the rows at most 64 at a time", () => {
     const root = copyOf(partly);
@@ -247,5 +247,5 @@ describe('rows held while embedding hippo.db', () => {
     expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
     expect(peakFullRowsRead(log.statements)).toBe(PAGE);
-  }, SLOW);
+  });
 });

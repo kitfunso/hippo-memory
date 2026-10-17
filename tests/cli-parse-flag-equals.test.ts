@@ -115,7 +115,7 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
     [...(flags.switches ?? []), ...(flags.values ?? []), ...(flags.numbers ?? []), ...(flags.lists ?? [])];
   beforeAll(() => {
     found = collectVerbReads(resolve(__dirname, '..'));
-  }, 120_000);
+  });
 
   it('case 14d: a flag a verb reads only as on/off is a switch on that verb, so no value can switch it on', () => {
     expect(found.unclassed).toEqual([]);

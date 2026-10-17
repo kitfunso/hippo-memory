@@ -41,5 +41,5 @@ describe('cross-tenant recall isolation', () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 });

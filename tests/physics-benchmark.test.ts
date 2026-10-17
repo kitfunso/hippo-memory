@@ -8,7 +8,7 @@
  * This isolates the physics scoring logic from embedding model quality.
  */
 
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   type MemoryEntry
 } from '../src/core/memory.js';
@@ -27,8 +27,6 @@ import { computeSystemEnergy, simulate, type ForceContext } from '../src/core/ph
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// A benchmark: 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
-vi.setConfig({ testTimeout: 60_000 });
 
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator
@@ -279,7 +277,7 @@ beforeAll(() => {
   } finally {
     closeHippoDb(db);
   }
-}, 30_000);
+});
 
 // ---------------------------------------------------------------------------
 // Metric helpers
@@ -438,7 +436,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
   beforeAll(async () => {
     standard = await scoreQueries(STANDARD_QUERIES);
     cluster = await scoreQueries(CLUSTER_QUERIES);
-  }, 30_000);
+  });
 
   describe('Standard queries', () => {
     STANDARD_QUERIES.forEach((tc, i) => {

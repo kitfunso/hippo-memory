@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { replayTrace, replayAll } from '../scripts/token-eval/replay.mjs';
 
 // Each replayed prompt runs the built hippo hook in a child process.
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 38_000 });
 
 const TRACE = {
   name: 'ci-short',

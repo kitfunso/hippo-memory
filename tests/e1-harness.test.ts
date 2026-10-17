@@ -139,6 +139,7 @@ describe('E1 driver', () => {
     for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
   });
 
+  // Two full real-store runs of the arm.
   it('is REPRODUCIBLE: identical (arm, seed) runs produce identical metrics (codex P1)', async () => {
     // The protocol intentionally creates score ties (identical-form
     // negatives); with random entry UUIDs, tie order differed across runs of
@@ -148,7 +149,7 @@ describe('E1 driver', () => {
     const b = await runArmSeed('full', 11, TINY);
     expect(JSON.stringify(a.epochs)).toBe(JSON.stringify(b.epochs));
     expect(a.meta.protocolHash).toBe(b.meta.protocolHash);
-  }, 60_000); // two full real-store runs; default 5s timeout is a CI flake (codex P2)
+  }, 16_000);
 
   it('baseline arms produce rankings (bm25-static + recency-window)', async () => {
     const bm25 = await runArmSeed('bm25-static', 4, TINY);
@@ -167,5 +168,5 @@ describe('E1 driver', () => {
       expect(r.meta).toHaveProperty('halfLife');
     }
     for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
-  }, 60_000);
+  });
 });

@@ -174,5 +174,5 @@ describe('a command that fails at the top level', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 60000);
+  });
 });

@@ -157,7 +157,7 @@ describe('schemaFitInStore', () => {
     const fit = schemaFitInStore(root, 'default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
     expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
-  }, 30_000);
+  }, 10_000);
 });
 
 describe('schema_fit affects half-life', () => {

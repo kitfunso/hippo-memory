@@ -10,8 +10,6 @@ import { replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Store } from './_helpers/cli-parity-store.js';
 
-// A spawned case starts the built CLI up to five times, each a few seconds on a loaded Windows box; 60 s is twice that.
-const SPAWNED_CASE_MS = 60_000;
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const CREATED = '2026-01-20T00:00:00.000Z';
 const CLEAN = 'the billing service retries a failed charge three times';
@@ -52,7 +50,7 @@ describe('hippo forget --dry-run (built CLI, no server)', () => {
     await s.run('forget', short, '--dry-run');
     await s.run('forget', long, '--dry-run');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('refuses a raw row, and --archive refuses a row that is not raw', async () => {
     const s = new Store();
@@ -91,7 +89,7 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
     await s.run('resolve', '1');
     await s.run('resolve', 'conflict_1');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('an unknown conflict, a conflict of another tenant, and a store that cannot be read', async () => {
     const s = new Store();
@@ -117,7 +115,7 @@ describe('hippo inspect (built CLI, no server)', () => {
     await s.run('inspect', 'mem_inspect_plain');
     await s.run('inspect', 'mem_inspect_full');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('an unknown id, a row of another tenant, no id, and a store that cannot be read', async () => {
     const s = clocked();
@@ -138,7 +136,7 @@ describe('hippo share (built CLI, no server)', () => {
     s.settle();
     await s.run('share', id);
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('an unknown id, a row of another tenant, no id, and a store that cannot be read', async () => {
     const s = new Store({ global: true });
@@ -163,7 +161,7 @@ describe('hippo trace <id> (built CLI, no server)', () => {
     await s.run('trace', 'mem_trace_child', '--json');
     await s.run('trace', 'mem_trace_parent');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('a row only the global store holds, and a parent of another tenant reads as not found', async () => {
     const s = clocked({ global: true });

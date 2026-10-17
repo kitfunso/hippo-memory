@@ -69,8 +69,8 @@ async function learn(root: string, flags: Record<string, string | boolean>, repo
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }
 
-// Each case spawns a dozen git processes, which a loaded Windows box runs slowly.
-const GIT_HEAVY_MS = 120_000;
+// These cases build a five-commit repo and run learn on it, about a dozen git processes each.
+const GIT_HEAVY_MS = 51_000;
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', join(temp('learn-git-home'), 'global'));
@@ -142,7 +142,7 @@ describe('hippo learn --git (in process)', () => {
     expect(r.stdout).toContain('No git history found (or not a git repository).');
     expect(r.stdout).toContain('Git learn complete: 0 new lessons added, 0 duplicates skipped.');
     expect(Object.keys(rowsOf(root))).toHaveLength(2);
-  }, GIT_HEAVY_MS);
+  });
 
   it('says so when no commit is a fix, revert or bug', async () => {
     const root = seededStore();
@@ -153,5 +153,5 @@ describe('hippo learn --git (in process)', () => {
     expect(r.stdout).toContain('No fix/revert/bug commits found in the specified period.');
     expect(r.stdout).toContain('Git learn complete: 0 new lessons added, 0 duplicates skipped.');
     expect(Object.keys(rowsOf(root))).toHaveLength(2);
-  }, GIT_HEAVY_MS);
+  });
 });

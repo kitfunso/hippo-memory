@@ -129,5 +129,5 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 });

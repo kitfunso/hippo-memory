@@ -12,7 +12,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -33,8 +33,6 @@ import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-// The one case ingests 200 webhook events, each its own write to a real store.
-vi.setConfig({ testTimeout: 90_000 });
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -244,6 +242,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  // Ingests 200 webhook events and replays them, each its own write to a real store.
   it('ingests the stream cleanly and enforces every security boundary', async () => {
     const ctx = ctxFor(root);
     const deliveries = buildDeliveryStream();
@@ -405,5 +404,5 @@ describe('GitHub connector — 200-event smoke test', () => {
       filter: { scope: 'acme:private:demo' },
     });
     expect(canaryScoped.results.length).toBeGreaterThan(0);
-  });
+  }, 45_000);
 });

@@ -63,6 +63,7 @@ describe('sequential-learning adapter contract', () => {
 // ---------------------------------------------------------------------------
 
 describe('hippo adapter goal-stack boost fires end-to-end', () => {
+  // Each adapter call starts the built CLI: init, the goal, the store and the recall.
   it('writes at least one row to goal_recall_log after pushGoal+store+recall', async () => {
     // We use the public adapter so any wiring bug surfaces. The adapter
     // creates its own temp HIPPO_HOME and sets HIPPO_SESSION_ID for us.
@@ -124,5 +125,5 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
     } finally {
       await hippoAdapter.cleanup();
     }
-  }, 60_000);
+  }, 14_000);
 });

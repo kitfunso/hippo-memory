@@ -5,8 +5,6 @@ import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
-// The first case runs two full `hippo init`s and four more verbs, too slow for the 5 s unit default on a busy runner.
-vi.setConfig({ testTimeout: 30_000 });
 
 const savedCwd = process.cwd();
 let home = '';

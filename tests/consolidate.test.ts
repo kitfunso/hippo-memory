@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { consolidate } from '../src/index.js';
@@ -14,8 +14,6 @@ import { refreshParticleProperties } from '../src/core/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../src/core/physics.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// One merge case builds and consolidates five separate stores.
-vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

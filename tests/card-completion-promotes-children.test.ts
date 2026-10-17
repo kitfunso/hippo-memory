@@ -82,14 +82,14 @@ describe('completeCard child promotion', () => {
       expect(card(id)).toMatchObject({ status: 'ready', leaseUntil: null, heartbeatAt: null, assigneeRuntime: null });
     }
     expect(family.others.map((before) => card(before.id))).toEqual(family.others);
-  }, 60_000);
+  });
 
   it('promotes nothing when the parent is shelved', () => {
     const family = seedFamily(10);
     const result = completeCard(root, TENANT, family.parent, 'failure');
     expect(result?.promotedChildren).toEqual([]);
     expect([...family.promotable].map((id) => card(id).status)).toEqual([...family.promotable].map(() => 'backlog'));
-  }, 60_000);
+  });
 
   it("leaves another tenant's child of the same parent id in backlog", () => {
     const family = seedFamily(3);
@@ -105,7 +105,7 @@ describe('completeCard child promotion', () => {
     const result = completeCard(root, TENANT, family.parent, 'success');
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
     expect(loadCard(root, 'tenant-b', 'card_other')?.status).toBe('backlog');
-  }, 60_000);
+  });
 });
 
 /** Runs `fn` and returns the SQL of every statement it prepared, through a wrapper that calls the real prepare. */
@@ -137,7 +137,7 @@ describe('statements one completion prepares and runs', () => {
       expect(countMatching(run, 'FROM card_deps')).toBe(1);
       expect(countMatching(run, 'UPDATE cards SET status')).toBe(2);
     }
-  }, 60_000);
+  });
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);

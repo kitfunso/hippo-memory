@@ -180,7 +180,7 @@ describe('hippo serve over TLS', () => {
     const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
     expect(await healthOverTls(port, pair.cert)).toBe(200);
     expect(stdout).toContain('requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request');
-  }, 60_000);
+  });
 
   it.each([
     ['only a certificate', ['--tls-cert', 'cert.pem'], /needs both a certificate and a key/],
@@ -192,5 +192,5 @@ describe('hippo serve over TLS', () => {
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toMatch(message);
-  }, 60_000);
+  });
 });

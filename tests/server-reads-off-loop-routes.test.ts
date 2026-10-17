@@ -127,11 +127,10 @@ async function runSteps(steps: readonly Step[], inProcess: boolean) {
   return { replies, ...left(root) };
 }
 
-// Seeding the template stores row by row runs past the 30 s hook default on a slow runner.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   seed = await seedMovedReads();
-}, 120_000);
+});
 
 afterAll(async () => {
   await embeddings.close();
@@ -167,7 +166,7 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
     expect(bodyOf['recall the approved memory in its scope']).toContain('before every commit');
     expect(bodyOf['recall with overflow summaries']).toContain('"isSummary":true');
     expect(onWorkers.stored.filter((row) => row.startsWith('traces '))).toHaveLength(8);
-  }, 120_000);
+  });
 
   it('answers a read behind a held write lock with its 200, and a decision and a recall with the same 503 and Retry-After', async () => {
     const busy: readonly Step[] = [
@@ -197,7 +196,7 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
     expect(onWorkers).toEqual(inProcess);
     expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(busy.map(([label, , status]) => [label, status]));
     expect(onWorkers[2]?.headers).toContainEqual(['retry-after', '1']);
-  }, 120_000);
+  });
 });
 
 describe("the server-thread block of a `loop: 'off'` route this file covers", () => {

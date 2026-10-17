@@ -129,10 +129,9 @@ function copy(): string {
   return made.root;
 }
 
-// Seeding the template stores row by row runs past the 30 s hook default on a slow runner.
 beforeAll(async () => {
   seed = await seedMovedReads();
-}, 120_000);
+});
 
 afterAll(() => {
   for (const dir of [seed.templates.dir, ...homes]) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -192,7 +191,7 @@ describe('a read the op table places on a reader thread', () => {
     await blocked;
 
     expect(late).toEqual([]);
-  }, 120_000);
+  });
 });
 
 describe('a write the op table places on the writer thread', () => {

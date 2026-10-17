@@ -41,6 +41,7 @@ beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
 
 describe('cross-ingest determinism', () => {
+  // Two ingests and two full 30-round simulations against real stores on disk.
   it('two separate scratch-root ingests of the same fixture, FULL 30-round protocol, produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
     const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
     const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));
@@ -113,5 +114,5 @@ describe('cross-ingest determinism', () => {
       fs.rmSync(rootA, { recursive: true, force: true });
       fs.rmSync(rootB, { recursive: true, force: true });
     }
-  }, 90_000);
+  }, 16_000);
 });

@@ -212,6 +212,7 @@ describe('cli thin-client mode', () => {
     }
   });
 
+  // Starts a server process and two CLI processes, and waits for the server to stop.
   it('routes through HTTP when server is up, falls back to direct when stopped', async () => {
     const workspace = makeWorkspace();
     let server: SpawnedServer | null = null;
@@ -241,8 +242,9 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 53_000);
 
+  // Starts a server process and a CLI process for each path.
   it('remember --error stores the same tags and half-life whether it routes or takes the direct path', async () => {
     // Separate stores: a second remember in one store would shift the direct row's schema fit.
     const routedWorkspace = makeWorkspace();
@@ -278,7 +280,7 @@ describe('cli thin-client mode', () => {
       rmSync(routedWorkspace, { recursive: true, force: true });
       rmSync(directWorkspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 37_000);
 
   it('self-heals on a stale pidfile', async () => {
     const workspace = makeWorkspace();
@@ -311,7 +313,7 @@ describe('cli thin-client mode', () => {
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 15_000);
+  });
 
   it('errors instead of silently falling back when HIPPO_REQUIRE_SERVER is set (H2)', () => {
     const workspace = makeWorkspace();
@@ -328,7 +330,7 @@ describe('cli thin-client mode', () => {
       delete process.env.HIPPO_REQUIRE_SERVER;
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 15_000);
+  });
 
   it('hippo forget --archive routes through HTTP when a server is up (A3)', async () => {
     const workspace = makeWorkspace();
@@ -374,7 +376,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 
   it('forget --archive errors instead of falling back when HIPPO_REQUIRE_SERVER is set', () => {
     const workspace = makeWorkspace();
@@ -409,7 +411,7 @@ describe('cli thin-client mode', () => {
       delete process.env.HIPPO_REQUIRE_SERVER;
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 15_000);
+  });
 
   it('forget --archive on a non-raw memory prints the same Could-not-archive prefix routed as direct', async () => {
     const workspace = makeWorkspace();
@@ -440,7 +442,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 
   it('connection-refused fallback clears the pidfile only when it still owns it (cli.ts removePidfileIfOwned)', async () => {
     const workspace = makeWorkspace();
@@ -490,7 +492,7 @@ describe('cli thin-client mode', () => {
       }
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 
   it('a server error quoting a transport-shaped id does not tear down a live pidfile', async () => {
     const workspace = makeWorkspace();
@@ -513,7 +515,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 
   it('forget --archive reaches the same connection-refused fallback as remember', async () => {
     const workspace = makeWorkspace();
@@ -578,8 +580,9 @@ describe('cli thin-client mode', () => {
       }
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 
+  // Starts a server process and a CLI process for each verb on each path.
   it('forget counts in stats whether it routes or takes the direct path', async () => {
     const workspace = makeWorkspace();
     const hippoRoot = join(workspace, '.hippo');
@@ -627,7 +630,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 38_000);
 
   it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
     const workspace = makeWorkspace();
@@ -654,5 +657,5 @@ describe('cli thin-client mode', () => {
       await handle.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 30_000);
+  });
 });

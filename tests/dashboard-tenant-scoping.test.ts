@@ -91,5 +91,5 @@ describe('dashboard tenant-scoping', () => {
     } finally {
       closeHippoDb(db);
     }
-  }, 15_000);
+  });
 });

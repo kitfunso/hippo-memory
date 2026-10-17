@@ -15,7 +15,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
 import { evaluateAll, buildScorers, evaluateStore } from '../benchmarks/memory-value/evaluate.mjs';
@@ -39,8 +39,8 @@ import {
 
 import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
 
-// Each case ingests, simulates and extracts a question against real stores on disk.
-vi.setConfig({ testTimeout: 30_000 });
+// A case on the real fixture ingests, simulates and extracts a question against real stores on disk.
+const REAL_FIXTURE_MS = 10_000;
 
 type GateOptions = { splitRegistered?: object; registeredResults?: object; expectedFitDims?: readonly string[]; needTrainRows?: boolean };
 // SAFETY: fit.mjs destructures all four options, but its inferred parameter type omits splitRegistered and registeredResults.
@@ -254,7 +254,7 @@ describe('computeFit (real fixture)', () => {
     const run1 = computeFit(trainIds, cachedRowsById, FAST_FIT_OPTS);
     const run2 = computeFit(trainIds, cachedRowsById, FAST_FIT_OPTS);
     expect(JSON.stringify(run1.weights)).toBe(JSON.stringify(run2.weights));
-  });
+  }, REAL_FIXTURE_MS);
 
   it('(2) restart-0 invariant: final train objective >= the recency vector objective', async () => {
     for (const q of QUESTIONS) await runPipeline(q);
@@ -265,7 +265,7 @@ describe('computeFit (real fixture)', () => {
     const { winner } = computeFit(trainIds, cachedRowsById, FAST_FIT_OPTS);
     if (recencyObjective === null) throw new Error('every train id was skipped');
     expect(winner.trainObjective).toBeGreaterThanOrEqual(recencyObjective);
-  });
+  }, REAL_FIXTURE_MS);
 
   it('(3) weights file contract: only FIT_DIMS keys; loads through buildScorers/evaluateStore without throw; dead dims absent', async () => {
     for (const q of QUESTIONS) await runPipeline(q);
@@ -298,7 +298,7 @@ describe('computeFit (real fixture)', () => {
     }
     // Scorers the fit does not touch score the same with or without weights.
     expect(fitted.perScorer.recency[0.3].retention).toBe(unfitted.perScorer.recency[0.3].retention);
-  });
+  }, REAL_FIXTURE_MS);
 });
 
 // ---------------------------------------------------------------------------
@@ -334,7 +334,7 @@ describe('runIntegrityGate (real fixture)', () => {
     expect(gateResult.trainIds).toEqual(['fixture_q_a']);
     expect(gateResult.cachedRowsById?.size).toBe(1);
     expect(gateResult.recencyCrossCheck).toEqual(expect.any(Number));
-  });
+  }, REAL_FIXTURE_MS);
 
   it('assertVarianceLiveness: registered varyingFeatures must equal expectedFitDims exactly (non-tautological)', async () => {
     // Every other gate test in this file sets expectedFitDims to

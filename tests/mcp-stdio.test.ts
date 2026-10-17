@@ -172,5 +172,5 @@ describe('hippo mcp stdio', () => {
     expect(listResp.id).toBe(2);
     expect(Array.isArray(listResp.result?.tools)).toBe(true);
     expect(listResp.result.tools.length).toBeGreaterThan(0);
-  }, 15000);
+  });
 });

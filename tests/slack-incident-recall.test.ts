@@ -8,9 +8,10 @@ describe('slack incident recall (success criterion)', () => {
     root = makeRoot('slack-eval');
   });
 
+  // Ingests and recalls ten incident scenarios against a real store.
   it('beats transcript-tail baseline on at least 7/10 scenarios', async () => {
     const r = await runIncidentRecallEval({ hippoRoot: root });
     expect(r.scenarios).toHaveLength(10);
     expect(r.scenariosBeaten).toBeGreaterThanOrEqual(7);
-  }, 30_000);
+  }, 40_000);
 });

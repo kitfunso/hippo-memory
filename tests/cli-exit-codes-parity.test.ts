@@ -128,7 +128,7 @@ describe('hippo exit codes and output of failing invocations (built CLI)', () =>
   it.each(CASES)('$name', async (c) => {
     const r = await run(c);
     expect(`$ hippo ${c.args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr}`).toMatchSnapshot();
-  }, SPAWN_TIMEOUT_MS);
+  });
 
   // Reads what the cases above recorded, so it holds only on a whole-file run.
   it('covers every exit code a verb hands to the entry', () => {

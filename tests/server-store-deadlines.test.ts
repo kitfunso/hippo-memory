@@ -199,7 +199,7 @@ describe('a writer thread killed inside an open transaction on a WAL database', 
     expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get()).toEqual({ n: 0 });
     next.exec("INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('t', 'default', 'kill-proof', 'after', NULL, '{}')");
     expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
-  }, 120_000);
+  });
 });
 
 describe("a store thread's queue", () => {

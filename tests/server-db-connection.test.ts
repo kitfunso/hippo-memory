@@ -117,7 +117,7 @@ describe('hippo serve store connection', () => {
       await gone;
       await handle?.stop();
     }
-  }, 60_000);
+  });
 });
 
 describe('GET /ready', () => {

@@ -348,7 +348,7 @@ describe('hippo sleep finishes what the hook could not', () => {
 
     expect(sleep().status).toBe(0);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(4);
-  }, 60_000);
+  });
 
   it('a dry run replays nothing', () => {
     initStore(s.hippoRoot);
@@ -382,7 +382,7 @@ describe('hippo sleep finishes what the hook could not', () => {
     expect(fs.readdirSync(spool)).toEqual([]);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
-  }, 60_000);
+  });
 
   it('the next post-compact also finishes an earlier compaction', () => {
     initStore(s.hippoRoot);
@@ -391,7 +391,7 @@ describe('hippo sleep finishes what the hook could not', () => {
     expect(oneLine(hook.stdout)).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(3);
     expect(compactionRows(s.hippoRoot).map((r) => r.status)).toEqual(['done', 'done']);
-  }, 60_000);
+  });
 });
 
 describe('the daily runner finishes the global store', () => {
@@ -415,5 +415,5 @@ describe('the daily runner finishes the global store', () => {
     expect(fs.readdirSync(path.join(s.globalRoot, 'compactions-spool'))).toEqual([]);
     expect(compactionMemories(s.globalRoot)).toHaveLength(2);
     expect(compactionRows(s.globalRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
-  }, 60_000);
+  });
 });

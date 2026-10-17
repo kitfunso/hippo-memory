@@ -132,6 +132,7 @@ ${served.output()}`);
 const KILLED = process.platform === 'win32' ? { code: 1, signal: null } : { code: null, signal: 'SIGKILL' };
 
 describe('serve() shutdown bound', () => {
+  // Waits out the 10 s store-close bound in a child process before it can see the exit.
   it.each([
     ['SIGTERM', "process.emit('SIGTERM');"],
     ['uncaught exception', "setTimeout(() => { throw new Error('boom-bound'); }, 0);"],
@@ -154,7 +155,7 @@ describe('serve() shutdown bound', () => {
     const boundLines = served.stderr().split('\n').filter((line) => line.includes('did not finish within'));
     expect(boundLines).toHaveLength(1);
     expect(boundLines[0]).toMatch(new RegExp(`^\\[hippo\\] error: serve shutdown after ${cause} did not finish within ${BOUND_MS} ms; ending the process without it`));
-  }, 60_000);
+  }, 35_000);
 
   it('exits 0 on SIGTERM when stop() finishes, with no bound line', async () => {
     const served = serveThen(trackedRoot(), ["process.emit('SIGTERM');"]);
@@ -162,5 +163,5 @@ describe('serve() shutdown bound', () => {
     expect(await served.exited).toEqual({ code: 0, signal: null });
     expect(served.stderr()).toContain('received SIGTERM, shutting down');
     expect(served.stderr()).not.toContain('did not finish within');
-  }, 30_000);
+  });
 });
