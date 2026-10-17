@@ -31,21 +31,21 @@ const hasModifier = (node, kind) => (ts.canHaveModifiers(node) ? ts.getModifiers
 
 function importFact(node, line) {
   const clause = node.importClause;
-  if (!clause) return { spec: node.moduleSpecifier.text, line, kind: 'side-effect', typeOnly: false, names: ['*'] };
+  if (!clause) return { spec: node.moduleSpecifier.text, line, kind: 'side-effect', typeOnly: false, names: ['*'], hasDefault: false, specifiers: [] };
   const bindings = clause.namedBindings;
   const named = bindings && ts.isNamedImports(bindings) ? bindings.elements : [];
   // tsc erases the statement when every named specifier is `type X` and nothing else is bound.
   const allTypes = !clause.name && named.length > 0 && named.every((e) => e.isTypeOnly);
   const names = named.map((e) => bindingName(e));
   if (clause.name || (bindings && ts.isNamespaceImport(bindings))) names.push('*');
-  return { spec: node.moduleSpecifier.text, line, kind: 'import', typeOnly: clause.isTypeOnly || allTypes, names };
+  return { spec: node.moduleSpecifier.text, line, kind: 'import', typeOnly: clause.isTypeOnly || allTypes, names, hasDefault: Boolean(clause.name), specifiers: named.map((e) => ({ name: bindingName(e), typeOnly: clause.isTypeOnly || e.isTypeOnly })) };
 }
 
 function exportFact(node, line) {
   const clause = node.exportClause;
   const named = clause && ts.isNamedExports(clause) ? clause.elements : null;
   const allTypes = named !== null && named.length > 0 && named.every((e) => e.isTypeOnly);
-  return { spec: node.moduleSpecifier.text, line, kind: 'export', typeOnly: node.isTypeOnly || allTypes, names: named ? named.map(bindingName) : ['*'] };
+  return { spec: node.moduleSpecifier.text, line, kind: 'export', typeOnly: node.isTypeOnly || allTypes, names: named ? named.map(bindingName) : ['*'], hasDefault: false, specifiers: (named ?? []).map((e) => ({ name: bindingName(e), typeOnly: node.isTypeOnly || e.isTypeOnly })) };
 }
 
 /** `process.env` in code: a member access, `process["env"]`, or `{ env } = process` as a declaration or an assignment. */
@@ -67,7 +67,7 @@ function isProcessEnvRead(node) {
  * @param {string} [fileName] decides the script kind, so pass the real name for `.tsx` or `.mjs`
  * @returns {{
  *   sourceFile: ts.SourceFile,
- *   imports: { spec: string, line: number, kind: 'import' | 'export' | 'side-effect' | 'dynamic', typeOnly: boolean, names: string[] }[],
+ *   imports: { spec: string, line: number, kind: 'import' | 'export' | 'side-effect' | 'dynamic', typeOnly: boolean, names: string[], hasDefault: boolean, specifiers: { name: string, typeOnly: boolean }[] }[],
  *   calls: { callee: string, line: number }[],
  *   envReads: { line: number }[],
  *   exportedFunctions: { name: string, firstParam: string | null }[],
@@ -85,7 +85,7 @@ export function readFacts(text, fileName = 'file.ts') {
     else if (ts.isCallExpression(n)) {
       const arg = n.arguments[0];
       if (n.expression.kind === K.ImportKeyword && arg && ts.isStringLiteralLike(arg)) {
-        facts.imports.push({ spec: arg.text, line: lineOf(n), kind: 'dynamic', typeOnly: false, names: ['*'] });
+        facts.imports.push({ spec: arg.text, line: lineOf(n), kind: 'dynamic', typeOnly: false, names: ['*'], hasDefault: false, specifiers: [] });
       } else {
         const callee = nameOf(n.expression);
         if (callee) facts.calls.push({ callee, line: lineOf(n) });

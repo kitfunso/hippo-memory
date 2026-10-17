@@ -6,11 +6,10 @@
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { stripComments } from './lib/source-text.mjs';
+import { readFacts } from './lib/ts-facts.mjs';
 
 const BASELINE = '.config-reads-baseline.json';
 const MAP = 'layers.json';
-const READ_RE = /(?<![\w$])loadConfig\s*\(/g;
 const ALLOWED = new Set(['src/api/config-of.ts', 'src/core/config.ts']);
 
 function tsFiles(dir, out = []) {
@@ -34,7 +33,7 @@ function findReads(map) {
   const counts = {};
   for (const file of tsFiles('src')) {
     if (ALLOWED.has(file) || layerOf(map, file) === 'surface') continue;
-    const n = [...stripComments(readFileSync(file, 'utf8')).matchAll(READ_RE)].length;
+    const n = readFacts(readFileSync(file, 'utf8'), file).calls.filter((c) => c.callee.split('.').at(-1) === 'loadConfig').length;
     if (n > 0) counts[file] = n;
   }
   return counts;
