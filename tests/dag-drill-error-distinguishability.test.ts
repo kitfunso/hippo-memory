@@ -9,7 +9,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -17,6 +17,14 @@ import { drillDown } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -67,7 +75,7 @@ describe('drillDown discriminated outcome', () => {
     if ('failure' in r) expect(r.failure).toBe('not_drillable');
   });
 
-  it('failure=not_found for a private-scoped summary (codex round 3 P1 collapse)', async () => {
+  it('failure=not_found for a private-scoped summary', async () => {
     // Distinguishable scope_blocked told no-scope callers "row exists but
     // not for you" — same existence leak the HTTP 404 collapse fixed.
     // Now collapsed at the JS API level to match HTTP behaviour.
@@ -203,13 +211,13 @@ describe('HTTP path-segment validation', () => {
     expect(res.status).toBe(400);
   });
 
-  it('400 on /v1/auth/keys/:keyId DELETE with illegal charset (caught by /review round 3)', async () => {
+  it('400 on /v1/auth/keys/:keyId DELETE with illegal charset', async () => {
     // 7th :id route the plan-stage review missed; final-pass /review caught.
     const res = await fetch(`${handle.url}/v1/auth/keys/has;semi`, { method: 'DELETE' });
     expect(res.status).toBe(400);
   });
 
-  it('200 on /v1/memories with %2F in QUERY string (codex round 3 P2)', async () => {
+  it('200 on /v1/memories with %2F in QUERY string', async () => {
     // Pre-codex-round-3 rejectEncodedSlash scanned the full URL including
     // query, so any recall query containing a URL would 400. Splitting
     // on the first `?` confines the check to the pathname.

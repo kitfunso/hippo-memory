@@ -163,7 +163,7 @@ describe('rememberLocally starts the embedding', () => {
     const asked = embeddings.requests();
     expect((await rememberLocally(ctx, { content: TEXT, tags: [] })).status).toBe('skipped');
     expect(embeddings.requests()).toBe(asked);
-  }, 30_000);
+  });
 });
 
 describe('extractRememberedFacts', () => {

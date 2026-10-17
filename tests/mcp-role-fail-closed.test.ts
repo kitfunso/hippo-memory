@@ -1,7 +1,7 @@
 // Only stdio, which passes no MCP context, acts as the local operator; a context that lacks a role fails closed, and tools that read the server's cwd
 // (hippo_learn's git scan, hippo_context's git auto-detect) refuse or skip it for any remote caller but a host admin.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -16,8 +16,6 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { loadEveryTenantEntries } from './_helpers/root-forms.js';
 
-// Both suites run git in child processes.
-vi.setConfig({ testTimeout: 30_000 });
 
 const LESSON = 'fix the retry loop that dropped the last queued webhook delivery';
 

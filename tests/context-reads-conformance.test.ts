@@ -38,7 +38,7 @@ beforeAll(() => {
   } finally {
     closeHippoDb(db);
   }
-}, 60_000);
+});
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });

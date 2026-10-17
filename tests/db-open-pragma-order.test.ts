@@ -100,11 +100,12 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
     writeFileSync(stopFile, '');
     const reports = await Promise.all(started.map((c) => c.report));
 
+    // Open and write counts follow the scheduler over a 2.5 s window, so only the floor of one is fixed.
     expect(opens).toBeGreaterThan(0);
     expect(errors).toEqual([]);
     for (const report of reports) {
       expect(report.errors).toEqual([]);
       expect(report.windowWrites).toBeGreaterThan(0);
     }
-  }, 15_000);
+  });
 });

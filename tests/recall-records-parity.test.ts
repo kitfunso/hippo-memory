@@ -22,6 +22,10 @@ import {
 import type { CliFlags } from '../src/cli/flag-values.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 type Surface = 'http' | 'cli';
 const SURFACES: readonly Surface[] = ['http', 'cli'];
 const HOST_SESSION = 'host-agent-session';
@@ -157,7 +161,8 @@ describe('what a recall records, HTTP and CLI', () => {
     expect(got.ledger).toHaveLength(1);
     expect(got.ledger[0]).toMatchObject({ tenant_id: TENANT, session_id: null, surface: surface === 'http' ? 'http_recall' : 'recall', event: 'inject' });
     expect(got.recalled).toBe(got.ledger[0]!.items);
-    expect(got.recalled).toBeGreaterThan(0);
+    // 12 local deploy rows are neither superseded nor private; HTTP caps them at its limit of 10, the CLI adds the global row.
+    expect(got.recalled).toBe(surface === 'http' ? 10 : 13);
     expect({ ...got, ledger: undefined }).toMatchSnapshot();
   });
 
@@ -200,7 +205,8 @@ describe('what a recall records, HTTP and CLI', () => {
       // SAFETY: a 200 from /v1/memories is a serialised RecallResult.
       const body = got.reply!.body as RecallResult;
       expect(got.reply!.cacheControl).toBe('no-store');
-      expect(body.continuityTokens).toBeGreaterThan(0);
+      // Snapshot 5 + 4 + 4, handoff 6 + 3, event 4, each at Math.ceil(len/4).
+      expect(body.continuityTokens).toBe(26);
       expect(got.ledger[0]).toMatchObject({ surface: 'http_recall', items: body.results.length, tokens: body.tokens + (body.continuityTokens ?? 0) });
     } else {
       // The CLI books the block it printed.

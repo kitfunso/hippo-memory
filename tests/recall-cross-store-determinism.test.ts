@@ -18,11 +18,9 @@
  * Real SQLite stores in temp dirs, no mocks (project convention).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
@@ -30,6 +28,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../src/entry/folder-search.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise
@@ -82,7 +81,6 @@ const TS_OFFSET_MS = [0, 1000, 1000, 1000, 1000, 2000];
  *  pinned to fixed offsets from NOW so both stores are byte-identical in
  *  every score input, independent of real wall-clock timing. */
 function ingestFixture(root: string, pathTag: string): void {
-  initStore(root);
   CONTENTS.forEach((content, i) => {
     const entry: MemoryEntry = createMemory(content, {
       layer: Layer.Episodic,
@@ -103,15 +101,10 @@ describe('recall cross-store determinism', () => {
     // Deliberately DIFFERENT directory name shapes (distinct prefixes AND
     // the mkdtemp-generated random suffix), matching the plan's probe
     // setup: rank variance was traced to store-path-dependent behaviour.
-    storeA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-tiebreak-storeA-'));
-    storeB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-tiebreak-storeB-different-name-'));
+    storeA = makeRoot('tiebreak-storeA');
+    storeB = makeRoot('tiebreak-storeB-different-name');
     ingestFixture(storeA, 'path:store-a');
     ingestFixture(storeB, 'path:store-b');
-  });
-
-  afterEach(() => {
-    fs.rmSync(storeA, { recursive: true, force: true });
-    fs.rmSync(storeB, { recursive: true, force: true });
   });
 
   it('hybridSearch returns identical top-K content sequences across differently-named fresh stores', async () => {
@@ -176,6 +169,6 @@ describe('recall cross-store determinism', () => {
     const contentsA = resultsA.map((r) => r.entry.content);
     const contentsB = resultsB.map((r) => r.entry.content);
     expect(contentsA).toEqual(contentsB);
-    expect(contentsA.length).toBeGreaterThan(0);
+    expect([...contentsA].sort()).toEqual(CONTENTS.slice(1).sort());
   });
 });

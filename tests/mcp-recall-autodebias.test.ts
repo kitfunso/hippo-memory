@@ -10,13 +10,17 @@
  * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 7, Task 9).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { closePrediction } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type HippoRecallToolArgs = {
   query: string;
@@ -61,20 +65,16 @@ function seedBaserate(home: string): void {
 
 describe('mcp hippo_recall planningFallacyHint text block', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-j32');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
-    delete process.env.HIPPO_AUTODEBIAS;
+    vi.stubEnv('HIPPO_HOME', home);
+    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
-    delete process.env.HIPPO_AUTODEBIAS;
+    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
 
   it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {
@@ -99,7 +99,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
 
   it('does NOT prepend the hint block when HIPPO_AUTODEBIAS=off', async () => {
     seedBaserate(home);
-    process.env.HIPPO_AUTODEBIAS = 'off';
+    vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
     const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);

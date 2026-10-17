@@ -17,34 +17,28 @@ import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 describe('POST /v1/sleep admin-role gate', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
-  let origRole: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('sleep-gate');
     globalHome = makeRoot('sleep-gate');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
-    origRole = process.env.HIPPO_KEYLESS_LOCAL_ROLE;
-    delete process.env.HIPPO_KEYLESS_LOCAL_ROLE;
+    vi.stubEnv('HIPPO_HOME', globalHome);
+    vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', undefined);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
-    vi.unstubAllEnvs();
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
-    if (origRole !== undefined) process.env.HIPPO_KEYLESS_LOCAL_ROLE = origRole;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
+    vi.unstubAllEnvs();
   });
 
   const keyless = (path: string, method = 'POST'): Promise<Response> =>

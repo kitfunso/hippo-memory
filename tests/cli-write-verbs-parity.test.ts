@@ -12,8 +12,6 @@ import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-// A spawned case starts the built CLI up to four times, each a few seconds on a loaded Windows box; 60 s is twice that.
-const SPAWNED_CASE_MS = 60_000;
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session or a server for the child, so the developer's shell cannot change a row.
 const DROPPED_ENV = ['HIPPO_TENANT', 'HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL', 'HIPPO_SESSION_ID', 'HIPPO_API_KEY', 'HIPPO_REQUIRE_SERVER', 'HIPPO_STRICT_OWNER'];
@@ -150,7 +148,7 @@ describe('hippo remember (built CLI, no server)', () => {
     const s = await Store.open(undefined, label === 'plain');
     await s.run('remember', 'the billing service retries a failed charge three times', ...flags);
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('a second row whose tags the store already holds', async () => {
     const s = await Store.open();
@@ -201,7 +199,7 @@ describe('hippo supersede (built CLI, no server)', () => {
     await s.run('remember', 'the billing service retries a failed charge three times', ...oldFlags);
     await s.run('supersede', s.lastId(), 'the billing service retries a failed charge five times', ...flags);
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('a missing id', async () => {
     const s = await Store.open();
@@ -244,7 +242,7 @@ describe('hippo trace record (built CLI, no server)', () => {
     const s = await Store.open(undefined, true);
     await s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'success');
     s.expectPinned();
-  }, SPAWNED_CASE_MS);
+  });
 
   it('--session, --tag and --source', async () => {
     const s = await Store.open();

@@ -11,10 +11,8 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { rmSync } from 'node:fs';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
@@ -30,8 +28,12 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
-import { makeStore } from './_helpers/make-root.js';
+import { makeStore, makeRoot } from './_helpers/make-root.js';
 import { deleteEntry, loadPendingExtractionTenants, markGraphDirty } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const T = 'default';
 
@@ -44,18 +46,17 @@ interface TestCtx {
 function newCtx(): TestCtx {
   const { base: tmpDir, root: hippoRoot } = makeStore('sleep-hook');
   // Per-test HIPPO_HOME isolation (autoShare phase calls initGlobal()).
-  const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-hook-global-'));
+  const globalTmp = makeRoot('sleep-hook-global', { init: false });
   const origHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalTmp;
+  vi.stubEnv('HIPPO_HOME', globalTmp);
   const ctx = apiCtx(hippoRoot, T, adminActor('test:sleep-hook'));
   return {
     hippoRoot,
     ctx,
     restore: () => {
       rmSync(tmpDir, { recursive: true, force: true });
-      rmSync(globalTmp, { recursive: true, force: true });
-      if (origHome !== undefined) process.env.HIPPO_HOME = origHome;
-      else delete process.env.HIPPO_HOME;
+      if (origHome !== undefined) vi.stubEnv('HIPPO_HOME', origHome);
+      else vi.stubEnv('HIPPO_HOME', undefined);
     },
   };
 }
@@ -198,7 +199,7 @@ describe('sleep enqueue-hook', () => {
     expect(loadPendingExtractionTenants(tc.hippoRoot)).toHaveLength(0);
   });
 
-  it('14. P1: a tenant still rebuilds when an earlier sleep phase deletes its queued mirror (codex)', async () => {
+  it('14. a tenant still rebuilds when an earlier sleep phase deletes its queued mirror', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     expect(pending(tc.hippoRoot)).toHaveLength(1);
     // Simulate dedup/audit removing the queued mirror mid-sleep: the queue row
@@ -215,7 +216,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(0); // its queue row cascade-deleted (mark = no-op)
   });
 
-  it('15. P2 fail-soft: a dirty-tenant snapshot failure does not abort core sleep (codex)', async () => {
+  it('15. fail-soft: a dirty-tenant snapshot failure does not abort core sleep', async () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     const phases: Partial<SleepPhases> = {
       loadPendingExtractionTenants: () => { throw new Error('boom: queue read failed'); },
@@ -227,7 +228,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
   });
 
-  it('16. atomic rebuild: graphRebuild.applyOps rolls back all writes on a throw (codex P2)', async () => {
+  it('16. atomic rebuild: graphRebuild.applyOps rolls back all writes on a throw', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, { decisionText: 'Adopt Postgres as the system of record' });
     // A rebuild that inserts then throws must leave NO partial graph rows: the
     // whole transaction rolls back. This is what makes extractGraph atomic, so two

@@ -80,7 +80,7 @@ describe('repairQualityOnce', () => {
     }
     expect(flag(root)).toBe('');
     expect(repairQualityOnce({ hippoRoot: root }, 'default')?.appliedIds).toEqual([bad.id]);
-  }, 30000);
+  });
 
   it('leaves a store whose schema it cannot repair unmarked', () => {
     const bad = seed(root, CUT);

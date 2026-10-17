@@ -41,9 +41,8 @@ describe('cosineSimilarity', () => {
   it('returns partial similarity for related vectors', () => {
     const a = [1, 1, 0];
     const b = [1, 0, 0];
-    const sim = cosineSimilarity(a, b);
-    expect(sim).toBeGreaterThan(0);
-    expect(sim).toBeLessThan(1);
+    // a . b = 1 over |a| |b| = sqrt(2).
+    expect(cosineSimilarity(a, b)).toBeCloseTo(Math.SQRT1_2, 12);
   });
 });
 

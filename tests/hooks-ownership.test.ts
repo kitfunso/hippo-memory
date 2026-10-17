@@ -34,7 +34,7 @@ const read = (file: string) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const group = (command: string) => ({ hooks: [{ type: 'command', command }] });
 
 describe('a command hippo wrote itself', () => {
-  it('init replaces the 0.20.3 SessionEnd command, so session-end is not added beside it', () => {
+  it('init replaces the old SessionEnd command, so session-end is not added beside it', () => {
     const file = seed({ hooks: { SessionEnd: [group(HIPPO_0_20_3)] } });
 
     expect(installJsonHooks('claude-code').migratedSplitSessionEnd).toBe(true);

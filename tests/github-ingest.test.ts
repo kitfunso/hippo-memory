@@ -318,7 +318,7 @@ describe('ingestEvent', () => {
     expect(r2.memoryId).toBe(r1.memoryId);
   });
 
-  it('7. v1.3.1: different artifact_refs produce different idempotency keys; same artifact + same updated_at collapses', () => {
+  it('7. different artifact_refs produce different idempotency keys; same artifact + same updated_at collapses', () => {
     // The v1.3.1 hotfix changed the key from sha256(eventName + ':' + rawBody)
     // to sha256(artifactRef + ':' + updatedAt) so backfill and webhook ingests
     // of the same source revision dedupe onto the same row.

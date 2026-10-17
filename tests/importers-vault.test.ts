@@ -267,17 +267,18 @@ describe('importVault (g) — dialect syntax does not crash', () => {
   it('imports Obsidian (^block-id, ![[embed]]) without error', async () => {
     const r = await importVault(path.join(FIXTURES, 'obsidian-sample'), opts({ name: 'obs' }));
     expect(r.imported).toBe(r.total);
-    expect(r.total).toBeGreaterThan(0);
+    // One note per .md file in the fixture; dot-folders are never walked.
+    expect(r.total).toBe(3);
   });
   it('imports Foam (plain md) without error', async () => {
     const r = await importVault(path.join(FIXTURES, 'foam-sample'), opts({ name: 'foam' }));
     expect(r.imported).toBe(r.total);
-    expect(r.total).toBeGreaterThan(0);
+    expect(r.total).toBe(3);
   });
   it('imports Dendron (dot-hierarchy filenames) without error', async () => {
     const r = await importVault(path.join(FIXTURES, 'dendron-sample'), opts({ name: 'den' }));
     expect(r.imported).toBe(r.total);
-    expect(r.total).toBeGreaterThan(0);
+    expect(r.total).toBe(2);
     // Dot-hierarchy filename survives as a relpath-keyed artifactRef.
     const all = loadAllEntries(tmpDir, 'default');
     expect(all.some((e) => e.artifact_ref === 'vault:den:vault.note.child.md')).toBe(true);
@@ -636,7 +637,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     expect(archivedRows().length).toBe(0);
   });
 
-  it('treats a junction/symlink to the store as self-store (codex R9 P2)', async () => {
+  it('treats a junction/symlink to the store as self-store', async () => {
     writeNote('keep.md', '# Keep\na real note that must survive an aliased self-import');
     expect((await importVault(vaultDir, opts({ name: 'v' }))).imported).toBe(1);
 
@@ -794,7 +795,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     expect(third.archived).toBe(0);
   });
 
-  it('rejects a bare-private scope recall would not treat as private (codex R13 P2)', async () => {
+  it('rejects a bare-private scope recall would not treat as private', async () => {
     writeNote('note.md', '# Note\nsensitive content the user wants private');
     // Bare `private` / `private:<x>` are NOT default-denied by recall, so reject
     // them rather than store public-visible "private" notes.
@@ -823,7 +824,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     expect(live[0].tags).toContain('campaign:q3');
   });
 
-  it('re-imports an unchanged file when an extra tag is REMOVED (codex R11 P2)', async () => {
+  it('re-imports an unchanged file when an extra tag is REMOVED', async () => {
     writeNote('note.md', '# Note\nstable content across the tag removal');
     expect(
       (await importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }))).imported,

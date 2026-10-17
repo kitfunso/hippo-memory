@@ -1,5 +1,5 @@
 // The predictions routes run their SQLite work on worker threads: the server answers through a held write lock, and a client sees what the in-process store gave.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../src/db/index.js';
 import { log } from '../src/util/log.js';
@@ -17,6 +17,14 @@ import {
 } from './_helpers/store-worker-server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { handlesOf } from '../src/store/open.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const SAVE = 'predictions.savePrediction';
 

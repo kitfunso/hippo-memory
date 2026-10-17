@@ -1,10 +1,14 @@
 // Pins the status and error text of every HTTP route, plus one literal field per route's valid reply, so a dispatch change cannot move a reply.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from '../src/core/memory.js';
 import type { ServerHandle } from '../src/server.js';
 import { serveAsAdmin } from './_helpers/admin-server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 type Json = string | number | boolean | null | Json[] | JsonObject;
 interface JsonObject { [key: string]: Json }
@@ -185,16 +189,13 @@ describe('HTTP route status table: status and error text per route', () => {
   let home: string;
   let handle: ServerHandle;
   let globalHome: string;
-  let savedRps: string | undefined;
-  let savedHippoHome: string | undefined;
   const seeded: Record<string, string> = {};
   const created: Record<string, number> = {};
 
   beforeAll(async () => {
     home = makeRoot('route-parity');
     globalHome = makeRoot('route-parity-global');
-    savedHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     for (const [key, content, kind] of [
       ['raw', 'parity raw row for archive', 'raw'],
       ['sup', 'parity row to supersede', 'distilled'],
@@ -206,17 +207,12 @@ describe('HTTP route status table: status and error text per route', () => {
       writeEntry(home, entry);
       seeded[key] = entry.id;
     }
-    savedRps = process.env.HIPPO_V1_RPS;
-    process.env.HIPPO_V1_RPS = '0';
+    vi.stubEnv('HIPPO_V1_RPS', '0');
     handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterAll(async () => {
     await handle.stop();
-    if (savedRps === undefined) delete process.env.HIPPO_V1_RPS;
-    else process.env.HIPPO_V1_RPS = savedRps;
-    if (savedHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = savedHippoHome;
   });
 
   const call = (c: Call): Promise<Reply> => send(handle.url, c);
@@ -441,15 +437,12 @@ describe('HTTP route status table: status and error text per route', () => {
 describe('HTTP route status table under the rate limiter', () => {
   it('throttles /v1 and /mcp but never /health or other paths', async () => {
     const home = makeRoot('route-parity-rl');
-    const saved = process.env.HIPPO_V1_RPS;
-    process.env.HIPPO_V1_RPS = '0.5';
+    vi.stubEnv('HIPPO_V1_RPS', '0.5');
     const handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
     try {
       expect(await runCases(handle.url, LIMITED)).toEqual(expected(LIMITED));
     } finally {
       await handle.stop();
-      if (saved === undefined) delete process.env.HIPPO_V1_RPS;
-      else process.env.HIPPO_V1_RPS = saved;
     }
   });
 });

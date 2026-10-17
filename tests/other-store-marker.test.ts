@@ -1,8 +1,7 @@
 // A hippo root holding the other-store marker refuses every hippo.db open, from the CLI as from a request, and never creates the file.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -137,17 +136,13 @@ describe('the other-store marker', () => {
 
   it('hippo auth create on the marked folder exits 1 with the message and mints into no hippo.db', () => {
     writeFileSync(marker, 'postgres\n');
-    const cwd = mkdtempSync(join(tmpdir(), 'hippo-marker-cwd-'));
-    try {
-      const run = spawnSync(process.execPath, [CLI, 'auth', 'create', '--global'], {
-        cwd, encoding: 'utf8', env: { ...process.env, HIPPO_HOME: root },
-      });
-      expect(run.status).toBe(1);
-      expect(run.stderr).toContain(`This folder's memories live in the 'postgres' store, so hippo.db is not used here`);
-      expect(run.stdout).not.toContain('plaintext');
-      expect(dbFiles()).toEqual([]);
-    } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
+    const cwd = makeRoot('marker-cwd', { init: false });
+    const run = spawnSync(process.execPath, [CLI, 'auth', 'create', '--global'], {
+      cwd, encoding: 'utf8', env: { ...process.env, HIPPO_HOME: root },
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(`This folder's memories live in the 'postgres' store, so hippo.db is not used here`);
+    expect(run.stdout).not.toContain('plaintext');
+    expect(dbFiles()).toEqual([]);
   });
 });

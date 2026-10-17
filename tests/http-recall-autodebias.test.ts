@@ -8,13 +8,21 @@
  * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 6, Task 9).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import type { RecallResult } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { closePrediction } from './_helpers/root-forms.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function seedBaserate(home: string): void {
   for (const [est, act] of [[2, 4], [3, 6], [4, 8]]) {
@@ -32,14 +40,14 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   home = makeRoot('http-j32');
-  delete process.env.HIPPO_AUTODEBIAS;
+  vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
   await handle.stop();
   rmSync(home, { recursive: true, force: true });
-  delete process.env.HIPPO_AUTODEBIAS;
+  vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
 });
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -79,7 +87,7 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
 
   it('planningFallacyHint absent when HIPPO_AUTODEBIAS=off', async () => {
     seedBaserate(home);
-    process.env.HIPPO_AUTODEBIAS = 'off';
+    vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
     const q = encodeURIComponent('migration effort will take 3 days');
     const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
     const body = await jsonAs<Partial<RecallResult>>(res);

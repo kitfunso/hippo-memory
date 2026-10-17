@@ -51,7 +51,8 @@ const digest = (finalText: string, edits: DigestEdit[] = []): string => end(fina
 describe('network paths in a digest', () => {
   it('still probes a local repo path, so the checks below are live', () => {
     expect(digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe('Changed: src/a.ts');
-    expect(probes.length).toBeGreaterThan(0);
+    // The store's repo and the cwd each resolve on the first probe; the missing file walks up to its folder.
+    expect(probes).toEqual([repo, repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]);
   });
 
   it.each([

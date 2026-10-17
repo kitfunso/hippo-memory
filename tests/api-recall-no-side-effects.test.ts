@@ -20,25 +20,29 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { loadLastRecall } from './_helpers/root-forms.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function tmpHome() {
   const home = makeRoot('api-recall-noside');
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = home;
+  vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };
@@ -58,16 +62,16 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
 
       // api.recall — should NOT mutate.
       const recallResult = await retrieve(ctx, { query: 'target', window: { limit: 5 } });
-      expect(recallResult.results.length).toBeGreaterThan(0);
+      expect(recallResult.results).toHaveLength(2);
       const afterRecall = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(afterRecall).toEqual(before);
       expect(afterRecall).toEqual([]);
 
       // api.getContext — SHOULD mutate. (getContext opts use `q`, not `query`.)
       const ctxResult = await getContext(ctx, { q: 'target', budget: 1000 });
-      expect(ctxResult.entries.length).toBeGreaterThan(0);
+      expect(ctxResult.entries).toHaveLength(2);
       const afterContext = loadLastRecall(home).last_retrieval_ids ?? [];
-      expect(afterContext.length).toBeGreaterThan(0);
+      expect([...afterContext].sort()).toEqual(ctxResult.entries.map((e) => e.entry.id).sort());
       expect(afterContext).not.toEqual(before);
     } finally {
       restore();

@@ -2,10 +2,9 @@
 // writes, so a refactor of the recall pipeline that changes any byte fails here. The cases in SPAWNED run the built CLI; the
 // rest run it in process.
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -13,7 +12,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '.
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { pushGoal } from './_helpers/root-forms.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
@@ -33,7 +32,6 @@ function seeded(content: string, id: string, created: string, extra: Partial<Mem
 }
 
 function seedLocal(hippoRoot: string): void {
-  initStore(hippoRoot);
   const rows: MemoryEntry[] = [
     seeded('deploy pipeline uses blue green rollout for the api', 'mem_golden_plain', '2026-01-20T00:00:00.000Z', {}, { tags: ['deploy'] }),
     seeded('deploy freeze applies to the billing service on fridays', 'mem_golden_pinned', '2026-01-05T00:00:00.000Z', {}, { pinned: true, tags: ['deploy', 'billing'] }),
@@ -50,7 +48,6 @@ function seedLocal(hippoRoot: string): void {
 }
 
 function seedGlobal(globalRoot: string): void {
-  initStore(globalRoot);
   writeEntry(globalRoot, seeded('deploy notes from the global store about rollbacks', 'mem_golden_global', '2026-01-12T00:00:00.000Z'));
 }
 
@@ -114,7 +111,10 @@ function freshStore(c: Pick<Case, 'global'>): FreshStore {
   const home = makeRoot('golden', { init: false });
   cpSync(template, join(home, '.hippo'), { recursive: true });
   const globalRoot = join(home, 'global-hippo');
-  if (c.global) seedGlobal(globalRoot);
+  if (c.global) {
+    initStore(globalRoot);
+    seedGlobal(globalRoot);
+  }
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const k of DROP_ENV) delete env[k];
   Object.assign(env, { HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_FAKE_NOW: FAKE_NOW });
@@ -168,12 +168,8 @@ async function rowsAfter<T>(c: Case, pick: (rows: WrittenRows) => T): Promise<Ro
 
 describe('cli recall and explain golden output', () => {
   beforeAll(() => {
-    template = join(mkdtempSync(join(tmpdir(), 'hippo-golden-template-')), '.hippo');
+    template = makeStore('golden-template').root;
     seedLocal(template);
-  });
-
-  afterAll(() => {
-    if (template) rmSync(join(template, '..'), { recursive: true, force: true });
   });
 
   it.each(CASES)('$name', async (c) => {

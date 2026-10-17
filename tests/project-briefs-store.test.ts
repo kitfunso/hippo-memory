@@ -78,7 +78,8 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
     const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
-    expect(b.id).toBeGreaterThan(0);
+    // The first row in a fresh store's AUTOINCREMENT table.
+    expect(b.id).toBe(1);
     expect(b.memoryId).not.toBeNull();
     expect(b.repo).toBe('hippo');
     expect(b.summary).toBe('agent-memory lib');
@@ -251,7 +252,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     } finally { closeHippoDb(db2); }
   });
 
-  it('refresh stays within the summary cap with many long receipts (codex P2 regression)', async () => {
+  it('refresh stays within the summary cap with many long receipts', async () => {
     // 50 receipts (the MAX_BRIEF_RECEIPTS scan cap) with long headlines would build
     // an ~11KB digest if rendered naively, exceeding MAX_BRIEF_SUMMARY_LEN (8192) and
     // making saveProjectBrief reject it. Budget-aware assembly must keep it bounded.

@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // withFakeHome empties PATH; a child process still needs node and cmd.exe.
 const prevPathForChild = process.env.PATH ?? '';
@@ -20,11 +20,15 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { waitFor } from './_helpers/wait-for.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
 function setCodexHome(value: string | undefined): void {
-  if (value === undefined) delete process.env.CODEX_HOME;
-  else process.env.CODEX_HOME = value;
+  if (value === undefined) vi.stubEnv('CODEX_HOME', undefined);
+  else vi.stubEnv('CODEX_HOME', value);
 }
 
 function withFakeHome() {
@@ -32,15 +36,15 @@ function withFakeHome() {
   const prevUserProfile = process.env.USERPROFILE;
   const prevPath = process.env.PATH;
   const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-codex-wrapper-test-'));
-  process.env.HOME = fake;
-  process.env.USERPROFILE = fake;
-  process.env.PATH = '';
+  vi.stubEnv('HOME', fake);
+  vi.stubEnv('USERPROFILE', fake);
+  vi.stubEnv('PATH', '');
   return {
     home: fake,
     cleanup: () => {
-      process.env.HOME = prevHome;
-      process.env.USERPROFILE = prevUserProfile;
-      process.env.PATH = prevPath;
+      vi.stubEnv('HOME', prevHome);
+      vi.stubEnv('USERPROFILE', prevUserProfile);
+      vi.stubEnv('PATH', prevPath);
       // Tests wait for the worker's last write; retries cover Windows releasing an exited worker's handles late.
       fs.rmSync(fake, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
@@ -75,7 +79,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     const realCodex = path.join(realBin, 'codex.cmd');
     fs.mkdirSync(realBin, { recursive: true });
     fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
-    process.env.PATH = realBin;
+    vi.stubEnv('PATH', realBin);
     expect(ensureCodexWrapperInstalled().status).toBe('installed');
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
     return realCodex;
@@ -143,7 +147,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     const realCodex = path.join(realBin, 'codex.cmd');
     fs.mkdirSync(realBin, { recursive: true });
     fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
-    process.env.PATH = realBin;
+    vi.stubEnv('PATH', realBin);
 
     const result = ensureCodexWrapperInstalled();
     const metadata = JSON.parse(fs.readFileSync(resolveCodexWrapperPaths().metadataPath, 'utf8'));
@@ -158,7 +162,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     const realCodex = path.join(realBin, 'codex.cmd');
     fs.mkdirSync(realBin, { recursive: true });
     fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
-    process.env.PATH = realBin;
+    vi.stubEnv('PATH', realBin);
 
     const result = repairCodexWrapperIfInstalled();
 
@@ -174,7 +178,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     const realCodex = path.join(realBin, 'codex.cmd');
     fs.mkdirSync(realBin, { recursive: true });
     fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
-    process.env.PATH = realBin;
+    vi.stubEnv('PATH', realBin);
 
     // Explicit opt-in first (what `hippo hook install codex` runs).
     expect(ensureCodexWrapperInstalled().status).toBe('installed');
@@ -214,7 +218,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     const realCodex = path.join(realBin, 'codex.cmd');
     fs.mkdirSync(realBin, { recursive: true });
     fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
-    process.env.PATH = realBin;
+    vi.stubEnv('PATH', realBin);
 
     expect(ensureCodexWrapperInstalled().status).toBe('installed');
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
@@ -441,5 +445,5 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     expect(readLog()).not.toContain('skip capture');
     expect(saved().some((c) => c.includes(SENTINEL))).toBe(true);
     expect(saved().some((c) => c.includes(DECOY))).toBe(false);
-  }, 60_000);
+  });
 });

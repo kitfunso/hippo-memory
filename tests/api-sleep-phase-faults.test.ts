@@ -12,10 +12,8 @@
  * autoShare phase's initGlobal() doesn't leak into the run-wide baseline.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { rmSync } from 'node:fs';
 import { sleep, adminActor } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -25,7 +23,11 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer } from '../src/core/memory.js';
 import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
 import { configOf as realConfigOf } from '../src/api/config-of.js';
-import { makeStore } from './_helpers/make-root.js';
+import { makeStore, makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function newCtx() {
   const { base: tmpDir, root: hippoRoot } = makeStore('sleep-fault');
@@ -44,9 +46,9 @@ function newCtx() {
   writeEntry(hippoRoot, mem);
 
   // Per-test HIPPO_HOME isolation (autoShare phase 4 calls initGlobal()).
-  const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-fault-global-'));
+  const globalTmp = makeRoot('sleep-fault-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalTmp;
+  vi.stubEnv('HIPPO_HOME', globalTmp);
 
   const ctx = apiCtx(hippoRoot, 'default', adminActor('test:phase-faults'));
 
@@ -55,9 +57,8 @@ function newCtx() {
     tmpDir,
     restore: () => {
       rmSync(tmpDir, { recursive: true, force: true });
-      rmSync(globalTmp, { recursive: true, force: true });
-      if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-      else delete process.env.HIPPO_HOME;
+      if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
+      else vi.stubEnv('HIPPO_HOME', undefined);
     },
   };
 }

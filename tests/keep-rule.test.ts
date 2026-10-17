@@ -26,8 +26,6 @@ import { makeRoot } from './_helpers/make-root.js';
 import { deleteEntry } from './_helpers/root-forms.js';
 import { handlesOf } from '../src/store/open.js';
 
-// Each case commits rows to a real store, so its time follows the runner's disk.
-vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -137,7 +135,8 @@ describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x so
 
     expect(sqlDeletableIds(root)).toEqual(fromFunction);
     expect(sqlDeletableIds(root)).toEqual(table.filter((r) => r.deletable).map((r) => r.id).sort());
-    expect(fromFunction.length).toBeGreaterThan(0);
+    // One unpinned distilled row for each of the 11 cases that are not kept.
+    expect(fromFunction).toHaveLength(11);
     expect(fromFunction.length).toBeLessThan(table.length);
   });
 
@@ -355,7 +354,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
 
     expect(fetcher).toHaveBeenCalled();
     expect(result.extractionCandidates).toBe(3);
-    expect(result.merged).toBeGreaterThan(0);
+    expect(result.merged).toBe(3);
   });
 
   it('three kept look-alike rows never reach the fetcher and are not merged', async () => {

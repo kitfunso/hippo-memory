@@ -1,6 +1,6 @@
 // The four dashboard writes (pin, wrong, resolve, forget): their result mapping, tenant and live-only guards, and the request guards in front of them.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
@@ -11,6 +11,10 @@ import {
   DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import { replaceDetectedConflicts } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
 
@@ -265,7 +269,7 @@ describe('request guards', () => {
 
   it('answers 408 when the promised body never arrives', async () => {
     const target = seed(store.hippoRoot, 'stalled row');
-    process.env.HIPPO_BODY_TIMEOUT_MS = '50';
+    vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', '50');
     try {
       const status = await new Promise<number>((resolve, reject) => {
         const req = httpRequest({
@@ -281,7 +285,7 @@ describe('request guards', () => {
       });
       expect(status).toBe(408);
     } finally {
-      delete process.env.HIPPO_BODY_TIMEOUT_MS;
+      vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', undefined);
     }
     expect(row(target.id).pinned).toBe(false);
   });

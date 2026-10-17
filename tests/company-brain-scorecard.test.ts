@@ -136,7 +136,8 @@ describe('Company Brain continuity scorecard scaffold', () => {
     const featureOn = buildResumeScorecard(tmpDir, sessionId);
     expect(featureOn.coverage).toBeGreaterThan(baseline.coverage);
     expect(featureOn.coverage).toBe(1);
-    expect(featureOn.rawTranscriptTokens).toBeGreaterThan(0);
+    // The six trail steps joined by newlines are 1204 characters, at four per token.
+    expect(featureOn.rawTranscriptTokens).toBe(301);
     expect(featureOn.distilledTokens).toBeLessThan(featureOn.rawTranscriptTokens * 0.45);
   });
 
@@ -210,8 +211,9 @@ describe('Company Brain continuity scorecard scaffold', () => {
       `Recent: ${lastPreview}`,
     ];
     const distilledTokens = estimateTokens(distilledParts.join('\n'));
-    expect(rawTranscriptTokens).toBeGreaterThan(0);
-    expect(distilledTokens).toBeGreaterThan(0);
+    // 1204 characters of trail; 384 of distilled parts, whose preview is the oldest-first trail's last step.
+    expect(rawTranscriptTokens).toBe(301);
+    expect(distilledTokens).toBe(96);
     expect(distilledTokens).toBeLessThan(rawTranscriptTokens * 0.45);
 
     // Sanity: the unfiltered continuityTokens IS larger than the displayable

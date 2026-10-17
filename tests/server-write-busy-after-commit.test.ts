@@ -1,5 +1,5 @@
 // A busy store never fails a routed write that already committed, and a busy 503 always means nothing landed, so the thin client may replay it.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -11,6 +11,14 @@ import * as client from '../src/cli/client.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from './_helpers/root-forms.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -72,12 +80,11 @@ describe('routed writes under a busy store', () => {
   let url: string;
   let stop: () => Promise<void>;
   let busyErr: Error;
-  const savedHome = process.env.HIPPO_HOME;
 
   beforeAll(async () => {
     home = makeRoot('busy-after-commit');
     globalHome = makeRoot('busy-after-commit-global', { init: false });
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     initStore(globalHome);
     busyErr = realBusyError(home);
     const handle = await serve({ hippoRoot: home, port: 0 });
@@ -87,15 +94,13 @@ describe('routed writes under a busy store', () => {
 
   afterAll(async () => {
     await stop();
-    if (savedHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = savedHome;
   });
 
   it('remember: a lock held across the first tries ends in one stored row, not an error or a duplicate', async () => {
     const result = await withLockHeld(home, 1200, () => client.remember(url, undefined, { content: 'remember-busy-canary' }));
     expect(result.id).toBeTruthy();
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
-  }, 15_000);
+  });
 
   it('forget: a lock held across the first tries ends in one removal counted once', async () => {
     const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary' });
@@ -103,21 +108,21 @@ describe('routed writes under a busy store', () => {
     await expect(withLockHeld(home, 1200, () => client.forget(url, undefined, id))).resolves.toEqual({ ok: true, id });
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
     expect(forgottenTotal(home)).toBe(before + 1);
-  }, 15_000);
+  });
 
   it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw' });
     await expect(withLockHeld(home, 1200, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({ ok: true });
     expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
-  }, 15_000);
+  });
 
   it('promote: a held global lock ends in exactly one global copy and one promote audit row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary' });
     const result = await withLockHeld(globalHome, 1200, () => client.promote(url, undefined, id));
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`, result.globalId)).toBe(1);
-  }, 15_000);
+  });
 
   it('the stats counter after a committed removal skips a busy store with one warning instead of throwing', async () => {
     _resetLogOnceForTests();

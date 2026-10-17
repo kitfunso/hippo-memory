@@ -58,7 +58,7 @@ describe('graph schema v37', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('creates the reverse-guard triggers (codex P1 + P2): memories + entities', () => {
+  it('creates the reverse-guard triggers: memories + entities', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_memories_graph_referenced_guard'`).get()).toBeDefined();

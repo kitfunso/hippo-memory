@@ -1,10 +1,7 @@
 // One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, handlesOf } from '../src/store/open.js';
+import { handlesOf } from '../src/store/open.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
@@ -15,6 +12,10 @@ import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { saveEmbeddingIndex } from './_helpers/root-forms.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 const ROWS = 10_000;
 const FEWER_ROWS = ROWS / 10;
@@ -34,14 +35,13 @@ function vector(seed: number): number[] {
 }
 
 describe('hybrid recall at 10k rows', () => {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-10k-'));
-  const fewer = mkdtempSync(join(tmpdir(), 'hippo-1k-'));
-  const global = makeRoot('10k-global', { init: false });
+  const config = { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
+  const home = makeRoot('10k', { config });
+  const fewer = makeRoot('1k', { config });
+  const global = makeRoot('10k-global');
   afterAll(() => {
     vi.unstubAllGlobals();
-    delete process.env.OPENAI_API_KEY;
-    rmSync(home, { recursive: true, force: true });
-    rmSync(fewer, { recursive: true, force: true });
+    vi.stubEnv('OPENAI_API_KEY', undefined);
   });
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
@@ -49,25 +49,24 @@ describe('hybrid recall at 10k rows', () => {
   const recallOnce = (): ReturnType<typeof searchBothHybrid> => recall(home);
 
   function seed(store: string, rows: number): void {
-    writeFileSync(join(store, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
-    initStore(store);
     const entries = Array.from({ length: rows }, (_, i) =>
       createMemory(`note ${i} about ${i % 50 === 0 ? 'deploy pipeline' : 'topic'} ${i % 97}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     batchWriteAndDelete(store, entries, []);
     saveEmbeddingIndex(store, Object.fromEntries(entries.map((e, i) => [e.id, vector(i + 1)])));
   }
 
+  // Three times the measured seed of 11k rows and their 384-dim vectors.
   beforeAll(() => {
-    initStore(global);
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
-    process.env.OPENAI_API_KEY = 'sk-test';
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     for (const store of [home, fewer]) saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
     const queryVector = vector(7);
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));
-  }, 120_000);
+  }, 65_000);
 
+  // Each case scans every stored 384-dim vector, which a shared CI runner takes seconds over.
   it('a recall over ten times the rows runs no more statements and reads at most ten times the rows', async () => {
     let t0 = performance.now();
     const atRows = await recordStatementsAsync(() => recall(home));
@@ -75,7 +74,8 @@ describe('hybrid recall at 10k rows', () => {
     t0 = performance.now();
     const atFewer = await recordStatementsAsync(() => recall(fewer));
     console.log(`hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`);
-    expect(atFewer.result.length).toBeGreaterThan(0);
+    // The 20 rows that name the query plus the 50 nearest vectors, none of them shared, all inside the budget.
+    expect(atFewer.result).toHaveLength(70);
     // The smaller recall ran its vector scan too, so the two counts compare like with like.
     expect(atFewer.rowsRead).toBeGreaterThanOrEqual(FEWER_ROWS);
     // A query per row scored, or per chunk of rows, grows the statements with the store.
@@ -85,7 +85,8 @@ describe('hybrid recall at 10k rows', () => {
 
   it('one recall reads each stored vector once and few other rows', async () => {
     const { result, statements, rowsRead } = await recordStatementsAsync(recallOnce);
-    expect(result.length).toBeGreaterThan(0);
+    // The 200 rows that name the query plus the 50 nearest vectors, less row 2500, which is both.
+    expect(result).toHaveLength(249);
     // Every stored vector is read, so the ceilings below measure a recall that ran its vector scan.
     expect(rowsRead).toBeGreaterThanOrEqual(ROWS);
     // About 1.3 times what one recall does; a second vector scan or a whole-store load of memories passes it.

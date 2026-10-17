@@ -150,8 +150,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
       db.exec('ROLLBACK');
       closeHippoDb(db);
     }
-  // About 4 s solo, most of it the two bounded lock waits; 30 s is a 7x margin for a busy runner.
-  }, 30_000);
+  });
 });
 
 describe('the pre-compact diagnostic log', () => {

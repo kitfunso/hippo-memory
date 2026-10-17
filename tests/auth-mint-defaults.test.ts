@@ -11,6 +11,10 @@ import { runInProcess } from './_helpers/run-in-process.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface Minted {
@@ -42,7 +46,6 @@ interface AuditRow {
 let home: string;
 let globalHome: string;
 let handle: ServerHandle;
-let savedEnv: Array<[string, string | undefined]>;
 
 async function jsonOf<T>(res: Response): Promise<T> {
   // SAFETY: each caller names the shape its route documents and asserts on the fields it reads.
@@ -87,19 +90,14 @@ function daysUntil(iso: string | null): number {
 beforeEach(async () => {
   home = makeRoot('mint-defaults');
   globalHome = makeRoot('mint-defaults-global');
-  savedEnv = ['HIPPO_HOME', 'HIPPO_REQUIRE_AUTH'].map((name) => [name, process.env[name]]);
-  process.env.HIPPO_HOME = globalHome;
-  process.env.HIPPO_REQUIRE_AUTH = '1';
+  vi.stubEnv('HIPPO_HOME', globalHome);
+  vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
   vi.useRealTimers();
   await handle.stop();
-  for (const [name, value] of savedEnv) {
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
   rmSync(home, { recursive: true, force: true });
   rmSync(globalHome, { recursive: true, force: true });
 });

@@ -19,6 +19,10 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
 
@@ -93,7 +97,7 @@ function storeCounts(root: string): string {
 }
 
 beforeEach(() => {
-  process.env.HIPPO_FAKE_NOW = '2026-07-01T00:00:00.000Z';
+  vi.stubEnv('HIPPO_FAKE_NOW', '2026-07-01T00:00:00.000Z');
   _resetAblationCacheForTests();
   tmpRoot = makeRoot('delivery-recorder', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
@@ -102,14 +106,14 @@ beforeEach(() => {
   fs.mkdirSync(globalRoot, { recursive: true });
   initStore(local);
   initStore(globalRoot);
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete process.env.HIPPO_HOME;
-  delete process.env.HIPPO_FAKE_NOW;
+  vi.stubEnv('HIPPO_HOME', undefined);
+  vi.stubEnv('HIPPO_FAKE_NOW', undefined);
   _resetAblationCacheForTests();
 });
 
@@ -174,7 +178,8 @@ describe('rejection reasons', () => {
     const event = await observed({ ...baseOpts, budget: 40 });
     const row = rowsOf(event).find((c) => c.memoryId === big.id);
     expect([row?.stage, row?.reason, row?.pool]).toEqual(['budget', 'budget', 'pin']);
-    expect(row?.score).toBeGreaterThan(0);
+    // A pin with no wrong marks has strength exactly 1, and the recent pool adds no boost.
+    expect(row?.score).toBe(1);
     expect(row?.tokens).toBeGreaterThan(40);
   });
 
@@ -187,7 +192,8 @@ describe('rejection reasons', () => {
     const rows = new Map(rowsOf(event).map((c) => [c.memoryId, c]));
     expect([rows.get(second.id)?.stage, rows.get(second.id)?.reason]).toEqual(['gate', 'gate-max-items']);
     expect([rows.get(weak.id)?.stage, rows.get(weak.id)?.reason, rows.get(weak.id)?.pool]).toEqual(['gate', 'gate-below-threshold', 'prompt-recall']);
-    expect(rows.get(weak.id)?.score).toBeGreaterThan(0);
+    // Jaccard over content words: 'postgres' is the one word shared by the prompt's six and the memory's eight.
+    expect(rows.get(weak.id)?.score).toBeCloseTo(1 / 13, 10);
   });
 
   it('scope and quality at eligibility, for prompt-recall candidates the loader returned', async () => {

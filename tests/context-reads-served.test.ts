@@ -69,7 +69,7 @@ async function runServed(makeStore?: (root: string) => HippoStore) {
 beforeAll(() => {
   fixture = seedTwoTenants();
   seedContextRows(fixture.dir);
-}, 120_000);
+});
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });
@@ -102,5 +102,5 @@ describe('context over serve()', () => {
     const inProcess = await runServed(sqliteStore);
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);
-  }, 120_000);
+  });
 });

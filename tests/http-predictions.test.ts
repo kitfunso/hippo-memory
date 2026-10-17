@@ -76,7 +76,8 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     expect(body.prediction.estimateUnit).toBe('days');
     expect(body.prediction.targetDate).toBe('2026-06-15');
     expect(body.prediction.closureState).toBe('open');
-    expect(body.prediction.id).toBeGreaterThan(0);
+    // The first row in a fresh store's AUTOINCREMENT table.
+    expect(body.prediction.id).toBe(1);
   });
 
   it('GET /v1/predictions filters by class and returns list', async () => {

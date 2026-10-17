@@ -1,6 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { judgeAll, type JudgeOptions, type Judgment } from '../src/eval/judgment.js';
 import { envTypesafeApiKey } from '../src/util/env.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface JevAnswerFixture { type?: string; noul?: number; choice?: string; confidence?: number }
 interface JevBodyFixture {
@@ -197,17 +201,11 @@ describe('judgeAll', () => {
 
 describe('envTypesafeApiKey', () => {
   it('treats a missing or blank key as opt-out', () => {
-    const original = process.env.TYPESAFE_API_KEY;
-    try {
-      delete process.env.TYPESAFE_API_KEY;
-      expect(envTypesafeApiKey()).toBeUndefined();
-      process.env.TYPESAFE_API_KEY = '   ';
-      expect(envTypesafeApiKey()).toBeUndefined();
-      process.env.TYPESAFE_API_KEY = ' sk-live ';
-      expect(envTypesafeApiKey()).toBe('sk-live');
-    } finally {
-      if (original === undefined) delete process.env.TYPESAFE_API_KEY;
-      else process.env.TYPESAFE_API_KEY = original;
-    }
+    vi.stubEnv('TYPESAFE_API_KEY', undefined);
+    expect(envTypesafeApiKey()).toBeUndefined();
+    vi.stubEnv('TYPESAFE_API_KEY', '   ');
+    expect(envTypesafeApiKey()).toBeUndefined();
+    vi.stubEnv('TYPESAFE_API_KEY', ' sk-live ');
+    expect(envTypesafeApiKey()).toBe('sk-live');
   });
 });

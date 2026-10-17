@@ -92,7 +92,8 @@ describe('FTS drift repair', () => {
       const missing = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)`).get() as { c: number };
       expect(Number(missing.c)).toBe(0);
       // The work sits inside each statement, where no statement or row count sees it; the plan names the loop.
-      expect(statements.filter((sql) => /memories_fts(?!_)/.test(sql)).length).toBeGreaterThan(0);
+      // The insert of missing rows and the orphan delete; the drift count reads the docsize shadow table instead.
+      expect(statements.filter((sql) => /memories_fts(?!_)/.test(sql))).toHaveLength(2);
       expect(statements.flatMap((sql) => indexScansPerRow(db, sql))).toEqual([]);
     } finally {
       closeHippoDb(db);

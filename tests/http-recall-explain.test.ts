@@ -9,11 +9,19 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { serve, type ServerHandle } from '../src/server.js';
 import { remember, type RecallResult } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let home: string;
 let handle: ServerHandle;
@@ -39,7 +47,7 @@ describe('HTTP /v1/memories rerank-trace wire-format', () => {
     // RecallResult produced by src/api/index.ts's recall(), checked immediately by
     // the assertions that follow.
     const body = (await res.json()) as RecallResult;
-    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.results).toHaveLength(2);
     for (const item of body.results) {
       expect(item.rerankPipeline).toBe('api');
     }
@@ -52,7 +60,7 @@ describe('HTTP /v1/memories rerank-trace wire-format', () => {
     // RecallResult produced by src/api/index.ts's recall(), checked immediately by
     // the assertions that follow.
     const body = (await res.json()) as RecallResult;
-    expect(body.results.length).toBeGreaterThan(0);
+    expect(body.results).toHaveLength(2);
     for (const item of body.results) {
       expect(item.rerankPipeline).toBeUndefined();
       expect(item.rerankTrace).toBeUndefined();

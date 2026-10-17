@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +27,8 @@ import { makeRoot } from './_helpers/make-root.js';
 // embedding index under the same best-effort contract as `remember`.
 
 const HIPPO_BIN = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
+// Xenova/all-MiniLM-L6-v2, the default local embedding model these stores use, emits 384 numbers.
+const MINILM_DIMENSIONS = 384;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,22 +73,15 @@ async function embeddingIsFunctional(): Promise<boolean> {
 describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   let localRoot: string;
   let globalRoot: string;
-  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
     disableEmbeddings(globalRoot);
-    // promote/shareMemory/autoShare resolve their destination via
-    // getGlobalRoot(), which reads HIPPO_HOME (same isolation pattern as
-    // tests/shared.test.ts's copyToGlobal describe block).
-    prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalRoot;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
   });
 
   afterEach(() => {
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
     cleanUp(localRoot, globalRoot);
   });
 
@@ -148,18 +142,14 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
 describe('global-row-embeddings: awaited batch producers', () => {
   let localRoot: string;
   let globalRoot: string;
-  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
-    prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalRoot;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
   });
 
   afterEach(() => {
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
     cleanUp(localRoot, globalRoot);
   });
 
@@ -179,7 +169,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const index = loadEmbeddingIndex(localRoot);
     expect(index[entry.id]).toBeDefined();
-    expect(index[entry.id].length).toBeGreaterThan(0);
+    expect(index[entry.id]).toHaveLength(MINILM_DIMENSIONS);
   }, 60_000);
 
   it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
@@ -194,7 +184,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[shared[0].id]).toBeDefined();
-    expect(index[shared[0].id].length).toBeGreaterThan(0);
+    expect(index[shared[0].id]).toHaveLength(MINILM_DIMENSIONS);
   }, 60_000);
 });
 
@@ -205,18 +195,14 @@ describe('global-row-embeddings: awaited batch producers', () => {
 describe('global-row-embeddings: fire-and-forget integration', () => {
   let localRoot: string;
   let globalRoot: string;
-  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
-    prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalRoot;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
   });
 
   afterEach(() => {
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
     cleanUp(localRoot, globalRoot);
   });
 
@@ -252,9 +238,9 @@ describe('global-row-embeddings: the first promote, before any global store exis
   });
 
   afterEach(async () => {
-    vi.unstubAllEnvs();
     await embeddings.close();
     cleanUp(localRoot, globalRoot);
+    vi.unstubAllEnvs();
   });
 
   it('embeds the copy into the global store the promote created', async () => {
@@ -276,7 +262,7 @@ describe('global-row-embeddings: the first promote, before any global store exis
 describe('global-row-embeddings: hippo embed --global CLI', () => {
   it('embeds a seeded global row from a cwd with no local store, without requireInit failing', async () => {
     const home = makeRoot('gre-cli-home', { init: false });
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-cli-cwd-'));
+    const cwd = makeRoot('gre-cli-cwd', { init: false });
     const globalRoot = path.join(home, '.hippo');
     const env = { ...process.env, HIPPO_HOME: globalRoot };
 
@@ -321,7 +307,7 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
   // when every in-process test above is skipping.
   it('promoting a remembered row lands a vector in the GLOBAL embedding index', async () => {
     const home = makeRoot('gre-wiring-home', { init: false });
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-wiring-cwd-'));
+    const cwd = makeRoot('gre-wiring-cwd', { init: false });
     const globalRoot = path.join(home, '.hippo');
     const env = { ...process.env, HIPPO_HOME: globalRoot };
 
@@ -369,7 +355,7 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
         await vi.waitFor(() => {
           const index = loadEmbeddingIndex(globalRoot);
           expect(index[globalId]).toBeDefined();
-          expect(index[globalId].length).toBeGreaterThan(0);
+          expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
         }, { timeout: 60_000, interval: 250 });
       }
     } finally {

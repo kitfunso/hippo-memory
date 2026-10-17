@@ -1,15 +1,14 @@
 // Pins `hippo sleep` stdout, stderr, exit code and log file over its flags on a seeded store, so moving the
 // sleep verb out of cli.ts, or any later refactor of it, that changes a byte fails here.
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { ownStderr } from './_helpers/own-stderr.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -23,7 +22,6 @@ function seeded(content: string, id: string, created: string, extra: Partial<Mem
 }
 
 function seedLocal(hippoRoot: string): void {
-  initStore(hippoRoot);
   const rows: MemoryEntry[] = [
     seeded('deploy rollback needs the database migration reverted before the api restarts', 'mem_sleep_a', '2026-01-20T00:00:00.000Z', {}, { tags: ['deploy'] }),
     seeded('deploy rollback needs the database migration reverted before the api restarts again', 'mem_sleep_b', '2026-01-21T00:00:00.000Z', {}, { tags: ['deploy'] }),
@@ -65,38 +63,30 @@ interface RunOutput { status: number | null; stdout: string; stderr: string; log
 
 function run(c: Case): RunOutput {
   // Real path: the CLI prints resolved paths, and macOS spells the temp root through the /var symlink.
-  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-sleep-golden-')));
-  try {
-    if (!c.uninitialised) cpSync(template, join(home, '.hippo'), { recursive: true });
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    for (const k of DROP_ENV) delete env[k];
-    // The agent-memory import reads the home dir, so every home a run could see is the temp dir.
-    Object.assign(env, {
-      HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_FAKE_NOW: FAKE_NOW,
-      HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), LOCALAPPDATA: join(home, 'AppData', 'Local'),
-    });
-    const logPath = join(home, 'logs', 'sleep.log');
-    const args = c.logFile ? [...c.args, '--log-file', logPath] : c.args;
-    const res = spawnSync('node', [CLI, ...args], { cwd: home, env, encoding: 'utf-8' });
-    const out: RunOutput = { status: res.status, stdout: normalize(res.stdout, home), stderr: normalize(res.stderr, home) };
-    if (c.logFile) out.log = existsSync(logPath) ? normalize(readFileSync(logPath, 'utf8'), home) : '<missing>';
-    return out;
-  } finally {
-    rmSync(home, { recursive: true, force: true });
-  }
+  const home = realpathSync.native(makeRoot('sleep-golden', { init: false }));
+  if (!c.uninitialised) cpSync(template, join(home, '.hippo'), { recursive: true });
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of DROP_ENV) delete env[k];
+  // The agent-memory import reads the home dir, so every home a run could see is the temp dir.
+  Object.assign(env, {
+    HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_FAKE_NOW: FAKE_NOW,
+    HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), LOCALAPPDATA: join(home, 'AppData', 'Local'),
+  });
+  const logPath = join(home, 'logs', 'sleep.log');
+  const args = c.logFile ? [...c.args, '--log-file', logPath] : c.args;
+  const res = spawnSync('node', [CLI, ...args], { cwd: home, env, encoding: 'utf-8' });
+  const out: RunOutput = { status: res.status, stdout: normalize(res.stdout, home), stderr: normalize(res.stderr, home) };
+  if (c.logFile) out.log = existsSync(logPath) ? normalize(readFileSync(logPath, 'utf8'), home) : '<missing>';
+  return out;
 }
 
 describe('cli sleep golden output', () => {
   beforeAll(() => {
-    template = join(mkdtempSync(join(tmpdir(), 'hippo-sleep-golden-template-')), '.hippo');
+    template = makeStore('sleep-golden-template').root;
     seedLocal(template);
-  });
-
-  afterAll(() => {
-    if (template) rmSync(join(template, '..'), { recursive: true, force: true });
   });
 
   it.each(CASES)('$name', (c) => {
     expect(run(c)).toMatchSnapshot();
-  }, 60_000);
+  });
 });

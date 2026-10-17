@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -8,6 +8,10 @@ import { withSharedStoreHandles } from '../src/db/index.js';
 import { _resetAblationCacheForTests, strengthAblation } from '../src/core/ablation.js';
 import { makeStore } from './_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHoldingWords } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 const DAY = 86400000;
@@ -86,7 +90,7 @@ describe('loadContextCandidates reward factor', () => {
   });
 
   afterEach(() => {
-    delete process.env.HIPPO_ABLATE_OUTCOME_SLOW;
+    vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
     _resetAblationCacheForTests();
     rmSync(join(root, '..'), { recursive: true, force: true });
   });
@@ -108,7 +112,7 @@ describe('loadContextCandidates reward factor', () => {
   });
 
   it('drops the reward factor from the rank when outcome-slow is ablated', async () => {
-    process.env.HIPPO_ABLATE_OUTCOME_SLOW = '1';
+    vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
     _resetAblationCacheForTests();
     const { id, strongest } = await survivor([row('x-rewarded', 20, { outcome_positive: 3 }), row('z-plain', 20, { half_life_days: 12 })]);
     expect(strongest).toBe('z-plain');

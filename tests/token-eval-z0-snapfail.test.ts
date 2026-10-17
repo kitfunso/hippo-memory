@@ -1,9 +1,13 @@
 // A pre-session snapshot copy that fails (EBUSY on Windows) never abandons the run; the retry says the restore failed.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cpSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { __setSurfaceCopy } from '../scripts/token-eval/surfaces.mjs';
 import { cleanup, isolate, makeRepo, task, plain, spec, run, readRecords, readPlan, readLedger, find } from './fixtures/z0-harness.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 afterEach(() => {
   __setSurfaceCopy(null);
@@ -16,10 +20,11 @@ const busyPreSession: typeof cpSync = (from, to, opts) => {
 };
 
 describe('a failed snapshot copy', () => {
+  // A two-task run over a real git repo with fake Claude sessions, one of them retried after a limit.
   it('marks the snapshot unrestorable and the retry unrestored, and the run goes on', async () => {
     const { out } = isolate('snapfail');
     const r = makeRepo();
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(out, 'limit-hit'));
     __setSurfaceCopy(busyPreSession);
     const said: string[] = [];
     await run(spec(r, [], [task(r, 'n1', 'LIMIT LIMIT_SURFACES look around'), plain(r, 'n2')]), ['A2'], out, { limitWaitMs: 0, log: (m) => said.push(m) });
@@ -32,5 +37,5 @@ describe('a failed snapshot copy', () => {
     expect(pre.restorable).toBe(false);
     expect(pre.copyErrors.map((e) => e.code)).toContain('EBUSY');
     expect(said.some((m) => /n1 A2 seed1: pre-session copy of \w+ failed \(EBUSY\)/.test(m))).toBe(true);
-  }, 300_000);
+  }, 122_000);
 });

@@ -290,5 +290,5 @@ describe('hippo audit repair', () => {
     expect(result.stderr).toContain(STORE_BUSY_MESSAGE);
     expect(readdirSync(join(local, 'backups'))).toEqual([]);
     expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
-  }, 30000);
+  });
 });

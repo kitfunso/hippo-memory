@@ -86,7 +86,8 @@ describe('incidents store (first-class object)', () => {
       incidentText: 'DB pool exhausted',
       context: 'spike at 14:00',
     }, 'cli');
-    expect(inc.id).toBeGreaterThan(0);
+    // The first row of a fresh AUTOINCREMENT table.
+    expect(inc.id).toBe(1);
     expect(inc.memoryId).not.toBeNull();
     expect(inc.tenantId).toBe('default');
     expect(inc.incidentText).toBe('DB pool exhausted');

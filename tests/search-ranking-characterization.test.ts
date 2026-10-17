@@ -18,6 +18,10 @@ import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { saveEmbeddingIndex } from './_helpers/root-forms.js';
 
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 const TENANT = 'default';
 const DAY = 86_400_000;
@@ -105,7 +109,7 @@ function seedStore(): string {
   writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
   initStore(root);
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
-  process.env.OPENAI_API_KEY = 'sk-test';
+  vi.stubEnv('OPENAI_API_KEY', 'sk-test');
   saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
   saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const entity = (memoryId: string): number =>
@@ -133,12 +137,12 @@ describe('search ranking characterization: hybrid and physics with a store', () 
   });
 
   afterAll(() => {
-    delete process.env.OPENAI_API_KEY;
+    vi.stubEnv('OPENAI_API_KEY', undefined);
     rmSync(root, { recursive: true, force: true });
   });
 
   beforeEach(() => {
-    process.env.OPENAI_API_KEY = 'sk-test';
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
       // SAFETY: body is the OpenAI embeddings request the provider just serialised.
       const body = JSON.parse(init.body) as { input: string[] };
@@ -184,7 +188,7 @@ describe('search ranking characterization: hybrid and physics with a store', () 
     expect(pin(res)).toMatchSnapshot();
   });
   it('physics falls back to hybrid when no provider is available', async () => {
-    delete process.env.OPENAI_API_KEY;
+    vi.stubEnv('OPENAI_API_KEY', undefined);
     expect(pin(await physicsSearch('deploy pipeline', clone(), opts()))).toMatchSnapshot();
   });
 });

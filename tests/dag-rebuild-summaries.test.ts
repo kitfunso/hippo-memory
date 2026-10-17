@@ -7,7 +7,7 @@
  * race-loser no-op (E3 MED #5), cap hard-ceiling clamping (E3 R2 must-fix).
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -21,8 +21,9 @@ import { makeRoot } from './_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult } from './_helpers/root-forms.js';
 import { handlesOf } from '../src/store/open.js';
 
-// The cap cases seed up to 75 rows and marks in a real store, so their time follows the runner's disk.
-vi.setConfig({ testTimeout: 30_000 });
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.
@@ -468,28 +469,23 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('test #9: apiKey gate — consolidate without ANTHROPIC_API_KEY → rebuild phase skipped, dirty stays set', async () => {
-    const saved = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
-      const summary = makeSummary('untouched by sleep');
-      writeEntry(hippoRoot, summary);
-      writeEntry(hippoRoot, makeChild(summary.id, 'fact'));
-      forceMarkDirty(hippoRoot, summary.id);
+    vi.stubEnv('ANTHROPIC_API_KEY', undefined);
+    const summary = makeSummary('untouched by sleep');
+    writeEntry(hippoRoot, summary);
+    writeEntry(hippoRoot, makeChild(summary.id, 'fact'));
+    forceMarkDirty(hippoRoot, summary.id);
 
-      const result = await consolidate(hippoRoot);
-      expect(result.summariesRebuilt).toBe(0);
-      expect(result.summariesRebuildFailed).toBe(0);
-      expect(result.summariesZeroChildSkipped).toBe(0);
+    const result = await consolidate(hippoRoot);
+    expect(result.summariesRebuilt).toBe(0);
+    expect(result.summariesRebuildFailed).toBe(0);
+    expect(result.summariesZeroChildSkipped).toBe(0);
 
-      // Dirty still set
-      const stillDirty = loadAllDirtySummaries(hippoRoot);
-      expect(stillDirty.map((s) => s.id)).toContain(summary.id);
-    } finally {
-      if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
-    }
+    // Dirty still set
+    const stillDirty = loadAllDirtySummaries(hippoRoot);
+    expect(stillDirty.map((s) => s.id)).toContain(summary.id);
   });
 
-  it('test #10: REGRESSION LOCK — buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
+  it('test #10: REGRESSION LOCK: buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
     const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
     const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
@@ -521,7 +517,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       const auditRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean'
       `).all() as Array<{ metadata_json: string }>;
-      expect(auditRows.length).toBeGreaterThan(0);
+      // One summary was built, and its dirty flag cleared once.
+      expect(auditRows).toHaveLength(1);
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.source).toBe('buildDag-clean');
     } finally {
@@ -663,28 +660,29 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       writeEntry(hippoRoot, makeChild(sum.id, 'fact-0'));
       forceMarkDirty(hippoRoot, sum.id);
       global.fetch = makeOkFetcher('clamped-ceiling-XXX-content');
-      process.env.ANTHROPIC_API_KEY = 'k';
+      vi.stubEnv('ANTHROPIC_API_KEY', 'k');
 
       const table: Array<[string, number]> = [
         ['99999', 1000], ['1001', 1000], ['1000', 1000], ['50', 50], ['0', 20], ['-5', 20], ['abc', 20],
       ];
       for (const [index, [raw, expected]] of table.entries()) {
-        process.env.HIPPO_DAG_REBUILD_CAP = raw;
+        vi.stubEnv('HIPPO_DAG_REBUILD_CAP', raw);
         const result = await consolidate(hippoRoot);
         expect(rebuildSpy).toHaveBeenCalledTimes(index + 1);
         expect(rebuildSpy.mock.calls[index][1].cap).toBe(expected);
         if (index === 0) {
           const processed = result.summariesRebuilt + result.summariesZeroChildSkipped + result.summariesRebuildFailed;
-          expect(processed).toBeGreaterThan(0);
+          // The one dirty summary seeded above.
+          expect(processed).toBe(1);
         }
       }
     } finally {
       rebuildSpy.mockRestore();
       global.fetch = originalFetch;
-      if (savedKey !== undefined) process.env.ANTHROPIC_API_KEY = savedKey;
-      else delete process.env.ANTHROPIC_API_KEY;
-      if (saved !== undefined) process.env.HIPPO_DAG_REBUILD_CAP = saved;
-      else delete process.env.HIPPO_DAG_REBUILD_CAP;
+      if (savedKey !== undefined) vi.stubEnv('ANTHROPIC_API_KEY', savedKey);
+      else vi.stubEnv('ANTHROPIC_API_KEY', undefined);
+      if (saved !== undefined) vi.stubEnv('HIPPO_DAG_REBUILD_CAP', saved);
+      else vi.stubEnv('HIPPO_DAG_REBUILD_CAP', undefined);
     }
   });
 

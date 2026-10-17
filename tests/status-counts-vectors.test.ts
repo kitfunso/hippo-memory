@@ -242,7 +242,9 @@ describe('hippo status read bound', () => {
       }
     })();
     const rowReads = statements.filter((sql) => /^\s*SELECT\b[^;]*\bFROM memories\b/.test(sql));
-    expect(rowReads.length).toBeGreaterThan(0);
+    // The read count is the code's to change; the one read that walks every row must be among them.
+    expect(rowReads).toContain('SELECT layer, confidence, pinned, created, last_retrieved, half_life_days, retrieval_count, '
+      + 'emotional_valence, outcome_positive, outcome_negative FROM memories ORDER BY created ASC, id ASC');
     expect(rowReads.filter((sql) => /\b(content|\w+_json)\b/.test(sql))).toEqual([]);
   });
 });

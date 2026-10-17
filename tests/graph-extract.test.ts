@@ -200,7 +200,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     expect(loadEntities(home, 'default', { limit: 100 }).map((e) => e.name)).toEqual(['second']);
   });
 
-  it('truncates an over-cap E2 name instead of throwing + bricking the rebuild (codex/independent-review)', async () => {
+  it('truncates an over-cap E2 name instead of throwing + bricking the rebuild', async () => {
     // decisionText is uncapped at source; a >512-char one must NOT throw in insertEntity
     // (which would leave the cleared graph empty + unrebuildable). It is truncated.
     const longText = 'D' + 'x'.repeat(700);
@@ -217,7 +217,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     expect(loadEntities(home, 'default', { limit: 100 }).length).toBe(2);
   });
 
-  it('trims leading whitespace before capping (codex R2: a long whitespace-prefix name must not brick)', async () => {
+  it('trims leading whitespace before capping: a long whitespace-prefix name must not brick', async () => {
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'placeholder' });
     // Inject a name whose first 512 chars are whitespace (slice-without-trim would
     // yield a whitespace-only label -> insertEntity trims to '' -> throws -> brick).
@@ -245,7 +245,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal in Q3, wants RetryPolicy' });
     await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib for Acme Corp' });
     const first = await extractGraph(sqliteStore(home), 'default');
-    expect(first.references).toBeGreaterThan(0);
+    // Both active decisions and the note name RetryPolicy, and the brief names Acme Corp; superseded rows make none.
+    expect(first.references).toBe(4);
 
     expect(graphWritesDuring(async () => await extractGraph(sqliteStore(home), 'default'))).toEqual([]);
   });
@@ -301,7 +302,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
     const r = await extractGraphChunked(sqliteStore(home), 'default', budget(0, closeOlderOnce));
 
-    expect(pauses).toBeGreaterThan(0);
+    // A zero hold commits one op per chunk, and the two entity inserts need one pause between them.
+    expect(pauses).toBe(1);
     expect(loadEntities(home, 'default', { limit: 10 }).map((e) => e.name)).toEqual(['Newer call']);
     expect(r.skipped).toBe(1);
   });

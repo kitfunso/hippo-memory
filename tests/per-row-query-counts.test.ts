@@ -63,11 +63,11 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
 }
 
 /** Seeds in one store scope, which opens the store once, so a 200-row fixture stays fast. */
-function seed(root: string, entries: readonly MemoryEntry[], after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void): void {
+function seed(ctx: FullContext, entries: readonly MemoryEntry[], after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void): void {
   withRequestStoresSync(() => {
-    const db = openStore(root);
+    const db = openStore(ctx.hippoRoot);
     for (const e of entries) {
-      writeEntry(root, e);
+      writeEntry(ctx.hippoRoot, e);
       after?.(db, e);
     }
   });
@@ -93,7 +93,7 @@ describe('outcome', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-outcome');
       const entries = rows(n, 'outcome');
-      seed(root, entries);
+      seed(ctxFor(root), entries);
       const { result, statements } = await recordStatementsAsync(() => outcome(ctxFor(root), entries.map((e) => e.id), true));
       expect(result.applied).toBe(n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
@@ -107,7 +107,7 @@ describe('quarantineList', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-quarantine');
       const entries = rows(n, 'held', { scope: quarantineScopeFor(null) });
-      seed(root, entries, (db, e) => recordQuarantine(db, { tenantId: 'default', memoryId: e.id, originalScope: null, reason: 'test', actor: 'test' }));
+      seed(ctxFor(root), entries, (db, e) => recordQuarantine(db, { tenantId: 'default', memoryId: e.id, originalScope: null, reason: 'test', actor: 'test' }));
       const { result, statements } = await recordStatementsAsync(() => quarantineList(ctxFor(root), { limit: 500 }));
       expect(result).toHaveLength(n);
       expect(result.every((item) => item.contentPreview.includes('zephyrine'))).toBe(true);
@@ -124,7 +124,7 @@ describe('drillDown', () => {
       const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
       const mids = rows(n, 'mid', { dag_level: 1, dag_parent_id: summary.id });
       const leaves = mids.map((m, i) => memory(`leaf ${i} under the zephyrine cache`, { dag_level: 0, dag_parent_id: m.id }));
-      seed(root, [summary, ...mids, ...leaves]);
+      seed(ctxFor(root), [summary, ...mids, ...leaves]);
       const { result, statements } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }));
       expect('failure' in result ? result.failure : result.totalChildren).toBe(2 * n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
@@ -141,7 +141,7 @@ describe('drillDown', () => {
       const children = Array.from({ length: n }, (_, i) => memory(`child ${i} of the zephyrine cache`, {
         dag_level: 1, dag_parent_id: summary.id, created: new Date(Date.UTC(2026, 0, 1, 0, 0, n - i)).toISOString(),
       }));
-      seed(root, [summary, ...children]);
+      seed(ctxFor(root), [summary, ...children]);
       const { result, rowsRead } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { limit: 5 }));
       if ('failure' in result) throw new Error(result.failure);
       expect(result.children.map((c) => c.id)).toEqual(children.slice(-5).reverse().map((c) => c.id));
@@ -155,7 +155,7 @@ describe('drillDown', () => {
     const root = freshRoot('qc-drill-plan');
     const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
     const mids = rows(3, 'mid', { dag_level: 1, dag_parent_id: summary.id });
-    seed(root, [summary, ...mids, ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id }))]);
+    seed(ctxFor(root), [summary, ...mids, ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id }))]);
     const { statements } = await recordStatementsAsync(async () => {
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: 4 });
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: Number.POSITIVE_INFINITY });
@@ -219,7 +219,7 @@ describe('invalidateMatching', () => {
   it('weakens every match on one store handle', () => {
     const opens = SIZES.map((n) => {
       const root = freshRoot('qc-invalidate');
-      seed(root, rows(n, 'invalidate', { tags: ['oldlib'] }));
+      seed(ctxFor(root), rows(n, 'invalidate', { tags: ['oldlib'] }));
       const target = { from: 'oldlib', to: null, type: 'removal' as const };
       const { result, statements } = recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default'));
       expect(result.invalidated).toBe(n);
@@ -249,7 +249,7 @@ describe('detectChurnStale', () => {
 
     const counts = SIZES.map((n) => {
       const root = freshRoot('qc-churn');
-      seed(root, rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', origin_project: 'qcproj' }));
+      seed(ctxFor(root), rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', origin_project: 'qcproj' }));
       const { result, statements } = recordStatements(() => detectChurnStale(sqliteSyncStore(root).localFiles.learning, repo, { tenantId: 'default', projectName: 'qcproj' }));
       expect(result.marked).toBe(n);
       return { opens: countMatching(statements, STORE_OPEN), reads: countMatching(statements, ROW_READ) };
@@ -263,7 +263,7 @@ describe('replaceDetectedConflicts', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-conflicts');
       const entries = rows(n, 'conflict');
-      seed(root, entries);
+      seed(ctxFor(root), entries);
       const mirrorsRewritten = ageMirrors(root);
       const pair = { memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 };
       const { statements } = recordStatements(() => replaceDetectedConflicts(root, [pair]));
@@ -279,7 +279,7 @@ describe('replaceDetectedConflicts', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-resolve');
       const entries = rows(n, 'resolve');
-      seed(root, entries);
+      seed(ctxFor(root), entries);
       replaceDetectedConflicts(root, [{ memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 }]);
       const [conflict] = listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
@@ -295,7 +295,7 @@ describe('deduplicateStore', () => {
     const opens = SIZES.map((n) => {
       const root = freshRoot('qc-dedupe');
       const originals = rows(n, 'dedupe');
-      seed(root, [...originals, ...originals.map((e) => memory(e.content))]);
+      seed(ctxFor(root), [...originals, ...originals.map((e) => memory(e.content))]);
       const { result, statements } = recordStatements(() => deduplicateStore(sqliteConsolidation(handlesOf(root))));
       expect(result.removed).toBe(n);
       return countMatching(statements, STORE_OPEN);
@@ -309,7 +309,7 @@ describe('strengthenRetrieved', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-strengthen');
       const entries = rows(n, 'strengthen');
-      seed(root, entries);
+      seed(ctxFor(root), entries);
       const { result, statements } = recordStatements(() => strengthenRetrieved(root, entries.map((e) => e.id), { recallBoostAblated: false }));
       expect(result.size).toBe(n);
       expect(countMatching(statements, ROW_READ)).toBe(1);
@@ -319,7 +319,7 @@ describe('strengthenRetrieved', () => {
   it('moves a repeated id once, as one read per id did', () => {
     const root = freshRoot('qc-strengthen-repeat');
     const [entry] = rows(1, 'repeat');
-    seed(root, [entry]);
+    seed(ctxFor(root), [entry]);
     expect([...strengthenRetrieved(root, [entry.id, entry.id], { recallBoostAblated: false })]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
     expect(after?.retrieval_count).toBe(entry.retrieval_count + 1);
@@ -345,7 +345,7 @@ describe('learn', () => {
   async function learnInto(repo: string, n: number) {
     const root = freshRoot('qc-learn');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
-    seed(root, [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
+    seed(ctxFor(root), [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
     const { result, statements } = await recordStatementsAsync(() =>
       cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN })));
     return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
@@ -403,7 +403,7 @@ describe('cmdRemember', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-remember');
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
-      seed(root, rows(n, 'remember', { tags: ['topic:cache'] }));
+      seed(ctxFor(root), rows(n, 'remember', { tags: ['topic:cache'] }));
       const { statements, printed } = await remember(root, 'a new note about the zephyrine cache');
       expect(printed[0]).toMatch(/^Remembered \[/);
       // The write goes through the api, which answers an id, so the printout reads that one row by id.
@@ -417,7 +417,7 @@ describe('cmdRemember', () => {
       const root = freshRoot('qc-remember-salience');
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false }, salience: { enabled: true, recentWindow: 3 } }));
       const stored = rows(n, 'salience').map((e, i) => ({ ...e, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() }));
-      seed(root, stored);
+      seed(ctxFor(root), stored);
 
       const inWindow = await remember(root, stored[n - 1].content);
       expect(inWindow.printed[0]).toMatch(/^Skipped \(salience: duplicate/);
@@ -436,7 +436,7 @@ describe('cmdCapture', () => {
       const root = freshRoot('qc-capture');
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       const held = 'Never deploy service 0 on Fridays because the on-call rota is thin';
-      seed(root, [...rows(n, 'capture'), memory(held)]);
+      seed(ctxFor(root), [...rows(n, 'capture'), memory(held)]);
       const sessionTurns = Array.from({ length: items + 1 }, (_, i) => ({ role: 'user' as const, text: `Never deploy service ${i} on Fridays because the on-call rota is thin.` }));
       const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
@@ -456,7 +456,7 @@ describe('outcome with a repeated id', () => {
   it('applies the outcome twice, as one read per id did', async () => {
     const root = freshRoot('qc-outcome-repeat');
     const [entry] = rows(1, 'repeat');
-    seed(root, [entry]);
+    seed(ctxFor(root), [entry]);
     expect((await outcome(ctxFor(root), [entry.id, entry.id], false)).applied).toBe(2);
     expect(readEntry(root, entry.id)?.outcome_negative).toBe(2);
   });
@@ -468,7 +468,7 @@ describe('buildDag', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-dag-link');
       const facts = rows(n, 'fact', { tags: ['extracted', 'speaker:alice'], dag_level: 1 });
-      seed(root, facts);
+      seed(ctxFor(root), facts);
       const mirrorsRewritten = ageMirrors(root);
       const fetcher: typeof fetch = async () => new Response(JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }), { status: 200 });
       const { result, statements } = await recordStatementsAsync(() => buildDag(sqliteSyncStore(root).localFiles, facts, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test-key', fetcher }));
@@ -496,7 +496,7 @@ describe('buildMemoryDetail', () => {
     const work = SIZES.map((n) => {
       const root = freshRoot('qc-detail');
       const [subject, ...others] = rows(n + 1, 'detail');
-      seed(root, [subject, ...others]);
+      seed(ctxFor(root), [subject, ...others]);
       replaceDetectedConflicts(root, [
         ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
         { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
@@ -515,7 +515,7 @@ describe('the dashboard snapshot build', () => {
     const read: number[] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-dash-build');
-      seed(root, [...rows(4, 'live'), ...rows(n, 'archived', { kind: 'archived' }), ...rows(n, 'replaced', { kind: 'superseded' })]);
+      seed(ctxFor(root), [...rows(4, 'live'), ...rows(n, 'archived', { kind: 'archived' }), ...rows(n, 'replaced', { kind: 'superseded' })]);
       const service = createSnapshotService(root, () => Date.now());
       try {
         const { result, statements, rowsRead } = recordStatements(() => service.get('default'));
@@ -543,7 +543,7 @@ describe('hippo_status', () => {
         memory('status row tagged as an error', { tags: ['deploy', 'error'] }),
       ];
       const elsewhere = rows(2, 'elsewhere', { tenant_id: 'other' });
-      seed(root, [...own, ...elsewhere]);
+      seed(ctxFor(root), [...own, ...elsewhere]);
       replaceDetectedConflicts(root, [
         { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },
         { memory_a_id: elsewhere[0].id, memory_b_id: elsewhere[1].id, reason: 'other tenant pair', score: 0.9 },
@@ -566,7 +566,7 @@ describe('recordSessionDigest', () => {
   it('reads no full row to find the text hippo could have injected', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-digest');
-      seed(root, rows(n, 'digest'));
+      seed(ctxFor(root), rows(n, 'digest'));
       const scan = {
         turns: [{ role: 'user' as const, text: 'the upload keeps failing overnight' }],
         finalText: 'Retry `upload()` with backoff because the storage token expires mid-transfer.',
@@ -585,7 +585,7 @@ describe('an id-list read of one tenant', () => {
   it('seeks each id on the primary key, never walking every row of the tenant', async () => {
     const root = freshRoot('qc-id-plan');
     const entries = rows(10, 'plan');
-    seed(root, entries);
+    seed(ctxFor(root), entries);
     const ids = entries.map((e) => e.id);
     const { result, statements } = await recordStatementsAsync(async () => {
       await outcome(ctxFor(root), ids, true);

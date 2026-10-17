@@ -17,6 +17,10 @@ import {
   createCard, claimCard, addCardComment, blockCard, reviewCard, completeCard, heartbeatCard,
 } from './_helpers/root-forms.js';
 
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
 function dashboardRequest(
@@ -81,14 +85,10 @@ describe('dashboard entry', () => {
   let hippoRoot: string;
   let server: Server | undefined;
   let port: number;
-  let prevTenant: string | undefined;
-  let prevHippoHome: string | undefined;
 
   beforeEach(async () => {
     ({ base: home, root: hippoRoot } = makeStore('dash-entry'));
-    prevTenant = process.env.HIPPO_TENANT;
-    prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     port = await listenAndGetPort(server);
   });
@@ -100,10 +100,6 @@ describe('dashboard entry', () => {
       );
       server = undefined;
     }
-    if (prevTenant === undefined) delete process.env.HIPPO_TENANT;
-    else process.env.HIPPO_TENANT = prevTenant;
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
   });
 
   it('E1: a loopback Host gets 200 with no ACAO, on API and static paths', async () => {
@@ -195,8 +191,6 @@ describe('card routes', () => {
   let listJson: string;
   let showPJson: string;
   let showCJson: string;
-  let prevTenant: string | undefined;
-  let prevHippoHome: string | undefined;
 
   beforeAll(async () => {
     home = makeRoot('w2c-routes', { init: false });
@@ -213,11 +207,8 @@ describe('card routes', () => {
     });
     hippoRoot = join(cwd, '.hippo');
     expect(existsSync(hippoRoot)).toBe(true);
-
-    prevTenant = process.env.HIPPO_TENANT;
-    prevHippoHome = process.env.HIPPO_HOME;
-    delete process.env.HIPPO_TENANT;
-    process.env.HIPPO_HOME = globalDir;
+    vi.stubEnv('HIPPO_TENANT', undefined);
+    vi.stubEnv('HIPPO_HOME', globalDir);
     tenant = resolveTenantId({});
 
     const p = createCard(hippoRoot, tenant, { title: 'P', repo: 'r', contract: 'c', budget: 5 });
@@ -266,17 +257,13 @@ describe('card routes', () => {
   });
 
   afterEach(() => {
-    delete process.env.HIPPO_TENANT;
+    vi.stubEnv('HIPPO_TENANT', undefined);
   });
 
   afterAll(async () => {
     await new Promise<void>((resolve, reject) =>
       server.close((err) => (err ? reject(err) : resolve())),
     );
-    if (prevTenant === undefined) delete process.env.HIPPO_TENANT;
-    else process.env.HIPPO_TENANT = prevTenant;
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
   });
 
   const host = () => `127.0.0.1:${port}`;
@@ -331,14 +318,14 @@ describe('card routes', () => {
   });
 
   it('R5: HIPPO_TENANT scopes /api/cards and /api/cards/:id to the resolved tenant', async () => {
-    process.env.HIPPO_TENANT = 'tenant_b';
+    vi.stubEnv('HIPPO_TENANT', 'tenant_b');
     const listB = await dashboardRequest(port, '/api/cards', host());
     const idsB = JSON.parse(listB.body).cards.map((card: { id: string }) => card.id);
     expect(idsB).not.toContain(T);
     const showB = await dashboardRequest(port, `/api/cards/${T}`, host());
     expect(showB.status).toBe(404);
 
-    process.env.HIPPO_TENANT = 'tenant_a';
+    vi.stubEnv('HIPPO_TENANT', 'tenant_a');
     const listA = await dashboardRequest(port, '/api/cards', host());
     const idsA = JSON.parse(listA.body).cards.map((card: { id: string }) => card.id);
     expect(idsA).toEqual([T]);
@@ -355,12 +342,12 @@ describe('card routes', () => {
 
   it('R7: a broken tenant answers 500 and the server keeps serving', async () => {
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    process.env.HIPPO_TENANT = 'sess_x';
+    vi.stubEnv('HIPPO_TENANT', 'sess_x');
     const broken = await dashboardRequest(port, '/api/cards', host());
     expect(broken.status).toBe(500);
     expect(broken.body).toBe('{"error":"Internal error"}');
 
-    delete process.env.HIPPO_TENANT;
+    vi.stubEnv('HIPPO_TENANT', undefined);
     const after = await dashboardRequest(port, '/api/cards', host());
     expect(after.status).toBe(200);
     errorSpy.mockRestore();

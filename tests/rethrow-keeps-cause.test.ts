@@ -1,5 +1,5 @@
 // A rethrown failure keeps the original error as `cause`, so a log or debugger can reach the real fault.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
@@ -10,6 +10,10 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { createListener } from '../src/server/tls.js';
 import { parseSteps } from '../src/consolidate/trace.js';
 import { loadConfig } from '../src/core/config.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const tmpDirs: string[] = [];
 const servers: http.Server[] = [];
@@ -79,14 +83,9 @@ describe('rethrown errors keep their cause', () => {
   });
 
   describe('embedding provider', () => {
-    const saved = process.env['OPENAI_API_KEY'];
-    afterEach(() => {
-      if (saved === undefined) delete process.env['OPENAI_API_KEY'];
-      else process.env['OPENAI_API_KEY'] = saved;
-    });
 
     it('keeps the transport error when the API port refuses the connection', async () => {
-      process.env['OPENAI_API_KEY'] = 'test-key';
+      vi.stubEnv('OPENAI_API_KEY', 'test-key');
       const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('embedding request to openai failed');
@@ -94,7 +93,7 @@ describe('rethrown errors keep their cause', () => {
     });
 
     it('keeps the parse error when a 200 answer is not JSON', async () => {
-      process.env['OPENAI_API_KEY'] = 'test-key';
+      vi.stubEnv('OPENAI_API_KEY', 'test-key');
       const port = portOf(await listen((_req, res) => { res.writeHead(200); res.end('not json'); }));
       const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(port)).embeddings);
       const err = await caught(() => provider.embed(['hello']));
@@ -104,7 +103,7 @@ describe('rethrown errors keep their cause', () => {
     });
 
     it('keeps the key out of the cause when the transport refuses the header', async () => {
-      process.env['OPENAI_API_KEY'] = 'sk-test' + String.fromCharCode(10) + 'SECRETPART';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test' + String.fromCharCode(10) + 'SECRETPART');
       const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
       const err = await caught(() => provider.embed(['hello']));
       expect(err.cause).toBeInstanceOf(Error);

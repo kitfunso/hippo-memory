@@ -8,11 +8,15 @@
  * clears them in its finally; tests also clear in beforeEach/afterEach.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { generateProtocol } from '../scripts/e1-lifecycle/generate.mjs';
 import { runArmSeed } from '../scripts/e1-lifecycle/run.mjs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -26,7 +30,7 @@ const ABLATION_ENV_VARS = [
 ] as const;
 
 function clearAblationEnv(): void {
-  for (const v of ABLATION_ENV_VARS) delete process.env[v];
+  for (const v of ABLATION_ENV_VARS) vi.stubEnv(v, undefined);
   _resetAblationCacheForTests();
 }
 beforeEach(clearAblationEnv);
@@ -83,7 +87,7 @@ describe('E1 generator', () => {
       JSON.stringify(p.memories.filter(keep).map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })));
     expect(strip(v1, () => true)).toBe(strip(base, () => true));
     const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
-    expect(negs.length).toBeGreaterThan(0);
+    expect(negs).toHaveLength(TINY.numFacts * TINY.distractorMultiple);
     expect(negs.every((m: any) => m.session < floor)).toBe(true);
     // @ts-expect-error - 'junk' is deliberately outside the lookalikeWindow union to reach the runtime validation
     expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(/lookalikeWindow/);
@@ -96,7 +100,8 @@ describe('E1 driver', () => {
     const result = await runArmSeed('full', 3, TINY, (hippoRoot: string) => {
       storeSeen = true;
       const entries = loadAllEntries(hippoRoot, 'default');
-      expect(entries.length).toBeGreaterThan(0);
+      // Seed 3's protocol: 12 facts, 5 updates, 1 contradiction, 2 traps and 48 distractors, none ever deleted.
+      expect(entries).toHaveLength(68);
       // Every created timestamp lies within the protocol's simulated range -
       // nothing stamped with the real 2026 clock (rev #8 invariant).
       for (const e of entries) {
@@ -139,7 +144,8 @@ describe('E1 driver', () => {
     for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
   });
 
-  it('is REPRODUCIBLE: identical (arm, seed) runs produce identical metrics (codex P1)', async () => {
+  // Two full real-store runs of the arm.
+  it('is REPRODUCIBLE: identical (arm, seed) runs produce identical metrics', async () => {
     // The protocol intentionally creates score ties (identical-form
     // negatives); with random entry UUIDs, tie order differed across runs of
     // the same seed. Entry ids are now derived from (seed, protocol id) -
@@ -148,7 +154,7 @@ describe('E1 driver', () => {
     const b = await runArmSeed('full', 11, TINY);
     expect(JSON.stringify(a.epochs)).toBe(JSON.stringify(b.epochs));
     expect(a.meta.protocolHash).toBe(b.meta.protocolHash);
-  }, 60_000); // two full real-store runs; default 5s timeout is a CI flake (codex P2)
+  }, 16_000);
 
   it('baseline arms produce rankings (bm25-static + recency-window)', async () => {
     const bm25 = await runArmSeed('bm25-static', 4, TINY);
@@ -160,6 +166,7 @@ describe('E1 driver', () => {
     }
   });
 
+  // Three full real-store runs, one per arm.
   it('round-2 arms produce rankings and record their settings in meta', async () => {
     for (const arm of ['recency-off', 'bm25-outcome', 'bm25-newest']) {
       const r = await runArmSeed(arm, 4, TINY);

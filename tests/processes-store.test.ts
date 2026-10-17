@@ -50,7 +50,7 @@ describe('processes store (first-class object)', () => {
       steps: ['run tests', 'bump version', 'publish'],
       description: 'the npm release ritual',
     });
-    expect(proc.id).toBeGreaterThan(0);
+    expect(proc.id).toBe(1);
     expect(proc.memoryId).not.toBeNull();
     expect(proc.tenantId).toBe('default');
     expect(proc.processName).toBe('Release');

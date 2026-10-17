@@ -22,7 +22,7 @@
  *     the full result list by (score DESC, sessionIndex ASC, turnIdx ASC)
  *     via the provenance map before ever slicing top-K.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -37,17 +37,22 @@ import { _resetAblationCacheForTests } from '../dist/core/ablation.js';
 
 import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
 
 describe('cross-ingest determinism', () => {
+  // Two ingests and two full 30-round simulations against real stores on disk.
   it('two separate scratch-root ingests of the same fixture, FULL 30-round protocol, produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
     const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
     const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));
     const budgets = [0.1, 0.2, 0.3, 0.5];
 
     async function ingestSimExtractUnder(root: string) {
-      process.env.HIPPO_MV_SCRATCH_ROOT = root;
+      vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', root);
       const rowsByQuestion: Record<string, Array<{ memory_id: string; sessionIndex: number; turnIdx: number; gold: number; features: Record<string, number> }>> = {};
       for (const q of QUESTIONS) {
         ingestQuestion(q);
@@ -105,7 +110,7 @@ describe('cross-ingest determinism', () => {
         }
       }
     } finally {
-      delete process.env.HIPPO_MV_SCRATCH_ROOT;
+      vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
       _resetAblationCacheForTests();
       // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
       // reads the env var, which is already cleared above), so a plain

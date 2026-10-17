@@ -27,7 +27,6 @@ const FAKE_NOW = '2026-03-01T12:00:00.000Z';
 const TENANTS = ['tenant-a', 'tenant-b'];
 const ROWS = 300;
 const HASHED_ID = 'openai:hashed-16';
-const SLOW = 120_000;
 const PAGE = 64;
 
 let home: string;
@@ -110,6 +109,7 @@ function rebuiltState(root: string, providerId: string, vectorOf: (entry: Memory
   };
 }
 
+// 300 rows written one commit at a time, then embedded twice, so the runner's disk sets the time.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   home = makeRoot('embed-index-state', { init: false });
@@ -128,7 +128,7 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-}, SLOW);
+}, 120_000);
 
 afterAll(async () => {
   await embeddings.close();
@@ -168,7 +168,7 @@ describe('embedAll backfill on hippo.db', () => {
       model,
       particles: [],
     });
-  }, SLOW);
+  });
 
   it('embeds nothing on a second run', async () => {
     const root = copyOf(indexedOld);
@@ -177,7 +177,7 @@ describe('embedAll backfill on hippo.db', () => {
     expect(await embedAll(sqliteSyncStore(root).localFiles, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(0);
     expect(calls).toEqual([]);
     expect(indexOn(root)).toEqual(before);
-  }, SLOW);
+  });
 });
 
 describe('a model identity change on hippo.db', () => {
@@ -188,7 +188,7 @@ describe('a model identity change on hippo.db', () => {
     const state = indexOn(root);
     expect(state).toEqual(rebuiltState(root, 'fake-new', (e) => fakeVector('fake-new', e)));
     expect([state.vectors.length, state.particles.length]).toEqual([ROWS, ROWS]);
-  }, SLOW);
+  });
 
   it('embedAll rebuilds a 300-row index, and embedMemory leaves it alone past the inline reindex cap', async () => {
     const [viaAll, viaOne] = [copyOf(indexedOld), copyOf(indexedOld)];
@@ -199,7 +199,7 @@ describe('a model identity change on hippo.db', () => {
     expect(indexOn(viaOne)).toEqual(before);
     expect(await embedAll(sqliteSyncStore(viaAll).localFiles)).toBe(ROWS);
     expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
-  }, SLOW);
+  });
 
   it('keeps the old vectors, identity and particles when the provider fails part way through the rebuild', async () => {
     const root = copyOf(indexedOld);
@@ -211,13 +211,13 @@ describe('a model identity change on hippo.db', () => {
     await expect(embedAll(sqliteSyncStore(root).localFiles, undefined, failing)).rejects.toThrow('provider down');
     expect(indexOn(root)).toEqual(before);
     expect(before.model).toBe(embeddingIndexIdentity('fake-old'));
-  }, SLOW);
+  });
 });
 
 /** The most full memory rows one statement of a run can hand back: the length of its id list, or the whole store when it has none. */
-function peakFullRowsRead(statements: readonly string[]): number {
+function peakFullRowsRead(statements: readonly string[], fullReads: number): number {
   const reads = statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS));
-  expect(reads.length).toBeGreaterThan(0);
+  expect(reads).toHaveLength(fullReads);
   return Math.max(...reads.map((sql) => {
     const idList = /\bid IN \(([?,\s]+)\)/.exec(sql);
     return idList ? idList[1].split('?').length - 1 : ROWS;
@@ -225,17 +225,18 @@ function peakFullRowsRead(statements: readonly string[]): number {
 }
 
 describe('rows held while embedding hippo.db', () => {
+  // A rebuild reads its 300 rows twice, once to embed and once to reset the particles.
   it.each([
-    { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120 },
-    { name: 'a rebuild of 300 rows', template: (): string => indexedOld, id: 'fake-new', embedded: ROWS },
-  ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded }) => {
+    { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120, fullReads: 2 },
+    { name: 'a rebuild of 300 rows', template: (): string => indexedOld, id: 'fake-new', embedded: ROWS, fullReads: 10 },
+  ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded, fullReads }) => {
     const root = copyOf(template());
     const calls: number[] = [];
     const log = await recordStatementsAsync(() => embedAll(sqliteSyncStore(root).localFiles, undefined, fake(id, (texts) => calls.push(texts.length))));
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
-    expect(peakFullRowsRead(log.statements)).toBe(PAGE);
-  }, SLOW);
+    expect(peakFullRowsRead(log.statements, fullReads)).toBe(PAGE);
+  });
 
   it("resets particles from ids for both tenants' embedded rows, reading the rows at most 64 at a time", () => {
     const root = copyOf(partly);
@@ -247,6 +248,6 @@ describe('rows held while embedding hippo.db', () => {
     expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
-    expect(peakFullRowsRead(log.statements)).toBe(PAGE);
-  }, SLOW);
+    expect(peakFullRowsRead(log.statements, 5)).toBe(PAGE);
+  });
 });

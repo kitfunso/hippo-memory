@@ -134,7 +134,8 @@ describe('hybridSearch with embeddings', () => {
 
     // hybridSearch without hippoRoot falls back to BM25
     const results = await hybridSearch('FRED cache failure', entries, { budget: 10000 });
-    expect(results.length).toBeGreaterThan(0);
+    // BM25-only drops the Python row, which shares no query term.
+    expect(results).toHaveLength(1);
     expect(results[0].entry.content).toMatch(/FRED|cache/i);
   });
 

@@ -13,7 +13,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
@@ -21,6 +21,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { retrieve, RecallContractError } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -42,20 +46,12 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
 
 describe('fresh-tail policy', () => {
   let root: string;
-  // Snapshot + restore env so other test files are not affected.
-  let prevEnv: string | undefined;
 
   beforeEach(() => {
     root = makeRoot('f5');
-    prevEnv = process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
-    delete process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
   });
   afterEach(() => {
-    if (prevEnv === undefined) {
-      delete process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
-    } else {
-      process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = prevEnv;
-    }
     safeRmSync(root);
   });
 
@@ -68,7 +64,7 @@ describe('fresh-tail policy', () => {
   });
 
   it('env=1, freshTailCount > 0, no sessionId → throws RecallContractError with code', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
     let thrown = null;
     try {
@@ -89,7 +85,7 @@ describe('fresh-tail policy', () => {
   });
 
   it('env=1, freshTailSessionId set → no throw, session-scoped rows surface', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     const sess = 'sess-A';
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`session A event ${i}`, { source_session_id: sess });
@@ -104,9 +100,9 @@ describe('fresh-tail policy', () => {
       query: 'session',
       window: { freshTailCount: 5, freshTailSessionId: sess },
     });
-    const freshIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
-    // Every fresh-tail row must come from sess-A.
-    expect(freshIds.length).toBeGreaterThan(0);
+    const fresh = r.results.filter((it) => it.isFreshTail).map((it) => it.content).sort();
+    // Every fresh-tail row must come from sess-A, and all three of them surface.
+    expect(fresh).toEqual(['session A event 0', 'session A event 1', 'session A event 2']);
     // And no fresh-tail row should mention "session B".
     for (const it of r.results) {
       if (it.isFreshTail) {
@@ -116,7 +112,7 @@ describe('fresh-tail policy', () => {
   });
 
   it('env=1, freshTailCount=0 (or unset) → no throw (guard fires only when fresh-tail requested)', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
     const unset = await retrieve(ctxFor(root), { query: 'event' });
     const zero = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 0 } });
@@ -129,7 +125,7 @@ describe('fresh-tail policy', () => {
   it('env=an off or unknown spelling → treated as unset, no throw', async () => {
     // Only the on spellings (1, true, on) enable the guard; "yes" is unknown and takes the off side.
     for (const val of ['yes', '0', '', 'false']) {
-      process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = val;
+      vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', val);
       for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`v-${val}-event ${i}`));
       const none = await retrieve(ctxFor(root), { query: 'event' });
       expect(none.results.length).toBeGreaterThanOrEqual(3);

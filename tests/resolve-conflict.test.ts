@@ -197,7 +197,7 @@ describe('conflict tenant isolation', () => {
     expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
   });
 
-  it('auto-resolves an existing open cross-tenant row when the pair is re-detected (v1.11.0 residue)', () => {
+  it('auto-resolves an existing open cross-tenant row when the pair is re-detected', () => {
     // Seed two memories under different tenants.
     const a = createMemory7('tenant-a content', { tenantId: 'tenant-a', tags: ['x'] });
     const b = createMemory7('tenant-b content', { tenantId: 'tenant-b', tags: ['x'] });

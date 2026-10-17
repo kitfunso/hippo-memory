@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -11,6 +11,10 @@ import {
 } from '../src/core/project-identity.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let tmpRoot: string;
 let home: string;
@@ -146,20 +150,11 @@ describe('resolveProjectIdentity', () => {
     const repo = mkdirs('outer', 'tmp', 'repo');
     fs.mkdirSync(path.join(repo, '.git'));
     expect(resolveProjectIdentity(plain, { homeDir: home }).name).toBe('outer');
-
-    const saved = { TMPDIR: process.env.TMPDIR, TEMP: process.env.TEMP, TMP: process.env.TMP };
-    process.env.TMPDIR = tmp;
-    process.env.TEMP = tmp;
-    process.env.TMP = tmp;
-    try {
-      expect(resolveProjectIdentity(plain, { homeDir: home }).name).toBe('');
-      expect(resolveProjectIdentity(repo, { homeDir: home }).name).toBe('repo');
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    }
+    vi.stubEnv('TMPDIR', tmp);
+    vi.stubEnv('TEMP', tmp);
+    vi.stubEnv('TMP', tmp);
+    expect(resolveProjectIdentity(plain, { homeDir: home }).name).toBe('');
+    expect(resolveProjectIdentity(repo, { homeDir: home }).name).toBe('repo');
   });
 
   it('lowercases the project name', () => {

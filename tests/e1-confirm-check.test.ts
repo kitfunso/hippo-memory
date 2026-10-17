@@ -74,5 +74,5 @@ describe('confirm-check.mjs', () => {
     const kept = r.stdout.match(/R4 seeds: (.*)/)?.[1].trim().split(',') ?? [];
     expect(kept).toHaveLength(20);
     expect(kept).not.toContain('89');
-  }, 30_000);
+  });
 });

@@ -81,7 +81,7 @@ describe('normalizeHookPayload leaves other payloads untouched', () => {
   // Five real Claude Code PostCompact payloads, the same fixture compaction-items.test.ts reads, plus a PostToolUseFailure with its error string.
   it('returns each Claude Code payload byte for byte', () => {
     const lines = fs.readFileSync(CLAUDE_FIXTURE, 'utf8').split('\n').filter(Boolean);
-    expect(lines.length).toBeGreaterThan(0);
+    expect(lines).toHaveLength(5);
     for (const line of [...lines, claudeCodePayload('PostToolUseFailure', CWD, TRANSCRIPT)]) expect(normalizeHookPayload(line)).toBe(line);
   });
 

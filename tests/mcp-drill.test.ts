@@ -5,7 +5,7 @@
  * summary, errors cleanly on a leaf id, errors cleanly on a cross-tenant id.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
@@ -13,6 +13,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type DrillArgs = { summary_id: string; depth?: number };
 
@@ -47,18 +51,14 @@ function extractText(res: McpResponse | null): string {
 
 describe('mcp hippo_drill', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-drill');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
 
   afterEach(() => {
     safeRmSync(home);
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('hippo_drill is registered in the tools catalogue', async () => {
@@ -103,7 +103,7 @@ describe('mcp hippo_drill', () => {
     expect(text).toContain('alpha detail event 0');
   });
 
-  it('errors on a leaf id (v1.6.4: distinguishable message)', async () => {
+  it('errors on a leaf id (distinguishable message)', async () => {
     const leaf = createMemory('plain leaf body', {
       layer: Layer.Buffer,
       confidence: 'observed',

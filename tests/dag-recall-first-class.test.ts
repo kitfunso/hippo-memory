@@ -25,6 +25,10 @@ import type { PhysicsParticle } from '../src/core/physics.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function makeL2Summary(
   content: string,
   opts: { lastRebuiltAt?: string | null; rebuildCount?: number; descendantCount?: number } = {},
@@ -66,8 +70,8 @@ describe('first-class DAG recall (scoring layer)', () => {
   });
 
   afterEach(() => {
-    if (savedDeboost !== undefined) process.env.HIPPO_SUMMARY_DEBOOST = savedDeboost;
-    else delete process.env.HIPPO_SUMMARY_DEBOOST;
+    if (savedDeboost !== undefined) vi.stubEnv('HIPPO_SUMMARY_DEBOOST', savedDeboost);
+    else vi.stubEnv('HIPPO_SUMMARY_DEBOOST', undefined);
   });
 
   it('test #1: default deboost (0.85) applies to L2 summary, NOT to L1 fact', async () => {
@@ -92,7 +96,7 @@ describe('first-class DAG recall (scoring layer)', () => {
   });
 
   it('test #3: env HIPPO_SUMMARY_DEBOOST respected', async () => {
-    process.env.HIPPO_SUMMARY_DEBOOST = '0.5';
+    vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('env-deboost test summary');
     writeEntry(hippoRoot, summary);
     const results = await hybridSearch('env-deboost', [summary], { explain: true });
@@ -104,14 +108,14 @@ describe('first-class DAG recall (scoring layer)', () => {
     writeEntry(hippoRoot, summary);
 
     for (const bad of ['2.0', '0.0', 'NaN', '-0.5', 'garbage']) {
-      process.env.HIPPO_SUMMARY_DEBOOST = bad;
+      vi.stubEnv('HIPPO_SUMMARY_DEBOOST', bad);
       const results = await hybridSearch('out-of-range', [summary], { explain: true });
       expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.85);
     }
   });
 
   it('test #5: per-call option overrides env', async () => {
-    process.env.HIPPO_SUMMARY_DEBOOST = '0.5';
+    vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('override-env summary');
     writeEntry(hippoRoot, summary);
     const results = await hybridSearch('override-env', [summary], { explain: true, summaryDeboost: 0.7 });
@@ -256,6 +260,7 @@ describe('first-class DAG recall (scoring layer)', () => {
       summaryDeboost: 1.0,
     });
     const summaryBaseScore = findResult(baseline, summary.id)?.score ?? 0;
+    // BM25 times a clock-dependent strength and recency, so only the sign is fixed.
     expect(summaryBaseScore).toBeGreaterThan(0);
 
     // Run with reranker + default deboost

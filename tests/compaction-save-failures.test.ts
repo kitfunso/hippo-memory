@@ -43,7 +43,7 @@ describe('saveCompaction reports each failure once', () => {
     }
     expect(logs.filter((m) => m.startsWith('store busy, summary spooled'))).toHaveLength(1);
     expect(errors).not.toHaveBeenCalled();
-  }, 60_000);
+  });
 
   it('a spool that cannot be written is logged once to the hook and once to the structured log', () => {
     const errors = vi.spyOn(logger, 'error').mockImplementation(() => {});
@@ -60,5 +60,5 @@ describe('saveCompaction reports each failure once', () => {
     expect(logs.filter((m) => m.startsWith('spool failed'))).toHaveLength(1);
     expect(errors).toHaveBeenCalledTimes(1);
     expect(String(errors.mock.calls[0][0])).toContain('post-compact: spool failed');
-  }, 60_000);
+  });
 });

@@ -22,8 +22,9 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// The LIKE case seeds 6,000 rows, in two transactions, since store size is the thing it varies.
-vi.setConfig({ testTimeout: 30_000 });
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -75,13 +76,13 @@ describe('loadSearchEntries bm25_score', () => {
   it('No-terms path: empty query returns entries with bm25_score undefined', () => {
     writeEntry(root, makeRaw('any content'));
     const results = loadSearchEntries(root, '', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((e) => e.content)).toEqual(['any content']);
     for (const e of results) {
       expect(e.bm25_score).toBeUndefined();
     }
   });
 
-  it('No-terms path: honours the LIMIT parameter (self-review fix)', async () => {
+  it('No-terms path: honours the LIMIT parameter', async () => {
     // Self-review found the no-terms path was uncapped pre-v1.7.0 (codex
     // diff-pass only flagged the bottom-of-function full-store fallback).
     // Insert 50 raws, request limit=10, assert exactly 10 returned.
@@ -95,7 +96,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry (v1.7.1 INFO #3 + P1)', async () => {
+  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry', async () => {
     // P1[5]: verify stamped `created` survives writeEntry → roundtrip read.
     // upsertEntryRow (store/entry-row.ts) passes entry.created straight through;
     // a future normalizer would silently break this test. Anchor explicitly.
@@ -136,7 +137,7 @@ describe('loadSearchEntries bm25_score', () => {
     // FTS5 matches whole tokens, so a part-word is the only route to LIKE that leaves the FTS index untouched.
     writeEntry(root, makeRaw('alphabet soup contents'));
     const results = loadSearchEntries(root, 'alphab', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
+    expect(results).toHaveLength(1);
     // Anchor: the expected row must come back via the LIKE branch.
     expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
     // No FTS path → no bm25_score on any returned row.
@@ -147,18 +148,13 @@ describe('loadSearchEntries bm25_score', () => {
 
   it('the environment cannot force the LIKE route: with the old variable set, a term query still comes back through FTS', () => {
     writeEntry(root, makeRaw('alphabet soup contents'));
-    const prev = process.env.HIPPO_FORCE_LIKE_PATH;
-    process.env.HIPPO_FORCE_LIKE_PATH = '1';
-    try {
-      const results = loadSearchEntries(root, 'alphabet', 200, 'default');
-      expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
-      expect(results[0]!.bm25_score).toEqual(expect.any(Number));
-    } finally {
-      if (prev === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
-      else process.env.HIPPO_FORCE_LIKE_PATH = prev;
-    }
+    vi.stubEnv('HIPPO_FORCE_LIKE_PATH', '1');
+    const results = loadSearchEntries(root, 'alphabet', 200, 'default');
+    expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
+    expect(results[0]!.bm25_score).toEqual(expect.any(Number));
   });
 
+  // Seeds 6,000 rows, in two transactions, since store size is the thing it varies.
   it('LIKE fallback path: a query matching nothing tests the same number of rows however large the store', () => {
     const db = openHippoDb(root);
     try {
@@ -177,12 +173,13 @@ describe('loadSearchEntries bm25_score', () => {
         // The LIKE predicate lowers content and tags once per term for each row it tests.
         return lowered / 2;
       });
-      expect(rowsTested[0]).toBeGreaterThan(0);
+      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/search-rows.ts).
+      expect(rowsTested[0]).toBe(2000);
       expect(rowsTested[1]).toBe(rowsTested[0]);
     } finally {
       closeHippoDb(db);
     }
-  });
+  }, 30_000);
 
   it('Full-store fallback path: terms with no match → no FTS hit, no LIKE hit → fallback returns all rows with bm25_score undefined', () => {
     writeEntry(root, makeRaw('one row'));
@@ -198,7 +195,7 @@ describe('loadSearchEntries bm25_score', () => {
       200,
       'default',
     );
-    expect(results.length).toBeGreaterThan(0);
+    expect(results.map((e) => e.content).sort()).toEqual(['another row', 'one row']);
     // None of the returned rows should carry bm25_score because we did
     // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
     // → full-store fallback).
@@ -207,7 +204,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('Full-store fallback path: honours LIMIT (regression for codex P1 — pre-v1.7.0 was uncapped)', () => {
+  it('Full-store fallback path: honours LIMIT (regression: it was once uncapped)', () => {
     // Codex caught that the full-store fallback returned the entire tenant
     // store ignoring `limit`. Pre-v1.7.0 a query with no FTS hit and
     // limit=10 returned all 30 rows; the fix added LIMIT ?. This test

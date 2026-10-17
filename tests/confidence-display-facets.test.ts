@@ -2,7 +2,7 @@
 // `resolveConfidence` fused into one, making a rejected row and an aged-out
 // one indistinguishable at every display site.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
@@ -17,6 +17,10 @@ import { runCli } from '../src/cli.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { makeStore } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
@@ -67,17 +71,11 @@ describe('confidence facets', () => {
   let home: string;
   let hippoRoot: string;
   let server: Server | undefined;
-  let prevHome: string | undefined;
-  let prevNow: string | undefined;
 
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('facets'));
-    prevHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
-    // Fixtures are dated from NOW, so the runtime clock has to be NOW too,
-    // for the core calls and the CLI verbs this process runs.
-    prevNow = process.env.HIPPO_FAKE_NOW;
-    process.env.HIPPO_FAKE_NOW = NOW.toISOString();
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
+    vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
     _resetAblationCacheForTests();
   });
 
@@ -86,10 +84,6 @@ describe('confidence facets', () => {
       await new Promise<void>((res, rej) => server!.close((e) => (e ? rej(e) : res())));
       server = undefined;
     }
-    if (prevHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHome;
-    if (prevNow === undefined) delete process.env.HIPPO_FAKE_NOW;
-    else process.env.HIPPO_FAKE_NOW = prevNow;
     _resetAblationCacheForTests();
   });
 
@@ -252,7 +246,7 @@ describe('confidence facets', () => {
     expect(page.rows.find((m) => m.id === e.id)?.confidence).toBe('observed');
     expect(detail.confidence).toBe('observed');
     expect(detail.agedOut).toBe(true);
-  }, 15_000);
+  });
 
   it('renders the pair on hippo trace, the surface that reads without retrieving', async () => {
     const e = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
@@ -318,5 +312,5 @@ describe('confidence facets', () => {
       { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
     );
     expect(JSON.stringify(res)).toContain('[stale]');
-  }, 30_000);
+  });
 });

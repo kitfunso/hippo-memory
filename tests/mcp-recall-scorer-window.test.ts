@@ -72,7 +72,7 @@ describe('MCP hippo_recall scorer_window', () => {
     await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
   });
 
-  it('scorer_window+fresh_tail_count exercises the api.recall appendix path — review TESTING P1', async () => {
+  it('scorer_window+fresh_tail_count exercises the api.recall appendix path', async () => {
     // The appendix-marker assertion is non-deterministic in this test
     // because the physics scorer dedupes fresh-tail rows that already
     // appear in the primary ranked block. With all alpha-matching content,
@@ -95,7 +95,7 @@ describe('MCP hippo_recall scorer_window', () => {
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
     const text = extractResultText(result);
-    expect(text.length).toBeGreaterThan(0);
+    expect(text).toContain('Found 30 memories:');
     // Appendix renders "## Fresh tail / substituted summaries" header
     // (src/mcp/server.ts:470). Confirm the appendix path fired with the
     // beta rows that physics didn't score.

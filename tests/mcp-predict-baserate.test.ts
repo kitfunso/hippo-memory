@@ -8,13 +8,17 @@
  * 3. Missing class_tag returns clear usage message
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { closePrediction } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type ToolArgs = {
   class_tag?: string;
@@ -47,18 +51,14 @@ function extractText(res: McpResponse | null): string {
 
 describe('mcp hippo_predict_baserate', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-j3');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('returns formatted text response for a class with closed predictions', async () => {

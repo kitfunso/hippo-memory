@@ -5,6 +5,10 @@ import type { AddressInfo } from 'node:net';
 import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs, parseRetryAfterMs } from '../src/util/http-retry.js';
 import { classifyTransportFailure } from '../src/cli/client.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 interface Reply {
   status: number;
   headers?: Record<string, string>;
@@ -44,7 +48,7 @@ afterEach(async () => {
     await new Promise<void>((resolve) => server?.close(() => resolve()));
   }
   server = null;
-  delete process.env.HIPPO_LLM_TIMEOUT_MS;
+  vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', undefined);
   vi.restoreAllMocks();
 });
 
@@ -205,11 +209,24 @@ describe('the wait between attempts under a caller signal', () => {
     const controller = new AbortController();
     const { fetchFn, calls } = countedFetch();
     const reason = new Error('caller gave up');
+    // The two-second timer is the wait the 503 asked for, so the abort lands while the client is known to be in it.
+    const realSetTimeout = globalThis.setTimeout;
+    let waitTimer: NodeJS.Timeout | undefined;
+    const waiting = new Promise<void>((resolve) => {
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((fn, ms, ...rest) => {
+        const timer = realSetTimeout(fn, ms, ...rest);
+        if (ms === 2000) { waitTimer = timer; resolve(); }
+        return timer;
+      });
+    });
+    const cleared = vi.spyOn(globalThis, 'clearTimeout');
     const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn });
-    setTimeout(() => controller.abort(reason), 100);
+    await waiting;
+    controller.abort(reason);
     await expect(pending).rejects.toBe(reason);
-    // A wait that sat out its two seconds would have started a second attempt before the abort ended the call.
     expect([calls(), hits()]).toEqual([1, 1]);
+    // A wait the caller left must not keep the process alive for its two seconds.
+    expect(cleared).toHaveBeenCalledWith(waitTimer);
   });
 
   it('ends an injected sleep the same way after a dropped connection', async () => {
@@ -217,9 +234,13 @@ describe('the wait between attempts under a caller signal', () => {
     const controller = new AbortController();
     const { fetchFn, calls } = countedFetch();
     const sleeps: number[] = [];
-    const sleep = (ms: number): Promise<void> => { sleeps.push(ms); return neverWakes(); };
+    // Aborts from inside the wait, once the client has begun it, so the abort cannot land during the attempt instead.
+    const sleep = (ms: number): Promise<void> => {
+      sleeps.push(ms);
+      queueMicrotask(() => controller.abort(new Error('caller gave up')));
+      return neverWakes();
+    };
     const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn, sleep, random: () => 0 });
-    setTimeout(() => controller.abort(new Error('caller gave up')), 100);
     await expect(pending).rejects.toThrow('caller gave up');
     expect(sleeps).toEqual([125]);
     expect([calls(), hits()]).toEqual([1, 1]);
@@ -282,15 +303,15 @@ describe('retry helpers', () => {
 
   it('takes the LLM timeout from HIPPO_LLM_TIMEOUT_MS and ignores junk', () => {
     expect(llmTimeoutMs()).toBe(60_000);
-    process.env.HIPPO_LLM_TIMEOUT_MS = '1500';
+    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '1500');
     expect(llmTimeoutMs()).toBe(1500);
-    process.env.HIPPO_LLM_TIMEOUT_MS = 'zero';
+    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', 'zero');
     expect(llmTimeoutMs()).toBe(60_000);
   });
 
   it('gives one LLM call, retries included, two attempts and the longest wait', () => {
     expect(llmTotalMs()).toBe(128_000);
-    process.env.HIPPO_LLM_TIMEOUT_MS = '1500';
+    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '1500');
     expect(llmTotalMs()).toBe(11_000);
   });
 });

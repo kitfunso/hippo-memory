@@ -17,7 +17,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
@@ -26,6 +26,14 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadLastRecall, saveIndex } from './_helpers/root-forms.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets POST /v1/outcome under test in
@@ -37,24 +45,17 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('POST /v1/outcome', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-out');
     globalHome = makeRoot('srv-out');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
@@ -216,8 +217,6 @@ describe('POST /v1/outcome', () => {
     const m2 = await remember(ctx, { content: 'boundary-mem-2' });
     const m3 = await remember(ctx, { content: 'boundary-mem-3' });
     // Pad with fake ids that will silently miss (still within cap).
-    // 997 readEntry-misses + 3 real takes ~5-10 seconds on real SQLite —
-    // bump timeout above vitest default 5s.
     const ids = [m1.id, m2.id, m3.id, ...Array(997).fill(0).map((_, i) => `mem_pad_${i}`)];
     expect(ids.length).toBe(1000);
     const res = await fetch(`${handle.url}/v1/outcome`, {
@@ -228,7 +227,7 @@ describe('POST /v1/outcome', () => {
     expect(res.status).toBe(200);
     const body = await jsonAs<{ applied: number }>(res);
     expect(body.applied).toBe(3); // only the 3 real ids applied
-  }, 30_000);
+  });
 
   it('1MB+ body returns 413 from body cap before id cap fires', async () => {
     // Synthesise ~1.2MB of ids — body cap (1MB) at the HTTP layer fires

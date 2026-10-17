@@ -88,6 +88,6 @@ describe('loadRecallSearchEntriesFromDb', () => {
     }
 
     expect(viaDb.map((e) => e.id)).toEqual(viaPublic.map((e) => e.id));
-    expect(viaPublic.length).toBeGreaterThan(0);
+    expect(viaPublic.map((e) => e.content)).toEqual(['the postgres migration rollback plan for deploy']);
   });
 });

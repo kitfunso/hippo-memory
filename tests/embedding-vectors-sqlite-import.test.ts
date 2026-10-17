@@ -16,8 +16,6 @@ import { makeRoot } from './_helpers/make-root.js';
 import { deleteEntry, saveEmbeddingIndex } from './_helpers/root-forms.js';
 import { handlesOf } from '../src/store/open.js';
 
-// The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.
-vi.setConfig({ testTimeout: 30_000 });
 
 let root: string;
 

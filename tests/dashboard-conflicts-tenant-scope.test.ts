@@ -7,6 +7,10 @@ import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import { get, makeStore, parse, startDashboard, type RunningDashboard, type TmpStore } from './_helpers/dashboard-fixture.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let tmp: TmpStore;
 let dash: RunningDashboard;
 
@@ -25,7 +29,7 @@ function seedTwoTenants() {
 
 beforeEach(async () => {
   tmp = makeStore('hippo-dash-conflicts');
-  process.env.HIPPO_TENANT = 'tenant_a';
+  vi.stubEnv('HIPPO_TENANT', 'tenant_a');
   dash = await startDashboard(tmp.hippoRoot, () => Date.now());
 });
 
@@ -52,7 +56,7 @@ describe('dashboard conflicts are tenant-scoped', () => {
     expect(own.conflicts[0].other.id).toBe(a2.id);
 
     expect((await get(dash.port, `/api/memory/${b1.id}`)).status).toBe(404);
-  }, 15_000);
+  });
 
   it('passes the running tenant to every conflict load, so later filters are not the only guard', async () => {
     const { a1 } = seedTwoTenants();
@@ -66,5 +70,5 @@ describe('dashboard conflicts are tenant-scoped', () => {
     await get(dash.port, `/api/memory/${a1.id}`);
     expect(loadOwn).toHaveBeenCalled();
     expect(loadOwn.mock.calls.every(([, tenantId]) => tenantId === 'tenant_a')).toBe(true);
-  }, 15_000);
+  });
 });

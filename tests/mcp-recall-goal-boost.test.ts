@@ -92,13 +92,14 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
         sessionId,
       )!.c;
-      expect(count).toBeGreaterThan(0);
+      // One tagged memory and one goal; the log keeps one row per (memory, goal) however many bands boost it.
+      expect(count).toBe(1);
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('without session_id, no boost runs and goal_recall_log stays empty (v1.7.3 baseline)', async () => {
+  it('without session_id, no boost runs and goal_recall_log stays empty', async () => {
     const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',

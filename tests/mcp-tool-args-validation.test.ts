@@ -1,11 +1,15 @@
 // tools/call arguments are checked against the tool's inputSchema before the tool runs.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { validateToolArgs, type ToolInputSchema } from '../src/mcp/tool-args.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -23,17 +27,10 @@ function reply(res: McpResponse | null): ToolReply {
 
 describe('MCP tool argument validation', () => {
   let home: string;
-  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-args');
-    prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
-  });
-
-  afterEach(() => {
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
   });
 
   async function call(name: string, args: Wire): Promise<ToolReply> {

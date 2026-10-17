@@ -287,7 +287,7 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     expect(lockWaitAskedMs(traceDir, r.pid)).toBe(HOOK_DB_WAIT_MS);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('snapshot save failed: database is locked');
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toBeNull();
-  }, 60_000);
+  });
 });
 
 const VSCODE_SESSION = 'vscode-sess-1';
@@ -434,6 +434,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     await waitForLog(logFile(), TURN_DONE);
   });
 
+  // A lock holder process, two bounded lock waits in the hook, then a worker that saves once the lock is gone.
   it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot), 120_000);
@@ -449,7 +450,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
 
     expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
-  }, 120_000);
+  }, 98_000);
 
   it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
@@ -470,7 +471,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: WORKER_WAIT_MS });
 
     expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
-  }, 60_000);
+  });
 
   it('saves a reply that ends while the last reply\'s worker still runs, in that same worker', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
@@ -492,7 +493,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(readLog(logFile())).toContain('Captured 1 items (0 skipped as duplicates');
     expect(fs.existsSync(sessionFile('.queued'))).toBe(false);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
-  }, 90_000);
+  });
 
   it('keeps each lesson when a second chat ends a reply while the first chat\'s worker still runs', async () => {
     const second = 'vscode-sess-2';
@@ -518,7 +519,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
-  }, 90_000);
+  });
 
   it('files a reply under the payload cwd project when that folder has no store', async () => {
     const billing = path.join(s.dir, 'billing');
@@ -528,7 +529,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: 'billing' }]);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
     expect(fs.existsSync(path.join(billing, '.hippo'))).toBe(false);
-  }, 60_000);
+  });
 
   it('saves into the payload cwd store when the hook runs from another project with its own store', async () => {
     const otherRoot = initStoreIn(path.join(s.dir, 'other'));
@@ -536,7 +537,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(0);
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
-  }, 60_000);
+  });
 
   it('saves nothing for a transcript that is not on disk, with other chats\' transcripts where a fallback could look', async () => {
     const beside = writeVscodeTranscript(copilotEventsJsonl(), 'vscode-sess-2');
@@ -551,7 +552,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       expect(rows<{ n: number }>('SELECT COUNT(*) AS n FROM memories', root)).toEqual([{ n: 0 }]);
     }
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
-  }, 60_000);
+  });
 
   it('warns once when the payload cwd does not exist, and saves into the store of the folder it ran in', async () => {
     const other = path.join(s.dir, 'other');
@@ -566,7 +567,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(1);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
-  }, 60_000);
+  });
 });
 
 describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => {

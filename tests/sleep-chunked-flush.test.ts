@@ -257,7 +257,7 @@ describe('chunked consolidation flush', () => {
     expect(final).toBe(100);
     expect(seen.some((s) => s.merged > 0 && s.merged < final && s.runs === 0)).toBe(true);
     expect(flushBegins.count()).toBeGreaterThanOrEqual(10);
-  }, 120_000);
+  });
 
   it('ends with the same store whether the flush commits per unit or all at once', async () => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
@@ -274,7 +274,7 @@ describe('chunked consolidation flush', () => {
     expect(chunked.dormant).toBe(20);
     expect(chunked).toEqual(whole);
     expect(storeState(fx.root)).toEqual(storeState(copy));
-  }, 60_000);
+  });
 
   it('a run stopped between chunks keeps whole units and logs no run, and the next run finishes it', async () => {
     let pauses = 0;
@@ -289,7 +289,8 @@ describe('chunked consolidation flush', () => {
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
 
     const stopped = storeFacts(fx);
-    expect(stopped.merged).toBeGreaterThan(0);
+    // A zero hold commits one unit per chunk, so two clusters land before the second pause throws.
+    expect(stopped.merged).toBe(2);
     expect(stopped.merged).toBeLessThan(12);
     expect(stopped.parentsDemoted).toBe(true);
     expect(stopped.retiredXorSuccessor).toBe(true);
@@ -306,7 +307,7 @@ describe('chunked consolidation flush', () => {
     expect(finished.sharedParents).toEqual([]);
     expect(finished.dormantMoved).toBe(true);
     expect(finished.ftsIds).toEqual(finished.memoryIds);
-  }, 60_000);
+  });
 
   it('a sleep inside a server request waits out a writer that holds the lock between chunks', async () => {
     const fx = seed({ clusters: 4, dormant: 2, filler: 4 });
@@ -323,7 +324,7 @@ describe('chunked consolidation flush', () => {
     expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);
     expect(result.semanticCreated).toBe(4);
-  }, 60_000);
+  });
 
   it('the partial audit row names the unit that threw, not the first unit of its chunk', async () => {
     const fx = seed({ clusters: 6, dormant: 0, filler: 0 });
@@ -340,7 +341,7 @@ describe('chunked consolidation flush', () => {
     // SAFETY: consolidate writes nextUnitIds into the partial audit metadata as an array of unit ids.
     const meta = audit?.metadata as { nextUnitIds: string[] } | undefined;
     expect(meta?.nextUnitIds).not.toContain(fx.clusters[0]![0]);
-  }, 60_000);
+  });
 
   it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
     const fx = seed({ clusters: 2, dormant: 0, filler: 0 });
@@ -351,5 +352,5 @@ describe('chunked consolidation flush', () => {
       return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
     }, { busyWaitMs: HOOK_DB_WAIT_MS });
     expect(timeout).toBe(HOOK_DB_WAIT_MS);
-  }, 60_000);
+  });
 });

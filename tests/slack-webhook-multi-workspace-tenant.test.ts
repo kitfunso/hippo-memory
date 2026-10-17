@@ -23,12 +23,16 @@
  *     tenant A, never tenant B
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { loadEveryTenantEntries } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const SECRET = 'shhh-test-secret';
 
@@ -100,13 +104,13 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
 
   beforeEach(async () => {
     root = makeRoot('multi-ws');
-    process.env.SLACK_SIGNING_SECRET = SECRET;
+    vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.SLACK_SIGNING_SECRET;
-    delete process.env.HIPPO_TENANT;
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
+    vi.stubEnv('HIPPO_TENANT', undefined);
     await handle.stop();
   });
 
@@ -117,7 +121,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
   }
 
   it('registered team routes the ingested memory to the mapped tenant', async () => {
-    process.env.HIPPO_TENANT = 'deployment-fallback';
+    vi.stubEnv('HIPPO_TENANT', 'deployment-fallback');
     registerWorkspace(root, 'T_ACME', 'acme');
 
     const res = await postEvent(
@@ -183,7 +187,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
   });
 
   it('foreign team (not in slack_workspaces, non-empty table) does NOT leak into HIPPO_TENANT', async () => {
-    process.env.HIPPO_TENANT = 'deployment-fallback';
+    vi.stubEnv('HIPPO_TENANT', 'deployment-fallback');
     registerWorkspace(root, 'T_KNOWN', 'known-tenant');
 
     // T_FOREIGN is not registered. Per resolveTenantForSlackTeam's fail-closed
@@ -211,7 +215,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
   it('single-workspace install (empty slack_workspaces) routes via HIPPO_TENANT', async () => {
     // No registerWorkspace call → slack_workspaces is empty → env fallback
     // is safe per resolveTenantForSlackTeam.
-    process.env.HIPPO_TENANT = 'single-deployment';
+    vi.stubEnv('HIPPO_TENANT', 'single-deployment');
 
     const res = await postEvent(
       handle.port,

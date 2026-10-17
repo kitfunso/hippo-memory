@@ -1,12 +1,23 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
+import { IncomingMessage } from 'node:http';
+import { Socket } from 'node:net';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../src/store/auth.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { readAuthHeader } from '../src/server/auth.js';
 import type { RememberResult } from '../src/api/index.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: T is pinned by each call site to the exact JSON envelope the
@@ -18,24 +29,17 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('server auth middleware', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-auth');
     globalHome = makeRoot('srv-auth');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
@@ -53,7 +57,7 @@ describe('server auth middleware', () => {
     const db = openHippoDb(home);
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
-      expect(events.length).toBeGreaterThan(0);
+      expect(events).toHaveLength(1);
       expect(events[0]!.actor).toBe('localhost:cli');
       expect(events[0]!.targetId).toBe(body.id);
     } finally {
@@ -61,7 +65,8 @@ describe('server auth middleware', () => {
     }
   });
 
-  it('loopback with valid Bearer: 200 and audit shows actor=api_key:<keyId>', async () => {
+  // RFC 6750 schemes are case-insensitive, so a lower-case and a mixed-case one both authenticate.
+  it.each(['bearer', 'BeArEr'])('loopback with valid %s scheme: 200 and audit shows actor=api_key:<keyId>', async (scheme) => {
     const db = openHippoDb(home);
     let keyId: string;
     let plaintext: string;
@@ -77,8 +82,7 @@ describe('server auth middleware', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        // Mixed case scheme to confirm case-insensitive matching.
-        'Authorization': `Bearer ${plaintext}`,
+        'Authorization': `${scheme} ${plaintext}`,
       },
       body: JSON.stringify({ content: 'auth-canary-bearer-valid' }),
     });
@@ -90,9 +94,7 @@ describe('server auth middleware', () => {
     const db2 = openHippoDb(home);
     try {
       const events = queryAuditEvents(db2, { tenantId: 'default', op: 'remember' });
-      const matching = events.find((e) => e.targetId === body.id);
-      expect(matching).toBeDefined();
-      expect(matching!.actor).toBe(`api_key:${keyId}`);
+      expect(events.map((e) => [e.targetId, e.actor])).toEqual([[body.id, `api_key:${keyId}`]]);
     } finally {
       closeHippoDb(db2);
     }
@@ -174,22 +176,18 @@ describe('server auth middleware', () => {
 describe('server auth middleware for a non-loopback peer', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-auth');
     globalHome = makeRoot('srv-auth');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
     presentConnectionsAsRemote(handle.server!);
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHippoHome;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
@@ -230,5 +228,28 @@ describe('server auth middleware for a non-loopback peer', () => {
     expect(res.status).toBe(200);
     const body = await jsonAs<RememberResult>(res);
     expect(rememberEvents().find((e) => e.targetId === body.id)?.actor).toBe(`api_key:${created.keyId}`);
+  });
+});
+
+/** A request that carries only this Authorization header, or none. */
+function withAuth(value: string | undefined): IncomingMessage {
+  const req = new IncomingMessage(new Socket());
+  if (value !== undefined) req.headers = { authorization: value };
+  return req;
+}
+
+// The parser itself, so a scheme the HTTP cases above do not send still has a pinned answer.
+describe('readAuthHeader', () => {
+  it.each([
+    ['bearer tok-1', { kind: 'bearer', token: 'tok-1' }],
+    ['BeArEr tok-1', { kind: 'bearer', token: 'tok-1' }],
+    ['BEARER   tok-1  ', { kind: 'bearer', token: 'tok-1' }],
+    ['Basic dXNlcjpwYXNz', { kind: 'malformed' }],
+    ['Bearer ', { kind: 'malformed' }],
+    ['just-a-token-no-scheme', { kind: 'malformed' }],
+    ['', { kind: 'malformed' }],
+    [undefined, { kind: 'absent' }],
+  ] as const)('%j reads as %j', (value, expected) => {
+    expect(readAuthHeader(withAuth(value))).toEqual(expected);
   });
 });

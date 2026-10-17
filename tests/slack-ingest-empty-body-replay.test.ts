@@ -33,7 +33,7 @@ describe('ingestMessage empty-body replay status consistency', () => {
     root = makeStore('ingest-empty').base;
   });
 
-  it('replay of empty body returns skipped (not duplicate) — B3 fix', async () => {
+  it('replay of empty body returns skipped (not duplicate)', async () => {
     const hippoRoot = join(root, '.hippo');
     const opts = {
       teamId: 'T01',

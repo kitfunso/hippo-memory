@@ -97,11 +97,11 @@ async function mcpText(name: string, args: McpArgs): Promise<string> {
   return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
 }
 
-// Every note matched and printed while the store holds more than the budget can show.
-function expectBudgetBinds(text: string): void {
+// Every note matches and costs the same, so the count shown is the budget's fit; min < max only where a hint varies.
+function expectBudgetBinds(text: string, min: number, max: number = min): void {
   const shown = shownNotes(text).length;
-  expect(shown).toBeGreaterThan(0);
-  expect(shown).toBeLessThan(NOTES);
+  expect(shown).toBeGreaterThanOrEqual(min);
+  expect(shown).toBeLessThanOrEqual(max);
 }
 
 beforeEach(() => {
@@ -128,7 +128,8 @@ describe('hippo context', () => {
     const text = block(await hippo(args));
     expect(estimateTokens(text)).toBeLessThanOrEqual(400);
     expect(headerTokens(text, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(text));
-    expectBudgetBinds(text);
+    // The heading and ambient footer reserve 12 + 56 tokens, and each note line prices at 88, so 332 fits 3.
+    expectBudgetBinds(text, 3);
     expect(ledger().at(-1)).toEqual({ surface: 'context', tokens: estimateTokens(text) });
   });
 
@@ -145,12 +146,14 @@ describe('hippo context', () => {
     const ac = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     expect(estimateTokens(ac)).toBeLessThanOrEqual(600);
     const cut = ac.indexOf('## Prompt-Relevant Memory');
-    expect(cut).toBeGreaterThan(0);
+    // The static block is a 42-char heading and the two pin lines (326 and 330 chars), then a blank line.
+    expect(cut).toBe(702);
     const staticBlock = ac.slice(0, cut - 2);
     const recallBlock = ac.slice(cut);
     expect(headerTokens(staticBlock, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(staticBlock));
     expect(headerTokens(recallBlock, /## Prompt-Relevant Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(recallBlock));
-    expectBudgetBinds(recallBlock);
+    // Headings take 12 + 14 and the pins 82 + 83 of 600, so 409 holds 4 of the 5 gated 87-token notes.
+    expectBudgetBinds(recallBlock, 4);
     expect(ledger()).toEqual([
       { surface: 'hook', tokens: estimateTokens(staticBlock) },
       { surface: 'hook_recall', tokens: estimateTokens(recallBlock) },
@@ -159,8 +162,9 @@ describe('hippo context', () => {
 
   it('an entry the budget leaves out gets no retrieval bump and is not in last_retrieval_ids', async () => {
     seedNotes();
-    const shown = shownNotes(block(await hippo(['context', 'postgres', 'rollback', '--budget', '400']))).map((c) => ids.get(c)!);
-    expect(shown.length).toBeLessThan(NOTES);
+    const text = block(await hippo(['context', 'postgres', 'rollback', '--budget', '400']));
+    expectBudgetBinds(text, 3);
+    const shown = shownNotes(text).map((c) => ids.get(c)!);
     for (const id of ids.values()) expect(retrievalCount(id)).toBe(shown.includes(id) ? 1 : 0);
     expect([...loadLastRecall(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
   });
@@ -171,7 +175,8 @@ describe('hippo context', () => {
     const big = seed(OVERSIZE);
     const all = block(await hippo(['context', '--budget', '400']));
     expect(all).not.toContain('Zanzibar');
-    expectBudgetBinds(all);
+    // The oversize entry is skipped, and an old note still prices at 88 (strength priced at 100%), so 3 fit.
+    expectBudgetBinds(all, 3);
     expect(await hippo(['context', 'zanzibar', 'ferry', '--budget', '400'])).not.toContain('Zanzibar');
     expect(retrievalCount(big)).toBe(0);
   });
@@ -183,7 +188,8 @@ describe('hippo recall', () => {
     const text = block(await hippo(['recall', 'postgres rollback', '--budget', '400']));
     expect(estimateTokens(text)).toBeLessThanOrEqual(400);
     expect(headerTokens(text, /Found \d+ memories \((\d+) tokens\)/)).toBe(estimateTokens(text));
-    expectBudgetBinds(text);
+    // 385 after the header fits 3 notes at 109; when their created times differ, the availability hint pushes 3 past 400.
+    expectBudgetBinds(text, 2, 3);
     expect(ledger().at(-1)).toEqual({ surface: 'recall', tokens: estimateTokens(text) });
 
     const json = block(await hippo(['recall', 'postgres rollback', '--budget', '400', '--json']));
@@ -195,8 +201,9 @@ describe('hippo recall', () => {
 
   it('an entry the budget leaves out gets no retrieval bump and is not in last_retrieval_ids', async () => {
     seedNotes();
-    const shown = shownNotes(block(await hippo(['recall', 'postgres rollback', '--budget', '400']))).map((c) => ids.get(c)!);
-    expect(shown.length).toBeLessThan(NOTES);
+    const text = block(await hippo(['recall', 'postgres rollback', '--budget', '400']));
+    expectBudgetBinds(text, 2, 3);
+    const shown = shownNotes(text).map((c) => ids.get(c)!);
     for (const id of ids.values()) expect(retrievalCount(id)).toBe(shown.includes(id) ? 1 : 0);
     expect([...loadLastRecall(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
   });
@@ -215,14 +222,15 @@ describe('hippo recall', () => {
 });
 
 describe('MCP recall and context', () => {
+  // A 7-token heading reserve leaves 393 for 90-token notes, so 4; recall cuts one when its availability hint prints.
   it.each([
-    ['hippo_recall', 'mcp_recall', { query: 'postgres rollback', budget: 400 }],
-    ['hippo_context', 'mcp_context', { budget: 400 }],
-  ])('%s returns text within the budget and books that text', async (tool, surface, args) => {
+    ['hippo_recall', 'mcp_recall', { query: 'postgres rollback', budget: 400 }, 3, 4],
+    ['hippo_context', 'mcp_context', { budget: 400 }, 4, 4],
+  ])('%s returns text within the budget and books that text', async (tool, surface, args, min, max) => {
     seedNotes();
     const text = await mcpText(tool, args);
     expect(estimateTokens(text)).toBeLessThanOrEqual(400);
-    expectBudgetBinds(text);
+    expectBudgetBinds(text, min, max);
     for (const [content, id] of ids) expect(retrievalCount(id)).toBe(text.includes(content) ? 1 : 0);
     expect(ledger().at(-1)).toEqual({ surface, tokens: estimateTokens(text) });
   });

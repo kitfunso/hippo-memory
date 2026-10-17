@@ -1,9 +1,13 @@
 // Z0 G5 (prereg 166): each graded cell's trees and verdicts are saved outside the workspace before its .git is rebuilt.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { apply, cleanup, family, find, isolate, lesson, makeRepo, oneLesson, plain, readRecords, run, spec, teach, tmp } from './fixtures/z0-harness.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('per-cell grading save', () => {
   afterEach(cleanup);
@@ -59,7 +63,7 @@ describe('per-cell grading save', () => {
     // Both checkers write into work/dumps, so every check's commit has its own tree; else the final check rebuilds the stale commit and hides a lost hold.
     const dump = { check: { script: 'env-dump.mjs', args: ['exit=1'] } };
     const fam = family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'env-dump.mjs', args: [] } }), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...dump })]);
-    process.env.Z0_ENV_DUMP_DIR = 'dumps';
+    vi.stubEnv('Z0_ENV_DUMP_DIR', 'dumps');
     await run(spec(r, [fam], [
       teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'),
       teach(r, 't2', 'f1-l2', 'LESSON_OK'), plain(r, 'n3'), plain(r, 'n4'), apply(r, 'a3', 'f1-l2', 'LESSON_OK\nGC_ON_RESUME'),

@@ -201,7 +201,7 @@ describe('a read the op table places on a reader thread', () => {
     await blocked;
 
     expect(late).toEqual([]);
-  }, 120_000);
+  });
 });
 
 describe('a write the op table places on the writer thread', () => {

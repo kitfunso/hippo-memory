@@ -39,6 +39,10 @@ import {
 
 import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // Each case ingests, simulates and extracts a question against real stores on disk.
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -59,7 +63,7 @@ const FIT_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-fit-tes
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {
-  process.env.HIPPO_MV_SCRATCH_ROOT = FIT_SCRATCH_ROOT;
+  vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', FIT_SCRATCH_ROOT);
 });
 afterEach(clearAblationEnv);
 afterAll(() => {
@@ -286,7 +290,7 @@ describe('computeFit (real fixture)', () => {
     // SAFETY: same return shape, without the weights.
     const unfitted = evaluateStore(rows, [0.3]) as Scored;
     expect(fitted.N).toBe(rows.length);
-    expect(fitted.goldCount).toBeGreaterThan(0);
+    expect(fitted.goldCount).toBe(1);
     // The fitted run adds exactly the 'weighted' scorer to the unfitted set.
     expect(Object.keys(fitted.perScorer).sort()).toEqual([...Object.keys(unfitted.perScorer), 'weighted'].sort());
     for (const [name, byBudget] of Object.entries(fitted.perScorer)) {

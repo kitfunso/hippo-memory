@@ -42,7 +42,7 @@ describe('a failing API request that carries the access token', () => {
 
     const failure = written.filter((line) => line.includes('dashboard request failed'));
     expect(reply.status).toBe(500);
-    expect(failure.length).toBeGreaterThan(0);
+    expect(failure).toHaveLength(1);
     expect(written.some((line) => line.includes(DASHBOARD_TOKEN))).toBe(false);
     expect(failure.some((line) => /path=\S*\/api\/overview(\s|$)/.test(line))).toBe(true);
   });

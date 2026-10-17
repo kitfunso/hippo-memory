@@ -1,5 +1,5 @@
 // A broken full-text index never fails a write or a search, but it says so: warn once per kind of failure, then stay quiet.
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { createRequire } from 'node:module';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
@@ -8,6 +8,10 @@ import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { deleteEntry } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -73,11 +77,11 @@ describe('FTS failure logging', () => {
       writeEntry(root, createMemory('poison one'));
       writeEntry(root, createMemory('poison two'));
       expect(linesWith('FTS index update failed')).toHaveLength(1);
-      process.env.HIPPO_LOG = 'debug';
+      vi.stubEnv('HIPPO_LOG', 'debug');
       try {
         writeEntry(root, createMemory('poison three'));
       } finally {
-        delete process.env.HIPPO_LOG;
+        vi.stubEnv('HIPPO_LOG', undefined);
       }
     });
     const all = linesWith('FTS index update failed');

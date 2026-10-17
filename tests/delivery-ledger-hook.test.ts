@@ -272,8 +272,7 @@ describe('what one hook call records', () => {
       expect(rows.map((e) => e.turn_seq)).toEqual(rows.map((_, i) => i + 1));
       expect(rows.length + (stderrBySession.get(sessionId)?.length ?? 0)).toBe(3);
     }
-  // Six spawned hooks take about 2 s solo; 20 s is a 10x margin for a busy runner.
-  }, 20_000);
+  });
 
   it('F6: no session anywhere is missing, an env session is env, and a sub-agent keeps the parent session without a turn', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
@@ -441,7 +440,8 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     } finally {
       closeHippoDb(db);
     }
-    expect(cells.length).toBeGreaterThan(0);
+    // The scan covers each run's session and turn, the 2 pins, and the one note that shares the prompt's words.
+    expect(cells).toEqual(expect.arrayContaining(['f10', 'f10-codex', 'turn-9', ...seeded.slice(0, 3).map((m) => m.id)]));
     const odd = cells.filter((v) => !/^[0-9a-f]{16}$/.test(v) && !/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) && !ids.has(v) && !allowed.has(v));
     expect(odd).toEqual([]);
     const words = [PROMPT, ...seeded.map((m) => m.content)].flatMap((t) => {

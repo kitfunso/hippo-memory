@@ -163,7 +163,7 @@ describe('hippo recall --outcome filter', () => {
       '--why',
     ]);
     const parsed = JSON.parse(out);
-    expect(parsed.results.length).toBeGreaterThan(0);
+    expect(parsed.results).toHaveLength(1);
     for (const r of parsed.results) {
       if (r.layer === 'trace') {
         expect(r.content).toContain('Outcome: success');

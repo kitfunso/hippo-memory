@@ -8,7 +8,7 @@
  * This isolates the physics scoring logic from embedding model quality.
  */
 
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   type MemoryEntry
 } from '../src/core/memory.js';
@@ -27,8 +27,6 @@ import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { saveEmbeddingIndex } from './_helpers/root-forms.js';
 
-// A benchmark: 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
-vi.setConfig({ testTimeout: 60_000 });
 
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator
@@ -279,7 +277,7 @@ beforeAll(() => {
   } finally {
     closeHippoDb(db);
   }
-}, 30_000);
+});
 
 // ---------------------------------------------------------------------------
 // Metric helpers
@@ -438,7 +436,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
   beforeAll(async () => {
     standard = await scoreQueries(STANDARD_QUERIES);
     cluster = await scoreQueries(CLUSTER_QUERIES);
-  }, 30_000);
+  });
 
   describe('Standard queries', () => {
     STANDARD_QUERIES.forEach((tc, i) => {
@@ -446,6 +444,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const s = standard[i]!;
         expect(s.expectedCount).toBe(tc.expectedLabels.length);
         logRow(s, 'mrr');
+        // The rank follows the default embedding model, which only some runners have, so only a top-10 hit is fixed.
         expect(s.classic.mrr, `Classic MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
     });
@@ -454,6 +453,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
       expect(standard).toHaveLength(STANDARD_QUERIES.length);
       logSummary('Standard Queries', standard, 'mrr');
       expect(mean(standard, 'classic', 'mrr')).toBeGreaterThanOrEqual(0.8);
+      // Rank-based like the per-query checks, so only a floor holds.
       expect(mean(standard, 'physics', 'mrr')).toBeGreaterThan(0);
     });
   });
@@ -464,6 +464,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const s = cluster[i]!;
         expect(s.expectedCount).toBe(tc.expectedLabels.length);
         logRow(s, 'r3');
+        // Physics scores decay from the real clock and fall back to the default model, so only a top-10 hit is fixed.
         expect(s.physics.mrr, `Physics MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
     });
@@ -476,6 +477,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
   });
 
   describe('Simulation stability', () => {
+    // 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
     it('energy does not increase over 50 sleep cycles', () => {
       const db = openHippoDb(tmpDir);
       try {
@@ -515,6 +517,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
       } finally {
         closeHippoDb(db);
       }
-    });
+    }, 60_000);
   });
 });

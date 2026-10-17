@@ -1,6 +1,6 @@
 // Z0 lesson tasks end to end with the fake Claude Code: checks, teach and correction resumes, A4, the resume-limit
 // restore and every record shape against the z0-record/1 contract. Costs nothing; the fake's token numbers are made up.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -18,15 +18,10 @@ const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 const CHECKS = resolve(__dirname, 'fixtures', 'z0-checks');
 const dirs: string[] = [];
-const envKeys = ['HOME', 'USERPROFILE', 'APPDATA', 'FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS', 'GIT_CONFIG_GLOBAL'];
-const savedEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 afterEach(() => {
   process.chdir(savedCwd);
-  for (const [k, v] of Object.entries(savedEnv)) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
+  vi.unstubAllEnvs();
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 // Long sync tests starve the worker's RPC; a macrotask turn between tests lets its replies through.
@@ -41,13 +36,13 @@ const tmp = (prefix: string): string => {
 /** Temp HOME, USERPROFILE, APPDATA and cwd, and a fresh fake-Claude log; returns the out dir and the log path. */
 function isolate(name: string) {
   const home = tmp(`z0-turns-home-${name}-`);
-  process.env.HOME = home;
-  process.env.USERPROFILE = home;
-  process.env.APPDATA = join(home, 'AppData', 'Roaming');
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  vi.stubEnv('APPDATA', join(home, 'AppData', 'Roaming'));
   process.chdir(tmp('z0-turns-cwd-'));
   const out = tmp(`z0-turns-out-${name}-`);
   const log = join(tmp('z0-turns-log-'), 'fake.log');
-  process.env.FAKE_CLAUDE_LOG = log;
+  vi.stubEnv('FAKE_CLAUDE_LOG', log);
   return { out, log };
 }
 
@@ -125,7 +120,7 @@ describe('runner git', () => {
     writeFileSync(join(hooks, 'reference-transaction'), `#!/bin/sh\necho ran >> "${marker}"\n`, { mode: 0o755 });
     const cfg = join(hooks, 'gitconfig');
     writeFileSync(cfg, `[core]\n\thooksPath = ${hooks.replace(/\\/g, '/')}\n[i18n]\n\tcommitEncoding = ISO-8859-1\n`);
-    process.env.GIT_CONFIG_GLOBAL = cfg;
+    vi.stubEnv('GIT_CONFIG_GLOBAL', cfg);
     // The control: plain git under this config does run the hook.
     execFileSync('git', ['update-ref', 'refs/z0/probe', r.base], { cwd: r.repo });
     expect(existsSync(marker)).toBe(true);
@@ -235,7 +230,8 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     for (const arm of ['A0', 'A1', 'A2', 'A4', 'A5']) {
       const get = (id: string) => find(recs, arm, id);
       expect(get('t1'), arm).toMatchObject({ kind: 'teach', set: 'R', teachTurns: 1, correctionTurns: 0, teachForm: 'confirmation', lessons: [{ lessonId: 'f1-l1', first: 'pass', final: 'pass', staleFollow: null }] });
-      expect(get('t1').usage?.extra.outputTokens, arm).toBeGreaterThan(0);
+      // The confirmation resume is priced from its result, where the fake always reports 50 output tokens.
+      expect(get('t1').usage?.extra.outputTokens, arm).toBe(50);
       expect(get('t2'), arm).toMatchObject({ teachForm: 'correction', lessons: [{ lessonId: 'f1-l2', first: 'fail', final: 'pass' }] });
       expect(get('a1'), arm).toMatchObject({ kind: 'apply', applyIndex: 1, afterReversal: false, tasksSinceTeach: 2, teachTurns: 0, correctionTurns: 1, teachForm: null, lessons: [{ first: 'fail', final: 'pass', staleFollow: null }] });
       expect(get('a3'), arm).toMatchObject({ applyIndex: 2, afterReversal: true, tasksSinceTeach: 2, lessons: [{ lessonId: 'f1-l2', staleFollow: true }] });
@@ -516,7 +512,8 @@ describe('session evidence', () => {
     const rows = lib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').filter((x: { sessionId: string }) => [t1.sessionId, t1.resumeSessionId].includes(x.sessionId));
     lib.closeHippoDb(db);
     expect(rows).toHaveLength(2);
-    for (const x of rows) expect(x.injections, x.sessionId).toBeGreaterThan(0);
+    // n0's memory is the store's one row and matches each prompt, so each turn books its recall block and no static one.
+    for (const x of rows) expect(x.injections, x.sessionId).toBe(1);
     const total = (k: 'sent' | 'skipped' | 'injections') => rows.reduce((n: number, x: Record<string, number>) => n + x[k], 0);
     expect(t1.hippo).toEqual({ sessionId: t1.sessionId, sent: total('sent'), skipped: total('skipped'), injections: total('injections') });
   }, 300_000);
@@ -606,7 +603,7 @@ describe('usage limits around resumes', () => {
   it('a plan limit that outlasts every wait still names the limit when the limited attempt also deleted .git', async () => {
     const { out } = isolate('limit-rmgit');
     const r = makeRepo();
-    process.env.FAKE_CLAUDE_LIMIT_ALWAYS = '1';
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ALWAYS', '1');
     const logs: string[] = [];
     const s = spec(r, [], [task(r, 't1', 'LIMIT RM_GIT look around'), plain(r, 'n1')]);
     await expect(run(s, ['A0'], out, { limitWaitMs: 0, limitMaxWaits: 0, log: (m) => logs.push(m) })).rejects.toThrow(/seqF t1 A0 seed1: still at the plan limit after 0 waits/);
@@ -617,7 +614,7 @@ describe('usage limits around resumes', () => {
     const { out, log } = isolate('retry');
     const r = makeRepo();
     const newer = stubBaseCommit(r.repo, r.fix);
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(out, 'limit-hit'));
     const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'lesson.mjs', args: [`has=${newer}`] } })])], [
       teach(r, 't1', 'f1-l1', 'LIMIT LESSON_BAD', { baseRef: r.fix }), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'look around only'), apply(r, 'a2', 'f1-l1', 'look around only'),
     ]);

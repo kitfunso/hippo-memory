@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
-import { recordStatements } from './_helpers/count-statements.js';
+import { countMatching, recordStatements, STORE_OPEN } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
@@ -41,7 +41,8 @@ describe('openHippoDb on an already-current store is write-free', () => {
     try {
       const { result: db, statements } = recordStatements(() => openHippoDb(root));
       closeHippoDb(db);
-      expect(statements.length).toBeGreaterThan(0);
+      // The recorder saw exactly the one connection this open makes, so the empty list below is not a dead spy.
+      expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(statements.filter((sql) => NEEDS_WRITE_LOCK.test(sql))).toEqual([]);
     } finally {
       holder.exec('ROLLBACK');

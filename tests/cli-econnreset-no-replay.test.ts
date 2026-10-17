@@ -137,5 +137,5 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
-  }, 30000);
+  });
 });

@@ -110,7 +110,7 @@ beforeAll(() => {
   } finally {
     closeHippoDb(db);
   }
-}, 60_000);
+});
 
 afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });
@@ -282,5 +282,5 @@ describe('assemble and drill over serve()', () => {
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
     ]);
     expect(await runServed((root) => inMemoryDagReadsStore(root).store)).toEqual(onHippoDb);
-  }, 120_000);
+  });
 });

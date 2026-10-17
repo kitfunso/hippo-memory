@@ -1,5 +1,5 @@
 // MCP on a shared store stamps the caller's X-Hippo-Project, refuses memory tools without one, and never stamps the served folder's ''.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -16,13 +16,20 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
 const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve', 'hippo_peers'];
 const OPEN = new Map<string, Record<string, JsonValue>>([['hippo_predict_baserate', { class_tag: 'gate-check' }]]);
 
 let tmp: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 /** `<tmp>/srv/hippo-team`, a folder with no project marker, so the folder stamp is '' (user-global). */
 function flaggedStore(): string {
@@ -59,7 +66,7 @@ function repoWithOneFix(): string {
 
 beforeEach(() => {
   tmp = makeRoot('shared-mcp', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -67,8 +74,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
 });
 

@@ -75,6 +75,7 @@ describe('hippo github CLI', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('backfill without --repo exits 2 with usage', () => {
@@ -120,8 +121,7 @@ describe('hippo github CLI', () => {
         updated_at: '2026-01-01T00:00:00Z',
       },
     ]);
-    const prevToken = process.env.GITHUB_TOKEN;
-    process.env.GITHUB_TOKEN = 'fake-token';
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     // Capture stdout so we can parse the JSON result.
     const logs: string[] = [];
     const origLog = console.log;
@@ -130,8 +130,6 @@ describe('hippo github CLI', () => {
       await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'acme/widgets' } });
     } finally {
       console.log = origLog;
-      if (prevToken === undefined) delete process.env.GITHUB_TOKEN;
-      else process.env.GITHUB_TOKEN = prevToken;
     }
     // SAFETY: the backfill command's only console.log call in this path prints
     // its own JSON summary object with `ingested`/`pages` counters (verified
@@ -144,7 +142,8 @@ describe('hippo github CLI', () => {
     expect(json.pages.issues).toBe(1);
     // Verify the row actually landed in the store.
     const all = loadAllEntries(hippoRoot, 'default');
-    expect(all.length).toBeGreaterThan(0);
+    // An issue's memory is its title and body, a blank line apart.
+    expect(all.map((e) => e.content)).toEqual(['hello\n\nworld']);
   });
 
   it('dlq list on empty DLQ prints "no entries"', () => {

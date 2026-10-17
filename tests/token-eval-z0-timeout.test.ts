@@ -60,7 +60,8 @@ describe('a session that runs out of time (prereg 165)', () => {
     const t1 = find(recs, 'A4', 't1');
     expect(t1).toMatchObject({ invalid: null, timedOut: true, resolved: false, teachTurns: 1, teachForm: 'correction', lessons: [{ lessonId: 'f1-l1', first: 'fail', final: 'pass' }] });
     expect(logLines(log)).toContain(`resume ${t1.sessionId}`);
-    expect(t1.usage!.extra.outputTokens).toBeGreaterThan(0);
+    // Only session 1 hung, so the resume is priced from its result, where the fake always reports 50 output tokens.
+    expect(t1.usage!.extra.outputTokens).toBe(50);
     expect(rawResult(out, 'A4', 'n1.json').files['CLAUDE.md']).toContain('- Write the lesson file, because');
     expect(validateCorpus(recs, readPlan(out))).toEqual([]);
   }, 120_000);

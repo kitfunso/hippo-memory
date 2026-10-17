@@ -1,6 +1,6 @@
 // promptHookContext answers a store-less laptop's per-prompt hook with the bytes the local hook would print.
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -20,6 +20,10 @@ import { hippoRun } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const REPO = path.resolve(__dirname, '..');
 // The command Claude Code runs on every prompt, so a change to its flags fails the parity case below.
 const HOOK_ARGS = HIPPO_PINNED_INJECT_COMMAND.split(' ').slice(1);
@@ -34,17 +38,11 @@ interface LedgerRow { session_id: string | null; tenant_id: string; surface: str
 type HookPayload = { session_id: string; prompt?: string; hook_event_name?: string; agent_id?: string };
 
 let tmp: string;
-const origHome = process.env.HIPPO_HOME;
 
 beforeEach(() => {
   tmp = makeRoot('prompt-hook', { init: false });
   // An empty global store on both sides, so neither the CLI nor the call mixes in a real one.
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
-});
-
-afterEach(() => {
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 
 /** A project folder with its own `.hippo` store; a rate writes the store's pilot config. */
@@ -340,7 +338,7 @@ describe('promptHookContext on a shared store', () => {
 
   it('records nothing and books no arm when the served root has no store, never falling back to the global one', async () => {
     const globalStore = makeProject(path.join(tmp, 'home'), 10000);
-    process.env.HIPPO_HOME = globalStore;
+    vi.stubEnv('HIPPO_HOME', globalStore);
     const served = path.join(tmp, 'srv', '.hippo');
     expect(await ask(served, 'no-store', true)).toEqual({ arm: null, ...NOTHING });
     expect(ledger(globalStore, '1 = 1')).toEqual([]);

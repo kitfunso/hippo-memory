@@ -22,7 +22,6 @@ const OWN_FLAG = new Map([
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 // No PATH, so a spawned verb that ignored --help could not reach schtasks, crontab or codex.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
-const ISOLATED_KEYS = ['HOME', 'USERPROFILE', 'HIPPO_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS'];
 
 // No-op spies, so a verb that ignored --help is caught without running.
 const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS)
@@ -59,7 +58,6 @@ interface HelpDirs { readonly cwd: string; readonly home: string; readonly store
 let dirs: HelpDirs;
 let full: InProcessResult;
 const savedCwd = process.cwd();
-const savedEnv = Object.fromEntries(ISOLATED_KEYS.map((key) => [key, process.env[key]]));
 
 interface HelpRun extends InProcessResult { readonly ran: string[]; readonly written: string[] }
 
@@ -82,17 +80,17 @@ const pinned = (res: InProcessResult): InProcessResult => ({ ...pick(res), stdou
 
 beforeAll(async () => {
   dirs = { cwd: mkdtempSync(join(tmpdir(), 'hippo-help-cwd-')), home: mkdtempSync(join(tmpdir(), 'hippo-help-home-')), store: mkdtempSync(join(tmpdir(), 'hippo-help-store-')) };
-  Object.assign(process.env, { HOME: dirs.home, USERPROFILE: dirs.home, HIPPO_HOME: dirs.store, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' });
+  vi.stubEnv('HOME', dirs.home);
+  vi.stubEnv('USERPROFILE', dirs.home);
+  vi.stubEnv('HIPPO_HOME', dirs.store);
+  vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   process.chdir(dirs.cwd);
   full = pick(await run(['--help']));
 });
 
 afterAll(() => {
   process.chdir(savedCwd);
-  for (const [key, value] of Object.entries(savedEnv)) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
+  vi.unstubAllEnvs();
   for (const dir of Object.values(dirs)) rmSync(dir, { recursive: true, force: true });
   for (const [, spy] of handlers) spy.mockRestore();
 });

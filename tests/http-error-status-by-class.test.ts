@@ -1,5 +1,5 @@
 // The HTTP status of a failed request follows the error's class, never its message, and an untyped error never shows its text.
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi, beforeEach } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -12,6 +12,14 @@ import { mapApiError } from '../src/api/error-reply.js';
 import { StoreBusyError } from '../src/store/port.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE } from '../src/util/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type ReplyBody = Record<string, string>;
 

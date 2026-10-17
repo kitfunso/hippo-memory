@@ -59,7 +59,8 @@ describe('hippo recall --why exposes envelope', () => {
   it('JSON output includes envelope object when --why is set', async () => {
     await hippo('remember', 'envelope-json-marker rollback-uniq43 token', '--kind', 'distilled', '--owner', 'agent:claude', '--artifact-ref', 'slack://team/channel/1700.123', '--global');
     const parsed = JSON.parse(await hippo('recall', 'envelope-json-marker rollback-uniq43', '--why', '--json'));
-    expect(parsed.results.length).toBeGreaterThan(0);
+    // Both stores together hold only the one memory this test remembered.
+    expect(parsed.results).toHaveLength(1);
     const first = parsed.results[0];
     expect(first.envelope).toBeDefined();
     expect(first.envelope.kind).toBe('distilled');

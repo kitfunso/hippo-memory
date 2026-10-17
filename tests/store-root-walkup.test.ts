@@ -1,6 +1,6 @@
 // Ancestor walk-up store discovery (episode 01M1S8SZH6KZA9FPC9KY92XX5Y). Real filesystem in a
 // mkdtemp sandbox; the walk stops at the temp root, so stores above it cannot leak into these cases.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -19,6 +19,10 @@ import { findHippoStoreDir, getHippoRoot, isInitialized } from '../src/core/proj
 import { findHippoRoot } from '../src/mcp/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadLastRecall } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const hippoBin = path.join(repoRoot, 'bin', 'hippo.js');
@@ -95,21 +99,12 @@ describe('getHippoRoot ancestor walk', () => {
     fs.mkdirSync(path.join(tmpRoot, 'scratch', '.hippo'));
     const work = mkdirs('scratch', 'tmp', 'work');
     expect(findHippoStoreDir(work, { homeDir: home })).toBe(path.join(tmpRoot, 'scratch', '.hippo'));
-
-    const saved = { TMPDIR: process.env.TMPDIR, TEMP: process.env.TEMP, TMP: process.env.TMP };
-    process.env.TMPDIR = tmp;
-    process.env.TEMP = tmp;
-    process.env.TMP = tmp;
-    try {
-      expect(samePath(fs.realpathSync.native(os.tmpdir()), fs.realpathSync.native(tmp))).toBe(true);
-      expect(findHippoStoreDir(work, { homeDir: home })).toBeNull();
-      expect(getHippoRoot(work, { homeDir: home })).toBe(path.join(work, '.hippo'));
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    }
+    vi.stubEnv('TMPDIR', tmp);
+    vi.stubEnv('TEMP', tmp);
+    vi.stubEnv('TMP', tmp);
+    expect(samePath(fs.realpathSync.native(os.tmpdir()), fs.realpathSync.native(tmp))).toBe(true);
+    expect(findHippoStoreDir(work, { homeDir: home })).toBeNull();
+    expect(getHippoRoot(work, { homeDir: home })).toBe(path.join(work, '.hippo'));
   });
 
   it('returns a bare ancestor .hippo directory, which isInitialized then rejects', () => {
@@ -211,21 +206,15 @@ describe('CLI end to end', () => {
     expect(contextJson.memories[0].global).toBe(true);
     const why = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--why', '--json'], opts));
     expect(why.results[0].source).toBe('global');
-    const priorHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalStore;
-    try {
-      const direct = await retrieve(
-        apiCtx(globalStore, 'default', adminActor('test')),
-        { query: 'projectless-orbit', window: { includeContinuity: true } },
-      );
-      expect(direct.continuity?.activeSnapshot?.task).toBe('Foreign global active task');
-      expect(direct.continuity?.sessionHandoff?.summary).toBe('Foreign global handoff summary');
-      expect(direct.continuity?.recentSessionEvents[0].content).toBe('Foreign global event trail');
-      expect(direct.results.map((r) => r.id)).toContain(entry.id);
-    } finally {
-      if (priorHome === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = priorHome;
-    }
+    vi.stubEnv('HIPPO_HOME', globalStore);
+    const direct = await retrieve(
+      apiCtx(globalStore, 'default', adminActor('test')),
+      { query: 'projectless-orbit', window: { includeContinuity: true } },
+    );
+    expect(direct.continuity?.activeSnapshot?.task).toBe('Foreign global active task');
+    expect(direct.continuity?.sessionHandoff?.summary).toBe('Foreign global handoff summary');
+    expect(direct.continuity?.recentSessionEvents[0].content).toBe('Foreign global event trail');
+    expect(direct.results.map((r) => r.id)).toContain(entry.id);
   });
 
   it('recall from <proj>/src finds the project store and creates no nested one', () => {
@@ -272,29 +261,23 @@ describe('CLI end to end', () => {
 });
 
 describe('MCP findHippoRoot', () => {
-  const origHippoHome = process.env.HIPPO_HOME;
-
-  afterEach(() => {
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
-  });
 
   it('HIPPO_HOME wins over home/.hippo when cwd is under home with no marker', () => {
     const globalStore = mkdirs('global-store');
-    process.env.HIPPO_HOME = globalStore;
+    vi.stubEnv('HIPPO_HOME', globalStore);
     const work = mkdirs('home', 'work');
     expect(findHippoRoot(work, { homeDir: home })).toBe(globalStore);
   });
 
   it('returns null when no ancestor store exists and the global root is missing', () => {
-    process.env.HIPPO_HOME = path.join(tmpRoot, 'missing-global');
+    vi.stubEnv('HIPPO_HOME', path.join(tmpRoot, 'missing-global'));
     const work = mkdirs('home', 'work');
     expect(findHippoRoot(work, { homeDir: home })).toBeNull();
   });
 
   it('prefers the nearest ancestor store over the global root', () => {
     const globalStore = mkdirs('global-store');
-    process.env.HIPPO_HOME = globalStore;
+    vi.stubEnv('HIPPO_HOME', globalStore);
     const proj = mkdirs('home', 'proj');
     fs.mkdirSync(path.join(proj, '.hippo'));
     const src = mkdirs('home', 'proj', 'src');

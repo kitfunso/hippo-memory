@@ -35,8 +35,8 @@ beforeEach(() => {
   w = openWorld();
 });
 afterEach(() => {
-  vi.unstubAllEnvs();
   closeWorld(w);
+  vi.unstubAllEnvs();
 });
 
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
@@ -108,7 +108,8 @@ describe('agent memory sync: routing and sharing', () => {
     expect(claude(compaction.result).imported).toBe(1);
     expect(liveRows(w.local)).toMatchObject([{ content: Q, origin_project: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
-    expect(spawnsDuring(() => importProjectMemories(w.local, opts())).spawns).toBeGreaterThan(0);
+    // Claude Code's folder names ask git once; this world has no Gemini index or Copilot store to ask it again.
+    expect(spawnsDuring(() => importProjectMemories(w.local, opts())).spawns).toBe(1);
   });
 
   it('a session begun above two repos keeps its folder notes user-global, one copy wherever it ends', () => {

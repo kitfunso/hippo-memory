@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -10,6 +10,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { copyToGlobal } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,41 +35,23 @@ function cleanUp(...dirs: string[]): void {
 // ---------------------------------------------------------------------------
 
 describe('getGlobalRoot', () => {
-  // getGlobalRoot() reads HIPPO_HOME / XDG_DATA_HOME, and the test run sets
-  // HIPPO_HOME to an isolated temp dir (vitest.config.ts). Each case controls
-  // its own environment and restores it, so the test is hermetic rather than
-  // dependent on the ambient ~/.hippo fallback.
-  let prevHippoHome: string | undefined;
-  let prevXdg: string | undefined;
-
-  beforeEach(() => {
-    prevHippoHome = process.env.HIPPO_HOME;
-    prevXdg = process.env.XDG_DATA_HOME;
-  });
-
-  afterEach(() => {
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
-    if (prevXdg === undefined) delete process.env.XDG_DATA_HOME;
-    else process.env.XDG_DATA_HOME = prevXdg;
-  });
 
   it('falls back to ~/.hippo when neither env var is set', () => {
-    delete process.env.HIPPO_HOME;
-    delete process.env.XDG_DATA_HOME;
+    vi.stubEnv('HIPPO_HOME', undefined);
+    vi.stubEnv('XDG_DATA_HOME', undefined);
     expect(getGlobalRoot()).toBe(path.join(os.homedir(), '.hippo'));
   });
 
   it('honours HIPPO_HOME when it is set', () => {
     const custom = path.join(os.tmpdir(), 'hippo-getglobalroot-hh');
-    process.env.HIPPO_HOME = custom;
+    vi.stubEnv('HIPPO_HOME', custom);
     expect(getGlobalRoot()).toBe(custom);
   });
 
   it('uses XDG_DATA_HOME/hippo when HIPPO_HOME is unset', () => {
-    delete process.env.HIPPO_HOME;
+    vi.stubEnv('HIPPO_HOME', undefined);
     const xdg = path.join(os.tmpdir(), 'hippo-getglobalroot-xdg');
-    process.env.XDG_DATA_HOME = xdg;
+    vi.stubEnv('XDG_DATA_HOME', xdg);
     expect(getGlobalRoot()).toBe(path.join(xdg, 'hippo'));
   });
 });
@@ -77,21 +63,14 @@ describe('getGlobalRoot', () => {
 describe('copyToGlobal', () => {
   let localRoot: string;
   let globalRoot: string;
-  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
-    // copyToGlobal() resolves its destination via getGlobalRoot(), which
-    // reads HIPPO_HOME. Without this override it writes into the developer's
-    // real ~/.hippo store. Point it at the temp global store for isolation.
-    prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalRoot;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
   });
 
   afterEach(() => {
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
     cleanUp(localRoot, globalRoot);
   });
 
@@ -110,7 +89,7 @@ describe('copyToGlobal', () => {
     expect(() => copyToGlobal(localRoot, 'nonexistent_id')).toThrow();
   });
 
-  it('honors opts.tenantId for cross-tenant isolation (v1.11.0 residue)', () => {
+  it('honors opts.tenantId for cross-tenant isolation', () => {
     const a = createMemory('tenant-a content', { tenantId: 'tenant-a' });
     const b = createMemory('tenant-b content', { tenantId: 'tenant-b' });
     writeEntry(localRoot, a);

@@ -238,7 +238,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(countRows(home, 'graph_extraction_queue')).toBe(0);
   });
 
-  it('REVERSE guard (codex P1+P2): a graph-referenced memory is immutable in kind/tenant (raw, superseded, or tenant move all ABORT)', () => {
+  it('REVERSE guard: a graph-referenced memory is immutable in kind/tenant (raw, superseded, or tenant move all ABORT)', () => {
     const md = addMemory(home, 'default', 'distilled');
     insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const db = openHippoDb(home);
@@ -262,10 +262,11 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE memories SET kind = 'superseded' WHERE id = ?`).run(free)).not.toThrow();
+      expect(db2.prepare(`SELECT kind FROM memories WHERE id = ?`).get(free)).toEqual({ kind: 'superseded' });
     } finally { closeHippoDb(db2); }
   });
 
-  it('REVERSE guard (codex P2): a relation-endpoint entity cannot be moved cross-tenant via raw UPDATE', () => {
+  it('REVERSE guard: a relation-endpoint entity cannot be moved cross-tenant via raw UPDATE', () => {
     const md = addMemory(home, 'default', 'distilled');
     const mb = addMemory(home, 'tenant-b', 'distilled');
     const a = insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
@@ -285,6 +286,8 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE entities SET tenant_id = 'tenant-b', memory_id = ?, source_kind = 'distilled' WHERE id = ?`).run(mb, c.id)).not.toThrow();
+      expect(db2.prepare(`SELECT tenant_id, memory_id, source_kind FROM entities WHERE id = ?`).get(c.id))
+        .toEqual({ tenant_id: 'tenant-b', memory_id: mb, source_kind: 'distilled' });
     } finally { closeHippoDb(db2); }
   });
 

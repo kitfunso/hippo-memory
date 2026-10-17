@@ -19,7 +19,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -32,6 +32,14 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /**
  * Parses a fetch Response body as the shape `T` the caller asserts on.
@@ -48,24 +56,17 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('GET /v1/context', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-ctx');
     globalHome = makeRoot('srv-ctx');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
   });
 
   it('returns entries within budget (200)', async () => {
@@ -77,8 +78,9 @@ describe('GET /v1/context', () => {
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
     const body = await jsonAs<{ entries: unknown[]; tokens: number }>(res);
-    expect(body.entries.length).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.entries).toHaveLength(5);
+    // Each row prices as its printed line `- **[verified] ctx-route-mem-N** (100%)`: 39 chars and a newline.
+    expect(body.tokens).toBe(50);
   });
 
   it('honors tight budget cap', async () => {
@@ -197,7 +199,7 @@ describe('GET /v1/context', () => {
       entries: Array<{ entry: { id: string; content: string; pinned?: boolean } }>;
     }>(res);
     // All returned entries should be pinned.
-    expect(body.entries.length).toBeGreaterThan(0);
+    expect(body.entries.map((e) => e.entry.content)).toEqual(['pinned-canary']);
     for (const e of body.entries) {
       expect(e.entry.pinned).toBe(true);
     }
@@ -287,25 +289,18 @@ describe('GET /v1/context', () => {
 describe('GET /v1/context - ambientState field', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   async function startServer(ambientEnabled: boolean): Promise<void> {
     home = makeRoot('srv-ctx');
     globalHome = makeRoot('srv-ctx');
     writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   }
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
   });
 
   it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {
@@ -320,10 +315,11 @@ describe('GET /v1/context - ambientState field', () => {
       tokens: number;
       ambientState?: { totalMemories: number };
     }>(res);
-    expect(body.entries.length).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.entries).toHaveLength(1);
+    // `- **[verified] ambient-route-marker-row** (100%)` and a newline: 49 chars.
+    expect(body.tokens).toBe(13);
     expect(body.ambientState).toBeDefined();
-    expect(body.ambientState!.totalMemories).toBeGreaterThan(0);
+    expect(body.ambientState!.totalMemories).toBe(1);
   });
 
   it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {
@@ -334,8 +330,9 @@ describe('GET /v1/context - ambientState field', () => {
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
     const body = await jsonAs<{ entries: unknown[]; tokens: number; ambientState?: unknown }>(res);
-    expect(body.entries.length).toBeGreaterThan(0);
-    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.entries).toHaveLength(1);
+    // `- **[verified] ambient-off-marker-row** (100%)` and a newline: 47 chars.
+    expect(body.tokens).toBe(12);
     expect(body.ambientState).toBeUndefined();
   });
 });

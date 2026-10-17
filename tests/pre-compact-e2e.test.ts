@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -13,6 +13,10 @@ import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import type { InProcessResult } from './_helpers/run-in-process.js';
 import { loadActiveTaskSnapshot, writeSessionEndHandoff } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Verbs run through runCli in this process; the first case of each verb spawns the local built CLI, never a global install.
 const FAKE_JWT = ['eyJ' + 'FAKEHEADER', 'eyJ' + 'FAKEPAYLOAD', 'FAKESIG'].join('.');
@@ -952,8 +956,6 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 describe('combined firing: last-sleep + compact-resume against the same store/log state', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
-  let prevHome: string | undefined;
-  let prevUserProfile: string | undefined;
 
   beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
@@ -965,19 +967,11 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
       source: 'pre-compact',
       session_id: 'sess-combo',
     });
-    // This block computes `defaultSleepLogPath()` in the TEST process itself
-    // (to pre-seed / assert on the log file) — it must resolve to the same
-    // scratch dir as the spawned child's env, or it reads/writes the real
-    // developer machine's ~/.hippo/logs/.
-    prevHome = process.env.HOME;
-    prevUserProfile = process.env.USERPROFILE;
-    process.env.HOME = dir;
-    process.env.USERPROFILE = dir;
+    vi.stubEnv('HOME', dir);
+    vi.stubEnv('USERPROFILE', dir);
   });
 
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prevUserProfile;
     fs.rmSync(dir, { recursive: true, force: true });
   });
 

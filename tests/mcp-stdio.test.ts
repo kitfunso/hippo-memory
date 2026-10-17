@@ -1,10 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseFrame } from '../src/mcp/framing.js';
+import { TOOLS } from '../src/mcp/tools.js';
+import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ─── parseFrame unit tests ───
 
@@ -66,15 +71,15 @@ describe('hippo mcp stdio', () => {
   let proc: ChildProcessWithoutNullStreams | null = null;
 
   beforeEach(() => {
-    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-test-'));
+    tmpHome = makeRoot('mcp-test', { init: false });
     tmpHippo = path.join(tmpHome, '.hippo');
     fs.mkdirSync(tmpHippo, { recursive: true });
     prevHome = process.env.HOME;
     prevUserProfile = process.env.USERPROFILE;
     prevHippoHome = process.env.HIPPO_HOME;
-    process.env.HOME = tmpHome;
-    process.env.USERPROFILE = tmpHome;
-    process.env.HIPPO_HOME = tmpHippo;
+    vi.stubEnv('HOME', tmpHome);
+    vi.stubEnv('USERPROFILE', tmpHome);
+    vi.stubEnv('HIPPO_HOME', tmpHippo);
   });
 
   afterEach(async () => {
@@ -86,11 +91,10 @@ describe('hippo mcp stdio', () => {
       if (timedOut) proc.kill('SIGKILL');
       await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
     }
-    process.env.HOME = prevHome;
-    process.env.USERPROFILE = prevUserProfile;
-    process.env.HIPPO_HOME = prevHippoHome;
+    vi.stubEnv('HOME', prevHome);
+    vi.stubEnv('USERPROFILE', prevUserProfile);
+    vi.stubEnv('HIPPO_HOME', prevHippoHome);
     try {
-      fs.rmSync(tmpHome, { recursive: true, force: true });
     } catch {
       // Windows occasionally holds file handles briefly after process exit.
     }
@@ -171,6 +175,7 @@ describe('hippo mcp stdio', () => {
     const listResp = JSON.parse(listLine);
     expect(listResp.id).toBe(2);
     expect(Array.isArray(listResp.result?.tools)).toBe(true);
-    expect(listResp.result.tools.length).toBeGreaterThan(0);
-  }, 15000);
+    // A tools/list on stdio has no store yet, so it lists every tool.
+    expect(listResp.result.tools.map((t: { name: string }) => t.name)).toEqual(TOOLS.map((t) => t.name));
+  });
 });

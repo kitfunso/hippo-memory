@@ -1,5 +1,5 @@
 // Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getContext } from '../src/api/index.js';
@@ -23,8 +23,8 @@ import { loadConfig } from '../src/core/config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 
-// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
-vi.setConfig({ testTimeout: 30_000 });
+// Every sync asks git for each folder's layout in a child process, and the re-sync cases run several syncs.
+const RESYNC_MS = 15_000;
 
 const T = 'default';
 let w: World;
@@ -160,7 +160,7 @@ describe('the upgrade re-sync', () => {
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
     note(projectNotes(w, api), 'n2.md', NOTES[2]);
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
-  });
+  }, RESYNC_MS);
 
   it('moves a dormant-only folder-named import, so a returning note is restored, not imported again', () => {
     const api = checkout('git@github.com:acme/api.git', 'api');
@@ -174,7 +174,7 @@ describe('the upgrade re-sync', () => {
     note(projectNotes(w, api), 'n0.md', NOTES[0]);
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
     expect(liveRows(w.global)).toMatchObject([{ origin_project: 'github.com/acme/api', source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')) }]);
-  });
+  }, RESYNC_MS);
 
   it('repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them', () => {
     const api = checkout('git@github.com:acme/api.git', 'api');
@@ -192,7 +192,7 @@ describe('the upgrade re-sync', () => {
     expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
     expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).copies).toEqual([]);
-  });
+  }, RESYNC_MS);
 
   it('follows a merge: imports under the merged name move on the next sync instead of coming back as copies', () => {
     const svc = checkout('file:///srv/git/svc.git', 'svc');
@@ -207,7 +207,7 @@ describe('the upgrade re-sync', () => {
 
     expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
     expect(liveRows(w.global)).toMatchObject([{ content: NOTES[0], origin_project: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) }]);
-  });
+  }, RESYNC_MS);
 });
 
 describe('a project store with an id', () => {

@@ -23,7 +23,7 @@
  * a new top-placement guard added below.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/core/memory.js';
@@ -31,6 +31,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function callTool(
   reqId: number,
@@ -58,18 +62,14 @@ function extractText(res: McpResponse | null): string {
 
 describe('mcp hippo_recall Cutoff suppressionSummary', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-c5');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('MCP text response includes Cutoff block when filter activity is non-zero', async () => {
@@ -129,9 +129,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       // MCP's totalCandidates comes from loadAllEntries (all rows in tenant)
       // so it should be 30 (all our seeded rows).
       expect(totalCandidates).toBe(30);
-      // Shown count is bounded by physics/hybrid budget (200 tokens).
-      expect(totalShown).toBeGreaterThan(0);
-      expect(totalShown).toBeLessThan(30);
+      // Each printed row costs about 75 tokens, so two fit the 200-token budget and a third does not.
+      expect(totalShown).toBe(2);
     }
   });
 
@@ -152,7 +151,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     expect(text).not.toMatch(/WYSIATI:/);
   });
 
-  it('v1.13.3 top-placement guard: Cutoff block appears BEFORE the first memory row', async () => {
+  it('top-placement guard: Cutoff block appears BEFORE the first memory row', async () => {
     // Dogfood (docs/dogfood/2026-05-27-track-j-warnings.md) confirmed the
     // pre-v1.13.3 bottom-placement was the read-failure root cause. This
     // test locks the new top-placement so a future refactor cannot regress

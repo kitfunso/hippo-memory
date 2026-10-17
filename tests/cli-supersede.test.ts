@@ -39,7 +39,7 @@ describe('hippo supersede', () => {
     await hippo('remember', 'X is true');
     const hippoRoot = join(home, '.hippo');
     const entries = loadAllEntries(hippoRoot, 'default');
-    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.map((e) => e.content)).toEqual(['X is true']);
     const oldId = entries[0].id;
 
     const out = await hippo('supersede', oldId, 'X is false now');

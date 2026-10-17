@@ -113,6 +113,7 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
   const rows: Record<string, { readonly flags: VerbFlags }> = COMMANDS;
   const namesOf = (flags: VerbFlags): string[] =>
     [...(flags.switches ?? []), ...(flags.values ?? []), ...(flags.numbers ?? []), ...(flags.lists ?? [])];
+  // The walker builds a TypeScript program over all of src/, which is pure CPU and slowest on a shared runner.
   beforeAll(() => {
     found = collectVerbReads(resolve(__dirname, '..'));
   }, 120_000);

@@ -151,7 +151,8 @@ describe.each([
     const readsGiving = (i: number): number[] => saves[i].reads.filter((at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength);
     for (const [i, stored] of mirrors.entries()) {
       expect(stored.half_life_days).toBe(deriveHalfLife(base, stored));
-      expect(readsGiving(i).length).toBeGreaterThan(0);
+      // The row's stamp is one of the save's own reads, so the exact counts below never pass on an empty list.
+      expect(saves[i].reads).toContain(Date.parse(stored.created));
     }
     for (const i of [0, 1]) {
       // One read, later than the one that stamped the row: the clock did tick inside the save, so the strength is not the 1.0 of a frozen clock.

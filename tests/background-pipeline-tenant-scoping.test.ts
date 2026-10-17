@@ -5,9 +5,7 @@
  * host-wide back-compat parity. Real DB per the project convention; multi-
  * tenant fixtures constructed via createMemory({ tenantId }).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -25,8 +23,12 @@ import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { embedAll } from '../src/search/embed-memories.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { makeStore } from './_helpers/make-root.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { loadEveryTenantEntries } from './_helpers/root-forms.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,18 +40,8 @@ import { loadEveryTenantEntries } from './_helpers/root-forms.js';
  * this the test mutates the run-wide isolated HIPPO_HOME baseline and
  * tests/_real-store-guard.ts trips on teardown.
  */
-function tmpHippoHome(prefix: string) {
-  const home = mkdtempSync(join(tmpdir(), prefix));
-  const orig = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = home;
-  return {
-    home,
-    restore: () => {
-      rmSync(home, { recursive: true, force: true });
-      if (orig !== undefined) process.env.HIPPO_HOME = orig;
-      else delete process.env.HIPPO_HOME;
-    },
-  };
+function isolateGlobalHome(label: string): void {
+  vi.stubEnv('HIPPO_HOME', makeRoot(label, { init: false }));
 }
 
 function seedFor(
@@ -271,21 +263,17 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
   });
 
   it('case 7: autoShare({ tenantId: tenant-a }) only considers tenant-a local memories', () => {
-    const isolated = tmpHippoHome('hippo-l9-autoShare-global-');
-    try {
-      // Seed both tenants with high-transfer-score content (with the 'lesson' tag boost)
-      seedFor(hippoRoot, 'tenant-a', 'a-lesson: prefer explicit imports over wildcards', { tags: ['lesson', 'global-relevant'] });
-      seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', { tags: ['lesson', 'global-relevant'] });
+    isolateGlobalHome('l9-autoshare-global');
+    // Seed both tenants with high-transfer-score content (with the 'lesson' tag boost)
+    seedFor(hippoRoot, 'tenant-a', 'a-lesson: prefer explicit imports over wildcards', { tags: ['lesson', 'global-relevant'] });
+    seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', { tags: ['lesson', 'global-relevant'] });
 
-      // dryRun returns the candidate list without writing
-      const candidates = autoShare(...sharingStores(hippoRoot), { tenantId: 'tenant-a', minScore: 0, dryRun: true });
-      // Only tenant-a candidates should appear
-      const contents = candidates.map((c) => c.content);
-      expect(contents.some((c) => c.startsWith('a-lesson:'))).toBe(true);
-      expect(contents.some((c) => c.startsWith('b-lesson:'))).toBe(false);
-    } finally {
-      isolated.restore();
-    }
+    // dryRun returns the candidate list without writing
+    const candidates = autoShare(...sharingStores(hippoRoot), { tenantId: 'tenant-a', minScore: 0, dryRun: true });
+    // Only tenant-a candidates should appear
+    const contents = candidates.map((c) => c.content);
+    expect(contents.some((c) => c.startsWith('a-lesson:'))).toBe(true);
+    expect(contents.some((c) => c.startsWith('b-lesson:'))).toBe(false);
   });
 });
 
@@ -414,23 +402,19 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     // syncGlobalToLocal doesn't call initGlobal() (caller provides the
     // globalRoot directly), so HIPPO_HOME isolation isn't strictly required
     // here — but kept consistent for defence-in-depth.
-    const isolated = tmpHippoHome('hippo-l9-sync-global-');
-    try {
-      // Set up two separate roots to simulate global → local sync
-      const { root: globalRoot } = makeStore('l9-global');
-      seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
-      seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
+    isolateGlobalHome('l9-sync-global');
+    // Set up two separate roots to simulate global → local sync
+    const { root: globalRoot } = makeStore('l9-global');
+    seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
+    seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-      expect(syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
+    expect(syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
 
-      // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
-      // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
-      // lifted: both tenants' rows copy.
-      const copied = syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
-      expect(copied).toBe(2);
-    } finally {
-      isolated.restore();
-    }
+    // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
+    // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
+    // lifted: both tenants' rows copy.
+    const copied = syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
+    expect(copied).toBe(2);
   });
 });
 

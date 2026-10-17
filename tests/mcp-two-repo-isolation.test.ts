@@ -26,6 +26,10 @@ import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { saveEmbeddingIndex, replaceDetectedConflicts } from './_helpers/root-forms.js';
 
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 const TENANT = 'default';
 const SESSION = 'two-repo-session';
 const ACME = { name: 'acme', legacyName: 'acme' } as const;
@@ -39,7 +43,6 @@ let store: string;
 let handle: ServerHandle | undefined;
 let aliceKey = '';
 const realFetch = globalThis.fetch;
-const origEnv = { HIPPO_HOME: process.env.HIPPO_HOME, HIPPO_V1_RPS: process.env.HIPPO_V1_RPS, OPENAI_API_KEY: process.env.OPENAI_API_KEY };
 const BASE_CONFIG = { sharedStore: true, embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
 
 const ids = {
@@ -92,19 +95,14 @@ function writeConfig(extra: Record<string, JsonValue> = {}): void {
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ ...BASE_CONFIG, ...extra }));
 }
 
-function restoreEnv(name: string, value: string | undefined): void {
-  if (value === undefined) delete process.env[name];
-  else process.env[name] = value;
-}
-
 const HIDDEN_FROM_ACME = (): string[] => [ids.beta, ids.none, ids.other, ids.bob, ids.betaNear];
 const HIDDEN_FROM_BETA = (): string[] => [ids.acme, ids.none, ids.other, ids.bob];
 
 beforeAll(async () => {
   tmp = makeRoot('two-repo', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
-  process.env.HIPPO_V1_RPS = '0';
-  process.env.OPENAI_API_KEY = 'test-key-not-real';
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
+  vi.stubEnv('HIPPO_V1_RPS', '0');
+  vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   // The server shares this process, so its own requests pass through and only the embedding call is faked.
@@ -183,7 +181,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await handle?.stop();
   vi.unstubAllGlobals();
-  for (const [name, value] of Object.entries(origEnv)) restoreEnv(name, value);
   _resetSharedStoreCacheForTests();
   _resetProjectIdentityCacheForTests();
 });

@@ -32,7 +32,8 @@ describe('NO_MERGE_TAGS', () => {
   it('control: untagged rows are extraction candidates and merge', async () => {
     const result = await sleepOver([]);
     expect(result.extractionCandidates).toBe(3);
-    expect(result.merged).toBeGreaterThan(0);
+    // Each pair overlaps well past the 0.35 Jaccard bar, so the first row's cluster takes all three.
+    expect(result.merged).toBe(3);
   });
 
   it.each([...NO_MERGE_TAGS, PROBE])('a row tagged %s is neither sent to extraction nor merged', async (tag) => {

@@ -59,7 +59,8 @@ describe.skipIf(process.platform === 'win32')('hippo init installs the daily run
   it('writes one marked line, keeps an unrelated line, and adds nothing on a second run', () => {
     fs.writeFileSync(state, '0 1 * * * /usr/bin/true # unrelated\n');
     init(path.join(tmp, 'global'));
-    expect(calls().length, 'the fake crontab was never called; the real one may have run').toBeGreaterThan(0);
+    // With no marked line yet, init reads the table once and writes it once.
+    expect(calls(), 'the fake crontab was never called; the real one may have run').toEqual(['-l', '-']);
     expect(markerLines()).toHaveLength(1);
     expect(markerLines()[0]).toContain('15 6 * * *');
     expect(fs.readFileSync(state, 'utf8')).toContain('# unrelated');

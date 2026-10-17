@@ -1,5 +1,5 @@
 // A signal or crash shutdown that cannot finish ends the process at its bound; one that can finish still exits 0 on a signal.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +7,14 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { waitFor } from './_helpers/wait-for.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // The script's shutdownDrainMs plus the 10 s the store's threads get to close.
 const DRAIN_MS = 200;
@@ -132,6 +140,7 @@ ${served.output()}`);
 const KILLED = process.platform === 'win32' ? { code: 1, signal: null } : { code: null, signal: 'SIGKILL' };
 
 describe('serve() shutdown bound', () => {
+  // Waits out the 10 s store-close bound in a child process before it can see the exit.
   it.each([
     ['SIGTERM', "process.emit('SIGTERM');"],
     ['uncaught exception', "setTimeout(() => { throw new Error('boom-bound'); }, 0);"],
@@ -154,7 +163,7 @@ describe('serve() shutdown bound', () => {
     const boundLines = served.stderr().split('\n').filter((line) => line.includes('did not finish within'));
     expect(boundLines).toHaveLength(1);
     expect(boundLines[0]).toMatch(new RegExp(`^\\[hippo\\] error: serve shutdown after ${cause} did not finish within ${BOUND_MS} ms; ending the process without it`));
-  }, 60_000);
+  }, 35_000);
 
   it('exits 0 on SIGTERM when stop() finishes, with no bound line', async () => {
     const served = serveThen(trackedRoot(), ["process.emit('SIGTERM');"]);
@@ -162,5 +171,5 @@ describe('serve() shutdown bound', () => {
     expect(await served.exited).toEqual({ code: 0, signal: null });
     expect(served.stderr()).toContain('received SIGTERM, shutting down');
     expect(served.stderr()).not.toContain('did not finish within');
-  }, 30_000);
+  });
 });

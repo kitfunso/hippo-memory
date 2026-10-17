@@ -149,7 +149,8 @@ describe.each(KINDS)('HTTP $root ($kind)', (k) => {
   it('create answers 201 with the row; get finds it by id and answers 404 for a missing id', async () => {
     const row = await created(k);
     expect(row).toMatchObject(k.created);
-    expect(row.id).toBeGreaterThan(0);
+    // Each kind has its own AUTOINCREMENT table, and this test writes its first row.
+    expect(row.id).toBe(1);
 
     const getRes = await get(`${k.root}/${row.id}`);
     expect(getRes.status).toBe(200);

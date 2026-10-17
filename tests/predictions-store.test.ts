@@ -44,9 +44,8 @@ describe('predictions store (first-class object)', () => {
       targetDate: '2026-06-15',
     });
 
-    expect(pred.id).toBeGreaterThan(0);
-    expect(pred.memoryId).toBeDefined();
-    expect(pred.memoryId).not.toBeNull();
+    expect(pred.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
+    expect(pred.memoryId).toMatch(/^sem_/); // the mirror is a semantic-layer memory
     expect(pred.tenantId).toBe('default');
     expect(pred.classTag).toBe('migration-effort');
     expect(pred.claimText).toBe('migration takes 2 days');
@@ -191,7 +190,7 @@ describe('predictions store (first-class object)', () => {
     expect(cResults.length).toBe(0);
   });
 
-  it('UPDATE trigger blocks tenant_id-only mutation (codex round-1 P2 fix)', () => {
+  it('UPDATE trigger blocks tenant_id-only mutation', () => {
     // Create memory under tenant-a + a prediction referencing it
     const memA = createMemory('tenant-a prediction memory', {
       tags: ['prediction', 'x'],
@@ -221,7 +220,7 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('closePrediction rejects already-closed predictions (codex round-1 P2 fix)', () => {
+  it('closePrediction rejects already-closed predictions', () => {
     const pred = savePrediction(home, 'default', {
       classTag: 'reclose-test',
       claimText: 'predict and close once',

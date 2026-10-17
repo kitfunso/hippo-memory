@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { consolidate } from '../src/index.js';
@@ -14,8 +14,6 @@ import { refreshParticleProperties } from '../src/core/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../src/core/physics.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// One merge case builds and consolidates five separate stores.
-vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -38,7 +36,7 @@ describe('Decay pass', () => {
     writeEntry(tmpDir, ancient);
 
     const result = await consolidate(tmpDir, { now: new Date() });
-    expect(result.removed).toBeGreaterThan(0);
+    expect(result.removed).toBe(1);
 
     const remaining = loadAllEntries(tmpDir, 'default');
     expect(remaining.find((e) => e.id === ancient.id)).toBeUndefined();
@@ -71,7 +69,7 @@ describe('Decay pass', () => {
 
     const result = await consolidate(tmpDir, { dryRun: true, now: new Date() });
     expect(result.dryRun).toBe(true);
-    expect(result.removed).toBeGreaterThan(0);
+    expect(result.removed).toBe(1);
 
     // Entry should still be on disk
     const remaining = loadAllEntries(tmpDir, 'default');
@@ -215,13 +213,13 @@ describe('Merge pass', () => {
 
     const result = await consolidate(tmpDir, { now: new Date() });
 
-    expect(result.merged).toBeGreaterThan(0);
-    expect(result.semanticCreated).toBeGreaterThan(0);
+    expect(result.merged).toBe(2);
+    expect(result.semanticCreated).toBe(1);
     expect(result.details.some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
 
     const all = loadAllEntries(tmpDir, 'default');
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
-    expect(semantics.length).toBeGreaterThan(0);
+    expect(semantics).toHaveLength(1);
   });
 
   it('does not merge dissimilar entries', async () => {
@@ -389,7 +387,7 @@ describe('Merge pass', () => {
     expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
   });
 
-  it('does not flag the unrelated wording pairs reported in PR #11', async () => {
+  it('does not flag the unrelated wording pairs', async () => {
     initStore(tmpDir);
 
     const pairs = [

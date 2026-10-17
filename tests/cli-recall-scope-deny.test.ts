@@ -132,7 +132,7 @@ describe('cli recall scope default-deny', () => {
     expect(out).not.toContain(PRIV_GITHUB);
   });
 
-  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', async () => {
+  it('private rows cannot starve admitted rows out of the SQL candidate window', async () => {
     // 220 matching private rows > the 200-row default window. Pre-fix, the
     // window filled with private rows in SQL and the JS filter then emptied
     // it, so the one admitted row never surfaced. The SQL pre-window
@@ -155,7 +155,7 @@ describe('cli recall scope default-deny', () => {
     const out = await hippo(home, 'recall', 'windowstarve', '--limit', '10');
     expect(out).toContain('windowstarve admitted public row');
     expect(out).not.toContain('private filler');
-  }, 20_000);
+  });
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
     const res = await runInProcess(() => handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }));

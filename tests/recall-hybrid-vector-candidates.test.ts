@@ -20,6 +20,10 @@ import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { saveEmbeddingIndex } from './_helpers/root-forms.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
 const QUERY = 'deploy pipeline';
@@ -82,14 +86,14 @@ describe('hybrid recall candidates with stored vectors', () => {
   const track = (s: Seeded): Seeded => { dirs.push(s.home, s.global); return s; };
 
   beforeEach(() => {
-    process.env.HIPPO_FAKE_NOW = NOW;
-    process.env.OPENAI_API_KEY = 'sk-test';
+    vi.stubEnv('HIPPO_FAKE_NOW', NOW);
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     _resetAblationCacheForTests();
   });
 
   afterEach(() => {
-    delete process.env.HIPPO_FAKE_NOW;
-    delete process.env.OPENAI_API_KEY;
+    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
+    vi.stubEnv('OPENAI_API_KEY', undefined);
     _resetAblationCacheForTests();
     vi.unstubAllGlobals();
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -124,15 +128,9 @@ describe('hybrid recall candidates with stored vectors', () => {
   it('getContext with a query and no global store', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const saved = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(s.global, 'absent');
-    try {
-      const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), { q: QUERY, budget: 100000 });
-      expect(labels(s, res.entries.map((e) => e.entry.id))).toEqual(EXPECTED.contextLocal);
-    } finally {
-      if (saved === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = saved;
-    }
+    vi.stubEnv('HIPPO_HOME', join(s.global, 'absent'));
+    const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), { q: QUERY, budget: 100000 });
+    expect(labels(s, res.entries.map((e) => e.entry.id))).toEqual(EXPECTED.contextLocal);
   });
 
   it('without a vector spec, hybridSearch ranks only the pool it was given', async () => {

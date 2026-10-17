@@ -2,7 +2,7 @@
  * MCP `hippo_assemble` tool — surface check for Phase 2 assemble API.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/core/memory.js';
@@ -10,6 +10,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 
@@ -33,16 +37,12 @@ function extractText(res: McpResponse | null): string {
 
 describe('mcp hippo_assemble', () => {
   let home: string;
-  let originalHome: string | undefined;
   beforeEach(() => {
     home = makeRoot('mcp-assemble');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
   afterEach(() => {
     safeRmSync(home);
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('hippo_assemble is in the tools catalogue', async () => {

@@ -1,5 +1,5 @@
 // Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync, lstatSync, symlinkSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, delimiter, resolve } from 'node:path';
@@ -12,12 +12,10 @@ import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, pars
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
 
 const dirs: string[] = [];
-const savedEnv = { ...process.env };
 const savedCwd = process.cwd();
 afterEach(() => {
   process.chdir(savedCwd);
-  for (const k of Object.keys(process.env)) if (!(k in savedEnv)) delete process.env[k];
-  Object.assign(process.env, savedEnv);
+  vi.unstubAllEnvs();
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 const tmp =(prefix: string): string => {
@@ -295,8 +293,9 @@ describe('applyInstructions', () => {
     const outDir = tmp('z0-outdir-');
     execFileSync('git', ['init', '-q'], { cwd: outDir });
     const home = tmp('z0-agent-home-');
-    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
-    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) vi.stubEnv(k, undefined);
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     // Inside a repo, diff3 turns off git's zealous trim, so a union merge read with it repeats the shared line.
     for (const [name, cfg] of [['diff3', '[merge]\n\tconflictStyle = diff3\n'], ['broken', '[core\n']]) {
       writeFileSync(join(home, '.gitconfig'), cfg);
@@ -425,8 +424,9 @@ describe('workspace checkout', () => {
     mkdirSync(hooks);
     writeFileSync(join(hooks, 'post-checkout'), `#!/bin/sh\necho hooked > lib.js\necho ran > "${marker.replace(/\\/g, '/')}"\n`, { mode: 0o755 });
     writeFileSync(join(home, '.gitconfig'), `[core]\n\thooksPath = ${hooks.replace(/\\/g, '/')}\n`);
-    for (const k of ['GIT_CONFIG_GLOBAL', 'XDG_CONFIG_HOME']) delete process.env[k];
-    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    for (const k of ['GIT_CONFIG_GLOBAL', 'XDG_CONFIG_HOME']) vi.stubEnv(k, undefined);
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     expect(execFileSync('git', ['config', '--global', 'core.hooksPath'], { encoding: 'utf8' }).trim()).toBe(hooks.replace(/\\/g, '/'));
     checkoutBase(repo, work, 'seqK', { id: 'k2', baseRef: base }, 'A0');
     expect(existsSync(marker)).toBe(false);
@@ -507,8 +507,9 @@ describe('workspace checkout', () => {
       textconv: `[core]\n\tattributesFile = ${fwd(join(home, 'attrs'))}\n[diff "x"]\n\ttextconv = ${run}\n`,
       xdgBinary: '',
     };
-    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
-    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) vi.stubEnv(k, undefined);
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     for (const [name, cfg] of Object.entries(configs)) {
       writeFileSync(join(home, '.gitconfig'), cfg);
       if (name === 'xdgBinary') {
@@ -536,8 +537,9 @@ describe('workspace checkout', () => {
     execFileSync('git', ['init', '-q'], { cwd: decoy });
     const home = tmp('z0-agent-home-');
     writeFileSync(join(home, '.gitconfig'), `[url "${decoy.replace(/\\/g, '/')}"]\n\tinsteadOf = ${repo.replace(/\\/g, '\\\\')}\n`);
-    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) delete process.env[k];
-    Object.assign(process.env, { HOME: home, USERPROFILE: home });
+    for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) vi.stubEnv(k, undefined);
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
     expect(spawnSync('git', ['ls-remote', repo], { encoding: 'utf8' }).stdout).toBe('');
     checkoutBase(repo, work, 'seqU', { id: 'u2', baseRef: base }, 'A0');
     expect(readFileSync(join(work, 'lib.js'), 'utf8')).toBe('a - b\n');
@@ -826,13 +828,15 @@ describe('homes check (built CLI, no claude session)', () => {
       mkdirSync(dirname(f), { recursive: true });
       writeFileSync(f, text);
     }
-    Object.assign(process.env, { HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming') });
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    vi.stubEnv('APPDATA', join(home, 'AppData', 'Roaming'));
     return home;
   }
   const decoy = () => {
     const d = toolDir(['hippo']);
     const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-    process.env[key] = `${d}${delimiter}${process.env[key]}`;
+    vi.stubEnv(key, `${d}${delimiter}${process.env[key]}`);
     return d;
   };
   const runs = ARMS.map((arm: string) => ({ seq: 'seqH', arm, seed: 1 }));

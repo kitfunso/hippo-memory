@@ -1,5 +1,5 @@
 /** `hippo support-bundle`: read-only, secret-free, one redacted JSON file. Real stores, canaries built at runtime. */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -14,14 +14,15 @@ import type { JsonObject } from '../src/store/working-memory.js';
 import type { JsonValue } from '../src/util/json.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const dirs: string[] = [];
-const origHippoHome = process.env.HIPPO_HOME;
 
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
-  if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHippoHome;
-  delete process.env.HIPPO_FAKE;
+  vi.stubEnv('HIPPO_FAKE', undefined);
 });
 
 function tmp(prefix: string): string {
@@ -125,9 +126,9 @@ function seed(): Seeded {
     '',
   ].join('\n'));
 
-  process.env.HIPPO_HOME = join(home, 'unused-global');
+  vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
   const envCanary = `env-${randomUUID()}`;
-  process.env.HIPPO_FAKE = envCanary;
+  vi.stubEnv('HIPPO_FAKE', envCanary);
 
   return { home, cwd, hippoRoot, memoryCanary, pwCanary, qCanary, fCanary, keyCanary, authCanary, envCanary, ghpCanary, skCanary, bearerCanary, jwtCanary, pemCanary, hippoKeyCanary, basicCanary };
 }
@@ -157,7 +158,10 @@ describe('buildSupportBundle', () => {
     expect(parsed.stores[0].schemaVersion).toBe(getCurrentSchemaVersion());
     expect(parsed.stores[0].path.startsWith('~')).toBe(true);
     expect(Array.isArray(parsed.doctor.checks)).toBe(true);
-    expect(parsed.doctor.checks.length).toBeGreaterThan(0);
+    // codex joins only where CODEX_HOME names a folder on this machine; no global store, so no projects check.
+    expect(parsed.doctor.checks.map((c: { id: string }) => c.id).filter((id: string) => id !== 'codex')).toEqual([
+      'node', 'store', 'schema', 'memories', 'fts', 'tokens', 'failures', 'sleep', 'compactions', 'claude-code', 'embeddings',
+    ]);
     expect(parsed.logs.tails).toBeUndefined();
   });
 
@@ -165,8 +169,9 @@ describe('buildSupportBundle', () => {
     const s = seed();
     // tmpdir() is often an 8.3 short form on Windows and a symlink on macOS; elsewhere this is the plain path.
     const aliasHome = join(tmpdir(), basename(s.home));
-    process.env.HIPPO_HOME = join(aliasHome, 'global');
-    initStore(process.env.HIPPO_HOME);
+    const aliasGlobal = join(aliasHome, 'global');
+    vi.stubEnv('HIPPO_HOME', aliasGlobal);
+    initStore(aliasGlobal);
     const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
     expect(bundleText(bundle).filter((t) => t.includes(aliasHome.toLowerCase())), aliasHome).toEqual([]);
     // Exact, so a swap of only the user's own home (~\AppData\...\global) does not pass for this one.
@@ -181,16 +186,9 @@ describe('buildSupportBundle', () => {
     writeFileSync(join(s.home, '.hippo', 'logs', 'alias.log'), `wrote ${join(aliasHome, 'tmp', 'scratch.txt')}\n`);
     const saved = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
     // os.tmpdir() reads these on every call, so the bundle sees a temp folder under the home's alias.
-    for (const k of Object.keys(saved)) process.env[k] = join(aliasHome, 'tmp');
+    for (const k of Object.keys(saved)) vi.stubEnv(k, join(aliasHome, 'tmp'));
     let bundle: JsonObject;
-    try {
-      bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    }
+    bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
     expect(JSON.parse(JSON.stringify(bundle)).logs.tails['alias.log']).toEqual([`wrote ${join('~', 'tmp', 'scratch.txt')}`]);
   });
 
@@ -200,7 +198,7 @@ describe('buildSupportBundle', () => {
     const cwd = join(home, 'proj');
     mkdirSync(cwd, { recursive: true });
     mkdirSync(join(home, '.hippo', 'logs'), { recursive: true });
-    process.env.HIPPO_HOME = join(home, 'unused-global');
+    vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
     writeFileSync(join(home, '.hippo', 'logs', 'hook.log'), [
       `payload ${JSON.stringify({ cwd })}`,
       `at ${pathToFileURL(join(cwd, 'x.js')).href}:1:2`,
@@ -247,7 +245,7 @@ describe('buildSupportBundle', () => {
     const s = seed();
     // tmpdir() is usually the 8.3 short form; HIPPO_HOME under it makes the bundle find that alias of the home.
     const shortHome = join(tmpdir(), basename(s.home));
-    process.env.HIPPO_HOME = join(shortHome, 'unused-global');
+    vi.stubEnv('HIPPO_HOME', join(shortHome, 'unused-global'));
     // Git Bash writes C:\x as /c/x; Cygwin and WSL put the same path under /cygdrive and /mnt.
     const mount = (root: string, p: string): string => `${root}/${p[0].toLowerCase()}${p.slice(2).replace(/\\/g, '/')}`;
     writeFileSync(join(s.home, '.hippo', 'logs', 'shell.log'), [
@@ -336,7 +334,7 @@ describe('buildSupportBundle', () => {
     const home = tmp('hippo-bundle-empty-home-');
     const cwd = join(home, 'proj');
     mkdirSync(cwd, { recursive: true });
-    process.env.HIPPO_HOME = join(home, 'unused-global');
+    vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 
     const bundle = buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() });
     const parsed = JSON.parse(JSON.stringify(bundle));
@@ -356,7 +354,7 @@ describe('buildSupportBundle', () => {
     const cwd = join(home, 'proj');
     mkdirSync(join(cwd, '.hippo'), { recursive: true });
     writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
-    process.env.HIPPO_HOME = join(home, 'unused-global');
+    vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 
     const parsed = JSON.parse(JSON.stringify(
       buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() }),

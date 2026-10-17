@@ -2,7 +2,7 @@
  * `hippo doctor`: read-only health report with a fix for every warn or fail.
  * Real stores, real settings files, the built CLI for the exit code.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,19 +19,17 @@ import { repairProjectNames } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function sha256(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
 
 const dirs: string[] = [];
-const origHome = process.env.HIPPO_HOME;
-const origConfigDir = process.env.CLAUDE_CONFIG_DIR;
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
-  if (origConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-  else process.env.CLAUDE_CONFIG_DIR = origConfigDir;
 });
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -42,7 +40,7 @@ function tmp(prefix: string): string {
 describe('hippo doctor', () => {
   it('fails with a fix when there is no store, and creates nothing', () => {
     const cwd = tmp('doctor-empty-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const r = runDoctor({ cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(false);
     const store = r.checks.find((c) => c.id === 'store')!;
@@ -54,7 +52,7 @@ describe('hippo doctor', () => {
 
   it('passes on a healthy project store and reports hooks, memories and sleep', () => {
     const cwd = tmp('doctor-ok-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
     writeEntry(join(cwd, '.hippo'), createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     mkdirSync(join(cwd, '.claude'));
@@ -75,7 +73,7 @@ describe('hippo doctor', () => {
 
   it('warns when the failure log table is gone, because the capture-error hook then logs nothing', () => {
     const cwd = tmp('doctor-failures-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
     const db = openHippoDb(join(cwd, '.hippo'));
     db.exec('DROP TABLE failure_log');
@@ -85,7 +83,7 @@ describe('hippo doctor', () => {
 
   it('names compactions left unfinished for over 10 minutes and points at sleep, ignoring live, finished and closed ones', () => {
     const cwd = tmp('doctor-compactions-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
     initStore(hippoRoot);
     const now = new Date('2026-09-29T12:00:00.000Z');
@@ -126,7 +124,7 @@ describe('hippo doctor', () => {
     }
     const setup = (prefix: string): SpoolStore => {
       const cwd = tmp(prefix);
-      process.env.HIPPO_HOME = join(cwd, 'global');
+      vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
       const hippoRoot = join(cwd, '.hippo');
       initStore(hippoRoot);
       const spoolAt = (name: string, mtime: Date): void => {
@@ -197,7 +195,7 @@ describe('hippo doctor', () => {
 
   it('flags old Node, missing Claude Code hooks, and accepts the plugin instead of hooks', () => {
     const cwd = tmp('doctor-warn-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
     mkdirSync(join(cwd, '.claude'));
     writeFileSync(join(cwd, '.claude', 'settings.json'), '{}');
@@ -212,18 +210,18 @@ describe('hippo doctor', () => {
 
   it('reads the Claude Code settings from CLAUDE_CONFIG_DIR when it is set, not from <home>/.claude', () => {
     const cwd = tmp('doctor-config-dir-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
     const config = join(cwd, 'elsewhere');
     mkdirSync(config);
     writeFileSync(join(config, 'settings.json'), '{}');
-    process.env.CLAUDE_CONFIG_DIR = config;
+    vi.stubEnv('CLAUDE_CONFIG_DIR', config);
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')).toMatchObject({ status: 'warn', fix: 'hippo hook install claude-code' });
   });
 
   it('reads a Claude Code settings.json saved with a byte order mark, which install also reads', () => {
     const cwd = tmp('doctor-bom-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
     mkdirSync(join(cwd, '.claude'));
     const commands = ['hippo context --pinned-only', 'hippo session-end', 'hippo pre-compact', 'hippo compact-resume', 'hippo post-compact', 'hippo capture-error'];
@@ -241,7 +239,7 @@ describe('hippo doctor', () => {
 
   it('leaves an older store as it found it', () => {
     const cwd = tmp('doctor-readonly-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
     initStore(hippoRoot);
     const seed = openHippoDb(hippoRoot);
@@ -262,7 +260,7 @@ describe('hippo doctor', () => {
 
   it('flags a bare .hippo folder and creates nothing', () => {
     const cwd = tmp('doctor-bare-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     mkdirSync(join(cwd, '.hippo'));
     const r = runDoctor({ cwd, home: cwd, version: 'test' });
     const store = r.checks.find((c) => c.id === 'store')!;
@@ -274,7 +272,7 @@ describe('hippo doctor', () => {
 
   it('openHippoDbReadOnly refuses writes', () => {
     const cwd = tmp('doctor-ro-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
     initStore(hippoRoot);
     const db = openHippoDbReadOnly(hippoRoot);
@@ -284,7 +282,7 @@ describe('hippo doctor', () => {
 
   it('a store that needs a newer binary names the upgrade', () => {
     const cwd = tmp('doctor-incompat-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     const hippoRoot = join(cwd, '.hippo');
     initStore(hippoRoot);
     const seed = openHippoDb(hippoRoot);
@@ -297,7 +295,7 @@ describe('hippo doctor', () => {
 
   it('a hippo.db that is not a database is one failed schema check and no other database check', () => {
     const cwd = tmp('doctor-notdb-');
-    process.env.HIPPO_HOME = join(cwd, 'global');
+    vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     mkdirSync(join(cwd, '.hippo'));
     writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
 
@@ -311,7 +309,7 @@ describe('hippo doctor', () => {
   it('warns about merged rows the global store tagged user-global by mistake, and passes once repaired', () => {
     const cwd = tmp('doctor-projects-');
     const global = join(cwd, 'global');
-    process.env.HIPPO_HOME = global;
+    vi.stubEnv('HIPPO_HOME', global);
     initStore(global);
     const parent = { ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-b' };
     writeEntry(global, parent);

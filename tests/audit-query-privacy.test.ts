@@ -1,5 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -13,6 +13,14 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const CANARY = 'zqcanaryneedle';
 const QUERY = `${CANARY} private customer question`;
@@ -20,7 +28,6 @@ const QUERY = `${CANARY} private customer question`;
 let home: string;
 let localRoot: string;
 let globalRoot: string;
-let savedHome: string | undefined;
 let ctx: FullContext;
 
 interface RecallMetadata {
@@ -57,7 +64,8 @@ function expectHashedOnly(row: AuditRow, query: string): void {
 
 function expectNoCanary(): void {
   const rows = [...auditRows(localRoot), ...auditRows(globalRoot)];
-  expect(rows.length).toBeGreaterThan(0);
+  // remember, context and API recall one row each; CLI, MCP and HTTP a recall plus a no-session anchor skip each.
+  expect(rows).toHaveLength(9);
   for (const row of rows) expect(row.text).not.toContain(CANARY);
 }
 
@@ -66,16 +74,10 @@ beforeEach(async () => {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   localRoot = join(home, '.hippo');
   globalRoot = join(home, 'global-hippo');
-  savedHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   initStore(localRoot);
   ctx = apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: `${CANARY} stored memory body` });
-});
-
-afterEach(() => {
-  if (savedHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = savedHome;
 });
 
 describe('auditQueryFields', () => {
@@ -111,8 +113,8 @@ describe('recall audits store a query hash, never the text', () => {
       encoding: 'utf-8',
     });
     const rows = auditRows(localRoot).filter((r) => r.op === 'recall');
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) expectHashedOnly(row, QUERY);
+    expect(rows).toHaveLength(1);
+    expectHashedOnly(rows[0], QUERY);
   });
 });
 

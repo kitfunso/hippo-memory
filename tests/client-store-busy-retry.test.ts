@@ -36,12 +36,13 @@ afterEach(async () => {
 });
 
 describe('thin client under a busy store', () => {
+  // Each busy answer ends its connection, so the three requests each open a new one to the fake server.
   it('remember retries two busy 503s and returns the 200', async () => {
     const fake = await startFake(2);
     const result = await remember(fake.url, undefined, { content: 'held lock clears' });
     expect(result.id).toBe('m1');
     expect(fake.hits()).toBe(3);
-  }, 15_000);
+  }, 7_000);
 
   it('remember gives up with the 503 inside the ~5 s budget when the lock never clears', async () => {
     const fake = await startFake(Number.POSITIVE_INFINITY);
@@ -57,11 +58,11 @@ describe('thin client under a busy store', () => {
     expect(fake.hits()).toBe(5);
     // Four pauses, each the one second the server named, and none after the last try: that sum is the budget.
     expect(timers.mock.calls.filter(([, ms]) => ms === 1_000)).toHaveLength(4);
-  }, 15_000);
+  });
 
   it('forget retries a busy 503 too, since a routed write commits nothing before it answers busy', async () => {
     const fake = await startFake(1);
     await expect(forget(fake.url, undefined, 'm1')).resolves.toEqual({ ok: true, id: 'm1' });
     expect(fake.hits()).toBe(2);
-  }, 15_000);
+  });
 });

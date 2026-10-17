@@ -1,5 +1,5 @@
 // Sleep may reuse a person's text and hippo's own sound text; hippo's text with a certain defect never feeds a summary or the global store.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { consolidate } from '../src/index.js';
@@ -11,23 +11,20 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const DEFECT = 'Found local migration files to be';
 
 let scratch: string;
 let root: string;
-const saved = { home: process.env.HIPPO_HOME, key: process.env.ANTHROPIC_API_KEY };
 beforeEach(() => {
   scratch = makeRoot('defects-local', { init: false });
   root = join(scratch, 'project', '.hippo');
   initStore(root);
   writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));
-  process.env.HIPPO_HOME = join(scratch, 'global');
-});
-afterEach(() => {
-  for (const [name, value] of [['HIPPO_HOME', saved.home], ['ANTHROPIC_API_KEY', saved.key]] as const) {
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
+  vi.stubEnv('HIPPO_HOME', join(scratch, 'global'));
 });
 
 describe('automatic rows with a certain defect stay local', () => {
@@ -40,7 +37,7 @@ describe('automatic rows with a certain defect stay local', () => {
   });
 
   it('the DAG pass summarises sound extracted facts and leaves a defective one out', async () => {
-    process.env.ANTHROPIC_API_KEY = 'test';
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test');
     const source = createMemory('Notes on the uploader and its storage token handling.', { layer: Layer.Episodic });
     writeEntry(root, source);
     const fact = (content: string) => ({

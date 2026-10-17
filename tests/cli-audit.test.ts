@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-// The first case runs two full `hippo init`s and four more verbs, too slow for the 5 s unit default on a busy runner.
-vi.setConfig({ testTimeout: 30_000 });
 
 const savedCwd = process.cwd();
 let home = '';
@@ -18,7 +15,7 @@ async function hippo(...args: string[]): Promise<string> {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-audit-cli-'));
+  home = makeRoot('audit-cli', { init: false });
   vi.stubEnv('HIPPO_TENANT', '');
   process.chdir(home);
 });
@@ -26,7 +23,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('hippo audit list', () => {

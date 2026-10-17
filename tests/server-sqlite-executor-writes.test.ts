@@ -1,5 +1,5 @@
 // The memory write, key, audit and session assemble routes run their SQLite work on worker threads, and so does the key row read of every request.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { copyFileSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +19,14 @@ import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import {
   auditFailures, auditRows, cleanups, del, execOn, get, holdWriteLock, keyFor, mirrorFiles, newRoot, onDb, patientStore, post, postText, removeLater, scrub, seen, start, undoAll, watched,
 } from './_helpers/store-worker-server.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 afterEach(async () => {
   vi.useRealTimers();

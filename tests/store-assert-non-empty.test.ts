@@ -39,7 +39,7 @@ describe('assertNonEmpty', () => {
     expect(thrownBy(() => assertNonEmpty(arr, 'TEST'))).toBeUndefined();
   });
 
-  it('the shipped deny list passed the guard at import, so it holds at least one scope', () => {
-    expect(RECALL_DEFAULT_DENY_SCOPES.length).toBeGreaterThan(0);
+  it('the shipped deny list passed the guard at import and holds the legacy scope', () => {
+    expect(RECALL_DEFAULT_DENY_SCOPES).toEqual(['unknown:legacy']);
   });
 });

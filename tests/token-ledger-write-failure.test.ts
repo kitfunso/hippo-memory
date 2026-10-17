@@ -1,5 +1,5 @@
 // A failed token-ledger write never fails the recall that produced the text, but it is logged instead of swallowed.
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -15,10 +15,12 @@ import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
-const savedHome = process.env.HIPPO_HOME;
-const savedLevel = process.env.HIPPO_LOG;
 const PROJECT = { name: 'p', legacyName: 'p' };
 
 function skippedLines(): string[] {
@@ -39,17 +41,13 @@ beforeEach(() => {
   db.exec('DROP TABLE token_ledger');
   closeHippoDb(db);
   // No global store, so the hook reads and writes this one alone.
-  process.env.HIPPO_HOME = path.join(root, 'no-global');
+  vi.stubEnv('HIPPO_HOME', path.join(root, 'no-global'));
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   _resetLogOnceForTests();
 });
 
 afterEach(() => {
   stderrSpy.mockRestore();
-  if (savedHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = savedHome;
-  if (savedLevel === undefined) delete process.env.HIPPO_LOG;
-  else process.env.HIPPO_LOG = savedLevel;
 });
 
 describe('token ledger write failures', () => {
@@ -93,10 +91,11 @@ describe('token ledger write failures', () => {
     expect((await hook('s-dropped-1')).stdout).toContain('the deploy window opens on Tuesdays');
     expect(skippedLines()).toEqual([]);
 
-    process.env.HIPPO_LOG = 'debug';
+    vi.stubEnv('HIPPO_LOG', 'debug');
     expect((await hook('s-dropped-2')).stdout).toContain('the deploy window opens on Tuesdays');
+    // With no printed hash the hook skips the last-sent read, so its one inject row is the one write that fails.
     const lines = skippedLines();
-    expect(lines.length).toBeGreaterThan(0);
+    expect(lines).toHaveLength(1);
     for (const line of lines) {
       expect(line).toMatch(/^\[hippo\] debug: token ledger row skipped: no such table: token_ledger ts=\S+\n$/);
     }
@@ -113,7 +112,7 @@ describe('token ledger write failures', () => {
     write();
     expect(stderrSpy.mock.calls).toEqual([]);
 
-    process.env.HIPPO_LOG = 'debug';
+    vi.stubEnv('HIPPO_LOG', 'debug');
     write();
     expect(skippedLines()).toHaveLength(1);
     expect(skippedLines()[0]).toMatch(/^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/);

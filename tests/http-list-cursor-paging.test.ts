@@ -89,7 +89,7 @@ beforeAll(async () => {
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
-}, 60_000);
+});
 
 afterAll(async () => {
   await handle.stop();

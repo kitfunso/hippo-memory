@@ -11,8 +11,15 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { makeStore } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const CLI_PATH = join(process.cwd(), 'dist', 'cli.js');
-const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
 
 function der(tag: number, ...parts: Buffer[]): Buffer {
   const body = Buffer.concat(parts);
@@ -126,8 +133,6 @@ describe('hippo serve over TLS', () => {
     await handle?.stop();
     handle = undefined;
     vi.restoreAllMocks();
-    if (savedRequireAuth === undefined) delete process.env.HIPPO_REQUIRE_AUTH;
-    else process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
     for (const kill of children.splice(0)) kill();
     // A killed child holds the store open for a moment on Windows, so removal is retried until the child lets go.
     await waitFor(() => {
@@ -147,7 +152,7 @@ describe('hippo serve over TLS', () => {
     ({ ...process.env, HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ...extra });
 
   it('answers HTTPS with the given certificate on a network bind, takes no cleartext request and logs no cleartext warning', async () => {
-    process.env.HIPPO_REQUIRE_AUTH = '1';
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
     handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, tls: pair });
     expect(handle.url).toBe(`https://0.0.0.0:${handle.port}`);
@@ -202,7 +207,7 @@ describe('hippo serve over TLS', () => {
     const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
     expect(await healthOverTls(port, pair.cert)).toBe(200);
     expect(stdout).toContain('requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request');
-  }, 60_000);
+  });
 
   it.each([
     ['only a certificate', ['--tls-cert', 'cert.pem'], /needs both a certificate and a key/],
@@ -214,5 +219,5 @@ describe('hippo serve over TLS', () => {
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toMatch(message);
-  }, 60_000);
+  });
 });

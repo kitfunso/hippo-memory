@@ -11,7 +11,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
@@ -22,6 +22,10 @@ import { getContext } from '../src/api/index.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let tmpRoot: string;
 let projA: string;
@@ -46,7 +50,7 @@ beforeEach(() => {
   globalStore = path.join(tmpRoot, 'globalstore');
   initStore(globalStore);
   origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalStore;
+  vi.stubEnv('HIPPO_HOME', globalStore);
   _resetProjectIdentityCacheForTests();
 
   writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
@@ -65,9 +69,9 @@ beforeEach(() => {
 
 afterEach(() => {
   if (origHippoHome !== undefined) {
-    process.env.HIPPO_HOME = origHippoHome;
+    vi.stubEnv('HIPPO_HOME', origHippoHome);
   } else {
-    delete process.env.HIPPO_HOME;
+    vi.stubEnv('HIPPO_HOME', undefined);
   }
 });
 
@@ -97,7 +101,7 @@ describe('getContext origin partition (project A session)', () => {
     const got = contents(result.entries);
     expect(got).not.toContain(BRAVO);
     expect(got).not.toContain(LEGACY);
-    expect(got.length).toBeGreaterThan(0);
+    expect([...got].sort()).toEqual([ALPHA, GLOBAL_PREF]);
   });
 
   it('annotates returned entries with origin and category', async () => {
@@ -148,7 +152,8 @@ describe('getContext origin partition (project A session)', () => {
     });
     const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
     const got = contents(result.entries);
-    expect(got.length).toBeGreaterThan(0);
+    // The two admitted rows cost 12 and 13 tokens, so both fit the 60-token budget once the bulk row is out.
+    expect([...got].sort()).toEqual([ALPHA, GLOBAL_PREF]);
     expect(got.join('\n')).not.toContain('filler text for bulk');
   });
 

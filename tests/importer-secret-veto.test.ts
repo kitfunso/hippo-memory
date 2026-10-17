@@ -8,7 +8,7 @@
  * gates the importer with detectSecret. This test locks that in.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -20,8 +20,6 @@ import { loadConfig } from '../src/core/config.js';
 import { sqliteAgentImport } from '../src/store/sqlite/agent-import.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// An import asks git for the project's layout in a child process, once for each agent tool it reads.
-vi.setConfig({ testTimeout: 30_000 });
 
 const sync = (root: string, home: string): Tally =>
   totalTally(importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } }));

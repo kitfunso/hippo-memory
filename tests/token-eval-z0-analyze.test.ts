@@ -354,7 +354,8 @@ describe('Z0 hypotheses', () => {
     const a = analyze(g);
     const h = real(a.hypotheses);
     const rep = real(a.reported);
-    expect(h.H1.violation.estimate).toBeGreaterThan(0);
+    // Per (repo, seed), A2 fails one of two applies in families 0-2 and two of three in family 3: (3/2 + 2/3) / 4.
+    expect(h.H1.violation.estimate).toBeCloseTo(13 / 24, 12);
     expect(rep.firstApply.H1.violation.estimate).toBe(0);
     expect([h.H1.violation.units, rep.maintainerOnly.H1.violation.units, rep.sensitivity.H1.violation.units]).toEqual([72, 54, 68]);
     expect(rep.sensitivity.carryUnionRuns).toBe(1);
@@ -367,7 +368,9 @@ describe('Z0 hypotheses', () => {
     const byPos = new Map<string, number[]>();
     for (const r of g.records) byPos.set(`${r.sequence}#${r.seed}@${r.position}`, [...(byPos.get(`${r.sequence}#${r.seed}@${r.position}`) ?? []), slotOf(r)]);
     for (const s of byPos.values()) expect([...s].sort((a, b) => a - b)).toEqual(s.map((_, i) => i + 1));
-    expect(rep.rotation.length).toBeGreaterThan(0);
+    // The rotation walks each of the five RN arms through slots 1-5 and each of the four X arms through 1-4.
+    const cells = (arms: string[], n: number) => arms.flatMap((arm) => Array.from({ length: n }, (_, i) => [arm, i + 1]));
+    expect(rep.rotation.map((c) => [c.arm, c.slot])).toEqual([...cells(['A0', 'A1', 'A2', 'A4', 'A5'], 5), ...cells(['X1', 'X2', 'X3', 'X4'], 4)]);
   });
 });
 

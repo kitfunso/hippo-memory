@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb } from '../src/db/index.js';
 import { createMemory } from '../src/core/memory.js';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { distUrl, withDb } from './_helpers/agent-memories-world.js';
@@ -12,31 +12,48 @@ import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const WORKERS = 2;
 const ROWS = 60;
+// A zero-wait BEGIN IMMEDIATE on a second handle says whether another writer holds the lock as this one comes to write.
 const WORKER = `
-const [, , memoryUrl, writesUrl, root, tag, rows, startAt] = process.argv;
+const [, , memoryUrl, writesUrl, root, dbPath, tag, rows] = process.argv;
+const { DatabaseSync } = await import('node:sqlite');
 const { createMemory } = await import(memoryUrl);
 const { writeEntry } = await import(writesUrl);
-await new Promise((done) => setTimeout(done, Math.max(0, Number(startAt) - Date.now())));
+const probe = new DatabaseSync(dbPath);
+probe.exec('PRAGMA busy_timeout = 0');
+let found = 'free';
+try { probe.exec('BEGIN IMMEDIATE'); probe.exec('ROLLBACK'); } catch (error) { if (error.errcode !== 5) throw error; found = 'held'; }
+probe.close();
+process.stdout.write(found + '\\n');
 for (let i = 0; i < Number(rows); i++) {
   writeEntry(root, createMemory('Worker ' + tag + ' notes that deploy step ' + i + ' waits for the nightly backup window.', { baseHalfLifeDays: 30 }));
 }
 `;
 
-interface Finished {
-  readonly code: number | null;
-  readonly stderr: string;
+interface Worker {
+  /** The worker's first line: whether it found the write lock held before its first write. */
+  readonly found: Promise<string>;
+  readonly finished: Promise<{ readonly code: number | null; readonly stderr: string }>;
 }
 
 let root: string;
 
-function runWorker(args: readonly string[]): Promise<Finished> {
-  return new Promise((resolve, fail) => {
-    const child = spawn(process.execPath, [join(root, 'worker.mjs'), ...args], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
-    let stderr = '';
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+function startWorker(args: readonly string[]): Worker {
+  const child = spawn(process.execPath, [join(root, 'worker.mjs'), ...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  let stdout = '';
+  let stderr = '';
+  const found = new Promise<string>((resolve) => {
+    child.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString('utf8');
+      if (stdout.includes('\n')) resolve(stdout.split('\n')[0]!);
+    });
+    child.on('close', () => resolve(stdout.split('\n')[0]!));
+  });
+  child.stderr.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+  const finished = new Promise<{ code: number | null; stderr: string }>((resolve, fail) => {
     child.on('error', fail);
     child.on('close', (code) => resolve({ code, stderr }));
   });
+  return { found, finished };
 }
 
 interface StoreCounts {
@@ -59,14 +76,23 @@ describe('two hippo processes writing to one store at once', () => {
     root = makeStore('writers-wait').root;
     writeFileSync(join(root, 'worker.mjs'), WORKER, 'utf8');
 
-    // Every worker waits for one shared start time after loading, so the writes overlap.
-    const startAt = String(Date.now() + 2000);
-    const done = await Promise.all(Array.from({ length: WORKERS }, (_, i) =>
-      runWorker([distUrl('core/memory.js'), distUrl('store/entry-writes.js'), root, String(i), String(ROWS), startAt])));
+    // This handle holds the write lock until every worker has met it, so all of them start writing behind one holder.
+    const holder = openHippoDb(root);
+    let workers: Worker[];
+    try {
+      holder.exec('BEGIN IMMEDIATE');
+      workers = Array.from({ length: WORKERS }, (_, i) =>
+        startWorker([distUrl('core/memory.js'), distUrl('store/entry-writes.js'), root, getHippoDbPath(root), String(i), String(ROWS)]));
+      expect(await Promise.all(workers.map((w) => w.found))).toEqual(Array(WORKERS).fill('held'));
+    } finally {
+      if (holder.isTransaction) holder.exec('ROLLBACK');
+      closeHippoDb(holder);
+    }
+    const done = await Promise.all(workers.map((w) => w.finished));
 
     for (const d of done) expect(d.code, d.stderr).toBe(0);
     expect(storeCounts(root)).toEqual({ rows: WORKERS * ROWS, audits: WORKERS * ROWS, matched: WORKERS * ROWS });
-  }, 60_000);
+  });
 });
 
 describe('writeEntryDbOnly inside the caller\'s transaction', () => {

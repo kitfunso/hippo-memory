@@ -1,6 +1,6 @@
 // The personal-memories plan's lane T walk, written from the plan alone: one shared-store server, callers A, B and an unowned admin.
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as api from '../src/api/index.js';
@@ -30,6 +30,10 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 const A_SCOPE = 'personal:private:oid-a';
 const B_SCOPE = 'personal:private:oid-b';
 const ZIRCON = 'zircon-kettle note for alpha';
@@ -54,7 +58,6 @@ let store: string;
 let handle: ServerHandle | undefined;
 let keys: Keys;
 const ids = { aZircon: '', teamZircon: '', bBasalt: '', aQuill: '', teamTeal: '', summary: '', child: '', teamRaw: '' };
-const origEnv = { HIPPO_HOME: process.env.HIPPO_HOME, HIPPO_V1_RPS: process.env.HIPPO_V1_RPS };
 
 const resolver: AuthResolver = (token) => {
   if (token === SIGNIN_A) return { tenantId: 'default', subject: 'oid-a', role: 'member' };
@@ -132,17 +135,11 @@ async function sameAsMissing(id: string, run: (id: string) => Promise<Reply>, st
   if (status !== undefined) expect(real.status, real.text).toBe(status);
 }
 
-function restoreEnv(name: keyof typeof origEnv): void {
-  const value = origEnv[name];
-  if (value === undefined) delete process.env[name];
-  else process.env[name] = value;
-}
-
 beforeAll(async () => {
   tmp = makeRoot('personal-walk', { init: false });
   // File-wide, not per test: the one server reads both at boot and on every request.
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
-  process.env.HIPPO_V1_RPS = '0'; // every call comes from one address, so the per-address limiter would cut the walk short
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
+  vi.stubEnv('HIPPO_V1_RPS', '0'); // every call comes from one address, so the per-address limiter would cut the walk short
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   store = path.join(tmp, 'srv', 'hippo-team');
@@ -171,8 +168,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await handle?.stop();
-  restoreEnv('HIPPO_HOME');
-  restoreEnv('HIPPO_V1_RPS');
   _resetSharedStoreCacheForTests();
   _resetProjectIdentityCacheForTests();
 });

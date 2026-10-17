@@ -8,6 +8,10 @@ import type { AddressInfo } from 'node:net';
 import { loadConfig } from '../src/core/config.js';
 import { handlesOf } from '../src/store/open.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function writeConfig(hippoRoot: string, model: string): void {
   fs.writeFileSync(
     path.join(hippoRoot, 'config.json'),
@@ -81,21 +85,17 @@ async function startEmbeddingStub(vector: number[]): Promise<{
 
 describe('embedding model configuration', () => {
   let tmpDir: string;
-  let prevVoyageKey: string | undefined;
 
   beforeEach(() => {
     vi.resetModules();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-model-'));
-    prevVoyageKey = process.env.VOYAGE_API_KEY;
     // Dummy value: the local stub server never validates it. Real presence
     // check only (ApiEmbeddingProvider.isAvailable()), same as production.
-    process.env.VOYAGE_API_KEY = 'test-voyage-key';
+    vi.stubEnv('VOYAGE_API_KEY', 'test-voyage-key');
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    if (prevVoyageKey === undefined) delete process.env.VOYAGE_API_KEY;
-    else process.env.VOYAGE_API_KEY = prevVoyageKey;
   });
 
   it('resolves the configured embedding model when no explicit override is provided', async () => {
@@ -174,7 +174,7 @@ describe('embedding model configuration', () => {
       const results = await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
       expect(stub.requests).toHaveLength(0);
-      expect(results.length).toBeGreaterThan(0);
+      expect(results.map((r) => r.entry.id)).toEqual([entry.id]);
     } finally {
       await stub.close();
     }
@@ -195,14 +195,15 @@ describe('embedding model configuration', () => {
       const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
       saveStoredEmbeddingModel(handlesOf(tmpDir).on, providerId);
 
-      const results = await hybridSearch('query text', [createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], {
+      const entry = createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      const results = await hybridSearch('query text', [entry], {
         hippoRoot: tmpDir,
         budget: 1000,
       });
 
       // Empty index -> no cached doc vectors -> the query embedding is skipped.
       expect(stub.requests).toHaveLength(0);
-      expect(results.length).toBeGreaterThan(0);
+      expect(results.map((r) => r.entry.id)).toEqual([entry.id]);
     } finally {
       await stub.close();
     }

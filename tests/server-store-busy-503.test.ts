@@ -1,5 +1,5 @@
 // A held write lock answers a server write with a quick 503 and Retry-After instead of stalling the event loop for seconds.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { MessageChannel } from 'node:worker_threads';
 import { getHippoDbPath, type DatabaseSyncLike } from '../src/db/index.js';
@@ -10,6 +10,14 @@ import { serveJobs } from '../src/store/sqlite/worker-jobs.js';
 import type { Job, Reply } from '../src/store/sqlite/worker-ops.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -59,7 +67,7 @@ describe('server under a held write lock', () => {
       body: JSON.stringify({ content: 'written after the lock is released' }),
     });
     expect(ok.status).toBe(200);
-  }, 20000);
+  });
 
   it("opens a store worker's connection with the wait its executor passed and tries a write behind the lock once", async () => {
     const { port1, port2 } = new MessageChannel();

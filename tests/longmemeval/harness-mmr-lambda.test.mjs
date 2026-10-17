@@ -39,6 +39,7 @@ test('harness reads --mmr-lambda and passes it to hybridSearch', () => {
   expect(result.stderr).toMatch(/mmrLambda.*0\.3/);
   const records = fs.readFileSync(out, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
   expect(records.map((r) => r.question_id)).toEqual(['syn_001', 'syn_002']);
-  expect(records[0].num_retrieved).toBeGreaterThan(0);
+  // Both stored rows share 'authentication flow' with the first question and fit the default budget.
+  expect(records[0].num_retrieved).toBe(2);
   expect(records.every((r) => r.error === undefined)).toBe(true);
 });

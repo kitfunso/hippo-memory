@@ -1,5 +1,5 @@
 // Z0 G5 (prereg 166): every saved check and acceptance test runs again on the saved commits; flips drop lessons, harness faults are error rows.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -7,7 +7,9 @@ import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
 import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
 import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
 
-const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 let shared: Shared;
 const gradeOf = (out: string, id: string) => JSON.parse(readFileSync(join(out, 'grading', 'seqF', 'A0', 'seed1', `${id}.grade.json`), 'utf8'));
 const bundleOf = (out: string, id: string) => join(out, 'grading', 'seqF', 'A0', 'seed1', `${id}.bundle`);
@@ -19,8 +21,6 @@ describe('z0-regrade regrade and grading', () => {
   }, 600_000);
   afterAll(() => {
     cleanup();
-    if (savedToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    else process.env.CLAUDE_CODE_OAUTH_TOKEN = savedToken;
   });
 
   it('a stable checker gives zero flips, and grading.json holds E7\'s three fields plus g5 (1)', async () => {
@@ -49,7 +49,8 @@ describe('z0-regrade regrade and grading', () => {
     expect(await cli(['reader', '--out', c.out, '--labels', labels])).toMatchObject({ code: 0 });
     expect(await grading(c.out)).toMatchObject({ code: 0 });
     expect(readGrading(c.out)).toMatchObject({ readerSample: { n: pairs.length, disagreements: 0 }, g5: { readerRound: 1 } });
-    expect(pairs.length).toBeGreaterThan(0);
+    // Every teach resumes, so the three give a first and a final pair each; the four applies pass first and give one; n1 has no lesson.
+    expect(pairs).toHaveLength(10);
     // The round passed, so the checkers are frozen: a changed one is refused before any cell runs.
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
     const { check } = lessonOf(raw, 'f1-l1');
