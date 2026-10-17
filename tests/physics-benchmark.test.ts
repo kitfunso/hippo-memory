@@ -27,7 +27,7 @@ import {
   resetAllPhysicsState,
   savePhysicsState,
 } from '../src/db/physics-state.js';
-import { simulate, type ForceContext } from '../src/core/physics.js';
+import { computeSystemEnergy, simulate, type ForceContext } from '../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 
 // A benchmark: 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
@@ -506,9 +506,9 @@ describe('Physics vs Classic A/B Benchmark', () => {
             config: DEFAULT_PHYSICS_CONFIG,
           };
 
-          const stats = simulate(particles, ctx);
+          simulate(particles, ctx);
           savePhysicsState(db, particles);
-          energyHistory.push(stats.energy.total);
+          energyHistory.push(computeSystemEnergy(particles, ctx.config.G_memory).total);
         }
 
         expect(energyHistory.length).toBeGreaterThanOrEqual(10);
