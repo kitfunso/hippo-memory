@@ -46,9 +46,7 @@ export const EVAL_TESTS = [
 ].map((name) => `tests/token-eval-${name}.test.ts`);
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
-// GitHub's Windows runners stall their D: temp disk for up to two minutes at 10 ms a write (#903), so a unit test
-// there gets the process tests' budget.
-const UNIT_MS = process.env.GITHUB_ACTIONS === 'true' && process.platform === 'win32' ? 30_000 : 5_000;
+const UNIT_MS = 5_000;
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 export { PROCESS_TESTS };
 
