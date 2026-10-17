@@ -29,7 +29,8 @@ function build(label: string, rootOf: (base: string) => string, { config, init =
   made.push(base);
   const root = rootOf(base);
   if (!init) return { base, root };
-  mkdirSync(join(base, '.hippo'), { recursive: true });
+  // makeStore's root is left for initStore to create, so it gets the owner-only mode a real store gets.
+  if (root === base) mkdirSync(join(base, '.hippo'), { recursive: true });
   initStore(root);
   if (config) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   return { base, root };
