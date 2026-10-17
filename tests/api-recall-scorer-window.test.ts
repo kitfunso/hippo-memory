@@ -53,8 +53,7 @@ describe('RecallOptions.scorerWindow', () => {
     for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`zeta ${i}`));
     const result = await retrieve(ctxFor(root), {
       query: 'zeta',
-      limit: 5,
-      scorerWindow: 25,
+      window: { limit: 5, scorerWindow: 25 },
     });
     expect(result.windowSize).toBe(25);
     // Wider than limit — proves scorerWindow actually widened the pool.
@@ -69,7 +68,7 @@ describe('RecallOptions.scorerWindow', () => {
       writeEntry(root, makeRaw('alpha'));
       let thrown = null;
       try {
-        await retrieve(ctxFor(root), { query: 'alpha', scorerWindow: bad });
+        await retrieve(ctxFor(root), { query: 'alpha', window: { scorerWindow: bad } });
       } catch (err) {
         thrown = err;
       }
@@ -97,8 +96,7 @@ describe('RecallOptions.scorerWindow', () => {
     for (let i = 0; i < 10; i++) writeEntry(root, makeRaw(`omega ${i}`));
     const result = await retrieve(ctxFor(root), {
       query: 'omega',
-      limit: 3,
-      freshTailCount: 5,
+      window: { limit: 3, freshTailCount: 5 },
     });
     // Base ranked: <= limit (3). Fresh-tail can add more.
     // Ranked items mark isFreshTail on the recent set; a row may be both
@@ -119,8 +117,7 @@ describe('RecallOptions.scorerWindow', () => {
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`tau ${i}`));
     const result = await retrieve(ctxFor(root), {
       query: 'tau',
-      limit: 5,
-      scorerWindow: 1,
+      window: { limit: 5, scorerWindow: 1 },
     });
     expect(result.windowSize).toBe(1);
     // FTS5 LIMIT 1 against a >1-row matching population returns exactly 1.

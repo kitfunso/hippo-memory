@@ -113,7 +113,7 @@ describe('api.recall — trace wiring', () => {
       await remember(ctx, { content: 'recall-trace-target-alpha' });
       await remember(ctx, { content: 'recall-trace-target-beta also matches' });
 
-      const result = await retrieve(ctx, { query: 'recall-trace-target', limit: 5 });
+      const result = await retrieve(ctx, { query: 'recall-trace-target', window: { limit: 5 } });
       expect(result.results.length).toBeGreaterThan(0);
 
       const traces = traceRows(home, 'api');
@@ -142,7 +142,7 @@ describe('api.recall — trace wiring', () => {
       await remember(ctx, { content: 'recall-trace-no-side-effect-target' });
 
       expect(lastTraceId(home)).toBeNull();
-      const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', limit: 5 });
+      const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', window: { limit: 5 } });
       expect(result.results.length).toBeGreaterThan(0);
 
       // A trace row WAS written (previous test), but last_trace_id stays null.
@@ -163,9 +163,9 @@ describe('api.recall — trace wiring', () => {
       await remember(ctx, { content: 'batched-trace-B' });
       await remember(ctx, { content: 'batched-trace-C' });
 
-      await retrieve(ctx, { query: 'batched-trace-A', limit: 5 });
-      await retrieve(ctx, { query: 'batched-trace-B', limit: 5 });
-      await retrieve(ctx, { query: 'batched-trace-C', limit: 5 });
+      await retrieve(ctx, { query: 'batched-trace-A', window: { limit: 5 } });
+      await retrieve(ctx, { query: 'batched-trace-B', window: { limit: 5 } });
+      await retrieve(ctx, { query: 'batched-trace-C', window: { limit: 5 } });
 
       expect(traceRows(home, 'api')).toHaveLength(3);
     } finally {
@@ -179,7 +179,7 @@ describe('api.recall — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'suppressed-trace-target' });
 
-      const result = await retrieve(ctx, { query: 'suppressed-trace-target', limit: 5, suppressRecallTrace: true });
+      const result = await retrieve(ctx, { query: 'suppressed-trace-target', window: { limit: 5 }, trace: { suppressRecallTrace: true } });
       expect(result.results.length).toBeGreaterThan(0);
 
       expect(traceRows(home, 'api')).toHaveLength(0);

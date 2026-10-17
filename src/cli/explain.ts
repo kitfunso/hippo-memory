@@ -84,7 +84,7 @@ async function cmdExplain(
       query,
       cliCore: {
         rank: {
-          budget: entryBudget, cost, limit, includeSuperseded, asOf,
+          budget: entryBudget, cost, window: { limit }, includeSuperseded, asOf,
           explicitScope, activeScope,
           search: { ...engine, multihop: false, explain: true },
         },

@@ -279,7 +279,7 @@ describe('MCP on a shared store with two repos', () => {
   });
 
   it('overflow substitution never brings in another repo\'s parent summary', async () => {
-    const summaries = (await retrieve(acmeCtx(), { query: 'harbourline', limit: 4, project: ACME })).results.filter((r) => r.isSummary).map((r) => r.id);
+    const summaries = (await retrieve(acmeCtx(), { query: 'harbourline', window: { limit: 4 }, filter: { project: ACME } })).results.filter((r) => r.isSummary).map((r) => r.id);
     expect(summaries).toContain(ids.acmeSumO);
     expect(summaries).not.toContain(ids.betaSumO);
   });

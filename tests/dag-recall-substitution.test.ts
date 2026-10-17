@@ -62,7 +62,7 @@ describe('DAG-aware recall substitution', () => {
     for (let i = 0; i < 30; i++) {
       writeEntry(root, makeLeaf(`alpha bravo charlie ${i}`));
     }
-    const r = await retrieve(ctxFor(root), { query: 'alpha bravo charlie', limit: 10 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha bravo charlie', window: { limit: 10 } });
     expect(r.results.length).toBe(10);
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
@@ -80,7 +80,7 @@ describe('DAG-aware recall substitution', () => {
       }));
     }
 
-    const r = await retrieve(ctxFor(root), { query: 'alpha detail event', limit: 5 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha detail event', window: { limit: 5 } });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
     expect(summaries[0].id).toBe(summary.id);
@@ -100,7 +100,7 @@ describe('DAG-aware recall substitution', () => {
     }
     // No scope passed; default-deny should drop the leaves AND prevent
     // the summary from being substituted in.
-    const r = await retrieve(ctxFor(root), { query: 'secret payroll detail', limit: 3 });
+    const r = await retrieve(ctxFor(root), { query: 'secret payroll detail', window: { limit: 3 } });
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
 
@@ -116,7 +116,7 @@ describe('DAG-aware recall substitution', () => {
     }
     // Recall as default tenant: nothing should match (entries belong to other),
     // and even if loadEntriesByIds saw the parent ID, tenant filter blocks it.
-    const r = await retrieve(ctxFor(root, 'default'), { query: 'alpha cross tenant', limit: 3 });
+    const r = await retrieve(ctxFor(root, 'default'), { query: 'alpha cross tenant', window: { limit: 3 } });
     expect(r.results).toHaveLength(0);
   });
 
@@ -138,7 +138,7 @@ describe('DAG-aware recall substitution', () => {
     for (let i = 0; i < 10; i++) {
       writeEntry(root, makeLeaf(`alpha unrelated padding ${i}`));
     }
-    const r = await retrieve(ctxFor(root), { query: 'alpha topic event', limit: 10 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha topic event', window: { limit: 10 } });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBeLessThanOrEqual(3);
     expect(summaries.length).toBeGreaterThanOrEqual(1);
@@ -154,7 +154,7 @@ describe('DAG-aware recall substitution', () => {
         dag_parent_id: summary.id,
       }));
     }
-    const r = await retrieve(ctxFor(root), { query: 'gamma detail', limit: 3, summarizeOverflow: false });
+    const r = await retrieve(ctxFor(root), { query: 'gamma detail', window: { limit: 3, summarizeOverflow: false } });
     expect(r.results.length).toBe(3);
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
@@ -171,7 +171,7 @@ describe('DAG-aware recall substitution', () => {
         dag_parent_id: summary.id,
       }));
     }
-    const r = await retrieve(ctxFor(root), { query: 'shared keyword summary marker', limit: 2 });
+    const r = await retrieve(ctxFor(root), { query: 'shared keyword summary marker', window: { limit: 2 } });
     const summaryHits = r.results.filter((it) => it.id === summary.id);
     expect(summaryHits.length).toBe(1);
   });

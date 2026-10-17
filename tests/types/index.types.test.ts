@@ -7,6 +7,9 @@ import {
   textOverlap, tokenize, type MemoryEntry, type SearchResult, type SleepOpts, type SleepResult,
 } from '../../src/index.js';
 import type { Context } from '../../src/api/types.js';
+import type {
+  RecallBoostOptions, RecallFilterOptions, RecallHintOptions, RecallOptions, RecallTraceOptions, RecallWindowOptions,
+} from '../../src/api/index.js';
 import type { ConsolidationResult } from '../../src/consolidate/run.js';
 
 describe('hippo-memory entry types', () => {
@@ -54,5 +57,20 @@ describe('hippo-memory entry types', () => {
     expectTypeOf(sleep).returns.toEqualTypeOf<Promise<SleepResult>>();
     // @ts-expect-error sleep needs a Context, not a root path
     typeOnly(() => sleep('/tmp/root'));
+  });
+});
+
+describe('api barrel recall types', () => {
+  it('RecallOptions keeps the query at the top and groups the rest by stage', () => {
+    expectTypeOf<RecallOptions['query']>().toEqualTypeOf<string>();
+    expectTypeOf<RecallOptions['window']>().toEqualTypeOf<RecallWindowOptions | undefined>();
+    expectTypeOf<RecallOptions['filter']>().toEqualTypeOf<RecallFilterOptions | undefined>();
+    expectTypeOf<RecallOptions['boost']>().toEqualTypeOf<RecallBoostOptions | undefined>();
+    expectTypeOf<RecallOptions['hints']>().toEqualTypeOf<RecallHintOptions | undefined>();
+    expectTypeOf<RecallOptions['trace']>().toEqualTypeOf<RecallTraceOptions | undefined>();
+    const grouped: RecallOptions = { query: 'q', window: { limit: 3 }, filter: { scope: 'team' } };
+    // @ts-expect-error limit moved into window in 3.0
+    const flat: RecallOptions = { query: 'q', limit: 3 };
+    expect([grouped.window?.limit, flat.query]).toEqual([3, 'q']);
   });
 });

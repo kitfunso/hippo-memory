@@ -175,7 +175,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   const { ctx, hippoRoot, config, tenantId, args, store } = call;
   // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
   const { opts: recallOpts } = parseRecallRequest(toolParams(args));
-  const { query, includeContinuity, sessionId } = recallOpts;
+  const { query, window: { includeContinuity }, boost: { sessionId } } = recallOpts;
   const budget = Number(args.budget) || config.defaultBudget;
   const apiCtx: Context = {
     hippoRoot,
@@ -191,12 +191,11 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
   await apiRetrieve(apiCtx, {
     ...recallOpts,
-    limit: MCP_RECALL_LIMIT,
+    window: { ...recallOpts.window, limit: MCP_RECALL_LIMIT },
     mode: config.physics?.enabled !== false ? 'physics' : 'hybrid',
+    filter: { ...recallOpts.filter, keepHeldCopies: true, project: ctx?.project },
     // The hint is computed below over the list MCP shows; the window band's copy would emit its audit row twice.
-    suppressAvailabilityHint: true,
-    keepHeldCopies: true,
-    project: ctx?.project,
+    hints: { suppressAvailabilityHint: true },
     showRanked: recallPresenter(budget, {
       includeContinuity,
       anchorRing,

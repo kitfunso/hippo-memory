@@ -28,7 +28,7 @@ function opts(extra: Partial<RankRecallOptions> = {}): RankRecallOptions {
     query: 'deploy',
     budget: 4000,
     cost: (r) => r.tokens,
-    limit: 10,
+    window: { limit: 10 },
     includeSuperseded: false,
     explicitScope: null,
     activeScope: null,
@@ -86,7 +86,7 @@ describe('rankRecall', () => {
 
   it('returns the goal-stack log rows and writes none of them', async () => {
     pushGoal(hippoRoot, { sessionId: 's-rank', tenantId: 'default', goalName: 'goal-alpha' });
-    const rank = await rankRecall(ctx(), opts({ sessionId: 's-rank' }));
+    const rank = await rankRecall(ctx(), opts({ boost: { sessionId: 's-rank' } }));
     expect(rank.goalRecallLog.map((r) => r.memoryId)).toEqual(['mem_rank_goal']);
     expect(ids(rank.results)[0]).toBe('mem_rank_goal');
     expect(goalLogCount()).toBe(0);

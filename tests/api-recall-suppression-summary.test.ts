@@ -61,21 +61,21 @@ describe('RecallResult.suppressionSummary', () => {
   it('totalCandidates reflects loaded candidate pool (post tenant + SQL scope predicate)', async () => {
     // Insert 5 query-matching memories; expect totalCandidates >= 5.
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`zeta ${i}`));
-    const result = await retrieve(ctxFor(root), { query: 'zeta', limit: 10 });
+    const result = await retrieve(ctxFor(root), { query: 'zeta', window: { limit: 10 } });
     expect(result.suppressionSummary!.totalCandidates).toBeGreaterThanOrEqual(5);
   });
 
   it('droppedByBudget reflects rows excluded by the final limit slice', async () => {
     // Insert 20 matching memories; limit to 5; expect droppedByBudget = 15.
     for (let i = 0; i < 20; i++) writeEntry(root, makeRaw(`omega ${i}`));
-    const result = await retrieve(ctxFor(root), { query: 'omega', limit: 5 });
+    const result = await retrieve(ctxFor(root), { query: 'omega', window: { limit: 5 } });
     expect(result.results.length).toBe(5);
     expect(result.suppressionSummary!.droppedByBudget).toBe(15);
   });
 
   it('droppedByBudget = 0 when limit >= candidates (no overflow)', async () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`kappa ${i}`));
-    const result = await retrieve(ctxFor(root), { query: 'kappa', limit: 10 });
+    const result = await retrieve(ctxFor(root), { query: 'kappa', window: { limit: 10 } });
     expect(result.suppressionSummary!.droppedByBudget).toBe(0);
     // suppressionSummary still defined even when no overflow.
     expect(result.suppressionSummary).toBeDefined();
@@ -84,7 +84,7 @@ describe('RecallResult.suppressionSummary', () => {
   it('retrieve returns the same ids in the same order and the same summary on a repeat call', async () => {
     for (let i = 0; i < 8; i++) writeEntry(root, makeRaw(`parity ${i} shared token`));
     writeEntry(root, { ...makeRaw('parity old shared token'), superseded_by: 'mem_newer' });
-    const opts = { query: 'parity shared', limit: 5 };
+    const opts = { query: 'parity shared', window: { limit: 5 } };
     const first = await retrieve(ctxFor(root), opts);
     const again = await retrieve(ctxFor(root), opts);
     expect(again.results.map((r) => r.id)).toEqual(first.results.map((r) => r.id));

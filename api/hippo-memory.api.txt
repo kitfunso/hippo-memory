@@ -72,7 +72,6 @@ entry/store-kit.d.ts: GoalRecallLogRow re-export
 entry/store-kit.d.ts: Goals re-export
 entry/store-kit.d.ts: HandoffFilter re-export
 entry/store-kit.d.ts: HandoffOutcome re-export
-entry/store-kit.d.ts: HippoDbContext re-export
 entry/store-kit.d.ts: HippoStore re-export
 entry/store-kit.d.ts: KeyAudit re-export
 entry/store-kit.d.ts: KeyListQuery re-export
@@ -117,7 +116,6 @@ entry/store-kit.d.ts: SessionHandoff re-export
 entry/store-kit.d.ts: Sessions re-export
 entry/store-kit.d.ts: SnapshotInput re-export
 entry/store-kit.d.ts: StoreBusyError re-export
-entry/store-kit.d.ts: StoreContext re-export
 entry/store-kit.d.ts: StoreGroup re-export
 entry/store-kit.d.ts: StoreGroups re-export
 entry/store-kit.d.ts: StrengthTallies re-export
@@ -236,7 +234,7 @@ index.d.ts: resolveConfidence re-export
 index.d.ts: resultToBaseline re-export
 index.d.ts: runFeatureEval re-export
 index.d.ts: search re-export
-index.d.ts: sleep function
+index.d.ts: sleep re-export
 index.d.ts: strengthBucket re-export
 index.d.ts: temporalBoost re-export
 index.d.ts: textOverlap re-export

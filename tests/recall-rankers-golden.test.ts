@@ -48,23 +48,23 @@ type CoreCase = readonly [string, string, CoreSetup];
 
 const BAND: readonly BandCase[] = [
   ['bm25 plain', { query: 'deploy' }],
-  ['bm25 limit 3', { query: 'deploy', limit: 3 }],
+  ['bm25 limit 3', { query: 'deploy', window: { limit: 3 } }],
   ['hybrid', { query: 'deploy', mode: 'hybrid' }],
   ['physics', { query: 'deploy', mode: 'physics' }],
-  ['scope team-alpha', { query: 'deploy', scope: 'team-alpha' }],
-  ['session goal boost', { query: 'deploy', sessionId: SESSION }],
-  ['goal tag beats the session', { query: 'deploy', sessionId: SESSION, goalTag: 'goal-alpha', mode: 'hybrid' }],
-  ['fresh tail', { query: 'deploy', freshTailCount: 1, freshTailSessionId: SESSION }],
-  ['overflow summary', { query: 'deploy', limit: 2 }],
-  ['hybrid rollout limit 5', { query: 'rollout', mode: 'hybrid', limit: 5 }],
+  ['scope team-alpha', { query: 'deploy', filter: { scope: 'team-alpha' } }],
+  ['session goal boost', { query: 'deploy', boost: { sessionId: SESSION } }],
+  ['goal tag beats the session', { query: 'deploy', boost: { sessionId: SESSION, goalTag: 'goal-alpha' }, mode: 'hybrid' }],
+  ['fresh tail', { query: 'deploy', window: { freshTailCount: 1, freshTailSessionId: SESSION } }],
+  ['overflow summary', { query: 'deploy', window: { limit: 2 } }],
+  ['hybrid rollout limit 5', { query: 'rollout', mode: 'hybrid', window: { limit: 5 } }],
   ['LIKE path', { query: 'caf' }],
-  ['physics with session', { query: 'deploy', mode: 'physics', sessionId: SESSION, explain: true }],
+  ['physics with session', { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, trace: { explain: true } }],
 ];
 
 const WIDE: readonly BandCase[] = [
   ['wide hybrid', { query: 'deploy' }],
-  ['wide physics with session', { query: 'deploy', mode: 'physics', sessionId: SESSION, limit: 5 }],
-  ['wide scoped', { query: 'rollout cluster', scope: 'team-alpha' }],
+  ['wide physics with session', { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, window: { limit: 5 } }],
+  ['wide scoped', { query: 'rollout cluster', filter: { scope: 'team-alpha' } }],
 ];
 
 const CORE: readonly CoreCase[] = [
@@ -95,12 +95,12 @@ async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
   }
 }
 
-function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'sessionId' | 'goalTag'> {
+function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'boost'> {
   const search = {
     usePhysics: c.physics === true, physicsConfig: loadConfig(s.root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2,
     explain: c.rank?.why === true,
   };
-  return { budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null, ...c.rank, search };
+  return { budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null, ...c.rank, search };
 }
 
 describe('recall ranker goldens', () => {
@@ -136,8 +136,8 @@ describe('recall ranker goldens', () => {
       let ranked: string[] = [];
       const result = await retrieve(ctxOf(s), {
         ...opts,
-        keepHeldCopies: true,
-        suppressAvailabilityHint: true,
+        filter: { ...opts.filter, keepHeldCopies: true },
+        hints: { ...opts.hints, suppressAvailabilityHint: true },
         showRanked: (ranking) => {
           ranked = ranking.ranked.map((r) => r.entry.id);
           return { ids: ranked.slice(0, 10), audit: [] };
@@ -153,7 +153,7 @@ describe('recall ranker goldens', () => {
       let ranked: string[] = [];
       await retrieve(ctxOf(s), {
         query,
-        sessionId: c.sessionId,
+        boost: { sessionId: c.sessionId },
         cliCore: {
           rank: rankOpts(s, c),
           sources: c.global ? { globalRoot: s.globalRoot, globalStore: sqliteStore(s.globalRoot) } : undefined,

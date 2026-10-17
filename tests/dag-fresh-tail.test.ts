@@ -60,7 +60,7 @@ describe('fresh-tail recall', () => {
     }
     const r = await retrieve(ctxFor(root), {
       query: 'no match for this string anywhere',
-      freshTailCount: 3,
+      window: { freshTailCount: 3 },
     });
     const tailIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
     expect(tailIds.length).toBe(3);
@@ -73,7 +73,7 @@ describe('fresh-tail recall', () => {
     writeEntry(root, e);
     const r = await retrieve(ctxFor(root), {
       query: 'shared keyword target',
-      freshTailCount: 5,
+      window: { freshTailCount: 5 },
     });
     const matches = r.results.filter((it) => it.id === e.id);
     expect(matches.length).toBe(1);
@@ -84,7 +84,7 @@ describe('fresh-tail recall', () => {
     writeEntry(root, makeRaw('private payroll memo', { scope: 'slack:private:Csec' }));
     const r = await retrieve(ctxFor(root), {
       query: 'completely unrelated string',
-      freshTailCount: 5,
+      window: { freshTailCount: 5 },
     });
     // BM25 already drops private rows in the no-scope path; fresh-tail must
     // not undo that. Public row appears with isFreshTail=true; private one
@@ -100,7 +100,7 @@ describe('fresh-tail recall', () => {
     writeEntry(root, makeRaw('other tenant row', { tenant_id: 'other' }));
     const r = await retrieve(ctxFor(root, 'default'), {
       query: 'unmatched',
-      freshTailCount: 10,
+      window: { freshTailCount: 10 },
     });
     const allContent = r.results.map((it) => it.content);
     expect(allContent.every((c) => !c.includes('other tenant'))).toBe(true);
@@ -119,7 +119,7 @@ describe('fresh-tail recall', () => {
     writeEntry(root, recent);
     const r = await retrieve(ctxFor(root), {
       query: 'alpha bravo charlie',
-      freshTailCount: 1,
+      window: { freshTailCount: 1 },
     });
     const recentHit = r.results.find((it) => it.id === recent.id);
     expect(recentHit?.isFreshTail).toBe(true);
@@ -133,8 +133,8 @@ describe('fresh-tail recall', () => {
     const store: HippoStore = { ...sqliteStore(root), freshRawEntries: async () => [mine!, theirs!, global!] };
     const r = await retrieve({ ...ctxFor(root), store }, {
       query: 'unmatched',
-      freshTailCount: 5,
-      project: { name: 'proj-a', legacyName: '' },
+      window: { freshTailCount: 5 },
+      filter: { project: { name: 'proj-a', legacyName: '' } },
     });
     expect(r.results.map((it) => [it.id, it.isFreshTail])).toEqual([[mine!.id, true], [global!.id, true]]);
   });

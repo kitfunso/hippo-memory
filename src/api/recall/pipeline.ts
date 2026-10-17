@@ -39,6 +39,7 @@ import type { HippoStore } from '../../store/index.js';
 import { isJsonNumber } from '../../util/json.js';
 import { currentSignal } from '../../util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../util/tokenize.js';
+import type { RecallBoostOptions, RecallWindowOptions } from './types.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
@@ -90,7 +91,7 @@ export interface RankRecallOptions {
   budget: number;
   /** Price of one result, usually the tokens its printed line takes. */
   cost: ResultCost;
-  limit: number;
+  window: Required<Pick<RecallWindowOptions, 'limit'>>;
   /** Record a rerank trace step for each score change. */
   why?: boolean;
   includeSuperseded: boolean;
@@ -106,10 +107,7 @@ export interface RankRecallOptions {
   valueAware?: boolean;
   rerankUtility?: boolean;
   reranker?: RecallReranker;
-  /** Explicit goal tag; when set, the session goal stack is skipped. */
-  goalTag?: string;
-  /** Session whose active goals boost matching rows. */
-  sessionId?: string;
+  boost?: RecallBoostOptions;
   salienceThreshold?: number;
   outcome?: string;
   layer?: string;
@@ -185,7 +183,8 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
   if (opts.outcome) dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.trace_outcome === opts.outcome);
   if (opts.haltBefore === 'layer') return done(true);
   if (opts.layer) dropUnless(state, (r) => r.entry.layer === opts.layer);
-  if (opts.limit < state.results.length) state.results = state.results.slice(0, opts.limit);
+  const { limit } = opts.window;
+  if (limit < state.results.length) state.results = state.results.slice(0, limit);
   return done(false);
 }
 
@@ -487,7 +486,7 @@ function applyRecallReranker(
 }
 
 async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, state: RankState): Promise<void> {
-  const goalTag = opts.goalTag ?? '';
+  const { goalTag = '', sessionId } = opts.boost ?? {};
   if (goalTag) {
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
     state.results = byScore(
@@ -505,14 +504,14 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, stat
     );
     return;
   }
-  if (!opts.sessionId) return;
+  if (!sessionId) return;
   // The helper re-spreads rows, so its steps come back in a map keyed by entry id.
   const goalBoostTrace = opts.why ? new Map<string, RerankStep>() : undefined;
-  const session = { sessionId: opts.sessionId, tenantId: ctx.tenantId };
+  const session = { sessionId, tenantId: ctx.tenantId };
   // The log may name global rows; the store drops those when it writes, as it does for api.recall.
   const boost = boostByGoals(state.results, await ctx.store.activeGoals(session), {
     ...session,
-    limit: opts.limit,
+    limit: opts.window.limit,
     trace: goalBoostTrace,
   });
   state.results = boost.results;

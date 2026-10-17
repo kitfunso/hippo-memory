@@ -41,13 +41,12 @@ async function cliCore(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
   let shown: readonly SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieve(ctx, {
     query: q.text,
-    sessionId: q.stages.sessionId ?? '',
-    goalTag: q.stages.goalTag ?? '',
+    boost: { sessionId: q.stages.sessionId ?? '', goalTag: q.stages.goalTag ?? '' },
     cliCore: {
       rank: {
         budget: q.budget,
         cost: (r) => r.tokens,
-        limit: SHOWN_ROWS,
+        window: { limit: SHOWN_ROWS },
         includeSuperseded: q.stages.includeSuperseded === true,
         explicitScope: null,
         activeScope: detectScope(),
@@ -72,7 +71,9 @@ async function cliCore(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
 
 /** Arm B: `retrieve` with no mode and no ranker option, as `GET /v1/memories` calls it. */
 async function sqlBm25(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
-  const [result, retrieveMs] = await timed(() => retrieve(ctx, { query: q.text, limit: SHOWN_ROWS, ...session(q) }));
+  const [result, retrieveMs] = await timed(() =>
+    retrieve(ctx, { query: q.text, window: { limit: SHOWN_ROWS }, boost: session(q) }),
+  );
   return { texts: result.results.map((r) => r.content), retrieveMs };
 }
 
@@ -82,11 +83,11 @@ async function showRanked(ctx: StoreContext, q: EvalQuery): Promise<Ranked> {
   let shown: SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieve(ctx, {
     query: q.text,
-    ...session(q),
-    limit: 50,
+    boost: session(q),
+    window: { limit: 50 },
     mode,
-    suppressAvailabilityHint: true,
-    keepHeldCopies: true,
+    hints: { suppressAvailabilityHint: true },
+    filter: { keepHeldCopies: true },
     showRanked: ({ ranked }) => {
       shown = ranked.slice(0, SHOWN_ROWS);
       return { ids: shown.map((r) => r.entry.id), audit: [] };
