@@ -23,6 +23,7 @@ import type {
   ObjectByKind,
   ObjectFields,
   ObjectKind,
+  ObjectRefusal,
   Policy,
   SavableKind,
   Skill,
@@ -350,20 +351,6 @@ export interface ObjectSave<K extends SavableKind = SavableKind> {
   /** The new row's createdAt and the replaced row's supersededAt: core's clock, as `toISOString` gives it, since the
    * list orders createdAt as text. */
   readonly at: string;
-}
-
-/** Why a save or close wrote nothing: the tenant holds no such row (`missing`), the row's `status` is not one the write
- * may start from, another writer moved it between the check and the write (`raced`), or the written row could not be
- * read back (`vanished`). Core turns each into its own error text. */
-export type ObjectRefusal =
-  | { readonly refused: 'missing' }
-  | { readonly refused: 'status'; readonly status: string }
-  | { readonly refused: 'raced' }
-  | { readonly refused: 'vanished' };
-
-/** Tells a refusal from the row a write answered; no row carries a `refused` key. */
-export function isObjectRefusal<T extends object>(written: T | ObjectRefusal): written is ObjectRefusal {
-  return 'refused' in written;
 }
 
 /** An incident to open and the memory that mirrors it into recall, built as `ObjectSave` has it. */

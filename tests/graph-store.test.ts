@@ -17,7 +17,7 @@ import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { insertEntityRow, insertRelationRow, updateEntityRow } from '../src/store/graph-writes.js';
 import { markGraphDirty, markPendingProcessedUpTo } from '../src/store/graph-queue.js';
 import { loadEntitiesByIds, loadEntities, loadRelations } from '../src/store/graph-reads.js';
-import { MAX_ENTITY_NAME_LEN } from '../src/store/graph-rows.js';
+import { MAX_ENTITY_NAME_LEN } from '../src/core/entity-name.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 

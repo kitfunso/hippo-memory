@@ -3,12 +3,8 @@
  *  consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { applyGraphOps, rebuildGraphUnderLock } from '../store/graph-apply.js';
-import {
-  MAX_ENTITY_NAME_LEN,
-  type EntityType,
-  type SourceObjectType,
-  type SourceObjectRef,
-} from '../store/graph-rows.js';
+import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
+import type { EntityType, SourceObjectType, SourceObjectRef } from '../store/graph-rows.js';
 import {
   diffGraph,
   memoryIdsOf,

@@ -7,15 +7,8 @@ import { assertTenantId } from '../core/tenant-id.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { ObjectDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, objectMirror } from './lifecycle.js';
-import type { Incident, IncidentStatus } from '../core/object-types.js';
-import {
-  isObjectRefusal,
-  type IncidentOpen,
-  type IncidentOpenRefusal,
-  type IncidentResolve,
-  type ObjectRefusal,
-  type Objects,
-} from '../store/port.js';
+import { isObjectRefusal, type Incident, type IncidentStatus, type ObjectRefusal } from '../core/object-types.js';
+import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../store/port.js';
 
 export type { Incident, IncidentStatus } from '../core/object-types.js';
 
