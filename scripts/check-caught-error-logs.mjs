@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Per-file count of log calls inside a catch block or `.catch` callback that omit errorFields() may fall, never rise,
-// so an operator reading the log sees the error class and stack of every caught failure.
+// Per-file count of log calls inside a catch block, a `.catch` callback or an 'error' event listener that omit
+// errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
 // Usage: check-caught-error-logs.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -11,6 +11,7 @@ import { stripComments } from './lib/source-text.mjs';
 
 const BASELINE = '.caught-error-logs-baseline.json';
 const LOGGERS = new Set(['log', 'logger']);
+const LISTENER_METHODS = new Set(['on', 'once', 'addListener', 'prependListener', 'addEventListener']);
 
 const isLogCall = (n) =>
   ts.isCallExpression(n) &&
@@ -18,31 +19,74 @@ const isLogCall = (n) =>
   ts.isIdentifier(n.expression.expression) &&
   LOGGERS.has(n.expression.expression.text);
 
-/** The body a node hands to the failure path: a catch clause's block, or the callback of a `.catch(...)` call. */
-function failureBodies(node) {
+/** True when the call hands the whole errorFields(...) result on; `errorFields(x).errorClass` drops the stack and cause. */
+function carriesErrorFields(call) {
+  let found = false;
+  const visit = (n) => {
+    const isFields = ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorFields';
+    const p = n.parent;
+    const isRead = (ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === n;
+    if (isFields && !isRead) found = true;
+    ts.forEachChild(n, visit);
+  };
+  visit(call);
+  return found;
+}
+
+const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
+
+/** Every function in the file by name, so `server.once('error', onError)` is read through its `const onError = ...`. */
+function namedFunctions(sf) {
+  const byName = new Map();
+  const visit = (n) => {
+    if (ts.isFunctionDeclaration(n) && n.name && n.body) byName.set(n.name.text, n.body);
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && isFunction(n.initializer)) {
+      byName.set(n.name.text, n.initializer.body);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return byName;
+}
+
+/** The listener of `x.on('error', fn)`, `x.once('error', fn)` or `addEventListener('error', fn)`, inline or by name. */
+function errorListenerBodies(node, functions) {
+  const callee = node.expression;
+  const method = ts.isPropertyAccessExpression(callee) ? callee.name.text : ts.isIdentifier(callee) ? callee.text : '';
+  const [event, listener] = node.arguments;
+  if (!LISTENER_METHODS.has(method) || !event || !ts.isStringLiteralLike(event) || event.text !== 'error') return [];
+  if (listener && isFunction(listener)) return [listener.body];
+  const named = listener && ts.isIdentifier(listener) ? functions.get(listener.text) : undefined;
+  return named ? [named] : [];
+}
+
+/** The bodies a node hands to the failure path: a catch block, a `.catch(...)` callback or an 'error' listener. */
+function failureBodies(node, functions) {
   if (ts.isCatchClause(node)) return [node.block];
-  const callee =
-    ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) ? node.expression : undefined;
-  if (callee?.name.text !== 'catch') return [];
-  return node.arguments.filter((a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a)).map((a) => a.body);
+  if (!ts.isCallExpression(node)) return [];
+  if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'catch') {
+    return node.arguments.filter(isFunction).map((a) => a.body);
+  }
+  return errorListenerBodies(node, functions);
 }
 
 /**
- * Returns the 1-based line of every log call inside a catch block or `.catch` callback that does not mention errorFields.
+ * Returns the 1-based line of every log call inside a failure path that does not hand on errorFields(...) whole.
  * @param {string} text
  * @returns {number[]}
  */
 export function unfieldedLogLines(text) {
   const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const hits = new Map();
+  const functions = namedFunctions(sf);
   const collect = (node) => {
-    if (isLogCall(node) && !node.getText(sf).includes('errorFields')) {
+    if (isLogCall(node) && !carriesErrorFields(node)) {
       hits.set(node.getStart(sf), sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
     }
     ts.forEachChild(node, collect);
   };
   const visit = (node) => {
-    for (const body of failureBodies(node)) collect(body);
+    for (const body of failureBodies(node, functions)) collect(body);
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -99,7 +143,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`Wrote ${BASELINE}: ${total} calls over ${Object.keys(counts).length} files.`);
   } else if (risen.length > 0) {
     for (const [f, n] of risen) {
-      console.error(`${f}: ${n} log calls in a catch without errorFields(err) (baseline ${base[f] ?? 0})`);
+      console.error(`${f}: ${n} log calls in a failure path without errorFields(err) (baseline ${base[f] ?? 0})`);
     }
     console.error(
       'Fix: pass errorFields(err) from src/util/log.ts as the fields argument, or spread it into the existing fields.',

@@ -232,7 +232,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     }
   } catch (err) {
     // An audit store that will not open must never crash the mutation it records.
-    log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, { errorClass: errorFields(err).errorClass });
+    log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, errorFields(err));
     result.details.push(
       `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
         `(${plural(rescuedEntries.length, 'rescue')} not audited)`,

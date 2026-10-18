@@ -63,7 +63,8 @@ describe('sleep rescue audit', () => {
       lines.some(
         (l) =>
           l.includes('warn: mv_rescue audit unavailable: hippo-memory: this database requires') &&
-          l.includes('errorClass=IncompatibleBinaryError'),
+          l.includes('errorClass=IncompatibleBinaryError') &&
+          l.includes('stack='),
       ),
     ).toBe(true);
     expect(result.details).toContain(

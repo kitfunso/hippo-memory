@@ -54,6 +54,33 @@ describe('check-caught-error-logs', () => {
     expect(unfieldedLogLines(text)).toEqual([]);
   });
 
+  it("flags a log call in an 'error' listener given to on, once or addEventListener, inline or by name", () => {
+    const text = [
+      "child.on('error', (err) => log.warn(`a: ${errorMessage(err)}`));",
+      "server.once('error', function (err) { log.warn(`b: ${errorMessage(err)}`); });",
+      "target.addEventListener('error', () => { log.warn('c'); });",
+      'const onFail = (err: Error): void => { log.warn(`d: ${errorMessage(err)}`); };',
+      "socket.on('error', onFail);",
+      "child.on('exit', () => log.warn('not an error listener'));",
+    ].join('\n');
+    expect(unfieldedLogLines(text)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('passes an error listener that hands on errorFields', () => {
+    const text = "child.on('error', (err) => log.warn(`a: ${errorMessage(err)}`, errorFields(err)));\n";
+    expect(unfieldedLogLines(text)).toEqual([]);
+  });
+
+  it('does not count errorFields(x).prop, which drops the stack and the cause', () => {
+    const text = [
+      'try { work(); } catch (err) {',
+      '  log.warn(`a`, { errorClass: errorFields(err).errorClass });',
+      "  log.warn(`b`, { code: errorFields(err)['errorClass'] });",
+      '}',
+    ].join('\n');
+    expect(unfieldedLogLines(text)).toEqual([2, 3]);
+  });
+
   it('counts a log call in a catch nested in another catch once', () => {
     const text = 'try { a(); } catch (e) { try { b(); } catch (f) { log.warn(`b failed`); } }\n';
     expect(unfieldedLogLines(text)).toEqual([1]);
@@ -72,7 +99,7 @@ describe('check-caught-error-logs', () => {
     writeFileSync(join(dir, BASELINE), '{}\n');
     const r = run();
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain('src/bad.ts: 1 log calls in a catch without errorFields(err) (baseline 0)');
+    expect(r.stderr).toContain('src/bad.ts: 1 log calls in a failure path without errorFields(err) (baseline 0)');
   });
 
   it('passes at the baseline and refuses --update when a count would rise', () => {
