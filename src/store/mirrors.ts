@@ -206,14 +206,22 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-/** writeMarkdownMirror for many entries: each layer folder is listed once, so no file is probed one by one. A file that
- * fails is warned about and the rest still land. */
+/** Below this many entries a batch probes each entry's own files: a layer folder can hold every mirror in the store. */
+const LISTING_MIN_BATCH = 64;
+
+type LayerListing = ReadonlyArray<{ dir: string; names: ReadonlySet<string> }>;
+
+/** writeMarkdownMirror for many entries: a large batch or a stream lists each layer folder once, so no file is probed
+ * one by one; a small batch probes only its own files. A file that fails is warned about and the rest still land. */
 export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<MemoryEntry>): void {
   mirrorBestEffort('markdown mirrors', () => {
-    const listed = MIRROR_LAYERS.map((layer) => {
-      const dir = layerDir(hippoRoot, layer);
-      return { dir, names: new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []) };
-    });
+    const listed: LayerListing | null =
+      Array.isArray(entries) && entries.length < LISTING_MIN_BATCH
+        ? null
+        : MIRROR_LAYERS.map((layer) => {
+            const dir = layerDir(hippoRoot, layer);
+            return { dir, names: new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []) };
+          });
     const made = new Set<string>();
     for (const entry of entries) {
       try {
@@ -229,15 +237,17 @@ export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<Memory
   });
 }
 
-/** writeMarkdownMirror against a listing taken before the batch; `made` holds the folders already made. */
+/** writeMarkdownMirror against a listing taken before the batch, or against each file when there is none; `made`
+ * holds the folders already made. */
 function writeListedMirror(
   hippoRoot: string,
   entry: MemoryEntry,
-  listed: ReadonlyArray<{ dir: string; names: ReadonlySet<string> }>,
+  listed: LayerListing | null,
   made: Set<string>,
 ): void {
   const name = `${entry.id}.md`;
-  for (const { dir, names } of listed) if (names.has(name)) fs.rmSync(path.join(dir, name), { force: true });
+  if (listed === null) removeEntryMirrors(hippoRoot, entry.id);
+  else for (const { dir, names } of listed) if (names.has(name)) fs.rmSync(path.join(dir, name), { force: true });
   const dir = layerDir(hippoRoot, entry.layer);
   if (!made.has(dir)) fs.mkdirSync(dir, MIRROR_FOLDER);
   made.add(dir);
