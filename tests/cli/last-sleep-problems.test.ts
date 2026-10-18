@@ -122,31 +122,31 @@ describe('cmdLastSleep output', () => {
 });
 
 describe('hippo last-sleep', () => {
-  it('prints nothing on stdout in a clean folder', () => {
-    initProject(s);
+  it('prints nothing on stdout in a clean folder', async () => {
+    await initProject(s);
     writeLog(CLEAN);
-    const r = runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
+    const r = await runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     for (const line of CLEAN) expect(r.stderr).toContain(line);
     expect(fs.existsSync(logFile)).toBe(false);
   });
 
-  it('prints nothing on stdout with no project and no global store', () => {
+  it('prints nothing on stdout with no project and no global store', async () => {
     writeLog(CLEAN);
-    const r = runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
+    const r = await runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     expect(fs.existsSync(s.hippoRoot)).toBe(false);
     expect(fs.existsSync(s.globalRoot)).toBe(false);
   });
 
-  it('prints one systemMessage line when the spool holds a .bad file', () => {
-    initProject(s);
+  it('prints one systemMessage line when the spool holds a .bad file', async () => {
+    await initProject(s);
     fs.mkdirSync(path.join(s.hippoRoot, 'compactions-spool'));
     fs.writeFileSync(path.join(s.hippoRoot, 'compactions-spool', '0000000001000-aaaaaaaa.unreadable.bad'), '{');
     writeLog(CLEAN);
-    const r = runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
+    const r = await runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
     expect(r.status, r.stderr).toBe(0);
     expect(JSON.parse(oneLine(r.stdout))).toEqual({
       systemMessage: 'Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.',

@@ -17,10 +17,10 @@ import { loadConfig } from '../../src/core/config.js';
 
 let s: Scratch;
 
-beforeEach(() => {
+beforeEach(async () => {
   s = scratch();
   for (const name of ['HIPPO_HOME', 'HOME', 'USERPROFILE'] as const) vi.stubEnv(name, s.env[name]!);
-  initProject(s);
+  await initProject(s);
 });
 
 afterEach(() => {
@@ -28,13 +28,13 @@ afterEach(() => {
   removeScratch(s);
 });
 
-function hippo(...args: string[]): void {
-  const r = runHippo(args, s.proj, s.env);
+async function hippo(...args: string[]): Promise<void> {
+  const r = await runHippo(args, s.proj, s.env);
   expect(r.status, r.stderr).toBe(0);
 }
 
-function resumeStdout(sessionId: string): string {
-  const r = runHippo(
+async function resumeStdout(sessionId: string): Promise<string> {
+  const r = await runHippo(
     ['compact-resume'],
     s.proj,
     s.env,
@@ -59,8 +59,8 @@ function expectedText(): string {
 }
 
 describe('compactResumeText', () => {
-  it('equals the local compact-resume stdout byte for byte, with a trail', () => {
-    hippo(
+  it('equals the local compact-resume stdout byte for byte, with a trail', async () => {
+    await hippo(
       'snapshot',
       'save',
       '--task',
@@ -72,8 +72,8 @@ describe('compactResumeText', () => {
       '--session',
       's1',
     );
-    hippo('session', 'log', '--id', 's1', '--content', 'ran the suite', '--type', 'note', '--task', 'login');
-    hippo(
+    await hippo('session', 'log', '--id', 's1', '--content', 'ran the suite', '--type', 'note', '--task', 'login');
+    await hippo(
       'session',
       'log',
       '--id',
@@ -83,14 +83,14 @@ describe('compactResumeText', () => {
       '--type',
       'note',
     );
-    const stdout = resumeStdout('s1');
+    const stdout = await resumeStdout('s1');
     expect(stdout).toContain('## Recent Session Trail');
     expect(stdout).not.toContain('y'.repeat(COMPACT_RESUME_EVENT_CONTENT_CAP));
     expect(stdout).toBe(expectedText() + '\n');
   });
 
-  it('equals the local compact-resume stdout byte for byte, without a trail', () => {
-    hippo(
+  it('equals the local compact-resume stdout byte for byte, without a trail', async () => {
+    await hippo(
       'snapshot',
       'save',
       '--task',
@@ -102,7 +102,7 @@ describe('compactResumeText', () => {
       '--session',
       's2',
     );
-    const stdout = resumeStdout('s2');
+    const stdout = await resumeStdout('s2');
     expect(stdout).toContain('## Restored after compaction');
     expect(stdout).not.toContain('Session Trail');
     expect(stdout).toBe(expectedText() + '\n');
@@ -131,7 +131,7 @@ describe('preCompactForCaller', () => {
       trigger: 'auto',
       session_id: 's1',
     };
-    const r = runHippo(
+    const r = await runHippo(
       ['pre-compact', '--log-file', path.join(s.dir, 'pre-compact.log')],
       s.proj,
       s.env,

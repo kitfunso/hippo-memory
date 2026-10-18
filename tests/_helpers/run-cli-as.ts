@@ -11,7 +11,7 @@ import { _resetLossAversionRatioCacheForTests } from '../../src/core/memory.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { withHookStdin } from './hook-stdin.js';
 import { runInProcess, type InProcessResult } from './run-in-process.js';
-import { HIPPO_BIN } from './spawn-hippo.js';
+import { HIPPO_BIN } from './hippo-bin.js';
 
 export interface CliAsOptions {
   readonly cwd?: string;

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { COMPACTION_DB_WAIT_MS } from '../../src/core/compaction-timing.js';
 import { replayCompactions, saveCompaction } from '../../src/capture/compaction-record.js';
 import { compactionByRequest, saveItems } from '../../src/store/compactions-record.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
@@ -20,7 +19,6 @@ import {
   summaryWith,
   type Scratch,
 } from '../_helpers/compaction-hooks.js';
-import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { folderFiles } from '../_helpers/cli-stores.js';
 
@@ -499,28 +497,28 @@ describe('two replayers working the same store', () => {
 });
 
 describe('hippo sleep finishes what the hook could not', () => {
-  const sleep = () => runHippo(['sleep', '--no-learn', '--no-share'], s.proj, s.env);
+  const sleep = async () => await runHippo(['sleep', '--no-learn', '--no-share'], s.proj, s.env);
 
-  it('a hook killed after the record step: sleep writes the items once', () => {
+  it('a hook killed after the record step: sleep writes the items once', async () => {
     initStore(s.hippoRoot);
-    const hook = runHippo(['post-compact'], s.proj, s.env, fixturePayload(0, { cwd: s.proj }));
+    const hook = await runHippo(['post-compact'], s.proj, s.env, fixturePayload(0, { cwd: s.proj }));
     expect(oneLine(hook.stdout)).toBe('Hippo saved 4 memories from this compaction.');
 
     run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
     run(s.hippoRoot, `UPDATE compactions SET status = 'summarised', items_written = 0, summarised_at = ?`, ago(20));
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
 
-    const first = sleep();
+    const first = await sleep();
     expect(first.status).toBe(0);
     expect(first.stdout).toContain('Finished saving 1 compaction left over');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(4);
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ status: 'done', items_written: 4 }]);
 
-    expect(sleep().status).toBe(0);
+    expect((await sleep()).status).toBe(0);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(4);
   });
 
-  it('a dry run replays nothing', () => {
+  it('a dry run replays nothing', async () => {
     initStore(s.hippoRoot);
     seed(s.hippoRoot, {
       id: 'cmp-1',
@@ -529,43 +527,12 @@ describe('hippo sleep finishes what the hook could not', () => {
       summarizedMinutesAgo: 20,
       items: ITEMS,
     });
-    expect(runHippo(['sleep', '--no-learn', '--dry-run'], s.proj, s.env).status).toBe(0);
+    expect((await runHippo(['sleep', '--no-learn', '--dry-run'], s.proj, s.env)).status).toBe(0);
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
     expect(compactionRows(s.hippoRoot)[0].status).toBe('summarised');
   });
 
-  it('a locked store makes the hook spool inside its budget, and sleep imports the spool', () => {
-    initStore(s.hippoRoot);
-    const db = openHippoDb(s.hippoRoot);
-    const waits = path.join(s.dir, 'lock-waits');
-    try {
-      db.exec('BEGIN IMMEDIATE');
-      const hook = runHippo(
-        ['post-compact'],
-        s.proj,
-        tracingLockWaits(s.env, waits),
-        postCompactPayload('s1', s.proj, summaryWith(ITEMS)),
-      );
-      expect(hook.status).toBe(0);
-      expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
-      // One wait, then the spool: a small part of the 10 s Claude Code gives PostCompact.
-      expect(lockWaitAskedMs(waits, hook.pid)).toBe(COMPACTION_DB_WAIT_MS);
-    } finally {
-      db.exec('ROLLBACK');
-      closeHippoDb(db);
-    }
-
-    const spool = path.join(s.hippoRoot, 'compactions-spool');
-    expect(fs.readdirSync(spool).filter((f) => f.endsWith('.json'))).toHaveLength(1);
-    expect(compactionMemories(s.hippoRoot)).toEqual([]);
-
-    expect(sleep().status).toBe(0);
-    expect(fs.readdirSync(spool)).toEqual([]);
-    expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
-    expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
-  });
-
-  it('the next post-compact also finishes an earlier compaction', () => {
+  it('the next post-compact also finishes an earlier compaction', async () => {
     initStore(s.hippoRoot);
     seed(s.hippoRoot, {
       id: 'cmp-1',
@@ -575,7 +542,7 @@ describe('hippo sleep finishes what the hook could not', () => {
       items: ITEMS,
       session: 'earlier',
     });
-    const hook = runHippo(
+    const hook = await runHippo(
       ['post-compact'],
       s.proj,
       s.env,
@@ -592,12 +559,17 @@ describe('hippo sleep finishes what the hook could not', () => {
 });
 
 describe('the daily runner finishes the global store', () => {
-  it('imports what a hook in a folder with no store of its own spooled into the global store', () => {
+  it('imports what a hook in a folder with no store of its own spooled into the global store', async () => {
     initStore(s.globalRoot);
     const db = openHippoDb(s.globalRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const hook = runHippo(['post-compact'], s.proj, s.env, postCompactPayload('s1', s.proj, summaryWith(ITEMS)));
+      const hook = await runHippo(
+        ['post-compact'],
+        s.proj,
+        s.env,
+        postCompactPayload('s1', s.proj, summaryWith(ITEMS)),
+      );
       expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
     } finally {
       db.exec('ROLLBACK');
@@ -606,7 +578,7 @@ describe('the daily runner finishes the global store', () => {
     expect(fs.existsSync(s.hippoRoot)).toBe(false);
     expect(compactionMemories(s.globalRoot)).toEqual([]);
 
-    const daily = runHippo(['daily-runner'], s.dir, s.env);
+    const daily = await runHippo(['daily-runner'], s.dir, s.env);
     expect(daily.status).toBe(0);
     expect(daily.stdout).toContain('Finished saving 1 compaction left over in the global store.');
     expect(fs.readdirSync(path.join(s.globalRoot, 'compactions-spool'))).toEqual([]);

@@ -11,10 +11,11 @@ import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCli } from '../../src/cli.js';
 import { initStore } from '../../src/store/open.js';
-import { compactionRows, runHippo } from '../_helpers/compaction-hooks.js';
+import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
+import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import {
@@ -29,6 +30,8 @@ import {
 } from '../_helpers/copilot-hooks.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
+const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
+  hippoRun(args, { cwd, env, input });
 const CONTEXT_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'copilot'];
 const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth/retry.ts';
 const GLOBAL_PIN = 'Global pin: prefer small pull requests over large ones';

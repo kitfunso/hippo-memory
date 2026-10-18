@@ -258,17 +258,17 @@ describe('captureSessionTexts caps', () => {
 });
 
 describe('captureSessionTexts against the CLI', () => {
-  it('stores what `hippo capture --last-session` stores for the same transcript', () => {
+  it('stores what `hippo capture --last-session` stores for the same transcript', async () => {
     const s = scratch();
     try {
-      initProject(s);
+      await initProject(s);
       const transcript = path.join(s.dir, 't.jsonl');
       const lines = TEXTS.flatMap((text) => [
         { type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } },
         { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'OK, noted.' }] } },
       ]);
       fs.writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
-      const cli = runHippo(['capture', '--last-session', '--transcript', transcript], s.proj, s.env, '');
+      const cli = await runHippo(['capture', '--last-session', '--transcript', transcript], s.proj, s.env, '');
       expect(cli.status, cli.stderr).toBe(0);
 
       const { users, assistants } = sessionTail(collectSessionTurns(fs.readFileSync(transcript, 'utf8')));

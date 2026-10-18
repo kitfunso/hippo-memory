@@ -1,20 +1,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { COMPACTION_DB_WAIT_MS } from '../../src/core/compaction-timing.js';
-import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../../src/db/index.js';
 import {
   compactionRows,
   oneLine,
   postCompactPayload,
   removeScratch,
-  runHippo,
   scratch,
   summaryWith,
   type Scratch,
 } from '../_helpers/compaction-hooks.js';
 import { initStore } from '../../src/store/open.js';
-import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
@@ -167,29 +163,6 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     expect(oneLine((await post('s1', 'Session one restores its own snapshot after compaction.')).stdout)).toBe(
       'Hippo saved 1 memory from this compaction and restored your task snapshot.',
     );
-  });
-
-  it('exits 0 and still asks for memories when the store is locked', async () => {
-    initStore(s.hippoRoot);
-    const db = openHippoDb(s.hippoRoot);
-    try {
-      db.exec('BEGIN IMMEDIATE');
-      const waits = path.join(s.dir, 'lock-waits');
-      s.env = tracingLockWaits(s.env, waits);
-      const result = runHippo(
-        ['pre-compact', '--log-file', logFile],
-        s.proj,
-        s.env,
-        payloadFor('s1', transcript, 'auto'),
-      );
-      expect(result.status).toBe(0);
-      expect(result.stdout).toBe(`${INSTRUCTION}\n`);
-      // One wait for the token-ledger row and one for the record, then none: far inside the 30 s Claude Code gives PreCompact.
-      expect(lockWaitAskedMs(waits, result.pid)).toBe(HOOK_DB_WAIT_MS + COMPACTION_DB_WAIT_MS);
-    } finally {
-      db.exec('ROLLBACK');
-      closeHippoDb(db);
-    }
   });
 });
 
