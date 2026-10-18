@@ -1,22 +1,24 @@
-/** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
- * the memory row only mirrors the claim. Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers
- * enforce the prediction's tenant matches the referenced memory's. `savePrediction` writes memory and prediction inside
- * `writeEntry`'s SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
-
+// hippo.db's Predictions group: the queries the CLI and the MCP tools run.
 import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
 import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { type StoreFiles } from './open.js';
+import type { StoreFiles, OnHandle } from './open.js';
 import { writeEntryRowAt } from './entry-writes.js';
 import { assertTenantId } from '../../core/tenant-id.js';
 import { appendAuditEvent } from './audit.js';
 import { keysetAfter, type KeysetPosition } from '../../util/keyset.js';
-import type { PredictionSave } from '../port.js';
+import type { PredictionSave, Predictions, Sync } from '../port.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../core/prediction.js';
 import { plural } from '../../util/format.js';
 import { CLI_ACTOR } from '../../core/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
 import type { Prediction, SavePredictionOptions } from '../port/predictions.js';
+import { openStore } from './handles.js';
+
+/** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
+ * the memory row only mirrors the claim. Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers
+ * enforce the prediction's tenant matches the referenced memory's. `savePrediction` writes memory and prediction inside
+ * `writeEntry`'s SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
 
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
@@ -24,13 +26,13 @@ const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
   actual_value, closure_state, closed_at, closure_note, created_at`;
 
-export interface ClosePredictionOptions {
+interface ClosePredictionOptions {
   closureState: ClosureState;
   actualValue?: number;
   closureNote?: string;
 }
 
-export interface ListPredictionsOptions {
+interface ListPredictionsOptions {
   closureState?: ClosureState;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
@@ -75,7 +77,7 @@ function rowToPrediction(row: PredictionRow): Prediction {
 
 /** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
  * check included, and its predictions row shares that write scope, so neither lands alone. */
-export function writePredictionAt(
+function writePredictionAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -174,7 +176,7 @@ function auditPredictionCreate(
 
 /** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table
  * is the source of truth). Accuracy is computed from (estimateValue, actualValue) at query time. */
-export function closePredictionAt(
+function closePredictionAt(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
@@ -259,7 +261,7 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   );
 }
 
-export function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
+function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
   // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
@@ -271,7 +273,7 @@ export function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id:
   return row ? rowToPrediction(row) : null;
 }
 
-export function loadPredictionsByClassAt(
+function loadPredictionsByClassAt(
   db: DatabaseSyncLike,
   tenantId: string,
   classTag: string,
@@ -314,7 +316,7 @@ export function loadPredictionsByClassAt(
 }
 
 /** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
-export function loadAllPredictionsAt(
+function loadAllPredictionsAt(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
@@ -335,7 +337,7 @@ export function loadAllPredictionsAt(
 }
 
 /** One closed prediction as the baserate reads it: both values set. */
-export interface BaserateRow {
+interface BaserateRow {
   estimate_value: number;
   actual_value: number;
 }
@@ -447,7 +449,7 @@ export function predictionBaserateOf(classTag: string, rows: readonly BaserateRo
   };
 }
 
-export function loadOpenPredictionsAt(
+function loadOpenPredictionsAt(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
@@ -480,4 +482,20 @@ export function loadOpenPredictionsAt(
       .all(tenantId, ...after.params, limit) as PredictionRow[];
   }
   return rows.map(rowToPrediction);
+}
+
+export function sqlitePredictions(on: OnHandle): Sync<Predictions> {
+  return {
+    savePrediction: (tenantId, input, actor) =>
+      on((db, files) => writePredictionAt(db, files, tenantId, input, actor), openStore),
+    closePrediction: (tenantId, id, close, actor) => on((db) => closePredictionAt(db, tenantId, id, close, actor)),
+    predictionById: (tenantId, id) => on((db) => loadPredictionByIdAt(db, tenantId, id)),
+    listPredictions(tenantId, { classTag, closureState, limit, after }) {
+      if (closureState === 'open') return on((db) => loadOpenPredictionsAt(db, tenantId, { classTag, limit, after }));
+      if (classTag === undefined) return on((db) => loadAllPredictionsAt(db, tenantId, { limit, after }));
+      return on((db) => loadPredictionsByClassAt(db, tenantId, classTag, { closureState, limit, after }));
+    },
+    predictionBaserate: (tenantId, classTag, actor) =>
+      on((db) => computePredictionBaserateAt(db, tenantId, classTag, actor)),
+  };
 }

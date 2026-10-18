@@ -1,7 +1,7 @@
 // The dormant_memories rows: the snapshot sleep keeps of a faded memory, read and written on the caller's handle.
-import { type DatabaseSyncLike } from '../../db/index.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../core/memory.js';
-import { type SqlFragment } from './rule-sql.js';
+import type { SqlFragment } from './rule-sql.js';
 import { chunked } from '../../util/chunked.js';
 import { escapeLike } from '../../util/escape.js';
 import { placeholders } from '../../util/sql.js';

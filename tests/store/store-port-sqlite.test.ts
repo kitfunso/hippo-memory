@@ -14,7 +14,7 @@ import { boostByGoals } from '../../src/search/goal-boost.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
 import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { planningFallacyEvidenceAt } from '../../src/store/planning-fallacy-evidence.js';
+import { planningFallacyEvidenceAt } from '../../src/store/sqlite/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
 import { serve } from '../../src/server.js';
 import {

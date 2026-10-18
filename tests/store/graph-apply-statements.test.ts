@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { applyGraphOpsAt } from '../../src/store/graph-apply.js';
+import { sqliteGraphRebuild } from '../../src/store/sqlite/graph-rebuild.js';
 import type { GraphOp, NaturalKey } from '../../src/store/port/graph-rebuild.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -45,10 +45,11 @@ function applyFresh(count: number) {
     const ids = Array.from({ length: count }, (_, i) =>
       Number(insert.run(`decision ${i}`, '2026-01-01T00:00:00.000Z').lastInsertRowid),
     );
+    const graphRebuild = sqliteGraphRebuild((fn) => fn(db, { hippoRoot: root }));
     const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare');
     try {
       const { result, statements } = recordStatements(() =>
-        applyGraphOpsAt(db, 'default', rebuildOps(ids), { from: 0, holdMs: Infinity }),
+        graphRebuild.applyOps('default', rebuildOps(ids), { from: 0, holdMs: Infinity }),
       );
       return { result, statements, prepares: prepare.mock.calls.length, root };
     } finally {
@@ -59,7 +60,7 @@ function applyFresh(count: number) {
   }
 }
 
-describe('applyGraphOpsAt', () => {
+describe('GraphRebuild.applyOps', () => {
   it('prepares the same statements for 2 decisions as for 12', () => {
     const small = applyFresh(2);
     const large = applyFresh(12);

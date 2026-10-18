@@ -12,7 +12,7 @@ import { flushStatsMirrors } from './mirrors.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
-import { sqliteVectorReads } from './vector-reads-group.js';
+import { sqliteVectorReads } from './vector-reads.js';
 import {
   type Job,
   type OpPlace,

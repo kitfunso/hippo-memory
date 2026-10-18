@@ -38,7 +38,7 @@ import type { JsonObject } from '../port/types.js';
 
 /** The group with each answer as its value; spelled out because
  * `Sync<Objects>` would widen each method's kind to every kind. */
-export interface SyncObjects {
+interface SyncObjects {
   listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): ObjectByKind[K][];
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): ObjectByKind[K] | null;
   closeObject<K extends ObjectKind>(

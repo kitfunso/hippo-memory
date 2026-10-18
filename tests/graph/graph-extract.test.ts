@@ -29,13 +29,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
-import {
-  deleteEntry,
-  loadNeighborRelations,
-  loadRelationsAmong,
-  loadEntities,
-  loadRelations,
-} from '../_helpers/root-forms.js';
+import { deleteEntry, loadNeighborRelations, loadEntities, loadRelations } from '../_helpers/root-forms.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -443,7 +437,9 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     const newestFirst = ['D2 adopts RetryPolicy', 'D1 adopts RetryPolicy'];
     expect(fromNames(loadRelations(home, 'default', { limit: 10 }))).toEqual(newestFirst);
     expect(fromNames(loadNeighborRelations(home, 'default', [pol.id]))).toEqual(newestFirst);
-    expect(fromNames(loadRelationsAmong(home, 'default', [d1.id, d2.id, pol.id]))).toEqual(newestFirst);
+    const focus = await sqliteStore(home).graphReads.graphRows('default', { entity: pol.name, limit: 10 });
+    expect(new Set(focus.entities.map((e) => e.id))).toEqual(new Set([d1.id, d2.id, pol.id]));
+    expect(fromNames(focus.relations)).toEqual(newestFirst);
   });
 
   it('a chunked rebuild inside a server request waits out a writer that holds the lock between chunks', async () => {

@@ -1,9 +1,15 @@
-// Applies a rebuild's op list through the row writers in graph-writes.ts, in one transaction per call.
-import type { DatabaseSyncLike } from '../db/index.js';
-import { clock } from '../util/write-budget.js';
-import { storedGraphOn } from './sqlite/graph-reads.js';
-import type { DesiredRelation, GraphOp } from './port/graph-rebuild.js';
-import type { StoredGraph } from './port/graph-reads.js';
+// hippo.db's GraphRebuild group: a rebuild's ops through the row writers in graph-writes.ts, one transaction a call.
+import { type DatabaseSyncLike, SLEEP_DB_WAIT_MS } from '../../db/index.js';
+import { clock } from '../../util/write-budget.js';
+import { storedGraphOn } from './graph-reads.js';
+import type {
+  DesiredRelation,
+  GraphOp,
+  ApplyGraphOpsOptions,
+  ApplyGraphOpsResult,
+  GraphRebuild,
+} from '../port/graph-rebuild.js';
+import type { StoredGraph } from '../port/graph-reads.js';
 import {
   deleteEntityRow,
   deleteRelationRow,
@@ -14,8 +20,8 @@ import {
   relationPresent,
   runGraphRebuildTransaction,
   updateEntityRow,
-} from './sqlite/graph-writes.js';
-import type { ApplyGraphOpsOptions, ApplyGraphOpsResult } from './port/graph-rebuild.js';
+} from './graph-writes.js';
+import { type OnHandle, waitingOpener } from './open.js';
 
 function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
@@ -81,7 +87,7 @@ function applyGraphOpsOn(
 
 /** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary past `opts.holdMs`;
  * returns where the next chunk starts and how many ops were skipped as stale. */
-export function applyGraphOpsAt(
+function applyGraphOpsAt(
   db: DatabaseSyncLike,
   tenantId: string,
   ops: readonly GraphOp[],
@@ -92,7 +98,7 @@ export function applyGraphOpsAt(
 
 /** Reads the stored graph, diffs it with `diff` and applies every op under one lock, so two concurrent rebuilds
  * serialize instead of both inserting a missing row. Returns how many ops were skipped as stale. */
-export function rebuildGraphAt(
+function rebuildGraphAt(
   db: DatabaseSyncLike,
   tenantId: string,
   memoryIds: readonly string[],
@@ -102,4 +108,14 @@ export function rebuildGraphAt(
     const ops = diff(storedGraphOn(tx, tenantId, memoryIds));
     return applyGraphOpsOn(tx, tenantId, ops, { from: 0, holdMs: Infinity }).skipped;
   });
+}
+
+// Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
+const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
+
+export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {
+  return {
+    applyOps: (tenantId, ops, opts) => on((db) => applyGraphOpsAt(db, tenantId, ops, opts), openForChunk),
+    rebuild: (tenantId, memoryIds, diff) => on((db) => rebuildGraphAt(db, tenantId, memoryIds, diff)),
+  };
 }
