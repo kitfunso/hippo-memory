@@ -80,12 +80,12 @@ describe('transferScore', () => {
 // ---------------------------------------------------------------------------
 
 describe('listPeers', () => {
-  it('returns empty when global store is empty', () => {
-    const peers = listPeers(folderStore(globalDir));
+  it('returns empty when global store is empty', async () => {
+    const peers = await listPeers(folderStore(globalDir));
     expect(peers).toEqual([]);
   });
 
-  it('groups memories by project from source field', () => {
+  it('groups memories by project from source field', async () => {
     const entry1 = createMemory('Lesson from project A');
     entry1.source = 'shared:projectA:2026-03-27T00:00:00Z';
     writeEntry(globalDir, entry1);
@@ -98,7 +98,7 @@ describe('listPeers', () => {
     entry3.source = 'shared:projectB:2026-03-27T02:00:00Z';
     writeEntry(globalDir, entry3);
 
-    const peers = listPeers(folderStore(globalDir));
+    const peers = await listPeers(folderStore(globalDir));
     expect(peers.length).toBe(2);
 
     const projectA = peers.find((p) => p.project === 'projectA');
@@ -110,7 +110,7 @@ describe('listPeers', () => {
     expect(projectB!.count).toBe(1);
   });
 
-  it('sorts by count descending', () => {
+  it('sorts by count descending', async () => {
     for (let i = 0; i < 5; i++) {
       const e = createMemory(`Lesson ${i}`);
       e.source = 'shared:bigProject:2026-03-27T00:00:00Z';
@@ -120,7 +120,7 @@ describe('listPeers', () => {
     e.source = 'shared:smallProject:2026-03-27T00:00:00Z';
     writeEntry(globalDir, e);
 
-    const peers = listPeers(folderStore(globalDir));
+    const peers = await listPeers(folderStore(globalDir));
     expect(peers[0].project).toBe('bigProject');
     expect(peers[0].count).toBe(5);
   });

@@ -4,6 +4,7 @@ import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
+import { CLI_ACTOR } from '../core/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
 import type { FolderStore, LocalFiles } from '../store/port.js';
 import { isPersonalScope, isQuarantineScope } from '../core/recall-scope.js';
@@ -87,29 +88,26 @@ export function transferScore(entry: MemoryEntry): number {
 
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
-export function shareMemory(
+export async function shareMemory(
   local: FolderStore,
   global: FolderStore,
   id: string,
   options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
-): MemoryEntry | null {
-  // tenantId is optional for single-tenant callers (autoShare passes only `{ force: true }`); MCP/REST hosts MUST pass
-  // it so tenant A cannot share
-  // tenant B's memory to global (readEntry returns null on a cross-tenant lookup).
-  const entry = local.store.localFiles.learning.readEntry(id, options.tenantId);
+): Promise<MemoryEntry | null> {
+  // tenantId is optional for single-tenant callers; MCP/REST hosts MUST pass it so tenant A cannot share tenant B's
+  // memory to global (the read finds no row of another tenant).
+  const [entry] = await local.store.entriesByIds([id], options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
   const globalEntry = toGlobalEntry(local.root, entry, options.force === true);
   if (!globalEntry) return null;
 
-  const to = global.store.localFiles;
-  to.ensureFiles();
-  to.learning.writeEntry(globalEntry);
+  await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: CLI_ACTOR });
 
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
   // the whole index per call.
   if (!options.skipEmbed) {
-    void embedMemory(folderIndex(global), globalEntry);
+    void embedMemory({ hippoRoot: global.root, store: global.store }, globalEntry);
   }
 
   return globalEntry;
@@ -164,15 +162,15 @@ function assertShareable(entry: MemoryEntry, id: string): void {
 /** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or
  * 'promoted:<path>' sources.
  *  `tenantId` filters to one tenant; undefined is host-wide (legacy callers: CLI standalone, dashboard). */
-export function listPeers(
+export async function listPeers(
   global: FolderStore,
   tenantId?: string,
-): Array<{ project: string; count: number; latest: string }> {
+): Promise<Array<{ project: string; count: number; latest: string }>> {
   if (!fs.existsSync(global.root)) return [];
 
   // Tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const tallies = global.store.localFiles.sharing.sourceTallies(tenantId)
+  const tallies = (await global.store.localFiles.sharing.sourceTallies(tenantId))
     .sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
   const peerMap = new Map<string, { count: number; latest: string }>();
 

@@ -1,7 +1,6 @@
 // Audit log queries and retention, and the memory-quality audit with its repair passes.
 
-import { auditMemories, type AuditIssue, type AuditResult } from '../../core/memory-audit.js';
-import { canAutoDelete, type MemoryEntry } from '../../core/memory.js';
+import { auditMemories, PROTECTED_ROWS, type AuditIssue, type AuditResult } from '../../core/memory-audit.js';
 import type { AuditMaintenance } from '../../store/port.js';
 import { DAY_MS } from '../../util/time.js';
 import type { KeysetPosition } from '../../util/keyset.js';
@@ -62,30 +61,20 @@ export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number
   return audit;
 }
 
-/** The rows quality repair keeps whatever their defect: a person's pin, a raw receipt, a trusted imported note, and a
- * row an object names, since the object's link could not be restored. */
-export function repairProtection(entry: MemoryEntry, backsObject: boolean): string | undefined {
-  if (entry.pinned) return 'pinned';
-  if (entry.kind === 'raw') return 'raw receipt';
-  if (!canAutoDelete(entry)) return 'trusted imported note';
-  if (backsObject) return 'backs an object';
-  return undefined;
-}
-
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage
  * behind a backup. */
 export async function repairMemoryQuality(
   ctx: Context,
   apply: boolean,
 ): Promise<QualityRepairResult> {
-  return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply, repairProtection);
+  return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply, PROTECTED_ROWS);
 }
 
 /** The repair sleep and the daily runner apply once per store after an upgrade; null when it already ran there. */
 export async function repairMemoryQualityOnce(
   ctx: Context,
 ): Promise<QualityRepairResult | null> {
-  return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId, repairProtection);
+  return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId, PROTECTED_ROWS);
 }
 
 export interface PruneAuditOptions {

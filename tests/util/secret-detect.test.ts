@@ -207,10 +207,10 @@ describe('producer + sync vetoes (real stores)', () => {
     }
   });
 
-  it('shareMemory refuses a secret row even with force', () => {
+  it('shareMemory refuses a secret row even with force', async () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
-    expect(() => shareMemory(...sharingStores(projA), row.id, { force: true })).toThrow(/secret/i);
+    await expect(shareMemory(...sharingStores(projA), row.id, { force: true })).rejects.toThrow(/secret/i);
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
@@ -243,22 +243,22 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
-  it('copyToGlobal refuses a secret row and stamps origin on clean promotes', () => {
+  it('copyToGlobal refuses a secret row and stamps origin on clean promotes', async () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const rows = loadAllEntries(projA, 'default');
     const secretRow = rows.find((e) => e.content === SECRET_ROW)!;
     const cleanRow = rows.find((e) => e.content === CLEAN_ROW)!;
-    expect(() => copyToGlobal(projA, secretRow.id)).toThrow(/secret/i);
-    const promoted = copyToGlobal(projA, cleanRow.id);
+    await expect(copyToGlobal(projA, secretRow.id)).rejects.toThrow(/secret/i);
+    const promoted = await copyToGlobal(projA, cleanRow.id);
     expect(promoted.origin_project).toBe('proj-a');
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
-  it('shareMemory stamps the canonical origin on the global copy', () => {
+  it('shareMemory stamps the canonical origin on the global copy', async () => {
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
-    const globalCopy = shareMemory(...sharingStores(projA), row.id, { force: true });
+    const globalCopy = await shareMemory(...sharingStores(projA), row.id, { force: true });
     expect(globalCopy?.origin_project).toBe('proj-a');
     expect(globalCopy?.source).toMatch(/^shared:proj-a:/);
   });

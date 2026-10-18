@@ -74,34 +74,34 @@ describe('copyToGlobal', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('copies a local entry into the global store', () => {
+  it('copies a local entry into the global store', async () => {
     const entry = createMemory('shared lesson about pipeline errors');
     writeEntry(localRoot, entry);
 
     // HIPPO_HOME is pointed at a temp global store in beforeEach, so this
     // promote lands in that temp store, not the developer's real ~/.hippo.
-    const promoted = copyToGlobal(localRoot, entry.id);
+    const promoted = await copyToGlobal(localRoot, entry.id);
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe(entry.content);
   });
 
-  it('throws when ID does not exist in local store', () => {
-    expect(() => copyToGlobal(localRoot, 'nonexistent_id')).toThrow();
+  it('throws when ID does not exist in local store', async () => {
+    await expect(copyToGlobal(localRoot, 'nonexistent_id')).rejects.toThrow();
   });
 
-  it('honors opts.tenantId for cross-tenant isolation', () => {
+  it('honors opts.tenantId for cross-tenant isolation', async () => {
     const a = createMemory('tenant-a content', { tenantId: 'tenant-a' });
     const b = createMemory('tenant-b content', { tenantId: 'tenant-b' });
     writeEntry(localRoot, a);
     writeEntry(localRoot, b);
 
     // Promoting tenant-a's entry with opts.tenantId='tenant-a' succeeds.
-    const promoted = copyToGlobal(localRoot, a.id, { tenantId: 'tenant-a' });
+    const promoted = await copyToGlobal(localRoot, a.id, { tenantId: 'tenant-a' });
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe('tenant-a content');
 
     // Promoting tenant-a's entry as tenant-b throws: promote's tenant pre-check answers not found.
-    expect(() => copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).toThrow(/memory not found/);
+    await expect(copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).rejects.toThrow(/memory not found/);
   });
 });
 

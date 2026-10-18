@@ -382,7 +382,7 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: C
 
 // Promote command
 
-function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
+async function cmdPromote(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
   if (!id) {
@@ -391,7 +391,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
 
   const ctx = cliApiContext(hippoRoot, tenantId);
   try {
-    const result = api.promote(ctx, id);
+    const result = await api.promote(ctx, id);
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
@@ -436,7 +436,7 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
     }
   });
   if (promoted) return;
-  cmdPromote(hippoRoot, tenantId, id);
+  await cmdPromote(hippoRoot, tenantId, id);
 }
 
 export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -466,7 +466,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     const force = boolFlag(flags, 'force');
     const ctx = cliApiContext(hippoRoot, tenantId);
     const local = { root: hippoRoot, store: ctx.store };
-    const result = shareMemory(local, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
+    const result = await shareMemory(local, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);
@@ -485,11 +485,11 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   }
 }
 
-export function handlePeers({ tenantId, flags }: CommandContext): void {
+export async function handlePeers({ tenantId, flags }: CommandContext): Promise<void> {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flagIsTrue(flags, 'all-tenants');
   const tenantScope = allTenants ? undefined : tenantId;
-  const peers = listPeers(cliFolder(getGlobalRoot()), tenantScope);
+  const peers = await listPeers(cliFolder(getGlobalRoot()), tenantScope);
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {

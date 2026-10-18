@@ -16,7 +16,7 @@ import {
   withSqliteAllowed,
 } from '../../src/db/index.js';
 import { repairAutomaticMemories } from '../../src/store/quality-repair.js';
-import { repairProtection } from '../../src/api/auth/audit.js';
+import { PROTECTED_ROWS as repairProtection } from '../../src/core/memory-audit.js';
 import * as serverEntry from '../../src/server.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { initStore } from '../../src/store/open.js';

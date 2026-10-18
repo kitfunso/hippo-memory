@@ -85,11 +85,11 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('promote succeeds and writes no embedding index entry', () => {
+  it('promote succeeds and writes no embedding index entry', async () => {
     const entry = createMemory('deterministic no-embed promote test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
-    const promoted = promote(apiCtx(localRoot), entry.id);
+    const promoted = await promote(apiCtx(localRoot), entry.id);
     expect(promoted.globalId).toMatch(/^g_/);
 
     // provider.isAvailable() is synchronous and false here (config-disabled),
@@ -99,11 +99,11 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     expect(index[promoted.globalId]).toBeUndefined();
   });
 
-  it('shareMemory succeeds and writes no embedding index entry', () => {
+  it('shareMemory succeeds and writes no embedding index entry', async () => {
     const entry = createMemory('deterministic no-embed share test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'] });
     writeEntry(localRoot, entry);
 
-    const shared = shareMemory(...sharingStores(localRoot), entry.id, { force: true });
+    const shared = await shareMemory(...sharingStores(localRoot), entry.id, { force: true });
     expect(shared).not.toBeNull();
     expect(shared!.id).toMatch(/^g_/);
 
@@ -211,7 +211,7 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
     const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
-    const promoted = promote(apiCtx(localRoot), entry.id);
+    const promoted = await promote(apiCtx(localRoot), entry.id);
 
     // Generous timeout: first-run model load can be slow.
     await vi.waitFor(() => {
@@ -249,7 +249,7 @@ describe('global-row-embeddings: the first promote, before any global store exis
     const ctx = apiCtx(localRoot);
     expect(ctx.reach?.global).toBeUndefined();
 
-    const promoted = promote(ctx, entry.id);
+    const promoted = await promote(ctx, entry.id);
 
     await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toBeDefined(), { timeout: 10_000 });
   });

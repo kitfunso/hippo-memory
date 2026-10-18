@@ -138,6 +138,41 @@ describe('resolveConflict', () => {
     expect(listMemoryConflicts(tmpDir, 'open')).toHaveLength(1);
   });
 
+  it("a reject fate removes the value's copies its ownScope may touch, in the same write, and keeps another person's", () => {
+    const { aId, bId, conflictId } = seedConflict();
+    const copyOf = (scope: string, owner: string | null = null) => {
+      const copy = { ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }), scope, owner };
+      writeEntry(tmpDir, copy);
+      return copy.id;
+    };
+    const team = copyOf('team:shared');
+    const mine = copyOf('personal:private:alice', 'alice');
+    const theirs = copyOf('personal:private:bob', 'bob');
+    const resolved = sqliteSyncStore(tmpDir).conflicts.resolve('default', {
+      conflictId,
+      keep: { id: aId, scope: null },
+      loser: { id: bId, scope: null },
+      fate: { kind: 'reject', ownScope: 'personal:private:alice' },
+      actor: 'cli',
+      reason: 'wrong',
+    });
+    expect(resolved).toBe(true);
+    expect([bId, team, mine].map((id) => readEntry(tmpDir, id))).toEqual([null, null, null]);
+    expect(readEntry(tmpDir, theirs)).not.toBeNull();
+    expect(readEntry(tmpDir, aId)).not.toBeNull();
+  });
+
+  it('a reject fate with no ownScope keeps every personal copy', () => {
+    const { aId, bId, conflictId } = seedConflict();
+    const personal = { ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }), scope: 'personal:private:alice', owner: 'alice' };
+    writeEntry(tmpDir, personal);
+    const fate = { kind: 'reject', ownScope: null } as const;
+    const resolution = { conflictId, keep: { id: aId, scope: null }, loser: { id: bId, scope: null }, fate, actor: 'cli', reason: 'wrong' };
+    expect(sqliteSyncStore(tmpDir).conflicts.resolve('default', resolution)).toBe(true);
+    expect(readEntry(tmpDir, bId)).toBeNull();
+    expect(readEntry(tmpDir, personal.id)).not.toBeNull();
+  });
+
   it('answers 409 for an already-resolved conflict', async () => {
     const { aId, conflictId } = seedConflict();
     await resolve(conflictId, aId);

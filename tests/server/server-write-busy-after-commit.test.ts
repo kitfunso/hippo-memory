@@ -167,7 +167,7 @@ describe('routed writes under a busy store', () => {
     } finally {
       closeHippoDb(globalDb);
     }
-    expect(() => copyToGlobal(home, id)).toThrow(/forced promote audit failure/);
+    await expect(copyToGlobal(home, id)).rejects.toThrow(/forced promote audit failure/);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary')).toBe(0);
   });
 

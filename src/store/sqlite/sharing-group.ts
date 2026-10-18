@@ -12,7 +12,7 @@ export function sqliteSharing(on: OnHandle): Sharing {
     textKeys: (tenantId) => on((db) => loadEntryTextKeysAt(db, tenantId), openStore),
     entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids), openStore),
     writeSkippingRejected: (fill) => on((db, files) => writeEntriesSkippingRejectedAt(db, files, fill), openStore),
-    sourceTallies: (tenantId) => on((db) => tallySourcesAt(db, tenantId), openStore),
+    sourceTallies: async (tenantId) => on((db) => tallySourcesAt(db, tenantId), openStore),
     searchEntries: (query, limit, tenantId) => on((db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore),
     recallEntries: (query, options) => on((db) => loadRecallEntriesAt(db, query, options), openStore),
   };

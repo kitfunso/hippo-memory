@@ -30,11 +30,3 @@ export function selectMemoryReach(
     { tenant_id: string; scope: string | null } | undefined;
   return row && { tenantId: row.tenant_id, scope: row.scope };
 }
-
-/** `selectMemoryReach` for the store under `hippoRoot`, with no mirror setup and no full row read. */
-export function memoryReachAt(
-  db: DatabaseSyncLike,
-  id: string,
-): { tenantId: string; scope: string | null } | undefined {
-  return selectMemoryReach(db, id);
-}

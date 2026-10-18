@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../util/request-scope.js';
-import type { HippoStore, Readiness, StoreGroups, VectorReads } from '../port.js';
+import type { HippoStore, LocalFiles, Readiness, StoreGroups, VectorReads, StoreWith } from '../port.js';
 import { createSqliteExecutor, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
@@ -128,6 +128,19 @@ function sessionAndAdminGroups(executor: SqliteExecutor, inProcess: StoreGroups)
   };
 }
 
+// LocalFiles stays in process but for the methods a served route calls.
+function localFilesOn(executor: SqliteExecutor, inProcess: LocalFiles): LocalFiles {
+  const { promotion, sharing } = WORKER_OPS;
+  return {
+    ...inProcess,
+    promotion: onWorkers(executor, 'promotion', promotion, inProcess.promotion),
+    sharing: {
+      ...inProcess.sharing,
+      ...onWorkers<Pick<LocalFiles['sharing'], 'sourceTallies'>>(executor, 'sharing', sharing, inProcess.sharing),
+    },
+  };
+}
+
 /** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
  * resolves once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock
  * wait. */
@@ -142,6 +155,7 @@ export function workerSqliteStore(
     ...vectorGroups(executor, inProcess.vectors),
     ...recallAndWriteGroups(executor, inProcess),
     ...sessionAndAdminGroups(executor, inProcess),
+    localFiles: localFilesOn(executor, inProcess.localFiles),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };
@@ -151,7 +165,7 @@ export function workerSqliteStore(
 
 /** The operator's global stores a server opens beside its own, closed with it. */
 export interface GlobalStores {
-  readonly open: (root: string) => HippoStore;
+  readonly open: (root: string) => StoreWith<'localFiles'>;
   readonly close: () => Promise<void>;
 }
 
@@ -159,7 +173,7 @@ export interface GlobalStores {
  * thread; each is built at first use, since the global store can appear while the server runs. */
 export function globalStoresFor(served: HippoStore): GlobalStores {
   if (!runsOffLoop(served)) return { open: sqliteStore, close: async () => {} };
-  const opened = new Map<string, HippoStore>();
+  const opened = new Map<string, StoreWith<'localFiles'>>();
   return {
     open(root) {
       const known = opened.get(root);
