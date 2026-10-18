@@ -182,9 +182,9 @@ batch 2   screened 189, kept 50   <span class="g">unread rules</span>
   </doc-claim>
 
   <doc-claim>
-    <p>z0-size runs on dev-round data from the frozen build.</p>
-    <doc-code src="docs/evals/z0-stage2-record.md" lines="335" wrap>
-      <doc-pin line="335" tone="warn" title="Bounds 0.033 and 0.039 here">The size file reads 0 for both bounds. Find why before sizing.</doc-pin>
+    <p>The fixed z0-size runs on dev-round data from the frozen build.</p>
+    <doc-code src="scripts/token-eval/z0-size-sim.mjs" lines="73-80" hl="78-79" caption="Fixed in ca92f0f5. At the record's bounds, H1 power at the bounds reads 0.146, not 0.52.">
+      <doc-pin line="79" tone="ok" title="Each spread widens its own mean square">The old code raised E too, so a zero estimate kept a zero bound.</doc-pin>
     </doc-code>
   </doc-claim>
 
