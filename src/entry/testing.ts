@@ -14,6 +14,22 @@ export { initStore } from '../store/sqlite/handles.js';
 export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/folder-forms.js';
 export type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
 export { embedMemory } from './folder-search.js';
+// Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these forms.
+export type { MemoryWire } from '../core/memory-wire.js';
+export {
+  ambientSecretAdmitWire,
+  batchWriteAndDeleteWire,
+  calculateStrengthWire,
+  createMemoryWire,
+  embedMemoryWire,
+  hybridSearchWire,
+  isWorthSurfacingWire,
+  loadAllEntriesWire,
+  upsertEntryRowWire,
+  writeEntryWire,
+  type WireSearchResult,
+  type WireStrengthInputs,
+} from './wire-kit.js';
 // Benchmarks and token evals seed and read hippo.db on a handle they open themselves.
 export { resolveTenantId } from '../server/host-tenant.js';
 export { upsertEntryRow } from '../store/sqlite/entry-row.js';

@@ -31,7 +31,13 @@ describe('hippo-memory/testing entry types', () => {
     >();
   });
 
-  it('the entry exports exactly the nine published seams, the six eval-kit functions and nine handle helpers', () => {
+  it('the snake_case forms take and return the wire keys', () => {
+    expectTypeOf(testing.loadAllEntriesWire).toEqualTypeOf<(hippoRoot: string) => testing.MemoryWire[]>();
+    expectTypeOf(testing.writeEntryWire).parameter(1).toEqualTypeOf<testing.MemoryWire>();
+    expectTypeOf(testing.createMemoryWire).returns.toEqualTypeOf<testing.MemoryWire>();
+  });
+
+  it('the entry exports the nine published seams, the eval kit, its ten snake_case forms and nine handle helpers', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
       | '_resetAblationCacheForTests'
       | '_setDigestExistsProbeForTests'
@@ -48,6 +54,16 @@ describe('hippo-memory/testing entry types', () => {
       | 'loadAllEntries'
       | 'loadEmbeddingIndex'
       | 'writeEntry'
+      | 'ambientSecretAdmitWire'
+      | 'batchWriteAndDeleteWire'
+      | 'calculateStrengthWire'
+      | 'createMemoryWire'
+      | 'embedMemoryWire'
+      | 'hybridSearchWire'
+      | 'isWorthSurfacingWire'
+      | 'loadAllEntriesWire'
+      | 'upsertEntryRowWire'
+      | 'writeEntryWire'
       | 'resolveTenantId'
       | 'upsertEntryRow'
       | 'writeEntryDbOnly'
@@ -58,6 +74,6 @@ describe('hippo-memory/testing entry types', () => {
       | 'recordTokenUse'
       | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(24);
+    expect(Object.keys(testing)).toHaveLength(34);
   });
 });

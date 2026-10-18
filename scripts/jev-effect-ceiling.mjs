@@ -6,7 +6,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { calculateStrength } from '../dist/core/memory.js';
+import { calculateStrengthWire as calculateStrength } from '../dist/entry/testing.js';
 
 const lane4 = JSON.parse(
   await import('node:fs/promises').then((m) =>

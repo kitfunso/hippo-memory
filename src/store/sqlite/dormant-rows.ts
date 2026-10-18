@@ -1,6 +1,7 @@
 // The dormant_memories rows: the snapshot sleep keeps of a faded memory, read and written on the caller's handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../core/memory.js';
+import { fromWire, toWire, type MemoryWire } from '../../core/memory-wire.js';
 import type { SqlFragment } from './rule-sql.js';
 import { chunked } from '../../util/chunked.js';
 import { escapeLike } from '../../util/escape.js';
@@ -39,36 +40,34 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
     move.entry.tenant_id,
     move.entry.id,
     move.entry.content,
-    JSON.stringify(move.entry),
+    JSON.stringify(toWire(move.entry)),
     move.reason,
     move.strength,
     move.dormantAt,
   );
 }
 
-/** What entry_json may hold: a 2.0 snapshot, whose tenant is `tenant_id`, or a 1.x one, whose tenant is `tenantId`;
- * a 1.x `summary_dirty` is 0|1. */
-type StoredSnapshot = Omit<MemoryEntry, 'tenant_id' | 'summary_dirty'> & {
+/** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot, whose tenant is
+ * `tenantId`; a 1.x `summary_dirty` is 0|1. */
+type StoredSnapshot = Omit<MemoryWire, 'tenant_id' | 'summary_dirty'> & {
   summary_dirty?: boolean | 0 | 1;
 } & ({ tenant_id: string } | { tenantId: string });
 
 function toCurrentEntry(snapshot: StoredSnapshot): MemoryEntry {
   if ('tenant_id' in snapshot) {
     const { summary_dirty, ...rest } = snapshot;
-    return { ...rest, summary_dirty: summary_dirty === true || summary_dirty === 1 };
+    return fromWire({ ...rest, summary_dirty: summary_dirty === true || summary_dirty === 1 });
   }
   const { tenantId, summary_dirty, ...rest } = snapshot;
-  return { ...rest, tenant_id: tenantId, summary_dirty: summary_dirty === true || summary_dirty === 1 };
+  return fromWire({ ...rest, tenant_id: tenantId, summary_dirty: summary_dirty === true || summary_dirty === 1 });
 }
 
 /** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or
  * truncated). */
 function parseSnapshot(row: DormantRow): MemoryEntry | null {
   try {
-    // SAFETY: entry_json is only written by insertDormantRow from a MemoryEntry;
-    // the id / tenant / content checks below reject a row edited out of shape.
-    // SAFETY: entry_json came from JSON.stringify of a MemoryEntry (2.0) or a 1.x one; the checks below reject a row
-    // edited out of shape.
+    // SAFETY: entry_json came from JSON.stringify of a MemoryWire, or of a 1.x entry; the id, tenant and content checks
+    // below reject a row edited out of shape.
     const entry = toCurrentEntry(JSON.parse(row.entry_json) as StoredSnapshot);
     if (entry.id !== row.id || entry.tenant_id !== row.tenant_id || entry.content !== row.content) {
       warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
@@ -183,7 +182,7 @@ export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: 
   db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`).run(
     entry.id,
     entry.content,
-    JSON.stringify(entry),
+    JSON.stringify(toWire(entry)),
     tenantId,
     id,
   );

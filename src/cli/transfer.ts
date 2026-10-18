@@ -3,6 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../core/project-identity.js';
+import { toWire } from '../core/memory-wire.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../api/embeddings.js';
 import { captureError, runWatched, runWatchedLine } from '../learn/autolearn.js';
@@ -536,7 +537,7 @@ export async function handleExport({ hippoRoot, tenantId, args, flags }: Command
       })
       .join('\n\n---\n\n');
   } else {
-    output = JSON.stringify(entries, null, 2);
+    output = JSON.stringify(entries.map(toWire), null, 2);
   }
 
   if (outputPath) {
