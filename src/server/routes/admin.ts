@@ -1,5 +1,5 @@
 // Admin routes: API keys, quarantine and the audit log.
-import { DEFAULT_LIST_LIMIT, MAX_ID_LEN } from '../../util/limits.js';
+import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT, MAX_ID_LEN } from '../../util/limits.js';
 import {
   auditList,
   authCreate,
@@ -24,10 +24,6 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 // ServeOpts.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not sit through it.
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
-
-// Cap on GET /v1/audit?limit=: large enough to dump a small deployment's audit log unpaginated, small enough that a
-// client cannot ask for the world.
-const MAX_AUDIT_LIMIT = 10000;
 
 // GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees no change.
 const MAX_AUTH_KEYS_PAGE = 1000;

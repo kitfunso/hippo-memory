@@ -1,7 +1,7 @@
 // `hippo audit`: list and prune the audit log.
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
-import { MAX_LIST_LIMIT } from '../util/limits.js';
+import { MAX_AUDIT_LIMIT } from '../util/limits.js';
 import type { AuditResult } from '../core/memory-audit.js';
 import * as api from '../api/index.js';
 import { parseOlderThanFlag } from './audit-prune.js';
@@ -42,7 +42,7 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
 
 function readAuditLimit(flags: CliFlags): number {
   const limit = parseListLimit(flags);
-  if (limit > MAX_LIST_LIMIT) fail(`--limit must be between 1 and ${MAX_LIST_LIMIT} (got ${limit}).`);
+  if (limit > MAX_AUDIT_LIMIT) fail(`--limit must be between 1 and ${MAX_AUDIT_LIMIT} (got ${limit}).`);
   return limit;
 }
 
