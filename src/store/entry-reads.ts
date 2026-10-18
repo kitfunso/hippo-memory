@@ -9,9 +9,11 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { chunked } from '../util/chunked.js';
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { placeholders } from '../util/sql.js';
+import { duplicateKey, longestWord } from '../util/same-text.js';
 import type { EntryCursor, EntryPage } from './port/consolidation.js';
 import type { RawRefRow } from './port/context-reads.js';
-import type { EntrySignals, EntryTextKeyPage } from './port/sharing.js';
+import type { OriginRows, OriginTally } from './port/project-tags.js';
+import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from './port/sharing.js';
 
 const MAX_IDS_PER_READ = 500;
 const MAX_FRESH_RAW = 200;
@@ -224,7 +226,7 @@ export function loadFreshRawMemoriesAt(
 
 /** Every entry of one tenant. A caller that surfaces rows to a user passes the resolved tenant. */
 export function loadAllEntriesAt(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
-  return selectAllEntries(db, tenantId);
+  return selectAllRows(db, tenantId).map(rowToEntry);
 }
 
 export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
@@ -417,11 +419,6 @@ export function loadEntriesPageAt(
   return pageOf(rows.map(rowToEntry), page.limit);
 }
 
-/** Every memory row on an open connection, so a caller can read inside its own transaction. */
-export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): MemoryEntry[] {
-  return selectAllRows(db, tenantId).map(rowToEntry);
-}
-
 /** The columns a text match needs, for one row of a tenant. */
 export interface TenantText {
   readonly id: string;
@@ -453,17 +450,104 @@ export function selectTenantTextsPage(
   return { texts: rows.slice(0, page.limit), next: cursorAfter(rows, page.limit) };
 }
 
-/** Live rows whose source starts with `prefix`, on the caller's
+/** Live rows whose source starts with `prefix`, in loadAllEntries' order, on the caller's
  * handle; LIKE folds case, so the prefix is checked again exactly. */
 export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ` +
-        `AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
+        `AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\' ORDER BY created ASC, id ASC`,
     )
     .all(tenantId, `${escapeLike(prefix)}%`) as MemoryRow[];
   return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
+}
+
+/** A tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
+export function selectEntriesFromOriginAt(db: DatabaseSyncLike, tenantId: string, rows: OriginRows): MemoryEntry[] {
+  const live = rows.live ? ` AND COALESCE(superseded_by, '') = ''` : '';
+  const { sourcePrefix } = rows;
+  const prefix = sourcePrefix === undefined ? '' : ' AND substr(source, 1, ?) = ?';
+  const prefixArgs = sourcePrefix === undefined ? [] : [sourcePrefix.length, sourcePrefix];
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const found = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+      `WHERE tenant_id = ? AND origin_project = ?${live}${prefix} ORDER BY created ASC, id ASC`,
+  ).all(tenantId, rows.origin, ...prefixArgs) as MemoryRow[];
+  return found.map(rowToEntry);
+}
+
+/** Each project name's live rows in one grouped read, in the order its first row comes in loadAllEntries' order. */
+export function selectOriginTalliesAt(db: DatabaseSyncLike, tenantId: string, sourcePrefix: string): OriginTally[] {
+  // The unit separator sorts below every character of a time or an id, so the joined string orders as (created, id).
+  // SAFETY: rows' shape matches the four columns named in the SELECT.
+  return cachedStatement(
+    db,
+    `SELECT origin_project AS origin, COUNT(*) AS live, SUM(substr(source, 1, ?) = ?) AS prefixed, ` +
+      `MAX(created) AS newest FROM memories WHERE tenant_id = ? AND COALESCE(superseded_by, '') = '' ` +
+      `GROUP BY origin_project ORDER BY MIN(created || char(31) || id)`,
+  ).all(sourcePrefix.length, sourcePrefix, tenantId) as OriginTally[];
+}
+
+// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
+// Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
+const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
+const PHRASE_WORDS = 32;
+const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
+
+/** The index query for `text`'s first words, which a row holding the text word for word holds in a row; null when the
+ * phrase might name no token, since an empty phrase matches no row. */
+function holdingPhrase(text: string): string | null {
+  const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
+  return SURE_TOKEN_CHAR.test(opening) ? `content : "${opening.replaceAll('"', '""')}"` : null;
+}
+
+function textKeyCandidates(
+  db: DatabaseSyncLike,
+  tenantId: string | undefined,
+  text: string,
+  indexed: boolean,
+): EntryTextKey[] {
+  const phrase = indexed ? holdingPhrase(text) : null;
+  const tenant = tenantAnd(tenantId, phrase === null ? 'tenant_id = ?' : TENANT_IS);
+  const where = phrase === null ? 'instr(content, ?) > 0' : IN_PHRASE_HITS;
+  // SAFETY: rows' shape matches the four columns named in the SELECT.
+  const rows = cachedStatement(
+    db,
+    `SELECT id, tenant_id, content, source FROM memories WHERE ${where}${tenant.sql}`,
+  ).all(phrase ?? longestWord(text), ...tenant.args) as Array<
+    Omit<EntryTextKey, 'tenant_id'> & { tenant_id: string | null }
+  >;
+  return rows.map((row) => ({ ...row, tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID }));
+}
+
+/** The rows of `tenantId`, or of every tenant when it is undefined, that may hold one of `texts` word for word,
+ * spacing aside: the index's phrase hits, else the rows holding the text's longest word. Callers check each again. */
+export function selectTextKeysHoldingAt(
+  db: DatabaseSyncLike,
+  tenantId: string | undefined,
+  texts: readonly string[],
+): EntryTextKey[] {
+  const indexed = isFtsAvailable(db) && isFtsInSync(db);
+  const byId = new Map<string, EntryTextKey>();
+  for (const text of new Set(texts)) {
+    for (const key of textKeyCandidates(db, tenantId, text, indexed)) byId.set(key.id, key);
+  }
+  return [...byId.values()];
+}
+
+/** The ids among `ids` that a row of any tenant holds, one query per chunk. */
+export function selectTakenIdsAt(db: DatabaseSyncLike, ids: readonly string[]): string[] {
+  const taken: string[] = [];
+  for (const chunk of chunked([...new Set(ids)])) {
+    // SAFETY: rows' shape matches the one column named in the SELECT.
+    const rows = cachedStatement(db, `SELECT id FROM memories WHERE id IN (${placeholders(chunk.length)})`).all(
+      ...chunk,
+    ) as Array<{ id: string }>;
+    for (const row of rows) taken.push(row.id);
+  }
+  return taken;
 }
 
 // Content of every team-visible tenant row tagged `tag`, without reading the rest of the store; `origins` keeps one

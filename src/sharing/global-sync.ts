@@ -11,9 +11,9 @@ import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { log } from '../util/log.js';
-import type { EntryTextKey } from '../store/port/sharing.js';
+import type { EntryTextKey, Sharing } from '../store/port/sharing.js';
 import { logEmbedAllFailure } from './search-both.js';
-import { eachTextKey } from './text-keys.js';
+import { textKeyPages } from './text-keys.js';
 
 /**
  * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and
@@ -37,23 +37,34 @@ export function syncGlobalToLocal(
 
 const textKey = (e: { tenant_id: string; content: string }): string => `${e.tenant_id}\n${e.content}`;
 
-/** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together. */
+/** Global rows of every tenant that the local store holds by neither id nor tenant and text, oldest first; each page
+ * asks the local store about its own ids and texts only. */
+function missingRows(local: Sharing, from: Sharing): EntryTextKey[] {
+  const missing: EntryTextKey[] = [];
+  for (const page of textKeyPages(from, undefined)) {
+    const taken = new Set(local.takenIds(page.map((k) => k.id)));
+    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
+    const open = page.filter((k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX));
+    if (open.length === 0) continue;
+    const held = new Set(
+      local
+        .textKeysHolding(
+          undefined,
+          open.map((k) => k.content),
+        )
+        .map(textKey),
+    );
+    missing.push(...open.filter((k) => !held.has(textKey(k))));
+  }
+  return missing;
+}
+
+/** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together; each copy
+ * keeps its own tenant. */
 function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCrossProject: boolean): number {
   const local = into.store.localFiles;
   const from = global.store.localFiles;
-  // Host-wide read: the global union is copied into a tenant-scoped local store, and each copy keeps its own tenant.
-  const localIds = new Set<string>();
-  const localText = new Set<string>();
-  for (const k of eachTextKey(local.sharing, undefined)) {
-    localIds.add(k.id);
-    localText.add(textKey(k));
-  }
-  // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
-  const candidates: EntryTextKey[] = [];
-  for (const k of eachTextKey(from.sharing, undefined)) {
-    if (localIds.has(k.id) || k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) || localText.has(textKey(k))) continue;
-    candidates.push(k);
-  }
+  const candidates = missingRows(local.sharing, from.sharing);
   if (candidates.length === 0) return 0;
   const byId = new Map(
     chunked(candidates.map((k) => k.id))
@@ -67,17 +78,18 @@ function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCro
   const currentProject = resolveProjectIdentity(path.dirname(path.resolve(into.root)));
   // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
   let rejected = 0;
+  const copied = new Set<string>();
   const count = local.sharing.writeSkippingRejected((put) => {
-    for (const { id } of candidates) {
-      const entry = byId.get(id);
-      // A row the global store dropped between the two reads, or a text an earlier copy in this batch already brought
-      // down.
-      if (!entry || localText.has(textKey(entry))) continue;
+    for (const key of candidates) {
+      const entry = byId.get(key.id);
+      // A row the global store dropped or edited between the two reads waits for the next sync; a text an earlier copy
+      // in this batch brought down is not copied twice.
+      if (!entry || entry.content !== key.content || copied.has(textKey(entry))) continue;
       if (detectSecret(entry).flagged) continue;
       if (!includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project') {
         continue;
       }
-      if (put(entry)) localText.add(textKey(entry));
+      if (put(entry)) copied.add(textKey(entry));
       else rejected++;
     }
   });

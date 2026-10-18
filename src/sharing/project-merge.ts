@@ -77,26 +77,26 @@ function toolTag(source: string): string | null {
 
 /** Live rows per project name, newest write first, with how many of its imported notes are copies held elsewhere. */
 export function listProjects(store: ProjectTagReads): ProjectSummary[] {
-  const live = store.entries().filter((e) => !e.superseded_by);
-  const byOrigin = new Map<string | null, MemoryEntry[]>();
+  const imports = store.liveEntriesBySourcePrefix(AGENT_MEMORY_SOURCE_PREFIX);
   const holders = new Map<string, Set<string | null>>();
-  for (const e of live) {
-    const origin = e.origin_project ?? null;
-    byOrigin.set(origin, [...(byOrigin.get(origin) ?? []), e]);
+  for (const e of imports) {
     const key = duplicateKey(e.content);
-    if (isImport(e)) holders.set(key, (holders.get(key) ?? new Set<string | null>()).add(origin));
+    holders.set(key, (holders.get(key) ?? new Set<string | null>()).add(e.origin_project ?? null));
   }
-  return [...byOrigin]
-    .map(([origin, rows]) => {
-      const imports = rows.filter(isImport);
-      return {
-        origin,
-        live: rows.length,
-        imported: imports.length,
-        newest: rows.reduce((max, e) => (e.created > max ? e.created : max), ''),
-        copiesElsewhere: imports.filter((e) => (holders.get(duplicateKey(e.content))?.size ?? 0) > 1).length,
-      };
-    })
+  const copies = new Map<string | null, number>();
+  for (const e of imports) {
+    const origin = e.origin_project ?? null;
+    if ((holders.get(duplicateKey(e.content))?.size ?? 0) > 1) copies.set(origin, (copies.get(origin) ?? 0) + 1);
+  }
+  return store
+    .originTallies(AGENT_MEMORY_SOURCE_PREFIX)
+    .map(({ origin, live, prefixed, newest }) => ({
+      origin,
+      live,
+      imported: prefixed,
+      newest,
+      copiesElsewhere: copies.get(origin) ?? 0,
+    }))
     .sort((a, b) => b.newest.localeCompare(a.newest));
 }
 
@@ -128,11 +128,11 @@ export function mergeProjects(
 }
 
 function foldInTx(tx: ProjectTagWrites, from: string, into: string): Omit<MergeResult, 'from' | 'into' | 'backup'> {
-  const all = tx.entries();
-  const rows = all.filter((e) => e.origin_project === from);
+  const rows = tx.entriesFromOrigin({ origin: from });
   // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already holds would show
   // twice.
-  const held = new Set(all.filter((e) => e.origin_project === into && !e.superseded_by && isImport(e)).map(noteKey));
+  const intoImports = tx.entriesFromOrigin({ origin: into, live: true, sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX });
+  const held = new Set(intoImports.map(noteKey));
   const setAside: string[] = [];
   for (const row of rows) {
     const tag = toolTag(row.source);
@@ -143,8 +143,8 @@ function foldInTx(tx: ProjectTagWrites, from: string, into: string): Omit<MergeR
   const restamped = rows.filter((e) => !gone.has(e.id)).map((e) => e.id);
   tx.restampOrigin(from, into);
   const dormantRestamped: string[] = [];
-  for (const snap of tx.dormant()) {
-    if (snap.entry.origin_project !== from || gone.has(snap.entry.id)) continue;
+  for (const snap of tx.dormantFromOrigin(from)) {
+    if (gone.has(snap.entry.id)) continue;
     tx.replaceDormant(snap.entry.id, { ...snap.entry, origin_project: into });
     dormantRestamped.push(snap.entry.id);
   }
@@ -163,7 +163,7 @@ function noteKey(entry: MemoryEntry): string {
  * the folder it ended in.
  */
 function importCopies(store: ProjectTagReads): MemoryEntry[] {
-  const live = store.entries().filter((e) => !e.superseded_by && isImport(e));
+  const live = store.liveEntriesBySourcePrefix(AGENT_MEMORY_SOURCE_PREFIX);
   const userGlobal = new Set(live.filter((e) => e.origin_project === '').map((e) => duplicateKey(e.content)));
   return live.filter(
     (e) =>
@@ -261,7 +261,7 @@ function ownLegacyFold(store: ProjectTagReads, hippoRoot: string): ProjectFold[]
   const held =
     store.holdsOrigin('memories', legacyName) ||
     store.holdsOrigin('compactions', legacyName) ||
-    store.dormant().some((s) => s.entry.origin_project === legacyName);
+    store.dormantFromOrigin(legacyName).length > 0;
   return held ? [{ from: legacyName, into: name }] : [];
 }
 
@@ -288,18 +288,20 @@ function planUserGlobalRepair(
   store: ProjectTagReads,
   folds: readonly ProjectFold[],
 ): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
-  const all = store.entries();
+  const merges = store.entriesFromOrigin({ origin: '', live: true, sourcePrefix: 'consolidation' });
   const renamed = new Map(folds.map((f) => [f.from, f.into]));
   const after = (origin: string | null | undefined) => (origin ? (renamed.get(origin) ?? origin) : (origin ?? null));
-  const origins = new Map<string, string | null>(
-    store.dormant().map((s) => [s.entry.id, after(s.entry.origin_project)]),
-  );
-  for (const e of all) origins.set(e.id, after(e.origin_project));
+  const parentIds = [...new Set(merges.flatMap((row) => row.parents))];
+  const live = store.entriesByIds(parentIds);
+  // A live row outranks a snapshot under its id, so only the parents with no live row are looked up dormant.
+  const dormant = store.dormantByIds(parentIds.filter((id) => !live.has(id)));
+  const origins = new Map<string, string | null>([...dormant].map(([id, s]) => [id, after(s.entry.origin_project)]));
+  for (const [id, e] of live) origins.set(id, after(e.origin_project));
   const toProject: Array<{ id: string; origin: string }> = [];
   const setAside: string[] = [];
   const untraced: string[] = [];
-  for (const row of all) {
-    if (row.source !== 'consolidation' || row.origin_project !== '' || row.superseded_by) continue;
+  for (const row of merges) {
+    if (row.source !== 'consolidation') continue;
     const parents = new Set(row.parents.filter((id) => origins.has(id)).map((id) => origins.get(id) ?? null));
     const [only] = parents;
     if (parents.size === 1 && only === '') continue;
