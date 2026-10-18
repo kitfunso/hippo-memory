@@ -45,7 +45,7 @@ function globalCopyOf(localRoot: string, entry: MemoryEntry, shared: boolean): M
     ...entry,
     id: generateId('g'),
     source: shared ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
-    origin_project: entry.origin_project ?? fallbackOrigin(localRoot, shared),
+    originProject: entry.originProject ?? fallbackOrigin(localRoot, shared),
   };
 }
 
@@ -74,7 +74,7 @@ function assertPromotable(id: string, entry: MemoryEntry): void {
   }
 }
 
-/** Replace an old memory with new content, chaining old.superseded_by = new.id; the store commits both rows and the
+/** Replace an old memory with new content, chaining old.supersededBy = new.id; the store commits both rows and the
  * audit row together. */
 export interface SupersedeResult {
   ok: true;
@@ -120,9 +120,9 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
     throw new NotFoundError(`Memory not found: ${oldId}`);
   }
   // The CAS UPDATE closes the race; this check only gives a clearer error in the common single-writer case.
-  if (old.superseded_by) {
+  if (old.supersededBy) {
     throw new ConflictError(
-      `Memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`,
+      `Memory ${oldId} is already superseded by ${old.supersededBy}. Supersede that one instead.`,
     );
   }
   return old;

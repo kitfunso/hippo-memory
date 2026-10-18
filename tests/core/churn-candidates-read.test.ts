@@ -31,7 +31,7 @@ function newRoot(): string {
 function put(root: string, label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'default'): string {
   const entry = {
     ...createMemory(`${label}: a plain note about the team`, { tenantId }),
-    origin_project: 'proj',
+    originProject: 'proj',
     ...extra,
   };
   writeEntry(root, entry);
@@ -58,7 +58,7 @@ describe('detectChurnStale candidate read', () => {
     const emptySupersededBy = put(root, 'empty superseded_by');
     setColumn(root, 'superseded_by', '', emptySupersededBy);
     checked.add(emptySupersededBy);
-    legacyChecked.add(put(root, 'legacy', { origin_project: 'legacy' }));
+    legacyChecked.add(put(root, 'legacy', { originProject: 'legacy' }));
     pinned.add(put(root, 'pinned', { pinned: true }));
     // Pinned is judged before the date, so a pinned row with no usable date is still reported.
     const pinnedBadDate = put(root, 'pinned bad date', { pinned: true });
@@ -68,10 +68,10 @@ describe('detectChurnStale candidate read', () => {
     setColumn(root, 'superseded_by', 'mem-next', put(root, 'superseded', { pinned: true }));
     put(root, 'raw', { kind: 'raw', pinned: true });
     put(root, 'archived', { kind: 'archived' });
-    put(root, 'global', { origin_project: '' });
-    put(root, 'unassigned', { origin_project: null });
-    put(root, 'other project', { origin_project: 'other' });
-    put(root, 'case differs', { origin_project: 'Proj' });
+    put(root, 'global', { originProject: '' });
+    put(root, 'unassigned', { originProject: null });
+    put(root, 'other project', { originProject: 'other' });
+    put(root, 'case differs', { originProject: 'Proj' });
     put(root, 'other tenant', { pinned: true }, 'other');
 
     const order = loadAllEntries(root, 'default').map((e) => e.id);
@@ -93,7 +93,7 @@ describe('detectChurnStale candidate read', () => {
 
   it('reads no row of another project', () => {
     const root = newRoot();
-    for (let i = 0; i < 30; i++) put(root, `other ${i}`, { origin_project: 'other' });
+    for (let i = 0; i < 30; i++) put(root, `other ${i}`, { originProject: 'other' });
     const pinned = put(root, 'pinned', { pinned: true });
     put(root, 'current');
     const { result, statements, rowsRead } = recordStatements(() =>

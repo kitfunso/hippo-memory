@@ -124,7 +124,7 @@ const activeText = (root: string): string =>
     .join('\n');
 
 function halfLifeKept(root: string, entries: MemoryEntry[]): void {
-  for (const e of entries) expect(readEntry(root, e.id)!.half_life_days).toBe(e.half_life_days);
+  for (const e of entries) expect(readEntry(root, e.id)!.halfLifeDays).toBe(e.halfLifeDays);
 }
 
 function reject(root: string, contents: string[]): void {
@@ -193,16 +193,16 @@ describe('sleep keeps both versions', () => {
     const derived = loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic);
     expect(derived).toHaveLength(1);
     expect([...derived[0].parents].sort()).toEqual([a.id, b.id].sort());
-    const demoted = readEntry(root, a.id)!.half_life_days;
-    expect(demoted).toBeLessThan(a.half_life_days);
+    const demoted = readEntry(root, a.id)!.halfLifeDays;
+    expect(demoted).toBeLessThan(a.halfLifeDays);
 
     for (const day of [2, 3]) {
       const again = await consolidate(root, { now: new Date(start + day * DAY) });
       expect(again.merged).toBe(0);
       expect(again.semanticCreated).toBe(0);
     }
-    expect(readEntry(root, a.id)!.half_life_days).toBe(demoted);
-    expect(readEntry(root, b.id)!.half_life_days).toBe(demoted);
+    expect(readEntry(root, a.id)!.halfLifeDays).toBe(demoted);
+    expect(readEntry(root, b.id)!.halfLifeDays).toBe(demoted);
     expect(loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic)).toHaveLength(1);
   });
 
@@ -428,7 +428,7 @@ describe('a retired version leaves the merged row', () => {
     (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
   const current = (root: string): string =>
     loadAllEntries(root, 'default')
-      .filter((e) => !e.superseded_by)
+      .filter((e) => !e.supersededBy)
       .map((e) => e.content)
       .join('\n');
 

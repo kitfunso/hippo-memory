@@ -230,7 +230,7 @@ describe('dormant snapshot', () => {
       const entry = createMemory('the retired cron host was called nightly-02');
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
       db.prepare('UPDATE dormant_memories SET content = ? WHERE id = ?').run('edited by hand', entry.id);
-      expect(listDormantSnapshots(db, entry.tenant_id)).toEqual([]);
+      expect(listDormantSnapshots(db, entry.tenantId)).toEqual([]);
       const line = logged().find((l) => l.includes('dormant_memories.entry_json'));
       expect(line).toContain('wrong shape');
       expect(line).toContain(`id=${entry.id}`);

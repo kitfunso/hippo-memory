@@ -189,7 +189,7 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
   if (opts.haltBefore === 'salience') return done(true);
   if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
   if (opts.haltBefore === 'outcome') return done(true);
-  if (opts.outcome) dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.trace_outcome === opts.outcome);
+  if (opts.outcome) dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.traceOutcome === opts.outcome);
   if (opts.haltBefore === 'layer') return done(true);
   if (opts.layer) dropUnless(state, (r) => r.entry.layer === opts.layer);
   const { limit } = opts.window;
@@ -411,15 +411,15 @@ function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
   // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
   state.results = rescore(opts, state.results, 'interference', (r) =>
-    (r.entry.conflicts_with || []).some((peerId) => presentIds.has(peerId)) ? CONFLICT_PEER_MULTIPLIER : undefined,
+    (r.entry.conflictsWith || []).some((peerId) => presentIds.has(peerId)) ? CONFLICT_PEER_MULTIPLIER : undefined,
   );
 }
 
 function applyValueAware(opts: RankRecallOptions, state: RankState): void {
   // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
   state.results = rescore(opts, state.results, 'value', (r) => {
-    const pos = r.entry.outcome_positive ?? 0;
-    const neg = r.entry.outcome_negative ?? 0;
+    const pos = r.entry.outcomePositive ?? 0;
+    const neg = r.entry.outcomeNegative ?? 0;
     if (pos === 0 && neg === 0) return undefined;
     return Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
   });
@@ -438,7 +438,7 @@ function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
 function applyPfcRerankers(opts: RankRecallOptions, state: RankState): void {
   if (opts.evcAdaptive && state.results.length >= 2) state.results = evcAdaptive(opts.query, state.results);
   if (opts.filterConflicts) {
-    dropUnless(state, (r) => !r.entry.superseded_by);
+    dropUnless(state, (r) => !r.entry.supersededBy);
     demoteConflictPeers(opts, state);
   }
   if (opts.valueAware && state.results.length >= 1) applyValueAware(opts, state);
@@ -543,7 +543,7 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, stat
 /** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
 function applySalience(opts: RankRecallOptions, threshold: number, results: SearchResult[]): SearchResult[] {
   return rescore(opts, results, 'retrieval-count-downweight', (r) => {
-    const count = r.entry.retrieval_count ?? 0;
+    const count = r.entry.retrievalCount ?? 0;
     return count >= threshold ? undefined : Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
   });
 }

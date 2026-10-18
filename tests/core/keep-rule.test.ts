@@ -41,7 +41,7 @@ const DAY = 86_400_000;
 const TAG = AGENT_MEMORY_TOOLS[0].tag;
 const PREFIX = toolSourcePrefix(AGENT_MEMORY_TOOLS[0].id);
 const KEPT_SOURCE = `${PREFIX}session-one`;
-const RAW_FIELDS = { artifact_ref: 'slack://T1/C1/1.0', owner: 'user:U1' };
+const RAW_FIELDS = { artifactRef: 'slack://T1/C1/1.0', owner: 'user:U1' };
 const FAKE_KEY = 'sk-ant-' + 'a'.repeat(40);
 const roots: string[] = [];
 
@@ -374,7 +374,7 @@ describe('forget and supersede still work on a kept row', () => {
 
     const result = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
-    expect(readEntry(root, kept.id)?.superseded_by).toBe(result.newId);
+    expect(readEntry(root, kept.id)?.supersededBy).toBe(result.newId);
     expect(readEntry(root, result.newId)?.content).toBe('the release train leaves on tuesdays now');
   });
 

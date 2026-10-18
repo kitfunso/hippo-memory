@@ -23,10 +23,10 @@ function condemned(content: string): MemoryEntry {
   const entry: MemoryEntry = {
     ...createMemory(content, { layer: Layer.Semantic, tenantId: 'ta' }),
     created,
-    last_retrieved: created,
-    valid_from: created,
-    half_life_days: 1,
-    retrieval_count: 0,
+    lastRetrieved: created,
+    validFrom: created,
+    halfLifeDays: 1,
+    retrievalCount: 0,
     pinned: false,
   };
   return { ...entry, strength: calculateStrength(entry, NOW) };

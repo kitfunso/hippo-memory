@@ -27,7 +27,7 @@ const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'api_key:caller';
 const SHARED = 'the launch date is march third';
 
-type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind' | 'content' | 'summary_dirty'>;
+type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind' | 'content' | 'summaryDirty'>;
 type Value = AppliedRejection | LiftedRejection | RejectedValueRow[] | boolean[] | Row[];
 type Call = GroupCall<'rejections', Value>;
 type Side = SideResult<Value>;
@@ -65,7 +65,7 @@ function seed(dir: string): Seeded {
     noteB: createMemory(SHARED, { tenantId: TENANT_B }),
   };
   for (const entry of [...Object.values(rows), summary]) {
-    writeEntry(dir, { ...entry, origin_project: 'proj' }, { actor: 'cli' });
+    writeEntry(dir, { ...entry, originProject: 'proj' }, { actor: 'cli' });
   }
   return { ...rows, summary };
 }
@@ -95,10 +95,10 @@ const readBack =
   async (_g, store) =>
     (await store.entriesByIds(ids, tenantId)).map((e) => ({
       id: e.id,
-      tenant_id: e.tenant_id,
+      tenantId: e.tenantId,
       kind: e.kind,
       content: e.content,
-      summary_dirty: e.summary_dirty,
+      summaryDirty: e.summaryDirty,
     }));
 const value = <T extends Value>(side: Side, i: number): T => {
   const outcome = side.outcomes[i];
@@ -144,7 +144,7 @@ describe('Rejections.apply', () => {
     const { raw, child, summary } = seeded;
     const side = await conforms([byText(raw.content), byText(child.content), readBack(TENANT_A, summary.id)]);
     expect(value<AppliedRejection>(side, 0).removedRawIds).toEqual([raw.id]);
-    expect(value<Row[]>(side, 2)[0]?.summary_dirty).toBe(true);
+    expect(value<Row[]>(side, 2)[0]?.summaryDirty).toBe(true);
     expect(added(side).map((r) => r.op)).toEqual([
       'archive_raw',
       'reject_value',
@@ -157,7 +157,7 @@ describe('Rejections.apply', () => {
     const { merged } = seeded;
     const successor = {
       ...createMemory('badges are reissued in july', { tenantId: TENANT_A }),
-      origin_project: 'proj',
+      originProject: 'proj',
     };
     const side = await conforms([
       (g) =>

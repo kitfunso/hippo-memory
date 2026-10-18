@@ -88,7 +88,7 @@ describe("by-id writes on someone else's personal row", () => {
     const { newId } = await supersede(ctxFor(actorA), id, 'a newer version of the note');
     const successor = readEntry(root, newId, 'default');
     expect(successor?.scope).toBe('personal:private:a');
-    expect(successor?.origin_project).toBe('');
+    expect(successor?.originProject).toBe('');
   });
 
   it('hippo_share: another owner and an unowned admin get the missing-id error, while a team row still shares', async () => {

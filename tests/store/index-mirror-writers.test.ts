@@ -44,7 +44,7 @@ describe('index.json is written by no hippo path', () => {
     const entry = createMemory('reject leaves index.json alone');
     writeEntry(root, entry);
     await rejectValue(sqliteStore(root), {
-      tenantId: entry.tenant_id,
+      tenantId: entry.tenantId,
       actor: 'test',
       reason: 'index-mirror-writers test',
       memoryId: entry.id,
@@ -65,7 +65,7 @@ describe('index.json is written by no hippo path', () => {
     const toReject = createMemory('sentinel reject');
     writeEntry(root, toReject);
     await rejectValue(sqliteStore(root), {
-      tenantId: toReject.tenant_id,
+      tenantId: toReject.tenantId,
       actor: 'test',
       reason: 'sentinel',
       memoryId: toReject.id,

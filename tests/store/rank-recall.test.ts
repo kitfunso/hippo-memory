@@ -77,7 +77,7 @@ describe('rankRecall', () => {
     );
     writeEntry(
       hippoRoot,
-      seeded('deploy target was the old cluster', 'mem_rank_old', { superseded_by: 'mem_rank_plain' }),
+      seeded('deploy target was the old cluster', 'mem_rank_old', { supersededBy: 'mem_rank_plain' }),
     );
     writeEntry(hippoRoot, seeded('deploy goal work on the runner', 'mem_rank_goal', {}, { tags: ['goal-alpha'] }));
     writeEntry(
@@ -175,8 +175,8 @@ describe('rankRecall re-rank stages', () => {
   });
 
   it('filterConflicts drops superseded rows and down-ranks a row whose recorded conflict is also present', async () => {
-    put('mem_strong', 'deploy deploy deploy uses the blue cluster', { conflicts_with: ['mem_weak'] });
-    put('mem_weak', 'deploy uses the green cluster', { conflicts_with: ['mem_strong'] });
+    put('mem_strong', 'deploy deploy deploy uses the blue cluster', { conflictsWith: ['mem_weak'] });
+    put('mem_weak', 'deploy uses the green cluster', { conflictsWith: ['mem_strong'] });
     put('mem_free', 'deploy checklist lives in the wiki');
 
     const plain = await rank();
@@ -189,8 +189,8 @@ describe('rankRecall re-rank stages', () => {
   });
 
   it('valueAware lifts rows with good outcome history and sinks ones with bad, clamped to 0.7..1.3', async () => {
-    put('mem_good', 'deploy step that worked', { outcome_positive: 9 });
-    put('mem_bad', 'deploy step that failed', { outcome_negative: 9 });
+    put('mem_good', 'deploy step that worked', { outcomePositive: 9 });
+    put('mem_bad', 'deploy step that failed', { outcomeNegative: 9 });
     put('mem_none', 'deploy step never rated');
 
     const before = new Map((await rank()).results.map((x) => [x.entry.id, x.score]));
@@ -215,8 +215,8 @@ describe('rankRecall re-rank stages', () => {
   });
 
   it('salience halves a never-recalled row and leaves a well-recalled one alone', async () => {
-    put('mem_hot', 'deploy fact recalled often', { retrieval_count: 10 });
-    put('mem_cold', 'deploy fact never recalled', { retrieval_count: 0 });
+    put('mem_hot', 'deploy fact recalled often', { retrievalCount: 10 });
+    put('mem_cold', 'deploy fact never recalled', { retrievalCount: 0 });
 
     const before = new Map((await rank()).results.map((x) => [x.entry.id, x.score]));
     const r = await rank({ salienceThreshold: 5, why: true });
@@ -230,8 +230,8 @@ describe('rankRecall re-rank stages', () => {
   });
 
   it('asOf returns the row that was true at that date, before or after its successor took over', async () => {
-    put('mem_v1', 'deploy region was us-east', { valid_from: '2024-01-01T00:00:00.000Z', superseded_by: 'mem_v2' });
-    put('mem_v2', 'deploy region is eu-west', { valid_from: '2025-06-01T00:00:00.000Z' });
+    put('mem_v1', 'deploy region was us-east', { validFrom: '2024-01-01T00:00:00.000Z', supersededBy: 'mem_v2' });
+    put('mem_v2', 'deploy region is eu-west', { validFrom: '2025-06-01T00:00:00.000Z' });
 
     expect(ids((await rank({ asOf: '2025-01-01T00:00:00.000Z' })).results)).toEqual(['mem_v1']);
     expect(ids((await rank({ asOf: '2026-01-01T00:00:00.000Z' })).results)).toEqual(['mem_v2']);

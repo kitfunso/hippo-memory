@@ -37,7 +37,7 @@ function seedFacts(target: Project): void {
       ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       id: `mem_ctx_fact_${i}`,
       created: '2026-05-20T00:00:00.000Z',
-      last_retrieved: '2026-05-20T00:00:00.000Z',
+      lastRetrieved: '2026-05-20T00:00:00.000Z',
     });
   });
 }

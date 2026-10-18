@@ -201,7 +201,7 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     if (b.outcomeBoost !== 1) {
       console.log(
         `    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
-          `(user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`,
+          `(user feedback: pos-neg = ${(r.entry.outcomePositive ?? 0) - (r.entry.outcomeNegative ?? 0)})`,
       );
     }
     if (b.churnStaleMultiplier !== 1) {

@@ -31,8 +31,8 @@ const fetcher = (text: string) =>
         headers: { 'content-type': 'application/json' },
       }),
   );
-const inProject = (entry: MemoryEntry, origin: string | null): MemoryEntry => ({ ...entry, origin_project: origin });
-const live = () => loadAllEntries(home, 'default').filter((e) => !e.superseded_by);
+const inProject = (entry: MemoryEntry, origin: string | null): MemoryEntry => ({ ...entry, originProject: origin });
+const live = () => loadAllEntries(home, 'default').filter((e) => !e.supersededBy);
 
 describe('sleep partitions by origin project', () => {
   it('the merge pass merges within a project only, and the merged row stays in that project', async () => {
@@ -51,9 +51,9 @@ describe('sleep partitions by origin project', () => {
     expect((await consolidate(home, { dryRun: false })).semanticCreated).toBe(2);
 
     const merged = live().filter((e) => e.source === 'consolidation');
-    expect(merged.map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
-    expect(merged.find((e) => e.origin_project === 'proj-b')!.content).not.toContain('charliemarker');
-    expect(merged.find((e) => e.origin_project === 'proj-c')!.content).not.toContain('bravomarker');
+    expect(merged.map((e) => e.originProject).sort()).toEqual(['proj-b', 'proj-c']);
+    expect(merged.find((e) => e.originProject === 'proj-b')!.content).not.toContain('charliemarker');
+    expect(merged.find((e) => e.originProject === 'proj-c')!.content).not.toContain('bravomarker');
   });
 
   it('a merge of rows with no known project stays unknown, never user-global', async () => {
@@ -69,7 +69,7 @@ describe('sleep partitions by origin project', () => {
     expect(
       live()
         .filter((e) => e.source === 'consolidation')
-        .map((e) => e.origin_project),
+        .map((e) => e.originProject),
     ).toEqual([null]);
   });
 
@@ -82,7 +82,7 @@ describe('sleep partitions by origin project', () => {
     expect(deduplicateStore(sqliteConsolidation(handlesOf(home))).removed).toBe(1);
     expect(
       live()
-        .map((e) => e.origin_project)
+        .map((e) => e.originProject)
         .sort(),
     ).toEqual(['proj-b', 'proj-c']);
   });
@@ -93,13 +93,13 @@ describe('sleep partitions by origin project', () => {
       ...inProject(createMemory(text, {}), origin),
       id,
       created: now.toISOString(),
-      last_retrieved: now.toISOString(),
+      lastRetrieved: now.toISOString(),
     });
     const always = rule('always alpha beta gamma', 'proj-b', 'b');
     const never = rule('never alpha beta gamma zeta', 'proj-c', 'c');
     expect(detectConflicts([always, never], now)).toEqual([]);
-    expect(detectConflicts([always, { ...never, origin_project: '' }], now)).toHaveLength(1);
-    expect(detectConflicts([always, { ...never, origin_project: 'proj-b', tenant_id: 'other' }], now)).toEqual([]);
+    expect(detectConflicts([always, { ...never, originProject: '' }], now)).toHaveLength(1);
+    expect(detectConflicts([always, { ...never, originProject: 'proj-b', tenantId: 'other' }], now)).toEqual([]);
   });
 
   it('facts extracted from a project row stay in that project; from an unknown row they stay unknown', () => {
@@ -112,7 +112,7 @@ describe('sleep partitions by origin project', () => {
         [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }],
         DEFAULT_HALF_LIFE_DAYS,
       );
-      expect(live().find((e) => e.id === fact!.id)!.origin_project).toBe(origin);
+      expect(live().find((e) => e.id === fact!.id)!.originProject).toBe(origin);
     }
   });
 
@@ -140,8 +140,8 @@ describe('sleep partitions by origin project', () => {
         })
       ).summariesCreated,
     ).toBe(2);
-    const l2s = live().filter((e) => e.dag_level === 2);
-    expect(l2s.map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
+    const l2s = live().filter((e) => e.dagLevel === 2);
+    expect(l2s.map((e) => e.originProject).sort()).toEqual(['proj-b', 'proj-c']);
 
     const more = ['proj-b', 'proj-c'].map((origin) =>
       inProject(
@@ -167,8 +167,8 @@ describe('sleep partitions by origin project', () => {
     ).toBe(2);
     expect(
       live()
-        .filter((e) => e.dag_level === 3)
-        .map((e) => e.origin_project)
+        .filter((e) => e.dagLevel === 3)
+        .map((e) => e.originProject)
         .sort(),
     ).toEqual(['proj-b', 'proj-c']);
   });
@@ -179,9 +179,9 @@ describe('conflicts never pair across a personal scope', () => {
   const rule = (text: string, id: string, scope: string | null): MemoryEntry => ({
     ...createMemory(text, { scope }),
     id,
-    origin_project: 'proj',
+    originProject: 'proj',
     created: now.toISOString(),
-    last_retrieved: now.toISOString(),
+    lastRetrieved: now.toISOString(),
   });
   const ALICE = 'personal:private:alice';
 

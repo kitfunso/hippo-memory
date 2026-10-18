@@ -111,7 +111,7 @@ describe('GET /v1/context', () => {
       // Cross-project row in the GLOBAL store (the 2026-07-01 leak shape).
       writeEntry(globalHome, {
         ...createMemory('BRAVO deploykey cross-project fact', { pinned: true }),
-        origin_project: 'proj-b',
+        originProject: 'proj-b',
       });
 
       const contents = async (qs: string): Promise<string> => {
@@ -139,11 +139,11 @@ describe('GET /v1/context', () => {
     // may ambient-inject regardless of the cross_project override.
     writeEntry(globalHome, {
       ...createMemory('deploykey secret sk_vendor_deadbeef123456 from proj-b', { pinned: true }),
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
     writeEntry(globalHome, {
       ...createMemory('deploykey secret sk_vendor_feedface654321 no origin', { pinned: true }),
-      origin_project: '',
+      originProject: '',
     });
 
     for (const qs of ['q=deploykey', 'q=deploykey&cross_project=1']) {

@@ -145,13 +145,13 @@ function passesRecallFilters(
   // Drop it unless --include-superseded; the newer `from` endpoint is always kept.
   const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
   if (asOfDate) {
-    if (new Date(mem.valid_from) > asOfDate) return false; // not yet valid at asOf
-    if (mem.superseded_by) {
-      const succVf = successorValidFrom.get(mem.superseded_by);
+    if (new Date(mem.validFrom) > asOfDate) return false; // not yet valid at asOf
+    if (mem.supersededBy) {
+      const succVf = successorValidFrom.get(mem.supersededBy);
       // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
       if (succVf && new Date(succVf) <= asOfDate) return false;
     }
-  } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
+  } else if (!includeSuperseded && (mem.supersededBy || isSupersededEndpoint)) {
     return false; // default recall drops superseded
   }
   return recallScope.additive
@@ -248,8 +248,8 @@ async function loadSuccessorValidFrom(
   asOfDate: Date | null,
 ): Promise<Map<string, string>> {
   if (!asOfDate) return new Map<string, string>();
-  const succIds = [...new Set([...loadedById.values()].map((m) => m.superseded_by).filter((id): id is string => !!id))];
-  return new Map((await loadByIdsChunked(store, tenantId, succIds)).map((m) => [m.id, m.valid_from]));
+  const succIds = [...new Set([...loadedById.values()].map((m) => m.supersededBy).filter((id): id is string => !!id))];
+  return new Map((await loadByIdsChunked(store, tenantId, succIds)).map((m) => [m.id, m.validFrom]));
 }
 
 /**

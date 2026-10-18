@@ -76,8 +76,8 @@ describe('memoryGet answers what readEntry answers', () => {
   it('a superseded row is still returned', async () => {
     const r = root();
     seed(r, 'mem_new');
-    seed(r, 'mem_old', {}, { superseded_by: 'mem_new', kind: 'superseded' });
-    expect((await expectSameAnswer(r, 'mem_old'))?.superseded_by).toBe('mem_new');
+    seed(r, 'mem_old', {}, { supersededBy: 'mem_new', kind: 'superseded' });
+    expect((await expectSameAnswer(r, 'mem_old'))?.supersededBy).toBe('mem_new');
   });
 
   it('a raw row archived through the api has left memories and reads as null', async () => {

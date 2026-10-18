@@ -204,7 +204,7 @@ function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarg
     });
     if (dryRun) continue;
 
-    entry.half_life_days = Math.max(1, Math.floor(entry.half_life_days / 2));
+    entry.halfLifeDays = Math.max(1, Math.floor(entry.halfLifeDays / 2));
     entry.confidence = 'stale';
     if (!entry.tags.includes('invalidated')) {
       entry.tags.push('invalidated');
@@ -429,13 +429,10 @@ function collectChurnCandidates(
   const skippedPinned: string[] = [];
   const candidates: ChurnCandidate[] = [];
   for (const entry of entries) {
-    if (
-      !entry.origin_project ||
-      (entry.origin_project !== opts.projectName && entry.origin_project !== opts.legacyName)
-    ) {
+    if (!entry.originProject || (entry.originProject !== opts.projectName && entry.originProject !== opts.legacyName)) {
       continue;
     }
-    if (entry.superseded_by) continue;
+    if (entry.supersededBy) continue;
     if (entry.kind === 'raw' || entry.kind === 'archived') continue;
     if (entry.pinned) {
       skippedPinned.push(entry.id);

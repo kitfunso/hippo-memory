@@ -15,16 +15,16 @@ import type { StoreFiles } from './open.js';
 import { chunked } from '../../util/chunked.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../util/sql.js';
 
-/** A 1.x JS caller's `tenantId` would otherwise fall through to the default tenant without a sound. */
+/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
-  if (Object.hasOwn(entry, 'tenantId') && entry.tenant_id === undefined) {
-    throw new TypeError('tenantId was renamed to tenant_id in 2.0');
+  if (Object.hasOwn(entry, 'tenant_id') && entry.tenantId === undefined) {
+    throw new TypeError('tenant_id was renamed to tenantId in 3.0');
   }
 }
 
 export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
   rejectLegacyTenantKey(entry);
-  checkRejectionGuard(db, entry.tenant_id ?? DEFAULT_TENANT_ID, entry.id, entry.content);
+  checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
@@ -102,41 +102,41 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   return [
     entry.id,
     entry.created,
-    entry.last_retrieved,
-    entry.retrieval_count,
+    entry.lastRetrieved,
+    entry.retrievalCount,
     entry.strength,
-    entry.half_life_days,
+    entry.halfLifeDays,
     entry.layer,
     JSON.stringify(entry.tags ?? []),
-    entry.emotional_valence,
-    entry.schema_fit,
+    entry.emotionalValence,
+    entry.schemaFit,
     entry.source,
-    entry.outcome_score,
-    entry.outcome_positive ?? 0,
-    entry.outcome_negative ?? 0,
-    JSON.stringify(entry.conflicts_with ?? []),
+    entry.outcomeScore,
+    entry.outcomePositive ?? 0,
+    entry.outcomeNegative ?? 0,
+    JSON.stringify(entry.conflictsWith ?? []),
     entry.pinned ? 1 : 0,
     entry.confidence,
     entry.content,
     JSON.stringify(entry.parents ?? []),
     entry.starred ? 1 : 0,
-    entry.trace_outcome ?? null,
-    entry.source_session_id ?? null,
-    entry.valid_from ?? entry.created,
-    entry.superseded_by ?? null,
-    entry.extracted_from ?? null,
-    entry.dag_level ?? 0,
-    entry.dag_parent_id ?? null,
+    entry.traceOutcome ?? null,
+    entry.sourceSessionId ?? null,
+    entry.validFrom ?? entry.created,
+    entry.supersededBy ?? null,
+    entry.extractedFrom ?? null,
+    entry.dagLevel ?? 0,
+    entry.dagParentId ?? null,
     entry.kind ?? 'distilled',
     entry.scope ?? null,
     entry.owner ?? null,
-    entry.artifact_ref ?? null,
-    entry.tenant_id ?? DEFAULT_TENANT_ID,
-    entry.origin_project ?? null,
-    entry.descendant_count ?? 0,
-    entry.earliest_at ?? null,
-    entry.latest_at ?? null,
-    entry.dag_level_3_built_at ?? null,
+    entry.artifactRef ?? null,
+    entry.tenantId ?? DEFAULT_TENANT_ID,
+    entry.originProject ?? null,
+    entry.descendantCount ?? 0,
+    entry.earliestAt ?? null,
+    entry.latestAt ?? null,
+    entry.dagLevel3BuiltAt ?? null,
   ];
 }
 
@@ -245,8 +245,8 @@ export function ftsDriftAt(db: DatabaseSyncLike, repair: boolean): { memories: n
  * user-global) when never stamped; returns a copy. NULL is PRESERVED: it means no known project and ambient context
  * denies it, so a writeback must not launder it. */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
-  if (entry.origin_project !== undefined) return entry;
-  return { ...entry, origin_project: fallbackOrigin(hippoRoot) };
+  if (entry.originProject !== undefined) return entry;
+  return { ...entry, originProject: fallbackOrigin(hippoRoot) };
 }
 
 export function stampOriginProjectIn(files: StoreFiles, entry: MemoryEntry): MemoryEntry {
@@ -257,10 +257,10 @@ export function stampOriginProjectIn(files: StoreFiles, entry: MemoryEntry): Mem
  * column. Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the
  * destination store's location. */
 export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
-  if (entry.origin_project !== undefined) return entry;
+  if (entry.originProject !== undefined) return entry;
   const fromSource = originFromSource(entry.source);
   return {
     ...entry,
-    origin_project: fromSource ?? fallbackOrigin(hippoRoot),
+    originProject: fromSource ?? fallbackOrigin(hippoRoot),
   };
 }

@@ -6,9 +6,9 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { hybridSearch } from '../dist/index.js';
+import { hybridSearchWire as hybridSearch } from '../dist/entry/testing.js';
 import { buildCorpus } from '../dist/search/bm25.js';
-import { loadAllEntries } from '../dist/entry/testing.js';
+import { loadAllEntriesWire as loadAllEntries } from '../dist/entry/testing.js';
 
 const BOOTSTRAP_DRAWS = 2000;
 const LENGTH_TOLERANCE = 0.25;

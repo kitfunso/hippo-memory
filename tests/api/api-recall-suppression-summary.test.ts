@@ -26,7 +26,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
   });
 }
 
@@ -95,7 +95,7 @@ describe('RecallResult.suppressionSummary', () => {
 
   it('retrieve returns the same ids in the same order and the same summary on a repeat call', async () => {
     for (let i = 0; i < 8; i++) writeEntry(root, makeRaw(`parity ${i} shared token`));
-    writeEntry(root, { ...makeRaw('parity old shared token'), superseded_by: 'mem_newer' });
+    writeEntry(root, { ...makeRaw('parity old shared token'), supersededBy: 'mem_newer' });
     const opts = { query: 'parity shared', window: { limit: 5 } };
     const first = await retrieve(ctxFor(root), opts);
     const again = await retrieve(ctxFor(root), opts);

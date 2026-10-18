@@ -67,10 +67,10 @@ describe('recall --why rerankTrace', () => {
       tags: ['fix-auth'],
       tenantId,
     });
-    hero.conflicts_with = [peer.id];
-    hero.outcome_positive = 3;
-    hero.outcome_negative = 0;
-    hero.retrieval_count = 1; // below the --salience-threshold below
+    hero.conflictsWith = [peer.id];
+    hero.outcomePositive = 3;
+    hero.outcomeNegative = 0;
+    hero.retrievalCount = 1; // below the --salience-threshold below
     heroId = hero.id;
     writeEntry(localRoot, hero);
 

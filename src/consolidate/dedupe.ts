@@ -1,7 +1,7 @@
 /**
  * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so `api.sleep` can dedupe
  * without cli -> api imports.
- * Survivor order is total and tenant-scoped: strength bucket, retrieval_count, then compareEntryIdentity; raw and
+ * Survivor order is total and tenant-scoped: strength bucket, retrievalCount, then compareEntryIdentity; raw and
  * superseded rows are not candidates.
  */
 
@@ -55,23 +55,23 @@ interface DedupRow {
   readonly content: string;
   readonly layer: MemoryEntry['layer'];
   readonly strength: number;
-  readonly retrieval_count: number;
+  readonly retrievalCount: number;
   readonly tags: readonly string[];
   readonly source: string;
   readonly deletable: boolean;
 }
 
 function dedupRow(entry: MemoryEntry, backing: ReadonlySet<string>): DedupRow {
-  const { id, content, layer, strength, retrieval_count, tags, source } = entry;
+  const { id, content, layer, strength, retrievalCount, tags, source } = entry;
   const deletable = canAutoDelete(entry) && !backing.has(id);
-  return { id, content, layer, strength, retrieval_count, tags, source, deletable };
+  return { id, content, layer, strength, retrievalCount, tags, source, deletable };
 }
 
-/** The v1.26.3 survivor total order: strength bucket desc, then retrieval_count desc, then compareEntryIdentity. */
+/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
-  const retrievalDiff = finiteCount(b.retrieval_count) - finiteCount(a.retrieval_count);
+  const retrievalDiff = finiteCount(b.retrievalCount) - finiteCount(a.retrievalCount);
   if (retrievalDiff !== 0) return retrievalDiff;
   return compareEntryIdentity(a, b);
 }
@@ -115,7 +115,7 @@ function partitionPairs(groups: PartitionGroups): DedupPair[] {
 }
 
 /** The rows currentDistilledEntries selects, picked from a whole-store read. */
-const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.superseded_by;
+const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
 
 /** Pairs from rows fed a page at a time; between pages only each group's survivor and losers are held. */
 function scanPairs(pages: Iterable<readonly MemoryEntry[]>, backing: ReadonlySet<string>): DedupPair[] {
@@ -125,7 +125,7 @@ function scanPairs(pages: Iterable<readonly MemoryEntry[]>, backing: ReadonlySet
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
       // EI2: also split by restricted scope, else a private copy can delete the readable one.
-      const partition = derivationPartitionKey(entry.tenant_id, entry.scope, entry.origin_project);
+      const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));
       addRow(groups, duplicateKey(entry.content), dedupRow(entry, backing));

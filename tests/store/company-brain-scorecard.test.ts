@@ -366,7 +366,7 @@ describe('Company Brain correction-latency scorecard', () => {
     oldEntry.created = '2026-04-01T00:00:00.000Z';
     const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     newEntry.created = '2026-04-02T00:00:00.000Z';
-    oldEntry.superseded_by = newEntry.id;
+    oldEntry.supersededBy = newEntry.id;
 
     const report = buildCorrectionLatency([oldEntry, newEntry]);
 
@@ -395,7 +395,7 @@ describe('Company Brain correction-latency scorecard', () => {
       extractedFrom: rawReceipt.id,
     });
     newFact.created = '2026-04-01T10:30:00.000Z';
-    oldFact.superseded_by = newFact.id;
+    oldFact.supersededBy = newFact.id;
 
     const report = buildCorrectionLatency([rawReceipt, oldFact, newFact]);
 
@@ -413,7 +413,7 @@ describe('Company Brain correction-latency scorecard', () => {
     oldEntry.created = '2026-04-01T00:00:00.000Z';
     const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     newEntry.created = 'not-a-date';
-    oldEntry.superseded_by = newEntry.id;
+    oldEntry.supersededBy = newEntry.id;
 
     const report = buildCorrectionLatency([oldEntry, newEntry]);
     expect(report.count).toBe(0);
@@ -422,7 +422,7 @@ describe('Company Brain correction-latency scorecard', () => {
 
   it('handles dangling superseded_by pointers without throwing', () => {
     const oldEntry = createMemory('belief points at a missing successor', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    oldEntry.superseded_by = 'mem-does-not-exist';
+    oldEntry.supersededBy = 'mem-does-not-exist';
 
     const report = buildCorrectionLatency([oldEntry]);
     expect(report.count).toBe(0);
@@ -451,7 +451,7 @@ describe('Company Brain correction-latency scorecard', () => {
         extractedFrom: raw.id,
       });
       newFact.created = new Date(new Date(baseRaw).getTime() + lagMin * 60 * 1000).toISOString();
-      oldFact.superseded_by = newFact.id;
+      oldFact.supersededBy = newFact.id;
 
       entries.push(raw, oldFact, newFact);
     });

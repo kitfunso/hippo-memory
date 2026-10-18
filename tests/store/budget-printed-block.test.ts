@@ -200,7 +200,7 @@ describe('hippo context', () => {
 
   it('skips an entry that alone exceeds the budget and keeps filling, with or without a query', async () => {
     const old = new Date(Date.now() - 3 * 86_400_000).toISOString();
-    seedNotes({ created: old, last_retrieved: old });
+    seedNotes({ created: old, lastRetrieved: old });
     const big = seed(OVERSIZE);
     const all = block(await hippo(['context', '--budget', '400']));
     expect(all).not.toContain('Zanzibar');
@@ -295,7 +295,7 @@ describe('assemble and drill', () => {
       dagLevel: 2,
       tags: ['dag-summary'],
     });
-    s.descendant_count = children;
+    s.descendantCount = children;
     writeEntry(hippoDir, s);
     for (let i = 0; i < children; i++) {
       const c = createMemory(line(i), {

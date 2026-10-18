@@ -29,7 +29,7 @@ const ago = (ms: number): string => new Date(Date.parse(NOW) - ms).toISOString()
 let fixture: TwoTenantFixture;
 
 function at(entry: MemoryEntry, iso: string): MemoryEntry {
-  return { ...entry, created: iso, valid_from: iso, last_retrieved: iso };
+  return { ...entry, created: iso, validFrom: iso, lastRetrieved: iso };
 }
 
 function seed(dir: string): void {
@@ -37,8 +37,8 @@ function seed(dir: string): void {
     at(createMemory(content, { tenantId: TENANT_A, ...over }), iso);
   const raw = a('slack: the tier moved to 120', ago(30 * 24 * HOUR), { kind: 'raw' });
   const newFact = a('belief: the tier is 120', ago(HOUR), { extractedFrom: raw.id, layer: Layer.Semantic });
-  const oldFact = { ...a('belief: the tier is 100', ago(40 * 24 * HOUR)), superseded_by: newFact.id };
-  const dangling = { ...a('belief: replaced by a deleted row', ago(20 * 24 * HOUR)), superseded_by: 'mem_gone' };
+  const oldFact = { ...a('belief: the tier is 100', ago(40 * 24 * HOUR)), supersededBy: newFact.id };
+  const dangling = { ...a('belief: replaced by a deleted row', ago(20 * 24 * HOUR)), supersededBy: 'mem_gone' };
   const pinned = a('pinned: the deploy window is friday', ago(3 * HOUR), { pinned: true, confidence: 'verified' });
   const aged = a('an aged note about the old cluster', ago(2 * 24 * HOUR), { confidence: 'inferred' });
   const b = (content: string, iso: string): MemoryEntry => at(createMemory(content, { tenantId: TENANT_B }), iso);

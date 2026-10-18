@@ -32,7 +32,7 @@ function writeWithCompanions(db: DatabaseSyncLike, { entry, actor, event, quaran
   writeInOwnTenant(db, entry, actor, (handle, memoryId) => {
     if (quarantine) {
       recordQuarantine(handle, {
-        tenantId: entry.tenant_id,
+        tenantId: entry.tenantId,
         memoryId,
         originalScope: quarantine.originalScope,
         reason: quarantine.reason,

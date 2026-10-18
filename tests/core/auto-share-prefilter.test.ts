@@ -61,10 +61,10 @@ function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [
 function seedSignalRows(): Map<string, string> {
   const ids = new Map<string, string>();
   ids.set('plain 0.5', put('plain'));
-  ids.set('negative 0.55', put('negative', { emotional_valence: 'negative' }));
-  ids.set('critical 0.55', put('critical', { emotional_valence: 'critical' }, ['ops']));
-  ids.set('retrieved twice 0.5', put('retrieved twice', { retrieval_count: 2 }));
-  ids.set('retrieved thrice 0.6', put('retrieved thrice', { retrieval_count: 3 }));
+  ids.set('negative 0.55', put('negative', { emotionalValence: 'negative' }));
+  ids.set('critical 0.55', put('critical', { emotionalValence: 'critical' }, ['ops']));
+  ids.set('retrieved twice 0.5', put('retrieved twice', { retrievalCount: 2 }));
+  ids.set('retrieved thrice 0.6', put('retrieved thrice', { retrievalCount: 3 }));
   ids.set('pinned 0.6', put('pinned', { pinned: true }));
   ids.set('error 0.6', put('error', {}, ['error']));
   ids.set('error deploy 0.45', put('error deploy', {}, ['error', 'deploy']));

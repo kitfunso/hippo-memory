@@ -47,17 +47,16 @@ function row(id: string | null | undefined): MemoryEntry {
 
 /** The fields the local group and the supersede overrides can set. */
 function settable(entry: MemoryEntry) {
-  const { layer, pinned, confidence, source, schema_fit, trace_outcome, source_session_id, half_life_days, tags } =
-    entry;
+  const { layer, pinned, confidence, source, schemaFit, traceOutcome, sourceSessionId, halfLifeDays, tags } = entry;
   return {
     layer,
     pinned,
     confidence,
     source,
-    schema_fit,
-    trace_outcome,
-    source_session_id,
-    half_life_days,
+    schemaFit,
+    traceOutcome,
+    sourceSessionId,
+    halfLifeDays,
     tags,
     strength: Number(entry.strength.toFixed(6)),
   };
@@ -83,9 +82,9 @@ describe('in process', () => {
       pinned: true,
       confidence: 'inferred',
       source: 'import',
-      schema_fit: 0.9,
-      trace_outcome: 'success',
-      source_session_id: 'sess-9',
+      schemaFit: 0.9,
+      traceOutcome: 'success',
+      sourceSessionId: 'sess-9',
     });
   });
 
@@ -99,8 +98,8 @@ describe('in process', () => {
         .id,
     );
     expect(weak.strength).toBe(0.3);
-    expect(weak.half_life_days).toBe(plain.half_life_days * 0.5);
-    expect(floored.half_life_days).toBe(1);
+    expect(weak.halfLifeDays).toBe(plain.halfLifeDays * 0.5);
+    expect(floored.halfLifeDays).toBe(1);
   });
 
   it("api.supersede overrides replace the old row's layer, tags and pin, and without them the successor keeps all three", async () => {

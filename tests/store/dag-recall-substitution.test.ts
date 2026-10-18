@@ -34,10 +34,10 @@ function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     layer: Layer.Buffer,
     tags: opts.tags ?? [],
     confidence: 'observed',
-    dagLevel: opts.dag_level ?? 0,
-    dagParentId: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dagLevel ?? 0,
+    dagParentId: opts.dagParentId ?? undefined,
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
     kind: opts.kind ?? 'distilled',
   });
   return e;
@@ -51,7 +51,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     confidence: 'inferred',
     dagLevel: 2,
     scope: opts.scope ?? null,
-    tenantId: opts.tenant_id ?? 'default',
+    tenantId: opts.tenantId ?? 'default',
   });
   return s;
 }
@@ -77,14 +77,14 @@ describe('DAG-aware recall substitution', () => {
     // 1 summary + 12 children. limit=5 means 7 children overflow; summary
     // should be appended.
     const summary = makeSummary('topic alpha rollup', { tags: ['dag-summary', 'topic:alpha'] });
-    summary.descendant_count = 12;
+    summary.descendantCount = 12;
     writeEntry(root, summary);
     for (let i = 0; i < 12; i++) {
       writeEntry(
         root,
         makeLeaf(`alpha detail event ${i}`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
+          dagLevel: 1,
+          dagParentId: summary.id,
         }),
       );
     }
@@ -104,8 +104,8 @@ describe('DAG-aware recall substitution', () => {
       writeEntry(
         root,
         makeLeaf(`secret payroll detail ${i}`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
+          dagLevel: 1,
+          dagParentId: summary.id,
           scope: 'slack:private:CSEC',
         }),
       );
@@ -117,15 +117,15 @@ describe('DAG-aware recall substitution', () => {
   });
 
   it('4. cross-tenant summary not loaded', async () => {
-    const summary = makeSummary('other tenant topic', { tenant_id: 'other' });
+    const summary = makeSummary('other tenant topic', { tenantId: 'other' });
     writeEntry(root, summary);
     for (let i = 0; i < 6; i++) {
       writeEntry(
         root,
         makeLeaf(`alpha cross tenant ${i}`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
-          tenant_id: 'other',
+          dagLevel: 1,
+          dagParentId: summary.id,
+          tenantId: 'other',
         }),
       );
     }
@@ -145,8 +145,8 @@ describe('DAG-aware recall substitution', () => {
         writeEntry(
           root,
           makeLeaf(`alpha topic event ${s}-${c}`, {
-            dag_level: 1,
-            dag_parent_id: summary.id,
+            dagLevel: 1,
+            dagParentId: summary.id,
           }),
         );
       }
@@ -164,14 +164,14 @@ describe('DAG-aware recall substitution', () => {
 
   it('6. summarizeOverflow:false disables substitution', async () => {
     const summary = makeSummary('topic gamma', { tags: ['dag-summary'] });
-    summary.descendant_count = 6;
+    summary.descendantCount = 6;
     writeEntry(root, summary);
     for (let i = 0; i < 6; i++) {
       writeEntry(
         root,
         makeLeaf(`gamma detail ${i}`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
+          dagLevel: 1,
+          dagParentId: summary.id,
         }),
       );
     }
@@ -184,14 +184,14 @@ describe('DAG-aware recall substitution', () => {
     // Parent summary itself matches the query strongly and ranks in the top
     // limit. Substitution must NOT add it again.
     const summary = makeSummary('shared keyword summary marker', { tags: ['dag-summary', 'topic:shared'] });
-    summary.descendant_count = 4;
+    summary.descendantCount = 4;
     writeEntry(root, summary);
     for (let i = 0; i < 4; i++) {
       writeEntry(
         root,
         makeLeaf(`shared keyword summary marker leaf ${i}`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
+          dagLevel: 1,
+          dagParentId: summary.id,
         }),
       );
     }

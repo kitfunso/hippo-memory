@@ -32,7 +32,7 @@ const RAW_CONFIG = { replay: { count: 0 }, dormant: { enabled: false } };
 
 function aged(entry: MemoryEntry, days: number): MemoryEntry {
   const then = new Date(Date.now() - days * DAY_MS).toISOString();
-  return { ...entry, created: then, last_retrieved: then };
+  return { ...entry, created: then, lastRetrieved: then };
 }
 
 describe('deleting a raw row', () => {

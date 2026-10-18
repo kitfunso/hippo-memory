@@ -39,12 +39,12 @@ describe('captureError', () => {
 
   it('sets emotional_valence to negative', () => {
     const entry = captureError(1, 'err', 'cmd');
-    expect(entry.emotional_valence).toBe('negative');
+    expect(entry.emotionalValence).toBe('negative');
   });
 
   it('writes into the tenant it is given, else default', () => {
-    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenant_id).toBe('tenant_b');
-    expect(captureError(1, 'err', 'cmd').tenant_id).toBe('default');
+    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenantId).toBe('tenant_b');
+    expect(captureError(1, 'err', 'cmd').tenantId).toBe('default');
   });
 
   it('short stderr passes through unchanged', () => {
@@ -333,8 +333,8 @@ describe('a gated lesson still invalidates', () => {
       updated!.tags,
       'a gated lesson does not invalidate - documented limitation, see the comment above',
     ).not.toContain('invalidated');
-    expect(updated!.half_life_days, 'and its decay must be untouched, so rescans cannot compound').toBe(
-      stale.half_life_days,
+    expect(updated!.halfLifeDays, 'and its decay must be untouched, so rescans cannot compound').toBe(
+      stale.halfLifeDays,
     );
 
     // ...and the thin subject itself is still not stored.
@@ -466,7 +466,7 @@ describe('invalidation during git learning', () => {
     expect(updated).not.toBeNull();
     expect(updated!.tags).toContain('invalidated');
     expect(updated!.confidence).toBe('stale');
-    expect(updated!.half_life_days).toBeLessThan(mem.half_life_days);
+    expect(updated!.halfLifeDays).toBeLessThan(mem.halfLifeDays);
   });
 
   it('does not invalidate memories for non-migration commits', () => {
@@ -482,6 +482,6 @@ describe('invalidation during git learning', () => {
     // Memory should remain unchanged
     const updated = readEntry(tmpDir, mem.id);
     expect(updated!.tags).not.toContain('invalidated');
-    expect(updated!.half_life_days).toBe(mem.half_life_days);
+    expect(updated!.halfLifeDays).toBe(mem.halfLifeDays);
   });
 });

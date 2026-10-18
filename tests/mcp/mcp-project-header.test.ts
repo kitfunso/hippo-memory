@@ -94,9 +94,9 @@ describe('X-Hippo-Project on a shared store', () => {
     const r = await post(headers);
     expect(r.status, r.text).toBe(200);
     expect(r.text).toContain('Remembered');
-    expect(loadAllEntries(store, 'default').map((e) => e.origin_project)).toEqual(['acme/café']);
+    expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme/café']);
 
-    const aliased = { ...createMemory('the aliasmark row from before the rename'), origin_project: 'old,name' };
+    const aliased = { ...createMemory('the aliasmark row from before the rename'), originProject: 'old,name' };
     writeEntry(store, aliased);
     lastRecalledIds.clear();
     const recalled = await post(headers, toolCall('hippo_recall', { query: 'aliasmark' }));
@@ -109,7 +109,7 @@ describe('X-Hippo-Project on a shared store', () => {
     handle = await serve({ hippoRoot: store, port: 0 });
     const r = await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': '' });
     expect(r.status, r.text).toBe(200);
-    expect(loadAllEntries(store, 'default').map((e) => e.origin_project)).toEqual(['acme']);
+    expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme']);
   });
 
   it('answers 400 with no JSON-RPC body for each bad header, and stores nothing', async () => {
@@ -210,6 +210,6 @@ describe('X-Hippo-Project on a store that is not shared', () => {
     }
     const rows = loadAllEntries(store, 'default');
     expect(rows).toHaveLength(2);
-    for (const row of rows) expect(row.origin_project).not.toBe('acme');
+    for (const row of rows) expect(row.originProject).not.toBe('acme');
   });
 });

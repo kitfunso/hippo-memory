@@ -57,6 +57,7 @@ export const SERVER_TESTS: readonly string[] = [
   'server/http-recall-autodebias.test.ts',
   'server/http-recall-explain.test.ts',
   'server/http-skills.test.ts',
+  'server/memory-wire-http-golden.test.ts',
   'server/recall-port-only-parity.test.ts',
   'server/recall-vector-reads-parity.test.ts',
   'server/request-log-route-template.test.ts',

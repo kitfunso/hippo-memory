@@ -132,13 +132,13 @@ describe('api tenant isolation', () => {
     // Old row carries the chain pointer.
     const oldEntry = readEntry(home, created.id, 'alpha');
     expect(oldEntry).not.toBeNull();
-    expect(oldEntry!.superseded_by).toBe(result.newId);
+    expect(oldEntry!.supersededBy).toBe(result.newId);
 
     // New row landed.
     const newEntry = readEntry(home, result.newId, 'alpha');
     expect(newEntry).not.toBeNull();
     expect(newEntry!.content).toBe('fresh replacement content');
-    expect(newEntry!.tenant_id).toBe('alpha');
+    expect(newEntry!.tenantId).toBe('alpha');
 
     // Audit log: 'supersede' op with newId metadata + 'remember' for the new row.
     const db = openHippoDb(home);

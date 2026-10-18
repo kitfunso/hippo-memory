@@ -14,7 +14,7 @@ export function writeEntryThenFail(hippoRoot: string, entry: MemoryEntry): void 
     try {
       writePromotedEntry(hippoRoot, entry, {
         sourceId: 'test',
-        auditAs: { tenantId: entry.tenant_id ?? 'default', actor: 'test' },
+        auditAs: { tenantId: entry.tenantId ?? 'default', actor: 'test' },
       });
     } finally {
       db.exec('DROP TRIGGER test_force_promote_failure');

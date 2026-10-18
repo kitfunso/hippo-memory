@@ -87,7 +87,7 @@ describe('importVault (a) — fixture vault → kind=raw with source:vault tags'
     expect(provenanced.length / all.length).toBeGreaterThanOrEqual(0.95);
     // Every imported row carries an artifactRef under the vault prefix.
     for (const e of all) {
-      expect(e.artifact_ref).toMatch(/^vault:obs:/);
+      expect(e.artifactRef).toMatch(/^vault:obs:/);
       expect(e.owner).toBe('agent:vault-import');
     }
   });
@@ -164,7 +164,7 @@ describe('importVault (d) — deleted source file archives the raw row', () => {
     const first = await importVault(vaultDir, opts({ name: 'v' }));
     expect(first.imported).toBe(2);
 
-    const dropId = loadAllEntries(tmpDir, 'default').find((e) => e.artifact_ref === 'vault:v:drop.md')!.id;
+    const dropId = loadAllEntries(tmpDir, 'default').find((e) => e.artifactRef === 'vault:v:drop.md')!.id;
 
     // Remove one note from the source folder.
     fs.rmSync(path.join(vaultDir, 'drop.md'));
@@ -174,7 +174,7 @@ describe('importVault (d) — deleted source file archives the raw row', () => {
 
     const all = loadAllEntries(tmpDir, 'default');
     expect(all.length).toBe(1);
-    expect(all[0].artifact_ref).toBe('vault:v:keep.md');
+    expect(all[0].artifactRef).toBe('vault:v:keep.md');
 
     const archived = archivedRows();
     expect(archived.length).toBe(1);
@@ -268,7 +268,7 @@ describe('importVault (g) — dialect syntax does not crash', () => {
     expect(r.total).toBe(2);
     // Dot-hierarchy filename survives as a relpath-keyed artifactRef.
     const all = loadAllEntries(tmpDir, 'default');
-    expect(all.some((e) => e.artifact_ref === 'vault:den:vault.note.child.md')).toBe(true);
+    expect(all.some((e) => e.artifactRef === 'vault:den:vault.note.child.md')).toBe(true);
   });
 });
 
@@ -314,7 +314,7 @@ describe('importVault (i) — LIKE-escape isolation on vault name', () => {
     // Build vault "ab" with one note.
     writeNote('n.md', '# N\nab vault note');
     await importVault(vaultDir, opts({ name: 'ab' }));
-    const abId = loadAllEntries(tmpDir, 'default').find((e) => e.artifact_ref === 'vault:ab:n.md')!.id;
+    const abId = loadAllEntries(tmpDir, 'default').find((e) => e.artifactRef === 'vault:ab:n.md')!.id;
 
     // Build vault "a%" with its own note in a SEPARATE source folder.
     const otherVault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-pct-'));
@@ -324,8 +324,8 @@ describe('importVault (i) — LIKE-escape isolation on vault name', () => {
 
       // Both vaults coexist: ab's row + a%'s row.
       const all = loadAllEntries(tmpDir, 'default');
-      expect(all.some((e) => e.artifact_ref === 'vault:ab:n.md')).toBe(true);
-      expect(all.some((e) => e.artifact_ref === 'vault:a%:m.md')).toBe(true);
+      expect(all.some((e) => e.artifactRef === 'vault:ab:n.md')).toBe(true);
+      expect(all.some((e) => e.artifactRef === 'vault:a%:m.md')).toBe(true);
 
       // Re-import "a%" with its file deleted. If the LIKE pattern were
       // unescaped, `vault:a%:%` would match `vault:ab:n.md` and archive it.
@@ -336,8 +336,8 @@ describe('importVault (i) — LIKE-escape isolation on vault name', () => {
       // ab's row survives (escape worked); a%'s row archived.
       const abLive = after.find((e) => e.id === abId);
       expect(abLive).toBeDefined();
-      expect(abLive!.artifact_ref).toBe('vault:ab:n.md');
-      expect(after.some((e) => e.artifact_ref === 'vault:a%:m.md')).toBe(false);
+      expect(abLive!.artifactRef).toBe('vault:ab:n.md');
+      expect(after.some((e) => e.artifactRef === 'vault:a%:m.md')).toBe(false);
 
       const archived = archivedRows();
       expect(archived.length).toBe(1);
@@ -518,7 +518,7 @@ async function seedDuplicateRawRow(): Promise<string[]> {
     tags: ['source:vault', 'vault:v', `content-hash:${hash}`],
   });
   const ids = loadAllEntries(tmpDir, 'default')
-    .filter((e) => e.artifact_ref === 'vault:v:dup.md')
+    .filter((e) => e.artifactRef === 'vault:v:dup.md')
     .map((e) => e.id);
   expect(ids.length).toBe(2); // precondition: two live rows for one ref
   return ids;
@@ -556,7 +556,7 @@ describe('importVault (t) — duplicate raw rows for one artifactRef archive ALL
     expect(second.total).toBe(0); // vault now empty
     expect(second.archived).toBe(2); // BOTH rows archived on deletion-sync
 
-    const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref === 'vault:v:dup.md');
+    const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef === 'vault:v:dup.md');
     expect(live.length).toBe(0);
 
     const archived = archivedRows();
@@ -593,7 +593,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     // A real import first, so live vault rows exist to be (wrongly) archived.
     writeNote('keep.md', '# Keep\na genuine vault note worth keeping');
     expect((await importVault(vaultDir, opts({ name: 'v' }))).imported).toBe(1);
-    const before = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:'));
+    const before = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:'));
     expect(before.length).toBe(1);
 
     // Now point the importer at the STORE itself. This must be a no-op, NOT a
@@ -603,7 +603,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     expect(selfImport.imported).toBe(0);
     expect(selfImport.archived).toBe(0); // the regression guard
 
-    const after = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:'));
+    const after = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:'));
     expect(after.length).toBe(1); // row survived
     expect(after[0].id).toBe(before[0].id);
     expect(archivedRows().length).toBe(0); // nothing archived at all
@@ -619,7 +619,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     const selfImport = await importVault(childOfStore, opts({ name: 'v' }));
     expect(selfImport.total).toBe(0);
     expect(selfImport.archived).toBe(0);
-    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:')).length).toBe(1);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:')).length).toBe(1);
     expect(archivedRows().length).toBe(0);
   });
 
@@ -643,7 +643,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
         const aliased = await importVault(link, opts({ name: 'v' }));
         expect(aliased.total).toBe(0);
         expect(aliased.archived).toBe(0); // the regression guard
-        const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:'));
+        const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:'));
         expect(live.length).toBe(1);
         expect(archivedRows().length).toBe(0);
       }
@@ -716,8 +716,8 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
         expect(result.imported).toBe(1);
         const rows = loadAllEntries(hippoAlias, 'default').filter((e) => e.tags.includes('vault:v'));
         expect(rows.length).toBe(1);
-        expect(rows[0].artifact_ref).toBe('vault:v:realnote.md');
-        expect(rows.some((e) => (e.artifact_ref ?? '').includes('Store/'))).toBe(false);
+        expect(rows[0].artifactRef).toBe('vault:v:realnote.md');
+        expect(rows.some((e) => (e.artifactRef ?? '').includes('Store/'))).toBe(false);
       }
     } finally {
       // Remove ONLY the junction link, never recurse into realStore (which lives
@@ -836,8 +836,8 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
 
       const all = loadAllEntries(tmpDir, 'default');
       expect(all.length).toBe(2);
-      expect(all.some((e) => e.artifact_ref === 'vault:work:shared.md')).toBe(true);
-      expect(all.some((e) => e.artifact_ref === 'vault:personal:shared.md')).toBe(true);
+      expect(all.some((e) => e.artifactRef === 'vault:work:shared.md')).toBe(true);
+      expect(all.some((e) => e.artifactRef === 'vault:personal:shared.md')).toBe(true);
     } finally {
       fs.rmSync(other, { recursive: true, force: true });
     }

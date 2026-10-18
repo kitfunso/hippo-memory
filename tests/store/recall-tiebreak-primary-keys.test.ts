@@ -51,9 +51,9 @@ describe('api.ts:833 DAG substitution ordering', () => {
       layer: Layer.Buffer,
       tags: opts.tags ?? [],
       confidence: 'observed',
-      dagLevel: opts.dag_level ?? 0,
-      dagParentId: opts.dag_parent_id ?? undefined,
-      tenantId: opts.tenant_id ?? 'default',
+      dagLevel: opts.dagLevel ?? 0,
+      dagParentId: opts.dagParentId ?? undefined,
+      tenantId: opts.tenantId ?? 'default',
       kind: opts.kind ?? 'distilled',
     });
   }
@@ -63,7 +63,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
       tags: opts.tags ?? ['dag-summary'],
       confidence: 'inferred',
       dagLevel: 2,
-      tenantId: opts.tenant_id ?? 'default',
+      tenantId: opts.tenantId ?? 'default',
     });
   }
 
@@ -90,8 +90,8 @@ describe('api.ts:833 DAG substitution ordering', () => {
       writeEntry(
         root,
         makeLeaf(`alpha zulu topic event a-${i}`, {
-          dag_level: 1,
-          dag_parent_id: summaryA.id,
+          dagLevel: 1,
+          dagParentId: summaryA.id,
         }),
       );
     }
@@ -102,8 +102,8 @@ describe('api.ts:833 DAG substitution ordering', () => {
       writeEntry(
         root,
         makeLeaf(`alpha zulu topic event b-${i}`, {
-          dag_level: 1,
-          dag_parent_id: summaryB.id,
+          dagLevel: 1,
+          dagParentId: summaryB.id,
         }),
       );
     }

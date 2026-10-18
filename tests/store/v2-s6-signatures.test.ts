@@ -57,7 +57,7 @@ describe('confidenceFacets', () => {
     const inputs: ConfidenceInputs = {
       pinned: false,
       confidence: 'observed',
-      last_retrieved: new Date().toISOString(),
+      lastRetrieved: new Date().toISOString(),
     };
     expect(confidenceFacets(inputs)).toEqual({ tier: 'observed', agedOut: false });
   });

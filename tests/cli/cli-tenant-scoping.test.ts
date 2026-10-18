@@ -146,6 +146,6 @@ describe('CLI tenant-scoping', () => {
     const res = await runCli('tenant_b', 'supersede', old, 'B replacement content');
     expect(res.status, res.out).toBe(0);
     const successor = loadEveryTenantEntries(hippoRoot).find((e) => e.content === 'B replacement content');
-    expect(successor?.tenant_id).toBe('tenant_b');
+    expect(successor?.tenantId).toBe('tenant_b');
   });
 });

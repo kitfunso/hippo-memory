@@ -17,18 +17,18 @@ export function mem(
     layer?: Layer;
     tags?: string[];
     created?: string;
-    extracted_from?: string;
-    dag_level?: number;
-    dag_parent_id?: string;
+    extractedFrom?: string;
+    dagLevel?: number;
+    dagParentId?: string;
   } = {},
 ): MemoryEntry {
   const entry = createMemory(content, {
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
     baseHalfLifeDays: 30,
-    extractedFrom: opts.extracted_from,
-    dagLevel: opts.dag_level,
-    dagParentId: opts.dag_parent_id,
+    extractedFrom: opts.extractedFrom,
+    dagLevel: opts.dagLevel,
+    dagParentId: opts.dagParentId,
   });
   entry.id = id;
   if (opts.created) entry.created = opts.created;
@@ -55,7 +55,7 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
         created: dateOffset(10),
         layer: Layer.Semantic,
         tags: ['speaker:Alice', 'topic:infrastructure', 'extracted'],
-        extracted_from: 'ep-src-1',
+        extractedFrom: 'ep-src-1',
       },
     ),
   ];
@@ -82,7 +82,7 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
         created: dateOffset(11),
         layer: Layer.Semantic,
         tags: ['speaker:Bob', 'topic:monitoring', 'extracted'],
-        extracted_from: 'ep-src-2',
+        extractedFrom: 'ep-src-2',
       },
     ),
   ];
@@ -109,7 +109,7 @@ export function authMeetingEntries(): MemoryEntry[] {
         created: dateOffset(12),
         layer: Layer.Semantic,
         tags: ['speaker:Carol', 'topic:auth', 'extracted'],
-        extracted_from: 'ep-src-3',
+        extractedFrom: 'ep-src-3',
       },
     ),
   ];

@@ -61,16 +61,16 @@ describe('schema v25 — DAG summary metadata', () => {
       confidence: 'inferred',
       dagLevel: 2,
     });
-    summary.descendant_count = 7;
-    summary.earliest_at = '2026-01-01T00:00:00.000Z';
-    summary.latest_at = '2026-01-08T00:00:00.000Z';
+    summary.descendantCount = 7;
+    summary.earliestAt = '2026-01-01T00:00:00.000Z';
+    summary.latestAt = '2026-01-08T00:00:00.000Z';
     writeEntry(root, summary);
 
     const reloaded = loadAllEntries(root, 'default').find((e) => e.id === summary.id);
     expect(reloaded).toBeDefined();
-    expect(reloaded?.descendant_count).toBe(7);
-    expect(reloaded?.earliest_at).toBe('2026-01-01T00:00:00.000Z');
-    expect(reloaded?.latest_at).toBe('2026-01-08T00:00:00.000Z');
+    expect(reloaded?.descendantCount).toBe(7);
+    expect(reloaded?.earliestAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(reloaded?.latestAt).toBe('2026-01-08T00:00:00.000Z');
   });
 
   it('loadEntriesByIds returns matching rows scoped to tenant', () => {
@@ -102,7 +102,7 @@ describe('schema v25 — DAG summary metadata', () => {
       layer: Layer.Semantic,
       dagLevel: 2,
     });
-    parent.descendant_count = 2;
+    parent.descendantCount = 2;
     writeEntry(root, parent);
 
     const child1: MemoryEntry = createMemory('child 1', {

@@ -91,7 +91,7 @@ export async function drillDown(
 }
 
 function isDrillable(row: MemoryEntry): boolean {
-  return (row.dag_level ?? 0) >= DAG_LEVEL.topic;
+  return (row.dagLevel ?? 0) >= DAG_LEVEL.topic;
 }
 
 function drillResult(
@@ -107,15 +107,15 @@ function drillResult(
     content: summary.content,
     // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
     // level-0 children, never the BFS-depth-N total (independent-review MED #4).
-    descendantCount: summary.descendant_count ?? sizes[0] ?? 0,
-    earliestAt: summary.earliest_at ?? null,
-    latestAt: summary.latest_at ?? null,
+    descendantCount: summary.descendantCount ?? sizes[0] ?? 0,
+    earliestAt: summary.earliestAt ?? null,
+    latestAt: summary.latestAt ?? null,
   };
   const all: DrillDownChild[] = collected.map((c) => ({
     id: c.id,
     content: c.content,
     layer: c.layer,
-    dagLevel: c.dag_level ?? 0,
+    dagLevel: c.dagLevel ?? 0,
     created: c.created,
   }));
 

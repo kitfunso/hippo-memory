@@ -75,7 +75,7 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     expect(lesson.content).toBe('a pinned semantic lesson from the first release');
     expect(lesson.tags).toEqual(['alpha', 'beta']);
     expect(lesson.pinned).toBe(true);
-    expect(lesson.retrieval_count).toBe(3);
+    expect(lesson.retrievalCount).toBe(3);
     expect(lesson.strength).toBeCloseTo(0.8);
     expect(lesson.created).toBe('2025-01-02T03:04:05.000Z');
   });

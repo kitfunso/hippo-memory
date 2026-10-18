@@ -28,7 +28,7 @@ let ctx: FullContext;
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
   const entry = {
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    origin_project: PROJECT,
+    originProject: PROJECT,
     ...extra,
   };
   writeEntry(root, entry);
@@ -210,14 +210,14 @@ describe('contextGet prompt recall (api-level)', () => {
   it('never admits a superseded, secret-flagged, cross-project, or pinned row as prompt-recall', async () => {
     enablePromptRecall(local);
     const superseded = seed(local, 'the superseded database indexing plan for the migration', {
-      superseded_by: 'some-newer-id',
+      supersededBy: 'some-newer-id',
     });
     const secret = seed(local, 'the migration database password is on the indexing plan doc', {
       tags: ['secret'],
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
     const crossProject = seed(local, 'a different project migration database indexing plan note', {
-      origin_project: 'proj-b',
+      originProject: 'proj-b',
     });
     const pinned = seed(local, 'pinned migration database indexing plan already always injected', {
       pinned: true,
@@ -372,7 +372,7 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
   });
 
   it('keeps a cross-project recall in the always-sent section on a repeated prompt', async () => {
-    seedCli('the deploy rollback plan for the postgres migration', { origin_project: 'some-other-project' });
+    seedCli('the deploy rollback plan for the postgres migration', { originProject: 'some-other-project' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
     const payload = JSON.stringify({ session_id: 'sess-z1-cli-x', prompt: 'postgres migration rollback plan' });

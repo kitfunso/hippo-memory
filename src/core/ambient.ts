@@ -111,18 +111,18 @@ export function foldAmbientRows(t: AmbientTallies, entries: readonly MemoryEntry
   const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   t.total += entries.length;
   for (const entry of entries) {
-    if (entry.superseded_by) continue;
+    if (entry.supersededBy) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
     t.strengthSum += calculateStrength(entry, currentTime, { ablation: strengthAblation() });
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
-    if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') t.negative++;
+    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;
-    if (entry.schema_fit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
+    if (entry.schemaFit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;
     if (entry.layer === Layer.Episodic) t.episodic++;
-    t.conflicts += entry.conflicts_with.length;
-    if (entry.extracted_from) t.extracted++;
-    if (entry.dag_level > t.maxDagLevel) t.maxDagLevel = entry.dag_level;
+    t.conflicts += entry.conflictsWith.length;
+    if (entry.extractedFrom) t.extracted++;
+    if (entry.dagLevel > t.maxDagLevel) t.maxDagLevel = entry.dagLevel;
   }
 }
 

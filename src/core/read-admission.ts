@@ -37,25 +37,25 @@ export interface DescendantAdmission {
 /** The secret half of the ambient policy alone: a flagged row is admitted only inside its owning project. */
 export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
-  const origin = e.origin_project;
+  const origin = e.originProject;
   if (origin === undefined || origin === null || origin === '') return false;
   return projectNames(currentProject).includes(origin);
 }
 
 /** The ambient envelope contextGet's pools and the two-store search share: handoff digest, secret, scope, origin. */
 export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
-  if (a.handoffSessionId !== undefined && e.source_session_id === a.handoffSessionId && isSessionDigestRow(e)) {
+  if (a.handoffSessionId !== undefined && e.sourceSessionId === a.handoffSessionId && isSessionDigestRow(e)) {
     return false;
   }
   if (!ambientSecretAdmit(e, a.currentProject)) return false;
   if (!passesScopeFilterForRecall(e.scope ?? null, a.exactScope, a.ownScope)) return false;
   if (a.includeCrossProject) return true;
-  return classifyOriginProject(e.origin_project, a.currentProject) !== 'cross-project';
+  return classifyOriginProject(e.originProject, a.currentProject) !== 'cross-project';
 }
 
 // Superseded rows go first because the envelope regex-scans content for secrets.
 export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
-  return !e.superseded_by && !isOwnCompactionItem(e, a.ownSessionId) && ambientEnvelopeAdmits(e, a);
+  return !e.supersededBy && !isOwnCompactionItem(e, a.ownSessionId) && ambientEnvelopeAdmits(e, a);
 }
 
 /** Why an ambient load leaves `e` out, or null when it keeps it. */
@@ -64,13 +64,13 @@ export function ambientRefusal(e: MemoryEntry, a: AmbientAdmission): AmbientRefu
   return e.pinned || isWorthSurfacing(e) ? null : 'quality';
 }
 
-export function descendantAdmits(row: Pick<MemoryEntry, 'scope' | 'origin_project'>, a: DescendantAdmission): boolean {
+export function descendantAdmits(row: Pick<MemoryEntry, 'scope' | 'originProject'>, a: DescendantAdmission): boolean {
   return (
     passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope) &&
-    (!a.project || classifyOriginProject(row.origin_project, a.project) !== 'cross-project')
+    (!a.project || classifyOriginProject(row.originProject, a.project) !== 'cross-project')
   );
 }
 
 function isOwnCompactionItem(e: MemoryEntry, ownSessionId: string | undefined): boolean {
-  return !!ownSessionId && e.source_session_id === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG);
+  return !!ownSessionId && e.sourceSessionId === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG);
 }

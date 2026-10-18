@@ -43,7 +43,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
   const revived: MemoryEntry = {
     ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: ctx.config.defaultHalfLifeDays }),
     ...dormant.entry,
-    last_retrieved: now.toISOString(),
+    lastRetrieved: now.toISOString(),
   };
   if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
   return { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) };

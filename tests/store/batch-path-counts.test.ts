@@ -63,7 +63,7 @@ describe('sleep after consolidation', () => {
 
   const contentsByTenant = (root: string) => {
     const out: Record<string, string[]> = {};
-    for (const e of loadEveryTenantEntries(root)) (out[e.tenant_id] ??= []).push(e.content);
+    for (const e of loadEveryTenantEntries(root)) (out[e.tenantId] ??= []).push(e.content);
     for (const list of Object.values(out)) list.sort();
     return out;
   };
@@ -84,7 +84,7 @@ describe('sleep after consolidation', () => {
       c === 'the deploy  runs on friday at noon' ? 'the deploy runs on friday at noon' : c,
     );
     expect(contentsByTenant(root)).toEqual({ default: keptDefault, acme: kept });
-    expect(result.ambient).toEqual(computeAmbientState(loadEveryTenantEntries(root).filter((e) => !e.superseded_by)));
+    expect(result.ambient).toEqual(computeAmbientState(loadEveryTenantEntries(root).filter((e) => !e.supersededBy)));
   });
 
   it('a dry run reports what a real run would remove and removes nothing', async () => {
@@ -132,7 +132,7 @@ describe('invalidateMatching with onlyId', () => {
     const after = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e]));
     expect(after.get(rows[2]!.id)).toMatchObject({
       confidence: 'stale',
-      half_life_days: Math.max(1, Math.floor(rows[2]!.half_life_days / 2)),
+      halfLifeDays: Math.max(1, Math.floor(rows[2]!.halfLifeDays / 2)),
     });
     expect(after.get(rows[2]!.id)!.tags).toContain('invalidated');
     expect(after.get(rows[1]!.id)!.confidence).toBe(rows[1]!.confidence);
@@ -225,7 +225,7 @@ describe('syncGlobalToLocal', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
     expect([...local.keys()].sort()).toEqual([rows[0]!.id, rows[1]!.id, rows[2]!.id, sameText.id, acme.id].sort());
-    expect(local.get(acme.id)!.tenant_id).toBe('acme');
+    expect(local.get(acme.id)!.tenantId).toBe('acme');
     const refusals = (() => {
       const handle = openHippoDb(localRoot);
       try {

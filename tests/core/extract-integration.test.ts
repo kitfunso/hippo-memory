@@ -38,13 +38,13 @@ describe('storeExtractedFacts', () => {
 
     for (const entry of entries) {
       expect(entry.layer).toBe(Layer.Semantic);
-      expect(entry.extracted_from).toBe(source.id);
+      expect(entry.extractedFrom).toBe(source.id);
       expect(entry.confidence).toBe('inferred');
       expect(entry.tags).toContain('extracted');
 
       const loaded = readEntry(dir, entry.id);
       expect(loaded).not.toBeNull();
-      expect(loaded!.extracted_from).toBe(source.id);
+      expect(loaded!.extractedFrom).toBe(source.id);
     }
 
     expect(entries[0]!.content).toBe('Alice set the deadline to March 15');

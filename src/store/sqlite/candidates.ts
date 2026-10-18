@@ -39,7 +39,7 @@ const AMBIENT_DRIFT_SQL = `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND ${
 type RunSql = (where: string, params: Array<string | number>) => MemoryEntry[];
 
 function inOrigins(e: MemoryEntry, origins: RecentOrigins): boolean {
-  const origin = e.origin_project ?? null;
+  const origin = e.originProject ?? null;
   return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
 }
 
@@ -306,7 +306,7 @@ export function loadTextsHoldingWordsAt(
       origin_project: string | null;
     }>;
     for (const row of rows) {
-      out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
+      out.push({ content: row.content, source: row.source ?? 'cli', originProject: row.origin_project });
     }
   }
   return out;
@@ -454,12 +454,12 @@ function tallyStatusRows(
       pinned: Boolean(row.pinned),
       confidence: row.confidence ?? 'observed',
       created: row.created,
-      last_retrieved: row.last_retrieved,
-      half_life_days: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
-      retrieval_count: Number(row.retrieval_count ?? 0),
-      emotional_valence: row.emotional_valence ?? 'neutral',
-      outcome_positive: Number(row.outcome_positive ?? 0),
-      outcome_negative: Number(row.outcome_negative ?? 0),
+      lastRetrieved: row.last_retrieved,
+      halfLifeDays: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
+      retrievalCount: Number(row.retrieval_count ?? 0),
+      emotionalValence: row.emotional_valence ?? 'neutral',
+      outcomePositive: Number(row.outcome_positive ?? 0),
+      outcomeNegative: Number(row.outcome_negative ?? 0),
     };
     const strength = calculateStrength(entry, now);
     const facets = confidenceFacets(entry, now);

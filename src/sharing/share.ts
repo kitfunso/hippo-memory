@@ -117,13 +117,13 @@ export function transferScore(entry: MemoryEntry): number {
   score -= specificCount * TRANSFER_WEIGHTS.perProjectTag;
 
   // High-retrieval memories are more likely to be universally useful
-  if (entry.retrieval_count >= REUSED_AFTER_RETRIEVALS) score += TRANSFER_WEIGHTS.retrieved;
+  if (entry.retrievalCount >= REUSED_AFTER_RETRIEVALS) score += TRANSFER_WEIGHTS.retrieved;
 
   // Pinned memories are important to their owner
   if (entry.pinned) score += TRANSFER_WEIGHTS.pinned;
 
   // Error-tagged memories often encode universal lessons
-  if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') {
+  if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') {
     score += TRANSFER_WEIGHTS.negativeValence;
   }
 
@@ -168,13 +168,13 @@ function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): M
   // The label keeps the folder name for a user-global row; a NULL
   // row gets `shared::`, which originFromSource reads as no project.
   const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
+  const originName = entry.originProject ?? fallbackOrigin(localRoot);
   const label = originName === '' ? fallbackName : (originName ?? '');
   return {
     ...entry,
     id: generateId('g'),
     source: `shared:${label}:${new Date().toISOString()}`,
-    origin_project: originName,
+    originProject: originName,
   };
 }
 

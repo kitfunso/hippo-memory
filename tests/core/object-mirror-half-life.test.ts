@@ -294,11 +294,11 @@ describe.each([
     vi.restoreAllMocks();
 
     const mirrors = saves.map((save) => storedMirror(root, save));
-    expect(mirrors.map((m) => m.half_life_days)).toEqual([base, base, base * 2]);
+    expect(mirrors.map((m) => m.halfLifeDays)).toEqual([base, base, base * 2]);
     const readsGiving = (i: number): number[] =>
       saves[i].reads.filter((at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength);
     for (const [i, stored] of mirrors.entries()) {
-      expect(stored.half_life_days).toBe(deriveHalfLife(base, stored));
+      expect(stored.halfLifeDays).toBe(deriveHalfLife(base, stored));
       // The row's stamp is one of the save's own reads, so the exact counts below never pass on an empty list.
       expect(saves[i].reads).toContain(Date.parse(stored.created));
     }

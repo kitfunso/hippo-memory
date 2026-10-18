@@ -137,9 +137,9 @@ describe('walks of every row a read names', () => {
     const root = makeRoot('bounded-tag-walks');
     const rows = seeded(root, 7, (i) => ({
       source: i % 3 === 0 ? 'cli' : `agent-memory:claude-code:p/note-${i}.md`,
-      origin_project: i === 5 ? 'beta' : 'alpha',
+      originProject: i === 5 ? 'beta' : 'alpha',
     }));
-    const tenant = rows[0].tenant_id;
+    const tenant = rows[0].tenantId;
     const db = openHippoDb(root);
     try {
       const imported = recordStatements(() => [
@@ -166,7 +166,7 @@ describe('walks of every row a read names', () => {
     const rows = seeded(root, 3, () => ({ source: 'agent-memory:claude-code:p/note.md' }));
     const db = openHippoDb(root);
     try {
-      const walk = projectTagReads(db, rows[0].tenant_id).liveEntriesBySourcePrefix('agent-memory:');
+      const walk = projectTagReads(db, rows[0].tenantId).liveEntriesBySourcePrefix('agent-memory:');
       const log = recordStatements(() => walk[Symbol.iterator]().next().value?.id);
       expect(log.result).toBe(rows[0].id);
       expect(log.reads.filter((read) => read.sql.includes(MEMORY_SELECT_COLUMNS)).map((r) => r.sql)).toEqual([

@@ -50,7 +50,7 @@ describe('sleep after consolidation', () => {
     expect(result.audit?.errorsRemoved).toBe(1);
     const after = loadAllEntries(root, 'default');
     expect(after.some((e) => e.id === junk.id)).toBe(false);
-    expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.superseded_by)));
+    expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.supersededBy)));
   });
 
   it('adds no whole-store read for the share phase', async () => {

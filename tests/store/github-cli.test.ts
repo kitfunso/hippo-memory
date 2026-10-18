@@ -187,7 +187,7 @@ describe('hippo github CLI', () => {
       GITHUB_WEBHOOK_SECRET_PREVIOUS: '',
     });
   const liveRaws = (artifactRef: string) =>
-    loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+    loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
   const retryCountOf = (id: number) =>
     sqliteSyncStore(hippoRoot)
       .connectorEvents.deadLetters('github', 'default', 100)
@@ -292,7 +292,7 @@ describe('hippo github CLI', () => {
   ] as const)('backfill --max %s ingests %i of three issues', async (max, expected) => {
     expect(await ingestedOfThreeIssues('acme/widgets', max)).toBe(expected);
     const stored = loadAllEntries(hippoRoot, 'default').filter((e) =>
-      e.artifact_ref?.startsWith('github://acme/widgets/issue/'),
+      e.artifactRef?.startsWith('github://acme/widgets/issue/'),
     );
     expect(stored).toHaveLength(expected);
   });

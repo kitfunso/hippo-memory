@@ -123,7 +123,7 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     make();
     for (let i = 0; i < 3; i++) seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
     const target = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
-      origin_project: 'some-other-project',
+      originProject: 'some-other-project',
       created: '2026-07-01T00:00:00.000Z',
     });
     await fireIn(p, 'x2', P1);

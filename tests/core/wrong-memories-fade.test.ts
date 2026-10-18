@@ -8,7 +8,7 @@ const now = new Date('2026-09-25T00:00:00Z');
 
 function fresh(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory('ENTSO-E power was removed from the daily refresh');
-  return { ...e, created: now.toISOString(), last_retrieved: now.toISOString(), ...overrides };
+  return { ...e, created: now.toISOString(), lastRetrieved: now.toISOString(), ...overrides };
 }
 
 function marked(e: MemoryEntry, bad: number, good = 0): MemoryEntry {
@@ -40,13 +40,13 @@ describe('wrong memories fade', () => {
   });
 
   it('an error-tagged lesson keeps its boost until it is marked wrong', () => {
-    const lesson = fresh({ emotional_valence: 'negative', tags: ['error'] });
+    const lesson = fresh({ emotionalValence: 'negative', tags: ['error'] });
     expect(calculateStrength(lesson, now)).toBe(1.0);
     expect(calculateStrength(marked(lesson, 1), now)).toBeCloseTo(0.5);
   });
 
   it('heavy recall does not shield a memory marked wrong', () => {
-    const e = marked(fresh({ retrieval_count: 633 }), 3);
+    const e = marked(fresh({ retrievalCount: 633 }), 3);
     expect(calculateStrength(e, now)).toBeCloseTo(0.125);
   });
 
@@ -55,17 +55,17 @@ describe('wrong memories fade', () => {
     const wrong = marked(fresh(), 1);
     const [r] = markRetrieved([right], now);
     const [w] = markRetrieved([wrong], now);
-    expect(r.half_life_days).toBe(right.half_life_days + 2);
-    expect(w.half_life_days).toBe(wrong.half_life_days);
-    expect(w.retrieval_count).toBe(wrong.retrieval_count + 1);
+    expect(r.halfLifeDays).toBe(right.halfLifeDays + 2);
+    expect(w.halfLifeDays).toBe(wrong.halfLifeDays);
+    expect(w.retrievalCount).toBe(wrong.retrievalCount + 1);
   });
 
   it('recall does not reset the decay clock of an aged memory marked wrong', () => {
     const monthAgo = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-    const wrong = marked(fresh({ half_life_days: 30, last_retrieved: monthAgo }), 1);
+    const wrong = marked(fresh({ halfLifeDays: 30, lastRetrieved: monthAgo }), 1);
     const before = calculateStrength(wrong, now);
     const [w] = markRetrieved([wrong], now);
-    expect(w.last_retrieved).toBe(monthAgo);
+    expect(w.lastRetrieved).toBe(monthAgo);
     expect(calculateStrength(w, now)).toBeCloseTo(before);
     expect(before).toBeLessThan(0.3);
   });

@@ -70,7 +70,7 @@ export function selectChildrenByParent(
     ).all(...chunk, ...tenant.args) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
-      const parentId = entry.dag_parent_id ?? '';
+      const parentId = entry.dagParentId ?? '';
       const bucket = byParent.get(parentId);
       if (bucket) bucket.push(entry);
       else byParent.set(parentId, [entry]);
@@ -345,7 +345,7 @@ export function loadEntryTextKeysPageAt(
   }>;
   const keys = rows.slice(0, page.limit).map((row) => ({
     id: row.id,
-    tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
+    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
     content: row.content,
     source: row.source,
   }));
@@ -500,9 +500,9 @@ function textKeyCandidates(db: DatabaseSyncLike, tenantId: TenantId, text: strin
     db,
     `SELECT id, tenant_id, content, source FROM memories WHERE ${where}${tenant.sql}`,
   ).all(phrase ?? longestWord(text), ...tenant.args) as Array<
-    Omit<EntryTextKey, 'tenant_id'> & { tenant_id: string | null }
+    Omit<EntryTextKey, 'tenantId'> & { tenant_id: string | null }
   >;
-  return rows.map((row) => ({ ...row, tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID }));
+  return rows.map(({ tenant_id, ...row }) => ({ ...row, tenantId: tenant_id ?? DEFAULT_TENANT_ID }));
 }
 
 /** The rows of `tenantId` that may hold one of `texts` word for word, spacing aside: the index's phrase hits, else the

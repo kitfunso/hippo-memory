@@ -32,7 +32,7 @@ const minute = (base: number, i: number): string => new Date(Date.UTC(2026, base
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = {
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    origin_project: PROJECT,
+    originProject: PROJECT,
     ...extra,
   };
   writeEntry(root, entry);
@@ -49,7 +49,7 @@ function seedItem(
   return seed(root, content, {
     tags: [COMPACTION_MEMORY_TAG],
     source: `${COMPACTION_SOURCE_PREFIX}${sessionId}`,
-    source_session_id: sessionId,
+    sourceSessionId: sessionId,
     created,
     ...extra,
   });
@@ -155,7 +155,7 @@ describe('own-session compaction items in recent context', () => {
 
   it('keeps an untagged row from the same session', async () => {
     const plain = seed(local, 'a plain note from the same session about the deploy migration check', {
-      source_session_id: OWN,
+      sourceSessionId: OWN,
       created: minute(6, 0),
     });
 

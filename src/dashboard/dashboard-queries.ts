@@ -423,7 +423,7 @@ async function openConflictsOf(
       id: c.id,
       reason: c.reason,
       score: c.score,
-      other: { id: other.id, content: other.content, strength, retrievals: other.retrieval_count },
+      other: { id: other.id, content: other.content, strength, retrievals: other.retrievalCount },
     });
   }
   return out;
@@ -444,7 +444,7 @@ export async function buildMemoryDetail(
 ): Promise<MemoryDetail> {
   const { snapshotId, nowMs, embedded } = options;
   const f = memoryFacts(entry, nowMs);
-  const project = projectIdentity(entry.origin_project);
+  const project = projectIdentity(entry.originProject);
   return {
     snapshotId,
     id: entry.id,
@@ -455,13 +455,13 @@ export async function buildMemoryDetail(
     strength: round3(f.strength),
     strength7d: round3(f.strength7d),
     strength30d: round3(f.strength30d),
-    halfLifeDays: entry.half_life_days,
-    retrievals: entry.retrieval_count,
-    lastRetrieved: entry.last_retrieved,
+    halfLifeDays: entry.halfLifeDays,
+    retrievals: entry.retrievalCount,
+    lastRetrieved: entry.lastRetrieved,
     created: entry.created,
     ageDays: round1(f.ageDays),
-    schemaFit: entry.schema_fit,
-    valence: entry.emotional_valence,
+    schemaFit: entry.schemaFit,
+    valence: entry.emotionalValence,
     confidence: f.confidence,
     agedOut: f.agedOut,
     pinned: entry.pinned,
@@ -469,7 +469,7 @@ export async function buildMemoryDetail(
     projectKey: project.key,
     projectName: project.name,
     scope: entry.scope,
-    tenant: entry.tenant_id,
+    tenant: entry.tenantId,
     kind: entry.kind,
     embedded,
     conflicts: await openConflictsOf(store, tenantId, entry, nowMs),

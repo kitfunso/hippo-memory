@@ -90,17 +90,17 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
   ): MemoryEntry => ({
     ...createMemory(text, opts),
     created: new Date(NOW.getTime() - ageDays * DAY + n++ * 1000).toISOString(),
-    last_retrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
+    lastRetrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
   });
   const clusters = Array.from({ length: counts.clusters }, (_, k) =>
     [0, 1, 2].map((j) => row(`c${k}alpha c${k}beta c${k}gamma c${k}delta variant v${j}`, 90, 1)),
   );
   const dormant = Array.from({ length: counts.dormant }, (_, i) => ({
     ...row(`faded d${i}alpha d${i}beta d${i}gamma`, 80, 60),
-    half_life_days: 7,
+    halfLifeDays: 7,
   }));
   const kept = row('kept source beta text', 70, 1);
-  const gone = { ...row('retired source alpha text', 70, 1), superseded_by: kept.id };
+  const gone = { ...row('retired source alpha text', 70, 1), supersededBy: kept.id };
   const header = '[Consolidated from 2 related memories, newest first]';
   const retired = {
     ...row(mergedText(header, [kept.content, gone.content]), 70, 1, { layer: Layer.Semantic, source: 'consolidation' }),
@@ -117,7 +117,7 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
     dormant: dormant.map((e) => e.id),
     retired: retired.id,
     keptSource: kept.id,
-    memberHalfLife: clusters[0]![0]!.half_life_days,
+    memberHalfLife: clusters[0]![0]!.halfLifeDays,
   };
 }
 

@@ -119,7 +119,7 @@ export interface AuditEvent {
 
 export type JsonObject = { [key: string]: JsonValue };
 
-export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
+export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'>;
 
 /** One project name, or every name a project's rows carry. */
 export type OriginFilter = string | readonly string[];

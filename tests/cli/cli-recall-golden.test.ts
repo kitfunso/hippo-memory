@@ -44,8 +44,8 @@ function seeded(
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts }),
     id,
     created,
-    last_retrieved: created,
-    valid_from: created,
+    lastRetrieved: created,
+    validFrom: created,
     strength: 1,
     ...extra,
   };
@@ -82,16 +82,16 @@ function seedLocal(hippoRoot: string): void {
       { scope: 'slack:private:C1' },
     ),
     seeded('deploy target was the old staging cluster', 'mem_golden_old', '2026-01-02T00:00:00.000Z', {
-      superseded_by: 'mem_golden_new',
+      supersededBy: 'mem_golden_new',
     }),
     seeded('deploy target is the new staging cluster in eu west', 'mem_golden_new', '2026-01-25T00:00:00.000Z', {
-      conflicts_with: ['mem_golden_plain'],
+      conflictsWith: ['mem_golden_plain'],
     }),
     seeded(
       'deploy goal work: migrate the rollout scripts to the new runner',
       'mem_golden_goal',
       '2026-01-15T00:00:00.000Z',
-      { retrieval_count: 3, outcome_positive: 2 },
+      { retrievalCount: 3, outcomePositive: 2 },
       { tags: ['goal-alpha'] },
     ),
     seeded(

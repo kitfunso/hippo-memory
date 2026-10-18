@@ -27,7 +27,7 @@ function inTenant(tenantId: string, origin: string | null) {
     hours: number,
     extra: Partial<MemoryEntry> = {},
     opts: SeedOptions = {},
-  ): MemoryEntry => seeded(content, id, ago(hours), { tenant_id: tenantId, origin_project: origin, ...extra }, opts);
+  ): MemoryEntry => seeded(content, id, ago(hours), { tenantId: tenantId, originProject: origin, ...extra }, opts);
 }
 
 function memoryRows(): MemoryEntry[] {
@@ -39,7 +39,7 @@ function memoryRows(): MemoryEntry[] {
       'pinned rule from the other project about its release train',
       'mem_a_pin_other',
       400,
-      { origin_project: 'other' },
+      { originProject: 'other' },
       { pinned: true },
     ),
     a(
@@ -54,7 +54,7 @@ function memoryRows(): MemoryEntry[] {
         `other project status update ${i} for the warehouse sync`,
         `mem_a_other_${String(i).padStart(2, '0')}`,
         0.5 + i / 10,
-        { origin_project: 'other' },
+        { originProject: 'other' },
       ),
     ),
     ...Array.from({ length: 6 }, (_, i) =>
@@ -62,37 +62,37 @@ function memoryRows(): MemoryEntry[] {
     ),
     ...Array.from({ length: 3 }, (_, i) =>
       a(`user global preference ${i}: keep commits small for review`, `mem_a_global_${i}`, 20 + i, {
-        origin_project: '',
+        originProject: '',
       }),
     ),
     a('team rota covers the rollout pager this week', 'mem_a_team', 30, {}, { scope: 'team:eng' }),
     a('alice reminder to renew the rollout certificate', 'mem_a_alice', 31, {}, { scope: OWN_SCOPE }),
     a('bob reminder to rotate the rollout dashboards', 'mem_a_bob', 32, {}, { scope: 'personal:private:bob' }),
     a('legacy import about the rollout freeze', 'mem_a_legacy', 33, {}, { scope: 'unknown:legacy' }),
-    a('rollout target was the old staging cluster', 'mem_a_old', 60, { superseded_by: 'mem_a_new' }),
+    a('rollout target was the old staging cluster', 'mem_a_old', 60, { supersededBy: 'mem_a_new' }),
     a('rollout target is the new staging cluster', 'mem_a_new', 41),
-    a('rollout note whose supersede link was blanked', 'mem_a_blank', 42, { superseded_by: '' }),
+    a('rollout note whose supersede link was blanked', 'mem_a_blank', 42, { supersededBy: '' }),
     a('archived rollout plan from last quarter', 'mem_a_archived', 43, { kind: 'archived' }),
     a('own project vault path lives in the ops runbook', 'mem_a_secret_own', 44, {}, { tags: ['secret'] }),
     a(
       'other project vault path lives in its runbook',
       'mem_a_secret_other',
       45,
-      { origin_project: 'other' },
+      { originProject: 'other' },
       { tags: ['Token'] },
     ),
     a(
       'user global vault path lives in the home runbook',
       'mem_a_secret_global',
       46,
-      { origin_project: '' },
+      { originProject: '' },
       { tags: ['password'] },
     ),
     a(
       'build failed when the zebra cache was cold',
       'mem_a_error',
       47,
-      { conflicts_with: ['mem_a_own_1'] },
+      { conflictsWith: ['mem_a_own_1'] },
       {
         tags: ['error:build'],
         layer: Layer.Semantic,
@@ -102,15 +102,15 @@ function memoryRows(): MemoryEntry[] {
         dagLevel: 2,
       },
     ),
-    a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, { origin_project: null }),
-    a('rollout lesson that decays within a day', 'mem_a_decayed', 200, { half_life_days: 1 }),
-    a('rollout lesson that kept paying off', 'mem_a_liked', 100, { outcome_positive: 3, last_retrieved: ago(2) }),
-    a('rollout lesson with no half life', 'mem_a_flat', 49, { half_life_days: 0 }),
+    a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, { originProject: null }),
+    a('rollout lesson that decays within a day', 'mem_a_decayed', 200, { halfLifeDays: 1 }),
+    a('rollout lesson that kept paying off', 'mem_a_liked', 100, { outcomePositive: 3, lastRetrieved: ago(2) }),
+    a('rollout lesson with no half life', 'mem_a_flat', 49, { halfLifeDays: 0 }),
     b('globex pinned rule about the deploy window', 'mem_b_pin', 50, {}, { pinned: true }),
     ...Array.from({ length: 5 }, (_, i) => b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i)),
     seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', {
-      tenant_id: TENANT_B,
-      origin_project: PROJECT,
+      tenantId: TENANT_B,
+      originProject: PROJECT,
     }),
   ];
 }

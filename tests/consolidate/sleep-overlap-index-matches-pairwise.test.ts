@@ -108,9 +108,9 @@ function randomEntries(rnd: () => number, n: number): MemoryEntry[] {
       ...createMemory(text, { layer, tags }),
       id: `e${k}`,
       created,
-      last_retrieved: created,
-      half_life_days: [1, 7, 30][Math.floor(rnd() * 3)],
-      superseded_by: rnd() < 0.05 ? 'e0' : null,
+      lastRetrieved: created,
+      halfLifeDays: [1, 7, 30][Math.floor(rnd() * 3)],
+      supersededBy: rnd() < 0.05 ? 'e0' : null,
       scope: rnd() < 0.05 ? 'quarantine:private:test' : null,
     };
   });
@@ -160,7 +160,7 @@ describe('sleep overlap index matches the pairwise passes', () => {
       ...createMemory(text, {}),
       id: `c${k}`,
       created: NOW.toISOString(),
-      last_retrieved: NOW.toISOString(),
+      lastRetrieved: NOW.toISOString(),
     }));
     const got = detectConflicts(onConflict, NOW);
     expect(got).toEqual(pairwiseDetectConflicts(onConflict, NOW));

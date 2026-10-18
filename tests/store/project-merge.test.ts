@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { toWire } from '../../src/core/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
@@ -29,7 +30,7 @@ afterEach(() => {
 
 const T = 'default';
 const row = (text: string, origin: string | null, extra: Partial<MemoryEntry> = {}): MemoryEntry => {
-  const entry = { ...createMemory(text, { layer: Layer.Semantic }), origin_project: origin, ...extra };
+  const entry = { ...createMemory(text, { layer: Layer.Semantic }), originProject: origin, ...extra };
   writeEntry(home, entry);
   return entry;
 };
@@ -68,24 +69,24 @@ describe('hippo projects merge', () => {
 
     const dry = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: true });
     expect(dry.setAside).toEqual([copy.id]);
-    expect(byId().get(lesson.id)!.origin_project).toBe('repo-wt-a');
+    expect(byId().get(lesson.id)!.originProject).toBe('repo-wt-a');
     expect(dry.backup).toBeNull();
 
     const r = projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
     const rows = byId();
     expect(rows.has(copy.id)).toBe(false);
-    expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.origin_project).toBe('repo');
-    expect(rows.get(held.id)!.origin_project).toBe('repo');
+    expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.originProject).toBe('repo');
+    expect(rows.get(held.id)!.originProject).toBe('repo');
     // The next sync renames its container prefix, so the import keeps its id, source and tag.
     expect(rows.get(kept.id)).toMatchObject({
-      origin_project: 'repo',
+      originProject: 'repo',
       source: kept.source,
       tags: ['claude-code-memory'],
     });
-    expect(rows.get(pinned.id)!.origin_project).toBe('repo');
+    expect(rows.get(pinned.id)!.originProject).toBe('repo');
     expect(rows.get(pinned.id)!.tags).toContain('claude-code-memory');
-    expect(rows.get(lesson.id)!.origin_project).toBe('repo');
-    expect(rows.get(other.id)!.origin_project).toBe('elsewhere');
+    expect(rows.get(lesson.id)!.originProject).toBe('repo');
+    expect(rows.get(other.id)!.originProject).toBe('elsewhere');
     expect(mirror(lesson.id)).toContain('origin_project: repo');
     expect(mirror(copy.id)).toBeNull();
     expect(existsSync(r.backup!)).toBe(true);
@@ -114,7 +115,7 @@ describe('hippo projects merge', () => {
       T,
       faded.id,
       faded.content,
-      JSON.stringify({ ...faded, origin_project: 'repo-wt-a' }),
+      JSON.stringify({ ...toWire(faded), origin_project: 'repo-wt-a' }),
       new Date().toISOString(),
     );
     db.prepare(
@@ -125,7 +126,7 @@ describe('hippo projects merge', () => {
 
     expect(r.dormantRestamped).toEqual([faded.id]);
     expect(r.compactions).toBe(1);
-    expect(listDormantSnapshots(db, T)[0].entry.origin_project).toBe('repo');
+    expect(listDormantSnapshots(db, T)[0].entry.originProject).toBe('repo');
   });
 });
 
@@ -144,16 +145,16 @@ describe('hippo projects repair', () => {
     open();
 
     expect(projectNameRepair(ctx(), { dryRun: true }).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
-    expect(byId().get(one.id)!.origin_project).toBe('');
+    expect(byId().get(one.id)!.originProject).toBe('');
 
     const r = projectNameRepair(ctx(), { dryRun: false });
     const rows = byId();
-    expect(rows.get(one.id)!.origin_project).toBe('proj-b');
+    expect(rows.get(one.id)!.originProject).toBe('proj-b');
     expect(rows.has(two.id)).toBe(false);
     expect(r.setAside).toEqual([two.id]);
     expect(r.untraced).toEqual([none.id]);
-    expect(rows.get(none.id)!.origin_project).toBe('');
-    expect(rows.get(global.id)!.origin_project).toBe('');
+    expect(rows.get(none.id)!.originProject).toBe('');
+    expect(rows.get(global.id)!.originProject).toBe('');
     expect(mirror(one.id)).toContain('origin_project: proj-b');
     expect(mirror(two.id)).toBeNull();
   });
@@ -173,9 +174,9 @@ describe('hippo projects repair', () => {
     const rows = byId();
     expect(r.toProject.map((p) => p.id).sort()).toEqual(tagged.map((e) => e.id).sort());
     expect(r.setAside.slice().sort()).toEqual(aside.map((e) => e.id).sort());
-    for (const e of tagged) expect(rows.get(e.id)!.origin_project).toBe('proj-b');
+    for (const e of tagged) expect(rows.get(e.id)!.originProject).toBe('proj-b');
     for (const e of aside) expect(rows.has(e.id)).toBe(false);
-    for (const e of [b1, b2, c1, ...bystanders]) expect(rows.get(e.id)!.origin_project).toBe(e.origin_project);
+    for (const e of [b1, b2, c1, ...bystanders]) expect(rows.get(e.id)!.originProject).toBe(e.originProject);
     expect(mirror(tagged[0].id)).toContain('origin_project: proj-b');
     expect(mirror(aside[0].id)).toBeNull();
   });
@@ -223,8 +224,8 @@ describe('hippo projects repair', () => {
 
     const r = projectNameRepair(ctx(), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'old-name', into: 'repo' }]);
-    expect(byId().get(lesson.id)!.origin_project).toBe('repo');
-    expect(byId().get(kept.id)!.origin_project).toBe('gone-name');
+    expect(byId().get(lesson.id)!.originProject).toBe('repo');
+    expect(byId().get(kept.id)!.originProject).toBe('gone-name');
     expect(mirror(lesson.id)).toContain('origin_project: repo');
   });
 
@@ -248,7 +249,7 @@ describe('hippo projects repair', () => {
     // Planned against the folded names, as apply sees them: both parents are under c.
     expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
     expect(projectNameRepair(ctx(), { dryRun: false }).toProject).toEqual(dry.toProject);
-    expect(byId().get(lesson.id)!.origin_project).toBe('a');
+    expect(byId().get(lesson.id)!.originProject).toBe('a');
   });
 
   it('folds nothing in a project store, whose names never came from a cwd', () => {

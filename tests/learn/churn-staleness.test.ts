@@ -117,7 +117,7 @@ describe('detectChurnStale', () => {
   ): ReturnType<typeof createMemory> {
     const mem = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], pinned: opts.pinned });
     if (opts.created) mem.created = opts.created;
-    mem.origin_project = opts.origin === undefined ? project : opts.origin;
+    mem.originProject = opts.origin === undefined ? project : opts.origin;
     writeEntry(hippoRoot, mem);
     return mem;
   }
@@ -675,7 +675,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: [CHURN_STALE_TAG],
     });
-    child.dag_parent_id = parent.id;
+    child.dagParentId = parent.id;
     for (const results of [
       search('quasar ledger', [parent, child]),
       await hybridSearch('quasar ledger', [parent, child]),
@@ -814,7 +814,7 @@ describe('hippo invalidate --churn (CLI)', () => {
     const hippoRoot = path.join(repoDir, '.hippo');
     const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
-    mem.origin_project = path.basename(repoDir).toLowerCase();
+    mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(hippoRoot, mem);
     fs.writeFileSync(path.join(repoDir, 'k.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
@@ -833,7 +833,7 @@ describe('hippo invalidate --churn (CLI)', () => {
     initStore(globalRoot);
     const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
-    mem.origin_project = path.basename(repoDir).toLowerCase();
+    mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(globalRoot, mem);
     fs.writeFileSync(path.join(repoDir, 'k.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
@@ -845,7 +845,7 @@ describe('hippo invalidate --churn (CLI)', () => {
   it('exits non-zero when the git read fails', async () => {
     const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
-    mem.origin_project = path.basename(repoDir).toLowerCase();
+    mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(path.join(repoDir, '.hippo'), mem);
     execFileSync('git', ['update-ref', '-d', 'HEAD'], { cwd: repoDir });
 
@@ -872,7 +872,7 @@ describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
   function setupChurnMemory(hippoRoot: string): string {
     const mem = createMemory('see m.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
-    mem.origin_project = path.basename(repoDir).toLowerCase();
+    mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(hippoRoot, mem);
     fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);

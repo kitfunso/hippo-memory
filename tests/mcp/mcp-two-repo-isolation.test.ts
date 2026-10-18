@@ -81,7 +81,7 @@ const ids = {
 const pairs = { acme: 0, beta: 0, slack: 0, none: 0 };
 
 function seed(content: string, origin: string | null, opts: Partial<CreateMemoryOptions> = {}): string {
-  const entry: MemoryEntry = { ...createMemory(content, { tenantId: TENANT, ...opts }), origin_project: origin };
+  const entry: MemoryEntry = { ...createMemory(content, { tenantId: TENANT, ...opts }), originProject: origin };
   writeEntry(store, entry);
   return entry.id;
 }
@@ -422,15 +422,15 @@ describe('MCP on a shared store with two repos', () => {
   it("hippo_remember stamps the caller's repo, and hippo_outcome touches only what that repo recalled", async () => {
     const remembered = await tool('acme', 'hippo_remember', { text: 'the acme repo pins node twenty two' });
     const newId = /Remembered \[([^\]]+)\]/.exec(remembered.text)?.[1] ?? '';
-    expect(readEntry(store, newId)?.origin_project, remembered.text).toBe('acme');
+    expect(readEntry(store, newId)?.originProject, remembered.text).toBe('acme');
 
     await shown('beta', 'hippo_recall', { query: 'lighthouse' });
     await shown('acme', 'hippo_recall', { query: 'lighthouse' });
-    const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcome_positive]));
+    const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcomePositive]));
     const applied = await tool('acme', 'hippo_outcome', { good: true });
     expect(applied.text).toMatch(/Applied positive outcome to [1-9]\d* memories/);
     const touched = loadAllEntries(store, 'default')
-      .filter((e) => e.outcome_positive !== before.get(e.id))
+      .filter((e) => e.outcomePositive !== before.get(e.id))
       .map((e) => e.id);
     expectOnly(touched, [ids.acme], HIDDEN_FROM_ACME(), 'acme outcome');
   });

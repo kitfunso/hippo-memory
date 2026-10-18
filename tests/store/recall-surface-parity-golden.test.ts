@@ -451,13 +451,13 @@ describe('shared store recall, MCP vs HTTP', () => {
       writeEntry(
         root,
         seeded('lighthouse rota for the acme repo', 'mem_d18_acme', '2026-01-20T00:00:00.000Z', {
-          origin_project: 'acme',
+          originProject: 'acme',
         }),
       );
       writeEntry(
         root,
         seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', {
-          origin_project: 'beta',
+          originProject: 'beta',
         }),
       );
       const mcp = toolReply(

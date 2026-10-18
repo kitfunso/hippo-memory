@@ -24,7 +24,7 @@ export interface SessionRawCount extends SessionRawQuery {
 export type { DescendantAdmission };
 
 /** The two fields `descendantAdmits` judges a row by. */
-export type DescendantOrigin = Pick<MemoryEntry, 'scope' | 'origin_project'>;
+export type DescendantOrigin = Pick<MemoryEntry, 'scope' | 'originProject'>;
 
 export interface DescendantPage {
   /** How many rows the caller reads whole, counted from the first row of the first level. */

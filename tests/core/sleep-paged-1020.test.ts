@@ -55,7 +55,7 @@ function seeded(): string {
   roots.push(root);
   for (const [id, text, { tenantId = 'default', pinned = false, retrievals = 0 }] of ROWS) {
     const entry = createMemory(text, { tags: ['ops'], tenantId, pinned, layer: Layer.Semantic });
-    writeEntry(root, { ...entry, id, retrieval_count: retrievals });
+    writeEntry(root, { ...entry, id, retrievalCount: retrievals });
   }
   return root;
 }

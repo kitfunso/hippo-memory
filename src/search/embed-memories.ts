@@ -246,7 +246,7 @@ async function writeVectorPage(
     const row: VectorRowWrite = withParticles
       ? { memoryId: entry.id, vector, particle: initializeParticle(entry, vector) }
       : { memoryId: entry.id, vector };
-    byTenant.set(entry.tenant_id, [...(byTenant.get(entry.tenant_id) ?? []), row]);
+    byTenant.set(entry.tenantId, [...(byTenant.get(entry.tenantId) ?? []), row]);
   });
   let written = 0;
   for (const [tenantId, rows] of byTenant) {

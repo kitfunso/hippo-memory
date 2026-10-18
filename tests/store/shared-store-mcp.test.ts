@@ -112,7 +112,7 @@ describe('MCP writes on a shared store', () => {
       { 'x-hippo-project': 'acme' },
     );
     expect(body.result?.content[0]?.text).toMatch(/Remembered/);
-    expect(loadAllEntries(store, 'default').map((e) => e.origin_project)).toEqual(['acme']);
+    expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme']);
   });
 
   it('learn with the MCP profile stores NULL rows', async () => {
@@ -122,7 +122,7 @@ describe('MCP writes on a shared store', () => {
     expect(result.added).toBe(1);
     const rows = loadAllEntries(store, 'default');
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.origin_project).toBeNull();
+    expect(rows[0]?.originProject).toBeNull();
   });
 
   it('hippo_remember takes exactly text, error, pin, tag and personal', async () => {

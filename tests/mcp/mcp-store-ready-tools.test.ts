@@ -100,9 +100,9 @@ const PROJECT = 'proj';
 const note = (id: string): string => `${id} holds a note about the rollout`;
 const minute = (m: number): string => `2026-03-01T10:0${m}:00.000Z`;
 const row = (tenantId: string, id: string, m: number, extra: Partial<MemoryEntry>): MemoryEntry =>
-  seeded(note(id), id, minute(m), { tenant_id: tenantId, origin_project: PROJECT, ...extra });
+  seeded(note(id), id, minute(m), { tenantId: tenantId, originProject: PROJECT, ...extra });
 const raw = (tenantId: string, id: string, m: number): MemoryEntry =>
-  row(tenantId, id, m, { kind: 'raw', source_session_id: 'sess-mcp' });
+  row(tenantId, id, m, { kind: 'raw', sourceSessionId: 'sess-mcp' });
 
 // serve() blocks hippo.db for a store of another kind, so a tool that still opened it would answer store_not_ported here.
 describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
@@ -219,9 +219,9 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
 
   it("hippo_drill lists the store's children of a summary, without a child only hippo.db holds", async () => {
     const child = (tenantId: string, id: string, m: number): MemoryEntry =>
-      row(tenantId, id, m, { dag_parent_id: 'sum_1', dag_level: 1 });
+      row(tenantId, id, m, { dagParentId: 'sum_1', dagLevel: 1 });
     for (const entry of [
-      row(TENANT_A, 'sum_1', 5, { dag_level: 2, descendant_count: 2 }),
+      row(TENANT_A, 'sum_1', 5, { dagLevel: 2, descendantCount: 2 }),
       child(TENANT_A, 'fact_1', 1),
       child(TENANT_A, 'fact_2', 2),
       child(TENANT_B, 'fact_b', 3),

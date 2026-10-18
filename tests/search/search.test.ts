@@ -70,8 +70,8 @@ describe('BM25 search', () => {
     const strong = createMemory('cache refresh data pipeline issue');
     const weak = createMemory('cache refresh data pipeline issue');
 
-    const e1 = { ...strong, last_retrieved: recentDate, retrieval_count: 10 };
-    const e2 = { ...weak, last_retrieved: oldDate, retrieval_count: 0 };
+    const e1 = { ...strong, lastRetrieved: recentDate, retrievalCount: 10 };
+    const e2 = { ...weak, lastRetrieved: oldDate, retrievalCount: 0 };
 
     const results = search('cache refresh', [e1, e2], { budget: 10000 });
     expect(results.length).toBe(2);
@@ -154,19 +154,19 @@ describe('decision recall boost', () => {
 describe('markRetrieved', () => {
   it('increments retrieval_count and updates last_retrieved', () => {
     const entry = createMemory('test memory');
-    const before = entry.retrieval_count;
+    const before = entry.retrievalCount;
     const now = new Date();
 
     const [updated] = markRetrieved([entry], now);
-    expect(updated.retrieval_count).toBe(before + 1);
-    expect(updated.last_retrieved).toBe(now.toISOString());
+    expect(updated.retrievalCount).toBe(before + 1);
+    expect(updated.lastRetrieved).toBe(now.toISOString());
   });
 
   it('extends half-life by 2 days per retrieval', () => {
     const entry = createMemory('test memory');
-    const beforeHL = entry.half_life_days;
+    const beforeHL = entry.halfLifeDays;
     const [updated] = markRetrieved([entry]);
-    expect(updated.half_life_days).toBe(beforeHL + 2);
+    expect(updated.halfLifeDays).toBe(beforeHL + 2);
   });
 
   // Replaces 'wakes stale memories back to observed on retrieval' (471ba86),

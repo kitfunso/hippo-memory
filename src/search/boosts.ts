@@ -41,15 +41,15 @@ function recencyBoost(entry: MemoryEntry, now: Date): number {
 
 /** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it too. */
 export function outcomeMultiplier(entry: MemoryEntry): number {
-  const pos = entry.outcome_positive ?? 0;
-  const neg = entry.outcome_negative ?? 0;
+  const pos = entry.outcomePositive ?? 0;
+  const neg = entry.outcomeNegative ?? 0;
   if (isOutcomeFastAblated() || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
   return Math.max(OUTCOME_NUDGE_MIN, Math.min(OUTCOME_NUDGE_MAX, 1 + OUTCOME_NUDGE_SLOPE * Math.tanh((pos - neg) / 2)));
 }
 
 /** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same deboost. */
 export function isDagSummary(entry: MemoryEntry): boolean {
-  return entry.dag_level === DAG_LEVEL.topic || entry.dag_level === DAG_LEVEL.entity;
+  return entry.dagLevel === DAG_LEVEL.topic || entry.dagLevel === DAG_LEVEL.entity;
 }
 
 const isDeboost = (value: number | undefined): value is number =>
@@ -63,8 +63,8 @@ export function resolveSummaryDeboost(perCall?: number, configured?: number): nu
 
 /** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get 1.0. */
 function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
-  if (!isDagSummary(entry) || !entry.last_rebuilt_at) return 1.0;
-  const rebuiltMs = new Date(entry.last_rebuilt_at).getTime();
+  if (!isDagSummary(entry) || !entry.lastRebuiltAt) return 1.0;
+  const rebuiltMs = new Date(entry.lastRebuiltAt).getTime();
   if (!Number.isFinite(rebuiltMs)) return 1.0;
   const ageMs = now.getTime() - rebuiltMs;
   return ageMs >= 0 && ageMs <= FRESHNESS_WINDOW_MS ? DEFAULT_FRESHNESS_BOOST : 1.0;

@@ -48,15 +48,15 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
     ...createMemory(`${tenant} ${text}`, { baseHalfLifeDays: 7, tenantId: tenant, ...opts }),
     id: `mem_${tenant}_${String(n).padStart(2, '0')}`,
     created: new Date(NOW.getTime() - ageDays * DAY + n++ * 1000).toISOString(),
-    last_retrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
-    origin_project: 'hippo',
+    lastRetrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
+    originProject: 'hippo',
     ...extra,
   });
   const cluster = [0, 1, 2].map((k) =>
     row(`rotate the staging tls certificates before expiry and page the on-call channel v${k}`, 30, 1),
   );
   const kept = row('the billing export lands in the shared bucket nightly', 25, 2);
-  const gone = row('the billing export lands in the legacy ftp drop nightly', 26, 2, {}, { superseded_by: kept.id });
+  const gone = row('the billing export lands in the legacy ftp drop nightly', 26, 2, {}, { supersededBy: kept.id });
   return [
     ...cluster,
     row(
@@ -64,23 +64,23 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
       30,
       1,
       {},
-      { origin_project: 'other' },
+      { originProject: 'other' },
     ),
     row('payments webhook retries are enabled for the eu cluster', 12, 1, { pinned: true }),
     row('payments webhook retries are disabled for the eu cluster', 11, 1),
-    row('faded note about the retired staging cluster', 400, 400, {}, { half_life_days: 3 }),
+    row('faded note about the retired staging cluster', 400, 400, {}, { halfLifeDays: 3 }),
     // Outcomes the memory-value weights rank in the tenant's top 30%, so that case rescues it.
     row(
       'faded note about the old vpn gateway',
       390,
       390,
       {},
-      { half_life_days: 3, outcome_positive: 6, outcome_negative: 9 },
+      { halfLifeDays: 3, outcomePositive: 6, outcomeNegative: 9 },
     ),
-    row('faded deploy key for the build agents', 380, 380, { tags: ['secret'] }, { half_life_days: 3 }),
-    row('decision: the api keeps semver for every public route', 60, 5, { source: 'decision' }, { half_life_days: 90 }),
+    row('faded deploy key for the build agents', 380, 380, { tags: ['secret'] }, { halfLifeDays: 3 }),
+    row('decision: the api keeps semver for every public route', 60, 5, { source: 'decision' }, { halfLifeDays: 90 }),
     row('the dashboard caches tenant snapshots for five minutes', 50, 3, { layer: Layer.Semantic }),
-    row('incident review notes for the march queue outage', 45, 40, {}, { retrieval_count: 3 }),
+    row('incident review notes for the march queue outage', 45, 40, {}, { retrievalCount: 3 }),
     row('the search index rebuild runs after every schema change', 15, 2),
     kept,
     gone,

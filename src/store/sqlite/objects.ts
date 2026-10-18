@@ -324,7 +324,7 @@ interface MirroredWrite {
  * moves; the flag is read under the save's write lock, so the two cannot interleave. */
 function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry {
   if (getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '') return mirror;
-  const legacy = { ...mirror, half_life_days: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
+  const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
   return { ...legacy, strength: calculateStrength(legacy) };
 }
 

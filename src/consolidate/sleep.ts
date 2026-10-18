@@ -214,10 +214,10 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
 // rescue.
 function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): void {
   const { result } = run;
-  const rescueEvent = (entry: Pick<MemoryEntry, 'id' | 'tenant_id'>): AppendAuditOpts => {
+  const rescueEvent = (entry: Pick<MemoryEntry, 'id' | 'tenantId'>): AppendAuditOpts => {
     const rank = rankById.get(entry.id);
     return {
-      tenantId: entry.tenant_id,
+      tenantId: entry.tenantId,
       actor: 'sleep',
       op: 'mv_rescue',
       targetId: entry.id,

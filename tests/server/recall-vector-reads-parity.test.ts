@@ -88,10 +88,10 @@ const ADMITTED: readonly SeedRow[] = [
 // Each sits at cosine 1 from the query; 50 rows of another tenant fill the top 50 unless the filter runs before the cut.
 const HIDDEN: readonly SeedRow[] = [
   seedRow('mem_x_archived', 'archived rollout plan', 10, NEAR, { kind: 'archived' }),
-  seedRow('mem_x_superseded', 'old rollout plan', 11, NEAR, { superseded_by: 'mem_l_api' }),
+  seedRow('mem_x_superseded', 'old rollout plan', 11, NEAR, { supersededBy: 'mem_l_api' }),
   seedRow('mem_x_private', 'private rollout token', 12, NEAR, { scope: 'slack:private:C1' }),
   ...Array.from({ length: 50 }, (_, i) =>
-    seedRow(`mem_o_${String(i).padStart(2, '0')}`, QUERY, 13, NEAR, { tenant_id: 'other' }),
+    seedRow(`mem_o_${String(i).padStart(2, '0')}`, QUERY, 13, NEAR, { tenantId: 'other' }),
   ),
 ];
 const HIDDEN_IDS = [...HIDDEN.map((r) => r.entry.id), ORPHAN];

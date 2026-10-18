@@ -84,7 +84,7 @@ describe('__session-end-worker with no store in the folder', () => {
     // Capture splits the turn into sentences, and only the 'Never' sentence holds the rule.
     const saved = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE));
     expect(saved).toHaveLength(1);
-    expect(saved.every((e) => e.origin_project === 'work')).toBe(true);
+    expect(saved.every((e) => e.originProject === 'work')).toBe(true);
   });
 
   it('saves its own copy of a lesson another project already holds in the global store', async () => {
@@ -101,7 +101,7 @@ describe('__session-end-worker with no store in the folder', () => {
 
     const origins = loadAllEntries(globalRoot, 'default')
       .filter((e) => e.content.includes(RULE))
-      .map((e) => e.origin_project);
+      .map((e) => e.originProject);
     expect(origins).toContain('other');
     expect(origins).toContain('work');
   });
@@ -220,7 +220,7 @@ describe('__codex-session-end-worker with no store in the folder', () => {
 
     const saved = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE));
     expect(saved).toHaveLength(1);
-    expect(saved.every((e) => e.origin_project === 'work')).toBe(true);
+    expect(saved.every((e) => e.originProject === 'work')).toBe(true);
   });
 
   it('with no store anywhere, exits 0, creates no store and logs the skip', async () => {

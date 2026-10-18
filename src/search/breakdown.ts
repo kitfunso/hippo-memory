@@ -15,11 +15,11 @@ export function addDagFields(
   deboost: number,
   freshness: number,
 ): ScoreBreakdown {
-  if (entry.dag_level !== undefined) breakdown.dagLevel = entry.dag_level;
-  if (entry.descendant_count !== undefined) breakdown.descendantCount = entry.descendant_count;
+  if (entry.dagLevel !== undefined) breakdown.dagLevel = entry.dagLevel;
+  if (entry.descendantCount !== undefined) breakdown.descendantCount = entry.descendantCount;
   if (isDagSummary(entry)) {
-    breakdown.lastRebuiltAt = entry.last_rebuilt_at ?? null;
-    breakdown.rebuildCount = entry.rebuild_count ?? 0;
+    breakdown.lastRebuiltAt = entry.lastRebuiltAt ?? null;
+    breakdown.rebuildCount = entry.rebuildCount ?? 0;
     breakdown.summaryDeboost = deboost;
     breakdown.summaryFreshnessBoost = freshness;
   }

@@ -36,7 +36,7 @@ describe('Decay pass', () => {
     // Create an entry that's very old (strength will be effectively 0)
     const entry = createMemory7('ancient memory');
     const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString(); // 10 years
-    const ancient = { ...entry, last_retrieved: veryOldDate, pinned: false };
+    const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
     const result = await consolidate(tmpDir, { now: new Date() });
@@ -51,7 +51,7 @@ describe('Decay pass', () => {
 
     const entry = createMemory7('permanent rule', { pinned: true });
     const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString();
-    const ancient = { ...entry, last_retrieved: veryOldDate, pinned: true };
+    const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: true };
     writeEntry(tmpDir, ancient);
 
     await consolidate(tmpDir, { now: new Date() });
@@ -68,7 +68,7 @@ describe('Decay pass', () => {
 
     const entry = createMemory7('ancient memory');
     const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString();
-    const ancient = { ...entry, last_retrieved: veryOldDate, pinned: false };
+    const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
     const result = await consolidate(tmpDir, { dryRun: true, now: new Date() });
@@ -85,7 +85,7 @@ describe('Decay pass', () => {
     fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
     const now = new Date('2026-06-01T00:00:00.000Z');
     const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
-    const faded = { half_life_days: 1, created: at, last_retrieved: at };
+    const faded = { halfLifeDays: 1, created: at, lastRetrieved: at };
     writeEntry(tmpDir, { ...createMemory7('an old note about a retired staging hostname nobody uses'), ...faded });
     writeEntry(tmpDir, {
       ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }),
@@ -117,7 +117,7 @@ describe('Decay pass', () => {
     const entry = createMemory7('stale memory candidate', { confidence: 'observed', tags: ['error'] });
     const now = new Date();
     const oldDate = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString();
-    const staleCandidate = { ...entry, last_retrieved: oldDate, confidence: 'observed' as const };
+    const staleCandidate = { ...entry, lastRetrieved: oldDate, confidence: 'observed' as const };
     writeEntry(tmpDir, staleCandidate);
 
     await consolidate(tmpDir, { now });
@@ -156,19 +156,19 @@ describe('Replay pass (integration)', () => {
     // Load all entries and check: exactly 5 should have retrieval_count > 0
     // (only replay bumps retrieval_count during consolidate)
     const after = loadAllEntries(tmpDir, 'default');
-    const rehearsed = after.filter((e) => e.retrieval_count > 0);
+    const rehearsed = after.filter((e) => e.retrievalCount > 0);
     expect(rehearsed).toHaveLength(5);
 
     // Each rehearsed entry must have:
     // - retrieval_count = 1 (started at 0)
     // - last_retrieved updated to a recent timestamp
     // - half_life_days bumped by +2 from the default
-    const defaultHalfLife = memories[0].half_life_days;
+    const defaultHalfLife = memories[0].halfLifeDays;
     const recentThreshold = new Date(Date.now() - 60_000).getTime();
     for (const r of rehearsed) {
-      expect(r.retrieval_count).toBe(1);
-      expect(new Date(r.last_retrieved).getTime()).toBeGreaterThan(recentThreshold);
-      expect(r.half_life_days).toBe(defaultHalfLife + 2);
+      expect(r.retrievalCount).toBe(1);
+      expect(new Date(r.lastRetrieved).getTime()).toBeGreaterThan(recentThreshold);
+      expect(r.halfLifeDays).toBe(defaultHalfLife + 2);
     }
   });
 
@@ -189,7 +189,7 @@ describe('Replay pass (integration)', () => {
 
     expect(result.replayed).toBe(0);
     const after = loadAllEntries(tmpDir, 'default');
-    const touched = after.filter((e) => e.retrieval_count > 0);
+    const touched = after.filter((e) => e.retrievalCount > 0);
     expect(touched).toHaveLength(0);
   });
 
@@ -208,7 +208,7 @@ describe('Replay pass (integration)', () => {
     expect(result.replayed).toBe(2);
     expect(result.details.some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
     const after = loadAllEntries(tmpDir, 'default');
-    const touched = after.filter((e) => e.retrieval_count > 0);
+    const touched = after.filter((e) => e.retrievalCount > 0);
     expect(touched).toHaveLength(2);
   });
 });
@@ -261,8 +261,8 @@ describe('Merge pass', () => {
 
     const m1 = readEntry(tmpDir, e1.id);
     const m2 = readEntry(tmpDir, e2.id);
-    expect(m1!.half_life_days).toBe(Math.max(1, Math.floor(e1.half_life_days * 0.3)));
-    expect(m2!.half_life_days).toBe(Math.max(1, Math.floor(e2.half_life_days * 0.3)));
+    expect(m1!.halfLifeDays).toBe(Math.max(1, Math.floor(e1.halfLifeDays * 0.3)));
+    expect(m2!.halfLifeDays).toBe(Math.max(1, Math.floor(e2.halfLifeDays * 0.3)));
 
     // Stored strength is a cache of the LIVE value, not a fake 0.3: fresh
     // entries keep ~full strength now (no immediate ranking cliff)...
@@ -274,7 +274,7 @@ describe('Merge pass', () => {
     const later = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
     const unmergedPeer = {
       ...createMemory('completely unrelated standalone topic', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      half_life_days: e1.half_life_days,
+      halfLifeDays: e1.halfLifeDays,
     };
     expect(calculateStrength(m1!, later)).toBeLessThan(calculateStrength(unmergedPeer, later));
   });
@@ -287,22 +287,22 @@ describe('Merge pass', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
       }),
-      half_life_days: 2,
+      halfLifeDays: 2,
     };
     const e2 = {
       ...createMemory('cache refresh failure data pipeline problem', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
       }),
-      half_life_days: 2,
+      halfLifeDays: 2,
     };
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
     await consolidate(tmpDir, { now: new Date() });
 
-    expect(readEntry(tmpDir, e1.id)!.half_life_days).toBe(1);
-    expect(readEntry(tmpDir, e2.id)!.half_life_days).toBe(1);
+    expect(readEntry(tmpDir, e1.id)!.halfLifeDays).toBe(1);
+    expect(readEntry(tmpDir, e2.id)!.halfLifeDays).toBe(1);
   });
 
   it('detects overlapping contradictory memories and records open conflicts', async () => {
@@ -328,8 +328,8 @@ describe('Merge pass', () => {
 
     const loadedA = readEntry(tmpDir, a.id);
     const loadedB = readEntry(tmpDir, b.id);
-    expect(loadedA?.conflicts_with).toContain(b.id);
-    expect(loadedB?.conflicts_with).toContain(a.id);
+    expect(loadedA?.conflictsWith).toContain(b.id);
+    expect(loadedB?.conflictsWith).toContain(a.id);
   });
 
   it('detects reworded contradictions, not just near-duplicate wording', async () => {
@@ -397,8 +397,8 @@ describe('Merge pass', () => {
     await consolidate(tmpDir, { now: new Date() });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
-    expect(readEntry(tmpDir, a.id)?.conflicts_with ?? []).toEqual([]);
-    expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
+    expect(readEntry(tmpDir, a.id)?.conflictsWith ?? []).toEqual([]);
+    expect(readEntry(tmpDir, b.id)?.conflictsWith ?? []).toEqual([]);
   });
 
   it('does not flag the unrelated wording pairs', async () => {
@@ -428,7 +428,7 @@ describe('Merge pass', () => {
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     for (const id of ids) {
-      expect(readEntry(tmpDir, id)?.conflicts_with ?? []).toEqual([]);
+      expect(readEntry(tmpDir, id)?.conflictsWith ?? []).toEqual([]);
     }
   });
 
@@ -453,8 +453,8 @@ describe('Merge pass', () => {
     await consolidate(tmpDir, { now: new Date() });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
-    expect(readEntry(tmpDir, a.id)?.conflicts_with ?? []).toEqual([]);
-    expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
+    expect(readEntry(tmpDir, a.id)?.conflictsWith ?? []).toEqual([]);
+    expect(readEntry(tmpDir, b.id)?.conflictsWith ?? []).toEqual([]);
   });
 });
 
@@ -491,8 +491,8 @@ describe('Physics pass', () => {
       layer: Layer.Episodic,
       baseHalfLifeDays: 30,
     });
-    writeEntry(tmpDir, { ...a, conflicts_with: [b.id] });
-    writeEntry(tmpDir, { ...b, conflicts_with: [a.id] });
+    writeEntry(tmpDir, { ...a, conflictsWith: [b.id] });
+    writeEntry(tmpDir, { ...b, conflictsWith: [a.id] });
     writeEntry(tmpDir, c);
     const db = openHippoDb(tmpDir);
     try {
@@ -514,17 +514,17 @@ describe('Physics pass', () => {
     const now = new Date();
     const seeded = storedParticles();
     const entries = loadAllEntries(tmpDir, 'default');
-    expect(entries.find((e) => e.id === ids.a)?.conflicts_with).toEqual([ids.b]);
-    expect(entries.map((e) => e.half_life_days)).toEqual([30, 30, 30]);
+    expect(entries.find((e) => e.id === ids.a)?.conflictsWith).toEqual([ids.b]);
+    expect(entries.map((e) => e.halfLifeDays)).toEqual([30, 30, 30]);
 
     // The same steps the pass must take, on the same particles in the same order.
     const expected = seeded.map((p) => ({ ...p, position: [...p.position], velocity: [...p.velocity] }));
     refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now);
     const stats = simulate(expected, {
       conflictPairs: new Map(
-        entries.filter((e) => e.conflicts_with.length > 0).map((e) => [e.id, new Set(e.conflicts_with)]),
+        entries.filter((e) => e.conflictsWith.length > 0).map((e) => [e.id, new Set(e.conflictsWith)]),
       ),
-      halfLives: new Map(entries.map((e) => [e.id, e.half_life_days])),
+      halfLives: new Map(entries.map((e) => [e.id, e.halfLifeDays])),
       config: loadConfig(tmpDir).physics,
     });
 

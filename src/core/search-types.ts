@@ -102,7 +102,7 @@ export interface ScoreBreakdown {
   final: number;
   /** Age of the memory in whole days, at scoring time. */
   ageDays: number;
-  /** entry.dag_level (0=raw, 1=extracted, 2=topic, 3=entity). */
+  /** entry.dagLevel (0=raw, 1=extracted, 2=topic, 3=entity). */
   dagLevel?: number;
   /** descendant_count column, refreshed by the DAG rebuild. */
   descendantCount?: number;

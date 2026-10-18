@@ -216,7 +216,7 @@ describe('the Codex session-end worker', () => {
   it('keys the digest on the rollout name, uses the final answer and lists only patches that landed', async () => {
     expect((await hippo(codexRollout(repo))).status).toBe(0);
     expect(fs.readFileSync(log, 'utf8')).toContain(`digest: wrote 1 sentence(s), 1 file(s) for ${ROLLOUT}`);
-    expect(digests().map((d) => [d.id, d.source_session_id, d.content])).toEqual([
+    expect(digests().map((d) => [d.id, d.sourceSessionId, d.content])).toEqual([
       [sessionDigestId('default', ROLLOUT), ROLLOUT, `${CODEX_REPLY}\nChanged: src/retry.ts`],
     ]);
   });
@@ -235,7 +235,7 @@ describe('a folder with only the global store', () => {
     expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
 
     const global = loadAllEntries(globalRoot, 'default');
-    expect(global.some((e) => e.content.includes(RULE) && e.origin_project === 'billing')).toBe(true);
+    expect(global.some((e) => e.content.includes(RULE) && e.originProject === 'billing')).toBe(true);
     expect(loadLatestHandoff(globalRoot, 'default', 'G1')).not.toBeNull();
     expect(global.filter(isSessionDigestRow)).toEqual([]);
     expect(digests()).toEqual([]);

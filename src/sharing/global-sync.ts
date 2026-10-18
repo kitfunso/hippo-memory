@@ -36,7 +36,7 @@ export function syncGlobalToLocal(
   return copyMissingRows(into, global, opts.includeCrossProject === true);
 }
 
-const textKey = (e: { tenant_id: string; content: string }): string => `${e.tenant_id}\n${e.content}`;
+const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
 
 /** Global rows of every tenant that the local store holds by neither id nor tenant and text, oldest first; each page
  * asks the local store about its own ids and texts only. */
@@ -87,7 +87,7 @@ function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCro
       // in this batch brought down is not copied twice.
       if (!entry || entry.content !== key.content || copied.has(textKey(entry))) continue;
       if (detectSecret(entry).flagged) continue;
-      if (!includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project') {
+      if (!includeCrossProject && classifyOriginProject(entry.originProject, currentProject) === 'cross-project') {
         continue;
       }
       if (put(entry)) copied.add(textKey(entry));

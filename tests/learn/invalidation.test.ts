@@ -74,7 +74,7 @@ describe('invalidateMatching', () => {
     const updated = readEntry(hippoRoot, mem.id);
     expect(updated!.confidence).toBe('stale');
     expect(updated!.tags).toContain('invalidated');
-    expect(updated!.half_life_days).toBeLessThan(mem.half_life_days);
+    expect(updated!.halfLifeDays).toBeLessThan(mem.halfLifeDays);
   });
 
   it('does not touch unrelated memories', () => {
@@ -95,7 +95,7 @@ describe('invalidateMatching', () => {
 
     expect(result.invalidated).toBe(0);
     const updated = readEntry(hippoRoot, mem.id);
-    expect(updated!.half_life_days).toBe(mem.half_life_days);
+    expect(updated!.halfLifeDays).toBe(mem.halfLifeDays);
   });
 
   it('does not touch pinned memories', () => {
@@ -150,7 +150,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     const updated = readEntry(hippoRoot, bystander.id);
     expect(updated!.confidence).toBe(bystander.confidence);
     expect(updated!.tags).not.toContain('invalidated');
-    expect(updated!.half_life_days).toBe(bystander.half_life_days);
+    expect(updated!.halfLifeDays).toBe(bystander.halfLifeDays);
   });
 
   it('secondary: hyphenated sibling tags are also untouched', () => {
@@ -232,7 +232,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(result.preview[0].id).toBe(mem.id);
     const untouched = readEntry(hippoRoot, mem.id);
     expect(untouched!.confidence).toBe(mem.confidence);
-    expect(untouched!.half_life_days).toBe(mem.half_life_days);
+    expect(untouched!.halfLifeDays).toBe(mem.halfLifeDays);
     expect(untouched!.tags).not.toContain('invalidated');
   });
 

@@ -204,7 +204,7 @@ function splitByParticle(
       isRecallBoostAblated()
         ? {
             ...particle,
-            mass: computeMass(calculateStrength(entry, now, { ablation: strengthAblation() }), entry.retrieval_count),
+            mass: computeMass(calculateStrength(entry, now, { ablation: strengthAblation() }), entry.retrievalCount),
           }
         : particle,
     );

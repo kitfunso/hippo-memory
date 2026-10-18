@@ -116,7 +116,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
   function entriesByTenant(tenantId: string) {
     return loadEveryTenantEntries(root)
       .filter((e) => e.tags.includes('source:slack'))
-      .filter((e) => e.tenant_id === tenantId);
+      .filter((e) => e.tenantId === tenantId);
   }
 
   it('registered team routes the ingested memory to the mapped tenant', async () => {
