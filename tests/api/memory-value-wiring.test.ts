@@ -22,6 +22,7 @@ import {
   type MemoryEntry,
   type DecayOptions,
 } from '../../src/core/memory.js';
+import { toWire } from '../../src/core/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
@@ -188,7 +189,7 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
       // SAFETY: computeFeatures (extract.mjs) computes the same 8-dim
       // feature vector as computeMvFeatures — proving that parity is this
       // test's whole point (the loop below checks every MV_FEATURE_NAMES dim).
-      const bench = computeFeatures(entry, NOW) as MvFeatureVector;
+      const bench = computeFeatures(toWire(entry), NOW) as MvFeatureVector;
       for (const f of MV_FEATURE_NAMES) {
         expect(mv[f]).toBeCloseTo(bench[f], 10);
       }

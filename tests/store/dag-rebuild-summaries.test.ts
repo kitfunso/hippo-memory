@@ -477,9 +477,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Smoke test the function actually applies the patch in one round-trip
     const result = applyRebuildResult(hippoRoot, summary, {
       content: 'one-shot-content-xyzabc',
-      descendant_count: 0,
-      earliest_at: null,
-      latest_at: null,
+      descendantCount: 0,
+      earliestAt: null,
+      latestAt: null,
       bumpRebuildCount: true,
       zeroChildren: false,
       actor: 'test',
@@ -671,9 +671,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const result = applyRebuildResult(hippoRoot, summary, {
       content: 'should-not-land',
-      descendant_count: 5,
-      earliest_at: '2026-05-25T10:00:00Z',
-      latest_at: '2026-05-25T11:00:00Z',
+      descendantCount: 5,
+      earliestAt: '2026-05-25T10:00:00Z',
+      latestAt: '2026-05-25T11:00:00Z',
       bumpRebuildCount: true,
       zeroChildren: false,
       actor: 'test',

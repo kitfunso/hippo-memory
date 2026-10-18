@@ -217,16 +217,16 @@ function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, pat
         .prepare(REBUILD_CONTENT_SQL)
         .run(
           patch.content,
-          patch.descendant_count,
-          patch.earliest_at,
-          patch.latest_at,
+          patch.descendantCount,
+          patch.earliestAt,
+          patch.latestAt,
           nowIso,
           summary.id,
           summary.tenantId,
         )
     : db
         .prepare(REBUILD_METADATA_SQL)
-        .run(patch.descendant_count, patch.earliest_at, patch.latest_at, summary.id, summary.tenantId);
+        .run(patch.descendantCount, patch.earliestAt, patch.latestAt, summary.id, summary.tenantId);
 
   // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry
   // the doomed rebuild forever); `refused` lets the caller count it as refused rather than rebuilt.
@@ -273,9 +273,9 @@ function syncRebuiltSummary(
   const patchedEntry: MemoryEntry = {
     ...summary,
     content: applyContentWrite ? patch.content : summary.content,
-    descendantCount: patch.descendant_count,
-    earliestAt: patch.earliest_at,
-    latestAt: patch.latest_at,
+    descendantCount: patch.descendantCount,
+    earliestAt: patch.earliestAt,
+    latestAt: patch.latestAt,
     summaryDirty: false,
     lastRebuiltAt: applyContentWrite ? nowIso : summary.lastRebuiltAt,
     rebuildCount: applyContentWrite ? (summary.rebuildCount ?? 0) + 1 : summary.rebuildCount,
@@ -289,7 +289,7 @@ function syncRebuiltSummary(
       dag_level: summary.dagLevel,
       source: 'E3-rebuild',
       zero_children: patch.zeroChildren,
-      descendant_count: patch.descendant_count,
+      descendant_count: patch.descendantCount,
     },
     actor: patch.actor,
     tenantId: summary.tenantId,

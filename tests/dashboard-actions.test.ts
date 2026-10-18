@@ -26,7 +26,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
+const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
 
 let store: TmpStore;
 let dash: RunningDashboard;

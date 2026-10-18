@@ -170,9 +170,9 @@ describe('rejection guard', () => {
     const loaded = readEntry(home, summary.id)!;
     const result1 = applyRebuildResult(home, loaded, {
       content: rejectedContent,
-      descendant_count: 3,
-      earliest_at: '2026-08-01T00:00:00Z',
-      latest_at: '2026-08-02T00:00:00Z',
+      descendantCount: 3,
+      earliestAt: '2026-08-01T00:00:00Z',
+      latestAt: '2026-08-02T00:00:00Z',
       bumpRebuildCount: true,
       zeroChildren: false,
       actor: 'sleep',
@@ -204,9 +204,9 @@ describe('rejection guard', () => {
     // no-op — no second refusal audit.
     const result2 = applyRebuildResult(home, after, {
       content: rejectedContent,
-      descendant_count: 3,
-      earliest_at: '2026-08-01T00:00:00Z',
-      latest_at: '2026-08-02T00:00:00Z',
+      descendantCount: 3,
+      earliestAt: '2026-08-01T00:00:00Z',
+      latestAt: '2026-08-02T00:00:00Z',
       bumpRebuildCount: true,
       zeroChildren: false,
       actor: 'sleep',

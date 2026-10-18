@@ -235,7 +235,7 @@ class ContainerRun {
     const created = Number.isFinite(item.updatedAt)
       ? new Date(Math.min(item.updatedAt, Date.parse(base.created))).toISOString()
       : base.created;
-    const origin = this.s.originProject === undefined ? {} : { origin_project: this.s.originProject };
+    const origin = this.s.originProject === undefined ? {} : { originProject: this.s.originProject };
     return this.tx.stampOrigin({ ...base, created, validFrom: created, ...origin });
   }
 

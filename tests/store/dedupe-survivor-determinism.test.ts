@@ -277,13 +277,13 @@ describe('dedupe survivor determinism', () => {
     // compareEntryIdentity) using the same two exported building blocks, to
     // pin that a NaN-strength entry still yields a strict, non-NaN order --
     // no DB needed, pure-function test only.
-    const a = { id: 'aaa-nan', content: 'alpha content', strength: NaN, retrieval_count: 0 };
-    const b = { id: 'bbb-normal', content: 'beta content', strength: 0.5, retrieval_count: 0 };
+    const a = { id: 'aaa-nan', content: 'alpha content', strength: NaN, retrievalCount: 0 };
+    const b = { id: 'bbb-normal', content: 'beta content', strength: 0.5, retrievalCount: 0 };
 
     const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
     expect(Number.isNaN(bucketDiff)).toBe(false);
 
-    const retrievalDiff = (b.retrieval_count ?? 0) - (a.retrieval_count ?? 0);
+    const retrievalDiff = (b.retrievalCount ?? 0) - (a.retrievalCount ?? 0);
     expect(Number.isNaN(retrievalDiff)).toBe(false);
 
     const identity = compareEntryIdentity(a, b);

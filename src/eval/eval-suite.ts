@@ -145,7 +145,7 @@ function dagChildEntries(): MemoryEntry[] {
         created: dateOffset(15),
         layer: Layer.Semantic,
         tags: ['topic:api-performance', 'extracted'],
-        dag_level: DAG_LEVEL.extracted,
+        dagLevel: DAG_LEVEL.extracted,
       },
     ),
     mem(
@@ -155,7 +155,7 @@ function dagChildEntries(): MemoryEntry[] {
         created: dateOffset(15),
         layer: Layer.Semantic,
         tags: ['topic:api-performance', 'extracted'],
-        dag_level: DAG_LEVEL.extracted,
+        dagLevel: DAG_LEVEL.extracted,
       },
     ),
     mem(
@@ -165,7 +165,7 @@ function dagChildEntries(): MemoryEntry[] {
         created: dateOffset(15),
         layer: Layer.Semantic,
         tags: ['topic:api-performance', 'extracted'],
-        dag_level: DAG_LEVEL.extracted,
+        dagLevel: DAG_LEVEL.extracted,
       },
     ),
   ];
@@ -182,8 +182,8 @@ function dagSummaryEntry(): MemoryEntry {
       created: dateOffset(16),
       layer: Layer.Semantic,
       tags: ['topic:api-performance'],
-      dag_level: DAG_LEVEL.topic,
-      dag_parent_id: undefined,
+      dagLevel: DAG_LEVEL.topic,
+      dagParentId: undefined,
     },
   );
 }

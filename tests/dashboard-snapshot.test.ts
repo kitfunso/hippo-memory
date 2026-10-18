@@ -45,9 +45,9 @@ function snapshot() {
 }
 
 // Ten day half-life, just retrieved: strong today, under 0.2 in thirty days.
-const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
+const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
 // Hundred day half-life, last used 150 days ago: weak today, still above 0.2 in thirty days.
-const FADING = { half_life_days: 100, created: isoAgo(150), last_retrieved: isoAgo(150) } as const;
+const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
 
 describe('dashboard snapshot', () => {
   it('groups by origin project, with Global for an empty origin and Unassigned for null', () => {

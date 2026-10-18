@@ -225,9 +225,9 @@ async function rebuildOneSummary(
   const childCreatedAts = children.map((c) => c.created).sort();
   const { changed, refused } = store.applyRebuild(summary, {
     content: newContent,
-    descendant_count: children.length,
-    earliest_at: childCreatedAts[0],
-    latest_at: childCreatedAts[childCreatedAts.length - 1],
+    descendantCount: children.length,
+    earliestAt: childCreatedAts[0],
+    latestAt: childCreatedAts[childCreatedAts.length - 1],
     bumpRebuildCount: true,
     zeroChildren: false,
     actor: 'sleep',
@@ -245,9 +245,9 @@ async function rebuildOneSummary(
 function clearZeroChildSummary(store: Consolidation, summary: MemoryEntry, result: DagRebuildResult): void {
   const { changed } = store.applyRebuild(summary, {
     content: summary.content,
-    descendant_count: 0,
-    earliest_at: null,
-    latest_at: null,
+    descendantCount: 0,
+    earliestAt: null,
+    latestAt: null,
     bumpRebuildCount: false,
     zeroChildren: true,
     actor: 'sleep',

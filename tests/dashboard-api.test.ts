@@ -29,8 +29,8 @@ import {
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 
-const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
-const FADING = { half_life_days: 100, created: isoAgo(150), last_retrieved: isoAgo(150) } as const;
+const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
+const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
 const LONG_TEXT = `long ${'x'.repeat(295)}`;
 
 let store: TmpStore;

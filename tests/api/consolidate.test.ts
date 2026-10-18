@@ -85,7 +85,7 @@ describe('Decay pass', () => {
     fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
     const now = new Date('2026-06-01T00:00:00.000Z');
     const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
-    const faded = { half_life_days: 1, created: at, last_retrieved: at };
+    const faded = { halfLifeDays: 1, created: at, lastRetrieved: at };
     writeEntry(tmpDir, { ...createMemory7('an old note about a retired staging hostname nobody uses'), ...faded });
     writeEntry(tmpDir, {
       ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }),

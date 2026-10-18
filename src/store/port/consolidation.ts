@@ -161,9 +161,9 @@ export interface SessionDecayContext {
  * rebuild. */
 export interface RebuildPatch {
   content: string; // new content for normal rebuild; summary.content for zero-child
-  descendant_count: number;
-  earliest_at: string | null;
-  latest_at: string | null;
+  descendantCount: number;
+  earliestAt: string | null;
+  latestAt: string | null;
   bumpRebuildCount: boolean;
   zeroChildren: boolean;
   actor: string;

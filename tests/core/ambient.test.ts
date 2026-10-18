@@ -13,11 +13,11 @@ function mem(
   opts: {
     tags?: string[];
     layer?: Layer;
-    emotional_valence?: EmotionalValence;
+    emotionalValence?: EmotionalValence;
     created?: string;
-    schema_fit?: number;
-    extracted_from?: string;
-    dag_level?: number;
+    schemaFit?: number;
+    extractedFrom?: string;
+    dagLevel?: number;
   } = {},
 ): MemoryEntry {
   const entry = createMemory(content, {
@@ -25,11 +25,11 @@ function mem(
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
   });
-  if (opts.emotional_valence) entry.emotionalValence = opts.emotional_valence;
+  if (opts.emotionalValence) entry.emotionalValence = opts.emotionalValence;
   if (opts.created) entry.created = opts.created;
-  if (opts.schema_fit !== undefined) entry.schemaFit = opts.schema_fit;
-  if (opts.extracted_from) entry.extractedFrom = opts.extracted_from;
-  if (opts.dag_level !== undefined) entry.dagLevel = opts.dag_level;
+  if (opts.schemaFit !== undefined) entry.schemaFit = opts.schemaFit;
+  if (opts.extractedFrom) entry.extractedFrom = opts.extractedFrom;
+  if (opts.dagLevel !== undefined) entry.dagLevel = opts.dagLevel;
   return entry;
 }
 
@@ -79,9 +79,9 @@ describe('computeAmbientState', () => {
 
   it('computes emotionalSkew for negative-heavy corpus', () => {
     const entries = [
-      mem('Error 1', { emotional_valence: 'negative' }),
-      mem('Error 2', { emotional_valence: 'critical' }),
-      mem('OK thing', { emotional_valence: 'neutral' }),
+      mem('Error 1', { emotionalValence: 'negative' }),
+      mem('Error 2', { emotionalValence: 'critical' }),
+      mem('OK thing', { emotionalValence: 'neutral' }),
     ];
     const state = computeAmbientState(entries);
     // Critical counts as negative, so two of three rows: (2 / 3) * 2 - 0.5.
@@ -99,7 +99,7 @@ describe('computeAmbientState', () => {
   });
 
   it('computes dagDepth from max dag_level', () => {
-    const entries = [mem('Root', { dag_level: 0 }), mem('Mid', { dag_level: 1 }), mem('Deep', { dag_level: 3 })];
+    const entries = [mem('Root', { dagLevel: 0 }), mem('Mid', { dagLevel: 1 }), mem('Deep', { dagLevel: 3 })];
     const state = computeAmbientState(entries);
     expect(state.dagDepth).toBe(3);
   });
@@ -107,7 +107,7 @@ describe('computeAmbientState', () => {
   it('computes extractionCoverage', () => {
     const entries = [
       mem('Episodic source', { layer: Layer.Episodic }),
-      mem('Extracted fact', { layer: Layer.Episodic, extracted_from: 'some-id' }),
+      mem('Extracted fact', { layer: Layer.Episodic, extractedFrom: 'some-id' }),
     ];
     const state = computeAmbientState(entries);
     expect(state.extractionCoverage).toBe(0.5);
@@ -136,7 +136,7 @@ describe('renderAmbientSummary', () => {
   it('produces a readable summary for a mixed corpus', () => {
     const entries = [
       mem('Fact A', { tags: ['topic:arch'], layer: Layer.Semantic }),
-      mem('Fact B', { tags: ['error'], layer: Layer.Episodic, emotional_valence: 'negative' }),
+      mem('Fact B', { tags: ['error'], layer: Layer.Episodic, emotionalValence: 'negative' }),
       mem('Fact C', { tags: ['topic:deploy'], layer: Layer.Episodic }),
     ];
     const summary = renderAmbientSummary(computeAmbientState(entries));
