@@ -5,7 +5,9 @@ import {
   commitInChunksAt, deleteEntriesOneByOneAt, failedUnitOf, memoriesBackingObjectsAt,
 } from '../delete-and-batch.js';
 import { expireDormantBeforeAt } from '../dormant.js';
-import { loadAllEntriesWithBaseAt, loadCurrentDistilledEntriesAt, loadEntriesPageAt } from '../entry-reads.js';
+import {
+  loadAllEntryIdsAt, loadCurrentDistilledEntriesAt, loadEntriesPageAt, selectEntriesByIds,
+} from '../entry-reads.js';
 import { ftsDriftAt } from '../entry-row.js';
 import { writeEntriesTogetherAt, writeEntryAt } from '../entry-writes.js';
 import { loadPendingExtractionTenantsAt, markPendingProcessedUpToAt } from '../graph-queue.js';
@@ -18,7 +20,7 @@ import {
   loadChildrenOfSummariesAt, loadChildrenOfSummaryAt,
 } from '../summaries.js';
 import { lazyTombstoneChecks } from '../tombstone-checks.js';
-import { loadStoredParticlesAt, saveStoredParticlesAt } from '../vector-index.js';
+import { saveStoredParticlesAt, storedParticleIdsAt, storedParticlesByIdsAt } from '../vector-index.js';
 import { errorMessage } from '../../util/log.js';
 import { type Handles, type OnHandle, openStore, waitingOpener } from '../open.js';
 
@@ -28,7 +30,8 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
   const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
   const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
   return {
-    entriesWithBase: () => on((db) => loadAllEntriesWithBaseAt(db), openStore),
+    entryIds: () => on((db) => loadAllEntryIdsAt(db), openStore),
+    entriesByIds: (ids) => (ids.length === 0 ? new Map() : on((db) => selectEntriesByIds(db, ids), openStore)),
     objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
     ftsDrift: (repair) => on((db) => ftsDriftAt(db, repair)),
     sessionDecayContext: () => on((db) => loadSessionDecayContextAt(db), openStore),
@@ -38,7 +41,8 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
     promotableSessions: (tenantId, sinceMs) => on((db) => findPromotableSessionsAt(db, tenantId, sinceMs), openStore),
     traceExists: (tenantId, sessionId) => on((db) => traceExistsForSessionAt(db, tenantId, sessionId), openStore),
     sessionEvents: (tenantId, opts) => on((db) => listSessionEventsAt(db, tenantId, opts), openStore),
-    storedParticles: () => on((db) => loadStoredParticlesAt(db)),
+    particleIds: () => on((db) => storedParticleIdsAt(db)),
+    particlesByIds: (ids) => (ids.length === 0 ? [] : on((db) => storedParticlesByIdsAt(db, ids))),
     saveParticles: (particles) => on((db) => saveStoredParticlesAt(db, particles)),
     commitFlush: async (components, opts) =>
       components.length === 0

@@ -200,6 +200,21 @@ export function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadPhysicsState(db).values());
 }
 
+/** The memory id of every stored particle in loadStoredParticlesAt's order, so a caller reads only the particles it
+ * keeps. */
+export function storedParticleIdsAt(db: DatabaseSyncLike): string[] {
+  // SAFETY: the SELECT names exactly the one column read.
+  const rows = db.prepare('SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{ memory_id: string }>;
+  return rows.map((row) => row.memory_id);
+}
+
+/** The stored particles for `ids`, in that order; an id with no particle is skipped. */
+export function storedParticlesByIdsAt(db: DatabaseSyncLike, ids: readonly string[]): PhysicsParticle[] {
+  if (ids.length === 0) return [];
+  const byId = loadPhysicsState(db, [...ids]);
+  return ids.flatMap((id) => byId.get(id) ?? []);
+}
+
 /** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
 export function saveStoredParticlesAt(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
   savePhysicsState(db, particles);

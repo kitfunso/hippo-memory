@@ -153,10 +153,17 @@ function hostState(root: string) {
   });
 }
 
-async function sleepOnce(root: string, opts: { dryRun?: boolean } = {}) {
+async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: number } = {}) {
   const local = sqliteSyncStore(root).localFiles;
   const result = await withCountedIds(() => runConsolidation(local, { ...opts, now: NOW, config: loadConfig(root), budget: fastBudget }));
   return { result, state: hostState(root) };
+}
+
+/** The default page's sleep, after checking one-row pages and one page for the whole store end the same. */
+async function sleepAtEveryPageSize(config: { memoryValue?: { enabled: boolean } }, opts: { dryRun?: boolean } = {}) {
+  const pinned = await sleepOnce(seed(config), opts);
+  for (const pageRows of [1, Infinity]) expect(await sleepOnce(seed(config), { ...opts, pageRows })).toEqual(pinned);
+  return pinned;
 }
 
 beforeEach(() => {
@@ -171,15 +178,16 @@ afterEach(() => {
 });
 
 describe('one sleep over three tenants', () => {
+  // Each case also runs at one-row pages and at one page for the whole store, which must end the same.
   it('ends with the pinned store', async () => {
-    expect(await sleepOnce(seed({}))).toMatchSnapshot();
+    expect(await sleepAtEveryPageSize({})).toMatchSnapshot();
   });
 
   it('ends with the pinned store when memory value rescues faded rows', async () => {
-    expect(await sleepOnce(seed({ memoryValue: { enabled: true } }))).toMatchSnapshot();
+    expect(await sleepAtEveryPageSize({ memoryValue: { enabled: true } })).toMatchSnapshot();
   });
 
   it('previews the same run without writing', async () => {
-    expect(await sleepOnce(seed({}), { dryRun: true })).toMatchSnapshot();
+    expect(await sleepAtEveryPageSize({}, { dryRun: true })).toMatchSnapshot();
   });
 });

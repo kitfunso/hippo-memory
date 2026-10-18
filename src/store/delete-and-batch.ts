@@ -17,7 +17,7 @@ import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
-import type { FlushComponent, LoadedRows, DormantMove } from './port/consolidation.js';
+import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from './port/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */
@@ -212,7 +212,7 @@ export function batchWriteAndDelete(
 
   return onHandle(hippoRoot, (db) => {
     // One component, so every op keeps the statement order this call has always had.
-    const all: FlushComponent = { writes: toWrite, deletes: toDeleteIds, dormant };
+    const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant };
     return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
   }, openStore);
 }
@@ -223,7 +223,10 @@ const failedUnits = new WeakMap<Error, string[]>();
  * wins. */
 function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
   if (!component || failedUnits.has(err)) return;
-  const ids = [...component.writes.map((e) => e.id), ...component.deletes, ...component.dormant.map((m) => m.entry.id)];
+  const ids = [
+    ...component.refreshes.map((r) => r.id), ...component.writes.map((e) => e.id), ...component.deletes,
+    ...component.dormant.map((m) => m.entry.id),
+  ];
   failedUnits.set(err, [...new Set(ids)]);
 }
 
@@ -308,9 +311,11 @@ function applyComponent(
     for (const row of selectAutoDeletableRows(db, component.deletes, out.dirty)) deletableIds.push(row.id);
   }
   // v39: batch writers bypass writeEntry, so stamp store-derived origins here too (a NULL origin hides new
-  // memories from ambient context). A row queued twice keeps only its last version, the one the merge compares.
-  const stampedWrites = [...new Map(component.writes.map((e) => [e.id, stampOriginProject(hippoRoot, e)])).values()];
-  applyBatchWrites(db, stampedWrites, snapshot, out);
+  // memories from ambient context). A row queued twice keeps its first place and its last version, the one the merge
+  // compares; refreshes come first, so a later write of the same row replaces its refresh.
+  const ops = new Map<string, MemoryEntry | StrengthRefresh>(component.refreshes.map((r) => [r.id, r]));
+  for (const entry of component.writes) ops.set(entry.id, stampOriginProject(hippoRoot, entry));
+  applyBatchWrites(db, [...ops.values()], snapshot, out);
   moveDormantAndDelete(db, component.dormant, deletableIds, out);
 }
 
@@ -385,9 +390,20 @@ function selectAutoDeletableRows(
   return rows;
 }
 
+/** The row a write lands as: a refresh sets its strength on the live row (none when the row is gone); a full write
+ * keeps what others changed since `base` was loaded. */
+function batchRow(
+  op: MemoryEntry | StrengthRefresh,
+  base: MemoryEntry | undefined,
+  live: MemoryEntry | undefined,
+): MemoryEntry | undefined {
+  if (!('content' in op)) return live && { ...live, strength: op.strength };
+  return base && live ? mergeOwnChanges(base, op, live) : op;
+}
+
 function applyBatchWrites(
   db: DatabaseSyncLike,
-  stampedWrites: MemoryEntry[],
+  ops: readonly (MemoryEntry | StrengthRefresh)[],
   snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
@@ -395,12 +411,13 @@ function applyBatchWrites(
   // on another connection, so a reject committed in between would be re-inserted. Skip, never throw, so the rest lands.
   const { written, fts, dirty } = out;
   const readLiveRow = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`);
-  for (const entry of stampedWrites) {
-    const base = snapshot?.get(entry.id);
+  for (const op of ops) {
+    const base = snapshot?.get(op.id);
     // SAFETY: MEMORY_SELECT_COLUMNS is the MemoryRow shape rowToEntry reads.
-    const liveRow = readLiveRow.get(entry.id) as MemoryRow | undefined;
+    const liveRow = readLiveRow.get(op.id) as MemoryRow | undefined;
     const live = liveRow ? rowToEntry(liveRow) : undefined;
-    const row = base && live ? mergeOwnChanges(base, entry, live) : entry;
+    const row = batchRow(op, base, live);
+    if (!row) continue;
     if (isRejectedBatchWrite(db, row)) {
       out.rejectedSkips++;
       continue;

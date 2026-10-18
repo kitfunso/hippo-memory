@@ -20,8 +20,8 @@ import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../util/time.js';
 import { plural } from '../util/format.js';
-import type { LoadedRows } from '../store/port/consolidation.js';
 import type { AppendAuditOpts } from '../store/port/types.js';
+import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from './survivors.js';
 
 export type ConsolidateOptions = {
   dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget;
@@ -32,7 +32,7 @@ export type ConsolidateOptions = {
 /** A full consolidation pass whose store work goes through `local.consolidation`. */
 export async function runConsolidation(
   local: LocalFiles,
-  options: ConsolidateOptions & { config: HippoConfig },
+  options: ConsolidateOptions & { config: HippoConfig; pageRows?: number },
 ): Promise<ConsolidationResult> {
   const { learning, consolidation: store } = local;
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
@@ -41,10 +41,9 @@ export async function runConsolidation(
   const halfLife = migrateHalfLives(local, options.config.defaultHalfLifeDays, dryRun, result);
   syncFtsIndex(store, dryRun, result);
 
-  // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
-  // The api.sleep audit row tags this with the admin synthetic actor.
-  const { entries: all, base: snapshot } = store.entriesWithBase();
-  if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
+  // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read a page at a time.
+  const preview = dryRun ? halfLife.halfLives : new Map<string, number>();
+  const rows = new SleepRows(store, store.entryIds(), preview, options.pageRows ?? SLEEP_PAGE_ROWS);
   const backingObjects = store.objectBackedIds();
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
@@ -53,13 +52,15 @@ export async function runConsolidation(
   const decayOpts = sessionDecayOptions(store, config);
 
   const run: SleepRun = {
-    learning, store, now, dryRun, config, decayOpts, result, all, retirable,
+    learning, store, now, dryRun, config, decayOpts, result, rows, retirable,
     tombstones: store.tombstoneChecks(dryRun),
-    survivors: [],
+    survivors: new Survivors(rows),
     // Collect all writes/deletes and batch them at the end
+    pendingRefreshes: [],
     pendingWrites: [],
     pendingDeletes: [],
     pendingDormant: [],
+    parentOf: new Map(),
     units: [],
   };
 
@@ -67,7 +68,7 @@ export async function runConsolidation(
   await runPassesAfterDecay(run, options.fetcher);
 
   const budget = options.budget ?? WRITE_BUDGET;
-  await flushPending(run, snapshot, budget);
+  await flushPending(run, budget);
   await expireDormant(run, budget);
   if (!dryRun) logRun(run, decay);
   return result;
@@ -129,14 +130,17 @@ function migrateHalfLives(
   return halfLife;
 }
 
-async function flushPending(run: SleepRun, snapshot: LoadedRows, budget: WriteBudget): Promise<void> {
-  const { result, pendingWrites, pendingDeletes, pendingDormant } = run;
+async function flushPending(run: SleepRun, budget: WriteBudget): Promise<void> {
+  const { result, pendingDeletes, pendingDormant } = run;
   result.removedIds = pendingDeletes;
   if (run.dryRun) return;
-  const units = [...run.units, ...familyUnits(pendingWrites, pendingDeletes, pendingDormant, snapshot)];
-  const components = groupFlush(pendingWrites, pendingDeletes, pendingDormant, units);
+  const ops = {
+    refreshes: run.pendingRefreshes, writes: run.pendingWrites, deletes: pendingDeletes, dormant: pendingDormant,
+  };
+  const units = [...run.units, ...familyUnits(ops, (id) => run.parentOf.get(id))];
+  const components = groupFlush(ops, units);
   // The snapshot keeps what the DAG passes and other writers changed while sleep ran.
-  const left = new Set(await run.store.commitFlush(components, { snapshot, budget }));
+  const left = new Set(await run.store.commitFlush(components, { snapshot: run.survivors.bases, budget }));
   for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
     if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
   }
@@ -165,7 +169,10 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
 // 4. Log run
 function logRun(run: SleepRun, decay: DecayOutcome): void {
   const { store, now, result } = run;
-  const detectedConflicts = detectConflicts(run.survivors, now, run.decayOpts, decay.rescuedIds);
+  const { survivors } = run;
+  const detectedConflicts = detectConflicts(
+    survivors.rows(), now, run.decayOpts, decay.rescuedIds, (ids) => survivors.pagesOf(ids),
+  );
   store.replaceConflicts(detectedConflicts, now.toISOString());
 
   if (detectedConflicts.length > 0) {
@@ -188,7 +195,7 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
 // rescue.
 function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): void {
   const { result } = run;
-  const rescueEvent = (entry: MemoryEntry): AppendAuditOpts => {
+  const rescueEvent = (entry: Pick<MemoryEntry, 'id' | 'tenant_id'>): AppendAuditOpts => {
     const rank = rankById.get(entry.id);
     return {
       tenantId: entry.tenant_id,

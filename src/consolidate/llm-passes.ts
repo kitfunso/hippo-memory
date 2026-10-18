@@ -27,22 +27,30 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
 
 type SleepLlm = ReturnType<typeof sleepLlm>;
 
+/** Counts the survivors extraction could read and returns the first `limit` of them, holding no others. */
+function extractionBatch(run: SleepRun, limit: number): MemoryEntry[] {
+  const extractedFromIds = new Set<string>();
+  for (const e of run.survivors.rows()) if (e.extracted_from) extractedFromIds.add(e.extracted_from);
+  const batch: MemoryEntry[] = [];
+  let candidates = 0;
+  for (const e of run.survivors.rows()) {
+    const candidate = e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e)
+      && e.trace_outcome === null && e.source !== 'auto-promote' && isReusable(e);
+    if (!candidate) continue;
+    if (candidates++ < limit) batch.push(e);
+  }
+  run.result.extractionCandidates = candidates;
+  return batch;
+}
+
 const dagStore = (run: SleepRun) => ({ consolidation: run.store });
 
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
-  // 1.6. Batch extraction — extract facts from episodic memories missing them
-  const extractedFromIds = new Set(
-    run.survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
-  );
-  const extractionCandidates = run.survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e)
-      && e.trace_outcome === null && e.source !== 'auto-promote' && isReusable(e),
-  );
-  run.result.extractionCandidates = extractionCandidates.length;
-
   const llm = sleepLlm(run, fetcher);
-  if (llm.apiKey && extractionCandidates.length > 0 && !run.dryRun) {
-    const stopped = await extractionPass(run, llm, extractionCandidates.slice(0, EXTRACTION_BATCH_LIMIT));
+  // 1.6. Batch extraction — extract facts from episodic memories missing them
+  const batch = extractionBatch(run, llm.apiKey !== '' && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
+  if (batch.length > 0) {
+    const stopped = await extractionPass(run, llm, batch);
     // The DAG passes call the same API with the same key and model, so they would fail the same way.
     if (stopped) return;
   }
@@ -92,10 +100,18 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
 
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
 async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepLlm): Promise<void> {
-  const extractedFacts = run.survivors.filter(
-    (e) => e.tags.includes('extracted') && e.dag_level === DAG_LEVEL.extracted && !e.superseded_by && isReusable(e),
-  );
-  if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
+  if (!(apiKey && !run.dryRun)) return;
+  // buildDag clusters only unparented facts, so only those are held; the gate counts every fact as it always did.
+  const extractedFacts: MemoryEntry[] = [];
+  let facts = 0;
+  for (const e of run.survivors.rows()) {
+    if (!(e.tags.includes('extracted') && e.dag_level === DAG_LEVEL.extracted && !e.superseded_by && isReusable(e))) {
+      continue;
+    }
+    facts++;
+    if (!e.dag_parent_id) extractedFacts.push(e);
+  }
+  if (facts < 3) return;
   try {
     const { buildDag } = await import('./dag.js');
     const dagResult = await buildDag(dagStore(run), extractedFacts, {

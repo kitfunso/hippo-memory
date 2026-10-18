@@ -68,50 +68,50 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** Pick `count` memories for replay, weighted by `replayPriority`, without replacement; deterministic for a seed.
- * Weighted but not greedy: always taking the top-N overfits, so a stochastic element keeps adjacent survivors in play.
- */
+/** The ids of `count` memories picked for replay in pick order, weighted by `replayPriority`, without replacement;
+ * deterministic for a seed. Weighted, not greedy: always taking the top-N overfits. Holds ids, not rows. */
 export function sampleForReplay(
-  survivors: MemoryEntry[],
+  survivors: Iterable<MemoryEntry>,
   count: number,
   now: Date,
   seed: number = Date.now() >>> 0
-): MemoryEntry[] {
-  if (count <= 0 || survivors.length === 0) return [];
-  const rng = mulberry32(seed);
-
-  // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive
-  // rather than trust
-  // the stored value (it no longer carries the age-out case).
-  const eligible = survivors.filter((e) => resolveConfidence(e, now) !== 'stale');
-  if (eligible.length === 0) return [];
-
+): string[] {
+  if (count <= 0) return [];
   const outcomeAblated = isOutcomeSlowAblated();
-  const pool = eligible.map((entry, idx) => ({
-    entry,
-    idx,
-    weight: replayPriority(entry, now, outcomeAblated),
-  }));
+  const ids: string[] = [];
+  const weights: number[] = [];
+  for (const entry of survivors) {
+    // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive
+    // rather than trust the stored value (it no longer carries the age-out case).
+    if (resolveConfidence(entry, now) === 'stale') continue;
+    ids.push(entry.id);
+    weights.push(replayPriority(entry, now, outcomeAblated));
+  }
+  return drawWeighted(weights, count, seed).map((i) => ids[i]);
+}
 
-  const want = Math.min(count, pool.length);
-  const chosen: MemoryEntry[] = [];
+function drawWeighted(weights: readonly number[], count: number, seed: number): number[] {
+  if (weights.length === 0) return [];
+  if (count <= 0 || weights.length === 0) return [];
+  const rng = mulberry32(seed);
+  const want = Math.min(count, weights.length);
+  const chosen: number[] = [];
   const taken = new Set<number>();
 
   for (let k = 0; k < want; k++) {
     let totalW = 0;
-    for (const p of pool) if (!taken.has(p.idx)) totalW += p.weight;
+    for (const [idx, weight] of weights.entries()) if (!taken.has(idx)) totalW += weight;
     if (totalW <= 0) break;
     let r = rng() * totalW;
-    for (const p of pool) {
-      if (taken.has(p.idx)) continue;
-      r -= p.weight;
+    for (const [idx, weight] of weights.entries()) {
+      if (taken.has(idx)) continue;
+      r -= weight;
       if (r <= 0) {
-        chosen.push(p.entry);
-        taken.add(p.idx);
+        chosen.push(idx);
+        taken.add(idx);
         break;
       }
     }
   }
-
   return chosen;
 }

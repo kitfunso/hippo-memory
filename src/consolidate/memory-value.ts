@@ -8,7 +8,7 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, calculateStrength } from '../core/memory.js';
-import { compareEntryIdentity } from '../core/compare.js';
+import { compareEntryIdentity, compareScoresDesc, type EntryIdentity } from '../core/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -112,22 +112,30 @@ export function scoreEntries(
   now: Date,
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
 ): Map<string, number> {
-  const raw = new Map<string, MvFeatureVector>();
-  for (const e of entries) raw.set(e.id, computeMvFeatures(e, now));
+  return scoreFeatures(entries.map((e) => [e.id, computeMvFeatures(e, now)] as const), weights);
+}
 
+/** One entry's id and its features. */
+type MvFeatures = readonly [string, MvFeatureVector];
+
+/** scoreEntries over features computed ahead, so a caller need not hold the entries. */
+function scoreFeatures(
+  features: readonly MvFeatures[],
+  weights: Readonly<Record<string, number>>,
+): Map<string, number> {
+  const raw = new Map(features);
   const nonFiniteIds = new Set<string>();
-  for (const e of entries) {
-    const nf = raw.get(e.id)!;
-    if (MV_FEATURE_NAMES.some((f) => !Number.isFinite(nf[f]))) nonFiniteIds.add(e.id);
+  for (const [id, nf] of features) {
+    if (MV_FEATURE_NAMES.some((f) => !Number.isFinite(nf[f]))) nonFiniteIds.add(id);
   }
-  const normContextEntries = entries.filter((e) => !nonFiniteIds.has(e.id));
+  const normContext = features.filter(([id]) => !nonFiniteIds.has(id));
 
   const minMax = new Map<keyof MvFeatureVector, { min: number; max: number }>();
   for (const f of MV_FEATURE_NAMES) {
     let min = Infinity;
     let max = -Infinity;
-    for (const e of normContextEntries) {
-      const v = raw.get(e.id)![f];
+    for (const [id] of normContext) {
+      const v = raw.get(id)![f];
       if (v < min) min = v;
       if (v > max) max = v;
     }
@@ -139,15 +147,15 @@ export function scoreEntries(
   };
 
   const scores = new Map<string, number>();
-  for (const e of entries) {
-    if (nonFiniteIds.has(e.id)) {
-      scores.set(e.id, -Infinity);
+  for (const [id] of features) {
+    if (nonFiniteIds.has(id)) {
+      scores.set(id, -Infinity);
       continue;
     }
-    const nf = raw.get(e.id)!;
+    const nf = raw.get(id)!;
     let sum = 0;
     for (const f of MV_FEATURE_NAMES) sum += weights[f] * norm(f, nf[f]);
-    scores.set(e.id, sum);
+    scores.set(id, sum);
   }
   return scores;
 }
@@ -178,42 +186,95 @@ export function rankNonPinnedByTenant(
   digest: string = SOURCE_ARTIFACT_SHA256,
 ): Map<string, MvRankInfo> {
   validateWeights(weights, digest);
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now));
+  return rankCandidates(candidates, () => true, (ids) => [ids.map((id) => byId.get(id)!)], weights);
+}
 
-  const byTenant = new Map<string, MemoryEntry[]>();
-  for (const e of entries) {
-    if (e.pinned) continue; // pinned entries never compete for rescue (never condemned)
-    // Default an undefined tenantId as dag.ts:341 does: a raw/legacy row can carry one at runtime,
-    // and keying it "undefined" would split it into its own singleton tenant.
-    const tenantId = e.tenant_id ?? DEFAULT_TENANT_ID;
-    const list = byTenant.get(tenantId);
-    if (list) list.push(e);
-    else byTenant.set(tenantId, [e]);
+/** A non-pinned row's id, tenant and features: all the ranking keeps of a row. */
+export interface MvCandidate {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly features: MvFeatureVector;
+}
+
+/** The candidate `entry` ranks as; pinned entries never compete for rescue (never condemned). */
+export function mvCandidate(entry: MemoryEntry, now: Date): MvCandidate {
+  // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its own tenant.
+  return { id: entry.id, tenantId: entry.tenant_id ?? DEFAULT_TENANT_ID, features: computeMvFeatures(entry, now) };
+}
+
+/** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one; `read` returns the
+ * rows of a score tie, which the shared tie-break orders by content. */
+export function rankCandidates(
+  candidates: readonly MvCandidate[],
+  wanted: (id: string) => boolean,
+  read: (ids: readonly string[]) => Iterable<readonly EntryIdentity[]>,
+  weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
+): Map<string, MvRankInfo> {
+  const byTenant = new Map<string, MvFeatures[]>();
+  for (const c of candidates) {
+    const list = byTenant.get(c.tenantId);
+    if (list) list.push([c.id, c.features]);
+    else byTenant.set(c.tenantId, [[c.id, c.features]]);
   }
-
   const result = new Map<string, MvRankInfo>();
   for (const [tenantId, group] of byTenant) {
-    const scores = scoreEntries(group, now, weights);
-    // score DESC, then compareEntryIdentity, the shared tie-break of every score-primary sort (src/core/compare.ts).
-    // `-Infinity - -Infinity` is NaN, which Array.sort leaves insertion-order-dependent, so NaN ties too.
-    const sorted = [...group].sort((a, b) => {
-      const diff = scores.get(b.id)! - scores.get(a.id)!;
-      return diff === 0 || Number.isNaN(diff) ? compareEntryIdentity(a, b) : diff;
-    });
+    const scores = scoreFeatures(group, weights);
+    const ids = group.map(([id]) => id).sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
     // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc comment.
-    const keepN = sorted.length < MIN_RESCUE_GROUP
-      ? 0
-      : Math.min(sorted.length, Math.ceil(RESCUE_BUDGET * sorted.length));
-    sorted.forEach((e, i) => {
-      result.set(e.id, {
-        tenantId,
-        score: scores.get(e.id)!,
-        rank: i + 1,
-        totalNonPinned: sorted.length,
-        keepN,
-      });
-    });
+    const keepN = ids.length < MIN_RESCUE_GROUP ? 0 : Math.min(ids.length, Math.ceil(RESCUE_BUDGET * ids.length));
+    for (let start = 0, end = 0; start < ids.length; start = end) {
+      const score = scores.get(ids[start])!;
+      while (end < ids.length && scores.get(ids[end]) === score) end++;
+      // A non-finite row is always wanted: the caller names every one in a warning, in rank order.
+      const want = (id: string) => wanted(id) || score === -Infinity;
+      for (const [at, id] of tiePlaces(ids.slice(start, end), want, read)) {
+        result.set(id, { tenantId, score, rank: start + at + 1, totalNonPinned: ids.length, keepN });
+      }
+    }
   }
   return result;
+}
+
+/** The place of each wanted id among `tied` by compareEntryIdentity, the shared tie-break of every score-primary sort
+ * (src/core/compare.ts); only the wanted rows are held, the rest are counted a page at a time. */
+function tiePlaces(
+  tied: readonly string[],
+  wanted: (id: string) => boolean,
+  read: (ids: readonly string[]) => Iterable<readonly EntryIdentity[]>,
+): Array<readonly [number, string]> {
+  const mine = tied.filter(wanted);
+  if (mine.length === 0) return [];
+  if (tied.length === 1) return [[0, tied[0]]];
+  const held: EntryIdentity[] = [];
+  for (const page of read(mine)) for (const row of page) held.push(identityOf(row));
+  held.sort(compareEntryIdentity);
+  const own = new Set(mine);
+  const below = Array.from({ length: held.length + 1 }, () => 0);
+  for (const page of read(tied.filter((id) => !own.has(id)))) {
+    for (const row of page) below[heldBelow(held, row)]++;
+  }
+  let others = 0;
+  return held.map((row, i) => {
+    others += below[i];
+    return [i + others, row.id] as const;
+  });
+}
+
+function identityOf({ content, id, layer, tags, source }: EntryIdentity): EntryIdentity {
+  return { content, id, layer, tags, source };
+}
+
+/** How many of `held`, sorted, come before `row`. */
+function heldBelow(held: readonly EntryIdentity[], row: EntryIdentity): number {
+  let [lo, hi] = [0, held.length];
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (compareEntryIdentity(held[mid], row) < 0) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 export interface RescueSetOptions {
