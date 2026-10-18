@@ -15,7 +15,7 @@ const QUIET: GenOpts = { knobs: { A1: { fail: 0, resolve: 1 }, A2: { fail: 0, re
 
 interface Rule {
   schema: string;
-  settings: Record<string, number>;
+  settings: Record<string, number | string>;
   inputs: { role: string; file: string; sha256: string }[];
   seeds: Record<string, number> | null;
   perHypothesis: Record<string, number | null>;
@@ -42,11 +42,11 @@ const withArmsSwapped = (g: Generated): Generated => {
   return { records, plan: planOf(records) };
 };
 
-/** Arm A2 fails every apply task in families 0 and 1 and none elsewhere, in every seed: a pure family spread. */
-function familySpread(): Generated {
+/** `arm` (A2 for H1, X2 for H2) fails every apply task in families 0 and 1 and none elsewhere, in every seed: a pure family spread. */
+function familySpread(arm = 'A2'): Generated {
   const g = generate(QUIET);
   for (const r of g.records) {
-    if (r.arm === 'A2' && r.kind === 'apply' && r.lessons[0]) r.lessons[0].first = /-f[01]$/.test(r.familyId ?? '') ? 'fail' : 'pass';
+    if (r.arm === arm && r.kind === 'apply' && r.lessons[0]) r.lessons[0].first = /-f[01]$/.test(r.familyId ?? '') ? 'fail' : 'pass';
   }
   return g;
 }
@@ -70,18 +70,38 @@ describe('Z0 seed rule', () => {
     expect(res.json!.inputs.map((i: { role: string }) => i.role)).toEqual(expect.arrayContaining(['runs', 'plan', 'prices', 'source']));
   });
 
-  it('stops after wave 1 when the family spread alone is too big, and says how to size the next run', () => {
-    const res = run(familySpread());
+  it('stops after wave 1 under --on-miss stop when the family spread alone is too big, and says how to size the next run', () => {
+    const res = run(familySpread(), ['--on-miss', 'stop']);
     expect(res.code).toBe(0);
     expect(res.json).toMatchObject({ stop: true, seeds: null, perHypothesis: { H1: null, H2: 3 } });
     expect(res.json!.reasons[0]).toBe('H1 needs more than 9 seeds');
     expect(res.json!.reasons.at(-1)).toContain('z0-size.mjs');
   });
 
-  it('prints one line with --out: the seeds, or the stop', () => {
+  it('runs a cap miss at the cap by default, and names it, instead of stopping', () => {
+    const res = run(familySpread());
+    expect(res.code).toBe(0);
+    expect(res.json).toMatchObject({
+      stop: false, seeds: { A1: 9, A2: 9, A5: 9, X2: 3, X3: 3 }, perHypothesis: { H1: null, H2: 3 }, settings: { onMiss: 'cap' },
+    });
+    expect(res.json!.reasons).toContain('H1 needs more than 9 seeds, so it runs at the cap');
+    expect(run(familySpread(), ['--on-miss', 'never']).stderr).toContain('--on-miss must be stop or cap');
+  });
+
+  it('runs only the hypothesis that misses at the cap: an H2 miss gives X2 and X3 9 seeds and leaves the A arms at 3', () => {
+    const res = run(familySpread('X2'));
+    expect(res.json).toMatchObject({
+      stop: false, seeds: { A1: 3, A2: 3, A5: 3, X2: 9, X3: 9 }, perHypothesis: { H1: 3, H2: null, H4: 3 },
+    });
+    expect(res.json!.reasons).toEqual(['H2 needs more than 9 seeds, so it runs at the cap']);
+  });
+
+  it('prints one line with --out: the seeds (naming a run at the cap), or the stop', () => {
     const quiet = run(generate(QUIET), ['--out', 'rule.json']);
     expect(quiet).toMatchObject({ code: 0, stdout: 'seeds A1 3, A2 3, A5 3, X2 3, X3 3\n' });
-    expect(run(familySpread(), ['--out', 'rule.json']).stdout).toMatch(/^stop: H1 needs more than 9 seeds; the run stops after wave 1/);
+    expect(run(familySpread(), ['--out', 'rule.json']).stdout)
+      .toBe('seeds A1 9, A2 9, A5 9, X2 3, X3 3; H1 needs more than 9 seeds, so it runs at the cap\n');
+    expect(run(familySpread(), ['--out', 'rule.json', '--on-miss', 'stop']).stdout).toMatch(/^stop: H1 needs more than 9 seeds; the run stops after wave 1/);
   });
 
   it('leaves H2 out when the plan has no X2 and X3', () => {
@@ -110,8 +130,8 @@ describe('Z0 seed rule', () => {
 
   it('prints no figure that could carry the effect: no key names one, in the result or the stop', () => {
     const banned = ['estimate', 'mean', 'p', 'se', 'F', 'Q', 'E', 'noise', 'family', 'sequence', 'value'];
-    for (const g of [generate(QUIET), familySpread()]) {
-      const keys = keysOf(run(g).stdout);
+    for (const [g, extra] of [[generate(QUIET), []], [familySpread(), ['--on-miss', 'stop']], [familySpread(), []]] as const) {
+      const keys = keysOf(run(g, [...extra]).stdout);
       expect(keys).toEqual(expect.arrayContaining(['schema', 'settings', 'inputs', 'seeds', 'perHypothesis', 'stop', 'reasons']));
       expect(keys.filter((k) => banned.includes(k))).toEqual([]);
     }

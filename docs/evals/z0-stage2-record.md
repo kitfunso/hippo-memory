@@ -409,6 +409,8 @@ The send-once prompt hook (#893) is not in the frozen build. Calibration measure
 
 Open for the founder's go (prereg 265 to 269): the session ceiling, the minimum effect and the funding. At 15 points the level holds from 10 repositories up. A pick at 20 or 25 points at a count the sizer did not choose first reruns `bash C:/z0-runs/s9/size-a2x-at.sh <repos> <effect>`.
 
+Closed at the go, 2026-10-16, and recorded in the prereg's founder section: 15 points, 10 repositories (`sizes-a2x-e0.15-r10.json`: 30 set R and 30 set X families, 60 set N tasks, 5,187 sessions), a session ceiling of 9,500, and Claude sessions on the founder's subscription plan, so the $1,050 list price is plan usage, not billed money. The pick needs no rerun, because the sizer already ran this count at this effect.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.

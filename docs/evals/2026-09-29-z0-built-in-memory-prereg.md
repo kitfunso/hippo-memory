@@ -268,6 +268,8 @@ The run spends plan usage, not billed money, but it is large. Calibration conver
 - **The session ceiling.**
 - **The minimum effect.** Raising it from 15 points cuts the families needed sharply, but a real gain smaller than it then comes out as a tie or a small win.
 
+Set at the go, 2026-10-16: the minimum effect stays at 15 points, and the session ceiling is 9,500 sessions. The scored run uses 10 repositories, the design in `docs/evals/z0-freeze/sizes-a2x-e0.15-r10.json`, and its Claude sessions run on the founder's subscription plan.
+
 ## Review findings applied (2026-09-29)
 
 An adversarial review of the first draft found 14 issues. All were accepted:
@@ -313,3 +315,24 @@ S9 sizing found no feasible design with the repository as the unit. Two set R re
 7. **The bootstrap twin** (line 189) draws families within each repository and keeps the repositories fixed.
 8. **H4's power,** open in Amendment 1, is sized under these tests at S9.
 9. **Limits** gain one: the verdicts cover the scored repositories only.
+
+## Amendment 3 (2026-10-17), before any scored session
+
+Stage 3 ended with fewer repositories than the go fixed (`z0-scored-set-record.md`). Five screens finished. They kept 15 of 33 families: rustfs 6 of 7, conductor 3 of 8, zotero 3 of 6, leakcanary 2 of 6 and maigret 1 of 6. In 17 of the 18 dropped families, A0 broke the rule at most once in 4 attempts, so the model followed it with no memory. Only rustfs has an admissible split. Magnetissimo's screen is running again after a fault. Under the record's "Fewer than 10" rule, stage 3 stops. On 2026-10-17 the founder approved a pilot in place of a wider shortlist.
+
+1. **A pilot, not the scored run of the go.** Stage 4 runs on each repository with an admissible split when magnetissimo's screen ends: rustfs, and magnetissimo if it has one. This run is the Z0 pilot. Its results do not answer questions 1 to 4 as a confirmatory test.
+2. **What runs.** Every arm runs on wave 1's seeds: three for A1, A2, A5, X1, X2 and X3, and two for A0, A4 and X4. Each repository's set R with its 6 set N tasks is one runner invocation, and its set X is another, since the two share no sequence and no store. Wave 2 and the seed rule do not run.
+3. **What it reports.** The analyzer runs unchanged and blind first. G1 to G5 apply in full, and a failed gate makes the pilot invalid. The analyzer's estimates, intervals and p-values for H1, H2, attribution, H3 and H4 are reported as pilot estimates. None is called a win, loss or tie. With one repository per set, the test of Amendment 2, item 2 does not hold its level (0.040 against 0.025). With two, it meets Amendment 2, item 4, but the run is far smaller than the size the go fixed.
+4. **The families are spent.** Each pilot family is scored once. None can join a later confirmatory run, which needs new repositories and families.
+5. **Limits** gain one: the pilot covers one or two repositories, with 3 families per set in each.
+
+## Amendment 4 (2026-10-18), before unblinding
+
+The pilot runs on rustfs alone (`z0-scored-set-record.md`). No hypothesis outcome has been seen.
+
+1. **One repository stops the t test.** The analyzer's fixed-repository t test needs two scored repositories (`src/eval/repository-t.ts:338`). With one, every t estimate, interval and p-value is n/a, and G2 fails on that alone. Amendment 3, item 3 expected the test to run with one repository at a loose level. It does not run.
+2. **G2 is read on its bootstrap.** For this pilot, each required G2 half passes when, under both codings, the analyzer's twin bootstrap (families resampled inside rustfs, 10,000 resamples, seed 1) gives an estimate of at most -0.30 and a high end below zero. These are reading 5's thresholds, with the bootstrap in place of the t interval. The founder was told of this reading on 2026-10-18, before any G2 value at these settings was seen. A trial blind run (200 resamples, seed 7, three of the seven runs) had already printed the Claude Code half's interval as [-1.000, -0.333].
+3. **What the gate shows.** A smoke test of the pilot wrapper on 2026-10-18, at these settings and on the three finished runs, printed the Claude Code half (A4 against A0 in set R, 6 units) under the violation coding as estimate -0.667, interval [-1.000, 0.000]. The high end is not below zero, so G2 fails under item 2, and the pilot is invalid under Amendment 3, item 3. A0 and A4 have finished, so only a lesson dropped at G5 can change this.
+4. **An exploratory read.** The families are spent (Amendment 3, item 4), so a look at the hypothesis block cannot bias a later confirmatory run. After G5 and the analyzer's own unblind checks pass, `C:/z0-runs/scored/pilot-report.mjs` (sha256 prefix 7c2a53d5bf6a2a9f) prints the analyzer's own hypothesis and reported blocks, which the failed gate withholds. Every number from it is labelled exploratory, from an invalid pilot, and is never cited as a Z0 result.
+5. **G5 across seven runner folders.** Each folder is regraded with `z0-regrade.mjs`. One reader sample of at least 30 pairs is drawn across the folders, with `--n` per folder in proportion to its arms, and labelled by one reader who sees no arm, seed or verdict. The grading file joins the folders: the union of flipped lessons, the sum of acceptance flips, and the summed reader counts. More than 10% disagreement starts prereg 166's re-grade in every folder.
+6. **The stored sample** (prereg 179) is not drawn for the pilot. No gate reads it.

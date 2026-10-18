@@ -178,6 +178,17 @@ describe('Z0 CLI and blind mode', () => {
     }
   });
 
+  it('a drop list hook void is refused unless it names a sequence, a seed and a position', () => {
+    const dir = workspace(fresh());
+    const run = () => runCli([...ARGS, '--iterations', '300', '--drop-list', 'drop.json'], dir);
+    for (const bad of [{ sequence: 'rn-repo1', seed: 1 }, { sequence: 1, seed: 1, position: 8 }, 'rn-repo1 seed 1', null]) {
+      fs.writeFileSync(path.join(dir, 'drop.json'), JSON.stringify({ droppedLessons: [], droppedFamilies: [], hookVoids: [bad] }));
+      expect(run()).toMatchObject({ code: 1, stderr: expect.stringContaining('hookVoids needs') });
+    }
+    fs.writeFileSync(path.join(dir, 'drop.json'), JSON.stringify({ droppedLessons: [], droppedFamilies: [], hookVoids: [{ sequence: 'rn-repo1', seed: 1, position: 8 }] }));
+    expect(run()).toMatchObject({ code: 0, stdout: expect.stringContaining('hook-voided: 1 positions') });
+  });
+
   it('--help prints the usage and exits 0', () => {
     expect(runCli(['--help'])).toMatchObject({ code: 0, stdout: expect.stringMatching(/^usage: z0-analyze\.mjs --runs FILE/) });
   });
