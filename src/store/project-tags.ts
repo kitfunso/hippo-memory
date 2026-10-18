@@ -3,6 +3,7 @@
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { withBackup } from '../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { MAX_AUDIT_LIMIT } from '../util/limits.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import {
   compactionOriginsWithCwd,
@@ -74,7 +75,6 @@ export interface ProjectTagScope {
   readonly actor: string;
 }
 
-const AUDIT_READ_CAP = 10000;
 const TX_LABEL = 'merge_projects';
 const AUTO_REPAIR_META_KEY = 'project_repair_auto';
 
@@ -85,7 +85,7 @@ export function projectTagReads(db: DatabaseSyncLike, tenantId: string): Project
     liveEntriesBySourcePrefix: (prefix) => selectLiveEntriesBySourcePrefix(db, tenantId, prefix),
     entriesByIds: (ids) => selectEntriesByIds(db, ids, tenantId),
     dormant: () => listDormantSnapshots(db, tenantId),
-    auditEvents: (op) => queryAuditEvents(db, { tenantId, op, limit: AUDIT_READ_CAP }),
+    auditEvents: (op) => queryAuditEvents(db, { tenantId, op, limit: MAX_AUDIT_LIMIT }),
     compactionTranscripts: () => compactionTranscripts(db, tenantId),
     compactionOriginsWithCwd: () => compactionOriginsWithCwd(db, tenantId),
     holdsOrigin: (table, name) => holdsOrigin(db, table, tenantId, name),

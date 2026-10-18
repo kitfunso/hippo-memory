@@ -11,6 +11,7 @@ import { errorMessage, log, errorFields } from '../util/log.js';
 const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
 const MAX_LESSON_CHARS = 500;
+const GIT_TIMEOUT_MS = 10_000;
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and
  * tags through remember. */
@@ -173,7 +174,7 @@ export function isGitRepo(cwd: string): boolean {
     const raw = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
       encoding: 'utf8',
       cwd,
-      timeout: 10000,
+      timeout: GIT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
     });
@@ -192,7 +193,7 @@ export function fetchGitLog(cwd: string, days: number): string {
     const raw = execFileSync('git', ['log', `--since=${days} days ago`, '--pretty=format:%s'], {
       encoding: 'utf8',
       cwd,
-      timeout: 10000,
+      timeout: GIT_TIMEOUT_MS,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });

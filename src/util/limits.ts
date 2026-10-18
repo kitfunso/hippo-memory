@@ -9,6 +9,8 @@ export const DEFAULT_LIST_LIMIT = 100;
 // shares it.
 export const MAX_LIST_LIMIT = 1000;
 
+export const MAX_AUDIT_LIMIT = 10_000;
+
 /** The one list-limit rule: absent means the default; a positive integer up to the ceiling passes.
  * Anything else returns undefined, so each surface words its own error. */
 export function resolveListLimit(

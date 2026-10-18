@@ -2,7 +2,6 @@
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
 // (database openers outside the data layer, store branches in the API, routes that need hippo.db (storeReady 'localFiles' or sqliteOnly; sqliteOnly rows are counted apart too, and their list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
-// routesOnLoop counts the built-in routes whose SQLite work still runs on the server thread: V1_ROUTES rows and HOST_ROUTES entries without `loop: 'off'` (POST /mcp is one, so every MCP tool runs off it). Add-on routes declare their own.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
@@ -28,7 +27,6 @@ const NUMBERS = [
   'storeBranches',
   'routesNeedingHippoDb',
   'sqliteOnlyRoutes',
-  'routesOnLoop',
   'twinFunctions',
   'sqlOutside',
   'txLiterals',
@@ -337,7 +335,7 @@ function countTwins(sf) {
 
 const routeFail = (why, file = 'src/server/route-table.ts') => {
   console.error(
-    `check-store-port: ${file} ${why}; the route count would read low. Declare each route as an object literal whose storeReady, sqliteOnly and loop, if any, are string literals, or update readRoutes.`,
+    `check-store-port: ${file} ${why}; the route count would read low. Declare each route as an object literal whose storeReady and sqliteOnly, if any, are string literals, or update readRoutes.`,
   );
   process.exit(1);
 };
@@ -368,42 +366,15 @@ const rowLabel = (row, sf) => {
   return `${text(m).replace(/'/g, '')} ${text(where).replace(/'/g, '')}`;
 };
 
-const isOffLoop = (p) =>
-  ts.isPropertyAssignment(p) &&
-  ts.isIdentifier(p.name) &&
-  p.name.text === 'loop' &&
-  ts.isStringLiteralLike(p.initializer) &&
-  p.initializer.text === 'off';
-
-/** HOST_ROUTES entries that do not declare `loop: 'off'`: the routes boot.ts dispatches outside V1_ROUTES. */
-function hostRoutesOnLoop(sf) {
-  const table = declaredValue(sf, 'HOST_ROUTES');
-  if (!table || !ts.isObjectLiteralExpression(table)) {
-    return routeFail('HOST_ROUTES is not declared as an object literal');
-  }
-  let onLoop = 0;
-  for (const entry of table.properties) {
-    const at = `line ${sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1}`;
-    if (!ts.isPropertyAssignment(entry) || !ts.isObjectLiteralExpression(entry.initializer)) {
-      return routeFail(`HOST_ROUTES has a spread or non-object entry (${at})`);
-    }
-    if (!entry.initializer.properties.some(isOffLoop)) onLoop++;
-  }
-  return onLoop;
-}
-
-/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly), the sorted `METHOD path` of the sqliteOnly rows,
- *  and the rows that do not declare `loop: 'off'` plus the HOST_ROUTES entries that do not. */
+/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly) and the sorted `METHOD path` of the sqliteOnly rows. */
 function readRoutes(sf) {
   const array = declaredValue(sf, 'V1_ROUTES');
   if (!array || !ts.isArrayLiteralExpression(array)) return routeFail('V1_ROUTES is not declared as an array literal');
   let needsHippoDb = 0;
-  let onLoop = 0;
   const sqliteOnly = [];
   for (const row of array.elements) {
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
     if (!ts.isObjectLiteralExpression(row)) return routeFail(`V1_ROUTES has a spread or non-object element (${at})`);
-    if (!row.properties.some(isOffLoop)) onLoop++;
     const label = rowLabel(row, sf);
     const store = propNamed(row, 'storeReady');
     const only = propNamed(row, 'sqliteOnly');
@@ -425,7 +396,7 @@ function readRoutes(sf) {
       needsHippoDb++;
     } else if (store && store.initializer.text === 'localFiles') needsHippoDb++;
   }
-  return { needsHippoDb, sqliteOnly: sqliteOnly.sort(), onLoop: onLoop + hostRoutesOnLoop(sf) };
+  return { needsHippoDb, sqliteOnly: sqliteOnly.sort() };
 }
 
 /** True when the file names the reply carrier (`andThen`, `onStore` or `StoreReply`) as an identifier; comments and strings never match. */
@@ -547,7 +518,6 @@ function measure() {
       out.routesNeedingHippoDb = routes.needsHippoDb;
       out.sqliteOnlyRoutes = routes.sqliteOnly.length;
       sqliteOnlyRoutesList = routes.sqliteOnly;
-      out.routesOnLoop += routes.onLoop;
     }
     sqliteLocalMethods.push(...localMethods(sf));
     sites.portImportsFromSql.push(...portSqlImports(file, sf));

@@ -25,6 +25,9 @@ const PATTERNS = [
   ['pr', /\(#\d{2,4}\)|\bPR ?#?\d+|\bissue #\d+/],
 ];
 
+// Section labels that name a plan, wave or feature number instead of what the code is; no baseline, any hit fails.
+const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
+
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
 /** Index just past the string literal that opens at `start`, and how many escaped newlines it spans. */
@@ -149,7 +152,7 @@ function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     for (const [line, text] of commentLines(readFileSync(file, 'utf8'))) {
-      const kind = PATTERNS.find(([, re]) => re.test(text))?.[0];
+      const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
     }
   }
@@ -157,8 +160,9 @@ function findHits() {
 }
 
 const hits = findHits();
+const labels = hits.filter((h) => h.kind === 'label');
 const counts = {};
-for (const h of hits) counts[h.file] = (counts[h.file] ?? 0) + 1;
+for (const h of hits.filter((x) => x.kind !== 'label')) counts[h.file] = (counts[h.file] ?? 0) + 1;
 const args = process.argv.slice(2);
 
 if (args.includes('--update')) {
@@ -173,6 +177,12 @@ if (args.includes('--list')) {
     if (only.length === 0 || only.includes(h.file)) console.log(`${h.file}:${h.line} [${h.kind}] ${h.text}`);
   }
   process.exit(0);
+}
+
+if (labels.length > 0) {
+  console.error('Comments that label a section with a feature, wave or plan number (say what the code is):');
+  for (const h of labels) console.error(`  ${h.file}:${h.line} ${h.text}`);
+  process.exit(1);
 }
 
 const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};

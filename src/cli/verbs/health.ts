@@ -2,6 +2,7 @@
 
 import { TAIL_MAX_LINES } from '../../support-bundle.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../../api/assemble.js';
+import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
 export const HEALTH_VERBS = {
@@ -40,7 +41,7 @@ export const HEALTH_VERBS = {
       --op <op>            Filter by op (remember | recall | promote |
                            supersede | forget | archive_raw | auth_revoke)
       --since <iso>        Lower bound on ts (ISO timestamp)
-      --limit <n>          Max events (default: 100, max: 10000)
+      --limit <n>          Max events (default: ${DEFAULT_LIST_LIMIT}, max: ${MAX_AUDIT_LIMIT})
       --json               Output as JSON
       --global             Operate on the global store`,
     ],

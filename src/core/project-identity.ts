@@ -6,7 +6,7 @@ import { BadRequestError } from './api-errors.js';
 import { isSharedStore, loadConfig } from './config.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
-import { originRemoteId, projectFileId } from './project-remote.js';
+import { originRemoteId, projectFileId, readGitFilePointer } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { placeholders } from '../util/sql.js';
 
@@ -141,12 +141,9 @@ function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const marker = path.join(gitRoot, '.git');
   if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
   try {
-    const gitDir = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(marker, 'utf8'))?.[1]?.trim();
-    if (!gitDir) return null;
-    const linkDir = path.resolve(gitRoot, gitDir);
-    const commondir = path.join(linkDir, 'commondir');
-    if (!fs.existsSync(commondir)) return null; // a submodule's or a separate git dir's own checkout
-    const common = realpathOrResolve(path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()));
+    const dirs = readGitFilePointer(gitRoot, fs.readFileSync(marker, 'utf8'));
+    if (dirs?.commonDir == null) return null; // no git dir, or a submodule's or a separate git dir's own checkout
+    const common = realpathOrResolve(dirs.commonDir);
     const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
     if (samePath(repo, home)) return null; // a dotfiles repo at home must not make its worktrees user-global
     return (

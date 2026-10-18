@@ -1,4 +1,4 @@
-// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came from (plan design 10).
+// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came from.
 import path from 'node:path';
 import type { MemoryEntry } from '../core/memory.js';
 import { duplicateKey } from '../util/same-text.js';

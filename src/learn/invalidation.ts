@@ -50,48 +50,44 @@ const TRIVIAL_REMOVAL_WORDS = new Set([
   'commented',
 ]);
 
+function isTrivialRemoval(target: string): boolean {
+  const words = target.split(/\s+/);
+  return words.length <= 2 && words.some((w) => TRIVIAL_REMOVAL_WORDS.has(w.toLowerCase()));
+}
+
+interface InvalidationPattern {
+  readonly re: RegExp;
+  readonly type: InvalidationTarget['type'];
+  /** Group 2 names the replacement. */
+  readonly hasTo: boolean;
+  /** A match this refuses ends the search with no target. */
+  readonly refuses?: (from: string) => boolean;
+}
+
+// Ordered: the first pattern that matches wins.
+const INVALIDATION_PATTERNS: readonly InvalidationPattern[] = [
+  {
+    re: /(?:migrat\w+|switch\w*|mov\w+|convert\w*|transition\w*|upgrad\w+)\s+(?:from\s+)?(.+?)\s+to\s+(.+)/i,
+    type: 'migration',
+    hasTo: true,
+  },
+  { re: /from\s+(.+?)\s+to\s+(.+)/i, type: 'migration', hasTo: true },
+  { re: /replac\w+\s+(.+?)\s+with\s+(.+)/i, type: 'migration', hasTo: true },
+  { re: /deprecat\w+\s+(.+)/i, type: 'deprecation', hasTo: false },
+  { re: /(?:remov\w+|drop\w*)\s+(.+)/i, type: 'removal', hasTo: false, refuses: isTrivialRemoval },
+];
+
 /** Extract what was replaced/removed from a commit message.
  *  Returns null if the commit isn't a breaking/migration change. */
 export function extractInvalidationTarget(message: string): InvalidationTarget | null {
-  // Strip conventional commit prefix (e.g., "feat(scope): ")
   const body = message.replace(/^[a-z]+(\([^)]*\))?:\s*/i, '').trim();
-
-  // Pattern: "migrate/switch/move/convert/transition/upgrade from X to Y"
-  const fromToMatch = body.match(
-    /(?:migrat\w+|switch\w*|mov\w+|convert\w*|transition\w*|upgrad\w+)\s+(?:from\s+)?(.+?)\s+to\s+(.+)/i,
-  );
-  if (fromToMatch) {
-    return { from: fromToMatch[1].trim(), to: fromToMatch[2].trim(), type: 'migration' };
+  for (const { re, type, hasTo, refuses } of INVALIDATION_PATTERNS) {
+    const match = body.match(re);
+    if (!match) continue;
+    const from = match[1].trim();
+    if (refuses?.(from)) return null;
+    return { from, to: hasTo ? match[2].trim() : null, type };
   }
-
-  // Pattern: "from X to Y" (standalone)
-  const standaloneFromTo = body.match(/from\s+(.+?)\s+to\s+(.+)/i);
-  if (standaloneFromTo) {
-    return { from: standaloneFromTo[1].trim(), to: standaloneFromTo[2].trim(), type: 'migration' };
-  }
-
-  // Pattern: "replace X with Y"
-  const replaceMatch = body.match(/replac\w+\s+(.+?)\s+with\s+(.+)/i);
-  if (replaceMatch) {
-    return { from: replaceMatch[1].trim(), to: replaceMatch[2].trim(), type: 'migration' };
-  }
-
-  // Pattern: "deprecate X"
-  const deprecateMatch = body.match(/deprecat\w+\s+(.+)/i);
-  if (deprecateMatch) {
-    return { from: deprecateMatch[1].trim(), to: null, type: 'deprecation' };
-  }
-
-  // Pattern: "remove/drop X" (but not trivial removals)
-  const removeMatch = body.match(/(?:remov\w+|drop\w*)\s+(.+)/i);
-  if (removeMatch) {
-    const target = removeMatch[1].trim();
-    const words = target.split(/\s+/);
-    const isTrivial = words.length <= 2 && words.some((w) => TRIVIAL_REMOVAL_WORDS.has(w.toLowerCase()));
-    if (isTrivial) return null;
-    return { from: target, to: null, type: 'removal' };
-  }
-
   return null;
 }
 

@@ -37,6 +37,23 @@ describe('hippo audit list', () => {
     expect(ops).toContain('remember');
     expect(ops).toContain('recall');
   });
+
+  it('keeps the 10000 ceiling and refuses a limit that is not a whole number', async () => {
+    vi.stubEnv('HIPPO_HOME', home);
+    await hippo('init', '--global');
+    const list = (limit: string) =>
+      runInProcess(() => runCli(['node', 'hippo', 'audit', 'list', '--json', '--global', '--limit', limit]));
+
+    for (const ok of ['5000', '10000']) expect((await list(ok)).status, ok).toBe(0);
+    const over = await list('10001');
+    expect(over.status).not.toBe(0);
+    expect(over.stderr).toContain('--limit must be between 1 and 10000 (got 10001)');
+    for (const bad of ['1e3', '12.5']) {
+      const res = await list(bad);
+      expect(res.status, bad).not.toBe(0);
+      expect(res.stderr).toContain(`Invalid --limit: "${bad}"`);
+    }
+  });
 });
 
 describe('hippo audit --fix --dry-run', () => {

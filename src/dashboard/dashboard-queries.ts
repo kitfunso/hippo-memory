@@ -17,7 +17,7 @@ import {
   type Snapshot,
 } from './dashboard-snapshot.js';
 import { chunked } from '../util/chunked.js';
-import { pct, round1 } from '../util/format.js';
+import { pct, plural, round1 } from '../util/format.js';
 import type { MemoryQuery, SortDir, SortKey } from './dashboard-params.js';
 import type {
   ChipCounts,
@@ -63,10 +63,6 @@ function addedWithin(series: number[]): number {
   return series[SERIES_DAYS] - series[SERIES_DAYS - DELTA_DAYS];
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 /** Named projects by size, then Global, then Unassigned, as the treemap orders them. */
 function orderedProjects(snap: Snapshot): ProjectAgg[] {
   const rank = (p: ProjectAgg): number => (p.summary.kind === 'project' ? 0 : p.summary.kind === 'global' ? 1 : 2);
@@ -83,7 +79,7 @@ function healthKpis(snap: Snapshot, total: number, withConflicts: number): Kpi[]
       label: 'Open conflicts',
       value: snap.openConflicts,
       series: null,
-      delta: `in ${plural(withConflicts, 'project', 'projects')}`,
+      delta: `in ${plural(withConflicts, 'project')}`,
     },
     {
       id: 'embeddingCoverage',

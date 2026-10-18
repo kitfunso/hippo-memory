@@ -105,49 +105,42 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/memories',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateMemory,
   },
   {
     method: 'GET',
     path: '/v1/graph',
     auth: 'caller',
-    loop: 'off',
     handler: handleGetGraph,
   },
   {
     method: 'GET',
     path: '/v1/memories',
     auth: 'caller',
-    loop: 'off',
     handler: handleRecallMemories,
   },
   {
     method: 'GET',
     pattern: '/v1/sessions/:id/assemble',
     auth: 'caller',
-    loop: 'off',
     handler: handleAssembleSession,
   },
   {
     method: 'GET',
     pattern: '/v1/recall/drill/:id',
     auth: 'caller',
-    loop: 'off',
     handler: handleDrillRecall,
   },
   {
     method: 'POST',
     pattern: '/v1/memories/:id/archive',
     auth: 'caller',
-    loop: 'off',
     handler: handleArchiveMemory,
   },
   {
     method: 'POST',
     pattern: '/v1/memories/:id/supersede',
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedeMemory,
   },
   {
@@ -156,28 +149,24 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'caller',
     // The copy goes to the operator's global store, which only a hippo.db server reaches.
     storeReady: 'localFiles',
-    loop: 'off',
     handler: handlePromoteMemory,
   },
   {
     method: 'DELETE',
     pattern: '/v1/memories/:id',
     auth: 'caller',
-    loop: 'off',
     handler: handleForgetMemory,
   },
   {
     method: 'POST',
     path: '/v1/outcome',
     auth: 'caller',
-    loop: 'off',
     handler: handleApplyOutcome,
   },
   {
     method: 'GET',
     path: '/v1/context',
     auth: 'caller',
-    loop: 'off',
     handler: handleGetContext,
   },
   {
@@ -185,371 +174,318 @@ export const V1_ROUTES: readonly Route[] = [
     path: '/v1/sleep',
     auth: 'host-admin-local',
     storeReady: 'localFiles',
-    loop: 'off',
     handler: handleSleep,
   },
   {
     method: 'POST',
     path: '/v1/auth/keys',
     auth: 'admin',
-    loop: 'off',
     handler: handleCreateAuthKey,
   },
   {
     method: 'GET',
     path: '/v1/auth/keys',
     auth: 'caller',
-    loop: 'off',
     handler: handleListAuthKeys,
   },
   {
     method: 'DELETE',
     pattern: '/v1/auth/keys/:keyId',
     auth: 'caller',
-    loop: 'off',
     handler: handleRevokeAuthKey,
   },
   {
     method: 'GET',
     path: '/v1/quarantine',
     auth: 'admin',
-    loop: 'off',
     handler: handleListQuarantine,
   },
   {
     method: 'POST',
     pattern: '/v1/quarantine/:id/approve',
     auth: 'admin',
-    loop: 'off',
     handler: handleApproveQuarantine,
   },
   {
     method: 'POST',
     pattern: '/v1/quarantine/:id/reject',
     auth: 'admin',
-    loop: 'off',
     handler: handleRejectQuarantine,
   },
   {
     method: 'GET',
     path: '/v1/audit',
     auth: 'admin',
-    loop: 'off',
     handler: handleListAudit,
   },
   {
     method: 'POST',
     path: '/v1/predictions',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreatePrediction,
   },
   {
     method: 'GET',
     path: '/v1/predictions',
     auth: 'caller',
-    loop: 'off',
     handler: handleListPredictions,
   },
   {
     method: 'GET',
     path: '/v1/predictions/stats',
     auth: 'caller',
-    loop: 'off',
     handler: handlePredictionStats,
   },
   {
     method: 'GET',
     regex: /^\/v1\/predictions\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetPrediction,
   },
   {
     method: 'POST',
     regex: /^\/v1\/predictions\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleClosePrediction,
   },
   {
     method: 'POST',
     path: '/v1/decisions',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateDecision,
   },
   {
     method: 'GET',
     path: '/v1/decisions',
     auth: 'caller',
-    loop: 'off',
     handler: handleListDecisions,
   },
   {
     method: 'POST',
     regex: /^\/v1\/decisions\/(\d+)\/supersede$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedeDecision,
   },
   {
     method: 'POST',
     regex: /^\/v1\/decisions\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleCloseDecision,
   },
   {
     method: 'GET',
     regex: /^\/v1\/decisions\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetDecision,
   },
   {
     method: 'POST',
     path: '/v1/incidents',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateIncident,
   },
   {
     method: 'GET',
     path: '/v1/incidents',
     auth: 'caller',
-    loop: 'off',
     handler: handleListIncidents,
   },
   {
     method: 'POST',
     regex: /^\/v1\/incidents\/(\d+)\/resolve$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleResolveIncident,
   },
   {
     method: 'POST',
     regex: /^\/v1\/incidents\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleCloseIncident,
   },
   {
     method: 'GET',
     regex: /^\/v1\/incidents\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetIncident,
   },
   {
     method: 'POST',
     path: '/v1/processes',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateProcess,
   },
   {
     method: 'GET',
     path: '/v1/processes',
     auth: 'caller',
-    loop: 'off',
     handler: handleListProcesses,
   },
   {
     method: 'POST',
     regex: /^\/v1\/processes\/(\d+)\/supersede$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedeProcess,
   },
   {
     method: 'POST',
     regex: /^\/v1\/processes\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleCloseProcess,
   },
   {
     method: 'GET',
     regex: /^\/v1\/processes\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetProcess,
   },
   {
     method: 'POST',
     path: '/v1/policies',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreatePolicy,
   },
   {
     method: 'GET',
     path: '/v1/policies',
     auth: 'caller',
-    loop: 'off',
     handler: handleListPolicies,
   },
   {
     method: 'GET',
     path: '/v1/policies/asof',
     auth: 'caller',
-    loop: 'off',
     handler: handlePoliciesAsOf,
   },
   {
     method: 'POST',
     regex: /^\/v1\/policies\/(\d+)\/supersede$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedePolicy,
   },
   {
     method: 'POST',
     regex: /^\/v1\/policies\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleClosePolicy,
   },
   {
     method: 'GET',
     regex: /^\/v1\/policies\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetPolicy,
   },
   {
     method: 'POST',
     path: '/v1/skills',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateSkill,
   },
   {
     method: 'GET',
     path: '/v1/skills',
     auth: 'caller',
-    loop: 'off',
     handler: handleListSkills,
   },
   {
     method: 'GET',
     path: '/v1/skills/export',
     auth: 'caller',
-    loop: 'off',
     handler: handleExportSkills,
   },
   {
     method: 'POST',
     regex: /^\/v1\/skills\/(\d+)\/supersede$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedeSkill,
   },
   {
     method: 'POST',
     regex: /^\/v1\/skills\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleCloseSkill,
   },
   {
     method: 'GET',
     regex: /^\/v1\/skills\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetSkill,
   },
   {
     method: 'POST',
     path: '/v1/project-briefs',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateProjectBrief,
   },
   {
     method: 'GET',
     path: '/v1/project-briefs',
     auth: 'caller',
-    loop: 'off',
     handler: handleListProjectBriefs,
   },
   {
     method: 'POST',
     path: '/v1/project-briefs/refresh',
     auth: 'caller',
-    loop: 'off',
     handler: handleRefreshProjectBrief,
   },
   {
     method: 'POST',
     regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedeProjectBrief,
   },
   {
     method: 'POST',
     regex: /^\/v1\/project-briefs\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleCloseProjectBrief,
   },
   {
     method: 'GET',
     regex: /^\/v1\/project-briefs\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetProjectBrief,
   },
   {
     method: 'POST',
     path: '/v1/customer-notes',
     auth: 'caller',
-    loop: 'off',
     handler: handleCreateCustomerNote,
   },
   {
     method: 'GET',
     path: '/v1/customer-notes',
     auth: 'caller',
-    loop: 'off',
     handler: handleListCustomerNotes,
   },
   {
     method: 'POST',
     regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleSupersedeCustomerNote,
   },
   {
     method: 'POST',
     regex: /^\/v1\/customer-notes\/(\d+)\/close$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleCloseCustomerNote,
   },
   {
     method: 'GET',
     regex: /^\/v1\/customer-notes\/(\d+)$/,
     auth: 'caller',
-    loop: 'off',
     handler: handleGetCustomerNote,
   },
   {
     method: 'POST',
     path: '/v1/connectors/slack/events',
     auth: 'webhook-signature',
-    loop: 'off',
     handler: webhook(handleSlackEventsWebhook),
   },
   {
     method: 'POST',
     path: '/v1/connectors/github/events',
     auth: 'webhook-signature',
-    loop: 'off',
     handler: webhook(handleGitHubEventsWebhook),
   },
 ];
@@ -620,7 +556,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   noteAccess(r.req, { route: routeLabel(route) });
   // Only a store with worker threads has moved the route's SQLite
   // work; under any other the handler still opens hippo.db itself.
-  await (route.loop === 'off' ? r.opts.offLoop(() => run(r)) : run(r));
+  await r.opts.offLoop(() => run(r));
   return true;
 }
 
@@ -646,22 +582,21 @@ export async function dispatchAddonRoute(
   return true;
 }
 
-/** A route outside /v1 and the add-ons; `loop: 'off'` fences its store work from the server thread as a V1 row's. */
+/** A route outside /v1 and the add-ons; its store work runs off the server thread as a V1 row's does. */
 export interface HostRoute {
   readonly method: string;
   readonly path: string;
-  readonly loop?: 'off';
 }
 
 /** Each runs where boot.ts places it around the rate limit and the request scope. */
 export const HOST_ROUTES = {
-  health: { method: 'GET', path: '/health', loop: 'off' },
-  ready: { method: 'GET', path: '/ready', loop: 'off' },
-  mcp: { method: 'POST', path: '/mcp', loop: 'off' },
-  mcpStream: { method: 'GET', path: '/mcp/stream', loop: 'off' },
+  health: { method: 'GET', path: '/health' },
+  ready: { method: 'GET', path: '/ready' },
+  mcp: { method: 'POST', path: '/mcp' },
+  mcpStream: { method: 'GET', path: '/mcp/stream' },
 } as const satisfies Readonly<Record<string, HostRoute>>;
 
-/** Runs `handle` when the request is `route`'s, in the fence its row names; false when it is another route. */
+/** Runs `handle` off the server thread when the request is `route`'s; false when it is another route. */
 export async function dispatchHostRoute(
   { req, opts }: RouteRequest,
   request: { readonly method: string; readonly path: string },
@@ -670,7 +605,7 @@ export async function dispatchHostRoute(
 ): Promise<boolean> {
   if (request.method !== route.method || request.path !== route.path) return false;
   noteAccess(req, { route: route.path });
-  await (route.loop === 'off' ? opts.offLoop(handle) : handle());
+  await opts.offLoop(handle);
   return true;
 }
 

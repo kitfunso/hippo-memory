@@ -1,4 +1,4 @@
-import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
+import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../util/limits.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { log } from '../util/log.js';
 import { blockHash } from '../util/token-text.js';
@@ -94,8 +94,8 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
     params.push(opts.since);
   }
   const after = keysetAfter('ts', 'id', opts.after);
-  // One past the route's 10000 cap: GET /v1/audit reads a row ahead to tell whether another page exists.
-  const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, 10001));
+  // One past the cap: GET /v1/audit reads a row ahead to tell whether another page exists.
+  const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT + 1));
   // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(
@@ -121,7 +121,7 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
     where.push('+tenant_id = ?');
     params.push(opts.tenantId);
   }
-  const limit = Math.max(1, Math.min(opts.limit ?? 1000, 10000));
+  const limit = Math.max(1, Math.min(opts.limit ?? 1000, MAX_AUDIT_LIMIT));
   // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(`SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`)

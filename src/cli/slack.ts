@@ -14,12 +14,14 @@ import {
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
+import { runDlqReplay } from './dlq-replay.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit, fail } from './exit.js';
+import { errorMessage } from '../util/log.js';
 
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 
-function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const channel = stringFlag(flags, 'channel');
   if (!channel) {
     printSlackBackfillUsage();
@@ -31,24 +33,21 @@ function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags):
     printError('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
     throw new CliExit(2);
   }
-  // --since is advisory in V1: the slack_cursors row drives resume, so the backfill loop always continues where it left
-  // off (keeps idempotency clean).
-  const sinceIso = stringFlag(flags, 'since');
-  void sinceIso;
+  // The slack_cursors row drives resume, so the loop always continues where it left off (keeps idempotency clean).
+  if (stringFlag(flags, 'since')) printError('note: --since is ignored; the backfill resumes from the saved cursor.');
   const fetcher = slackHistoryFetcher(token);
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:slack-backfill') };
-  backfillChannel(ctx, {
-    teamId: envSlackTeamId() ?? 'T_UNKNOWN',
-    channel: { id: channel, is_private: false },
-    fetcher,
-  })
-    .then((r) => {
-      console.log(`backfill ${channel}: ${r.ingested} new messages across ${r.pages} pages`);
-    })
-    .catch((e: Error) => {
-      printError('backfill failed:', e.message);
-      process.exit(3);
+  try {
+    const r = await backfillChannel(ctx, {
+      teamId: envSlackTeamId() ?? 'T_UNKNOWN',
+      channel: { id: channel, is_private: false },
+      fetcher,
     });
+    console.log(`backfill ${channel}: ${r.ingested} new messages across ${r.pages} pages`);
+  } catch (e) {
+    printError('backfill failed:', errorMessage(e));
+    throw new CliExit(3);
+  }
 }
 
 async function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
@@ -59,26 +58,9 @@ async function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliF
 }
 
 async function cmdSlackDlqReplay(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
-  const idArg = args[2];
-  if (!idArg) {
-    fail('Usage: hippo slack dlq replay <id> [--force]');
-  }
-  const id = Number(idArg);
-  if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
-    fail(`replay: invalid id ${idArg}`);
-  }
-  const force = flags.force === true;
-  const result = await replayDlqEntry(cliApiContext(hippoRoot, tenantId), id, {
-    force,
-    signingSecret: envSlackSigningSecret(),
-  });
-  if (!result.ok) {
-    fail(
-      `replay failed: status=${result.status} retry_count=${result.retryCount}${result.reason ? ` reason=${result.reason}` : ''}`,
-    );
-  }
-  console.log(
-    `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  await runDlqReplay('slack', args[2], flags, (id, force) =>
+    replayDlqEntry(ctx, id, { force, signingSecret: envSlackSigningSecret() }),
   );
 }
 
@@ -118,7 +100,7 @@ async function cmdSlackWorkspacesRemove(hippoRoot: string, flags: CliFlags): Pro
 export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    cmdSlackBackfill(hippoRoot, tenantId, flags);
+    await cmdSlackBackfill(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {

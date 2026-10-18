@@ -49,9 +49,9 @@ export { markRetrieved } from './core/memory.js';
 export { multihopSearch } from './search/multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph/recall.js';
 
-// Feature 5: Session handoff
+// Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './core/handoff.js';
-// W2a: work-queue cards
+// Work-queue cards
 export {
   Card,
   CardStatus,
@@ -81,20 +81,20 @@ export async function consolidate(
 function isFolder(target: string | HippoStore): target is string {
   return typeof target === 'string';
 }
-// Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
+// The one dedupe.js export that is public; the rest of dedupe.js stays internal.
 export { strengthBucket } from './consolidate/dedupe.js';
 
-// Feature 1: Embedding search
+// Embedding search
 export { isEmbeddingAvailable, getEmbedding } from './embeddings/local.js';
 
-// Feature 2: Auto-learn from errors
+// Auto-learn from errors
 export { captureError, extractLessons, partitionLessons } from './learn/autolearn.js';
 
-// Feature 3: Cross-agent shared memory
+// Cross-agent shared memory
 export { getGlobalRoot } from './sharing/global-store.js';
 export { transferScore } from './sharing/share.js';
 
-// Feature 4: Memory importers
+// Memory importers
 export {
   importChatGPT,
   importClaude,
@@ -106,7 +106,7 @@ export {
 } from './entry/importers.js';
 export { ImportResult, ImportOptions } from './importers/core.js';
 
-// Feature eval suite
+// Eval suite
 export {
   runFeatureEval,
   formatResult,
@@ -115,8 +115,8 @@ export {
   buildSyntheticCorpus,
 } from './eval/eval-suite.js';
 
-// Pineal gland: salience gate
+// Salience gate
 export { computeSalience, SalienceDecision, SalienceResult, SalienceOptions } from './core/salience.js';
 
-// Pineal gland: ambient state vector
+// Ambient state vector
 export { computeAmbientState, renderAmbientSummary, formatAmbientVector, AmbientState } from './core/ambient.js';

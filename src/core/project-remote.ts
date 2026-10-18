@@ -5,6 +5,20 @@ import * as path from 'path';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 
+/** Where a `.git` file points: its own git dir, and the shared one when that dir names a `commondir` (a linked
+ * worktree); null when the file names no git dir. */
+export function readGitFilePointer(
+  gitRoot: string,
+  pointer: string,
+): { linkDir: string; commonDir: string | null } | null {
+  const gitDir = /^gitdir:\s*(.+)$/m.exec(pointer)?.[1]?.trim();
+  if (!gitDir) return null;
+  const linkDir = path.resolve(gitRoot, gitDir);
+  const commondir = path.join(linkDir, 'commondir');
+  if (!fs.existsSync(commondir)) return { linkDir, commonDir: null };
+  return { linkDir, commonDir: path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()) };
+}
+
 /** The config file git reads for a checkout: `.git/config`, a linked
  * worktree's `<commondir>/config`, a submodule's `<gitdir>/config`. */
 export function gitConfigPath(gitRoot: string): string | null {
@@ -12,12 +26,8 @@ export function gitConfigPath(gitRoot: string): string | null {
   try {
     const pointer = gitFilePointer(marker);
     if (pointer === null) return path.join(marker, 'config');
-    const gitDir = /^gitdir:\s*(.+)$/m.exec(pointer)?.[1]?.trim();
-    if (!gitDir) return null;
-    const linkDir = path.resolve(gitRoot, gitDir);
-    const commondir = path.join(linkDir, 'commondir');
-    if (!fs.existsSync(commondir)) return path.join(linkDir, 'config');
-    return path.join(path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()), 'config');
+    const dirs = readGitFilePointer(gitRoot, pointer);
+    return dirs === null ? null : path.join(dirs.commonDir ?? dirs.linkDir, 'config');
   } catch (err) {
     // A folder with no readable .git has no remote to name a project by, so the caller falls back to the folder name.
     log.debug(`project remote: no git config for ${gitRoot}: ${errorMessage(err)}`, errorFields(err));
