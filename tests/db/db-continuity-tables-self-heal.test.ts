@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { reproveStoreSchema } from '../../src/db/connect.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 
@@ -68,6 +69,8 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       closeHippoDb(db1);
     }
 
+    reproveStoreSchema(root); // the damage stands for another process's
+
     const db2 = openHippoDb(root);
     try {
       expect(tableNames(db2)).toContain('session_handoffs');
@@ -86,6 +89,8 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     } finally {
       closeHippoDb(db1);
     }
+
+    reproveStoreSchema(root); // the damage stands for another process's
 
     const db2 = openHippoDb(root);
     try {
@@ -117,6 +122,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       } finally {
         closeHippoDb(db1);
       }
+      reproveStoreSchema(healRoot); // the damage stands for another process's
       const db2 = openHippoDb(healRoot);
       try {
         expect(columns(db2, table)).toEqual(freshColumns[table]);
@@ -145,6 +151,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       } finally {
         closeHippoDb(db1);
       }
+      reproveStoreSchema(healRoot); // the damage stands for another process's
       const db2 = openHippoDb(healRoot);
       try {
         expect(indexNames(db2, table)).toEqual(freshIndexes[table]);

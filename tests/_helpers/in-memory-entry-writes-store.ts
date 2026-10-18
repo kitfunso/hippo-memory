@@ -188,6 +188,14 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
         return applied;
       });
     },
+    async setPinned(pin) {
+      return inTx(pin.actor, (tx) => {
+        const updated = { ...inReach(tx, pin, pin.id), pinned: pin.pinned };
+        put(tx, updated, pin.actor);
+        tx.audit.push({ tenantId: pin.tenantId, actor: pin.actor, op: 'pin', targetId: pin.id, metadata: { pinned: pin.pinned } });
+        return structuredClone(tx.rows.get(pin.id)!);
+      });
+    },
     async supersede(write) {
       const { tenantId, actor, oldId, successor } = write;
       await inTx(actor, (tx) => {

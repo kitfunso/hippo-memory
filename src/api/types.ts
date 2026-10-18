@@ -37,10 +37,6 @@ export interface Context {
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */
 export type ContextWith<G extends OptionalGroup> = Context & { readonly store: StoreWith<G> };
 
-/** Held only for src/dashboard/dashboard-actions.ts, which another session owns;
- * delete it when that file says Context. */
-export type StoreContext = Context;
-
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
  * callers build Actor from the api_keys row instead. */
 export function adminActor(subject: string): Actor {

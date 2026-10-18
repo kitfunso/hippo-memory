@@ -16,6 +16,7 @@ import {
   withSqliteAllowed,
 } from '../../src/db/index.js';
 import { repairAutomaticMemories } from '../../src/store/quality-repair.js';
+import { repairProtection } from '../../src/api/auth/audit.js';
 import * as serverEntry from '../../src/server.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { initStore } from '../../src/store/open.js';
@@ -130,7 +131,8 @@ describe('the other-store marker', () => {
   it('quality repair, which opens hippo.db itself to skip migrations, refuses and takes no backup', () => {
     initStore(root);
     writeFileSync(marker, 'postgres');
-    expect(() => repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply: true })).toThrow(OtherStoreFolderError);
+    const repair = { tenantId: 'default', apply: true, protect: repairProtection };
+    expect(() => repairAutomaticMemories({ hippoRoot: root }, repair)).toThrow(OtherStoreFolderError);
     expect(existsSync(join(root, 'backups'))).toBe(false);
   });
 

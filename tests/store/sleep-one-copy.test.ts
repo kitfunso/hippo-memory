@@ -12,7 +12,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllEntriesWithBase } from '../_helpers/root-forms.js';
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
 const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`;
@@ -32,41 +31,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
   _resetAblationCacheForTests();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
-});
-
-describe('loadAllEntriesWithBase', () => {
-  const seeded = (): string => {
-    const root = newRoot();
-    for (const text of ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday']) {
-      writeEntry(root, createMemory(text, { tags: ['ops'] }));
-    }
-    return root;
-  };
-
-  it('gives each row as loaded, equal to what loadAllEntries returns', () => {
-    const root = seeded();
-    const { entries, base } = loadAllEntriesWithBase(root);
-    expect(entries).toEqual(loadAllEntries(root, 'default'));
-    for (const e of loadAllEntries(root, 'default')) expect(base.get(e.id)).toEqual(e);
-  });
-
-  it('stays as loaded after the caller edits the entry in place', () => {
-    const root = seeded();
-    const { entries, base } = loadAllEntriesWithBase(root);
-    const [first] = entries;
-    const before = structuredClone(first!);
-    first!.tags.push('edited');
-    first!.strength = 0.01;
-    first!.retrieval_count += 5;
-    expect(base.get(first!.id)).toEqual(before);
-    expect(base.get(first!.id)).not.toBe(first);
-  });
-
-  it('gives undefined for an unknown id and one object for repeat gets', () => {
-    const { entries, base } = loadAllEntriesWithBase(seeded());
-    expect(base.get('no-such-id')).toBeUndefined();
-    expect(base.get(entries[0]!.id)).toBe(base.get(entries[0]!.id));
-  });
 });
 
 describe('sleep after consolidation', () => {
@@ -106,8 +70,8 @@ describe('sleep after consolidation', () => {
       return countMatching(statements, HOST_WIDE_READ);
     };
     const withoutShare = await wholeReads(true);
-    // Consolidation's one read, then the first page of dedup, the audit and ambient: three rows fit one page each.
-    expect(withoutShare).toBe(4);
+    // The first page of dedup, the audit and ambient: three rows fit one page each, and consolidation reads by id.
+    expect(withoutShare).toBe(3);
     expect(await wholeReads(false)).toBe(withoutShare);
   });
 });

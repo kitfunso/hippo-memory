@@ -18,7 +18,6 @@ import { _resetProjectIdentityCacheForTests } from '../../src/core/project-ident
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { AuthResolver } from '../../src/server/types.js';
-import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { initStore } from '../../src/store/open.js';
@@ -28,7 +27,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -386,7 +385,8 @@ describe('personal memories walk (plan lane T)', () => {
     }
 
     // The admin resolves with the CLI on a shared store, which runs this.
-    expect(resolveConflict(store, { conflictId: teamPair, keepId: t2, tenantId: 'default' }, { rejectLoserValue: true, rejectedBy: 'walk' })).not.toBeNull();
+    const resolved = await api.resolveMemoryConflict(apiCtx(store, 'default', api.adminActor('walk')), teamPair, { keepId: t2, rejectLoser: true });
+    expect(resolved.keptId).toBe(t2);
     expect(readEntry(store, t1)).toBeFalsy();
     expect(readEntry(store, p1)?.content).toBe(off);
   });

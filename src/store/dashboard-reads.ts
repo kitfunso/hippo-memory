@@ -1,57 +1,39 @@
-// The dashboard snapshot's read of one tenant: live rows with only
-// the columns it shows, and SQL counts of the rows it leaves out.
+// hippo.db's side of the dashboard reads: a tenant's live rows a page at a time, with only the columns the lists
+// show, SQL counts of the rows left out, and the commit signal on one held read-only connection.
 import * as fs from 'fs';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db/index.js';
 import { withReadSnapshot } from '../db/busy.js';
 import { pragmaDataVersion } from '../db/meta.js';
 import { tableExists } from '../db/tables.js';
-import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../core/memory.js';
-import { onHandle, openStore } from './open.js';
+import type { Layer, MemoryKind } from '../core/memory.js';
+import type { KeysetPosition } from '../util/keyset.js';
+import { MAX_LIST_LIMIT } from '../util/limits.js';
+import { conflictPageAt, openConflictsNamingAt } from './conflicts.js';
+import { openStore, type Handles } from './open.js';
+import type {
+  DashboardReads, DashboardRow, DashboardScan, DashboardText, ExcludedCounts,
+} from './port/dashboard-reads.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
 
-export type DashboardRow = StrengthInputs & ConfidenceInputs
-  & Pick<MemoryEntry, 'id' | 'content' | 'tags' | 'layer' | 'scope' | 'origin_project' | 'kind' | 'superseded_by'>;
+const PAGE_ROWS = 1000;
+// One past the list's 240-character cut, so the cut and its truncated flag come out as they would on the whole text.
+const HEAD_CHARS = 241;
 
-export interface ExcludedCounts {
-  superseded: number;
-  archived: number;
-  quarantined: number;
-}
-
-export interface DashboardRows {
-  /** Rows `isLiveMemory` admits, by created then id as `loadAllEntries` orders them. */
-  readonly live: DashboardRow[];
-  /** Every other row of the tenant, counted under the first of quarantined, superseded and archived that fits it. */
-  readonly excluded: ExcludedCounts;
-}
-
-// Full content stays: dashboard-snapshot's Fact.lower serves search over the whole text, so a preview would change
-// which rows match.
 const LIVE_COLUMNS =
-  'id, created, last_retrieved, retrieval_count, half_life_days, ' +
-  'layer, tags_json, emotional_valence, outcome_positive, ' +
-  'outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
+  'id, created, last_retrieved, retrieval_count, half_life_days, layer, emotional_valence, outcome_positive, ' +
+  'outcome_negative, pinned, confidence, superseded_by, kind, scope, origin_project, ' +
+  `substr(content, 1, ${HEAD_CHARS}) AS head, ` +
+  'EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id) AS embedded';
 type LiveRow = Pick<
   MemoryRow,
-  | 'id'
-  | 'created'
-  | 'last_retrieved'
-  | 'retrieval_count'
-  | 'half_life_days'
-  | 'layer'
-  | 'tags_json'
-  | 'emotional_valence'
-  | 'outcome_positive'
-  | 'outcome_negative'
-  | 'pinned'
-  | 'confidence'
-  | 'content'
-  | 'superseded_by'
-  | 'kind'
-  | 'scope'
+  | 'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'emotional_valence'
+  | 'outcome_positive' | 'outcome_negative' | 'pinned' | 'confidence' | 'superseded_by' | 'kind' | 'scope'
   | 'origin_project'
->;
+> & { head: string; embedded: number };
+
+const TEXT_COLUMNS = 'id, created, content, tags_json';
+type TextRow = Pick<MemoryRow, 'id' | 'created' | 'content' | 'tags_json'>;
 
 // SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does,
 // where LIKE would fold case.
@@ -71,82 +53,103 @@ function toDashboardRow(row: LiveRow): DashboardRow {
     retrieval_count: Number(row.retrieval_count ?? 0),
     half_life_days: Number(row.half_life_days ?? 7),
     layer: row.layer as Layer,
-    tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
     emotional_valence: row.emotional_valence ?? 'neutral',
     outcome_positive: Number(row.outcome_positive ?? 0),
     outcome_negative: Number(row.outcome_negative ?? 0),
     pinned: Boolean(row.pinned),
     confidence: row.confidence ?? 'observed',
-    content: row.content,
     superseded_by: row.superseded_by ?? null,
     kind: (row.kind ?? 'distilled') as MemoryKind,
     scope: row.scope ?? null,
     origin_project: row.origin_project ?? null,
+    head: row.head,
+    embedded: Boolean(row.embedded),
   };
 }
 
-/** One tenant's live rows and the counts of the rest, read in one transaction so the two agree. */
-export function loadDashboardRows(hippoRoot: string, tenantId: string): DashboardRows {
-  return onHandle(hippoRoot, (db) => {
-    return withReadSnapshot(db, () => {
-      // SAFETY: the SELECT names exactly LiveRow's columns.
-      const live = db
-        .prepare(`SELECT ${LIVE_COLUMNS} FROM memories WHERE tenant_id = ? AND ${LIVE} ORDER BY created ASC, id ASC`)
-        .all(tenantId) as LiveRow[];
-      // SAFETY: the SELECT names exactly these two fields, and `why` is one of the three CASE arms or NULL.
-      const counts = db.prepare(
-        `\n        SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
-          `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
-          `WHEN ${KIND} = 'archived' THEN 'archived' END AS why,\n` +
-          `               COUNT(*) AS n\n` +
-          `        FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why\n      `,
-      ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
-      const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0 };
-      for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
-      return { live: live.map(toDashboardRow), excluded };
-    });
-  }, openStore);
+function toDashboardText(row: TextRow): DashboardText {
+  const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
+  return { id: row.id, content: row.content, tags };
 }
 
-/** The dashboard's one read-only connection, kept across refreshes for the commit signal; it opens on the first read
- * that finds a database. */
-export class DashboardConnection {
-  private db: DatabaseSyncLike | null = null;
-
-  constructor(private readonly hippoRoot: string) {}
-
-  /** `PRAGMA data_version`, which moves when another connection commits; null while the store has no hippo.db. */
-  dataVersion(): number | null {
-    if (this.db === null) {
-      if (!fs.existsSync(getHippoDbPath(this.hippoRoot))) return null;
-      this.db = openHippoDbReadOnly(this.hippoRoot);
-    }
-    return pragmaDataVersion(this.db);
+/** Each page of `columns` over the tenant's live rows by created then id, each page resuming after the last. */
+function eachLivePage<R extends { created: string; id: string }>(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  columns: string,
+  visit: (page: R[]) => void,
+): void {
+  const select = `SELECT ${columns} FROM memories WHERE tenant_id = ? AND ${LIVE}`;
+  let after: R | undefined;
+  for (;;) {
+    const keyset = after ? ' AND (created, id) > (?, ?)' : '';
+    const params = after ? [tenantId, after.created, after.id, PAGE_ROWS] : [tenantId, PAGE_ROWS];
+    // SAFETY: each caller's columns are exactly the fields of its row type R.
+    const page = db.prepare(`${select}${keyset} ORDER BY created ASC, id ASC LIMIT ?`).all(...params) as R[];
+    if (page.length > 0) visit(page);
+    if (page.length < PAGE_ROWS) return;
+    after = page[page.length - 1];
   }
+}
 
-  /** Ids of the tenant's rows with a stored vector: none before the connection opens, null on a store older than the
-   * vector table (schema v52). */
-  embeddedIds(tenantId: string): ReadonlySet<string> | null {
-    if (this.db === null) return new Set();
-    if (!tableExists(this.db, 'memory_vectors')) return null;
-    // SAFETY: the SELECT names the one TEXT id column.
-    const rows = this.db
-      .prepare(
-        'SELECT m.id FROM memories m WHERE m.tenant_id = ? ' +
-          'AND EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = m.id)',
-      )
-      .all(tenantId) as Array<{ id: string }>;
-    return new Set(rows.map((row) => row.id));
-  }
+function eachOpenConflictPage(db: DatabaseSyncLike, tenantId: string, visit: DashboardScan['conflicts']): void {
+  let after: KeysetPosition | undefined;
+  do {
+    const page = conflictPageAt(db, { tenantId, status: 'open', limit: MAX_LIST_LIMIT, after });
+    if (page.rows.length > 0) visit(page.rows.map((row) => row.conflict));
+    after = page.next ?? undefined;
+  } while (after);
+}
 
-  /** Whether `id` has a stored vector, whatever its tenant and whether or not a memory row holds it. */
-  hasVector(id: string): boolean {
-    if (this.db === null || !tableExists(this.db, 'memory_vectors')) return false;
-    return this.db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
-  }
+function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
+  // SAFETY: the SELECT names exactly these two fields, and `why` is one of the three CASE arms or NULL.
+  const counts = db.prepare(
+    `SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
+      `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
+      `WHEN ${KIND} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
+      `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
+  ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
+  const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0 };
+  for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
+  return excluded;
+}
 
-  close(): void {
-    if (this.db !== null) closeHippoDb(this.db);
-    this.db = null;
-  }
+function scanAt(db: DatabaseSyncLike, tenantId: string, visit: DashboardScan): ExcludedCounts {
+  return withReadSnapshot(db, () => {
+    eachLivePage<LiveRow>(db, tenantId, LIVE_COLUMNS, (page) => visit.rows(page.map(toDashboardRow)));
+    eachOpenConflictPage(db, tenantId, visit.conflicts);
+    return excludedAt(db, tenantId);
+  });
+}
+
+/** Scans run on a fresh writable open, which runs any pending migration and legacy embeddings.json import first; the
+ * commit signal and point reads use one read-only connection, opened on the first call that finds a database. */
+export function sqliteDashboardReads({ on, files }: Handles): DashboardReads {
+  let held: DatabaseSyncLike | null = null;
+  const reader = (): DatabaseSyncLike | null => {
+    if (held === null && fs.existsSync(getHippoDbPath(files.hippoRoot))) held = openHippoDbReadOnly(files.hippoRoot);
+    return held;
+  };
+  return {
+    commitCount() {
+      const db = reader();
+      return db === null ? null : pragmaDataVersion(db);
+    },
+    scan: (tenantId, visit) => on((db) => scanAt(db, tenantId, visit), openStore),
+    scanText(tenantId, visit) {
+      on((db) => withReadSnapshot(db, () => {
+        eachLivePage<TextRow>(db, tenantId, TEXT_COLUMNS, (page) => visit(page.map(toDashboardText)));
+      }), openStore);
+    },
+    openConflictsOf: (tenantId, memoryId) => on((db) => openConflictsNamingAt(db, tenantId, memoryId), openStore),
+    hasVector(id) {
+      const db = reader();
+      if (db === null || !tableExists(db, 'memory_vectors')) return false;
+      return db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
+    },
+    close() {
+      if (held !== null) closeHippoDb(held);
+      held = null;
+    },
+  };
 }

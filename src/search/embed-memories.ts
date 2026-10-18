@@ -22,6 +22,7 @@ import type {
   VectorWriteResult,
   VectorWrites,
 } from '../store/port.js';
+import type { EntryCursor } from '../store/port/consolidation.js';
 import { chunked } from '../util/chunked.js';
 import { envByName } from '../util/env.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
@@ -29,6 +30,8 @@ import { redactSecretsStrict } from '../util/secret-detect.js';
 import { MINUTE_MS } from '../util/time.js';
 
 const STORE_PAGE = 64;
+// Ids with no vector read per page, so a large backlog is never listed whole.
+const PENDING_PAGE = 1000;
 
 /** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is skipped. */
 function* entryPages(index: EmbeddingIndex, ids: readonly string[]): Generator<MemoryEntry[]> {
@@ -469,6 +472,24 @@ async function backfillPending(
   return { count, backfillError };
 }
 
+/** backfillPending over the whole backlog, one page of ids at a time; a hard failure stops after the page it hit. */
+async function backfillAllPending(
+  index: EmbeddingIndex,
+  provider: EmbeddingProvider,
+  model: string,
+): Promise<{ count: number; backfillError: unknown }> {
+  let count = 0;
+  let after: EntryCursor | undefined;
+  do {
+    const page = index.pendingIds({ limit: PENDING_PAGE, after });
+    const done = await backfillPending(index, provider, page.ids, model);
+    count += done.count;
+    if (done.backfillError) return { count, backfillError: done.backfillError };
+    after = page.next ?? undefined;
+  } while (after);
+  return { count, backfillError: undefined };
+}
+
 /** Embeds every entry with no cached vector, prunes vectors of deleted memories, and returns how many it embedded;
  * `provider` defaults to the configured one. With a store, every tenant's memories with no vector for the provider's
  * model go through its `vectorWrites`. */
@@ -493,13 +514,8 @@ export async function embedAll(
     // Host-wide by design: embedAll backfills all tenants'
     // entries into the per-host index; per-tenant filtering
     // would produce partial indices and break recall.
-    const pending = index.pruneListPending();
-    const { count, backfillError } = await backfillPending(
-      index,
-      provider,
-      pending,
-      embeddingIndexIdentity(identity),
-    );
+    index.pruneOrphans();
+    const { count, backfillError } = await backfillAllPending(index, provider, embeddingIndexIdentity(identity));
 
     index.saveModel(identity);
 

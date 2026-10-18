@@ -4,12 +4,15 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { adminActor, type Context } from '../api/index.js';
+import { getMemory } from '../api/memories/memories.js';
+import { cardDetail, cardList } from '../api/objects/cards.js';
+import { cliStore } from '../cli/api-context.js';
 import { evalNow } from '../core/ablation.js';
-import { readEntry } from '../store/entry-reads.js';
-import { listCards } from '../store/cards.js';
-import { resolveTenantId } from '../store/tenant.js';
-import { loadCardDetail } from '../store/card-detail.js';
+import { loadConfig } from '../core/config.js';
+import type { HippoStore, StoreGroups } from '../store/port.js';
+import { envTenant } from '../util/env.js';
 import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
@@ -22,6 +25,7 @@ import {
 import {
   ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
 } from './dashboard-params.js';
+import type { MemoryDetail } from './dashboard-types.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { installSignalHandlers } from '../util/crash-handlers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
@@ -41,6 +45,8 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 } as const;
 
+// The audit log's actor for every dashboard write.
+const DASHBOARD_ACTOR = 'dashboard';
 const BODY_MAX_BYTES = 4096;
 const BODY_DRAIN_MAX_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
@@ -94,20 +100,20 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    let aborted = false;
     const deadlineMs = bodyDeadlineMs();
-    const timer = setTimeout(() => reject(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
-    // Unref: a request that already failed another way must not hold the process open for the rest of the deadline.
-    timer.unref();
+    const fail = (err: Error): void => {
+      clearTimeout(timer);
+      reject(err);
+    };
+    const timer = setTimeout(() => fail(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size <= BODY_MAX_BYTES) chunks.push(chunk);
-      if (size > BODY_DRAIN_MAX_BYTES && !aborted) {
-        aborted = true;
-        reject(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
-      }
+      if (size > BODY_DRAIN_MAX_BYTES) fail(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
     });
-    req.on('error', reject);
+    req.on('error', fail);
+    // A client that hangs up mid-body sends no 'end'; after a whole body this reject is a no-op.
+    req.on('close', () => fail(new ParamError('Request body was cut off')));
     req.on('end', () => {
       clearTimeout(timer);
       if (size > BODY_MAX_BYTES) return reject(new ParamError(`Body must be at most ${BODY_MAX_BYTES} bytes`));
@@ -120,10 +126,18 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
   });
 }
 
-interface RouteContext {
-  hippoRoot: string;
-  snapshots: SnapshotService;
-  now: () => number;
+/** What every request shares; built once in openDashboardRoot. */
+interface DashboardRoot {
+  readonly store: HippoStore & StoreGroups;
+  /** A fresh api Context on the server's one store, so a config edit shows on the next request. */
+  readonly context: () => Context;
+  readonly snapshots: SnapshotService;
+  readonly now: () => number;
+  /** Closes the snapshot cache and the store. */
+  readonly release: () => void;
+}
+
+interface RouteContext extends DashboardRoot {
   req: http.IncomingMessage;
   res: http.ServerResponse;
   url: URL;
@@ -135,9 +149,19 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
   return true;
 }
 
-function handleRead(ctx: RouteContext, segments: string[]): boolean {
-  const { hippoRoot, snapshots, req, res, url } = ctx;
-  const tenantId = resolveTenantId({});
+/** The drawer's detail of a live memory, or null when the tenant holds no live row with that id. */
+async function memoryDetail(ctx: RouteContext, id: string, fresh: boolean): Promise<MemoryDetail | null> {
+  const context = ctx.context();
+  const entry = await getMemory(context, id);
+  if (entry === null || !isLiveMemory(entry)) return null;
+  const snapshotId = ctx.snapshots.get(context.tenantId, fresh).id;
+  const embedded = ctx.snapshots.isEmbedded(entry.id);
+  return buildMemoryDetail(ctx.store, context.tenantId, entry, { snapshotId, nowMs: ctx.now(), embedded });
+}
+
+async function handleRead(ctx: RouteContext, segments: string[]): Promise<boolean> {
+  const { snapshots, req, res, url } = ctx;
+  const tenantId = envTenant();
   // A cross-site <img src=...?fresh=1> must not force a full rebuild.
   const fresh = url.searchParams.get('fresh') === '1' && !isCrossSite(req);
   const [, head, a, b] = segments;
@@ -153,42 +177,36 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
     return sendOrNotFound(res, buildProjectDetail(snapshots.get(tenantId, fresh), a));
   }
   if (head === 'memory' && a !== undefined && segments.length === 3) {
-    const entry = readEntry(hippoRoot, parseMemoryId(a), tenantId);
-    if (entry === null || !isLiveMemory(entry)) return sendOrNotFound(res, null);
-    const snapshotId = snapshots.get(tenantId, fresh).id;
-    const embedded = snapshots.isEmbedded(entry.id);
-    return sendOrNotFound(res, buildMemoryDetail(hippoRoot, tenantId, entry, { snapshotId, nowMs: ctx.now(), embedded }));
+    return sendOrNotFound(res, await memoryDetail(ctx, parseMemoryId(a), fresh));
   }
   if (head === 'search' && segments.length === 2) {
     return sendOrNotFound(res, buildSearch(snapshots.get(tenantId, fresh), parseSearchText(url.searchParams)));
   }
   if (head === 'cards' && segments.length === 2) {
-    return sendOrNotFound(res, { cards: listCards(hippoRoot, tenantId) });
+    return sendOrNotFound(res, { cards: await cardList(ctx.context()) });
   }
   if (head === 'cards' && a !== undefined && segments.length === 3) {
     // The Board has always answered 404, not 400, for an id that does not fit the pattern.
-    return sendOrNotFound(res, CARD_ID.test(a) ? loadCardDetail(hippoRoot, tenantId, a) ?? null : null);
+    return sendOrNotFound(res, CARD_ID.test(a) ? await cardDetail(ctx.context(), a) : null);
   }
   return false;
 }
 
 // Names the action only; nothing runs until the cross-site, content-type and body guards pass.
-function matchAction(segments: string[]): ((hippoRoot: string, tenantId: string, body: ActionBody) => ActionResult | Promise<ActionResult>) | null {
+function matchAction(segments: string[]): ((ctx: Context, body: ActionBody) => Promise<ActionResult>) | null {
   const [, head, id, verb] = segments;
   if (segments.length !== 4 || id === undefined) return null;
-  if (head === 'memory' && verb === 'pin') return (root, tenant, body) => pinMemory(root, tenant, id, body);
-  if (head === 'memory' && verb === 'wrong') return (root, tenant) => markWrong(root, tenant, id);
-  if (head === 'memory' && verb === 'forget') return (root, tenant) => forgetMemory(root, tenant, id);
-  if (head === 'conflicts' && verb === 'resolve') {
-    return (root, tenant, body) => resolveOpenConflict(root, tenant, parseConflictId(id), body);
-  }
+  if (head === 'memory' && verb === 'pin') return (ctx, body) => pinMemory(ctx, id, body);
+  if (head === 'memory' && verb === 'wrong') return (ctx) => markWrong(ctx, id);
+  if (head === 'memory' && verb === 'forget') return (ctx) => forgetMemory(ctx, id);
+  if (head === 'conflicts' && verb === 'resolve') return (ctx, body) => resolveOpenConflict(ctx, parseConflictId(id), body);
   return null;
 }
 
 async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolean> {
   const action = matchAction(segments);
   if (action === null) return false;
-  const { req, res, hippoRoot, snapshots } = ctx;
+  const { req, res, store, snapshots } = ctx;
   if (isCrossSite(req)) {
     forbidden(res);
     return true;
@@ -199,13 +217,15 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
     return true;
   }
   const body = await readActionBody(req);
-  const tenantId = resolveTenantId({});
-  const result = await action(hippoRoot, tenantId, body);
+  const context = ctx.context();
+  const { tenantId } = context;
+  const result = await action(context, body);
   if (result.changed) snapshots.invalidate();
   if (result.entry) {
     // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.
     const embedded = snapshots.isEmbedded(result.entry.id);
-    const detail = buildMemoryDetail(hippoRoot, tenantId, result.entry, { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded });
+    const options = { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded };
+    const detail = await buildMemoryDetail(store, tenantId, result.entry, options);
     jsonResponse(res, detail, result.status);
   } else {
     jsonResponse(res, result.body, result.status);
@@ -261,10 +281,10 @@ function serveSpa(res: http.ServerResponse, distUiDir: string, pathname: string)
   notBuilt(res);
 }
 
-function sameToken(given: string | undefined, token: string): boolean {
+function sameSecret(given: string | undefined, secret: string): boolean {
   if (given === undefined) return false;
   const a = Buffer.from(given);
-  const b = Buffer.from(token);
+  const b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
@@ -305,6 +325,11 @@ function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url:
 // A browser that restores its session keeps a cookie with no Max-Age for good; no Secure, since this server speaks plain HTTP on loopback only.
 const DASHBOARD_COOKIE_MAX_AGE_S = DAY_MS / 1000;
 
+/** The session cookie's value: a MAC of the token, so a read of the browser's cookie store never yields the token. */
+function sessionValue(token: string, port: number): string {
+  return createHmac('sha256', token).update(`hippo-dashboard-session:${port}`).digest('hex');
+}
+
 /** True when the request may proceed; false when this already answered it (redirect off the token URL, or 401). */
 function admitDashboardRequest(
   req: http.IncomingMessage,
@@ -312,13 +337,15 @@ function admitDashboardRequest(
   url: URL,
   access: { token: string; port: number },
 ): boolean {
-  const { token, port } = access;
-  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
-  const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
-  if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
-    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
+  const { token } = access;
+  const port = req.socket.localPort ?? access.port;
+  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate sessions.
+  const cookieName = `hippo_dashboard_${port}`;
+  const session = sessionValue(token, port);
+  if (sameSecret(url.searchParams.get('token') ?? undefined, token)) {
+    res.setHeader('Set-Cookie', `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
     if (leaveTokenUrl(req, res, url)) return false;
-  } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
+  } else if (!sameSecret(cookieValue(req.headers.cookie, cookieName), session)) {
     res.writeHead(401, { 'Content-Type': 'text/plain' });
     res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
     return false;
@@ -387,14 +414,14 @@ function stopOnSignal(server: http.Server): void {
   });
 }
 
-/** Gives the listener the API server's socket deadlines and one close of the store's connection; with `handleSignals`, a signal stops it too. */
-function superviseListener(server: http.Server, snapshots: SnapshotService, port: number, handleSignals: boolean): void {
+/** Gives the listener the API server's socket deadlines and one `release` of the store; with `handleSignals`, a signal stops it too. */
+function superviseListener(server: http.Server, release: () => void, port: number, handleSignals: boolean): void {
   setKeepAliveTimeouts(server);
   let storeClosed = false;
   const closeStore = (): void => {
     if (storeClosed) return;
     storeClosed = true;
-    snapshots.close();
+    release();
   };
   server.on('close', closeStore);
   server.on('error', (err) => {
@@ -406,17 +433,44 @@ function superviseListener(server: http.Server, snapshots: SnapshotService, port
   });
   if (handleSignals) stopOnSignal(server);
 }
+interface DashboardOptions {
+  readonly now?: () => number;
+  readonly cacheClock?: () => number;
+  readonly handleSignals?: boolean;
+}
+
+/** The composition root: one store, built as the CLI builds it, a Context per request with the actor every write
+ * audits as, and the snapshot cache over the same store. */
+function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): DashboardRoot {
+  const store = cliStore(hippoRoot);
+  const now = opts.now ?? ((): number => evalNow().getTime());
+  const snapshots = createSnapshotService(store.localFiles.dashboard, now, opts.cacheClock);
+  return {
+    store,
+    now,
+    snapshots,
+    context: () => ({
+      hippoRoot, tenantId: envTenant(), actor: adminActor(DASHBOARD_ACTOR), store, config: loadConfig(hippoRoot),
+    }),
+    release: () => {
+      snapshots.close();
+      store.close().catch((err) => {
+        log.error(`dashboard: closing the store failed: ${errorMessage(err)}`, errorFields(err));
+      });
+    },
+  };
+}
+
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
 export function serveDashboard(
   hippoRoot: string,
   port: number = 3333,
   token: string = randomBytes(32).toString('base64url'),
-  opts?: { now?: () => number; cacheClock?: () => number; handleSignals?: boolean },
+  opts?: DashboardOptions,
 ): http.Server {
   const distUiDir = path.join(PACKAGE_ROOT, 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
-  const now = opts?.now ?? ((): number => evalNow().getTime());
-  const snapshots = createSnapshotService(hippoRoot, now, opts?.cacheClock);
+  const root = openDashboardRoot(hippoRoot, opts ?? {});
 
   const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const host = req.headers.host;
@@ -428,8 +482,8 @@ export function serveDashboard(
     if (url.pathname.startsWith('/api/')) {
       // A malformed % sequence throws URIError here; the caller answers 400.
       const segments = url.pathname.split('/').filter((s) => s !== '').map((s) => decodeURIComponent(s));
-      const ctx: RouteContext = { hippoRoot, snapshots, now, req, res, url };
-      const handled = req.method === 'GET' ? handleRead(ctx, segments)
+      const ctx: RouteContext = { ...root, req, res, url };
+      const handled = req.method === 'GET' ? await handleRead(ctx, segments)
         : req.method === 'POST' ? await handlePost(ctx, segments)
         : false;
       if (!handled) notFoundJson(res);
@@ -446,7 +500,7 @@ export function serveDashboard(
   };
   // One id per request, so the lines it logs can be told apart from a concurrent request's.
   const server = http.createServer((req, res) => runWithRequestId(randomUUID(), () => onRequest(req, res)));
-  superviseListener(server, snapshots, port, opts?.handleSignals === true);
+  superviseListener(server, root.release, port, opts?.handleSignals === true);
 
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.

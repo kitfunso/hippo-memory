@@ -10,6 +10,7 @@ import { githubEventRecordAt, markGitHubEventSeenAt } from '../../src/store/conn
 import type { GitHubEventLogEntry } from '../../src/store/connectors/github.js';
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from './api-ctx.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
@@ -38,7 +39,6 @@ import type { DormantMemory, ListDormantOpts } from '../../src/store/dormant.js'
 import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
 import {
   countSessionRawMemoriesAt,
-  loadAllEntriesWithBaseAt,
   loadAllEntryIdsAt,
   loadEntriesByIdsAt,
   loadEntryTextKeysAt,
@@ -87,7 +87,7 @@ import {
   loadPredictionByIdAt,
   loadPredictionsByClassAt,
 } from '../../src/store/predictions.js';
-import type { HippoIndex, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
+import type { HippoIndex, MemoryConflict, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
 import type { SqlFragment } from '../../src/store/rule-sql.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
 import { listApiKeyRows } from '../../src/store/auth.js';
@@ -121,6 +121,7 @@ import {
 import type { WorkingMemoryItem } from '../../src/store/working-memory.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../../src/store/working-memory.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
+import { MAX_LIST_LIMIT } from '../../src/util/limits.js';
 import type {
   AppendAuditOpts,
   HeldText,
@@ -143,7 +144,6 @@ import type {
   DetectedConflict,
   FlushComponent,
   LoadedRows,
-  EntriesWithBase,
   SessionDecayContext,
   RebuildPatch,
 } from '../../src/store/port/consolidation.js';
@@ -259,6 +259,31 @@ export function replaceDetectedConflicts(
   detectedAt?: string,
 ): void {
   onHandle(hippoRoot, (db) => replaceDetectedConflictsAt(db, { hippoRoot }, detected, detectedAt), openStore);
+}
+
+/** Every conflict with `status` (no tenant: every tenant's), read through the store port a page at a time. */
+export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
+  const { conflicts } = sqliteSyncStore(hippoRoot);
+  const out: MemoryConflict[] = [];
+  let after: KeysetPosition | undefined;
+  do {
+    const page = conflicts.list({ tenantId: tenantId ?? null, status, limit: MAX_LIST_LIMIT, after });
+    out.push(...page.rows.map((row) => row.conflict));
+    after = page.next ?? undefined;
+  } while (after);
+  return out;
+}
+
+/** Keeps `keepId` and weakens the other member through the store port, as a plain `hippo resolve` does; for a
+ * fixture that needs a resolved conflict and no api checks. */
+export function resolveConflictKeeping(hippoRoot: string, tenantId: string, conflictId: number, keepId: string): boolean {
+  const conflicts = sqliteSyncStore(hippoRoot).conflicts;
+  const row = conflicts.get(tenantId, conflictId);
+  if (!row) return false;
+  const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };
+  const b = { id: row.conflict.memory_b_id, scope: row.b?.scope ?? null };
+  const [keep, loser] = keepId === a.id ? [a, b] : [b, a];
+  return conflicts.resolve(tenantId, { conflictId, keep, loser, fate: { kind: 'weaken' }, actor: CLI_ACTOR, reason: '' });
 }
 
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
@@ -649,10 +674,6 @@ export function commitInChunks(
     (db, files) => commitInChunksAt(db, files, components, opts),
     waitingOpener(opts.busyWaitMs, openStore),
   );
-}
-
-export function loadAllEntriesWithBase(hippoRoot: string): EntriesWithBase {
-  return onHandle(hippoRoot, loadAllEntriesWithBaseAt, openStore);
 }
 
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {

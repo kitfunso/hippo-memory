@@ -12,11 +12,10 @@ import * as path from 'node:path';
 import { initStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
 import {
   createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, LEGACY_TYPED_HALF_LIFE, type CreateMemoryOptions,
 } from '../../src/core/memory.js';
-import { migrateDefaultHalfLife, planHalfLifeMigration } from '../../src/consolidate/half-life-migration.js';
+import { migrateDefaultHalfLife } from '../../src/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { consolidate } from '../../src/index.js';
@@ -31,7 +30,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, resolveConflictKeeping, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteSyncStore(root).localFiles.consolidation;
@@ -172,7 +171,6 @@ describe('default half-life migration', () => {
     expect([...byContent(root).values()]).toEqual([7]);
     expect(local(root).halfLifeBase()).toBe(7);
     expect(migrateDefaultHalfLife(local(root), 7)).toMatchObject({ rescaled: 0 });
-    expect(planHalfLifeMigration(loadAllEntries(root, 'default'), 7, 7)).toEqual([]);
   });
 
   it('sleep moves a pre-1.46 store to the new default before decaying', async () => {
@@ -387,7 +385,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     pinTo90(root, loser, 47);
     pinTo90(root, winner);
     replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
-    resolveConflict(root, { conflictId: listMemoryConflicts(root)[0]!.id, keepId: winner });
+    expect(resolveConflictKeeping(root, 'default', listMemoryConflicts(root)[0]!.id, winner)).toBe(true);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     expect(halfLifeOf(root, loser)).toBe(92);
 

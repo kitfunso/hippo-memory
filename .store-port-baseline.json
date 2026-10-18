@@ -14,7 +14,7 @@
   "handleHoldersOutside": 0,
   "storeFilesWithoutSql": 1,
   "portImportsFromSql": 0,
-  "buildsOutsideRoots": 2,
+  "buildsOutsideRoots": 0,
   "groupChecksInApi": 0,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts"

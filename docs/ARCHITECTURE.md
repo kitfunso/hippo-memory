@@ -3,7 +3,7 @@
 ## Layers
 
 Six layers, lowest first: base (pure helpers, core types, embedding providers), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
-A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
+A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it: any upward import fails, and `.layers-baseline.json` caps the root files.
 
 ## Store port
 

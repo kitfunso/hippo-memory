@@ -86,10 +86,10 @@ describe('sleep after consolidation', () => {
     expect(contentsByTenant(root)).toEqual(before);
   });
 
-  it('reads the whole store once, for consolidation, and pages it once each for dedup, audit and ambient', async () => {
+  it('never reads the whole store: consolidation reads by id, and dedup, audit and ambient page it once each', async () => {
     const root = seeded();
     const { statements } = await recordStatementsAsync(() => runSleep(ctxFor(root), { noShare: true }));
-    expect(wholeStoreReads(statements)).toBe(1);
+    expect(wholeStoreReads(statements)).toBe(0);
     const isPageRead = (sql: string): boolean => sql.startsWith(FULL_ROW) && sql.endsWith('created ASC, id ASC LIMIT ?');
     const pageReads = statements.filter(isPageRead);
     expect(pageReads).toHaveLength(3);

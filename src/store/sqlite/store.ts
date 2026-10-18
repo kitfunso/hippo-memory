@@ -2,8 +2,8 @@
 import { loadAmbientTalliesAt } from '../ambient.js';
 import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
-import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
-import { getHippoDbPath, withWriteScope } from '../../db/index.js';
+import { appendAuditEventsAt, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
+import { getHippoDbPath } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
@@ -18,6 +18,7 @@ import { sqliteCaptures } from './captures-group.js';
 import { sqliteCompactionHooks } from './compaction-hooks-group.js';
 import { sqliteCards } from './cards-group.js';
 import { sqliteConflicts } from './conflicts-group.js';
+import { sqliteDashboardReads } from '../dashboard-reads.js';
 import { sqliteDormant } from './dormant-group.js';
 import { sqliteGoals } from './goals-group.js';
 import { sqliteRejections } from './rejections-group.js';
@@ -99,19 +100,21 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     graphRebuild: sqliteGraphRebuild(on),
     embeddingIndex: sqliteEmbeddingIndex(on),
     ledger: sqliteLedger(on),
+    dashboard: sqliteDashboardReads(handles),
   };
 }
 
-/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles, so close
- * has nothing to release. */
+/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles; the one
+ * held connection is the dashboard's reader, which close releases. */
 export function sqliteSyncStore(
   hippoRoot: string,
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
   const handles = handlesOf(hippoRoot);
   const { on } = handles;
+  const localFiles = sqliteLocalFiles(handles);
   return {
     kind: 'sqlite',
-    localFiles: sqliteLocalFiles(handles),
+    localFiles,
     ...sqliteBaseReads(on),
     ...sqliteRecallWrites(on),
     keyAudit: sqliteKeyAudit(on),
@@ -143,6 +146,7 @@ export function sqliteSyncStore(
     failureLog: sqliteFailureLog(on),
     compactions: sqliteCompactions(on),
     close() {
+      localFiles.dashboard.close();
       flushStatsMirrors(hippoRoot);
     },
   };
@@ -182,9 +186,7 @@ function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
   return {
     appendAuditEvents(events) {
       if (events.length === 0) return;
-      on((db) => withWriteScope(db, 'append_audit_events', () => {
-        for (const event of events) appendAuditEvent(db, event);
-      }));
+      on((db) => appendAuditEventsAt(db, events));
     },
     finishRecall(writes) {
       on((db) => finishRecallAt(db, writes));

@@ -4,12 +4,13 @@ import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
+import { resolveMemoryConflict, type ResolveMemoryConflictResult } from '../../src/api/index.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 interface StatementProto { readonly sourceSQL: string; all(...params: unknown[]): unknown[] }
 const require = createRequire(import.meta.url);
@@ -34,11 +35,11 @@ interface ArrayReads<T> {
 interface RejectedLoser {
   keepId: string;
   loserId: string;
-  resolve: () => ReturnType<typeof resolveConflict>;
+  resolve: () => Promise<ResolveMemoryConflictResult>;
 }
 
-/** SQL of every statement whose rows `fn` took as one array. */
-function arrayReads<T>(fn: () => T): ArrayReads<T> {
+/** SQL of every statement whose rows `fn` took as one array, until `fn` settles. */
+async function arrayReads<T>(fn: () => Promise<T>): Promise<ArrayReads<T>> {
   const sql: string[] = [];
   const all = StatementSync.prototype.all;
   const spy = vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
@@ -46,7 +47,7 @@ function arrayReads<T>(fn: () => T): ArrayReads<T> {
     return all.apply(this, params);
   });
   try {
-    return { result: fn(), sql };
+    return { result: await fn(), sql };
   } finally {
     spy.mockRestore();
   }
@@ -63,7 +64,7 @@ function rejectLoser(): RejectedLoser {
   const loserId = put(LOSER);
   replaceDetectedConflicts(root, [{ memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 }]);
   const conflictId = listMemoryConflicts(root, 'open')[0]!.id;
-  const resolve = () => resolveConflict(root, { conflictId, keepId, tenantId: 'default' }, { rejectLoserValue: true, reason: 'wrong' });
+  const resolve = () => resolveMemoryConflict(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
   return { keepId, loserId, resolve };
 }
 
@@ -89,14 +90,14 @@ function archivedRawIds(): string[] {
 }
 
 describe('rejecting a conflict loser value', () => {
-  it('removes the same duplicates: case and spacing variants and raw rows, never another owner\'s or tenant\'s', () => {
+  it('removes the same duplicates: case and spacing variants and raw rows, never another owner\'s or tenant\'s', async () => {
     const { keepId, loserId, resolve } = rejectLoser();
     const spaced = put(`  use &&   TO chain commands\tin powershell `);
     const raw = put(LOSER, { kind: 'raw' });
     const personal = put(LOSER, { scope: 'personal:private:bob', owner: 'bob' });
     const otherTenant = put(LOSER, {}, 'other');
     const unrelated = put('Use ; to chain commands in PowerShell');
-    expect(resolve()).not.toBeNull();
+    expect((await resolve()).loserId).toBe(loserId);
     expect(removedIds().slice().sort()).toEqual([loserId, spaced, raw].sort());
     expect(readEntry(root, spaced)).toBeNull();
     expect(readEntry(root, raw)).toBeNull();
@@ -107,11 +108,11 @@ describe('rejecting a conflict loser value', () => {
     expect(readEntry(root, keepId)).not.toBeNull();
   });
 
-  it('never holds every row of the tenant at once', () => {
-    const { resolve } = rejectLoser();
+  it('never holds every row of the tenant at once', async () => {
+    const { loserId, resolve } = rejectLoser();
     for (let i = 0; i < 20; i++) put(`unrelated note number ${i}`);
-    const { result, sql } = arrayReads(resolve);
-    expect(result).not.toBeNull();
+    const { result, sql } = await arrayReads(resolve);
+    expect(result.loserId).toBe(loserId);
     expect(sql.filter((s) => s.includes(DUP_SCAN))).toEqual([]);
   });
 });

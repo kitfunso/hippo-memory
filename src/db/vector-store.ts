@@ -305,6 +305,8 @@ function parseLegacyIndex(raw: string): Map<string, number[]> | null {
  */
 export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: string): void {
   const fp = path.join(hippoRoot, LEGACY_EMBEDDINGS_FILE);
+  // A stat is cheaper than the failed read this open would otherwise make.
+  if (!fs.existsSync(fp)) return;
   let raw: string;
   try {
     raw = fs.readFileSync(fp, 'utf8');

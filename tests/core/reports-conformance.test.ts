@@ -3,14 +3,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { updateStats } from '../../src/store/index-and-stats.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryReportsStore } from '../_helpers/in-memory-reports-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import {
-  replaceDetectedConflicts, appendConsolidationRun, saveStoredVectors,
+  replaceDetectedConflicts, appendConsolidationRun, resolveConflictKeeping, saveStoredVectors,
 } from '../_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
@@ -42,7 +42,7 @@ function seed(dir: string): void {
   ], NOW);
   const resolved = listMemoryConflicts(dir).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
-  resolveConflict(dir, { conflictId: resolved.id, keepId: recentB.id });
+  resolveConflictKeeping(dir, TENANT_B, resolved.id, recentB.id);
   saveStoredVectors(dir, [[pinned.id, [1, 2, 3, 4]], ['orphan', [0, 1, 0, 1]]], 'm');
   updateStats(dir, { remembered: 5, recalled: 3, forgotten: 1 });
   for (let i = 52; i >= 2; i--) appendConsolidationRun(dir, { timestamp: ago(i * HOUR), decayed: i, merged: 0, removed: 1 });

@@ -5,7 +5,6 @@ import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { CardDetail } from './card-detail.js';
 import type { StatusCounts, StrengthTallies } from './candidates.js';
-import type { ResolveConflictOpts, ResolveConflictRequest } from './conflicts.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './dormant.js';
 import type { FailureSummary } from './failure-log.js';
 import type { CompleteGoalOpts, PushGoalOpts } from './goals.js';
@@ -13,7 +12,8 @@ import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
 import type { FailureLog } from './port/failure-log.js';
 import type { Compactions } from './port/compactions.js';
 import type { Rejections } from './port/rejections.js';
-import type { LegacyStats, MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
+import type { ConflictListQuery, ConflictResolution, ConflictRow, ConflictRowPage } from './port/conflicts.js';
+import type { LegacyStats, SessionEvent, TaskSnapshot } from './rows.js';
 import type { SessionEventInput, SnapshotInput } from './sessions.js';
 import type { TokenSummary } from './token-ledger.js';
 import type { WorkingMemoryItem } from './working-memory.js';
@@ -135,15 +135,13 @@ export interface Goals {
 }
 
 export interface Conflicts {
-  /** `tenantId` null reads every tenant (host admin; the api checks). */
-  list(tenantId: string | null, status: string): Promise<MemoryConflict[]>;
-  /** Conflicts whose both rows the actor may touch; status '*' reads every status. */
-  listTouchable(tenantId: string, status: string, actor: { readonly owner?: string }): Promise<MemoryConflict[]>;
-  resolve(
-    tenantId: string,
-    request: Omit<ResolveConflictRequest, 'tenantId'>,
-    opts: ResolveConflictOpts,
-  ): Promise<{ conflict: MemoryConflict; loserId: string } | null>;
+  /** One page, newest change first, each conflict with both members' columns from the same read. */
+  list(query: ConflictListQuery): Promise<ConflictRowPage>;
+  /** Conflict `conflictId`, any status, when both its members are in the tenant; else null. */
+  get(tenantId: string, conflictId: number): Promise<ConflictRow | null>;
+  /** Writes what the api decided, in one transaction, while the conflict is still open and each side still holds the
+   * scope in `resolution`; false, with nothing written, otherwise. */
+  resolve(tenantId: string, resolution: ConflictResolution): Promise<boolean>;
 }
 
 export interface DormantRestoreRequest {

@@ -155,17 +155,13 @@ export function replayPass(run: SleepRun): void {
   // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
   // the whole pass;
   // persisting unmutated entries anyway would still refresh updated_at and mirrors.
-  if (!(replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated())) return;
+  if (!(replayCount > 0 && survivors.size > 0 && !isRecallBoostAblated())) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
-  const picked = sampleForReplay(survivors, replayCount, now, seed);
+  const picked = survivors.get(sampleForReplay(survivors.rows(), replayCount, now, seed));
   if (picked.length === 0) return;
   const rehearsed = markRetrieved(picked, now, { ablation: strengthAblation() });
-  const rehearsedById = new Map(rehearsed.map((e) => [e.id, e]));
   // Update survivors in place so downstream passes see rehearsed state.
-  for (let i = 0; i < survivors.length; i++) {
-    const replacement = rehearsedById.get(survivors[i].id);
-    if (replacement) survivors[i] = replacement;
-  }
+  survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;
   run.result.details.push(
     `  💭 replayed ${plural(rehearsed.length, 'memory', 'memories')}: ` +

@@ -1,10 +1,14 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { type DatabaseSyncLike, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
+import {
+  type DatabaseSyncLike, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift, setFtsInSync,
+} from '../db/index.js';
 import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { StoreFiles } from './open.js';
+import { chunked } from '../util/chunked.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../util/sql.js';
 
 /** A 1.x JS caller's `tenantId` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
@@ -27,65 +31,44 @@ export function upsertMemoryRow(db: ReturnType<typeof openHippoDb>, entry: Memor
   return isNewRow;
 }
 
-const UPSERT_MEMORY_SQL = `
-    INSERT INTO memories(
-      id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
-      tags_json, emotional_valence, schema_fit, source, outcome_score,
-      outcome_positive, outcome_negative,
-      conflicts_with_json, pinned, confidence, content,
-      parents_json, starred,
-      trace_outcome, source_session_id,
-      valid_from, superseded_by,
-      extracted_from,
-      dag_level, dag_parent_id,
-      kind, scope, owner, artifact_ref,
-      tenant_id, origin_project,
-      descendant_count, earliest_at, latest_at,
-      dag_level_3_built_at,
-      updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET
-      created = excluded.created,
-      last_retrieved = excluded.last_retrieved,
-      retrieval_count = excluded.retrieval_count,
-      strength = excluded.strength,
-      half_life_days = excluded.half_life_days,
-      layer = excluded.layer,
-      tags_json = excluded.tags_json,
-      emotional_valence = excluded.emotional_valence,
-      schema_fit = excluded.schema_fit,
-      source = excluded.source,
-      outcome_score = excluded.outcome_score,
-      outcome_positive = excluded.outcome_positive,
-      outcome_negative = excluded.outcome_negative,
-      conflicts_with_json = excluded.conflicts_with_json,
-      pinned = excluded.pinned,
-      confidence = excluded.confidence,
-      content = excluded.content,
-      parents_json = excluded.parents_json,
-      starred = excluded.starred,
-      trace_outcome = excluded.trace_outcome,
-      source_session_id = excluded.source_session_id,
-      valid_from = excluded.valid_from,
-      superseded_by = excluded.superseded_by,
-      extracted_from = excluded.extracted_from,
-      dag_level = excluded.dag_level,
-      dag_parent_id = excluded.dag_parent_id,
-      kind = excluded.kind,
-      scope = excluded.scope,
-      owner = excluded.owner,
-      artifact_ref = excluded.artifact_ref,
-      tenant_id = excluded.tenant_id,
-      origin_project = excluded.origin_project,
-      descendant_count = excluded.descendant_count,
-      earliest_at = excluded.earliest_at,
-      latest_at = excluded.latest_at,
-      dag_level_3_built_at = excluded.dag_level_3_built_at,
-      updated_at = datetime('now')
-  `;
+/** The columns a row write sets, in memoryRowValues' order; the upsert and the batch update share it. */
+const MEMORY_ROW_COLUMNS = [
+  'id', 'created', 'last_retrieved', 'retrieval_count', 'strength', 'half_life_days', 'layer',
+  'tags_json', 'emotional_valence', 'schema_fit', 'source', 'outcome_score',
+  'outcome_positive', 'outcome_negative',
+  'conflicts_with_json', 'pinned', 'confidence', 'content',
+  'parents_json', 'starred',
+  'trace_outcome', 'source_session_id',
+  'valid_from', 'superseded_by',
+  'extracted_from',
+  'dag_level', 'dag_parent_id',
+  'kind', 'scope', 'owner', 'artifact_ref',
+  'tenant_id', 'origin_project',
+  'descendant_count', 'earliest_at', 'latest_at',
+  'dag_level_3_built_at',
+] as const;
 
-/** Bind values for UPSERT_MEMORY_SQL, in its column order. */
+const UPDATED_COLUMNS = MEMORY_ROW_COLUMNS.slice(1);
+
+const UPSERT_MEMORY_SQL =
+  `INSERT INTO memories(${MEMORY_ROW_COLUMNS.join(', ')}, updated_at) ` +
+  `VALUES (${placeholders(MEMORY_ROW_COLUMNS.length)}, datetime('now')) ` +
+  `ON CONFLICT(id) DO UPDATE SET ${UPDATED_COLUMNS.map((c) => `${c} = excluded.${c}`).join(', ')}, ` +
+  `updated_at = datetime('now')`;
+
+/** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of rows. The caller owns
+ * the transaction, the rejection guard and the full-text rows. */
+export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
+  const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
+  for (const chunk of chunked(entries, rowsPerStatement(MEMORY_ROW_COLUMNS.length))) {
+    db.prepare(
+      `WITH v(${MEMORY_ROW_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, MEMORY_ROW_COLUMNS.length)}) ` +
+      `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
+    ).run(...chunk.flatMap(memoryRowValues));
+  }
+}
+
+/** Bind values for MEMORY_ROW_COLUMNS, in its order. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   return [
     entry.id,
@@ -128,6 +111,15 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   ];
 }
 
+// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts it.
+function markFtsDrifted(db: DatabaseSyncLike): void {
+  try {
+    setFtsInSync(db, false);
+  } catch (err) {
+    log.warnThenSample('fts-sync', `could not clear the FTS in-sync flag: ${errorMessage(err)}`, errorFields(err));
+  }
+}
+
 export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry, isNewRow = false): void {
   if (!isFtsAvailable(db)) return;
   try {
@@ -138,6 +130,7 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
       entry.tags.join(' ')
     );
   } catch (err) {
+    markFtsDrifted(db);
     // The memories table stays authoritative; a stale FTS row only costs recall quality, so the write goes on.
     log.warnThenSample(
       'fts-sync',
@@ -156,6 +149,7 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
   try {
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
   } catch (err) {
+    markFtsDrifted(db);
     log.warnThenSample(
       'fts-delete',
       `FTS index delete failed for ${id}; recall may return a stale hit: ${errorMessage(err)}`,
@@ -179,6 +173,7 @@ export function replaceFtsRows(
     } catch (err) {
       // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
       kept = new Set(staleIds);
+      markFtsDrifted(db);
       log.warnThenSample(
         'fts-delete',
         `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${errorMessage(err)}`,
@@ -193,6 +188,7 @@ export function replaceFtsRows(
     try {
       insert.run(row.id, row.content, row.tags.join(' '));
     } catch (err) {
+      markFtsDrifted(db);
       log.warnThenSample(
         'fts-sync',
         `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`,
@@ -207,7 +203,11 @@ export function replaceFtsRows(
 export function ftsDriftAt(db: DatabaseSyncLike, repair: boolean): { memories: number; fts: number } | null {
   if (!isFtsAvailable(db)) return null;
   const counts = ftsRowCounts(db);
-  if (counts === null || counts.memories === counts.fts) return null;
+  if (counts === null) return null;
+  if (counts.memories === counts.fts) {
+    setFtsInSync(db, true);
+    return null;
+  }
   if (repair) repairFtsDrift(db);
   return counts;
 }
