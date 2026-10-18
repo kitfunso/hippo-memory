@@ -366,6 +366,21 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(e2).toMatchObject({ ...NO_SESSION, invalid: 'setup', leak: false, carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null });
     expect(existsSync(join(out, 'raw', 'seqE', 'A1', 'seed1', 'e2.json'))).toBe(false);
     expect(existsSync(join(out, 'raw', 'seqE', 'A1', 'seed1', 'e2.setup.txt'))).toBe(true);
+    expect(existsSync(join(out, 'raw', 'seqE', 'A1', 'seed1', 'e2.setup-try1.txt'))).toBe(true);
+  }, 60_000);
+
+  it('a setup that fails once passes on its fresh second try, so the task runs', async () => {
+    isolate();
+    const r = makeRepo();
+    const out = tmp('ab-run-setup-flaky-');
+    const marker = join(out, 'failed-once');
+    const setup = `node -e "const f=require('fs');if(!f.existsSync(process.argv[1])){f.writeFileSync(process.argv[1],'');process.exit(1)}" "${marker}"`;
+    const spec = validateTasks({ sequences: [{ id: 'seqF', cluster: 'repoF', repo: r.repo, fixedOrder: true, tasks: [task(r, 'f0', 'look around only'), task(r, 'f1', 'look around only', { setup })] }] });
+    await run(spec, ['A1'], out);
+    const f1 = readRecords(out).find((x) => x.taskId === 'f1');
+    validateRecord(f1);
+    expect(f1.invalid).toBeNull();
+    expect(existsSync(join(out, 'raw', 'seqF', 'A1', 'seed1', 'f1.setup-try1.txt'))).toBe(true);
   }, 60_000);
 
   it('a later task with a symlinked instruction file stops the run before any session or plan', async () => {
