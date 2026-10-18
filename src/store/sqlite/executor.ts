@@ -12,7 +12,7 @@ import { errorFields, errorMessage, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { workerCounts } from './executor-counts.js';
-import { type Job, type OpMode, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
+import { type Job, type OpMode, type OpRoute, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
 const WORKER_ENTRY = fileURLToPath(new URL('../../../dist/store/sqlite/worker-entry.js', import.meta.url));
@@ -33,7 +33,7 @@ const DEFAULT_QUEUE_MAX = 256;
 const DEFAULT_WRITE_GRACE_MS = 2000;
 
 export interface CallOptions {
-  readonly mode: OpMode;
+  readonly mode: OpRoute;
   readonly requestId: string | undefined;
   /** Epoch milliseconds by which the call's request must be answered; absent means the call waits as long as it
    * takes. */
@@ -49,6 +49,8 @@ export interface ExecutorOptions {
   readonly queueMax?: number;
   /** How long past its deadline a write may still report its own outcome; defaults to 2000 ms. */
   readonly writeGraceMs?: number;
+  /** Stored vectors a store holds before the pinned reader builds its vector graph; defaults to 20,000. */
+  readonly vectorGraphThreshold?: number;
 }
 
 export interface SqliteExecutor {
@@ -78,6 +80,8 @@ interface Pending {
 /** One thread and the calls waiting for it; at most one job is on the thread at a time. */
 interface Lane {
   readonly mode: OpMode;
+  /** The reader every 'pinned-read' call goes to. */
+  readonly pinned: boolean;
   readonly queue: Pending[];
   running: Pending | undefined;
   worker: Worker | undefined;
@@ -88,8 +92,8 @@ interface Lane {
   commitFlag: Int32Array | undefined;
 }
 
-function laneOf(mode: OpMode): Lane {
-  return { mode, queue: [], running: undefined, worker: undefined, stopping: undefined, commitFlag: undefined };
+function laneOf(mode: OpMode, pinned = false): Lane {
+  return { mode, pinned, queue: [], running: undefined, worker: undefined, stopping: undefined, commitFlag: undefined };
 }
 
 // A thread that will not stop leaves a live worker behind, so the rejection is logged rather than dropped.
@@ -118,11 +122,12 @@ class WorkerPool implements SqliteExecutor {
   readonly #busyWaitMs: number;
   // One writer, so writes run in call order and never wait on each other's lock.
   readonly #writer = laneOf('write');
-  readonly #readers = [laneOf('read'), laneOf('read')];
+  readonly #readers = [laneOf('read', true), laneOf('read')];
   // Keyed by thread and not by lane: close() must also wait for a thread its lane already replaced.
   readonly #exits = new Map<Worker, Promise<void>>();
   readonly #queueMax: number;
   readonly #writeGraceMs: number;
+  readonly #vectorGraphThreshold: number | undefined;
   #nextId = 1;
   #closed = false;
   // 'done' once the writer has run the store's open-time setup, which a reader's connection could not write.
@@ -133,6 +138,7 @@ class WorkerPool implements SqliteExecutor {
     this.#busyWaitMs = opts.busyWaitMs ?? SERVER_DB_WAIT_MS;
     this.#queueMax = opts.queueMax ?? envStoreQueueMax() ?? DEFAULT_QUEUE_MAX;
     this.#writeGraceMs = opts.writeGraceMs ?? DEFAULT_WRITE_GRACE_MS;
+    this.#vectorGraphThreshold = opts.vectorGraphThreshold;
   }
 
   call<T>(op: string, args: readonly unknown[], { mode, requestId, deadlineAt, signal }: CallOptions): Promise<T> {
@@ -150,10 +156,7 @@ class WorkerPool implements SqliteExecutor {
         // declares.
         resolve(reply.value as T);
       };
-      const lane =
-        mode === 'write'
-          ? this.#writer
-          : this.#readers.reduce((least, next) => (load(next) < load(least) ? next : least));
+      const lane = this.#laneFor(mode);
       const refusal = this.#refusal(lane, deadlineAt);
       if (refusal !== undefined) {
         reject(refusal);
@@ -173,6 +176,14 @@ class WorkerPool implements SqliteExecutor {
       this.#ensureSetup();
       this.#pump(lane);
     });
+  }
+
+  #laneFor(mode: OpRoute): Lane {
+    if (mode === 'write') return this.#writer;
+    const [pinned, other] = this.#readers;
+    if (mode === 'pinned-read') return pinned;
+    // A tie goes to the reader with no graph, whose turns no graph build ever takes.
+    return load(pinned) < load(other) ? pinned : other;
   }
 
   // Ahead of the call that started it, and with no deadline: the writer's own lock wait bounds it.
@@ -345,6 +356,7 @@ class WorkerPool implements SqliteExecutor {
       mode: lane.mode,
       busyWaitMs: this.#busyWaitMs,
       ...(shared && { commitFlag: shared }),
+      ...(lane.pinned && { pinned: true, vectorGraphThreshold: this.#vectorGraphThreshold }),
     };
     // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of the node:sqlite
     // warning.

@@ -3,6 +3,7 @@ import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../audit.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
+import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { loadStoredVectorViewsAt } from '../vector-index.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { handlesOf, initStore } from '../open.js';
@@ -24,12 +25,12 @@ import {
 
 /** Every method the op table can name: the synchronous store, and the vector reads, which answer only through Promises.
  *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */
-function workerOps(hippoRoot: string) {
+function workerOps(hippoRoot: string, graphs: VectorGraphs | undefined) {
   const handles = handlesOf(hippoRoot);
   const packed = (ids: readonly string[]) => packVectors(handles.on((db) => loadStoredVectorViewsAt(db, ids)));
   return {
     ...sqliteSyncStore(hippoRoot),
-    vectors: { ...sqliteVectorReads(handles), storedVectors: packed },
+    vectors: { ...sqliteVectorReads(handles, graphs), storedVectors: packed },
     vectorViews: { storedVectorViews: packed },
   };
 }
@@ -139,14 +140,16 @@ function post(port: MessagePort, reply: Reply): void {
 /** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with no handle on the store's
  * files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
-  const ops = workerOps(init.hippoRoot);
+  const graphs = init.pinned ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold }) : undefined;
+  const ops = workerOps(init.hippoRoot, graphs);
   const stores = new WorkerStores(init);
   // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and it waits for that
   // job's reply.
   let last: Promise<void> = Promise.resolve();
   port.on('message', (message: Job | 'stop') => {
     if (message === 'stop') {
-      void last.then(() => {
+      graphs?.close();
+      void Promise.all([last, graphs?.idle()]).then(() => {
         flushStatsMirrors(init.hippoRoot);
         stores.close();
         port.close();

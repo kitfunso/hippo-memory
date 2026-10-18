@@ -246,9 +246,9 @@ describe('a read the op table places on a reader thread', () => {
     await inProcess.close();
   });
 
-  it('has a row here for every method tagged read', () => {
+  it('has a row here for every method tagged read or pinned-read', () => {
     const tagged = Object.entries(WORKER_OPS).flatMap(([group, places]) =>
-      Object.entries(places).filter(([, place]) => place === 'read').map(([method]) => (group === 'base' ? method : `${group}.${method}`)));
+      Object.entries(places).filter(([, place]) => place === 'read' || place === 'pinned-read').map(([method]) => (group === 'base' ? method : `${group}.${method}`)));
 
     expect(READS.map((row) => row.name).sort()).toEqual(tagged.sort());
   });

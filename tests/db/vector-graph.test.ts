@@ -1,13 +1,6 @@
+// The handwritten HNSW graph against an exact scan of the same vectors.
 import { describe, it, expect } from 'vitest';
-import {
-  createVectorGraph,
-  graphMeta,
-  graphNodes,
-  insertNode,
-  restoreGraph,
-  searchGraph,
-  type VectorGraph,
-} from '../../src/db/vector-graph.js';
+import { createVectorGraph, insertNode, searchGraph, type VectorGraph } from '../../src/db/vector-graph.js';
 
 const DIM = 64;
 const N = 3000;
@@ -92,20 +85,34 @@ describe('vector graph', () => {
 
   it('builds the same graph from the same seed and insert order', () => {
     const again = build(vectors, 42);
-    expect([...graphNodes(again)]).toEqual([...graphNodes(graph)]);
-    expect(graphMeta(again)).toEqual(graphMeta(graph));
+    expect(again.nodes).toEqual(graph.nodes);
+    expect([again.entry, again.maxLevel, again.rng]).toEqual([graph.entry, graph.maxLevel, graph.rng]);
   });
 
   it('changes the graph when the seed changes', () => {
     const other = build(vectors.slice(0, 500), 43);
     const same = build(vectors.slice(0, 500), 42);
-    expect([...graphNodes(other)]).not.toEqual([...graphNodes(same)]);
+    expect(other.nodes).not.toEqual(same.nodes);
   });
 
-  it('round-trips through restoreGraph and answers identically', () => {
-    const restored = restoreGraph(graphMeta(graph), graphNodes(graph));
-    expect([...graphNodes(restored)]).toEqual([...graphNodes(graph)]);
-    for (const q of queries.slice(0, 10)) expect(ids(restored, q, { k: 50, ef: 128 })).toEqual(ids(graph, q, { k: 50, ef: 128 }));
+  it('scores by its own unit vectors as it does by the vectors they came from', () => {
+    for (const q of queries.slice(0, 10)) {
+      const own = searchGraph(graph, q, { k: 50, ef: 128 });
+      if (own.aborted) throw new Error('unexpected abort');
+      expect(own.hits.map((h) => h.node)).toEqual(ids(graph, q, { k: 50, ef: 128 }));
+    }
+  });
+
+  it('keeps a unit vector as given and copies any other', () => {
+    const g = createVectorGraph({ dim: 2, seed: 1 });
+    const unit = Float32Array.from([0.6, 0.8]);
+    const long = Float32Array.from([3, 4]);
+    insertNode(g, 0, unit);
+    insertNode(g, 1, long);
+
+    expect(g.unit.get(0)).toBe(unit);
+    expect(g.unit.get(1)).not.toBe(long);
+    expect(Array.from(g.unit.get(1) ?? [])).toEqual([Math.fround(0.6), Math.fround(0.8)]);
   });
 
   it('never returns a rejected node and still fills k', () => {
