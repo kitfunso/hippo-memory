@@ -13,6 +13,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/store/tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
+import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import {
   createCard, claimCard, addCardComment, blockCard, reviewCard, completeCard, heartbeatCard,
 } from './_helpers/root-forms.js';
@@ -32,7 +33,7 @@ function dashboardRequest(
 ): Promise<{ status: number; body: string; acaoPresent: boolean }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method, headers: { Host: host, cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}`, ...extraHeaders } },
+      { host: '127.0.0.1', port, path, method, headers: { Host: host, cookie: sessionCookie(port, DASHBOARD_TOKEN), ...extraHeaders } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -69,7 +70,7 @@ function listenAndGetPort(server: Server): Promise<number> {
 function rawHttp10Get(port: number, path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1', () => {
-      socket.write(`GET ${path} HTTP/1.0\r\nCookie: hippo_dashboard_${port}=${DASHBOARD_TOKEN}\r\n\r\n`);
+      socket.write(`GET ${path} HTTP/1.0\r\nCookie: ${sessionCookie(port, DASHBOARD_TOKEN)}\r\n\r\n`);
     });
     let data = '';
     socket.on('data', (chunk) => {

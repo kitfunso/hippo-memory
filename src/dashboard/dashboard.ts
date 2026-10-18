@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { adminActor, type Context } from '../api/index.js';
 import { getMemory } from '../api/memories/memories.js';
 import { cardDetail, cardList } from '../api/objects/cards.js';
@@ -281,10 +281,10 @@ function serveSpa(res: http.ServerResponse, distUiDir: string, pathname: string)
   notBuilt(res);
 }
 
-function sameToken(given: string | undefined, token: string): boolean {
+function sameSecret(given: string | undefined, secret: string): boolean {
   if (given === undefined) return false;
   const a = Buffer.from(given);
-  const b = Buffer.from(token);
+  const b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
@@ -325,6 +325,11 @@ function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url:
 // A browser that restores its session keeps a cookie with no Max-Age for good; no Secure, since this server speaks plain HTTP on loopback only.
 const DASHBOARD_COOKIE_MAX_AGE_S = DAY_MS / 1000;
 
+/** The session cookie's value: a MAC of the token, so a read of the browser's cookie store never yields the token. */
+function sessionValue(token: string, port: number): string {
+  return createHmac('sha256', token).update(`hippo-dashboard-session:${port}`).digest('hex');
+}
+
 /** True when the request may proceed; false when this already answered it (redirect off the token URL, or 401). */
 function admitDashboardRequest(
   req: http.IncomingMessage,
@@ -332,13 +337,15 @@ function admitDashboardRequest(
   url: URL,
   access: { token: string; port: number },
 ): boolean {
-  const { token, port } = access;
-  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
-  const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
-  if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
-    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
+  const { token } = access;
+  const port = req.socket.localPort ?? access.port;
+  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate sessions.
+  const cookieName = `hippo_dashboard_${port}`;
+  const session = sessionValue(token, port);
+  if (sameSecret(url.searchParams.get('token') ?? undefined, token)) {
+    res.setHeader('Set-Cookie', `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
     if (leaveTokenUrl(req, res, url)) return false;
-  } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
+  } else if (!sameSecret(cookieValue(req.headers.cookie, cookieName), session)) {
     res.writeHead(401, { 'Content-Type': 'text/plain' });
     res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
     return false;

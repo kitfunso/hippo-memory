@@ -1,5 +1,6 @@
 // Shared setup for the dashboard server tests: a tmp store, seeded memories on a fixed clock, a loopback server and a tiny HTTP client.
 
+import { createHmac } from 'node:crypto';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -87,8 +88,14 @@ export function asDashboardRow(entry: MemoryEntry, embedded = false): DashboardR
   return { ...entry, head: entry.content, embedded };
 }
 
-/** The access token every fixture dashboard starts with; `call` sends it as the session cookie. */
+/** The access token every fixture dashboard starts with; `call` sends the session cookie it earns. */
 export const DASHBOARD_TOKEN = 'test-dashboard-token';
+
+/** The `Cookie` header a browser holds after opening the dashboard on `port` with `token`. */
+export function sessionCookie(port: number, token: string = DASHBOARD_TOKEN): string {
+  const session = createHmac('sha256', token).update(`hippo-dashboard-session:${port}`).digest('hex');
+  return `hippo_dashboard_${port}=${session}`;
+}
 
 export interface RunningDashboard {
   server: Server;
@@ -124,7 +131,7 @@ export interface CallOptions {
 
 export function call(port: number, method: string, path: string, opts: CallOptions = {}): Promise<Reply> {
   return new Promise((resolve, reject) => {
-    const headers = { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}`, ...opts.headers };
+    const headers = { cookie: sessionCookie(port), ...opts.headers };
     const req = httpRequest({ host: '127.0.0.1', port, path, method, headers }, (res) => {
       let body = '';
       res.setEncoding('utf8');

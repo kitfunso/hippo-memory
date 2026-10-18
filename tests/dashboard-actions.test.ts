@@ -7,7 +7,7 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
-  DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
+  NOW, call, get, isoAgo, makeStore, parse, postJson, seed, sessionCookie, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from './_helpers/root-forms.js';
 
@@ -235,7 +235,7 @@ describe('request guards', () => {
     const reply = await new Promise<{ status: number; closed: Promise<void> }>((resolve, reject) => {
       const req = httpRequest({
         host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
-        headers: { 'Content-Type': 'application/json', cookie: `hippo_dashboard_${dash.port}=${DASHBOARD_TOKEN}` },
+        headers: { 'Content-Type': 'application/json', cookie: sessionCookie(dash.port) },
       });
       let answered = false;
       req.on('response', (res) => {
@@ -273,7 +273,7 @@ describe('request guards', () => {
       const status = await new Promise<number>((resolve, reject) => {
         const req = httpRequest({
           host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: `hippo_dashboard_${dash.port}=${DASHBOARD_TOKEN}` },
+          headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: sessionCookie(dash.port) },
         }, (res) => {
           res.resume();
           resolve(res.statusCode ?? 0);
