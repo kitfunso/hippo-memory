@@ -310,6 +310,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'store/token-reread.test.ts',
   'store/trace.test.ts',
   'store/typed-object-characterization.test.ts',
+  'store/vector-graph-lanes.test.ts',
   'store/work-queue-cards.test.ts',
   'store/writers-configured-half-life.test.ts',
   'token-eval-ab-run.test.ts',

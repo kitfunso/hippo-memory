@@ -6,7 +6,7 @@ import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { originInSql } from '../core/project-identity.js';
-import { topVectorMatches } from '../db/vector-store.js';
+import { topVectorMatches, type VectorIndex } from '../db/vector-store.js';
 import {
   type MemoryRow,
   MEMORY_SELECT_COLUMNS,
@@ -255,11 +255,12 @@ export function loadRecallSearchEntriesFromDb(
   return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }
 
-/** The rows nearest `queryVector` that pass `spec`, nearest first. */
+/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it can. */
 export async function loadVectorCandidateEntriesAt(
   db: DatabaseSyncLike,
   queryVector: readonly number[],
   spec: VectorCandidateSpec,
+  index?: VectorIndex,
 ): Promise<MemoryEntry[]> {
   const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
@@ -271,6 +272,7 @@ export async function loadVectorCandidateEntriesAt(
     spec.limit ?? 50,
     `${tenant} AND m.kind != 'archived'${scope.sql}${current}`,
     params,
+    index,
   );
   if (matches.length === 0) return [];
   // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.

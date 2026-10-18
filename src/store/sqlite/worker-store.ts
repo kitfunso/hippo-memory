@@ -8,9 +8,9 @@ import { createSqliteExecutor, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
 import {
-  type OpMode,
   type OpPlace,
   type OpPlaces,
+  type OpRoute,
   type WorkerBase,
   type WorkerGroup,
   WORKER_OPS,
@@ -24,7 +24,7 @@ export function runsOffLoop(store: HippoStore): boolean {
   return offLoopStores.has(store);
 }
 
-function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[], mode: OpMode): Promise<T> {
+function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[], mode: OpRoute): Promise<T> {
   const deadline = currentDeadline();
   const call = executor.call<T>(op, args, {
     mode,
@@ -50,7 +50,7 @@ function onWorkers<G>(executor: SqliteExecutor, group: WorkerGroup, places: OpPl
 // ids reads nothing, as in process.
 function vectorGroups(executor: SqliteExecutor, inProcess: VectorReads): Pick<StoreGroups, 'vectors' | 'vectorViews'> {
   const { vectors, vectorViews } = WORKER_OPS;
-  const pack = (op: string, ids: readonly string[], mode: OpMode): Promise<VectorPack> =>
+  const pack = (op: string, ids: readonly string[], mode: OpRoute): Promise<VectorPack> =>
     send(executor, op, [ids], mode);
   return {
     vectors: {
