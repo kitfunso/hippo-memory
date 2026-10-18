@@ -1,0 +1,49 @@
+# Z0 round 2: hippo against built-in memory on fresh repositories. Pre-registration
+
+**Status: draft.** The fields marked TBD are filled at the freeze tag. This file is fixed in one commit after the tag and before shortlist batch 2 opens. After that commit, a change is an amendment, dated, with what it changes and what had been seen.
+
+The plan behind this file: `docs/evals/2026-10-18-z0-round2-plan.html`.
+
+## Why a round 2
+
+- **The pilot cannot answer H1.** The rustfs pilot is invalid on G2 (Amendment 4): A4 against A0 on repeat mistakes read -0.667, interval [-1, 0], on 6 units in one repository. Its families are spent (Amendment 3, item 4).
+- **Most screened rules were rules agents follow anyway.** Stage 3 kept 15 of 33 families. In 17 of the 18 drops, A0 broke the rule at most once in 4 attempts.
+- **The go's design was underpowered.** The sizer raised the noise mean square to its bound before it subtracted it, so zero family and sequence estimates kept zero bounds (`z0-size-sim.mjs`, fixed in `ca92f0f5`). At the record's bounds the go's 10-repository design has H1 power 0.146, not the 0.52 its sizes file shows.
+- **Hippo changes.** Prereg 240: a hippo change after the freeze needs a new registration.
+
+## What carries over
+
+The 2026-09-29 design and Amendments 1 to 4 hold, except where this file says otherwise. That covers: arms A0, A1, A2, A4 and A5; the session protocol, with the teach messages word for word (prereg 105-109); the definitions; gates G1 to G5; the measurements and the failure chain; the units, the bootstrap and the fixed-repository t; blind analysis; and what gets published.
+
+## What changes
+
+1. **Scope.** H1 and the H4 harm gate, on sets R and N. H3 is computed and reported as the prereg writes it. Set X and H2 do not run. The frozen analyzer runs Holm over H1 and H2 with an H2 not run as NaN (`z0-hypotheses.mjs:154-158`), so H1 is judged at an effective two-sided 0.025. G2 reads only its Claude Code half (`z0-gates.mjs:28-35`). Hippo counts as working only if H1 is a win under both codings and A2 beats A5 (prereg 148).
+2. **The hippo build.** Hippo is frozen at tag `z0-r2-freeze` (TBD: commit, dist hash) after the dev rounds below. The runner stays at `45b57c6b`; only the hippo build under test and its pins change.
+3. **Dev rounds, before the tag.** Every family that exists before the tag is dev or burned (the list below). A round picks the weakest chain link on the tune half and judges a candidate on the check half only. The candidate and the best build run A2 on the same seeds; the best build's A1 and A5 are the comparators. A candidate is kept when, under both codings, its paired gain over the best build is larger than one standard error, its A2 against A5 gain does not shrink, and the paraphrase check passes. At most 3 rounds, and the rounds stop after 2 rounds with no kept change. Each round is logged in `z0-scored-set-record.md` with every candidate, kept or dropped, and its numbers.
+4. **The teach-template ban.** `git diff z0-freeze z0-r2-freeze -- src/` holds none of "Please fix it", "Yes, keep doing that" and "because". A match blocks the tag. The paraphrase check (`C:/z0-runs/dev/capture-probe.mjs`) builds each dev lesson's teach message in the runner's two forms and in two reworded forms, and a kept capture change must store the key phrase from the reworded forms as often as from the runner's.
+5. **Repositories.** Fresh repositories come only from shortlist batch 2 (`C:/z0-runs/scored-shortlist/b2/candidates.json`: 50 kept of 189 screened). Batch 1, its 10 gated repositories and the dev repositories (cj, bm, hp, ml, ff and the stage 3 set) are excluded. The tuner reads no batch 2 rule text before the tag; on 2026-10-18 only its names and rule counts were listed. The gate target is 25 gated repositories (in stage 3, 4 of 10 gated reached 3 kept families). Batches screen on until the target is met or the authoring budget ends.
+6. **Authoring.** The inventory brief is `C:/eval-authors/r2-inventory-template.md` (TBD: sha256): the stage 3 brief (its sha256 is pinned at `z0-scored-set-record.md:36`) plus criterion 7, a rule against the default an agent would follow with no rule file. Criterion 7 is judged from the code, not from any arm, so it favours neither A1 nor A2. The two-thirds maintainer floor (prereg 51) still holds. Every author stays blind to hippo (prereg 58-64).
+7. **The A0 probe.** Before the screen, `C:/z0-runs/scored/probe.mjs` (TBD: sha256) runs A0 alone on each family's screen task, on seeds 1 and 2. A family with no break is dropped; one break sends it to the screen. The screen is unchanged: 4 A0 and 2 A4 sessions, kept on at least 2 A0 breaks and 2 A4 follows (prereg 66-68). Probe sessions never count toward the screen.
+8. **Sizing.** The fixed sizer runs on the stage 2 calibration runs and the frozen build's dev-round runs, at 3 families for each repository, and its file is committed with this one (TBD: path, sha256). If fewer repositories qualify than the design needs, the sizer runs again at the count reached. If no design passes there, the scored run does not start, and the size it needs is reported (prereg 215).
+9. **Runners split by seed.** Each runner chunk holds every arm of one seed, so lockstep (prereg 120) holds inside it. Before each chunk, `C:/z0-runs/s7/box-check.sh` must pass (median bare launch at most 150 ms); `s3x-run.ps1` refuses to start otherwise.
+10. **Hook voids.** After each chunk, `C:/z0-runs/s7/hook-check.mjs` reads every hippo start and prompt hook from the transcripts. A cancelled or timed-out one voids that position in every arm, through the drop list's `hookVoids` (`z0-filters.mjs`, `986d8f3b`). G4 fails when more than 5% of planned positions are hook-voided (`5a59ff5f`).
+11. **Budgets.** The 9,500-session ceiling of the go covers scored sessions only. Authoring, probes, screens and dev rounds have their own budget of 3,000 sessions (TBD at the tag), counted in the record.
+12. **Analyzer hash.** TBD: `docs/evals/z0-freeze/analyzer.sha256` for the analyzer at the tag, with the hook-void filter and the sizer fix.
+
+## Order
+
+Dev rounds, then the tag, then this file fixed, then batch 2 opens, then authoring, probe, screen and sizing, then the scored run, then the blind analysis and the unblind.
+
+## Family status before the tag
+
+- **Burned:** rustfs X f3, f4, f5 and R f7, f9, f13 (scored once in the pilot); every family a screen dropped.
+- **Dev:** magnetissimo f1, f4, f5, f6; conductor f2, f9, f10; zotero-format-metadata f2, f3, f7; leakcanary f2, f7; maigret f8 (screened on A0 and A4 only); nacos, linguist, Turing.jl, halo, hackathon-starter and langextract (authored, never screened); cj, bm, hp, ml and ff (stage 2 calibration).
+
+## What gets published, whatever the result
+
+Prereg 247-255, plus the dev-round log: every candidate hippo change, kept or dropped, with its paired gains, its attribution check and its paraphrase check.
+
+## Limits, stated now
+
+- **The teach messages stay scripted.** The paraphrase check covers capture's wording; it does not cover how a person corrects in a real session.
+- **Dev families share the authoring process.** The dev rounds tune hippo on families written by the same blind briefs as the fresh ones, so a gain that depends on how those briefs phrase rules carries into the confirm.
