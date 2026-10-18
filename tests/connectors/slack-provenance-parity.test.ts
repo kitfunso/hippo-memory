@@ -12,13 +12,13 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../../src/connectors/slack/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';

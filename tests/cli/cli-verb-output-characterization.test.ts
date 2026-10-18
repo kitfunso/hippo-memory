@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/open.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const savedCwd = process.cwd();
 let root: string;

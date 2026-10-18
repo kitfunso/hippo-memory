@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { saveDecision, loadDecisions } from '../../src/objects/decisions.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import type { CreateMemoryOptions, MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -14,6 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 
 const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
 const NEW_INDEXES = [

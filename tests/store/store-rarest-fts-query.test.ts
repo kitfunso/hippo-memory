@@ -1,7 +1,6 @@
 // Z1b latency fix: rarest-term FTS pre-select (docs/plans/2026-09-26-z1b-tool-recall.md).
 // Real SQLite store in a tmp dir, no mocks.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import {
   loadRecallSearchEntries,
   loadRecallSearchEntriesFromDb,
@@ -10,6 +9,7 @@ import {
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 let root: string;
 

@@ -14,7 +14,7 @@ import {
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
   rowToEntry,
 } from './rows.js';
-import { onHandle, openStore } from './open.js';
+import { onHandle, openStore } from './sqlite/handles.js';
 import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../util/escape.js';
 import { placeholders } from '../util/sql.js';

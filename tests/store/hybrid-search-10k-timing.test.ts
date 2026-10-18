@@ -1,8 +1,6 @@
 // One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { handlesOf } from '../../src/store/open.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
@@ -11,7 +9,8 @@ import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

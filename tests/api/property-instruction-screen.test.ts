@@ -4,11 +4,11 @@ import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';
 import { detectInstruction } from '../../src/api/instruction-detect.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from '../_helpers/property.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { readEntry } from '../_helpers/root-forms.js';
 
 // Built from code points, so no invisible character sits in this file.
 const ZWSP = String.fromCodePoint(0x200b);

@@ -7,7 +7,6 @@ import { savePolicy } from '../../src/objects/policies.js';
 import { canReadScope } from '../../src/core/recall-scope.js';
 import { type HippoStore } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import {
   ENTITY_COLS,
   RELATION_COLS,
@@ -26,6 +25,7 @@ import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
 import { objectsAt } from './objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from './root-forms.js';
 
 export interface InMemoryGraphReadsStore extends StoreSide {
   readonly store: HippoStore & { readonly graphReads: GraphReads };

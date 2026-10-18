@@ -8,10 +8,10 @@ import { cmdCapture } from '../../src/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
 import { getContext } from '../../src/api/index.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const TAUGHT =
   'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';

@@ -7,8 +7,8 @@ import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/audit.js
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import { sqliteStore, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
-import { initStore } from '../../src/store/open.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';

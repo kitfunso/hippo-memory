@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { initStore } from '../../src/store/open.js';
-import { saveActiveTaskSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../src/store/sessions.js';
+import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
   closeTaskSnapshotsForSession,
+  saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
 // never-expires fix for the active task snapshot ambient-injection surfaces.

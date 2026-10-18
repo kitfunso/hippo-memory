@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { hybridSearch } from '../dist/index.js';
 import { buildCorpus } from '../dist/search/bm25.js';
-import { loadAllEntries } from '../dist/store/entry-reads.js';
+import { loadAllEntries } from '../dist/entry/testing.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const MODEL = 'jev-latest';

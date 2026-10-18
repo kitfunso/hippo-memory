@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
 import type { JsonValue } from '../../src/util/json.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDbReadOnly } from '../../src/db/index.js';
 import { readDeliveryEvents } from '../../src/store/recall-trace.js';
 import { blockHash } from '../../src/util/token-text.js';
@@ -13,6 +12,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../sr
 import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
 import { hippo, hippoIn, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';
 import type { InProcessResult } from './run-in-process.js';
+import { writeEntry } from './root-forms.js';
 
 interface Json {
   [key: string]: JsonValue;

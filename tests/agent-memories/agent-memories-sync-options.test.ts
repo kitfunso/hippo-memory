@@ -11,7 +11,6 @@ import { createMemory } from '../../src/core/memory.js';
 import { isContentWorthStoring } from '../../src/core/memory-quality.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { isInitialized } from '../../src/core/project-identity.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import {
   auditTotal,
   closeWorld,
@@ -31,6 +30,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 24_000 });

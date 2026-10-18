@@ -1,8 +1,6 @@
-// The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its
-// snapshot runs on.
+// The graph reads a view and a traversal share, each on the handle its caller's snapshot runs on.
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import {
   type EntityType,
@@ -78,14 +76,6 @@ export function loadEntitiesAt(
   return rows.map(rowToEntity);
 }
 
-export function loadEntities(
-  hippoRoot: string,
-  tenantId: string,
-  opts: { entityType?: EntityType; limit?: number } = {},
-): Entity[] {
-  return onHandle(hippoRoot, (db) => loadEntitiesAt(db, tenantId, opts));
-}
-
 export function loadRelationsAt(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -110,14 +100,6 @@ export function loadRelationsAt(
   `)
     .all(...params) as RelationRow[];
   return rows.map(rowToRelation);
-}
-
-export function loadRelations(
-  hippoRoot: string,
-  tenantId: string,
-  opts: { fromEntityId?: number; limit?: number } = {},
-): Relation[] {
-  return onHandle(hippoRoot, (db) => loadRelationsAt(db, tenantId, opts));
 }
 
 /** Chunk size for IN-list queries: well under SQLite's 999-bound-variable default

@@ -3,7 +3,6 @@
 
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
-import { writeEntry } from '../store/entry-writes.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
@@ -13,6 +12,11 @@ import type { Rejections } from '../store/port/rejections.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { log } from '../util/log.js';
+
+/** Below this length a chunk holds nothing worth recalling. */
+const MIN_IMPORT_CHARS = 10;
+/** An imported memory keeps at most this much of its chunk; the rest is cut with a warning. */
+const MAX_IMPORT_CHARS = 1000;
 
 export interface ImportResult {
   total: number; // entries found in source
@@ -114,6 +118,7 @@ export function importEntries(chunks: string[], source: string, tags: string[], 
 
 interface OpenImport {
   readonly targetRoot: string;
+  readonly learning: LocalFiles['learning'];
   readonly keys: ReturnType<typeof storedTextKeys>;
   readonly rejections: Sync<Rejections>;
 }
@@ -123,24 +128,24 @@ function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImp
   const { localFiles, rejections } = target.store;
   if (global) localFiles.ensureFiles();
   const keys = storedTextKeys(localFiles.sharing.textKeys(global ? undefined : tenantId));
-  return { targetRoot: target.root, keys, rejections };
+  return { targetRoot: target.root, learning: localFiles.learning, keys, rejections };
 }
 
 function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
-  if (!chunk || chunk.length < 10) return 'too-short';
+  if (!chunk || chunk.length < MIN_IMPORT_CHARS) return 'too-short';
   if (keys.has(duplicateKey(chunk))) return 'duplicate';
   return null;
 }
 
-/** The secret-vetted chunk capped at 1000 chars, and whether vetting changed it. */
+/** The secret-vetted chunk capped at MAX_IMPORT_CHARS, and whether vetting changed it. */
 function prepareImportChunk(raw: string) {
   const original = raw.trim();
   const trimmed = vetSecrets(original).content;
   const wasRedacted = trimmed !== original;
-  if (trimmed.length > 1000) {
-    log.warn(`imported memory truncated from ${trimmed.length} to 1000 chars`);
+  if (trimmed.length > MAX_IMPORT_CHARS) {
+    log.warn(`imported memory truncated from ${trimmed.length} to ${MAX_IMPORT_CHARS} chars`);
   }
-  return { chunk: trimmed.slice(0, 1000), wasRedacted };
+  return { chunk: trimmed.slice(0, MAX_IMPORT_CHARS), wasRedacted };
 }
 
 function createImportEntry(
@@ -166,14 +171,14 @@ function createImportEntry(
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
 function writeOrProbeImport(target: OpenImport, entry: MemoryEntry, options: ImportOptions): boolean {
-  const { targetRoot, rejections } = target;
+  const { learning, rejections } = target;
   if (options.dryRun) {
     const check = { tenantId: entry.tenant_id ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };
     return !rejections.refusedAmong([check])[0];
   }
   // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
-    writeEntry(targetRoot, entry);
+    learning.writeEntry(entry);
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
     throw err;

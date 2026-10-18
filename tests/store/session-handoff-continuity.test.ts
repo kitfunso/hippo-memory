@@ -1,7 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initStore } from '../../src/store/open.js';
-import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { rowToSessionHandoff } from '../../src/core/handoff.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
@@ -11,7 +8,11 @@ import {
   loadActiveTaskSnapshot,
   loadLatestHandoff,
   loadHandoffById,
+  appendSessionEvent,
+  saveActiveTaskSnapshot,
+  saveSessionHandoff,
 } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string;
 

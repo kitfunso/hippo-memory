@@ -1,11 +1,10 @@
-// Opens the SQLite store, the source of truth; Markdown and JSON files are human-readable mirrors of it.
+// The store's handle types and the legacy setup a first open runs; src/store/sqlite/handles.ts opens hippo.db, the
+// source of truth, and Markdown and JSON files are human-readable mirrors of it.
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../core/memory.js';
 import {
-  closeHippoDb,
-  currentRequestStores,
   type DatabaseSyncLike,
   openHippoDb,
   getMeta,
@@ -13,87 +12,15 @@ import {
   withWriteScope,
   pruneConsolidationRuns,
 } from '../db/index.js';
-import { reproveStoreSchema } from '../db/connect.js';
-import { openHippoDbWithFacts } from '../db/open.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
-import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
+import { layerDir } from './mirrors.js';
 import { isJsonObject, type JsonValue } from '../util/json.js';
 import { CLI_ACTOR } from '../core/actor.js';
-
-export function initStore(hippoRoot: string): void {
-  reproveStoreSchema(hippoRoot);
-  closeHippoDb(openStore(hippoRoot));
-}
-
-/** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
-export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  // Open first: a folder marked for another store must refuse before any mirror folder appears.
-  const { db, facts } = openHippoDbWithFacts(hippoRoot, opts);
-  // A store worker's reader: its writer ran the steps below before this thread was sent a job, and this connection
-  // cannot write them.
-  if (currentRequestStores()?.setupDoneFor === hippoRoot) return db;
-  try {
-    ensureMirrorDirectories(hippoRoot);
-    // Both steps act only on a store with no memory row, which the open's own probe has just ruled out.
-    if (facts?.hasMemories) return db;
-    const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
-    if (bootstrapped) {
-      syncMirrorFiles(hippoRoot, db);
-    }
-    recordHalfLifeBaseForNewStore(db);
-    return db;
-  } catch (error) {
-    try {
-      closeHippoDb(db);
-    } catch (closeErr) {
-      // The init error is the one thrown; the close failure is only logged.
-      log.error(
-        `openStore: closing the handle after a failed init failed: ${errorMessage(closeErr)}`,
-        errorFields(closeErr),
-      );
-    }
-    throw error;
-  }
-}
-
-/** A connection with no mirror or legacy setup, for a caller that already ran `initStore`. */
-export function openBareHandle(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  return openHippoDb(hippoRoot, opts);
-}
-
-/** One call on a handle of its own, closed after (a request scope's handle stays open);
- *  pass openStore where the call also sets up mirror folders and legacy rows. */
-export function onHandle<T>(
-  hippoRoot: string,
-  fn: (db: DatabaseSyncLike) => T,
-  open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb,
-): T {
-  const db = open(hippoRoot);
-  try {
-    return fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/** `onHandle` for a call that runs to its promise, with the handle open until it settles. */
-export async function onHandleAsync<T>(
-  hippoRoot: string,
-  fn: (db: DatabaseSyncLike) => Promise<T>,
-  open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb,
-): Promise<T> {
-  const db = open(hippoRoot);
-  try {
-    return await fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
-}
 
 /** The folder a store keeps its mirror files in, beside hippo.db; an adapter hands it on and never reads it. */
 export interface StoreFiles {
@@ -128,17 +55,6 @@ export interface Handles {
   readonly files: StoreFiles;
 }
 
-/** The handles of the store under `hippoRoot`, which only the adapter's composition root builds. */
-export function handlesOf(hippoRoot: string): Handles {
-  const files: StoreFiles = { hippoRoot };
-  return {
-    on: (fn, open) => onHandle(hippoRoot, (db) => fn(db, files), open),
-    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(db, files), open),
-    open: () => openHippoDb(hippoRoot),
-    files,
-  };
-}
-
 /** `meta` key holding the default half-life base a store's memories are on (src/consolidate/half-life-migration.ts). */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
@@ -146,14 +62,15 @@ export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
 
 /** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that
  * holds memories but no recorded base predates the record and keeps the legacy 7-day base until sleep migrates it. */
-function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
+export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, HALF_LIFE_BASE_META_KEY, '') !== '') return;
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return;
   setMeta(db, HALF_LIFE_BASE_META_KEY, String(DEFAULT_HALF_LIFE_DAYS));
   setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
 }
 
-function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
+/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any row. */
+export function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
   // Existence, not COUNT(*): a count walks every row on each write's open.
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return false;
   // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the

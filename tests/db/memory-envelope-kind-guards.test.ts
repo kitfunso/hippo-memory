@@ -4,10 +4,9 @@ import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } 
 import { v14 } from '../../src/db/migrations/v14.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 describe('memory envelope: kind column, delete and update guards, raw_archive, round-trip', () => {
   it('getCurrentSchemaVersion matches the constant in src/db/migrations/index.ts', () => {

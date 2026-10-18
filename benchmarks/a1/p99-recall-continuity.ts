@@ -37,10 +37,9 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../../dist/core/config.js';
-import { initStore } from '../../dist/store/open.js';
+import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../dist/store/sessions.js';
-import { saveSessionHandoff } from '../../dist/store/handoffs.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../../dist/store/sqlite/folder-forms.js';
 import { remember as apiRemember, retrieve as apiRetrieve } from '../../dist/api/index.js';
 
 interface CliArgs {

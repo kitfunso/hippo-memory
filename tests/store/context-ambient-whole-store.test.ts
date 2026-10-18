@@ -3,10 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry, writeEntryDbOnly } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadAmbientTallies } from '../../src/store/ambient.js';
+import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
   Layer,
@@ -20,6 +17,8 @@ import { getContext, adminActor } from '../../src/api/index.js';
 import { renderAmbientSummary, tallyAmbientEntries, ambientStateFromTallies } from '../../src/core/ambient.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries, loadAmbientTallies } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let root = '';
 let store = '';

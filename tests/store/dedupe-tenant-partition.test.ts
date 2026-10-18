@@ -22,15 +22,14 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 function ctxFor(home: string, tenantId: string): FullContext {
   return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });

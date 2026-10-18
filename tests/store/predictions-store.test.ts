@@ -15,7 +15,6 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -28,6 +27,7 @@ import {
   loadPredictionById,
   loadPredictionsByClass,
   loadOpenPredictions,
+  writeEntry,
 } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {

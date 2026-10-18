@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at

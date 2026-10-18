@@ -3,10 +3,9 @@ import * as path from 'path';
 import { handleContext } from '../../src/cli/context.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { initStore } from '../../src/store/open.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string;
 let hippoDir: string;

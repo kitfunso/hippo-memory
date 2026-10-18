@@ -7,10 +7,10 @@ import { join } from 'node:path';
 import { reject, remember, adminActor } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session or a server for the child, so the developer's shell cannot change a row.

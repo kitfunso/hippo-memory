@@ -4,13 +4,12 @@ import { loadConfig } from '../../src/core/config.js';
 import { createSuccessor } from '../../src/core/memory.js';
 import { personalScopeOf } from '../../src/core/recall-scope.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sqlText, stageScratchWinner, type StagedWinner } from './race-winner.js';
-import { loadEntriesByIds } from './root-forms.js';
+import { loadEntriesByIds, writeEntry } from './root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 /** A supersede another process wins: it copies a successor from a scratch store and links `oldId` to it under the write lock. */
 export async function stageSupersedeWinner(

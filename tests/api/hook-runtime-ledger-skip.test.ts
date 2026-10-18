@@ -4,11 +4,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { startDeliveryRecorder, startToolFailureRecorder } from '../../src/api/prompt-hook.js';
 import { adminActor } from '../../src/api/types.js';
-import { initStore } from '../../src/store/open.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { DEFAULT_CONFIG } from '../../src/core/config.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

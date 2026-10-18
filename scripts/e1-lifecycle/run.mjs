@@ -50,9 +50,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, applyOutcome } from '../../dist/core/memory.js';
-import { initStore } from '../../dist/store/open.js';
-import { writeEntry } from '../../dist/store/entry-writes.js';
-import { loadAllEntries } from '../../dist/store/entry-reads.js';
+import { initStore, writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
 import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { outcomeMultiplier } from '../../dist/search/boosts.js';

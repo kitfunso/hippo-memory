@@ -14,10 +14,9 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/auth.js';
-import { listApiKeys } from '../_helpers/root-forms.js';
+import { listApiKeys, writeEntry } from '../_helpers/root-forms.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';

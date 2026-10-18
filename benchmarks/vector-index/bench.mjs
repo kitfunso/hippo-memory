@@ -10,7 +10,7 @@ import { closeHippoDb, openHippoDb, setMeta } from '../../dist/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../dist/db/vector-store.js';
 import { createMemory } from '../../dist/core/memory.js';
 import { writeEntryDbOnly } from '../../dist/store/entry-writes.js';
-import { initStore } from '../../dist/store/open.js';
+import { initStore } from '../../dist/entry/testing.js';
 import { loadVectorCandidateEntriesAt } from '../../dist/store/search-rows.js';
 
 const N = Number(process.env.N ?? 20000);

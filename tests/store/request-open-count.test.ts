@@ -4,7 +4,6 @@ import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vites
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
@@ -13,6 +12,7 @@ import { retrieve, remember } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

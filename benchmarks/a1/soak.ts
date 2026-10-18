@@ -39,7 +39,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../../dist/core/config.js';
-import { initStore } from '../../dist/store/open.js';
+import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { remember as apiRemember } from '../../dist/api/index.js';
 import { serve, type ServerHandle } from '../../dist/server.js';

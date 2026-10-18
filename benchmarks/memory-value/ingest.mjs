@@ -46,8 +46,7 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMemory, computeSchemaFit } from '../../dist/core/memory.js';
-import { initStore } from '../../dist/store/open.js';
-import { writeEntry } from '../../dist/store/entry-writes.js';
+import { initStore, writeEntry } from '../../dist/entry/testing.js';
 import {
   parseLmeDate,
   setFakeNow,

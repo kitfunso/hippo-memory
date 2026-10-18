@@ -14,16 +14,21 @@ import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/cor
 import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { initStore, handlesOf } from '../../src/store/open.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex, replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import {
+  saveEmbeddingIndex,
+  replaceDetectedConflicts,
+  listMemoryConflicts,
+  loadAllEntries,
+  readEntry,
+  writeEntry,
+  saveSessionHandoff,
+  saveActiveTaskSnapshot,
+} from '../_helpers/root-forms.js';
+import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

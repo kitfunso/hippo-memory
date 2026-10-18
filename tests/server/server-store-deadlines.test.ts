@@ -16,10 +16,10 @@ import {
   type ExecutorOptions,
   type SqliteExecutor,
 } from '../../src/store/sqlite/executor.js';
-import { initStore } from '../../src/store/open.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

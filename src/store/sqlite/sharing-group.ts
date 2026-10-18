@@ -2,7 +2,8 @@
 import { tallySourcesAt } from '../candidates.js';
 import { loadEntriesByIdsAt, loadEntriesWithSignalsAt, loadEntryTextKeysAt } from '../entry-reads.js';
 import { writeEntriesSkippingRejectedAt } from '../entry-writes.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 import type { Sharing } from '../port/sharing.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt } from '../search-rows.js';
 

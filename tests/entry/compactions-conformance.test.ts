@@ -4,7 +4,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import type { CallerItems, CallerItemsSaved, MemoryEntry } from '../../src/entry/store-kit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -16,6 +15,7 @@ import {
   TENANT_B,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const SEEDED = '2026-03-01T11:58:00.000Z';
 const NOW = '2026-03-01T12:00:00.000Z';

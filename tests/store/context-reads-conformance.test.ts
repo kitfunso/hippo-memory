@@ -15,7 +15,6 @@ import type {
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from '../_helpers/context-fixture.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryContextStore } from '../_helpers/in-memory-context-store.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -25,6 +24,7 @@ import {
   type Outcome,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 type Call = GroupCall<'contextReads', unknown>;
 type Named = readonly [string, Call];

@@ -18,16 +18,20 @@ import { _resetProjectIdentityCacheForTests } from '../../src/core/project-ident
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { AuthResolver } from '../../src/server/types.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import {
+  replaceDetectedConflicts,
+  listMemoryConflicts,
+  loadAllEntries,
+  readEntry,
+  writeEntry,
+} from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

@@ -5,10 +5,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
 

@@ -15,8 +15,8 @@ import {
   importEntries,
 } from '../../src/entry/importers.js';
 import type { ImportOptions } from '../../src/importers/core.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

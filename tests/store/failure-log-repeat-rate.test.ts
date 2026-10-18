@@ -2,8 +2,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { recordFailure, summarizeFailures, failuresBySession } from '../../src/store/failure-log.js';
 import { captureToolFailure } from '../../src/capture/capture-error.js';
@@ -16,6 +14,8 @@ import type { JsonValue } from '../../src/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { FailureOutcome } from '../../src/store/port/failure-log.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 

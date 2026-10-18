@@ -1,7 +1,6 @@
 import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, markRetrieved } from '../core/memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db/index.js';
-import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
+import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { chunked } from '../util/chunked.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
@@ -11,7 +10,7 @@ import { appendAuditEvent } from './audit.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
-import { onHandle, openStore, type StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import type { RenameSourceOptions } from './port/agent-import.js';
 import type { StrengthenOptions } from './port/recall-writes.js';
@@ -28,23 +27,19 @@ export interface WriteEntryInternalOptions extends WriteEntryOptions {
   afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
 }
 
-/** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'; the api layer passes the resolved
- * actor, so the audit log gets one row per write. */
-export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  onHandle(hippoRoot, (db) => writeEntryAt(db, { hippoRoot }, entry, opts), openStore);
-}
-
-/** Writes a promoted copy; with `auditAs` the `promote` audit row joins the INSERT's SAVEPOINT, so both or neither. */
-export function writePromotedEntry(
-  hippoRoot: string,
+/** Writes a promoted copy on the caller's open store; with `auditAs` the `promote` audit row joins the INSERT's
+ * SAVEPOINT, so both or neither. */
+export function writePromotedEntryAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   entry: MemoryEntry,
   opts: { readonly actor?: string; readonly sourceId: string; readonly auditAs?: { tenantId: string; actor: string } },
 ): void {
   const { auditAs, sourceId } = opts;
   const afterWrite =
     auditAs &&
-    ((db: DatabaseSyncLike, globalId: string) => {
-      appendAuditEvent(db, {
+    ((own: DatabaseSyncLike, globalId: string) => {
+      appendAuditEvent(own, {
         tenantId: auditAs.tenantId,
         actor: auditAs.actor,
         op: 'promote',
@@ -52,7 +47,7 @@ export function writePromotedEntry(
         metadata: { sourceId },
       });
     });
-  onHandle(hippoRoot, (db) => writeEntryAt(db, { hippoRoot }, entry, { actor: opts.actor, afterWrite }), openStore);
+  writeEntryAt(db, files, entry, { actor: opts.actor, afterWrite });
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each
@@ -189,25 +184,6 @@ export function writeEntryMirrorsIn(files: StoreFiles, entry: MemoryEntry): void
   writeEntryMirrors(files.hippoRoot, entry);
 }
 
-/** Strengthen what a read returned: update only the four retrieval columns on the live row, never a stale copy.
- *  Best effort: a failure logs and never fails the read. Returns the ids found in this store. */
-export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], opts: StrengthenOptions): Set<string> {
-  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
-  let db: DatabaseSyncLike;
-  try {
-    db = openHippoDb(hippoRoot);
-  } catch (error) {
-    rethrowIfSqliteBlocked(error);
-    warnStrengthenFailed(error);
-    return new Set();
-  }
-  try {
-    return strengthenRetrievedInOwnTx(db, ids, opts);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 /** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's transaction, so a
  * recall's last writes share one handle. */
 export function strengthenRetrievedInOwnTx(
@@ -224,7 +200,7 @@ export function strengthenRetrievedInOwnTx(
   }
 }
 
-function warnStrengthenFailed<E>(error: E): void {
+export function warnStrengthenFailed<E>(error: E): void {
   log.warn(`retrieval stats not saved (${errorMessage(error)})`);
 }
 

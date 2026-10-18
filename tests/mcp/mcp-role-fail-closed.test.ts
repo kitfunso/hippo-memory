@@ -6,7 +6,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadConfig } from '../../src/core/config.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { mcpActor } from '../../src/mcp/protocol.js';
@@ -14,7 +13,7 @@ import { runLearnTool } from '../../src/mcp/memory-tools.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 
 const LESSON = 'fix the retry loop that dropped the last queued webhook delivery';
 

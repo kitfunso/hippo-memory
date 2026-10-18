@@ -6,13 +6,12 @@ import { pathToFileURL } from 'node:url';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
+import { writeEntry, saveActiveTaskSnapshot } from './root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 

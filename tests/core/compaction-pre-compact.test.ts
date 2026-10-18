@@ -13,10 +13,10 @@ import {
   summaryWith,
   type Scratch,
 } from '../_helpers/compaction-hooks.js';
-import { initStore } from '../../src/store/open.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // The instruction Claude Code hands the summarizer; pinned word for word.
 const INSTRUCTION =

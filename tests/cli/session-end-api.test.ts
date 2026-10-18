@@ -7,9 +7,8 @@ import { sessionEndWork, type SessionEndWork } from '../../src/api/session-end.j
 import type { Context } from '../../src/api/types.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 const TENANT = 'default';
 const PROJECT = 'the-session-project';

@@ -43,7 +43,7 @@ import {
 } from './compactions.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../core/ablation.js';
-import { updateStats } from './index-and-stats.js';
+import { updateStatsAt } from './index-and-stats.js';
 import { type OnHandle, waitingOpener } from './open.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, reportCompactionFailure } from '../util/log.js';
@@ -376,13 +376,13 @@ function writeItemRows(
 }
 
 /** After commit: report skips, mirror the new rows, bump the counter. */
-function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void {
+function finishItemWrites(db: DatabaseSyncLike, hippoRoot: string, writes: ItemWrites, log: Log): void {
   if (writes.repeats > 0) log(`skipped ${writes.repeats} item(s) the store already holds`);
   if (writes.refused > 0) log(`skipped ${writes.refused} item(s) the write gate refused`);
   for (const entry of writes.written) writeEntryMirrors(hippoRoot, entry);
   if (writes.written.length > 0) {
     try {
-      updateStats(hippoRoot, { remembered: writes.written.length });
+      updateStatsAt(db, { hippoRoot }, { remembered: writes.written.length });
     } catch (err) {
       // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
       log(`remembered counter not updated: ${errorMessage(err)}`);
@@ -423,7 +423,7 @@ export function saveItems(
     log(`${ctx.recordId} was already finished by another process`);
     return finishedItems;
   }
-  finishItemWrites(hippoRoot, writes, log);
+  finishItemWrites(db, hippoRoot, writes, log);
   return writes.written.length;
 }
 

@@ -13,7 +13,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
@@ -24,6 +23,7 @@ import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

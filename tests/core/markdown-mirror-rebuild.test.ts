@@ -3,9 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry } from '../../src/core/markdown.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let storeRoot: string;
 

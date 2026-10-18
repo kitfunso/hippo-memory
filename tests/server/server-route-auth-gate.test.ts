@@ -1,11 +1,11 @@
 // The /v1 table declares each route's auth need and dispatch enforces it before any handler runs.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { initStore } from '../../src/store/open.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { V1_ROUTES } from '../../src/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const KNOWN_AUTH: ReadonlySet<string> = new Set(['caller', 'admin', 'host-admin-local', 'webhook-signature']);
 const WEBHOOKS = ['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];

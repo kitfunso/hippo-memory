@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { adminActor, recordTokens } from '../../src/api/index.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
@@ -16,6 +14,8 @@ import { folderFiles } from '../_helpers/cli-stores.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -3,9 +3,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { appendSessionEvent } from '../../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
@@ -20,7 +17,8 @@ import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/open.js';
+import { writeEntry, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 function makeOkFetcher(content: string) {
   return vi.fn<typeof fetch>(

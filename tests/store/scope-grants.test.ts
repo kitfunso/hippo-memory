@@ -5,8 +5,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, readApiKeyRecord, revokeApiKey } from '../../src/store/auth.js';
 import { Layer } from '../../src/core/memory.js';
@@ -21,6 +19,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 

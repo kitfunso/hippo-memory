@@ -11,8 +11,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { generateProtocol } from '../../scripts/e1-lifecycle/generate.mjs';
 import { runArmSeed } from '../../scripts/e1-lifecycle/run.mjs';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

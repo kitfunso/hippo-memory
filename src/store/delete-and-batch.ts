@@ -12,7 +12,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
-import { onHandle, openStore, type StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
@@ -201,24 +201,16 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
 /** Writes, deletes and dormant moves in one transaction. With `snapshot`, a write keeps only the fields the caller
  * changed and never resurrects a gone row. Dormant moves (src/store/dormant.ts) leave `memories` like a delete; both
  * skip rows no longer auto-deletable. Returns ids that left `memories`. */
-export function batchWriteAndDelete(
-  hippoRoot: string,
+export function batchWriteAndDeleteAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   toWrite: MemoryEntry[],
   toDeleteIds: string[],
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
-  const dormant = opts?.dormant ?? [];
-  if (toWrite.length === 0 && toDeleteIds.length === 0 && dormant.length === 0) return [];
-
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // One component, so every op keeps the statement order this call has always had.
-      const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant };
-      return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
-    },
-    openStore,
-  );
+  // One component, so every op keeps the statement order this call has always had.
+  const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant: opts?.dormant ?? [] };
+  return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
 }
 
 const failedUnits = new WeakMap<Error, string[]>();

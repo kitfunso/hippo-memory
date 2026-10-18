@@ -4,13 +4,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { DASHBOARD_TOKEN, sessionCookie } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 import { makeStore } from './_helpers/make-root.js';
+import { writeEntry } from './_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

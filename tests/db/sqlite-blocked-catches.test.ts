@@ -8,15 +8,15 @@ import { join } from 'node:path';
 import { SqliteBlockedError, withSqliteBlocked } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { recordMcpTokens } from '../../src/mcp/request.js';
-import { strengthenRetrieved } from '../../src/store/entry-writes.js';
 import { embeddingModelRequiresReindex } from '../../src/store/vector-index.js';
 import { resolveVectorArm } from '../../src/search/vector.js';
 import { sqliteStore } from '../../src/store/index.js';
 import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { handlesOf } from '../../src/store/open.js';
 import { loadConfig } from '../../src/core/config.js';
+import { strengthenRetrieved } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -56,7 +56,7 @@ const ROWS: readonly Row[] = [
     'returned',
   ],
   [
-    'store/entry-writes.ts strengthenRetrieved',
+    'store/sqlite/folder-forms.ts strengthenRetrieved',
     /strengthenRetrieved/,
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`,
     'found 0',

@@ -7,12 +7,12 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { folderStore } from '../_helpers/sharing-stores.js';
 import { listPeers } from '../../src/sharing/share.js';
 import { Layer } from '../../src/core/memory.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 function makeSharedEntry(opts: { id: string; project: string; tenantId: string }): MemoryEntry {
   return {

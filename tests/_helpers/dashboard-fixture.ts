@@ -7,8 +7,6 @@ import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
@@ -17,6 +15,8 @@ import { serveDashboard } from '../../src/dashboard/dashboard.js';
 import { createSnapshotService, type SnapshotService } from '../../src/dashboard/dashboard-snapshot.js';
 import type { DashboardRow } from '../../src/store/port/dashboard-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { writeEntry } from './root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
 export const DAY = 86_400_000;

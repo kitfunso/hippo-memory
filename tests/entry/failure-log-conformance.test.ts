@@ -3,7 +3,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryFailureLogStore } from '../_helpers/in-memory-failure-log-store.js';
@@ -15,6 +14,7 @@ import {
   type GroupCall,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const TAG = 'auto-captured';

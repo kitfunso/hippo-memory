@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { runSlackSmoke } from '../../benchmarks/e1.3/slack-1000-event-smoke.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 describe('slack 1000-event smoke (CI subset)', () => {
   let root: string;

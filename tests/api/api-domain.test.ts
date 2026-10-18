@@ -1,7 +1,5 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -21,6 +19,7 @@ import {
 import { appendAuditEvent } from '../../src/store/audit.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;

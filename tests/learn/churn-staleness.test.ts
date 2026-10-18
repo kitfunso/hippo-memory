@@ -6,9 +6,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { extractChurnRefs, detectChurnStale } from '../../src/learn/invalidation.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { search } from '../../src/search/bm25-search.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
@@ -22,6 +19,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)

@@ -3,13 +3,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { createRequire } from 'module';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { countMatching, recordStatements, STORE_OPEN } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this require + cast mirrors

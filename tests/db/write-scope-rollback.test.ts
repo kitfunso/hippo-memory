@@ -7,13 +7,17 @@ import { pruneAuditLog } from '../../src/api/auth/audit.js';
 import { adminActor } from '../../src/api/types.js';
 import { writeRecallTrace } from '../../src/store/recall-trace.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { recordTokenUse } from '../../src/store/token-ledger.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { saveIndex, closePrediction, recordRereads } from '../_helpers/root-forms.js';
+import {
+  saveIndex,
+  closePrediction,
+  recordRereads,
+  saveActiveTaskSnapshot,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 
 let root: string;
 

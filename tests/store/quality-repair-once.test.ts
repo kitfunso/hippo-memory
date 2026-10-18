@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repairAutomaticMemories, repairQualityOnce as repairStoreOnce } from '../../src/store/quality-repair.js';
 import { PROTECTED_ROWS as protect } from '../../src/core/memory-audit.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getMeta } from '../../src/db/meta.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import {
+  repairAutomaticMemories,
+  repairQualityOnce as repairStoreOnce,
+  writeEntry,
+  loadAllEntries,
+} from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';

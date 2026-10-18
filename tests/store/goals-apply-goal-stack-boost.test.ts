@@ -9,11 +9,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import type { RerankStep } from '../../src/core/search-types.js';
 import { createMemory as createDefaultMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { writeGoalRecallLog } from '../../src/store/goals.js';
 import type { GoalStackBoostOptions } from '../../src/search/goal-boost.js';
@@ -21,7 +19,8 @@ import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 import { remember } from '../../src/api/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { pushGoal } from '../_helpers/root-forms.js';
+import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 interface ScoredRow {
   entry: MemoryEntry;

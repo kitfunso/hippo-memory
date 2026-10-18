@@ -8,8 +8,7 @@ import type { ImportReport } from '../../src/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { removeEntryMirrors } from '../../src/store/mirrors.js';
-import { deleteEntryRowInTx, writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
+import { deleteEntryRowInTx } from '../../src/store/entry-writes.js';
 import {
   auditCount,
   auditTotal,
@@ -30,6 +29,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 20_000 });

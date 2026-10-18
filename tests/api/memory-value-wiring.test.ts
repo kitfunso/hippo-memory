@@ -15,9 +15,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 
 import { consolidate } from '../../src/index.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import {
   Layer,
   calculateStrength,
@@ -42,8 +39,15 @@ import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/consolid
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
 import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, loadSessionDecayContext, listMemoryConflicts } from '../_helpers/root-forms.js';
+import {
+  loadEveryTenantEntries,
+  loadSessionDecayContext,
+  listMemoryConflicts,
+  writeEntry,
+  batchWriteAndDelete,
+} from '../_helpers/root-forms.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>

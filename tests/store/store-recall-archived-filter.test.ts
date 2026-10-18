@@ -17,8 +17,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadSearchEntries } from '../_helpers/root-forms.js';
+import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { makeStore } from '../_helpers/make-root.js';

@@ -3,12 +3,10 @@ import * as path from 'path';
 import { handleRecall } from '../../src/cli/recall.js';
 import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string;
 let hippoDir: string;

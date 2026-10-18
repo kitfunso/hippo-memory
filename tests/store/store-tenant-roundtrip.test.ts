@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 describe('store roundtrip with tenant_id', () => {
   it('writeEntry persists tenant_id, readEntry returns it', () => {

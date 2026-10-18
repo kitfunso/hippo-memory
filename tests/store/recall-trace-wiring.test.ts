@@ -19,7 +19,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { remember, retrieve, getContext } from '../../src/api/index.js';
@@ -28,7 +27,7 @@ import { runCli } from '../../src/cli.js';
 import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadLastRecall } from '../_helpers/root-forms.js';
+import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 
 const INIT = ['init', '--no-hooks', '--no-schedule', '--no-learn'];
 

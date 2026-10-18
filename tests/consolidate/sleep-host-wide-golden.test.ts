@@ -16,11 +16,11 @@ import { savePhysicsState } from '../../src/db/physics-state.js';
 import { upsertEntryRow } from '../../src/store/entry-row.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/open.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
-import { appendSessionEvent } from '../../src/store/sessions.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { appendSessionEvent } from '../_helpers/root-forms.js';
 
 // Each case seeds and runs a full three-tenant sleep three times, once at one-row pages, which can pass the unit budget.
 vi.setConfig({ testTimeout: 20_000 });

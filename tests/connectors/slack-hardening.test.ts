@@ -1,8 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { remember } from '../../src/api/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -23,6 +21,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { stageScratchWinner } from '../_helpers/race-winner.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

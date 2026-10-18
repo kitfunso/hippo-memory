@@ -11,15 +11,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator

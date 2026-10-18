@@ -4,7 +4,6 @@ import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { CARD_LEASE_MS } from '../../src/core/card.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
@@ -20,6 +19,7 @@ import {
   reviewCard,
   completeCard,
   reclaimExpiredCards,
+  saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 
 let root: string;

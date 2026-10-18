@@ -2,10 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { stampOriginProjectForImport } from '../../src/store/entry-row.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { shareMemory } from '../../src/sharing/share.js';
@@ -23,7 +19,8 @@ import { summaryWith } from '../_helpers/compaction-hooks.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { folderFiles } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { copyToGlobal } from '../_helpers/root-forms.js';
+import { copyToGlobal, writeEntry, readEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

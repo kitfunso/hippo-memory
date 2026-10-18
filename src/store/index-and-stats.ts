@@ -9,7 +9,7 @@ import {
 import { log } from '../util/log.js';
 import type { HippoIndex } from './rows.js';
 import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
-import { onHandle, openStore, type StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../util/time.js';
 import type { SessionDecayContext } from './port/consolidation.js';
 
@@ -48,10 +48,6 @@ export function updateStatsAt(db: DatabaseSyncLike, files: StoreFiles, delta: St
   const total = addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta);
   updateStatsOn(db, files.hippoRoot, total);
   pendingStats.delete(files.hippoRoot);
-}
-
-export function updateStats(hippoRoot: string, delta: StatsDelta): void {
-  onHandle(hippoRoot, (db) => updateStatsAt(db, { hippoRoot }, delta), openStore);
 }
 
 export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: StatsDelta): void {

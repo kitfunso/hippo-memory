@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore, handlesOf } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { isStoreBusy } from '../../src/store/busy.js';
@@ -25,7 +23,6 @@ import { failureHash, failureReport } from '../../src/capture/failure-reading.js
 import { WORKING_STATE_CAPS } from '../../src/capture/working-state.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../src/util/compaction-items.js';
 import { compactResumeText } from '../../src/api/context-render.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../../src/core/api-errors.js';
 import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -43,8 +40,9 @@ import {
   type CallerFailureRequest,
 } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { loadActiveTaskSnapshot, writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import type { ContinuityKey } from '../../src/store/port/types.js';
+import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
 
 const TENANT = 'acme-tenant';
 const META = { sessionId: 's1', trigger: 'auto', cwd: null, transcriptPath: null };

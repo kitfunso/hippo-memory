@@ -28,8 +28,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { remember } from '../../src/api/index.js';
@@ -38,6 +36,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 /** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {

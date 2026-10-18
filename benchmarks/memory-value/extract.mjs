@@ -25,7 +25,7 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { calculateStrength } from '../../dist/core/memory.js';
-import { loadAllEntries } from '../../dist/store/entry-reads.js';
+import { loadAllEntries } from '../../dist/entry/testing.js';
 import { CONFIG } from './config.mjs';
 import {
   setFakeNow,

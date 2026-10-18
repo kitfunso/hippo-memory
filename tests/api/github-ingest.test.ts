@@ -1,7 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/connectors/ingest.js';
@@ -16,6 +15,7 @@ import type {
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { stageScratchWinner } from '../_helpers/race-winner.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 // -- Test helpers ----------------------------------------------------------
 

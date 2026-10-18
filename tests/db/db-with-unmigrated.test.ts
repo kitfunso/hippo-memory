@@ -3,8 +3,8 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OTHER_STORE_MARKER, withUnmigratedDb } from '../../src/db/open.js';
 import { OtherStoreFolderError } from '../../src/util/sqlite-blocked.js';
-import { initStore } from '../../src/store/open.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let root: string;
 beforeEach(() => {

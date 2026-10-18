@@ -3,8 +3,6 @@
 // invalidation while the 'invalidated' tag stayed on the row.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
@@ -12,6 +10,7 @@ import { remember, getContext } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 let home: string;
 

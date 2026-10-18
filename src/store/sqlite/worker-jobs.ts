@@ -6,7 +6,7 @@ import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { loadStoredVectorViewsAt } from '../vector-index.js';
 import { requestScopes } from '../../util/request-scope.js';
-import { handlesOf, initStore } from '../open.js';
+import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
 import { flushStatsMirrors } from '../mirrors.js';
 import { encodeError } from './error-codec.js';

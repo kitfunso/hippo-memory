@@ -197,6 +197,7 @@ entry/store-kit.d.ts: replacesIndex re-export
 entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: sqliteStore re-export
 entry/store-kit.d.ts: tallyAmbientEntries re-export
+entry/testing.d.ts: WriteEntryOptions re-export
 entry/testing.d.ts: __resetSessionRecallHistoryHttp re-export
 entry/testing.d.ts: _readApiKeyVerifyStatsForTests re-export
 entry/testing.d.ts: _resetAblationCacheForTests re-export
@@ -206,6 +207,11 @@ entry/testing.d.ts: _resetProjectIdentityCacheForTests re-export
 entry/testing.d.ts: _resetSessionRecallHistoryMcpForTests re-export
 entry/testing.d.ts: _resetSharedStoreCacheForTests re-export
 entry/testing.d.ts: _setDigestExistsProbeForTests re-export
+entry/testing.d.ts: ambientSecretAdmit re-export
+entry/testing.d.ts: initStore re-export
+entry/testing.d.ts: loadAllEntries re-export
+entry/testing.d.ts: loadEmbeddingIndex re-export
+entry/testing.d.ts: writeEntry re-export
 index.d.ts: AmbientState re-export
 index.d.ts: CARD_LEASE_MS re-export
 index.d.ts: CARD_TRANSITIONS re-export

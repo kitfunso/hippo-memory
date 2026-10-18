@@ -7,9 +7,6 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { initStore, handlesOf } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -36,6 +33,8 @@ import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
+import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];

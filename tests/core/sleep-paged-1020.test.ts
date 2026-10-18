@@ -5,14 +5,13 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { auditMemoryQuality } from '../../src/api/auth/audit.js';
 import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
 import { auditMemories, type AuditIssue } from '../../src/core/memory-audit.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
-import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 
 const PAGE = 4;
 const roots: string[] = [];

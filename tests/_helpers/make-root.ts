@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll } from 'vitest';
-import { initStore } from '../../src/store/open.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 export interface MakeRootOptions {
   /** Written to `<root>/config.json`, where the store reads its config. */

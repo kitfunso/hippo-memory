@@ -3,8 +3,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import type { HippoConfig } from '../../src/core/config.js';
 import { deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { saveDecision } from '../../src/objects/decisions.js';
@@ -18,6 +16,8 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { readEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const dirs: string[] = [];
 afterEach(() => {

@@ -4,9 +4,6 @@ import { join } from 'node:path';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { quarantineScopeFor } from '../../src/trust/quarantine.js';
@@ -14,7 +11,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

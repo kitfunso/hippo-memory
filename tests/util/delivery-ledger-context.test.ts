@@ -3,8 +3,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { blockHash, estimateTokens } from '../../src/util/token-text.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/store/delivery-recorder.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import {
   PROMPT_HOOK,
@@ -19,6 +17,8 @@ import {
   writeConfig,
   type Project,
 } from '../_helpers/delivery-boundary.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';

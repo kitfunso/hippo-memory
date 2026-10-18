@@ -1,9 +1,9 @@
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { loadConfig } from '../../src/core/config.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
-import { handlesOf, openStore } from '../../src/store/open.js';
 import { predictionMirror, writePredictionAt } from '../../src/store/predictions.js';
 import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
+import { handlesOf, openStore } from '../../src/store/sqlite/handles.js';
 
 /** A prediction with its recall mirror, the mirror's half-life read from the store's config.json as the CLI would. */
 export function savePrediction(

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
-import { initStore } from '../../src/store/open.js';
 
 import {
   DAILY_TASK_NAME,
@@ -12,6 +11,7 @@ import {
   workspaceRegistryPath,
 } from '../../src/cli/scheduler.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // The registry stores forward-slash paths on every platform.
 const norm = (p: string): string => resolve(p).replace(/\\/g, '/');

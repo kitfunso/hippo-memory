@@ -4,11 +4,11 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { importProjectMemories } from '../../src/agent-memories/sync.js';
 import { totalTally } from '../../src/agent-memories/report.js';
-import { initStore } from '../../src/store/open.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(

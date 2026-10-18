@@ -22,9 +22,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { remember } from '../../src/api/index.js';
@@ -32,6 +29,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -184,7 +183,7 @@ describe('GET /v1/context', () => {
     await remember(ctx, { content: 'unpinned-1' });
     await remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
-    const { writeEntry } = await import('../../src/store/entry-writes.js');
+    const { writeEntry } = await import('../_helpers/root-forms.js');
     const { Layer } = await import('../../src/core/memory.js');
     const pinnedEntry = createMemory('pinned-canary', {
       layer: Layer.Episodic,

@@ -7,9 +7,8 @@ import { cliApiContext } from '../../src/cli/api-context.js';
 import { listMemories } from '../../src/api/memories/memories.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../../src/store/dormant.js';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 
 let root: string;
 

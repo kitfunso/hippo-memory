@@ -15,7 +15,6 @@ import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { saveCustomerNote } from '../../src/objects/customer-notes.js';
 import { saveProjectBrief } from '../../src/objects/project-briefs.js';
-import { loadEntities, loadRelations } from '../../src/store/graph-reads.js';
 import type { Entity } from '../../src/store/graph-rows.js';
 import { extractGraph, extractGraphChunked } from '../../src/graph/extract.js';
 import {
@@ -30,7 +29,13 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
-import { deleteEntry, loadNeighborRelations, loadRelationsAmong } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  loadNeighborRelations,
+  loadRelationsAmong,
+  loadEntities,
+  loadRelations,
+} from '../_helpers/root-forms.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {

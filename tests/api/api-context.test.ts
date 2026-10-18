@@ -23,10 +23,10 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { remember, getContext } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

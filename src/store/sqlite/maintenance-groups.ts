@@ -6,9 +6,11 @@ import { deleteEntriesAutomaticallyAt, memoriesBackingObjectsAt } from '../delet
 import { contentsWithTagAt } from '../entry-reads.js';
 import { writeEntriesSkippingRejectedAt, writeEntriesTogetherAt } from '../entry-writes.js';
 import { updateStatsAt } from '../index-and-stats.js';
-import { type Handles, openStore } from '../open.js';
+import type { Handles } from '../open.js';
+import { openStore } from './handles.js';
 import type { AuditMaintenance, LessonWrites, Sync } from '../port.js';
-import { repairAutomaticMemories, repairQualityOnce } from '../quality-repair.js';
+import { repairAutomaticMemoriesAt, repairQualityOnceAt } from '../quality-repair.js';
+import { withUnmigratedDb } from '../../db/open.js';
 import { touchableScopeSql } from '../rule-sql.js';
 
 export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMaintenance> {
@@ -17,9 +19,13 @@ export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMainte
     deleteAutomatically: (removals, actor) =>
       removals.length === 0 ? [] : on((db, own) => deleteEntriesAutomaticallyAt(db, own, removals, actor), openStore),
     pruneAuditRows: (prune) => on((db) => pruneAuditRowsAt(db, prune)),
-    // Quality repair opens the store unmigrated, so it takes the folder and not a handle.
-    repairQuality: (tenantId, apply, protect) => repairAutomaticMemories(files, { tenantId, apply, protect }),
-    repairQualityOnce: (tenantId, protect) => repairQualityOnce(files, tenantId, protect),
+    // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
+    repairQuality: (tenantId, apply, protect) =>
+      withUnmigratedDb(files.hippoRoot, !apply, (db) =>
+        repairAutomaticMemoriesAt(db, files, { tenantId, apply, protect }),
+      ),
+    repairQualityOnce: (tenantId, protect) =>
+      withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnceAt(db, files, tenantId, protect)),
   };
 }
 

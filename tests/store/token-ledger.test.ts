@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -21,6 +20,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

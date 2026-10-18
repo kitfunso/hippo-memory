@@ -10,7 +10,7 @@ import {
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import type { TaskSnapshot } from './rows.js';
-import { onHandle, openStore, type StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './sessions.js';
 import type { ContinuityKey } from './port/types.js';
 
@@ -78,15 +78,6 @@ export function saveSessionHandoffAt(
   }
 
   return rowToSessionHandoff(row);
-}
-
-export function saveSessionHandoff(
-  hippoRoot: string,
-  tenantId: string,
-  handoff: Omit<SessionHandoff, 'updatedAt'>,
-  key?: ContinuityKey,
-): SessionHandoff {
-  return onHandle(hippoRoot, (db) => saveSessionHandoffAt(db, tenantId, handoff, key), openStore);
 }
 
 export interface HandoffFilter {

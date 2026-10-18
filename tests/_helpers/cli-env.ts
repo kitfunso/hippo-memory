@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 /** A project dir with its own `.hippo` store plus a sibling `global-hippo` dir to point HIPPO_HOME at. */
 export interface TestEnv {
