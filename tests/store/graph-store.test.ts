@@ -12,7 +12,7 @@ import { rmSync } from 'node:fs';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, withWriteScope } from '../../src/db/index.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { insertEntityRow, insertRelationRow, updateEntityRow } from '../../src/store/graph-writes.js';
+import { insertEntityRow, insertRelationRow, updateEntityRow } from '../../src/store/sqlite/graph-writes.js';
 import { MAX_ENTITY_NAME_LEN } from '../../src/core/entity-name.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
@@ -91,7 +91,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
   });
 
   it("every graph writer runs on the caller's handle, so a rolled-back transaction keeps none of its writes", async () => {
-    const writers = Object.keys(await import('../../src/store/graph-writes.js'));
+    const writers = Object.keys(await import('../../src/store/sqlite/graph-writes.js'));
     for (const rootForm of ['insertEntity', 'updateEntity', 'insertRelation']) expect(writers).not.toContain(rootForm);
     const md = addMemory(home, 'default', 'distilled');
     const kept = insertEntityAt(home, 'default', { entityType: 'system', name: 'kept', memoryId: md });

@@ -1,11 +1,11 @@
 // One hook or context turn's token-ledger work on one hippo.db handle, and the rule for a row that did not land.
 import { isSqliteBusy, noteStoreBusy, type DatabaseSyncLike } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { recordTokenUse } from './token-ledger.js';
+import { recordTokenUse } from './sqlite/token-ledger.js';
 import { ensurePilotArm, readPilotArm } from './pilot-arm.js';
 import { hashArm } from '../core/pilot-arm.js';
 import type { PilotArm } from '../core/pilot-arm.js';
-import { type DeliveryPruneSchedule, writeDeliveryEventOnHandle } from './recall-trace.js';
+import { type DeliveryPruneSchedule, writeDeliveryEventOnHandle } from './sqlite/recall-trace.js';
 import type { LedgerTurn } from './port/ledger.js';
 
 // SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no database.

@@ -1,10 +1,10 @@
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { appendAuditEvent } from './audit.js';
-import { conflictResolveAuditsAt, resolvedConflictsAt } from './conflicts.js';
-import { iterateEveryTenantEntriesAt, objectMemoryRowsAt } from './entry-reads.js';
-import { setHalfLivesAt } from './entry-writes.js';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './open.js';
+import { appendAuditEvent } from './sqlite/audit.js';
+import { conflictResolveAuditsAt, resolvedConflictsAt } from './sqlite/conflicts.js';
+import { iterateEveryTenantEntriesAt, objectMemoryRowsAt } from './sqlite/entry-reads.js';
+import { setHalfLivesAt } from './sqlite/entry-writes.js';
+import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './sqlite/open.js';
 import type { HalfLifeMove, HalfLifeRows } from './port/consolidation.js';
 
 /** The base every store used before the base was recorded. */

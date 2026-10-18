@@ -3,8 +3,8 @@
  * E3.3 graph-on-consolidated guard - criterion 2 (CI-level enforcement).
  *
  * The graph layer (entities / relations / graph_extraction_queue) must only ever be
- * written through the audited store writers `src/store/graph-writes.ts` and
- * `src/store/graph-queue.ts`, whose `resolveConsolidatedSource` guard + the v37 DB
+ * written through the audited store writers `src/store/sqlite/graph-writes.ts` and
+ * `src/store/sqlite/graph-queue.ts`, whose `resolveConsolidatedSource` guard + the v37 DB
  * triggers make a raw-layer reference unrepresentable. This lint enforces the architectural invariant at PR/CI time as
  * defense-in-depth on top of the runtime DB guard: it fails if any other source file
  * contains a DATA write (INSERT INTO / UPDATE) to a graph table.
@@ -45,9 +45,9 @@ const WRITE_RE = new RegExp(
   'gi',
 );
 /** The sanctioned writers, as paths RELATIVE TO srcDir (exact, not basename): a
- *  hypothetical `src/sub/store/graph-writes.ts` is NOT a sanctioned writer and must be linted. */
-const SANCTIONED_RELS = new Set(['store/graph-writes.ts', 'store/graph-queue.ts']);
-const WRITER_NAMES = 'src/store/graph-writes.ts and src/store/graph-queue.ts';
+ *  hypothetical `src/sub/store/sqlite/graph-writes.ts` is NOT a sanctioned writer and must be linted. */
+const SANCTIONED_RELS = new Set(['store/sqlite/graph-writes.ts', 'store/sqlite/graph-queue.ts']);
+const WRITER_NAMES = 'src/store/sqlite/graph-writes.ts and src/store/sqlite/graph-queue.ts';
 
 function walk(dir, onFile) {
   for (const entry of readdirSync(dir)) {

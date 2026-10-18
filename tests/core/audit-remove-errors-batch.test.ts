@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import type { AuditIssue } from '../../src/core/memory-audit.js';
 import { computeSchemaFit, schemaFitFrom, schemaFitSourceOf } from '../../src/core/memory.js';
 import { auditRemoveErrors } from '../../src/api/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

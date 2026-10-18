@@ -1,8 +1,8 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
-import { completeGoalAt, getSessionGoalsAt, pushGoalAt, resumeGoalAt, suspendGoalAt } from '../goals.js';
+import { completeGoalAt, getSessionGoalsAt, pushGoalAt, resumeGoalAt, suspendGoalAt } from './goals.js';
 import type { Goals } from '../port-groups.js';
 import type { Sync } from '../port.js';
-import { type OnHandle } from '../open.js';
+import { type OnHandle } from './open.js';
 
 export function sqliteGoals(on: OnHandle): Sync<Goals> {
   return {

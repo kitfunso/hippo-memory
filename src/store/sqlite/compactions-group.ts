@@ -1,7 +1,7 @@
 // hippo.db's half of the Compactions store group: each call on a handle of its own.
 import { saveCallerItemsAt } from '../compaction-caller.js';
-import { markSnapshotSaved, startCompaction } from '../compactions-record.js';
-import type { OnHandle } from '../open.js';
+import { markSnapshotSaved, startCompaction } from './compactions-record.js';
+import type { OnHandle } from './open.js';
 import type { Compactions } from '../port/compactions.js';
 import type { Sync } from '../port.js';
 

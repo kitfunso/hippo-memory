@@ -3,8 +3,8 @@
 // fixed.
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
-import { firstPilotArmHash } from './token-ledger-rows.js';
-import { recordTokenUse } from './token-ledger.js';
+import { firstPilotArmHash } from './sqlite/token-ledger-rows.js';
+import { recordTokenUse } from './sqlite/token-ledger.js';
 import { hashArm, type PilotArm } from '../core/pilot-arm.js';
 
 /** The session's first stored arm, or null; never writes. Without `tenantId` any tenant's row counts, since on one

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey, readApiKeyRecord, revokeApiKey } from '../../src/store/auth.js';
+import { createApiKey, readApiKeyRecord, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';

@@ -9,7 +9,7 @@ import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { carryingCalls, lastSentState, recordTokenUse } from '../../src/store/token-ledger.js';
+import { carryingCalls, lastSentState, recordTokenUse } from '../../src/store/sqlite/token-ledger.js';
 import { shouldSkipUnchanged } from '../../src/core/skip-unchanged.js';
 import { readApiCalls } from '../../src/core/transcript-calls.js';
 import type { TokenEvent, TokenSummary, TokenSurface } from '../../src/store/port/token-ledger.js';

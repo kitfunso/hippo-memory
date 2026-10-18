@@ -3,7 +3,7 @@
 
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
-import { resolveTenantId } from './tenant.js';
+import { resolveTenantId } from './sqlite/tenant.js';
 import type { JsonObject } from './port/types.js';
 import type { WorkingMemoryItem } from './port/sessions.js';
 

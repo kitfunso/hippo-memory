@@ -5,8 +5,8 @@ import type { IncomingMessage } from 'node:http';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import {
   adminActor,
   authCreate,

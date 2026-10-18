@@ -14,9 +14,9 @@ import {
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { canReadScope, personalScopeOf, recallScopeFilter, type ScopeActor } from '../../src/core/recall-scope.js';
-import { touchableScopeSql } from '../../src/store/rule-sql.js';
+import { touchableScopeSql } from '../../src/store/sqlite/rule-sql.js';
 import { briefFromReceipts } from '../../src/objects/project-briefs.js';
-import { saveItems, type ItemContext } from '../../src/store/compactions-record.js';
+import { saveItems, type ItemContext } from '../../src/store/sqlite/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

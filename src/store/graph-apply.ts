@@ -1,7 +1,7 @@
 // Applies a rebuild's op list through the row writers in graph-writes.ts, in one transaction per call.
 import type { DatabaseSyncLike } from '../db/index.js';
 import { clock } from '../util/write-budget.js';
-import { storedGraphOn } from './graph-reads.js';
+import { storedGraphOn } from './sqlite/graph-reads.js';
 import type { DesiredRelation, GraphOp } from './port/graph-rebuild.js';
 import type { StoredGraph } from './port/graph-reads.js';
 import {
@@ -14,7 +14,7 @@ import {
   relationPresent,
   runGraphRebuildTransaction,
   updateEntityRow,
-} from './graph-writes.js';
+} from './sqlite/graph-writes.js';
 import type { ApplyGraphOpsOptions, ApplyGraphOpsResult } from './port/graph-rebuild.js';
 
 function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {

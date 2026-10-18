@@ -9,7 +9,7 @@ import {
   verifyApiKeyCached,
   VerifiedKeyCache,
   type VerifiedApiKey,
-} from '../../src/store/auth.js';
+} from '../../src/store/sqlite/auth.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/index.js';

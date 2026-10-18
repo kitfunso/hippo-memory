@@ -12,7 +12,7 @@ import {
   canAutoDelete,
   type MemoryEntry,
 } from '../../src/core/memory.js';
-import { AUTO_DELETABLE } from '../../src/store/rule-sql.js';
+import { AUTO_DELETABLE } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';

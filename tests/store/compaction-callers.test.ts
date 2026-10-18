@@ -16,7 +16,7 @@ import {
   saveItems,
   startCompaction,
   type ItemContext,
-} from '../../src/store/compactions-record.js';
+} from '../../src/store/sqlite/compactions-record.js';
 import { captureToolFailure, storeLesson } from '../../src/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureHash, failureReport } from '../../src/capture/failure-reading.js';

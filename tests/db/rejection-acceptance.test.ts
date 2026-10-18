@@ -23,13 +23,9 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
-import {
-  rejectionDigest,
-  normalizeValueForRejection,
-  insertRejectedValue,
-  findRejectedValue,
-} from '../../src/store/rejection.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { insertRejectedValue, findRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../src/core/rejection-digest.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { cmdCapture } from '../../src/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';

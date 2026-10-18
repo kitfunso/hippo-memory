@@ -1,5 +1,5 @@
 // hippo.db's half of the FailureLog store group: each call on a handle of its own.
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import type { FailureLog } from '../port/failure-log.js';
 import type { Sync } from '../port.js';
 import { recordFailure, requestOutcome, settleFailureOutcome } from '../failure-log.js';

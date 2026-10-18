@@ -1,11 +1,11 @@
 // hippo.db's Reports group: the tenant reports and listings the status verbs print.
 import { withReadSnapshot } from '../../db/index.js';
-import { statusCountsAt, strengthTalliesAt } from '../candidates.js';
-import { countOpenConflictsAt } from '../conflicts.js';
-import { countAllEntriesAt, loadEntriesPageAt } from '../entry-reads.js';
-import { createdSinceLastSleepAt } from '../index-and-stats.js';
-import { buildStatsFromDb } from '../mirrors.js';
-import type { OnHandle } from '../open.js';
+import { statusCountsAt, strengthTalliesAt } from './candidates.js';
+import { countOpenConflictsAt } from './conflicts.js';
+import { countAllEntriesAt, loadEntriesPageAt } from './entry-reads.js';
+import { createdSinceLastSleepAt } from './index-and-stats.js';
+import { buildStatsFromDb } from './mirrors.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import type { Reports } from '../port-groups.js';
 import type { Sync } from '../port.js';

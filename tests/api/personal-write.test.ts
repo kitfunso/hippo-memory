@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { remember, type Actor } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { handleRemember } from '../../src/cli/remember.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { mapApiError } from '../../src/api/error-reply.js';

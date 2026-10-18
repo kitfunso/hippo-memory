@@ -1,10 +1,10 @@
 // hippo.db's Ledger: each call runs on the request's handle or a short-lived one. The delivery write takes the opener,
 // since it is fail-soft on an open that fails.
 import { noteLedgerRowSkipped, pilotArmAt, recordLedgerTurnAt } from '../ledger-turn.js';
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import type { Ledger } from '../port/ledger.js';
-import { deliveryPruneSchedule, writeDeliveryEventVia } from '../recall-trace.js';
-import { lastSentState, recordRereadsAt, recordTokenUse } from '../token-ledger.js';
+import { deliveryPruneSchedule, writeDeliveryEventVia } from './recall-trace.js';
+import { lastSentState, recordRereadsAt, recordTokenUse } from './token-ledger.js';
 
 export function sqliteLedger(on: OnHandle): Ledger {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.

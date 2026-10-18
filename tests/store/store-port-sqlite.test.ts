@@ -5,17 +5,17 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
-import { appendAuditEvent } from '../../src/store/audit.js';
+import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
-import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/goals.js';
+import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/goals.js';
 import { boostByGoals } from '../../src/search/goal-boost.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
 import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../../src/store/planning-fallacy-evidence.js';
-import { writeRecallTrace } from '../../src/store/recall-trace.js';
+import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
 import { serve } from '../../src/server.js';
 import {
   sqliteStore,
@@ -30,9 +30,9 @@ import {
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
-import { loadLatestHandoffAt } from '../../src/store/handoffs.js';
+import { loadLatestHandoffAt } from '../../src/store/sqlite/handoffs.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
-import { listSessionEventsAt, loadActiveTaskSnapshotAt } from '../../src/store/sessions.js';
+import { listSessionEventsAt, loadActiveTaskSnapshotAt } from '../../src/store/sqlite/sessions.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';

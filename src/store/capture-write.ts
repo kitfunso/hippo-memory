@@ -1,11 +1,11 @@
 // The write half of `hippo capture`: each item through the write gate on one store handle, then mirrored and counted.
 import type { DatabaseSyncLike } from '../db/index.js';
 import { duplicateKey } from '../util/same-text.js';
-import { writeEntryMirrors } from './entry-writes.js';
-import { stampOriginProject } from './entry-row.js';
-import { gatedWrite } from './gated-write.js';
-import { updateStatsOn } from './index-and-stats.js';
-import type { StoreFiles } from './open.js';
+import { writeEntryMirrors } from './sqlite/entry-writes.js';
+import { stampOriginProject } from './sqlite/entry-row.js';
+import { gatedWrite } from './sqlite/gated-write.js';
+import { updateStatsOn } from './sqlite/index-and-stats.js';
+import type { StoreFiles } from './sqlite/open.js';
 import type { CaptureItem, CaptureWriteOptions, CapturedOutcome } from './port/captures.js';
 
 /** One outcome per item, in order, on a handle opened with openStore. `keys` holds the texts already stored and gains

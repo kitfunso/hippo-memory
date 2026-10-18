@@ -6,7 +6,7 @@ import { connect } from 'node:net';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 
 /** An admin key, since only an admin passes the mint route's gate to its body read. */
 function adminKey(root: string): string {

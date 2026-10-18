@@ -4,7 +4,7 @@ import {
   slackEventSeenAt as hasSeenEvent,
   markSlackEventSeenAt as markEventSeen,
   slackEventMemoryAt as lookupMemoryByEvent,
-} from '../../src/store/connectors/slack.js';
+} from '../../src/store/sqlite/connectors/slack.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 describe('slack idempotency', () => {

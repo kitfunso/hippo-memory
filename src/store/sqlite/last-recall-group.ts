@@ -1,15 +1,15 @@
 // hippo.db's LastRecall group: the last recall sits in its meta table, and a traced outcome links on the outcome's own
 // handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
-import { appendAuditEvent } from '../audit.js';
-import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
+import { appendAuditEvent } from './audit.js';
+import { strengthenRetrievedInOwnTx } from './entry-writes.js';
 import { strengthenRetrieved } from './folder-forms.js';
-import { localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
-import { loadLastRecallAt, saveIndexAt } from '../index-and-stats.js';
-import type { OnHandle } from '../open.js';
+import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
+import { loadLastRecallAt, saveIndexAt } from './index-and-stats.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites, Sync } from '../port.js';
-import { writeRecallTrace } from '../recall-trace.js';
+import { writeRecallTrace } from './recall-trace.js';
 import { applyOutcomeAt } from './entry-writes-group.js';
 
 /** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and

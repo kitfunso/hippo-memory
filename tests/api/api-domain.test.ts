@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import {
   remember,
   retrieve,
@@ -16,7 +16,7 @@ import {
   authRevoke,
   auditList,
 } from '../../src/api/index.js';
-import { appendAuditEvent } from '../../src/store/audit.js';
+import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';

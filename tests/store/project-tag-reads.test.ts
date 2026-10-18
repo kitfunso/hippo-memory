@@ -3,9 +3,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { insertDormantRow } from '../../src/store/dormant.js';
-import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
-import { projectTagStoreOn } from '../../src/store/project-tags.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { projectTagStoreOn } from '../../src/store/sqlite/project-tags.js';
 import type { ProjectTagStore } from '../../src/store/port/project-tags.js';
 import { listProjects, mergeProjects, planProjectRepair } from '../../src/sharing/project-merge.js';
 import { mergedText } from '../../src/util/same-text.js';

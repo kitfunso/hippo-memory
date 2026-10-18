@@ -35,10 +35,6 @@
     "src/mcp/admin-tools.ts": 1,
     "src/mcp/memory-tools.ts": 1,
     "src/mcp/stdio.ts": 1,
-    "src/objects/lifecycle.ts": 2,
-    "src/store/audit.ts": 1,
-    "src/store/candidates.ts": 1,
-    "src/store/conflicts.ts": 1,
-    "src/store/graph-reads.ts": 1
+    "src/objects/lifecycle.ts": 2
   }
 }

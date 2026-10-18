@@ -1,17 +1,17 @@
 // hippo.db's half of the AuditMaintenance and LessonWrites store groups: the quality audit, audit prune and git learn's
 // batch.
-import { pruneAuditRowsAt } from '../audit.js';
-import { loadTextsHoldingWordsAt } from '../candidates.js';
-import { deleteEntriesAutomaticallyAt, memoriesBackingObjectsAt } from '../delete-and-batch.js';
-import { contentsWithTagAt } from '../entry-reads.js';
-import { writeEntriesSkippingRejectedAt, writeEntriesTogetherAt } from '../entry-writes.js';
-import { updateStatsAt } from '../index-and-stats.js';
-import type { Handles } from '../open.js';
+import { pruneAuditRowsAt } from './audit.js';
+import { loadTextsHoldingWordsAt } from './candidates.js';
+import { deleteEntriesAutomaticallyAt, memoriesBackingObjectsAt } from './delete-and-batch.js';
+import { contentsWithTagAt } from './entry-reads.js';
+import { writeEntriesSkippingRejectedAt, writeEntriesTogetherAt } from './entry-writes.js';
+import { updateStatsAt } from './index-and-stats.js';
+import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 import type { AuditMaintenance, LessonWrites, Sync } from '../port.js';
 import { repairAutomaticMemoriesAt, repairQualityOnceAt } from '../quality-repair.js';
 import { withUnmigratedDb } from '../../db/open.js';
-import { touchableScopeSql } from '../rule-sql.js';
+import { touchableScopeSql } from './rule-sql.js';
 
 export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMaintenance> {
   return {

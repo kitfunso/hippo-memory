@@ -13,7 +13,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
-import { MEMORY_BACKED_TABLES } from '../../src/store/delete-and-batch.js';
+import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { saveDecision } from '../../src/objects/decisions.js';
 import { openIncident } from '../../src/objects/incidents.js';
@@ -24,9 +24,9 @@ import { saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { saveCustomerNote } from '../../src/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { consolidate } from '../../src/index.js';
-import { insertDormantRow } from '../../src/store/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
 import { loadConfig } from '../../src/core/config.js';
 import {
   createMemory,
@@ -35,7 +35,8 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
 } from '../../src/core/memory.js';
-import { rejectionDigest, insertRejectedValue } from '../../src/store/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { rejectionDigest } from '../../src/core/rejection-digest.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import * as api from '../../src/api/index.js';
 import { WRITE_BUDGET } from '../../src/util/write-budget.js';

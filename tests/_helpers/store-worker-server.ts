@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { serve, type ServeOpts, type ServerHandle } from '../../src/server.js';

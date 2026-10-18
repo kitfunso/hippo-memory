@@ -3,8 +3,8 @@
  * Docs: docs/plans/2026-06-01-e3-graph-write-lint.md
  *
  * The lint enforces: graph tables (entities/relations/graph_extraction_queue) may only
- * be written through the sanctioned store writers (src/store/graph-writes.ts and
- * src/store/graph-queue.ts). These tests pin the detection + the false-positive
+ * be written through the sanctioned store writers (src/store/sqlite/graph-writes.ts and
+ * src/store/sqlite/graph-queue.ts). These tests pin the detection + the false-positive
  * exclusions (sanctioned writers, comment lines, name substrings).
  */
 
@@ -52,16 +52,16 @@ describe('check-graph-writes lint', () => {
       expect(v.length).toBe(2);
     });
 
-    it('does NOT flag the two sanctioned store writers (exact relative paths), but DOES flag subgraph.ts AND a subdir store/graph-writes.ts', () => {
-      file('store/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
-      file('store/graph-queue.ts', `db.prepare('UPDATE graph_extraction_queue SET status = ?').run(s);\n`);
+    it('does NOT flag the two sanctioned store writers (exact relative paths), but DOES flag subgraph.ts AND a subdir store/sqlite/graph-writes.ts', () => {
+      file('store/sqlite/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
+      file('store/sqlite/graph-queue.ts', `db.prepare('UPDATE graph_extraction_queue SET status = ?').run(s);\n`);
       file('subgraph.ts', `db.prepare('INSERT INTO relations(rel_type) VALUES (?)').run(r);\n`);
-      file('connectors/store/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT store/graph-writes.ts, not sanctioned
+      file('connectors/store/sqlite/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT store/graph-writes.ts, not sanctioned
       const files = findGraphWriteViolations(dir).map((x) => x.file.replace(/\\/g, '/'));
-      expect(files.some((f) => f.endsWith('/store/graph-writes.ts') && !f.includes('connectors'))).toBe(false);
-      expect(files.some((f) => f.endsWith('/store/graph-queue.ts'))).toBe(false);
+      expect(files.some((f) => f.endsWith('/store/sqlite/graph-writes.ts') && !f.includes('connectors'))).toBe(false);
+      expect(files.some((f) => f.endsWith('/store/sqlite/graph-queue.ts'))).toBe(false);
       expect(files.some((f) => f.endsWith('subgraph.ts'))).toBe(true);
-      expect(files.some((f) => f.endsWith('connectors/store/graph-writes.ts'))).toBe(true); // subdir store/graph-writes.ts IS linted
+      expect(files.some((f) => f.endsWith('connectors/store/sqlite/graph-writes.ts'))).toBe(true); // subdir store/sqlite/graph-writes.ts IS linted
     });
 
     it('flags a data write placed in src/graph/write.ts, which only applies ops through the store writers', () => {

@@ -4,11 +4,11 @@ import { CLI_ACTOR } from '../../src/core/actor.js';
 import type { Card, CardComment, CardRun } from '../../src/core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../../src/core/handoff.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { recordAuditEventsRowByRowAt } from '../../src/store/audit.js';
-import type { FailedAuditEvent } from '../../src/store/audit.js';
-import { githubEventRecordAt, markGitHubEventSeenAt } from '../../src/store/connectors/github.js';
-import type { GitHubEventLogEntry } from '../../src/store/connectors/github.js';
-import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/connectors/slack.js';
+import { recordAuditEventsRowByRowAt } from '../../src/store/sqlite/audit.js';
+import type { FailedAuditEvent } from '../../src/store/sqlite/audit.js';
+import { githubEventRecordAt, markGitHubEventSeenAt } from '../../src/store/sqlite/connectors/github.js';
+import type { GitHubEventLogEntry } from '../../src/store/sqlite/connectors/github.js';
+import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/sqlite/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from './api-ctx.js';
@@ -20,7 +20,7 @@ import {
   loadContextCandidatesAt,
   loadTextsHoldingWordsAt,
   tallySourcesAt,
-} from '../../src/store/candidates.js';
+} from '../../src/store/sqlite/candidates.js';
 import {
   addCardCommentAt,
   blockCardAt,
@@ -33,14 +33,14 @@ import {
   reclaimExpiredCardsAt,
   reviewCardAt,
 } from '../../src/store/cards.js';
-import { replaceDetectedConflictsAt } from '../../src/store/conflicts.js';
+import { replaceDetectedConflictsAt } from '../../src/store/sqlite/conflicts.js';
 import {
   commitInChunksAt,
   deleteEntriesOneByOneAt,
   memoriesBackingObjectsAt,
-} from '../../src/store/delete-and-batch.js';
+} from '../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../src/store/port/dormant.js';
-import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
+import { loadDormantMemoriesAt } from '../../src/store/sqlite/dormant.js';
 import {
   countSessionRawMemoriesAt,
   loadAllEntryIdsAt,
@@ -49,8 +49,8 @@ import {
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
   iterateEveryTenantEntriesAt,
-} from '../../src/store/entry-reads.js';
-import { writeEntriesTogetherAt } from '../../src/store/entry-writes.js';
+} from '../../src/store/sqlite/entry-reads.js';
+import { writeEntriesTogetherAt } from '../../src/store/sqlite/entry-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/port/goals.js';
 import {
   activeGoalsWithPoliciesAt,
@@ -58,18 +58,18 @@ import {
   pushGoalAt,
   resumeGoalAt,
   suspendGoalAt,
-} from '../../src/store/goals.js';
+} from '../../src/store/sqlite/goals.js';
 import {
   loadPendingExtractionTenantsAt,
   markGraphDirtyAt,
   markPendingProcessedUpToAt,
-} from '../../src/store/graph-queue.js';
+} from '../../src/store/sqlite/graph-queue.js';
 import {
   loadEntitiesByIdsAt,
   loadEntitiesByMemoryIdAt,
   loadNeighborRelationsAt,
   loadRelationsAmongAt,
-} from '../../src/store/graph-reads.js';
+} from '../../src/store/sqlite/graph-reads.js';
 import type { Entity, Relation } from '../../src/store/port/graph-reads.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../../src/store/port/sessions.js';
 import {
@@ -77,23 +77,23 @@ import {
   loadLatestHandoffAt,
   stampHandoffOutcomeAt,
   writeSessionEndHandoffAt,
-} from '../../src/store/handoffs.js';
+} from '../../src/store/sqlite/handoffs.js';
 import {
   appendConsolidationRunAt,
   loadLastRecallAt,
   loadSessionDecayContextAt,
   saveIndexAt,
   updateStatsUnlessBusyAt,
-} from '../../src/store/index-and-stats.js';
-import { waitingOpener } from '../../src/store/open.js';
+} from '../../src/store/sqlite/index-and-stats.js';
+import { waitingOpener } from '../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import { withUnmigratedDb } from '../../src/db/open.js';
 import type { RepairProtection } from '../../src/core/memory-audit.js';
-import { writePromotedEntryAt } from '../../src/store/entry-writes.js';
-import { updateStatsAt } from '../../src/store/index-and-stats.js';
+import { writePromotedEntryAt } from '../../src/store/sqlite/entry-writes.js';
+import { updateStatsAt } from '../../src/store/sqlite/index-and-stats.js';
 import { repairAutomaticMemoriesAt, repairQualityOnceAt } from '../../src/store/quality-repair.js';
 import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
-import type { StoreFiles } from '../../src/store/open.js';
+import type { StoreFiles } from '../../src/store/sqlite/open.js';
 
 export {
   appendSessionEvent,
@@ -109,7 +109,7 @@ export {
   strengthenRetrieved,
   writeEntry,
 } from '../../src/store/sqlite/folder-forms.js';
-import type { ClosePredictionOptions, ListPredictionsOptions } from '../../src/store/predictions.js';
+import type { ClosePredictionOptions, ListPredictionsOptions } from '../../src/store/sqlite/predictions.js';
 import {
   closePredictionAt,
   computePredictionBaserateAt,
@@ -117,13 +117,17 @@ import {
   loadOpenPredictionsAt,
   loadPredictionByIdAt,
   loadPredictionsByClassAt,
-} from '../../src/store/predictions.js';
-import type { HippoIndex } from '../../src/store/rows.js';
+} from '../../src/store/sqlite/predictions.js';
+import type { HippoIndex } from '../../src/store/sqlite/rows.js';
 import type { MemoryConflict } from '../../src/store/port/conflicts.js';
 import type { SessionEvent, TaskSnapshot } from '../../src/store/port/sessions.js';
-import type { SqlFragment } from '../../src/store/rule-sql.js';
-import { loadRecallEntriesAt, loadSearchEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
-import { listApiKeyRows } from '../../src/store/auth.js';
+import type { SqlFragment } from '../../src/store/sqlite/rule-sql.js';
+import {
+  loadRecallEntriesAt,
+  loadSearchEntriesAt,
+  loadVectorCandidateEntriesAt,
+} from '../../src/store/sqlite/search-rows.js';
+import { listApiKeyRows } from '../../src/store/sqlite/auth.js';
 import type { ApiKeyListItem, ListApiKeysOpts } from '../../src/store/port/key-writes.js';
 import {
   clearActiveTaskSnapshotAt,
@@ -131,7 +135,7 @@ import {
   findPromotableSessionsAt,
   listSessionEventsAt,
   loadActiveTaskSnapshotAt,
-} from '../../src/store/sessions.js';
+} from '../../src/store/sqlite/sessions.js';
 import { freshActiveSnapshot } from '../../src/core/session-snapshot.js';
 import {
   applyRebuildResultAt,
@@ -141,7 +145,7 @@ import {
   loadChildrenOfSummaryAt,
 } from '../../src/store/summaries.js';
 import type { ApiCall } from '../../src/core/transcript-calls.js';
-import { recordRereadsAt } from '../../src/store/token-ledger.js';
+import { recordRereadsAt } from '../../src/store/sqlite/token-ledger.js';
 import {
   loadStoredParticlesAt,
   loadStoredVectorsAt,
@@ -150,7 +154,7 @@ import {
   saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
-} from '../../src/store/vector-index.js';
+} from '../../src/store/sqlite/vector-index.js';
 import type { WorkingMemoryItem } from '../../src/store/port/sessions.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../../src/store/working-memory.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';

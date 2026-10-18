@@ -6,7 +6,7 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { clientIpForRateLimit, serve, type ServerHandle } from '../../src/server.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

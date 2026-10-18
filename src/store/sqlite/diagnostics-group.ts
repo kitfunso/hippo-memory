@@ -1,8 +1,8 @@
 import { openHippoDbReadOnly } from '../../db/index.js';
 import { storeHealthAt, storeInventoryAt } from '../diagnostics.js';
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import type { Diagnostics } from '../port/diagnostics.js';
-import { projectTagReads } from '../project-tags.js';
+import { projectTagReads } from './project-tags.js';
 
 export function sqliteDiagnostics(on: OnHandle): Diagnostics {
   return {

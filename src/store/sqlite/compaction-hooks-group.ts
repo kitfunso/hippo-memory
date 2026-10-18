@@ -4,8 +4,8 @@ import {
   recordSnapshotSaved,
   replayStoredCompactions,
   saveCompactionAt,
-} from '../compactions-record.js';
-import type { OnHandle } from '../open.js';
+} from './compactions-record.js';
+import type { OnHandle } from './open.js';
 import type { CompactionHooks } from '../port/compaction-hooks.js';
 
 export function sqliteCompactionHooks(on: OnHandle): CompactionHooks {

@@ -1,15 +1,15 @@
 // hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../util/escape.js';
 import { keysetAfter } from '../../util/keyset.js';
 import { chunked } from '../../util/chunked.js';
 import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../core/memory.js';
-import { scopeAdmitSql } from '../rule-sql.js';
-import { stampOriginProjectIn, upsertEntryRow } from '../entry-row.js';
-import { auditEntryWrite, writeEntryMirrorsIn } from '../entry-writes.js';
-import { markGraphDirtyAt } from '../graph-queue.js';
-import { removeGraphEntitiesForObjectAt } from '../graph-writes.js';
+import { scopeAdmitSql } from './rule-sql.js';
+import { stampOriginProjectIn, upsertEntryRow } from './entry-row.js';
+import { auditEntryWrite, writeEntryMirrorsIn } from './entry-writes.js';
+import { markGraphDirtyAt } from './graph-queue.js';
+import { removeGraphEntitiesForObjectAt } from './graph-writes.js';
 import {
   isObjectRefusal,
   type BriefReceipt,
@@ -21,7 +21,7 @@ import {
   type SavableKind,
   type Skill,
 } from '../../core/object-types.js';
-import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from '../open.js';
+import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from './open.js';
 import { openStore } from './handles.js';
 import type {
   IncidentOpen,

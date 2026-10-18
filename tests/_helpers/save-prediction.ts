@@ -1,7 +1,7 @@
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { loadConfig } from '../../src/core/config.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
-import { writePredictionAt } from '../../src/store/predictions.js';
+import { writePredictionAt } from '../../src/store/sqlite/predictions.js';
 import { predictionMirror } from '../../src/core/prediction.js';
 import type { Prediction, SavePredictionOptions } from '../../src/store/port/predictions.js';
 import { handlesOf, openStore } from '../../src/store/sqlite/handles.js';

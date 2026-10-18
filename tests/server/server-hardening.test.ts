@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey, revokeApiKey } from '../../src/store/auth.js';
+import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { log } from '../../src/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

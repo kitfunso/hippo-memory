@@ -1,13 +1,14 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/capture/extract.js';
 import { loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { gatedWrite } from '../../src/store/gated-write.js';
+import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
 import { createMemory, Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/core/rejection-digest.js';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { openStore, initStore } from '../../src/store/sqlite/handles.js';

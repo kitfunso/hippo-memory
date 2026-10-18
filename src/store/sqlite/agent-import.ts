@@ -10,31 +10,32 @@ import {
   withWriteScope,
   type DatabaseSyncLike,
 } from '../../db/index.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from './audit.js';
 import {
   deleteDormantRow,
   dormantSnapshotsBySourcePrefix,
   readDormantSnapshot,
   replaceDormantEntry,
-} from '../dormant.js';
-import { stampOriginProject } from '../entry-row.js';
-import { entryIdTakenAt, selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../entry-reads.js';
+} from './dormant.js';
+import { stampOriginProject } from './entry-row.js';
+import { entryIdTakenAt, selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from './entry-reads.js';
 import {
   renameEntrySourceAndOriginAt,
   renameEntrySourceAt,
   setEntryTagsInTx,
   supersedeEntryAt,
   writeEntryMirrors,
-} from '../entry-writes.js';
-import { gatedWrite } from '../gated-write.js';
-import { updateStatsAt } from '../index-and-stats.js';
-import { removeEntryMirrors } from '../mirrors.js';
+} from './entry-writes.js';
+import { gatedWrite } from './gated-write.js';
+import { updateStatsAt } from './index-and-stats.js';
+import { removeEntryMirrors } from './mirrors.js';
 import { initStore, onHandle, openBareHandle, openStore } from './handles.js';
-import { projectTagReads } from '../project-tags.js';
-import { findRejectedValue, rejectionDigest } from '../rejection.js';
-import { setAsideRow } from '../set-aside.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
-import { resolveTenantId } from '../tenant.js';
+import { projectTagReads } from './project-tags.js';
+import { findRejectedValue } from './rejection.js';
+import { rejectionDigest } from '../../core/rejection-digest.js';
+import { setAsideRow } from './set-aside.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
+import { resolveTenantId } from './tenant.js';
 import type { AgentImport, ContainerTx, ImportTarget } from '../port/agent-import.js';
 
 function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {

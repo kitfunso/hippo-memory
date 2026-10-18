@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './core/project-identity.js';
-import { resolveTenantId } from './store/tenant.js';
+import { resolveTenantId } from './store/index.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { exitAfterFlush } from './util/crash-handlers.js';

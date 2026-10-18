@@ -12,7 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { finishRecallAt } from '../../src/store/sqlite/last-recall-group.js';
-import { flushStatsMirrors } from '../../src/store/mirrors.js';
+import { flushStatsMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
   pushGoal,

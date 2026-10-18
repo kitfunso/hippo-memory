@@ -13,7 +13,8 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { rebuildDirtySummaries, buildDag } from '../../src/consolidate/dag.js';
 import * as dagModule from '../../src/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
-import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../../src/store/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../src/core/rejection-digest.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';

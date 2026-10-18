@@ -6,7 +6,7 @@ import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompact
 import type { LocalFiles, Sync } from '../store/port.js';
 import type { Sessions } from '../store/port-groups.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { resolveTenantId } from '../store/index.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import {
   readClaudeCodePostCompact,

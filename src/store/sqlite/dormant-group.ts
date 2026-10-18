@@ -4,12 +4,12 @@ import {
   holdsDormantMemoryAt,
   loadDormantMemoriesAt,
   restoreDormantMemoryAt,
-} from '../dormant.js';
-import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
+} from './dormant.js';
+import { updateStatsUnlessBusyAt } from './index-and-stats.js';
 import type { Dormant } from '../port-groups.js';
 import type { Sync } from '../port.js';
-import { touchableScopeSql } from '../rule-sql.js';
-import type { OnHandle } from '../open.js';
+import { touchableScopeSql } from './rule-sql.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 
 export function sqliteDormant(on: OnHandle): Sync<Dormant> {

@@ -1,5 +1,5 @@
 import type { DatabaseSyncLike } from '../db/index.js';
-import { computePredictionBaserateAt } from './predictions.js';
+import { computePredictionBaserateAt } from './sqlite/predictions.js';
 import type { PlanningFallacyEvidence, ClassResolution } from './port/types.js';
 
 /** Resolve a query-token set to a unique best-matching class_tag for the tenant: lower-cased token overlap, best score

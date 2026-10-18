@@ -1,14 +1,14 @@
 // hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its companion rows, in one
 // transaction on one handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { githubEventMemoryAt, markGitHubEventSeenAt } from '../connectors/github.js';
-import { markSlackEventSeenAt, slackEventMemoryAt } from '../connectors/slack.js';
-import type { OnHandle } from '../open.js';
+import { githubEventMemoryAt, markGitHubEventSeenAt } from './connectors/github.js';
+import { markSlackEventSeenAt, slackEventMemoryAt } from './connectors/slack.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites, Sync } from '../port.js';
-import { recordQuarantine } from '../quarantine.js';
-import { stampOriginProjectIn } from '../entry-row.js';
-import { writeEntryMirrorsIn } from '../entry-writes.js';
+import { recordQuarantine } from './quarantine.js';
+import { stampOriginProjectIn } from './entry-row.js';
+import { writeEntryMirrorsIn } from './entry-writes.js';
 import { archiveRawAt, writeInOwnTenant } from './entry-writes-group.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever sees it. */

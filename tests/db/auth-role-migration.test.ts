@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
-import { createApiKey, validateApiKey } from '../../src/store/auth.js';
+import { createApiKey, validateApiKey } from '../../src/store/sqlite/auth.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

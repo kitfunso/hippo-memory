@@ -1,19 +1,19 @@
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent } from './sqlite/audit.js';
 import { withBackup } from '../db/backup.js';
 import { withTrialScope, withWriteScope } from '../db/busy.js';
 import type { DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
-import { dormantSnapshotsByIds, insertDormantRow } from './dormant.js';
+import { dormantSnapshotsByIds, insertDormantRow } from './sqlite/dormant.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../core/memory-audit.js';
-import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './delete-and-batch.js';
-import { loadEntriesPageAt, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './entry-reads.js';
-import { ftsRowExists } from './entry-row.js';
-import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
-import { purgeMirrorBestEffort } from './mirrors.js';
-import type { StoreFiles } from './open.js';
+import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './sqlite/delete-and-batch.js';
+import { loadEntriesPageAt, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './sqlite/entry-reads.js';
+import { ftsRowExists } from './sqlite/entry-row.js';
+import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './sqlite/rows.js';
+import { purgeMirrorBestEffort } from './sqlite/mirrors.js';
+import type { StoreFiles } from './sqlite/open.js';
 import type { EntryCursor } from './port/consolidation.js';
 import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from './port/audit-maintenance.js';
 

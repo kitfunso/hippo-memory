@@ -1,13 +1,13 @@
 // A store other than hippo.db for the Quarantine group: it copies memories and memory_quarantine out of hippo.db once, then keeps
 // both in memory and decides from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
-import { createApiKey } from '../../src/store/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { recordQuarantine } from '../../src/store/quarantine.js';
+import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
-import { selectEntriesByIds } from '../../src/store/entry-reads.js';
+import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import type { Quarantine, QuarantineRefusal, QuarantinedMemory } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';

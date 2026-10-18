@@ -6,10 +6,10 @@ import {
   loadNeighborRelationsAt,
   loadStoredGraphAt,
   withGraphReadSnapshotAt,
-} from '../graph-reads.js';
+} from './graph-reads.js';
 import { graphViewRows } from '../graph-view-rows.js';
 import type { GraphReads, Sync } from '../port.js';
-import { type OnHandle } from '../open.js';
+import { type OnHandle } from './open.js';
 
 export function sqliteGraphReads(on: OnHandle): Sync<GraphReads> {
   return {

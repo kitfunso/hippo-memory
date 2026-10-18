@@ -16,7 +16,7 @@ import { FAKE_NOW, freshStore, SESSION, TENANT } from '../_helpers/recall-golden
 import { cleanups, holdWriteLock, mirrorFiles, onDb, patientStore, undoAll } from '../_helpers/store-worker-server.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
-import { insertDormantRow } from '../../src/store/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
 import { rejectValue } from '../../src/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';

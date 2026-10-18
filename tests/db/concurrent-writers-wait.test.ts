@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/core/memory.js';
-import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { distUrl, withDb } from '../_helpers/agent-memories-world.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 

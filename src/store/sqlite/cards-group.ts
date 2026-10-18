@@ -15,7 +15,7 @@ import {
 } from '../cards.js';
 import type { Cards } from '../port-groups.js';
 import type { Sync } from '../port.js';
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 
 export function sqliteCards(on: OnHandle): Sync<Cards> {

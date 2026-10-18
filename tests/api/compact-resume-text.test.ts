@@ -10,7 +10,7 @@ import { preCompactForCaller } from '../../src/server.js';
 import type { TaskSnapshot } from '../../src/store/port/sessions.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
 import { truncateCodePointSafe } from '../../src/util/transcript-tail.js';
-import { resolveTenantId } from '../../src/store/tenant.js';
+import { resolveTenantId } from '../../src/store/sqlite/tenant.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
 import { initStore } from '../../src/store/sqlite/handles.js';

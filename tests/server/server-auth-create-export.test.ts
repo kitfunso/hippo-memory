@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { authCreate, type Context } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
-import { validateApiKey } from '../../src/store/auth.js';
+import { validateApiKey } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';

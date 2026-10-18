@@ -1,11 +1,12 @@
 import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { assertTenantId } from '../core/tenant-id.js';
-import { findRejectedValue, rejectionDigest } from './rejection.js';
+import { findRejectedValue } from './sqlite/rejection.js';
+import { rejectionDigest } from '../core/rejection-digest.js';
 import { log } from '../util/log.js';
-import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
-import { audit } from './audit-event.js';
-import { syncFtsRow } from './entry-row.js';
+import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './sqlite/rows.js';
+import { audit } from './sqlite/audit-event.js';
+import { syncFtsRow } from './sqlite/entry-row.js';
 import { chunked } from '../util/chunked.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 import { placeholders } from '../util/sql.js';

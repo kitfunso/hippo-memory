@@ -1,33 +1,33 @@
 // hippo.db's half of the EntryWrites store group: the queries remember, outcome, supersede, archive and forget run
 // today.
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
-import { appendAuditEvent, appendAuditEventsAt } from '../audit.js';
+import { appendAuditEvent, appendAuditEventsAt } from './audit.js';
 import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
-import { archiveRawMemory, type ArchiveOptions } from '../raw-archive.js';
+import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { ownScopeTouches } from '../../core/recall-scope.js';
-import { recordTraceOutcome } from '../recall-trace.js';
+import { recordTraceOutcome } from './recall-trace.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
 import type { PinWrite } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import { markSummariesDirtyInTx, markSummaryDirtyInTx, summaryDirtyAuditRow } from '../summary-dirty.js';
-import { auditRejectionRefusal } from '../audit-event.js';
-import { deleteEntryCore } from '../delete-and-batch.js';
-import { selectEntriesByIds } from '../entry-reads.js';
+import { markSummariesDirtyInTx, markSummaryDirtyInTx, summaryDirtyAuditRow } from './summary-dirty.js';
+import { auditRejectionRefusal } from './audit-event.js';
+import { deleteEntryCore } from './delete-and-batch.js';
+import { selectEntriesByIds } from './entry-reads.js';
 import {
   rememberAuditMetadata,
   writeEntryDbOnly,
   writeEntryMirrorsIn,
   type WriteEntryInternalOptions,
-} from '../entry-writes.js';
-import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
-import type { OnHandle, StoreFiles } from '../open.js';
+} from './entry-writes.js';
+import { updateStatsUnlessBusyAt } from './index-and-stats.js';
+import type { OnHandle, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
-import { purgeMirrorBestEffortIn, removeEntryMirrorsIn, writeMarkdownMirrors } from '../mirrors.js';
-import { replaceFtsRows, stampOriginProjectIn, updateMemoryRows } from '../entry-row.js';
-import { selectMemoryReach } from '../tenant-lookup.js';
+import { purgeMirrorBestEffortIn, removeEntryMirrorsIn, writeMarkdownMirrors } from './mirrors.js';
+import { replaceFtsRows, stampOriginProjectIn, updateMemoryRows } from './entry-row.js';
+import { selectMemoryReach } from './tenant-lookup.js';
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves
  * neither. */

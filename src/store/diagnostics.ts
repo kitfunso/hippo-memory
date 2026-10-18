@@ -4,7 +4,7 @@ import { listTableNames } from '../db/tables.js';
 import { errorMessage } from '../util/log.js';
 import { compactionCountsAt, tokenTallySince } from './doctor-reads.js';
 import { countFailuresSince } from './failure-log.js';
-import { lastConsolidationAt } from './index-and-stats.js';
+import { lastConsolidationAt } from './sqlite/index-and-stats.js';
 import type { JsonObject } from './port/types.js';
 import type { Attempt, HealthCutoffs, StoreHealth, StoreInventory } from './port/diagnostics.js';
 

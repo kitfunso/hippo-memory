@@ -6,10 +6,10 @@ import { tableExists } from '../db/tables.js';
 import type { Layer, MemoryKind } from '../core/memory.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import { MAX_LIST_LIMIT } from '../util/limits.js';
-import { conflictPageAt } from './conflicts.js';
+import { conflictPageAt } from './sqlite/conflicts.js';
 import type { DashboardRow, DashboardScan, DashboardText, ExcludedCounts } from './port/dashboard-reads.js';
-import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
-import { type MemoryRow, parseJsonArray } from './rows.js';
+import { QUARANTINE_SCOPE_PREFIX } from './sqlite/quarantine.js';
+import { type MemoryRow, parseJsonArray } from './sqlite/rows.js';
 
 const PAGE_ROWS = 1000;
 // One past the list's 240-character cut, so the cut and its truncated flag come out as they would on the whole text.

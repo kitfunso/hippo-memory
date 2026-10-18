@@ -1,8 +1,8 @@
-import { confirmedOutcomeTimesAt } from '../audit.js';
-import { loadCurrentEntriesFromOriginsAt, loadEntriesMentioningAt, readEntryAt } from '../entry-reads.js';
-import { addTagToEntriesAt, writeEntriesTogetherAt, writeEntryAt } from '../entry-writes.js';
+import { confirmedOutcomeTimesAt } from './audit.js';
+import { loadCurrentEntriesFromOriginsAt, loadEntriesMentioningAt, readEntryAt } from './entry-reads.js';
+import { addTagToEntriesAt, writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
 import type { Learning } from '../port/learning.js';
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 
 /** The learn passes' store work on its hippo.db, each call on its own short-lived handle. */

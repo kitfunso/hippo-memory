@@ -1,6 +1,6 @@
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { localGoalRecallRows } from '../../src/store/goals.js';
+import { localGoalRecallRows } from '../../src/store/sqlite/goals.js';
 import { boostByGoals, type GoalStackBoost, type GoalStackBoostOptions } from '../../src/search/goal-boost.js';
 import { activeGoalsWithPolicies } from './root-forms.js';
 

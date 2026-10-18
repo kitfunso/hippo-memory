@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
 import type { DeliveryEventInput } from '../../src/core/delivery.js';
-import { writeDeliveryEventOnHandle } from '../../src/store/recall-trace.js';
+import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/recall-trace.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import type { JsonValue } from '../../src/util/json.js';

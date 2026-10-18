@@ -1,27 +1,27 @@
 import { SLEEP_DB_WAIT_MS } from '../../db/index.js';
-import { recordAuditEventsRowByRowAt } from '../audit.js';
+import { recordAuditEventsRowByRowAt } from './audit.js';
 import { reportAuditWriteFailure } from '../../core/audit-report.js';
-import { replaceDetectedConflictsAt } from '../conflicts.js';
+import { replaceDetectedConflictsAt } from './conflicts.js';
 import {
   commitInChunksAt,
   deleteEntriesOneByOneAt,
   failedUnitOf,
   memoriesBackingObjectsAt,
-} from '../delete-and-batch.js';
-import { expireDormantBeforeAt } from '../dormant.js';
+} from './delete-and-batch.js';
+import { expireDormantBeforeAt } from './dormant.js';
 import {
   loadAllEntryIdsAt,
   loadCurrentDistilledEntriesAt,
   loadEntriesPageAt,
   selectEntriesByIds,
-} from '../entry-reads.js';
-import { ftsDriftAt } from '../entry-row.js';
-import { writeEntriesTogetherAt, writeEntryAt } from '../entry-writes.js';
-import { loadPendingExtractionTenantsAt, markPendingProcessedUpToAt } from '../graph-queue.js';
+} from './entry-reads.js';
+import { ftsDriftAt } from './entry-row.js';
+import { writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
+import { loadPendingExtractionTenantsAt, markPendingProcessedUpToAt } from './graph-queue.js';
 import { moveHalfLivesAt, recordedHalfLifeBaseAt } from '../half-life.js';
-import { appendConsolidationRunAt, incrementSleepCountAt, loadSessionDecayContextAt } from '../index-and-stats.js';
+import { appendConsolidationRunAt, incrementSleepCountAt, loadSessionDecayContextAt } from './index-and-stats.js';
 import type { Consolidation } from '../port/consolidation.js';
-import { findPromotableSessionsAt, listSessionEventsAt, traceExistsForSessionAt } from '../sessions.js';
+import { findPromotableSessionsAt, listSessionEventsAt, traceExistsForSessionAt } from './sessions.js';
 import {
   applyRebuildResultAt,
   childrenKey,
@@ -32,9 +32,9 @@ import {
   loadChildrenOfSummaryAt,
 } from '../summaries.js';
 import { lazyTombstoneChecks } from '../tombstone-checks.js';
-import { saveStoredParticlesAt, storedParticleIdsAt, storedParticlesByIdsAt } from '../vector-index.js';
+import { saveStoredParticlesAt, storedParticleIdsAt, storedParticlesByIdsAt } from './vector-index.js';
 import { errorMessage } from '../../util/log.js';
-import { type Handles, type OnHandle, waitingOpener } from '../open.js';
+import { type Handles, type OnHandle, waitingOpener } from './open.js';
 import { openStore } from './handles.js';
 
 /** Sleep's store work on its hippo.db, each call on its own short-lived handle. */

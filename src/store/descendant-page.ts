@@ -1,10 +1,10 @@
 // A summary's descendants read as a page: every level is counted, and only the rows the caller shows are read whole.
 import type { DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { selectEntriesByIds, TENANT_IS } from './entry-reads.js';
+import { selectEntriesByIds, TENANT_IS } from './sqlite/entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import type { DescendantOrigin, SummaryDescendants } from './port.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './sqlite/rows.js';
 import { placeholders } from '../util/sql.js';
 
 export interface PagedWalk {

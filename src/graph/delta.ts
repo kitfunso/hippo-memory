@@ -1,8 +1,7 @@
 // Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its
 // relations hang on.
 import type { GraphReads } from '../store/port.js';
-import type { DesiredGraph } from '../store/graph-rows.js';
-import type { DesiredEntity, DesiredRelation, GraphOp, NaturalKey } from '../store/port/graph-rebuild.js';
+import type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey } from '../store/port/graph-rebuild.js';
 import type { StoredEntity, StoredGraph, StoredRelation } from '../store/port/graph-reads.js';
 
 export type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey };

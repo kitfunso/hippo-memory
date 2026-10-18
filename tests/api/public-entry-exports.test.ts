@@ -107,8 +107,24 @@ describe('package entry re-exports sleep', () => {
   });
 });
 
-/** What an eval seeds a store folder with, reads it back by and scores against; the rest of the entry is reset seams. */
-const EVAL_KIT = ['ambientSecretAdmit', 'initStore', 'loadAllEntries', 'loadEmbeddingIndex', 'writeEntry'];
+/** What an eval or benchmark seeds a store with, reads it back by and scores against; the rest of the entry is reset
+ * seams. */
+const EVAL_KIT = [
+  'ambientSecretAdmit',
+  'buildIndexFromDb',
+  'initStore',
+  'loadAllEntries',
+  'loadEmbeddingIndex',
+  'loadVectorCandidateEntriesAt',
+  'recordTokenUse',
+  'resolveTenantId',
+  'tokensBySession',
+  'upsertEntryRow',
+  'writeDeliveryEventOnHandle',
+  'writeEntry',
+  'writeEntryDbOnly',
+  'writeIndexMirror',
+];
 
 // The test seams live on their own subpath; a seam leaking back into /server or the root would ship test hooks to production callers.
 describe('hippo-memory/testing', () => {
@@ -252,9 +268,13 @@ describe('published runtime exports', () => {
       tallyAmbientEntries",
         "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests
       ambientSecretAdmit
+      buildIndexFromDb
       initStore
-      loadAllEntries loadEmbeddingIndex
-      writeEntry",
+      loadAllEntries loadEmbeddingIndex loadVectorCandidateEntriesAt
+      recordTokenUse resolveTenantId
+      tokensBySession
+      upsertEntryRow
+      writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeIndexMirror",
       }
     `);
   });

@@ -6,7 +6,7 @@ import { isJsonObject, type JsonValue } from '../../src/util/json.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { embedMemory } from '../../src/search/embed-memories.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
-import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveStoredVectors, batchWriteAndDelete } from '../_helpers/root-forms.js';

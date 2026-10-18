@@ -2,11 +2,11 @@
 // it runs every other method to its end.
 import { loadPhysicsState } from '../../db/physics-state.js';
 import type { VectorIndex } from '../../db/vector-store.js';
-import type { Handles } from '../open.js';
+import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 import type { VectorReads } from '../port.js';
-import { loadVectorCandidateEntriesAt } from '../search-rows.js';
-import { loadStoredVectorsAt, storedIndexStateAt } from '../vector-index.js';
+import { loadVectorCandidateEntriesAt } from './search-rows.js';
+import { loadStoredVectorsAt, storedIndexStateAt } from './vector-index.js';
 
 /** `index` is the store worker's vector graph, on the one reader thread that holds it. */
 export function sqliteVectorReads({ on, onAsync }: Handles, index?: VectorIndex): VectorReads {

@@ -8,8 +8,8 @@ import {
   loadSessionRawMemoriesAt,
   selectChildrenByParent,
   selectEntriesByIds,
-} from '../entry-reads.js';
-import type { OnHandle } from '../open.js';
+} from './entry-reads.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import type { DagReads, DescendantOrigin, DescendantWalk, SummaryDescendants, Sync } from '../port.js';
 

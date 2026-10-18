@@ -1,10 +1,10 @@
 // hippo.db's half of the KeyAudit store group.
 import { NotFoundError } from '../core/api-errors.js';
-import { appendAuditEvent } from './audit.js';
-import { revokeApiKey } from './auth.js';
+import { appendAuditEvent } from './sqlite/audit.js';
+import { revokeApiKey } from './sqlite/auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { KeyRevoke } from './port.js';
-import { selectApiKeyOwner } from './tenant-lookup.js';
+import { selectApiKeyOwner } from './sqlite/tenant-lookup.js';
 
 /** The revoke and its audit row commit together, so a failed audit write leaves the key live and the caller sees the
  * error. */

@@ -1,20 +1,20 @@
 // The built-in SQLite adapter behind the store port.
-import { loadAmbientTalliesAt } from '../ambient.js';
+import { loadAmbientTalliesAt } from './ambient.js';
 import { ambientRefusal } from '../../core/read-admission.js';
-import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
+import { listApiKeyRows, readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
-import { appendAuditEventsAt, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
+import { appendAuditEventsAt, listAuditEventsAfter, queryAuditEvents } from './audit.js';
 import { getHippoDbPath } from '../../db/index.js';
-import { activeGoalsWithPoliciesAt } from '../goals.js';
+import { activeGoalsWithPoliciesAt } from './goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
-import { recordTokenUse } from '../token-ledger.js';
-import { loadAmbientCandidatesAt, loadContextCandidatesAt, newestEntriesAt, schemaFitAt } from '../candidates.js';
+import { recordTokenUse } from './token-ledger.js';
+import { loadAmbientCandidatesAt, loadContextCandidatesAt, newestEntriesAt, schemaFitAt } from './candidates.js';
 import {
   liveContentsBySourceAndTagAt,
   loadEntriesByIdsAt,
   loadFreshRawMemoriesAt,
   rawRowsUnderRefAt,
-} from '../entry-reads.js';
+} from './entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { sqliteCaptures } from './captures-group.js';
 import { sqliteCompactionHooks } from './compaction-hooks-group.js';
@@ -48,12 +48,12 @@ import { sqliteObjects } from './objects-group.js';
 import { sqlitePredictions } from './predictions-group.js';
 import { sqliteQuarantine } from './quarantine-group.js';
 import { sqliteVectorReads } from './vector-reads-group.js';
-import { loadLatestHandoffAt } from '../handoffs.js';
-import { updateStatsAt } from '../index-and-stats.js';
-import { flushStatsMirrors } from '../mirrors.js';
+import { loadLatestHandoffAt } from './handoffs.js';
+import { updateStatsAt } from './index-and-stats.js';
+import { flushStatsMirrors } from './mirrors.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
-import type { Handles, OnHandle } from '../open.js';
+import type { Handles, OnHandle } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import {
   type AuditLog,
@@ -91,9 +91,9 @@ import type { LocalFiles } from '../port/local-files.js';
 import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
-import { loadRecallEntriesAt } from '../search-rows.js';
-import { listSessionEventsAt, loadActiveTaskSnapshotAt } from '../sessions.js';
-import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from '../vector-index.js';
+import { loadRecallEntriesAt } from './search-rows.js';
+import { listSessionEventsAt, loadActiveTaskSnapshotAt } from './sessions.js';
+import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
 
 /** Not on the synchronous store: the nearest-row scan yields to

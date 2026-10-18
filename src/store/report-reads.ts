@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
 import type { DatabaseSyncLike } from '../db/index.js';
-import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
+import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './sqlite/rows.js';
 
 /** Every superseded row, the row that replaced it and that row's extraction source, in loadAllEntries' order: all a
  * correction-latency report reads. */

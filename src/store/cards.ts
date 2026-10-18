@@ -10,7 +10,7 @@ import {
 import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../core/card.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { chunked } from '../util/chunked.js';
-import { HANDOFF_COLUMNS } from './handoffs.js';
+import { HANDOFF_COLUMNS } from './sqlite/handoffs.js';
 import { placeholders } from '../util/sql.js';
 
 interface CardRow {

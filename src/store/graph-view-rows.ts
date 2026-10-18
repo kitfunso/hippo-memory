@@ -8,7 +8,7 @@ import {
   loadNeighborRelationsAt,
   loadRelationsAt,
   loadRelationsAmongAt,
-} from './graph-reads.js';
+} from './sqlite/graph-reads.js';
 import type { GraphRows } from './port.js';
 import { placeholders } from '../util/sql.js';
 

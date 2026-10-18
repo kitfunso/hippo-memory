@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
-import { scopeAdmitSql } from '../../src/store/rule-sql.js';
+import { scopeAdmitSql } from '../../src/store/sqlite/rule-sql.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';

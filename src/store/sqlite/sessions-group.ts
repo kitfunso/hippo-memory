@@ -5,7 +5,7 @@ import {
   saveSessionHandoffAt,
   stampHandoffOutcomeAt,
   writeSessionEndHandoffAt,
-} from '../handoffs.js';
+} from './handoffs.js';
 import type { Sessions } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import {
@@ -17,9 +17,9 @@ import {
   loadFreshActiveTaskSnapshotAt,
   saveActiveTaskSnapshotAt,
   sessionOwnerOrBindAt,
-} from '../sessions.js';
+} from './sessions.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../working-memory.js';
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 
 export function sqliteSessions(on: OnHandle): Sync<Sessions> {

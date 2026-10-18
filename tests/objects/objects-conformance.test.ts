@@ -2,7 +2,7 @@
 // and on hippo.db a write whose audit row fails keeps nothing.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, rmSync } from 'node:fs';
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { objectMirror } from '../../src/objects/lifecycle.js';

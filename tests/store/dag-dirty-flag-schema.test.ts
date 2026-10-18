@@ -9,10 +9,10 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { markSummaryDirtyInTx } from '../../src/store/summary-dirty.js';
+import { markSummaryDirtyInTx } from '../../src/store/sqlite/summary-dirty.js';
 import { openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
 

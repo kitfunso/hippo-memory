@@ -1,7 +1,7 @@
 // A caller's compaction items on hippo.db, for the Compactions group.
 import type { DatabaseSyncLike } from '../db/index.js';
-import type { StoreFiles } from './open.js';
-import { compactionByRequest, recordSummary, saveItems } from './compactions-record.js';
+import type { StoreFiles } from './sqlite/open.js';
+import { compactionByRequest, recordSummary, saveItems } from './sqlite/compactions-record.js';
 import type { Log } from './port/compaction-hooks.js';
 import type { CallerItems } from './port/compactions.js';
 

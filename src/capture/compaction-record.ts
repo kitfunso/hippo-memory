@@ -12,7 +12,7 @@ import type {
 } from '../store/port/compaction-hooks.js';
 import type { FolderFiles } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { resolveTenantId } from '../store/index.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';

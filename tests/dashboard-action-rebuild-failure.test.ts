@@ -1,7 +1,7 @@
 // A dashboard write that committed answers 200 even when the next snapshot rebuild would fail; the next read is where it surfaces.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as conflicts from '../src/store/conflicts.js';
+import * as conflicts from '../src/store/sqlite/conflicts.js';
 import { readEntry } from './_helpers/root-forms.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import {

@@ -28,6 +28,11 @@ export interface DesiredEntity extends NaturalKey {
   readonly memoryId: string | null;
 }
 
+export interface DesiredGraph {
+  readonly entities: readonly DesiredEntity[];
+  readonly relations: readonly DesiredRelation[];
+}
+
 export interface DesiredRelation {
   readonly from: NaturalKey;
   readonly to: NaturalKey;

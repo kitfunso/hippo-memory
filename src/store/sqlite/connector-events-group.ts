@@ -10,7 +10,7 @@ import {
   markGitHubEventSeenAt,
   saveGitHubHwmAt,
   seedGitHubCursorsAt,
-} from '../connectors/github.js';
+} from './connectors/github.js';
 import {
   listSlackWorkspacesAt,
   markSlackEventSeenAt,
@@ -23,8 +23,8 @@ import {
   slackTeamRouteAt,
   SLACK_DLQ,
   upsertSlackWorkspaceAt,
-} from '../connectors/slack.js';
-import type { OnHandle } from '../open.js';
+} from './connectors/slack.js';
+import type { OnHandle } from './open.js';
 import type {
   ArtifactArchive,
   ConnectorEvent,

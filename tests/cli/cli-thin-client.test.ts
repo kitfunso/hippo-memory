@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { boundPort } from '../_helpers/listen.js';
 import { waitFor } from '../_helpers/wait-for.js';

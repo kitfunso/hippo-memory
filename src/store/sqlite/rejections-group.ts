@@ -1,11 +1,11 @@
 // hippo.db's half of the Rejections store group: each call on a handle of its own.
 import { RejectedValueError } from '../../core/api-errors.js';
-import type { OnHandle } from '../open.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import type { Rejections } from '../port/rejections.js';
 import type { Sync } from '../port.js';
 import { applyRejectionAt, liftRejectionAt } from '../rejected-values.js';
-import { checkRejectionGuard, listRejectedValues } from '../rejection.js';
+import { checkRejectionGuard, listRejectedValues } from './rejection.js';
 
 export function sqliteRejections(on: OnHandle): Sync<Rejections> {
   return {

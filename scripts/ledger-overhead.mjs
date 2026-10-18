@@ -30,11 +30,11 @@ const { loadConfig } = await load('core/config.js');
 const { resolveProjectIdentity } = await load('core/project-identity.js');
 const { contextCost } = await load('api/context-render.js');
 const { createDeliveryRecorder } = await load('api/delivery-recorder.js');
-const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
+const { writeDeliveryEventOnHandle } = await load('entry/testing.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { blockHash } = await load('util/token-text.js');
 const { realpathOrResolve } = await load('util/real-path.js');
-const { recordTokenUse } = await load('store/token-ledger.js');
+const { recordTokenUse } = await load('entry/testing.js');
 
 // Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.
 const WORDS = [

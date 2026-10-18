@@ -1,5 +1,5 @@
 // The built-in store's sharing reads and writes: the existing functions, bound to this store.
-import { tallySourcesAt } from '../candidates.js';
+import { tallySourcesAt } from './candidates.js';
 import {
   loadEntriesByIdsAt,
   loadEntriesPageAt,
@@ -7,12 +7,12 @@ import {
   loadEntryTextKeysPageAt,
   selectTakenIdsAt,
   selectTextKeysHoldingAt,
-} from '../entry-reads.js';
-import { writeEntriesSkippingRejectedAt } from '../entry-writes.js';
-import type { OnHandle } from '../open.js';
+} from './entry-reads.js';
+import { writeEntriesSkippingRejectedAt } from './entry-writes.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import type { Sharing } from '../port/sharing.js';
-import { loadRecallEntriesAt, loadSearchEntriesAt } from '../search-rows.js';
+import { loadRecallEntriesAt, loadSearchEntriesAt } from './search-rows.js';
 
 export function sqliteSharing(on: OnHandle): Sharing {
   return {

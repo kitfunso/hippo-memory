@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { SqliteBlockedError, withSqliteBlocked } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { recordMcpTokens } from '../../src/mcp/request.js';
-import { embeddingModelRequiresReindex } from '../../src/store/vector-index.js';
+import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vector-index.js';
 import { resolveVectorArm } from '../../src/search/vector.js';
 import { sqliteStore } from '../../src/store/index.js';
 import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';

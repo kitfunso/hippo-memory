@@ -14,7 +14,7 @@ import {
 import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { ensurePilotArm, readPilotArm } from '../../src/store/pilot-arm.js';
 import { hashArm } from '../../src/core/pilot-arm.js';
-import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/token-ledger.js';
+import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/util/json.js';

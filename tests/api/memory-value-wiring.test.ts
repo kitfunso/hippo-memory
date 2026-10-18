@@ -25,7 +25,7 @@ import {
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import {
   computeMvFeatures,
   MV_FEATURE_NAMES,

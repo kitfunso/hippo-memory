@@ -2,9 +2,9 @@
 import * as fs from 'fs';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../../db/index.js';
 import { pragmaDataVersion } from '../../db/meta.js';
-import { openConflictsNamingAt } from '../conflicts.js';
+import { openConflictsNamingAt } from './conflicts.js';
 import { hasVectorAt, scanAt, scanTextAt } from '../dashboard-reads.js';
-import type { Handles } from '../open.js';
+import type { Handles } from './open.js';
 import type { DashboardReads } from '../port/dashboard-reads.js';
 import { openStore } from './handles.js';
 

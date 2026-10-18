@@ -31,7 +31,7 @@ describe('hippo-memory/testing entry types', () => {
     >();
   });
 
-  it('the entry exports exactly the nine published seams and the five eval-kit functions', () => {
+  it('the entry exports exactly the nine published seams, the five eval-kit functions and nine handle helpers', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
       | '_resetAblationCacheForTests'
       | '_setDigestExistsProbeForTests'
@@ -47,7 +47,16 @@ describe('hippo-memory/testing entry types', () => {
       | 'loadAllEntries'
       | 'loadEmbeddingIndex'
       | 'writeEntry'
+      | 'resolveTenantId'
+      | 'upsertEntryRow'
+      | 'writeEntryDbOnly'
+      | 'buildIndexFromDb'
+      | 'writeIndexMirror'
+      | 'loadVectorCandidateEntriesAt'
+      | 'writeDeliveryEventOnHandle'
+      | 'recordTokenUse'
+      | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(14);
+    expect(Object.keys(testing)).toHaveLength(23);
   });
 });

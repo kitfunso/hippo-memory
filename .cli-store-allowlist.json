@@ -1,7 +1,7 @@
 [
   {
     "file": "cli.ts",
-    "target": "store/tenant.ts",
+    "target": "store/index.ts",
     "why": "dispatch resolves the tenant once and hands it to every verb in CommandContext"
   },
   {

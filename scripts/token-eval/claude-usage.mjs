@@ -32,7 +32,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { openHippoDb, closeHippoDb } from '../../dist/db/index.js';
-import { tokensBySession } from '../../dist/store/token-ledger.js';
+import { tokensBySession } from '../../dist/entry/testing.js';
 import { getGlobalRoot } from '../../dist/sharing/global-store.js';
 import { isInitialized } from '../../dist/core/project-identity.js';
 import { priceUsage, uncachedEquivalentInput } from '../../dist/eval/eval-stats.js';

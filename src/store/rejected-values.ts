@@ -4,28 +4,23 @@
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { heldTexts } from '../util/same-text.js';
-import { audit } from './audit-event.js';
-import { deleteEntryCore } from './delete-and-batch.js';
+import { audit } from './sqlite/audit-event.js';
+import { deleteEntryCore } from './sqlite/delete-and-batch.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
   dormantTextsByIds,
   dormantTextsPage,
   replaceDormantEntry,
-} from './dormant.js';
-import { entryRejectRowAt, selectEntriesByIds, selectTenantTextsPage } from './entry-reads.js';
-import { stampOriginProject } from './entry-row.js';
-import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
-import { purgeMirrorBestEffort } from './mirrors.js';
-import type { StoreFiles } from './open.js';
-import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
-import {
-  deleteRejectedValue,
-  insertRejectedValue,
-  listRejectedValues,
-  normalizeValueForRejection,
-  rejectionDigest,
-} from './rejection.js';
+} from './sqlite/dormant.js';
+import { entryRejectRowAt, selectEntriesByIds, selectTenantTextsPage } from './sqlite/entry-reads.js';
+import { stampOriginProject } from './sqlite/entry-row.js';
+import { writeEntryDbOnly, writeEntryMirrors } from './sqlite/entry-writes.js';
+import { purgeMirrorBestEffort } from './sqlite/mirrors.js';
+import type { StoreFiles } from './sqlite/open.js';
+import { archiveRawMemory, markMirrorCleaned } from './sqlite/raw-archive.js';
+import { deleteRejectedValue, insertRejectedValue, listRejectedValues } from './sqlite/rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../core/rejection-digest.js';
 import type { EntryCursor } from './port/consolidation.js';
 import type { AppliedRejection, HoldsValue, LiftedRejection, Rejection } from './port/rejections.js';
 

@@ -12,7 +12,7 @@ import { savePolicy } from '../../src/objects/policies.js';
 import { saveProcess } from '../../src/objects/processes.js';
 import { saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { saveSkill } from '../../src/objects/skills.js';
-import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/open.js';
+import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';

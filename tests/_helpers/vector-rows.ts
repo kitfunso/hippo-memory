@@ -1,7 +1,7 @@
 // Memories with stored vectors, written in one transaction through the store's own row writers, and seeded vectors.
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { createMemory } from './default-half-life-memory.js';
 
 export interface VectorRowSeed {

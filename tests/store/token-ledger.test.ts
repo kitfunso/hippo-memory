@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { recordTokenUse, lastSentState, summarizeTokenUse } from '../../src/store/token-ledger.js';
+import { recordTokenUse, lastSentState, summarizeTokenUse } from '../../src/store/sqlite/token-ledger.js';
 import { shouldSkipUnchanged } from '../../src/core/skip-unchanged.js';
 import { hookPayloadSessionId } from '../../src/util/hook-payload.js';
 import { blockHash } from '../../src/util/token-text.js';

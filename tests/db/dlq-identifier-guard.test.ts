@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { dlqAccess, type DlqColumn, type DlqTable } from '../../src/store/connectors/dlq.js';
+import { dlqAccess, type DlqColumn, type DlqTable } from '../../src/store/sqlite/connectors/dlq.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 type Row = Record<string, string | number | null>;

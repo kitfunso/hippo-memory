@@ -45,9 +45,6 @@ const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHolders
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
 const DB_DEFINITION_FILES = {
-  'src/store/rows.ts': 'row shapes and column lists of hippo.db',
-  'src/store/graph-rows.ts': 'graph row shapes of hippo.db',
-  'src/store/rule-sql.ts': 'SQL text that other store files run',
   'src/store/port.ts': 'the store port every backend implements',
   'src/store/port/': 'store port groups kept apart from port.ts',
   'src/store/port-groups.ts': 'the session and admin groups of the store port',

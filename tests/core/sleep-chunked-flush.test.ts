@@ -13,9 +13,9 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
 import { runConsolidation } from '../../src/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
-import { upsertEntryRow } from '../../src/store/entry-row.js';
+import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { mergedText } from '../../src/util/same-text.js';
-import { queryAuditEvents } from '../../src/store/audit.js';
+import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import {
   closeHippoDb,

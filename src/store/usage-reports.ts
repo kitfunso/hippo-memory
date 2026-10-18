@@ -3,7 +3,7 @@
 // import cycle.
 
 import type { DatabaseSyncLike } from '../db/index.js';
-import { summarizeTokenUse } from './token-ledger.js';
+import { summarizeTokenUse } from './sqlite/token-ledger.js';
 import type { TokenSummary } from './port/token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
 import type { FailureSummary } from './port/failure-log.js';

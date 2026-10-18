@@ -1,5 +1,5 @@
 // hippo.db's EmbeddingIndex. The model checks take the opener, since an unreadable index there reads as none.
-import { countAllEntriesAt, loadAllEntryIdsAt, loadEntriesByIdsAt } from '../entry-reads.js';
+import { countAllEntriesAt, loadAllEntryIdsAt, loadEntriesByIdsAt } from './entry-reads.js';
 import type { EmbeddingIndex } from '../port/embedding-index.js';
 import {
   embeddingModelRequiresReindex,
@@ -13,8 +13,8 @@ import {
   saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
-} from '../vector-index.js';
-import type { OnHandle } from '../open.js';
+} from './vector-index.js';
+import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 
 export function sqliteEmbeddingIndex(on: OnHandle): EmbeddingIndex {

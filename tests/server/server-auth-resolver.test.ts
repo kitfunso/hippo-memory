@@ -20,10 +20,10 @@ import {
   type ServeOpts,
   type Context,
 } from '../../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js';
-import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
