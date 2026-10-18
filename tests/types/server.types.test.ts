@@ -3,8 +3,17 @@
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  BadRequestError, ConflictError, ForbiddenError, HttpError, NotFoundError, isReservedActor, serve,
-  type Context, type HippoStore, type ServeOpts, type ServerHandle,
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  HttpError,
+  NotFoundError,
+  isReservedActor,
+  serve,
+  type Context,
+  type HippoStore,
+  type ServeOpts,
+  type ServerHandle,
 } from '../../src/server.js';
 import type { HippoConfig } from '../../src/entry/store-kit.js';
 

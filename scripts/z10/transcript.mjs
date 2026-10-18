@@ -1,7 +1,14 @@
 // The Claude Code transcript contract the delivery reader joins on: which lines are prompts, which hooks fired under them, and which turn row owns which prompt.
 
 const FIRING = ['task-notification', 'cross-session-message', 'agent-message'];
-const QUIET = ['command-name', 'local-command-stdout', 'local-command-caveat', 'bash-input', 'bash-stdout', 'bash-stderr'];
+const QUIET = [
+  'command-name',
+  'local-command-stdout',
+  'local-command-caveat',
+  'bash-input',
+  'bash-stdout',
+  'bash-stderr',
+];
 
 // String(v) === v holds only for a string primitive, which a JSON line's text always is.
 export const isText = (v) => String(v) === v;
@@ -50,13 +57,42 @@ export function parseTranscript(text, session) {
       compactions.push({ pos });
     } else if (line.type === 'user' && !line.isMeta && !line.isCompactSummary) {
       const body = promptBody(line.message?.content);
-      if (body) candidates.push({ index: candidates.length, pos, kind: kindOf(body.text), image: body.image, text: body.text, attachments: [], fired: false, queued: false });
+      if (body) {
+        candidates.push({
+          index: candidates.length,
+          pos,
+          kind: kindOf(body.text),
+          image: body.image,
+          text: body.text,
+          attachments: [],
+          fired: false,
+          queued: false,
+        });
+      }
     } else if (line.type === 'attachment' && line.attachment?.type === 'queued_command') {
       const body = promptBody(line.attachment.prompt);
       const mode = line.attachment.commandMode;
-      const kind = mode === undefined || mode === 'prompt' || mode === 'task-notification' ? kindOf(body?.text ?? '') : `queued-${mode}`;
-      if (body) candidates.push({ index: candidates.length, pos, kind, image: body.image, text: body.text, attachments: [], fired: false, queued: true });
-    } else if (line.type === 'attachment' && line.attachment?.type === 'hook_additional_context' && line.attachment.hookEvent === 'UserPromptSubmit') {
+      const kind =
+        mode === undefined || mode === 'prompt' || mode === 'task-notification'
+          ? kindOf(body?.text ?? '')
+          : `queued-${mode}`;
+      if (body) {
+        candidates.push({
+          index: candidates.length,
+          pos,
+          kind,
+          image: body.image,
+          text: body.text,
+          attachments: [],
+          fired: false,
+          queued: true,
+        });
+      }
+    } else if (
+      line.type === 'attachment' &&
+      line.attachment?.type === 'hook_additional_context' &&
+      line.attachment.hookEvent === 'UserPromptSubmit'
+    ) {
       const owner = candidates[candidates.length - 1];
       if (owner) {
         owner.attachments.push(hookText(line.attachment.content));

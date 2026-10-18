@@ -8,7 +8,12 @@ import { writeEntry, writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { loadAmbientTallies } from '../../src/store/ambient.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer, _resetLossAversionRatioCacheForTests, type EmotionalValence, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  Layer,
+  _resetLossAversionRatioCacheForTests,
+  type EmotionalValence,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { getContext, adminActor } from '../../src/api/index.js';
@@ -37,7 +42,10 @@ afterEach(() => {
 
 describe('ambient summary over the whole store', () => {
   it('a query matching 2 of 3 memories still reports 3 memories and no false narrow focus', async () => {
-    writeEntry(store, createMemory('always run the migration dry run before deploying', { pinned: true, tags: ['deploy'] }));
+    writeEntry(
+      store,
+      createMemory('always run the migration dry run before deploying', { pinned: true, tags: ['deploy'] }),
+    );
     writeEntry(store, createMemory('the deploy pipeline uses blue green rollout for the api', { tags: ['deploy'] }));
     writeEntry(store, createMemory('lunch options near the office include a noodle bar'));
 
@@ -82,7 +90,11 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
   function row(i: number): MemoryEntry {
     const created = new Date(NOW.getTime() - (i * 13 + 1) * 3600000).toISOString();
     return {
-      ...createMemory(`parity row ${i}`, { tags: TAGS[i % TAGS.length], pinned: i % 11 === 0, layer: [Layer.Episodic, Layer.Semantic, Layer.Buffer][i % 3] }),
+      ...createMemory(`parity row ${i}`, {
+        tags: TAGS[i % TAGS.length],
+        pinned: i % 11 === 0,
+        layer: [Layer.Episodic, Layer.Semantic, Layer.Buffer][i % 3],
+      }),
       created,
       last_retrieved: new Date(Date.parse(created) + (i % 4) * 86400000).toISOString(),
       half_life_days: [0, 1, 7, 30][i % 4],
@@ -116,13 +128,18 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     const db = openHippoDb(store);
     try {
       // A corrupt list must read as empty, as rowToEntry reads it, not fail the aggregate.
-      db.prepare(`UPDATE memories SET tags_json = '{bad', conflicts_with_json = '{"a":1}' WHERE content = 'parity row 1'`).run();
+      db.prepare(
+        `UPDATE memories SET tags_json = '{bad', conflicts_with_json = '{"a":1}' WHERE content = 'parity row 1'`,
+      ).run();
     } finally {
       closeHippoDb(db);
     }
 
     const sql = loadAmbientTallies(store, 'default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries(loadAllEntries(store, 'default').filter((e) => !e.superseded_by), NOW);
+    const js = tallyAmbientEntries(
+      loadAllEntries(store, 'default').filter((e) => !e.superseded_by),
+      NOW,
+    );
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });
     expect(sql.strengthSum).toBeCloseTo(js.strengthSum, 9);

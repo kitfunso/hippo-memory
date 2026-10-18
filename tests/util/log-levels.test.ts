@@ -113,8 +113,9 @@ describe('warnThenSample', () => {
 
 describe('log fields', () => {
   it('appends the request id and other fields as key=value, skipping undefined', () => {
-    expect(formatLogLine('warn', 'boom', { requestId: 'abc-123', status: 503, extra: undefined }))
-      .toBe('[hippo] warn: boom requestId=abc-123 status=503');
+    expect(formatLogLine('warn', 'boom', { requestId: 'abc-123', status: 503, extra: undefined })).toBe(
+      '[hippo] warn: boom requestId=abc-123 status=503',
+    );
   });
 
   it('flattens newlines so one event stays on one line', () => {
@@ -124,7 +125,9 @@ describe('log fields', () => {
   it('HIPPO_LOG_FORMAT=json writes the same fields as one JSON object per line', () => {
     vi.stubEnv('HIPPO_LOG_FORMAT', 'json');
     runWithRequestId('req-7', () => log.warn('a\nb', { status: 503 }));
-    expect(lines().map((line) => JSON.parse(line))).toEqual([{ ts: AT, level: 'warn', msg: 'a\nb', requestId: 'req-7', status: 503 }]);
+    expect(lines().map((line) => JSON.parse(line))).toEqual([
+      { ts: AT, level: 'warn', msg: 'a\nb', requestId: 'req-7', status: 503 },
+    ]);
     expect(lines()[0].endsWith('}\n')).toBe(true);
   });
 });
@@ -153,17 +156,26 @@ describe('a command that fails at the top level', () => {
     // A store file that is not a database makes the first read throw past every verb.
     mkdirSync(join(dir, '.hippo'));
     writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096));
-    const run = (level: string) => spawnSync(process.execPath, [resolve('dist', 'cli.js'), 'recall', 'anything'], {
-      cwd: dir,
-      env: { ...process.env, HIPPO_HOME: join(dir, 'home'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: level, HIPPO_LOG_FORMAT: '' },
-      encoding: 'utf8',
-    });
+    const run = (level: string) =>
+      spawnSync(process.execPath, [resolve('dist', 'cli.js'), 'recall', 'anything'], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          HIPPO_HOME: join(dir, 'home'),
+          HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+          HIPPO_LOG: level,
+          HIPPO_LOG_FORMAT: '',
+        },
+        encoding: 'utf8',
+      });
 
     const plain = run('warn');
     expect([plain.status, ownStderr(plain.stderr)]).toEqual([1, 'Error: file is not a database\n']);
 
     const debug = run('debug');
     expect(debug.status).toBe(1);
-    expect(ownStderr(debug.stderr)).toMatch(/Error: file is not a database\n {2}thrown as Error\nError: file is not a database\n\s+at /);
+    expect(ownStderr(debug.stderr)).toMatch(
+      /Error: file is not a database\n {2}thrown as Error\nError: file is not a database\n\s+at /,
+    );
   });
 });

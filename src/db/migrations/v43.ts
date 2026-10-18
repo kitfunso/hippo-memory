@@ -62,9 +62,9 @@ const CARDS_SCHEMA_SQL = `
       `;
 
 export const v43: Migration = {
-    version: 43,
-    up: (db) => {
-      // W2a work-queue cards. Additive only, v41 precedent.
-      db.exec(CARDS_SCHEMA_SQL);
-    },
+  version: 43,
+  up: (db) => {
+    // W2a work-queue cards. Additive only, v41 precedent.
+    db.exec(CARDS_SCHEMA_SQL);
+  },
 };

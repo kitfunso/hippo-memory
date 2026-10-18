@@ -11,10 +11,7 @@ export async function savePrediction(ctx: Context, input: PredictionSave): Promi
 }
 
 /** A claim saved with its recall mirror, built under the store root's half-life as the HTTP create route builds it. */
-export async function recordPrediction(
-  ctx: Context,
-  claim: SavePredictionOptions,
-): Promise<Prediction> {
+export async function recordPrediction(ctx: Context, claim: SavePredictionOptions): Promise<Prediction> {
   return savePrediction(ctx, {
     ...claim,
     mirror: predictionMirror(ctx.tenantId, claim, ctx.config.defaultHalfLifeDays),
@@ -28,10 +25,7 @@ export async function listPredictions(
   return predictionsOf(ctx).listPredictions(ctx.tenantId, query);
 }
 
-export async function predictionBaserate(
-  ctx: Context,
-  classTag: string,
-): Promise<PredictionBaserate> {
+export async function predictionBaserate(ctx: Context, classTag: string): Promise<PredictionBaserate> {
   return predictionsOf(ctx).predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
 }
 
@@ -39,10 +33,6 @@ export async function predictionById(ctx: Context, id: number): Promise<Predicti
   return predictionsOf(ctx).predictionById(ctx.tenantId, id);
 }
 
-export async function closePrediction(
-  ctx: Context,
-  id: number,
-  close: PredictionClose,
-): Promise<Prediction> {
+export async function closePrediction(ctx: Context, id: number, close: PredictionClose): Promise<Prediction> {
   return predictionsOf(ctx).closePrediction(ctx.tenantId, id, close, ctx.actor.subject);
 }

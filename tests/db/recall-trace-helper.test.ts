@@ -140,7 +140,11 @@ describe('writeRecallTrace', () => {
             },
           ],
         });
-        const row = queryRow<{ rerank_json: string }>(db, `SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`, traceId);
+        const row = queryRow<{ rerank_json: string }>(
+          db,
+          `SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`,
+          traceId,
+        );
         const steps = JSON.parse(row.rerank_json);
         expect(steps).toEqual([{ stage: 'goal-boost', scoreBefore: 0.8, scoreAfter: 0.9 }]);
       } finally {
@@ -177,7 +181,11 @@ describe('writeRecallTrace', () => {
             },
           ],
         });
-        const row = queryRow<{ rerank_json: string }>(db, `SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`, traceId);
+        const row = queryRow<{ rerank_json: string }>(
+          db,
+          `SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`,
+          traceId,
+        );
         expect(row.rerank_json).not.toContain('note');
         expect(row.rerank_json).not.toContain('super-secret-project-codename');
         const steps = JSON.parse(row.rerank_json);
@@ -269,7 +277,11 @@ describe('recordTraceOutcome', () => {
           outcome: 'positive',
           memoryIds: ['mem-a'],
         });
-        const row = queryRow<RecallTraceOutcomeRow>(db, `SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`, traceId);
+        const row = queryRow<RecallTraceOutcomeRow>(
+          db,
+          `SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`,
+          traceId,
+        );
         expect(row.outcome).toBe('positive');
         expect(JSON.parse(row.memory_ids_json)).toEqual(['mem-a']);
       } finally {
@@ -353,7 +365,11 @@ describe('recordTraceOutcome', () => {
           outcome: 'positive',
           memoryIds: ['mem-a', 'mem-c'],
         });
-        const row = queryRow<RecallTraceOutcomeRow>(db, `SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`, traceId);
+        const row = queryRow<RecallTraceOutcomeRow>(
+          db,
+          `SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`,
+          traceId,
+        );
         expect(JSON.parse(row.memory_ids_json)).toEqual(['mem-a']);
       } finally {
         closeHippoDb(db);
@@ -402,7 +418,9 @@ describe('recordTraceOutcome', () => {
         recordTraceOutcome(db, { traceId: 1, tenantId: 'default', outcome: 'positive', memoryIds: ['mem-a'] });
       }).not.toThrow();
       expect(errSpy).toHaveBeenCalled();
-      expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/recall trace outcome write failed.* stack=\S*Error.* at /));
+      expect(errSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/recall trace outcome write failed.* stack=\S*Error.* at /),
+      );
       errSpy.mockRestore();
     } finally {
       restore();

@@ -4,7 +4,14 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getHippoDbPath,
+  isSqliteBusy,
+  runWithRequestStores,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { serve } from '../../src/server.js';
 import * as client from '../../src/cli/client.js';
@@ -97,7 +104,9 @@ describe('routed writes under a busy store', () => {
   });
 
   it('remember: a lock held across the first tries ends in one stored row, not an error or a duplicate', async () => {
-    const result = await withLockHeld(home, 1200, () => client.remember(url, undefined, { content: 'remember-busy-canary' }));
+    const result = await withLockHeld(home, 1200, () =>
+      client.remember(url, undefined, { content: 'remember-busy-canary' }),
+    );
     expect(result.id).toBeTruthy();
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
   });
@@ -112,7 +121,9 @@ describe('routed writes under a busy store', () => {
 
   it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
     const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw' });
-    await expect(withLockHeld(home, 1200, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({ ok: true });
+    await expect(withLockHeld(home, 1200, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({
+      ok: true,
+    });
     expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
     expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
   });
@@ -121,7 +132,9 @@ describe('routed writes under a busy store', () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary' });
     const result = await withLockHeld(globalHome, 1200, () => client.promote(url, undefined, id));
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
-    expect(count(globalHome, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`, result.globalId)).toBe(1);
+    expect(
+      count(globalHome, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`, result.globalId),
+    ).toBe(1);
   });
 
   it('the stats counter after a committed removal skips a busy store with one warning instead of throwing', async () => {
@@ -130,7 +143,9 @@ describe('routed writes under a busy store', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, 60_000, async () => {
-        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'), { busyWaitMs: 50 });
+        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'), {
+          busyWaitMs: 50,
+        });
       });
       expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(/warn: removed m1, but the store was busy/);
     } finally {
@@ -147,7 +162,9 @@ describe('routed writes under a busy store', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, 60_000, async () => {
-        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), { busyWaitMs: 50 });
+        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), {
+          busyWaitMs: 50,
+        });
       });
     } finally {
       stderr.mockRestore();
@@ -163,15 +180,23 @@ describe('routed writes under a busy store', () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary' });
     const globalDb = openHippoDb(globalHome);
     try {
-      globalDb.exec(`CREATE TRIGGER fail_promote_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'promote' BEGIN SELECT RAISE(ABORT, 'forced promote audit failure'); END`);
+      globalDb.exec(
+        `CREATE TRIGGER fail_promote_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'promote' BEGIN SELECT RAISE(ABORT, 'forced promote audit failure'); END`,
+      );
     } finally {
       closeHippoDb(globalDb);
     }
     await expect(copyToGlobal(home, id)).rejects.toThrow(/forced promote audit failure/);
-    expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary')).toBe(0);
+    expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary')).toBe(
+      0,
+    );
   });
 
   it('MCP: a busy store answers with a retry message, not the generic internal error', () => {
-    expect(mcpErrorResponse(7, busyErr)).toEqual({ jsonrpc: '2.0', id: 7, error: { code: -32603, message: expect.stringMatching(/store busy.*retry/) } });
+    expect(mcpErrorResponse(7, busyErr)).toEqual({
+      jsonrpc: '2.0',
+      id: 7,
+      error: { code: -32603, message: expect.stringMatching(/store busy.*retry/) },
+    });
   });
 });

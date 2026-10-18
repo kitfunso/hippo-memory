@@ -14,7 +14,14 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import type { DescendantWalk, SessionRawCount, SessionRawWindow, SummaryDescendants } from '../../src/store/port.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';
@@ -23,13 +30,21 @@ const OWN = 'personal:private:alice';
 const at = (minute: number): string => `2026-03-01T10:${String(minute).padStart(2, '0')}:00.000Z`;
 
 function row(tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  return seeded(`${id} holds a note about the rollout`, id, at(minute), { tenant_id: tenantId, origin_project: 'proj', ...extra });
+  return seeded(`${id} holds a note about the rollout`, id, at(minute), {
+    tenant_id: tenantId,
+    origin_project: 'proj',
+    ...extra,
+  });
 }
 
 const raw = (tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry =>
   row(tenantId, id, minute, { kind: 'raw', source_session_id: SESSION, ...extra });
 
-const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}): Partial<MemoryEntry> => ({ dag_parent_id: parent, dag_level: level, ...extra });
+const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}): Partial<MemoryEntry> => ({
+  dag_parent_id: parent,
+  dag_level: level,
+  ...extra,
+});
 
 /** One session in both tenants with every scope, origin and supersede edge, and summary trees three levels deep, one of them a loop. */
 function dagRows(): MemoryEntry[] {
@@ -73,8 +88,21 @@ function dagRows(): MemoryEntry[] {
 
 /** The first tenant's live raw rows of SESSION, oldest first. */
 const SESSION_IDS = [
-  'raw_a_0', 'raw_a_1', 'raw_a_2', 'raw_a_3', 'raw_a_4', 'raw_a_5', 'raw_a_tie_x', 'raw_a_tie_y', 'raw_a_private', 'raw_a_alice',
-  'raw_a_legacy', 'raw_a_team', 'raw_a_other', 'raw_a_global', 'raw_a_no_origin',
+  'raw_a_0',
+  'raw_a_1',
+  'raw_a_2',
+  'raw_a_3',
+  'raw_a_4',
+  'raw_a_5',
+  'raw_a_tie_x',
+  'raw_a_tie_y',
+  'raw_a_private',
+  'raw_a_alice',
+  'raw_a_legacy',
+  'raw_a_team',
+  'raw_a_other',
+  'raw_a_global',
+  'raw_a_no_origin',
 ];
 /** sum_a's children the default scope deny admits: fact_a_private is left out, and leaf_a_under_private with it. */
 const SUM_A_CHILDREN = ['raw_a_0', 'raw_a_1', 'raw_a_2', 'fact_a_0', 'fact_a_1', 'fact_a_tie_x', 'fact_a_tie_y'];
@@ -95,12 +123,25 @@ async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   });
 }
 
-const window = (cap: number, over: Partial<SessionRawWindow> = {}): Call<string[]> => async (g) =>
-  (await g.sessionRawEntries({ tenantId: TENANT_A, sessionId: SESSION, cap, ...over })).map((r) => r.id);
-const count = (over: Partial<SessionRawCount> = {}): Call<number> => (g) => g.sessionRawCount({ tenantId: TENANT_A, sessionId: SESSION, ...over });
-const walk = (id: string, depth: number, more: Partial<DescendantWalk> = {}, tenantId = TENANT_A): Call<SummaryDescendants | null> => (g) =>
-  g.summaryWithDescendants(tenantId, id, { depth, admit: {}, ...more });
-const levelIds = (walked: SummaryDescendants | null): string[][] | null => walked && walked.levels.map((level) => level.map((r) => r.id));
+const window =
+  (cap: number, over: Partial<SessionRawWindow> = {}): Call<string[]> =>
+  async (g) =>
+    (await g.sessionRawEntries({ tenantId: TENANT_A, sessionId: SESSION, cap, ...over })).map((r) => r.id);
+const count =
+  (over: Partial<SessionRawCount> = {}): Call<number> =>
+  (g) =>
+    g.sessionRawCount({ tenantId: TENANT_A, sessionId: SESSION, ...over });
+const walk =
+  (
+    id: string,
+    depth: number,
+    more: Partial<DescendantWalk> = {},
+    tenantId = TENANT_A,
+  ): Call<SummaryDescendants | null> =>
+  (g) =>
+    g.summaryWithDescendants(tenantId, id, { depth, admit: {}, ...more });
+const levelIds = (walked: SummaryDescendants | null): string[][] | null =>
+  walked && walked.levels.map((level) => level.map((r) => r.id));
 
 beforeAll(() => {
   fixture = seedTwoTenants();
@@ -119,7 +160,13 @@ afterAll(() => {
 
 describe('DagReads.sessionRawEntries', () => {
   it('reads nothing for an empty session id, an unknown session and an unknown tenant', async () => {
-    expect(await conforms([window(5, { sessionId: '' }), window(5, { sessionId: 'sess-none' }), window(5, { tenantId: 'nobody' })])).toEqual([[], [], []]);
+    expect(
+      await conforms([
+        window(5, { sessionId: '' }),
+        window(5, { sessionId: 'sess-none' }),
+        window(5, { tenantId: 'nobody' }),
+      ]),
+    ).toEqual([[], [], []]);
   });
 
   it('reads a one-row session, and a whole session oldest first with a shared timestamp ordered by id', async () => {
@@ -129,7 +176,14 @@ describe('DagReads.sessionRawEntries', () => {
   it('keeps the newest rows at, under and over the cap, and reads them all for a cap of zero or less', async () => {
     const n = SESSION_IDS.length;
     const got = await conforms([window(n), window(n - 1), window(n + 1), window(1), window(0), window(-1)]);
-    expect(got).toEqual([SESSION_IDS, SESSION_IDS.slice(1), SESSION_IDS, ['raw_a_no_origin'], SESSION_IDS, SESSION_IDS]);
+    expect(got).toEqual([
+      SESSION_IDS,
+      SESSION_IDS.slice(1),
+      SESSION_IDS,
+      ['raw_a_no_origin'],
+      SESSION_IDS,
+      SESSION_IDS,
+    ]);
   });
 
   it('keeps the larger id of two rows sharing a timestamp when the cap falls between them', async () => {
@@ -139,7 +193,11 @@ describe('DagReads.sessionRawEntries', () => {
   });
 
   it('keeps the named projects beside rows of no project, and drops a row with no recorded origin', async () => {
-    const got = await conforms([window(100, { origins: ['proj'] }), window(100, { origins: ['other', 'elsewhere'] }), window(100, { origins: [] })]);
+    const got = await conforms([
+      window(100, { origins: ['proj'] }),
+      window(100, { origins: ['other', 'elsewhere'] }),
+      window(100, { origins: [] }),
+    ]);
     expect(got).toEqual([
       SESSION_IDS.filter((id) => id !== 'raw_a_other' && id !== 'raw_a_no_origin'),
       ['raw_a_other', 'raw_a_global'],
@@ -148,32 +206,56 @@ describe('DagReads.sessionRawEntries', () => {
   });
 
   it("reads only the asking tenant's rows of a session id two tenants share", async () => {
-    expect(await conforms([window(100, { tenantId: TENANT_B }), window(1, { tenantId: TENANT_B })])).toEqual([['raw_b_0', 'raw_b_1'], ['raw_b_1']]);
+    expect(await conforms([window(100, { tenantId: TENANT_B }), window(1, { tenantId: TENANT_B })])).toEqual([
+      ['raw_b_0', 'raw_b_1'],
+      ['raw_b_1'],
+    ]);
   });
 });
 
 describe('DagReads.sessionRawCount', () => {
   it('counts zero for an empty session id, an unknown session and an unknown tenant, and one for a one-row session', async () => {
-    const got = await conforms([count({ sessionId: '' }), count({ sessionId: 'sess-none' }), count({ tenantId: 'nobody' }), count({ sessionId: 'sess-one' })]);
+    const got = await conforms([
+      count({ sessionId: '' }),
+      count({ sessionId: 'sess-none' }),
+      count({ tenantId: 'nobody' }),
+      count({ sessionId: 'sess-one' }),
+    ]);
     expect(got).toEqual([0, 0, 0, 1]);
   });
 
-  it('leaves private and legacy rows out of the count unless the scope is the caller\'s own or asked for by name', async () => {
+  it("leaves private and legacy rows out of the count unless the scope is the caller's own or asked for by name", async () => {
     const denied = ['raw_a_private', 'raw_a_alice', 'raw_a_legacy'];
-    const got = await conforms([count(), count({ scope: '' }), count({ ownScope: OWN }), count({ scope: PRIVATE }), count({ scope: 'team:eng' }), count({ scope: 'team:none' })]);
+    const got = await conforms([
+      count(),
+      count({ scope: '' }),
+      count({ ownScope: OWN }),
+      count({ scope: PRIVATE }),
+      count({ scope: 'team:eng' }),
+      count({ scope: 'team:none' }),
+    ]);
     const open = SESSION_IDS.length - denied.length;
     expect(got).toEqual([open, open, open + 1, 1, 1, 0]);
   });
 
   it('counts inside the named projects and inside the asking tenant', async () => {
-    const got = await conforms([count({ origins: ['proj'] }), count({ origins: [], scope: PRIVATE }), count({ origins: [] }), count({ tenantId: TENANT_B })]);
+    const got = await conforms([
+      count({ origins: ['proj'] }),
+      count({ origins: [], scope: PRIVATE }),
+      count({ origins: [] }),
+      count({ tenantId: TENANT_B }),
+    ]);
     expect(got).toEqual([SESSION_IDS.length - 5, 0, 1, 2]);
   });
 });
 
 describe('DagReads.summaryWithDescendants', () => {
   it("answers null for a missing id and for another tenant's summary", async () => {
-    expect(await conforms([walk('sum_missing', 1), walk('sum_b', 1), walk('sum_a', 1, {}, TENANT_B)])).toEqual([null, null, null]);
+    expect(await conforms([walk('sum_missing', 1), walk('sum_b', 1), walk('sum_a', 1, {}, TENANT_B)])).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 
   it("lists one level by created then id, without another tenant's row linked under the summary", async () => {
@@ -185,7 +267,16 @@ describe('DagReads.summaryWithDescendants', () => {
 
   it('reads no level at depth zero, each level down to the depth asked, and stops where the rows end', async () => {
     const leaves = ['leaf_a_0', 'leaf_a_1'];
-    const got = (await conforms([walk('sum_a', 0), walk('sum_a', 2), walk('sum_a', 10), walk('profile_a', 3), walk('sum_a_empty', 3), walk('fact_a_0', 1)])).map(levelIds);
+    const got = (
+      await conforms([
+        walk('sum_a', 0),
+        walk('sum_a', 2),
+        walk('sum_a', 10),
+        walk('profile_a', 3),
+        walk('sum_a_empty', 3),
+        walk('fact_a_0', 1),
+      ])
+    ).map(levelIds);
     expect(got).toEqual([
       [],
       [SUM_A_CHILDREN, leaves],
@@ -203,7 +294,16 @@ describe('DagReads.summaryWithDescendants', () => {
       walk('sum_a', 3, { admit: { project: { name: 'proj', legacyName: 'proj' } } }),
       walk('profile_a', 3, { minSummaryLevel: 3 }),
     ]);
-    expect(got.map(levelIds)).toEqual([[], [], [SUM_A_CHILDREN, ['leaf_a_0', 'leaf_a_1']], [['sum_a2', 'sum_a'], ['fact_a2_0', ...SUM_A_CHILDREN], ['leaf_a_0', 'leaf_a_1']]]);
+    expect(got.map(levelIds)).toEqual([
+      [],
+      [],
+      [SUM_A_CHILDREN, ['leaf_a_0', 'leaf_a_1']],
+      [
+        ['sum_a2', 'sum_a'],
+        ['fact_a2_0', ...SUM_A_CHILDREN],
+        ['leaf_a_0', 'leaf_a_1'],
+      ],
+    ]);
     expect(got[0]?.summary.id).toBe('sum_a');
   });
 
@@ -212,7 +312,10 @@ describe('DagReads.summaryWithDescendants', () => {
   });
 });
 
-interface Reply { readonly status: number; readonly body: unknown }
+interface Reply {
+  readonly status: number;
+  readonly body: unknown;
+}
 
 const SERVED: readonly (readonly [string, number])[] = [
   [`/v1/sessions/${SESSION}/assemble?freshTail=3&budget=100000`, 200],
@@ -245,7 +348,9 @@ async function runServed(makeStore?: (root: string) => HippoStore): Promise<Repl
     const replies: Reply[] = [];
     try {
       for (const [path] of SERVED) {
-        const res = await fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${fixture.tokens.adminA}` } });
+        const res = await fetch(`${handle.url}${path}`, {
+          headers: { authorization: `Bearer ${fixture.tokens.adminA}` },
+        });
         replies.push({ status: res.status, body: await res.json() });
       }
     } finally {
@@ -273,12 +378,19 @@ describe('assemble and drill over serve()', () => {
   it('answer the same on hippo.db and on a store held in memory', async () => {
     const onHippoDb = await runServed();
     expect(onHippoDb.map((r) => r.status)).toEqual(SERVED.map(([, status]) => status));
-    expect(onHippoDb[0]?.body).toMatchObject({ summarized: 3, items: expect.arrayContaining([expect.objectContaining({ id: 'sum_a', isSummary: true })]) });
+    expect(onHippoDb[0]?.body).toMatchObject({
+      summarized: 3,
+      items: expect.arrayContaining([expect.objectContaining({ id: 'sum_a', isSummary: true })]),
+    });
     expect(onHippoDb[5]?.body).toMatchObject({ totalChildren: 12, truncated: true });
     expect(onHippoDb.slice(8).map((r) => r.body)).toMatchObject([
       { totalChildren: 2, truncated: true, children: [{ id: 'sum_a2' }] },
       { totalChildren: 7, truncated: true, children: [{ id: 'raw_a_0' }, { id: 'raw_a_1' }, { id: 'raw_a_2' }] },
-      { totalChildren: 10, truncated: true, children: [{ id: 'sum_a2' }, { id: 'sum_a' }, { id: 'fact_a2_0' }, { id: 'raw_a_0' }, { id: 'raw_a_1' }] },
+      {
+        totalChildren: 10,
+        truncated: true,
+        children: [{ id: 'sum_a2' }, { id: 'sum_a' }, { id: 'fact_a2_0' }, { id: 'raw_a_0' }, { id: 'raw_a_1' }],
+      },
       { totalChildren: 12, truncated: true },
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
     ]);

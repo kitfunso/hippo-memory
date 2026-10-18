@@ -36,7 +36,10 @@ import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import {
-  listMemoryConflicts, loadEntriesByIds, replaceDetectedConflicts, resolveConflictKeeping,
+  listMemoryConflicts,
+  loadEntriesByIds,
+  replaceDetectedConflicts,
+  resolveConflictKeeping,
 } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
 
@@ -66,7 +69,11 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
 }
 
 /** Seeds in one store scope, which opens the store once, so a 200-row fixture stays fast. */
-function seed(ctx: FullContext, entries: readonly MemoryEntry[], after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void): void {
+function seed(
+  ctx: FullContext,
+  entries: readonly MemoryEntry[],
+  after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void,
+): void {
   withRequestStoresSync(() => {
     const db = openStore(ctx.hippoRoot);
     for (const e of entries) {
@@ -85,7 +92,12 @@ function ageMirrors(root: string): () => number {
   const old = new Date('2001-01-01T00:00:00Z');
   const files = Object.values(Layer).flatMap((layer) => {
     const dir = path.join(root, layer);
-    return fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => path.join(dir, f)) : [];
+    return fs.existsSync(dir)
+      ? fs
+          .readdirSync(dir)
+          .filter((f) => f.endsWith('.md'))
+          .map((f) => path.join(dir, f))
+      : [];
   });
   for (const file of files) fs.utimesSync(file, old, old);
   return () => files.filter((file) => fs.existsSync(file) && fs.statSync(file).mtimeMs > old.getTime() + 1000).length;
@@ -97,7 +109,13 @@ describe('outcome', () => {
       const root = freshRoot('qc-outcome');
       const entries = rows(n, 'outcome');
       seed(ctxFor(root), entries);
-      const { result, statements } = await recordStatementsAsync(() => outcome(ctxFor(root), entries.map((e) => e.id), true));
+      const { result, statements } = await recordStatementsAsync(() =>
+        outcome(
+          ctxFor(root),
+          entries.map((e) => e.id),
+          true,
+        ),
+      );
       expect(result.applied).toBe(n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, ROW_READ)).toBe(1);
@@ -110,7 +128,15 @@ describe('quarantineList', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-quarantine');
       const entries = rows(n, 'held', { scope: quarantineScopeFor(null) });
-      seed(ctxFor(root), entries, (db, e) => recordQuarantine(db, { tenantId: 'default', memoryId: e.id, originalScope: null, reason: 'test', actor: 'test' }));
+      seed(ctxFor(root), entries, (db, e) =>
+        recordQuarantine(db, {
+          tenantId: 'default',
+          memoryId: e.id,
+          originalScope: null,
+          reason: 'test',
+          actor: 'test',
+        }),
+      );
       const { result, statements } = await recordStatementsAsync(() => quarantineList(ctxFor(root), { limit: 500 }));
       expect(result).toHaveLength(n);
       expect(result.every((item) => item.contentPreview.includes('zephyrine'))).toBe(true);
@@ -126,9 +152,13 @@ describe('drillDown', () => {
       const root = freshRoot('qc-drill');
       const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
       const mids = rows(n, 'mid', { dag_level: 1, dag_parent_id: summary.id });
-      const leaves = mids.map((m, i) => memory(`leaf ${i} under the zephyrine cache`, { dag_level: 0, dag_parent_id: m.id }));
+      const leaves = mids.map((m, i) =>
+        memory(`leaf ${i} under the zephyrine cache`, { dag_level: 0, dag_parent_id: m.id }),
+      );
       seed(ctxFor(root), [summary, ...mids, ...leaves]);
-      const { result, statements } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }));
+      const { result, statements } = await recordStatementsAsync(() =>
+        drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }),
+      );
       expect('failure' in result ? result.failure : result.totalChildren).toBe(2 * n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, ROW_READ)).toBe(3);
@@ -141,13 +171,22 @@ describe('drillDown', () => {
       const root = freshRoot('qc-drill-page');
       const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
       // Newest first on disk, so the page is the oldest five only if the read sorts by created.
-      const children = Array.from({ length: n }, (_, i) => memory(`child ${i} of the zephyrine cache`, {
-        dag_level: 1, dag_parent_id: summary.id, created: new Date(Date.UTC(2026, 0, 1, 0, 0, n - i)).toISOString(),
-      }));
+      const children = Array.from({ length: n }, (_, i) =>
+        memory(`child ${i} of the zephyrine cache`, {
+          dag_level: 1,
+          dag_parent_id: summary.id,
+          created: new Date(Date.UTC(2026, 0, 1, 0, 0, n - i)).toISOString(),
+        }),
+      );
       seed(ctxFor(root), [summary, ...children]);
       const { result, rowsRead } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { limit: 5 }));
       if ('failure' in result) throw new Error(result.failure);
-      expect(result.children.map((c) => c.id)).toEqual(children.slice(-5).reverse().map((c) => c.id));
+      expect(result.children.map((c) => c.id)).toEqual(
+        children
+          .slice(-5)
+          .reverse()
+          .map((c) => c.id),
+      );
       expect({ total: result.totalChildren, truncated: result.truncated }).toEqual({ total: n, truncated: true });
       read.push(rowsRead);
     }
@@ -158,7 +197,11 @@ describe('drillDown', () => {
     const root = freshRoot('qc-drill-plan');
     const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
     const mids = rows(3, 'mid', { dag_level: 1, dag_parent_id: summary.id });
-    seed(ctxFor(root), [summary, ...mids, ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id }))]);
+    seed(ctxFor(root), [
+      summary,
+      ...mids,
+      ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id })),
+    ]);
     const { statements } = await recordStatementsAsync(async () => {
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: 4 });
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: Number.POSITIVE_INFINITY });
@@ -169,7 +212,9 @@ describe('drillDown', () => {
     try {
       for (const sql of childReads) {
         // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
-        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(
+          (step) => step.detail,
+        );
         expect(plan[0], sql).toBe('SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)');
       }
     } finally {
@@ -183,7 +228,9 @@ describe('importEntries', () => {
     const opens = SIZES.map((n) => {
       const root = freshRoot('qc-import');
       const chunks = Array.from({ length: n }, (_, i) => `imported chunk ${i} about the zephyrine cache`);
-      const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default' }));
+      const { result, statements } = recordStatements(() =>
+        importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default' }),
+      );
       expect(result.imported).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -194,7 +241,9 @@ describe('importEntries', () => {
     const opens = SIZES.map((n) => {
       const root = freshRoot('qc-import-dry');
       const chunks = Array.from({ length: n }, (_, i) => `previewed chunk ${i} about the zephyrine cache`);
-      const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default', dryRun: true }));
+      const { result, statements } = recordStatements(() =>
+        importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default', dryRun: true }),
+      );
       expect(result.imported).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -209,8 +258,12 @@ describe('importVault', () => {
       const root = freshRoot('qc-vault-dry');
       const vault = path.join(freshRoot('qc-vault-notes'), 'notes');
       fs.mkdirSync(vault);
-      for (let i = 0; i < n; i++) fs.writeFileSync(path.join(vault, `note-${i}.md`), `vault note ${i} about the zephyrine cache`);
-      const { result, statements } = await recordStatementsAsync(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }));
+      for (let i = 0; i < n; i++) {
+        fs.writeFileSync(path.join(vault, `note-${i}.md`), `vault note ${i} about the zephyrine cache`);
+      }
+      const { result, statements } = await recordStatementsAsync(() =>
+        importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }),
+      );
       expect(result.imported).toBe(n);
       opens.push(countMatching(statements, STORE_OPEN));
     }
@@ -224,7 +277,9 @@ describe('invalidateMatching', () => {
       const root = freshRoot('qc-invalidate');
       seed(ctxFor(root), rows(n, 'invalidate', { tags: ['oldlib'] }));
       const target = { from: 'oldlib', to: null, type: 'removal' as const };
-      const { result, statements } = recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default'));
+      const { result, statements } = recordStatements(() =>
+        invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default'),
+      );
       expect(result.invalidated).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -236,12 +291,21 @@ describe('detectChurnStale', () => {
   it('tags every stale memory with one batched read on one handle', () => {
     const repo = freshRoot('qc-churn-repo');
     const git = (...args: string[]): void => {
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, stdio: 'ignore' });
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
+        cwd: repo,
+        stdio: 'ignore',
+      });
     };
     const commitAt = (iso: string): void => {
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-am', 'c', '--allow-empty'], {
-        cwd: repo, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso },
-      });
+      execFileSync(
+        'git',
+        ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-am', 'c', '--allow-empty'],
+        {
+          cwd: repo,
+          stdio: 'ignore',
+          env: { ...process.env, GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso },
+        },
+      );
     };
     git('init');
     fs.writeFileSync(path.join(repo, 'a.ts'), 'v1');
@@ -252,8 +316,16 @@ describe('detectChurnStale', () => {
 
     const counts = SIZES.map((n) => {
       const root = freshRoot('qc-churn');
-      seed(ctxFor(root), rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', origin_project: 'qcproj' }));
-      const { result, statements } = recordStatements(() => detectChurnStale(sqliteSyncStore(root).localFiles.learning, repo, { tenantId: 'default', projectName: 'qcproj' }));
+      seed(
+        ctxFor(root),
+        rows(n, 'see a.ts for the setup', { created: '2026-01-01T00:00:00.000Z', origin_project: 'qcproj' }),
+      );
+      const { result, statements } = recordStatements(() =>
+        detectChurnStale(sqliteSyncStore(root).localFiles.learning, repo, {
+          tenantId: 'default',
+          projectName: 'qcproj',
+        }),
+      );
       expect(result.marked).toBe(n);
       return { opens: countMatching(statements, STORE_OPEN), reads: countMatching(statements, ROW_READ) };
     });
@@ -283,7 +355,9 @@ describe('replaceDetectedConflicts', () => {
       const root = freshRoot('qc-resolve');
       const entries = rows(n, 'resolve');
       seed(ctxFor(root), entries);
-      replaceDetectedConflicts(root, [{ memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 }]);
+      replaceDetectedConflicts(root, [
+        { memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 },
+      ]);
       const [conflict] = listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
       expect(resolveConflictKeeping(root, 'default', conflict.id, conflict.memory_a_id)).toBe(true);
@@ -312,7 +386,13 @@ describe('strengthenRetrieved', () => {
       const root = freshRoot('qc-strengthen');
       const entries = rows(n, 'strengthen');
       seed(ctxFor(root), entries);
-      const { result, statements } = recordStatements(() => strengthenRetrieved(root, entries.map((e) => e.id), { recallBoostAblated: false }));
+      const { result, statements } = recordStatements(() =>
+        strengthenRetrieved(
+          root,
+          entries.map((e) => e.id),
+          { recallBoostAblated: false },
+        ),
+      );
       expect(result.size).toBe(n);
       expect(countMatching(statements, ROW_READ)).toBe(1);
     }
@@ -340,17 +420,32 @@ describe('learn', () => {
     });
     execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: repo, stdio: 'ignore' });
     // One fast-import writes every commit, where a `git commit` each costs a process spawn.
-    execFileSync('git', ['fast-import', '--quiet'], { cwd: repo, input: commits.join('\n'), stdio: ['pipe', 'ignore', 'ignore'] });
+    execFileSync('git', ['fast-import', '--quiet'], {
+      cwd: repo,
+      input: commits.join('\n'),
+      stdio: ['pipe', 'ignore', 'ignore'],
+    });
     return repo;
   }
 
   async function learnInto(repo: string, n: number, pageRows?: number) {
     const root = freshRoot('qc-learn');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
-    seed(ctxFor(root), [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
+    seed(ctxFor(root), [
+      ...rows(n, 'learn'),
+      memory('the quuxlib client retries twice'),
+      memory('quuxlib client timeouts are 30s'),
+    ]);
     const { result, statements } = await recordStatementsAsync(() =>
-      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows })));
-    return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
+      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows })),
+    );
+    return {
+      root,
+      result,
+      statements,
+      opens: countMatching(statements, STORE_OPEN),
+      tenantReads: countMatching(statements, TENANT_READ),
+    };
   }
 
   it('opens the store and reads the tenant once per batch, however many lessons or rows', async () => {
@@ -395,7 +490,11 @@ describe('learn', () => {
     expect(result.invalidations.map((i) => i.count)).toEqual([2, 3, 4]);
     const lessons = loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source);
     const base = lessons.find((e) => !e.tags.includes('invalidated'))?.half_life_days ?? 0;
-    expect(lessons.map((e) => e.half_life_days).sort((a, b) => a - b)).toEqual([Math.floor(Math.floor(base / 2) / 2), Math.floor(base / 2), base]);
+    expect(lessons.map((e) => e.half_life_days).sort((a, b) => a - b)).toEqual([
+      Math.floor(Math.floor(base / 2) / 2),
+      Math.floor(base / 2),
+      base,
+    ]);
     expect(lessons.filter((e) => e.confidence === 'stale')).toHaveLength(2);
   });
 });
@@ -404,7 +503,9 @@ describe('cmdRemember', () => {
   async function remember(root: string, text: string) {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, tenantId: 'default', args: [text], flags: { tag: ['topic:cache'] } }));
+      const { statements } = await recordStatementsAsync(() =>
+        handleRemember({ hippoRoot: root, tenantId: 'default', args: [text], flags: { tag: ['topic:cache'] } }),
+      );
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
       log.mockRestore();
@@ -427,8 +528,14 @@ describe('cmdRemember', () => {
   it('reads only the salience window when the gate runs, and judges as the whole list did', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-remember-salience');
-      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false }, salience: { enabled: true, recentWindow: 3 } }));
-      const stored = rows(n, 'salience').map((e, i) => ({ ...e, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() }));
+      fs.writeFileSync(
+        path.join(root, 'config.json'),
+        JSON.stringify({ embeddings: { enabled: false }, salience: { enabled: true, recentWindow: 3 } }),
+      );
+      const stored = rows(n, 'salience').map((e, i) => ({
+        ...e,
+        created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+      }));
       seed(ctxFor(root), stored);
 
       const inWindow = await remember(root, stored[n - 1].content);
@@ -453,7 +560,9 @@ describe('trace lineage', () => {
       seed(ctxFor(root), [...sources, child]);
       const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
-        const { statements } = await recordStatementsAsync(() => cliRequest(() => handleTrace({ hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} })));
+        const { statements } = await recordStatementsAsync(() =>
+          cliRequest(() => handleTrace({ hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} })),
+        );
         expect(log.mock.calls.map((call) => String(call[0])).join(' ')).toContain('parent memory number 0');
         reads.push(countMatching(statements, ROW_READ));
       } finally {
@@ -466,22 +575,35 @@ describe('trace lineage', () => {
 
 describe('cmdCapture', () => {
   it('reads no full row for its copy check and keeps every write on one handle', () => {
-    const counts = SIZES.flatMap((n) => [1, 10].map((items) => {
-      const root = freshRoot('qc-capture');
-      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
-      const held = 'Never deploy service 0 on Fridays because the on-call rota is thin';
-      seed(ctxFor(root), [...rows(n, 'capture'), memory(held)]);
-      const sessionTurns = Array.from({ length: items + 1 }, (_, i) => ({ role: 'user' as const, text: `Never deploy service ${i} on Fridays because the on-call rota is thin.` }));
-      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-      try {
-        const { statements } = recordStatements(() => cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns, dryRun: false, global: false, tenantId: 'default' }));
-        expect(log.mock.calls.at(-1)?.[0]).toContain(`Captured ${items} items (1 skipped as duplicates)`);
-        expect(countMatching(statements, ROW_READ)).toBe(0);
-        return countMatching(statements, STORE_OPEN);
-      } finally {
-        log.mockRestore();
-      }
-    }));
+    const counts = SIZES.flatMap((n) =>
+      [1, 10].map((items) => {
+        const root = freshRoot('qc-capture');
+        fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+        const held = 'Never deploy service 0 on Fridays because the on-call rota is thin';
+        seed(ctxFor(root), [...rows(n, 'capture'), memory(held)]);
+        const sessionTurns = Array.from({ length: items + 1 }, (_, i) => ({
+          role: 'user' as const,
+          text: `Never deploy service ${i} on Fridays because the on-call rota is thin.`,
+        }));
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+          const { statements } = recordStatements(() =>
+            cmdCapture(captureTarget(root), {
+              source: 'last-session',
+              sessionTurns,
+              dryRun: false,
+              global: false,
+              tenantId: 'default',
+            }),
+          );
+          expect(log.mock.calls.at(-1)?.[0]).toContain(`Captured ${items} items (1 skipped as duplicates)`);
+          expect(countMatching(statements, ROW_READ)).toBe(0);
+          return countMatching(statements, STORE_OPEN);
+        } finally {
+          log.mockRestore();
+        }
+      }),
+    );
     expect(new Set(counts).size).toBe(1);
   });
 });
@@ -504,8 +626,18 @@ describe('buildDag', () => {
       const facts = rows(n, 'fact', { tags: ['extracted', 'speaker:alice'], dag_level: 1 });
       seed(ctxFor(root), facts);
       const mirrorsRewritten = ageMirrors(root);
-      const fetcher: typeof fetch = async () => new Response(JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }), { status: 200 });
-      const { result, statements } = await recordStatementsAsync(() => buildDag(sqliteSyncStore(root).localFiles, facts, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test-key', fetcher }));
+      const fetcher: typeof fetch = async () =>
+        new Response(
+          JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }),
+          { status: 200 },
+        );
+      const { result, statements } = await recordStatementsAsync(() =>
+        buildDag(sqliteSyncStore(root).localFiles, facts, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          apiKey: 'test-key',
+          fetcher,
+        }),
+      );
       expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });
       const stored = loadAllEntries(root, 'default');
       const parentId = stored.find((e) => e.dag_level === 2)?.id;
@@ -514,7 +646,11 @@ describe('buildDag', () => {
       const db = openStore(root);
       try {
         // SAFETY: one row with the single aliased count column.
-        const audited = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'remember' AND target_id IN (SELECT id FROM memories WHERE dag_parent_id = ?)`).get(String(parentId)) as { n: number };
+        const audited = db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'remember' AND target_id IN (SELECT id FROM memories WHERE dag_parent_id = ?)`,
+          )
+          .get(String(parentId)) as { n: number };
         expect(audited.n).toBe(2 * n);
       } finally {
         closeHippoDb(db);
@@ -538,7 +674,9 @@ describe('buildMemoryDetail', () => {
       ]);
       const options = { snapshotId: 1, nowMs: Date.now(), embedded: false };
       const store = sqliteStore(root);
-      const { result, statements } = await recordStatementsAsync(() => buildMemoryDetail(store, 'default', subject, options));
+      const { result, statements } = await recordStatementsAsync(() =>
+        buildMemoryDetail(store, 'default', subject, options),
+      );
       expect(result.conflicts.map((c) => c.other.id).sort()).toEqual(others.map((e) => e.id).sort());
       expect(result.conflicts.every((c) => c.reason === 'names the subject')).toBe(true);
       work.push([countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)]);
@@ -552,7 +690,11 @@ describe('the dashboard snapshot build', () => {
     const read: number[] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-dash-build');
-      seed(ctxFor(root), [...rows(4, 'live'), ...rows(n, 'archived', { kind: 'archived' }), ...rows(n, 'replaced', { kind: 'superseded' })]);
+      seed(ctxFor(root), [
+        ...rows(4, 'live'),
+        ...rows(n, 'archived', { kind: 'archived' }),
+        ...rows(n, 'replaced', { kind: 'superseded' }),
+      ]);
       const service = snapshotsOf(root, () => Date.now());
       try {
         const { result, statements, rowsRead } = recordStatements(() => service.get('default'));
@@ -569,7 +711,7 @@ describe('the dashboard snapshot build', () => {
 });
 
 describe('hippo_status', () => {
-  it('tallies in SQL, so rows read stay flat, and counts only its tenant\'s open conflicts', async () => {
+  it("tallies in SQL, so rows read stay flat, and counts only its tenant's open conflicts", async () => {
     const read: number[] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-status');
@@ -585,10 +727,21 @@ describe('hippo_status', () => {
         { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },
         { memory_a_id: elsewhere[0].id, memory_b_id: elsewhere[1].id, reason: 'other tenant pair', score: 0.9 },
       ]);
-      const { result, rowsRead } = await recordStatementsAsync(() => handleMcpRequest(
-        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
-        { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1', store: sqliteStore(root), config: loadConfig(root) },
-      ));
+      const { result, rowsRead } = await recordStatementsAsync(() =>
+        handleMcpRequest(
+          { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
+          {
+            hippoRoot: root,
+            tenantId: 'default',
+            actor: 'tester',
+            role: 'admin',
+            hostAdmin: true,
+            clientKey: 'client-1',
+            store: sqliteStore(root),
+            config: loadConfig(root),
+          },
+        ),
+      );
       const reply = JSON.stringify(result);
       expect(reply).toContain(`Memories: ${n} (1 pinned, 1 errors)`);
       expect(reply).toContain('At risk (<0.1): 1\\n');
@@ -611,7 +764,13 @@ describe('recordSessionDigest', () => {
         edits: [],
       };
       const log: string[] = [];
-      const { statements } = recordStatements(() => recordSessionDigest(root, syncStore(root), scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) }));
+      const { statements } = recordStatements(() =>
+        recordSessionDigest(root, syncStore(root), scan, {
+          key: 's1',
+          tenantId: 'default',
+          log: (line) => log.push(line),
+        }),
+      );
       expect(log.join('\n')).toMatch(/^digest: wrote /);
       expect(countMatching(statements, TENANT_READ)).toBe(0);
     }
@@ -626,7 +785,10 @@ describe('an id-list read of one tenant', () => {
     const ids = entries.map((e) => e.id);
     const { result, statements } = await recordStatementsAsync(async () => {
       await outcome(ctxFor(root), ids, true);
-      return { held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
+      return {
+        held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]),
+        listed: loadEntriesByIds(root, ids, 'default').length,
+      };
     });
     expect(result).toEqual({ held: true, listed: 10 });
 
@@ -636,7 +798,9 @@ describe('an id-list read of one tenant', () => {
     try {
       for (const sql of idReads) {
         // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
-        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(
+          (step) => step.detail,
+        );
         expect(plan[0], sql).toBe('SEARCH memories USING INDEX sqlite_autoindex_memories_1 (id=?)');
       }
     } finally {

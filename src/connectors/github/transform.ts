@@ -35,12 +35,7 @@ function rememberOpts(
     scope: scopeFromRepository(repository),
     artifactRef: `github://${repoFull}/${refPath}`,
     owner: `user:github:${login}`,
-    tags: [
-      'source:github',
-      `repo:${repoFull}`,
-      `event:${event}`,
-      `user:github:${login}`,
-    ],
+    tags: ['source:github', `repo:${repoFull}`, `event:${event}`, `user:github:${login}`],
   };
 }
 
@@ -48,9 +43,7 @@ function titleAndBody(item: { title: string | null; body: string | null }): stri
   return [item.title?.trim(), item.body?.trim()].filter(Boolean).join('\n\n');
 }
 
-export function issueEventToRememberOpts(
-  evt: GitHubIssueEvent,
-): RememberOptions | null {
+export function issueEventToRememberOpts(evt: GitHubIssueEvent): RememberOptions | null {
   const content = titleAndBody(evt.issue);
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -61,9 +54,7 @@ export function issueEventToRememberOpts(
   });
 }
 
-export function issueCommentEventToRememberOpts(
-  evt: GitHubIssueCommentEvent,
-): RememberOptions | null {
+export function issueCommentEventToRememberOpts(evt: GitHubIssueCommentEvent): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -74,9 +65,7 @@ export function issueCommentEventToRememberOpts(
   });
 }
 
-export function pullRequestEventToRememberOpts(
-  evt: GitHubPullRequestEvent,
-): RememberOptions | null {
+export function pullRequestEventToRememberOpts(evt: GitHubPullRequestEvent): RememberOptions | null {
   const content = titleAndBody(evt.pull_request);
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -87,9 +76,7 @@ export function pullRequestEventToRememberOpts(
   });
 }
 
-export function prReviewCommentEventToRememberOpts(
-  evt: GitHubPullRequestReviewCommentEvent,
-): RememberOptions | null {
+export function prReviewCommentEventToRememberOpts(evt: GitHubPullRequestReviewCommentEvent): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {

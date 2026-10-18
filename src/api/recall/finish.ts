@@ -136,7 +136,8 @@ export function detectAnchoring(
       reason: 'memory_dominance',
       memoryId: currentTopMemoryId,
       queryCount,
-      summary: `Memory ${currentTopMemoryId} has been the top result for ${queryCount} distinct queries in this ` +
+      summary:
+        `Memory ${currentTopMemoryId} has been the top result for ${queryCount} distinct queries in this ` +
         `session and may be anchoring your reasoning.`,
       source: 'j1-recurrence',
     };
@@ -146,7 +147,8 @@ export function detectAnchoring(
     return {
       reason: 'query_repeat',
       memoryId: currentTopMemoryId,
-      summary: `Same query phrasing as a recent recall returned the same top result (${currentTopMemoryId}); you may ` +
+      summary:
+        `Same query phrasing as a recent recall returned the same top result (${currentTopMemoryId}); you may ` +
         `be re-asking the same question.`,
       source: 'j1-recurrence',
     };
@@ -271,9 +273,7 @@ export function snapshotRing(ring: RingBuffer): RecallHistorySnapshot {
  * disables only that kind.
  */
 export function biasHintEnabled(kind: 'anchoring' | 'availability'): boolean {
-  return kind === 'anchoring'
-    ? !envAnchoringOff()
-    : !envAvailabilityOff();
+  return kind === 'anchoring' ? !envAnchoringOff() : !envAvailabilityOff();
 }
 
 // entriesByIds reads at most this many ids a call.
@@ -372,10 +372,12 @@ export function anchorSkippedRows(who: RecallAuditCaller, query: string): Append
 
 export function anchoringRows(who: RecallAuditCaller, hint: AnchoringHint | null): AppendAuditOpts[] {
   if (hint?.reason === 'memory_dominance') {
-    return [recallAuditRow(who, 'recall_anchor_detected_memory_dominance', hint.memoryId, {
-      memory_id: hint.memoryId,
-      query_count: hint.queryCount ?? null,
-    })];
+    return [
+      recallAuditRow(who, 'recall_anchor_detected_memory_dominance', hint.memoryId, {
+        memory_id: hint.memoryId,
+        query_count: hint.queryCount ?? null,
+      }),
+    ];
   }
   if (hint?.reason === 'query_repeat') {
     return [recallAuditRow(who, 'recall_anchor_detected_query_repeat', hint.memoryId, { memory_id: hint.memoryId })];
@@ -385,11 +387,13 @@ export function anchoringRows(who: RecallAuditCaller, hint: AnchoringHint | null
 
 export function availabilityRows(who: RecallAuditCaller, hint: AvailabilityHint | null): AppendAuditOpts[] {
   if (!hint) return [];
-  return [recallAuditRow(who, 'recall_availability_detected', undefined, {
-    recent_fraction: hint.recentFraction,
-    older_passed_over: hint.olderCandidatesPassedOver,
-    returned_count: hint.returnedCount,
-  })];
+  return [
+    recallAuditRow(who, 'recall_availability_detected', undefined, {
+      recent_fraction: hint.recentFraction,
+      older_passed_over: hint.olderCandidatesPassedOver,
+      returned_count: hint.returnedCount,
+    }),
+  ];
 }
 
 export interface ShownRecall {

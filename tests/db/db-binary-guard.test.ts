@@ -7,7 +7,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
 let root: string;
-beforeEach(() => { root = makeRoot('binguard', { init: false }); });
+beforeEach(() => {
+  root = makeRoot('binguard', { init: false });
+});
 
 describe('min_compatible_binary guard under the migration lock', () => {
   it('stops migrating once another binary raises the minimum mid-run', () => {

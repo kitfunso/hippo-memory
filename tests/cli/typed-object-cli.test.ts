@@ -25,41 +25,78 @@ interface Noun {
 
 const NOUNS: readonly Noun[] = [
   {
-    noun: 'note', create: ['new', 'Acme Corp', '--text', 'renewal call notes'], recorded: /Customer note recorded: #\d+/,
-    listed: 'customer="Acme Corp"', notListed: /customer="new"/, shown: ['renewal call notes', 'customer: Acme Corp'],
-    states: 'active | superseded | closed', live: 'active',
-    keep: ['new', 'still-active', '--text', 'x'], kept: 'still-active', revise: ['--text', 'y'],
+    noun: 'note',
+    create: ['new', 'Acme Corp', '--text', 'renewal call notes'],
+    recorded: /Customer note recorded: #\d+/,
+    listed: 'customer="Acme Corp"',
+    notListed: /customer="new"/,
+    shown: ['renewal call notes', 'customer: Acme Corp'],
+    states: 'active | superseded | closed',
+    live: 'active',
+    keep: ['new', 'still-active', '--text', 'x'],
+    kept: 'still-active',
+    revise: ['--text', 'y'],
   },
   {
-    noun: 'incident', create: ['open', 'DB down at 14:00'], recorded: /Incident recorded: #\d+/,
-    listed: 'DB down at 14:00', shown: ['DB down at 14:00'],
-    states: 'open | resolved | closed', live: 'open',
-    keep: ['open', 'still open incident'], kept: 'still open incident',
+    noun: 'incident',
+    create: ['open', 'DB down at 14:00'],
+    recorded: /Incident recorded: #\d+/,
+    listed: 'DB down at 14:00',
+    shown: ['DB down at 14:00'],
+    states: 'open | resolved | closed',
+    live: 'open',
+    keep: ['open', 'still open incident'],
+    kept: 'still open incident',
   },
   {
-    noun: 'policy', create: ['new', 'Retention policy', '--text', 'delete after 90d', '--from', '2026-01-01'],
-    recorded: /Policy recorded: #\d+/, listed: 'Retention policy',
+    noun: 'policy',
+    create: ['new', 'Retention policy', '--text', 'delete after 90d', '--from', '2026-01-01'],
+    recorded: /Policy recorded: #\d+/,
+    listed: 'Retention policy',
     shown: ['delete after 90d', 'valid_from: 2026-01-01T00:00:00.000Z'],
-    states: 'active | superseded | closed', live: 'active',
-    keep: ['new', 'still active', '--text', 'x'], kept: 'still active', revise: ['--text', 'y'],
+    states: 'active | superseded | closed',
+    live: 'active',
+    keep: ['new', 'still active', '--text', 'x'],
+    kept: 'still active',
+    revise: ['--text', 'y'],
   },
   {
-    noun: 'process', create: ['new', 'Release flow', '--step', 'run tests', '--step', 'publish'], recorded: /Process recorded: #\d+/,
-    listed: 'Release flow', notListed: /^\s+new$/m, shown: ['1. run tests', '2. publish'],
-    states: 'active | superseded | closed', live: 'active',
-    keep: ['new', 'still active process', '--step', 'a'], kept: 'still active process', revise: ['--step', 'x'],
+    noun: 'process',
+    create: ['new', 'Release flow', '--step', 'run tests', '--step', 'publish'],
+    recorded: /Process recorded: #\d+/,
+    listed: 'Release flow',
+    notListed: /^\s+new$/m,
+    shown: ['1. run tests', '2. publish'],
+    states: 'active | superseded | closed',
+    live: 'active',
+    keep: ['new', 'still active process', '--step', 'a'],
+    kept: 'still active process',
+    revise: ['--step', 'x'],
   },
   {
-    noun: 'brief', create: ['new', 'hippo', '--summary', 'agent memory lib'], recorded: /Project brief recorded: #\d+/,
-    listed: 'repo="hippo"', notListed: /repo="new"/, shown: ['agent memory lib', 'repo: hippo'],
-    states: 'active | superseded | closed', live: 'active',
-    keep: ['new', 'still-active', '--summary', 'x'], kept: 'still-active', revise: ['--summary', 'y'],
+    noun: 'brief',
+    create: ['new', 'hippo', '--summary', 'agent memory lib'],
+    recorded: /Project brief recorded: #\d+/,
+    listed: 'repo="hippo"',
+    notListed: /repo="new"/,
+    shown: ['agent memory lib', 'repo: hippo'],
+    states: 'active | superseded | closed',
+    live: 'active',
+    keep: ['new', 'still-active', '--summary', 'x'],
+    kept: 'still-active',
+    revise: ['--summary', 'y'],
   },
   {
-    noun: 'skill', create: ['new', 'Run tests', '--instructions', 'npm test', '--trigger', 'before commit'],
-    recorded: /Skill recorded: #\d+/, listed: 'Run tests', shown: ['npm test', 'when: before commit'],
-    states: 'active | superseded | closed', live: 'active',
-    keep: ['new', 'still active', '--instructions', 'x'], kept: 'still active', revise: ['--instructions', 'y'],
+    noun: 'skill',
+    create: ['new', 'Run tests', '--instructions', 'npm test', '--trigger', 'before commit'],
+    recorded: /Skill recorded: #\d+/,
+    listed: 'Run tests',
+    shown: ['npm test', 'when: before commit'],
+    states: 'active | superseded | closed',
+    live: 'active',
+    keep: ['new', 'still active', '--instructions', 'x'],
+    kept: 'still active',
+    revise: ['--instructions', 'y'],
   },
 ];
 
@@ -148,7 +185,19 @@ describe('typed-object CLI rules one noun has', () => {
 
   it('policy new -> supersede version chain + asof query', async () => {
     const id = idOf(await ok('policy', 'new', 'Window', '--text', 'v1', '--from', '2026-01-01', '--to', '2026-06-01'));
-    const sup = await ok('policy', 'supersede', id, '--text', 'v2', '--from', '2026-01-01', '--to', '2026-06-01', '--change', 'reworded');
+    const sup = await ok(
+      'policy',
+      'supersede',
+      id,
+      '--text',
+      'v2',
+      '--from',
+      '2026-01-01',
+      '--to',
+      '2026-06-01',
+      '--change',
+      'reworded',
+    );
     expect(sup).toMatch(/v2/);
     const asof = await ok('policy', 'asof', '2026-03-01', '--name', 'Window');
     expect(asof).toContain('Window');
@@ -158,7 +207,9 @@ describe('typed-object CLI rules one noun has', () => {
   });
 
   it('policy new rejects an inverted valid_to', async () => {
-    expect((await hippo('policy', 'new', 'Inv', '--text', 'x', '--from', '2026-06-01', '--to', '2026-01-01')).status).toBe(1);
+    expect(
+      (await hippo('policy', 'new', 'Inv', '--text', 'x', '--from', '2026-06-01', '--to', '2026-01-01')).status,
+    ).toBe(1);
   });
 
   it('process new -> supersede -> list version chain', async () => {

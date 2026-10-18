@@ -8,7 +8,18 @@ import { canReadScope } from '../../src/core/recall-scope.js';
 import { type HippoStore } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow, type StoredGraph } from '../../src/store/graph-rows.js';
+import {
+  ENTITY_COLS,
+  RELATION_COLS,
+  rowToEntity,
+  rowToRelation,
+  type Entity,
+  type EntityRow,
+  type EntityType,
+  type Relation,
+  type RelationRow,
+  type StoredGraph,
+} from '../../src/store/graph-rows.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
@@ -38,10 +49,22 @@ function copyRows(hippoRoot: string): Copied {
       // SAFETY: each SELECT names exactly the columns of the row type it is read as.
       const entities = (db.prepare(`SELECT ${ENTITY_COLS} FROM entities`).all() as EntityRow[]).map(rowToEntity);
       // SAFETY: as above.
-      const relations = (db.prepare(`SELECT ${RELATION_COLS} FROM relations`).all() as RelationRow[]).map(rowToRelation);
+      const relations = (db.prepare(`SELECT ${RELATION_COLS} FROM relations`).all() as RelationRow[]).map(
+        rowToRelation,
+      );
       // SAFETY: as above.
-      const memories = db.prepare('SELECT tenant_id, id, scope, kind FROM memories').all() as { tenant_id: string; id: string; scope: string | null; kind: string }[];
-      return { entities, relations, scopes: new Map(memories.map((m) => [memoryKey(m.tenant_id, m.id), m.scope])), kinds: new Map(memories.map((m) => [m.id, m.kind])) };
+      const memories = db.prepare('SELECT tenant_id, id, scope, kind FROM memories').all() as {
+        tenant_id: string;
+        id: string;
+        scope: string | null;
+        kind: string;
+      }[];
+      return {
+        entities,
+        relations,
+        scopes: new Map(memories.map((m) => [memoryKey(m.tenant_id, m.id), m.scope])),
+        kinds: new Map(memories.map((m) => [m.id, m.kind])),
+      };
     } finally {
       closeHippoDb(db);
     }
@@ -50,7 +73,8 @@ function copyRows(hippoRoot: string): Copied {
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
 const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-const newestFirst = (a: { createdAt: string; id: number }, b: { createdAt: string; id: number }): number => byBytes(b.createdAt, a.createdAt) || b.id - a.id;
+const newestFirst = (a: { createdAt: string; id: number }, b: { createdAt: string; id: number }): number =>
+  byBytes(b.createdAt, a.createdAt) || b.id - a.id;
 const BATCH = 400;
 
 function batches<T>(items: readonly T[]): T[][] {
@@ -60,13 +84,25 @@ function batches<T>(items: readonly T[]): T[][] {
 }
 
 /** The walk from a name, before any row is hidden; null when no start entity shows. */
-function fromName(entities: Entity[], relations: Relation[], name: string, limit: number, shows: (row: Entity) => boolean): GraphRows | null {
-  const named = entities.filter((e) => e.name === name).sort((a, b) => a.id - b.id).slice(0, limit);
+function fromName(
+  entities: Entity[],
+  relations: Relation[],
+  name: string,
+  limit: number,
+  shows: (row: Entity) => boolean,
+): GraphRows | null {
+  const named = entities
+    .filter((e) => e.name === name)
+    .sort((a, b) => a.id - b.id)
+    .slice(0, limit);
   const startIds = named.filter(shows).map((e) => e.id);
   if (startIds.length === 0) return null;
   const joined: Relation[] = [];
   for (const batch of batches(startIds)) {
-    const touching = relations.filter((r) => batch.includes(r.fromEntityId) || batch.includes(r.toEntityId)).sort(newestFirst).slice(0, limit);
+    const touching = relations
+      .filter((r) => batch.includes(r.fromEntityId) || batch.includes(r.toEntityId))
+      .sort(newestFirst)
+      .slice(0, limit);
     for (const r of touching) if (!joined.includes(r)) joined.push(r);
   }
   const held = new Set(startIds);
@@ -78,29 +114,58 @@ function fromName(entities: Entity[], relations: Relation[], name: string, limit
     }
     held.add(r.fromEntityId).add(r.toEntityId);
   }
-  const found = batches([...held]).flatMap((batch) => entities.filter((e) => batch.includes(e.id)).sort((a, b) => a.id - b.id));
-  const among = relations.filter((r) => held.has(r.fromEntityId) && held.has(r.toEntityId)).sort(newestFirst).slice(0, limit);
-  return { entities: found, relations: among, truncated: named.length >= limit || joined.length >= limit || among.length >= limit || leftOver };
+  const found = batches([...held]).flatMap((batch) =>
+    entities.filter((e) => batch.includes(e.id)).sort((a, b) => a.id - b.id),
+  );
+  const among = relations
+    .filter((r) => held.has(r.fromEntityId) && held.has(r.toEntityId))
+    .sort(newestFirst)
+    .slice(0, limit);
+  return {
+    entities: found,
+    relations: among,
+    truncated: named.length >= limit || joined.length >= limit || among.length >= limit || leftOver,
+  };
 }
 
 /** The provenance columns a rebuild diffs, as hippo.db names them. */
 const sourceColumns = (row: Entity | Relation) => ({
-  memory_id: row.memoryId, source_kind: row.sourceKind, source_object_type: row.sourceObjectType ?? null, source_object_id: row.sourceObjectId ?? null,
+  memory_id: row.memoryId,
+  source_kind: row.sourceKind,
+  source_object_type: row.sourceObjectType ?? null,
+  source_object_id: row.sourceObjectId ?? null,
 });
 
-function storedGraphOf({ entities, relations, kinds }: Copied, tenantId: string, memoryIds: readonly string[]): StoredGraph {
+function storedGraphOf(
+  { entities, relations, kinds }: Copied,
+  tenantId: string,
+  memoryIds: readonly string[],
+): StoredGraph {
   const byId = (a: { id: number }, b: { id: number }): number => a.id - b.id;
   return {
     kinds: new Map(memoryIds.flatMap((id) => (kinds.has(id) ? [[id, kinds.get(id)!] as const] : []))),
-    entities: entities.filter((e) => e.tenantId === tenantId).sort(byId).map((e) => ({ id: e.id, entity_type: e.entityType, name: e.name, ...sourceColumns(e) })),
-    relations: relations.filter((r) => r.tenantId === tenantId).sort(byId).map((r) => ({
-      id: r.id, from_entity_id: r.fromEntityId, to_entity_id: r.toEntityId, rel_type: r.relType, ...sourceColumns(r),
-    })),
+    entities: entities
+      .filter((e) => e.tenantId === tenantId)
+      .sort(byId)
+      .map((e) => ({ id: e.id, entity_type: e.entityType, name: e.name, ...sourceColumns(e) })),
+    relations: relations
+      .filter((r) => r.tenantId === tenantId)
+      .sort(byId)
+      .map((r) => ({
+        id: r.id,
+        from_entity_id: r.fromEntityId,
+        to_entity_id: r.toEntityId,
+        rel_type: r.relType,
+        ...sourceColumns(r),
+      })),
   };
 }
 
 function wholeGraph(entities: Entity[], relations: Relation[], limit: number): GraphRows {
-  const newest = { entities: [...entities].sort(newestFirst).slice(0, limit), relations: [...relations].sort(newestFirst).slice(0, limit) };
+  const newest = {
+    entities: [...entities].sort(newestFirst).slice(0, limit),
+    relations: [...relations].sort(newestFirst).slice(0, limit),
+  };
   return { ...newest, truncated: newest.entities.length >= limit || newest.relations.length >= limit };
 }
 
@@ -116,22 +181,41 @@ export function inMemoryGraphReadsStore(hippoRoot: string): InMemoryGraphReadsSt
       };
       const entities = copied.entities.filter((e) => e.tenantId === tenantId);
       const relations = copied.relations.filter((r) => r.tenantId === tenantId);
-      const rows = entity === undefined ? wholeGraph(entities, relations, limit) : fromName(entities, relations, entity, limit, shows);
+      const rows =
+        entity === undefined
+          ? wholeGraph(entities, relations, limit)
+          : fromName(entities, relations, entity, limit, shows);
       if (!rows) return { entities: [], relations: [], truncated: false };
-      return structuredClone({ entities: rows.entities.filter(shows), relations: rows.relations.filter(shows), truncated: rows.truncated });
+      return structuredClone({
+        entities: rows.entities.filter(shows),
+        relations: rows.relations.filter(shows),
+        truncated: rows.truncated,
+      });
     },
     async entitiesForMemories(tenantId, memoryIds) {
-      const inBatch = (batch: string[]) => (e: Entity): boolean => e.tenantId === tenantId && e.memoryId !== null && batch.includes(e.memoryId);
-      return structuredClone(batches(memoryIds).flatMap((batch) => copied.entities.filter(inBatch(batch)).sort((a, b) => a.id - b.id)));
+      const inBatch =
+        (batch: string[]) =>
+        (e: Entity): boolean =>
+          e.tenantId === tenantId && e.memoryId !== null && batch.includes(e.memoryId);
+      return structuredClone(
+        batches(memoryIds).flatMap((batch) => copied.entities.filter(inBatch(batch)).sort((a, b) => a.id - b.id)),
+      );
     },
     async entitiesByIds(tenantId, ids) {
-      const inBatch = (batch: number[]) => (e: Entity): boolean => e.tenantId === tenantId && batch.includes(e.id);
-      return structuredClone(batches(ids).flatMap((batch) => copied.entities.filter(inBatch(batch)).sort((a, b) => a.id - b.id)));
+      const inBatch =
+        (batch: number[]) =>
+        (e: Entity): boolean =>
+          e.tenantId === tenantId && batch.includes(e.id);
+      return structuredClone(
+        batches(ids).flatMap((batch) => copied.entities.filter(inBatch(batch)).sort((a, b) => a.id - b.id)),
+      );
     },
     async neighborRelations(tenantId, entityIds, { limit }) {
       const byId = new Map<number, Relation>();
       for (const batch of batches(entityIds)) {
-        const touching = copied.relations.filter((r) => r.tenantId === tenantId && (batch.includes(r.fromEntityId) || batch.includes(r.toEntityId)));
+        const touching = copied.relations.filter(
+          (r) => r.tenantId === tenantId && (batch.includes(r.fromEntityId) || batch.includes(r.toEntityId)),
+        );
         for (const r of touching.sort(newestFirst).slice(0, limit)) byId.set(r.id, r);
       }
       return structuredClone([...byId.values()]);
@@ -152,7 +236,17 @@ export const BULK_TENANT = 'bulk';
 export const MANY = 405;
 export const seededAt = (second: number): string => `2020-03-01T00:00:${String(second).padStart(2, '0')}.000Z`;
 
-type InTenantA = 'hub' | 'spoke1' | 'spoke2' | 'secret' | 'mine' | 'twinHeld' | 'twinOpen' | 'lone' | 'shared' | 'anchored';
+type InTenantA =
+  | 'hub'
+  | 'spoke1'
+  | 'spoke2'
+  | 'secret'
+  | 'mine'
+  | 'twinHeld'
+  | 'twinOpen'
+  | 'lone'
+  | 'shared'
+  | 'anchored';
 type Elsewhere = 'sharedB' | 'otherB' | 'solo' | 'tailA' | 'tailB';
 
 /** Entity ids by a short name; `many` is the bulk tenant's same-named entities in id order. */
@@ -167,14 +261,23 @@ type Db = ReturnType<typeof openHippoDb>;
 
 function seeder(db: Db, dir: string) {
   const memory = (tenantId: string, id: string, scope: string | null): string => {
-    writeEntry(dir, { ...createMemory(`source of ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, scope }), id });
+    writeEntry(dir, {
+      ...createMemory(`source of ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, scope }),
+      id,
+    });
     return id;
   };
   const entity = (tenantId: string, second: number, name: string, entityType: EntityType, memoryId: string): number => {
     vi.setSystemTime(new Date(seededAt(second)));
     return insertEntityRow(db, tenantId, { entityType, name, memoryId }).id;
   };
-  const relation = (tenantId: string, second: number, fromEntityId: number, toEntityId: number, memoryId: string): number => {
+  const relation = (
+    tenantId: string,
+    second: number,
+    fromEntityId: number,
+    toEntityId: number,
+    memoryId: string,
+  ): number => {
     vi.setSystemTime(new Date(seededAt(second)));
     return insertRelationRow(db, tenantId, { fromEntityId, toEntityId, relType: 'references', memoryId }).id;
   };
@@ -188,7 +291,11 @@ interface SeededTenantA {
 
 function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
   const { memory, entity, relation } = seeder(db, dir);
-  const memories = { team: memory(TENANT_A, 'mem_gteam', TEAM_SCOPE), held: memory(TENANT_A, 'mem_gheld', HELD_SCOPE), alice: memory(TENANT_A, 'mem_galice', ALICE_SCOPE) };
+  const memories = {
+    team: memory(TENANT_A, 'mem_gteam', TEAM_SCOPE),
+    held: memory(TENANT_A, 'mem_gheld', HELD_SCOPE),
+    alice: memory(TENANT_A, 'mem_galice', ALICE_SCOPE),
+  };
   const hub = entity(TENANT_A, 1, 'Hub', 'project', memories.team);
   const spoke1 = entity(TENANT_A, 2, 'Spoke', 'system', memories.team);
   const spoke2 = entity(TENANT_A, 2, 'Spoke', 'project', memories.team);
@@ -199,7 +306,12 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
   const lone = entity(TENANT_A, 6, 'Lone', 'decision', memories.team);
   const shared = entity(TENANT_A, 7, 'Shared', 'project', memories.team);
   // Stamped with the second `shared` left on the clock, so the two newest entities share a timestamp.
-  const anchored = insertEntityRow(db, TENANT_A, { entityType: 'policy', name: 'Anchored', memoryId: null, sourceObject: { type: 'policy', id: policyId } }).id;
+  const anchored = insertEntityRow(db, TENANT_A, {
+    entityType: 'policy',
+    name: 'Anchored',
+    memoryId: null,
+    sourceObject: { type: 'policy', id: policyId },
+  }).id;
   relation(TENANT_A, 8, hub, spoke1, memories.team);
   relation(TENANT_A, 8, hub, spoke2, memories.team);
   relation(TENANT_A, 9, spoke1, spoke2, memories.team);
@@ -211,7 +323,12 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
 
 /** Adds a graph to each of four tenants: A with rows under three scopes, B sharing one name with A, one entity under `solo`, and 405 same-named entities under `bulk`. */
 export async function seedGraphRows(dir: string): Promise<SeededGraph> {
-  const policyId = (await savePolicy(objectsAt(dir), loadConfig(dir).defaultHalfLifeDays, TENANT_A, { policyName: 'Anchored', policyText: 'kept by its object' })).id;
+  const policyId = (
+    await savePolicy(objectsAt(dir), loadConfig(dir).defaultHalfLifeDays, TENANT_A, {
+      policyName: 'Anchored',
+      policyText: 'kept by its object',
+    })
+  ).id;
   const db = openHippoDb(dir);
   vi.useFakeTimers({ toFake: ['Date'] });
   try {

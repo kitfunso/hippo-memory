@@ -40,12 +40,23 @@ export function judge(caseDef, response) {
       CLAUDE_BIN,
       [
         '-p',
-        '--model', JUDGE_MODEL,
-        '--output-format', 'json',
+        '--model',
+        JUDGE_MODEL,
+        '--output-format',
+        'json',
         '--no-session-persistence',
-        '--disallowed-tools', 'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand', // judge is pure text classification
+        '--disallowed-tools',
+        'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand', // judge is pure text classification
       ],
-      { input: text, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 60_000, shell: process.platform === 'win32', env: childEnv(), cwd: os.tmpdir() }
+      {
+        input: text,
+        encoding: 'utf8',
+        maxBuffer: 8 * 1024 * 1024,
+        timeout: 60_000,
+        shell: process.platform === 'win32',
+        env: childEnv(),
+        cwd: os.tmpdir(),
+      },
     );
   } catch (err) {
     return { verdict: 'ERROR', raw: err.message };
@@ -71,7 +82,9 @@ export function judge(caseDef, response) {
 if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`) {
   let input = '';
   process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (c) => { input += c; });
+  process.stdin.on('data', (c) => {
+    input += c;
+  });
   process.stdin.on('end', () => {
     const { case: caseDef, response } = JSON.parse(input);
     const result = judge(caseDef, response);

@@ -32,7 +32,7 @@ describe('github DLQ', () => {
       repoFullName: 'octo/repo',
     });
     expect(id).toBe(1);
-    const item = (await sqliteStore(root).connectorEvents.deadLetter('github', id));
+    const item = await sqliteStore(root).connectorEvents.deadLetter('github', id);
     expect(item).not.toBeNull();
     expect(item!.tenantId).toBe('default');
     expect(item!.rawPayload).toBe('{"action":"opened"}');
@@ -55,7 +55,7 @@ describe('github DLQ', () => {
       error: 'no tenant',
       bucket: 'unroutable',
     });
-    const item = (await sqliteStore(root).connectorEvents.deadLetter('github', id));
+    const item = await sqliteStore(root).connectorEvents.deadLetter('github', id);
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
     const listed = await listDlq(githubDlq, sqliteStore(root), { tenantId: '__unroutable__' });
@@ -63,12 +63,7 @@ describe('github DLQ', () => {
   });
 
   it('parkInDlq round-trips every defined bucket value', async () => {
-    const buckets: DlqBucket[] = [
-      'parse_error',
-      'unroutable',
-      'signature_failed',
-      'unhandled',
-    ];
+    const buckets: DlqBucket[] = ['parse_error', 'unroutable', 'signature_failed', 'unhandled'];
     for (const bucket of buckets) {
       await parkInDlq(githubDlq, sqliteStore(root), {
         tenantId: 'default',
@@ -116,10 +111,10 @@ describe('github DLQ', () => {
       rawPayload: '{}',
       error: 'boom',
     });
-    const found = (await sqliteStore(root).connectorEvents.deadLetter('github', id));
+    const found = await sqliteStore(root).connectorEvents.deadLetter('github', id);
     expect(found).not.toBeNull();
     expect(found!.id).toBe(id);
-    expect((await sqliteStore(root).connectorEvents.deadLetter('github', 9999))).toBeNull();
+    expect(await sqliteStore(root).connectorEvents.deadLetter('github', 9999)).toBeNull();
   });
 
   it('replayDlqEntry returns not_found for unknown ids', async () => {
@@ -143,7 +138,7 @@ describe('github DLQ', () => {
     expect(result.status).toBe('parse_error');
     expect(result.retryCount).toBe(1);
 
-    const after = (await sqliteStore(root).connectorEvents.deadLetter('github', id));
+    const after = await sqliteStore(root).connectorEvents.deadLetter('github', id);
     expect(after!.retryCount).toBe(1);
     expect(after!.retriedAt).not.toBeNull();
   });

@@ -25,12 +25,7 @@ type ToolArgs = {
   class_tag?: string;
 };
 
-function callTool(
-  reqId: number,
-  name: string,
-  args: ToolArgs,
-  ctx: McpContext,
-) {
+function callTool(reqId: number, name: string, args: ToolArgs, ctx: McpContext) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -64,7 +59,11 @@ describe('mcp hippo_predict_baserate', () => {
 
   it('returns formatted text response for a class with closed predictions', async () => {
     // Seed 3 closed predictions
-    const estimateActualPairs: Array<[number, number]> = [[2, 4], [3, 6], [1, 1]];
+    const estimateActualPairs: Array<[number, number]> = [
+      [2, 4],
+      [3, 6],
+      [1, 1],
+    ];
     for (const [est, act] of estimateActualPairs) {
       const p = savePrediction(home, 'default', {
         classTag: 'mcp-test',
@@ -74,14 +73,20 @@ describe('mcp hippo_predict_baserate', () => {
       closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
     }
 
-    const res = await callTool(1, 'hippo_predict_baserate', { class_tag: 'mcp-test' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      1,
+      'hippo_predict_baserate',
+      { class_tag: 'mcp-test' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
 
     // Summary line + stats block
@@ -95,14 +100,20 @@ describe('mcp hippo_predict_baserate', () => {
   });
 
   it('empty class returns guidance text (not error)', async () => {
-    const res = await callTool(2, 'hippo_predict_baserate', { class_tag: 'never-seen' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      2,
+      'hippo_predict_baserate',
+      { class_tag: 'never-seen' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('No closed predictions');
     expect(text).toContain('never-seen');
@@ -110,27 +121,39 @@ describe('mcp hippo_predict_baserate', () => {
   });
 
   it('missing class_tag is rejected as an invalid argument', async () => {
-    const res = await callTool(3, 'hippo_predict_baserate', {}, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      3,
+      'hippo_predict_baserate',
+      {},
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     expect(res?.result).toMatchObject({ isError: true });
     expect(extractText(res)).toContain('class_tag is required');
   });
 
   it('blank class_tag returns clear usage message', async () => {
-    const res = await callTool(4, 'hippo_predict_baserate', { class_tag: '  ' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      4,
+      'hippo_predict_baserate',
+      { class_tag: '  ' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('No class_tag');
     expect(text).toContain('Usage');

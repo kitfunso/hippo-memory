@@ -31,7 +31,9 @@ describe('corrupt workspace registry', () => {
     expect(fs.readFileSync(path.join(globalRoot, asides[0]), 'utf8')).toBe(corrupt);
     expect(fs.existsSync(registryFile)).toBe(false);
     const warning = stderrSpy.mock.calls.map((c) => String(c[0])).find((l) => l.includes('workspace registry'));
-    expect(warning).toMatch(/^\[hippo\] warn: workspace registry .* is corrupt .*moved it to .*workspaces\.json\.corrupt-/);
+    expect(warning).toMatch(
+      /^\[hippo\] warn: workspace registry .* is corrupt .*moved it to .*workspaces\.json\.corrupt-/,
+    );
 
     registerWorkspace(globalRoot, path.join(globalRoot, 'repo-b'));
     expect(fs.readFileSync(path.join(globalRoot, asides[0]), 'utf8')).toBe(corrupt);

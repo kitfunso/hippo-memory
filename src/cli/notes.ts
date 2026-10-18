@@ -35,7 +35,11 @@ const noteKind = (
   save: (customer, note, extraTags, from) => {
     const { defaultHalfLifeDays } = cliConfig(hippoRoot);
     return customerNotesModule.saveCustomerNote(objects, defaultHalfLifeDays, tenantId, {
-      customer, note, extraTags, changeSummary: from?.changeSummary, supersedesNoteId: from?.id,
+      customer,
+      note,
+      extraTags,
+      changeSummary: from?.changeSummary,
+      supersedesNoteId: from?.id,
     });
   },
   recorded: (n) => `Customer note recorded: #${n.id} (v${n.version}) for customer "${n.customer}"`,

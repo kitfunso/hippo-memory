@@ -63,11 +63,16 @@ describe('mcp hippo_recall include_continuity', () => {
 
   it('omits continuity by default (hot path)', async () => {
     writeEntry(home, createMemory('memory about deploys', {}));
-    const res = await callTool(1, 'hippo_recall', { query: 'deploys' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      1,
+      'hippo_recall',
+      { query: 'deploys' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).not.toContain('## Continuity');
   });
@@ -95,14 +100,19 @@ describe('mcp hippo_recall include_continuity', () => {
       source: 'test',
     });
 
-    const res = await callTool(2, 'hippo_recall', {
-      query: 'deploys',
-      include_continuity: true,
-    }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      2,
+      'hippo_recall',
+      {
+        query: 'deploys',
+        include_continuity: true,
+      },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('## Continuity');
     expect(text).toContain('Wire MCP continuity');
@@ -121,14 +131,19 @@ describe('mcp hippo_recall include_continuity', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const res = await callTool(3, 'hippo_recall', {
-      query: 'deploys',
-      include_continuity: true,
-    }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      3,
+      'hippo_recall',
+      {
+        query: 'deploys',
+        include_continuity: true,
+      },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('## Continuity');
     expect(text).not.toContain('Private task');
@@ -145,15 +160,20 @@ describe('mcp hippo_recall include_continuity', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const res = await callTool(4, 'hippo_recall', {
-      query: 'deploys',
-      include_continuity: true,
-      scope: 'slack:private:Csecret',
-    }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      4,
+      'hippo_recall',
+      {
+        query: 'deploys',
+        include_continuity: true,
+        scope: 'slack:private:Csecret',
+      },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('Private task');
   });

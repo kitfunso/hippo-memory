@@ -69,9 +69,10 @@ export function originUrlFromConfig(text: string): string | null {
     const section = SECTION.exec(line);
     if (section) {
       const [, name, sub, rest] = section;
-      inOrigin = sub === undefined
-        ? name.toLowerCase() === 'remote.origin'
-        : name.toLowerCase() === 'remote' && sub.replace(/\\(.)/g, '$1') === 'origin';
+      inOrigin =
+        sub === undefined
+          ? name.toLowerCase() === 'remote.origin'
+          : name.toLowerCase() === 'remote' && sub.replace(/\\(.)/g, '$1') === 'origin';
       line = rest.trim();
     }
     const entry = inOrigin ? ENTRY.exec(line) : null;

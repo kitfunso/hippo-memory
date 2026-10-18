@@ -40,11 +40,7 @@ function ctx(home: string): FullContext {
 
 type ScopeToolArgs = { query: string } | Record<string, never>;
 
-function callMcpTool(
-  home: string,
-  name: string,
-  args: ScopeToolArgs,
-) {
+function callMcpTool(home: string, name: string, args: ScopeToolArgs) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -52,7 +48,15 @@ function callMcpTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+    {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    },
   );
 }
 
@@ -155,7 +159,11 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'acme:private:demo',
     });
 
-    const result = await retrieve(ctx(home), { query: 'anything', window: { includeContinuity: true }, filter: { scope: 'acme:private:demo' } });
+    const result = await retrieve(ctx(home), {
+      query: 'anything',
+      window: { includeContinuity: true },
+      filter: { scope: 'acme:private:demo' },
+    });
     expect(result.continuity?.activeSnapshot?.task).toBe('ACME private task');
   });
 

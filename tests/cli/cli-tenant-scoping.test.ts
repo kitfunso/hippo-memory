@@ -124,7 +124,9 @@ describe('CLI tenant-scoping', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`SELECT tenant_id, metadata_json FROM audit_log WHERE op = 'forget' AND target_id = ?`).get(bJunk);
+      const row = db
+        .prepare(`SELECT tenant_id, metadata_json FROM audit_log WHERE op = 'forget' AND target_id = ?`)
+        .get(bJunk);
       expect(row).toMatchObject({ tenant_id: 'tenant_b', metadata_json: expect.stringContaining('audit --fix: ') });
     } finally {
       closeHippoDb(db);

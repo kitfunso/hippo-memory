@@ -76,9 +76,16 @@ describe('listMemories paging', () => {
     const ctx = cliApiContext(root, 'default');
     expect(await listMemories(ctx, {}, { pageSize: 2 })).toEqual([]);
     await withSharedStoreHandles(() => {
-      for (let i = 0; i < 5; i++) writeEntry(root, { ...createMemory(`tied row ${i}`, { tenantId: 'default' }), created: '2026-02-02T00:00:00.000Z' });
+      for (let i = 0; i < 5; i++) {
+        writeEntry(root, {
+          ...createMemory(`tied row ${i}`, { tenantId: 'default' }),
+          created: '2026-02-02T00:00:00.000Z',
+        });
+      }
     });
-    expect((await listMemories(ctx, {}, { pageSize: 2 })).map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
+    expect((await listMemories(ctx, {}, { pageSize: 2 })).map((e) => e.id)).toEqual(
+      loadAllEntries(root, 'default').map((e) => e.id),
+    );
   });
 
   it('reads every row across the default page boundary', async () => {
@@ -109,7 +116,9 @@ describe('loadContextCandidates', () => {
 describe('strengthenRetrieved', () => {
   it('writes every returned row in one statement with the same values as a single-row write', async () => {
     const ids = await seed(4);
-    const { result, statements } = recordStatements(() => strengthenRetrieved(root, ids, { recallBoostAblated: false }));
+    const { result, statements } = recordStatements(() =>
+      strengthenRetrieved(root, ids, { recallBoostAblated: false }),
+    );
     expect([...result].sort()).toEqual([...ids].sort());
     expect(countMatching(statements, /UPDATE memories SET retrieval_count/)).toBe(1);
     for (const id of ids) {
@@ -127,14 +136,22 @@ describe('rejections.apply', () => {
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
     const { rejections } = sqliteSyncStore(root);
-    const { result, statements } = recordStatements(() => rejections.apply({
-      tenantId: 'default', actor: 'tester', reason: 'wrong', textOf: () => '  The Deploy WINDOW is friday   afternoon ',
-      inReach: () => true, successorOf: () => undefined,
-    }));
+    const { result, statements } = recordStatements(() =>
+      rejections.apply({
+        tenantId: 'default',
+        actor: 'tester',
+        reason: 'wrong',
+        textOf: () => '  The Deploy WINDOW is friday   afternoon ',
+        inReach: () => true,
+        successorOf: () => undefined,
+      }),
+    );
     expect(result.removedIds).toEqual([target.id]);
     expect(readEntry(root, target.id)).toBeNull();
     expect(loadAllEntries(root, 'default')).toHaveLength(5);
     expect(countMatching(statements, 'SELECT id, content, source, scope FROM memories')).toBe(1);
-    expect(countMatching(statements, /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/)).toBe(0);
+    expect(
+      countMatching(statements, /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/),
+    ).toBe(0);
   });
 });

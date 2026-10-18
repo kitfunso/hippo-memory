@@ -20,7 +20,11 @@ function initWithNoFlags(dir: string, extraEnv: Record<string, string>) {
   // An empty PATH as well, so a preload that missed a call still finds no schtasks or crontab to run.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PATH'));
   const env = {
-    ...inherited, ...extraEnv, PATH: emptyPath, HIPPO_HOME: join(dir, 'global'), SCHEDULER_CALLS_FILE: calls,
+    ...inherited,
+    ...extraEnv,
+    PATH: emptyPath,
+    HIPPO_HOME: join(dir, 'global'),
+    SCHEDULER_CALLS_FILE: calls,
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require "${REFUSE_SCHEDULER}"`,
   };
   const r = hippoRun(['init'], { cwd: project, env });

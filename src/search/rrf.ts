@@ -35,8 +35,7 @@ export function rrfFuse<T>(
   }
 
   const k = options?.k ?? RRF_K;
-  const defaultAbsentRank =
-    rankedLists.reduce((m, l) => Math.max(m, l.length), 0) + 1;
+  const defaultAbsentRank = rankedLists.reduce((m, l) => Math.max(m, l.length), 0) + 1;
   const absentRank = options?.absentRank ?? defaultAbsentRank;
 
   const rankMaps: Array<Map<T, number>> = rankedLists.map((list) => {

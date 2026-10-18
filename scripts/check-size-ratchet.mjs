@@ -26,14 +26,18 @@ function tsFiles(dir, out = []) {
 
 function propName(name) {
   if (!name) return undefined;
-  if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
   return '[computed]';
 }
 
 /** The variable or property an object literal is assigned to, so its methods read `handlers.run`. */
 function ownerOf(obj) {
   const p = obj.parent;
-  if (p && (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p))) return propName(p.name);
+  if (p && (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p))) {
+    return propName(p.name);
+  }
   return undefined;
 }
 
@@ -51,7 +55,7 @@ function localName(node) {
   if (ts.isConstructorDeclaration(node)) return `${node.parent.name?.text ?? 'class'}.constructor`;
   if (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) {
     const kind = ts.isGetAccessor(node) ? 'get ' : ts.isSetAccessor(node) ? 'set ' : '';
-    const owner = ts.isClassLike(p) ? p.name?.text ?? 'class' : ownerOf(p);
+    const owner = ts.isClassLike(p) ? (p.name?.text ?? 'class') : ownerOf(p);
     return `${owner ? owner + '.' : ''}${kind}${propName(node.name)}`;
   }
   if (ts.isFunctionExpression(node) && node.name) return node.name.text;
@@ -69,8 +73,14 @@ function localName(node) {
 }
 
 const isFunctionLike = (n) =>
-  (ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) ||
-    ts.isConstructorDeclaration(n) || ts.isGetAccessor(n) || ts.isSetAccessor(n)) && n.body !== undefined;
+  (ts.isFunctionDeclaration(n) ||
+    ts.isMethodDeclaration(n) ||
+    ts.isFunctionExpression(n) ||
+    ts.isArrowFunction(n) ||
+    ts.isConstructorDeclaration(n) ||
+    ts.isGetAccessor(n) ||
+    ts.isSetAccessor(n)) &&
+  n.body !== undefined;
 
 /** Every function in one file as [key, lines]; nested ones carry their parents' names and a #n when keys repeat. */
 function functionLengths(file, text) {
@@ -125,7 +135,8 @@ function findOffenders() {
 
 const current = findOffenders();
 const args = process.argv.slice(2);
-const total = `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${LIMITS_TEXT}` +
+const total =
+  `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${LIMITS_TEXT}` +
   `, ${Object.values(current.longLines).reduce((a, b) => a + b, 0)} src lines over ${LINE_LIMIT} characters`;
 
 if (args.includes('--update')) {
@@ -153,13 +164,19 @@ for (const kind of ['files', 'functions', 'longLines']) {
 }
 
 if (rose.length > 0) {
-  console.error(`Files over ${FILE_LIMIT} lines, functions over ${LIMITS_TEXT} or src lines over ${LINE_LIMIT} characters appeared or grew past the baseline:`);
+  console.error(
+    `Files over ${FILE_LIMIT} lines, functions over ${LIMITS_TEXT} or src lines over ${LINE_LIMIT} characters appeared or grew past the baseline:`,
+  );
   for (const [key, was, n] of rose) console.error(`  ${key}: ${was} -> ${n}`);
-  console.error('Split the new code into a smaller function or module, or wrap the long line, instead of growing an offender.');
+  console.error(
+    'Split the new code into a smaller function or module, or wrap the long line, instead of growing an offender.',
+  );
   console.error('`node scripts/check-size-ratchet.mjs --list` shows every offender, longest first.');
   process.exit(1);
 }
 if (fell.length > 0) {
-  console.log(`${fell.length} offenders shrank or went; run \`node scripts/check-size-ratchet.mjs --update\` to lock that in.`);
+  console.log(
+    `${fell.length} offenders shrank or went; run \`node scripts/check-size-ratchet.mjs --update\` to lock that in.`,
+  );
 }
 console.log(`Size ratchet OK: ${total}, none above ${BASELINE}.`);

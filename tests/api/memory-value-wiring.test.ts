@@ -18,7 +18,13 @@ import { consolidate } from '../../src/index.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../../src/core/memory.js';
+import {
+  Layer,
+  calculateStrength,
+  resolveConfidence,
+  type MemoryEntry,
+  type DecayOptions,
+} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
@@ -40,7 +46,8 @@ import { loadEveryTenantEntries, loadSessionDecayContext, listMemoryConflicts } 
 import type { AuditEvent } from '../../src/store/port/types.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
@@ -67,7 +74,11 @@ function enableMemoryValue(hippoRoot: string, extra: Partial<HippoConfig> = {}):
   fs.writeFileSync(
     configPath,
     // dormant off: these gates were pre-registered on the delete path.
-    JSON.stringify({ memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false }, ...extra }, null, 2),
+    JSON.stringify(
+      { memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false }, ...extra },
+      null,
+      2,
+    ),
   );
 }
 
@@ -139,10 +150,9 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
     const built: MemoryEntry[] = [
       createMemory7('alpha short note about a topic', { layer: Layer.Episodic }),
       {
-        ...createMemory(
-          'a much longer memory entry with considerably more words describing something in detail',
-          { layer: Layer.Semantic },
-        ),
+        ...createMemory('a much longer memory entry with considerably more words describing something in detail', {
+          layer: Layer.Semantic,
+        }),
         retrieval_count: 7,
         outcome_positive: 3,
         outcome_negative: 1,
@@ -193,10 +203,9 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
       createMemory7('two two', { layer: Layer.Semantic }),
       createMemory7('three three three words here', { layer: Layer.Semantic }),
       createMemory7('four four four four word entry with extra padding text', { layer: Layer.Semantic }),
-      createMemory7(
-        'five five five five five word entry with even more extra padding text added here',
-        { layer: Layer.Semantic },
-      ),
+      createMemory7('five five five five five word entry with even more extra padding text added here', {
+        layer: Layer.Semantic,
+      }),
     ].map((e, i) => ({
       ...e,
       retrieval_count: i,
@@ -246,9 +255,7 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
     const built: MemoryEntry[] = [
       condemnedEntry('short'),
       condemnedEntry('a somewhat longer piece of content here'),
-      condemnedEntry(
-        'an even longer piece of content with quite a few more words in it than the others',
-      ),
+      condemnedEntry('an even longer piece of content with quite a few more words in it than the others'),
     ];
     for (const e of built) writeEntry(dir, e);
     const loaded = loadEveryTenantEntries(dir);
@@ -297,17 +304,23 @@ describe('(d) flag-off byte-identical', () => {
     const configPath = path.join(dir, 'config.json');
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ replay: { count: 0 }, physics: { enabled: false }, autoTraceCapture: false, dormant: { enabled: false } }, null, 2),
+      JSON.stringify(
+        { replay: { count: 0 }, physics: { enabled: false }, autoTraceCapture: false, dormant: { enabled: false } },
+        null,
+        2,
+      ),
     );
 
     const tenants = ['d-t1', 'd-t2', 'd-t3'];
     const built: MemoryEntry[] = [];
     for (const tenantId of tenants) {
       for (let i = 0; i < 10; i++) {
-        built.push(createMemory7(`${tenantId} healthy entry ${i} with distinct padding text`, {
-          layer: Layer.Semantic,
-          tenantId,
-        }));
+        built.push(
+          createMemory7(`${tenantId} healthy entry ${i} with distinct padding text`, {
+            layer: Layer.Semantic,
+            tenantId,
+          }),
+        );
       }
       for (let i = 0; i < 3; i++) {
         built.push(condemnedEntry(`${tenantId} condemned entry ${i}`, { tenantId }));
@@ -383,12 +396,16 @@ describe('(e) rescue semantics', () => {
   it('a rescue audit row that fails to write is counted and reported, and the other rows still land', async () => {
     initStore(dir);
     enableMemoryValue(dir);
-    const built = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ta' }));
+    const built = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) =>
+      condemnedEntry('w'.repeat(len), { tenantId: 'ta' }),
+    );
     for (const e of built) writeEntry(dir, e);
     const refused = built[1]!.id;
     const db = openHippoDb(dir);
     try {
-      db.exec(`CREATE TRIGGER refuse_one_rescue_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'mv_rescue' AND NEW.target_id = '${refused}' BEGIN SELECT RAISE(ABORT, 'audit row refused'); END`);
+      db.exec(
+        `CREATE TRIGGER refuse_one_rescue_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'mv_rescue' AND NEW.target_id = '${refused}' BEGIN SELECT RAISE(ABORT, 'audit row refused'); END`,
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -402,7 +419,9 @@ describe('(e) rescue semantics', () => {
       stderr.mockRestore();
     }
 
-    expect(result.details).toContain('  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)');
+    expect(result.details).toContain(
+      '  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)',
+    );
     expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(new Set([built[0]!.id, built[2]!.id]));
     expect(loadEveryTenantEntries(dir).map((e) => e.id)).toContain(refused);
   });
@@ -419,9 +438,7 @@ describe('(e) rescue semantics', () => {
     // we only assert on the top 2 (a safe subset of the top 3 regardless of
     // exactly which entry takes rank 3).
     const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const built = lens.map((len) =>
-      condemnedEntry('w'.repeat(len), { tenantId: 'te', confidence: 'observed' }),
-    );
+    const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'te', confidence: 'observed' }));
     for (const e of built) writeEntry(dir, e);
 
     const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
@@ -449,7 +466,7 @@ describe('(e) rescue semantics', () => {
     }
   });
 
-  it('rescued entries participate in the same cycle\'s merge pass', async () => {
+  it("rescued entries participate in the same cycle's merge pass", async () => {
     initStore(dir);
     enableMemoryValue(dir);
 
@@ -471,9 +488,7 @@ describe('(e) rescue semantics', () => {
     expect(result.merged).toBeGreaterThanOrEqual(2);
 
     const after = loadEveryTenantEntries(dir);
-    const semanticSummary = after.find(
-      (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated'),
-    );
+    const semanticSummary = after.find((e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated'));
     expect(semanticSummary, 'expected a new merged semantic summary').toBeDefined();
 
     // Both rescued twins survive (demoted half-life, not deleted).
@@ -494,14 +509,14 @@ describe('(e) rescue semantics', () => {
     // Buffer layer: excluded from the merge pass (Episodic-only), included
     // in detectConflicts (only Semantic is excluded there) — keeps this
     // sub-test isolated from the merge-pass sub-test above.
-    const a = condemnedEntry(
-      'widget caching is enabled by default for every request',
-      { layer: Layer.Buffer, tenantId: 'tc' },
-    );
-    const b = condemnedEntry(
-      'widget caching is disabled by default for every request',
-      { layer: Layer.Buffer, tenantId: 'tc' },
-    );
+    const a = condemnedEntry('widget caching is enabled by default for every request', {
+      layer: Layer.Buffer,
+      tenantId: 'tc',
+    });
+    const b = condemnedEntry('widget caching is disabled by default for every request', {
+      layer: Layer.Buffer,
+      tenantId: 'tc',
+    });
     const fillers = Array.from({ length: 8 }, (_, i) =>
       condemnedEntry(`completely unrelated filler content block number ${i} ${'z'.repeat(100 + i * 10)}`, {
         layer: Layer.Semantic,
@@ -521,9 +536,7 @@ describe('(e) rescue semantics', () => {
 
     const conflicts = listMemoryConflicts(dir, 'open', 'tc');
     const found = conflicts.find(
-      (c) =>
-        (c.memory_a_id === a.id && c.memory_b_id === b.id) ||
-        (c.memory_a_id === b.id && c.memory_b_id === a.id),
+      (c) => (c.memory_a_id === a.id && c.memory_b_id === b.id) || (c.memory_a_id === b.id && c.memory_b_id === a.id),
     );
     expect(found, 'expected a conflict row between the two rescued entries').toBeDefined();
     expect(found!.reason).toMatch(/enabled\/disabled/);
@@ -606,9 +619,9 @@ describe('(g) fail-loud on a malformed weights constant', () => {
     const all = loadEveryTenantEntries(dir);
     const badWeights = { ...MEMORY_VALUE_WEIGHTS, strength: Number.POSITIVE_INFINITY };
 
-    expect(() => rescueSet(all, new Set([condemned.id]), NOW, { weights: badWeights, digest: SOURCE_ARTIFACT_SHA256 })).toThrow(
-      /not a finite number/,
-    );
+    expect(() =>
+      rescueSet(all, new Set([condemned.id]), NOW, { weights: badWeights, digest: SOURCE_ARTIFACT_SHA256 }),
+    ).toThrow(/not a finite number/);
     // Sanity: the real frozen constant is valid — the throw above is
     // specific to the corrupted override, not a false-positive on the
     // production path.
@@ -624,10 +637,46 @@ describe('(h) scale characterization', () => {
   it('deterministic, deletes-subset, per-tenant isolation at ~2,000 entries / 3 tenants; reports rescue rate', async () => {
     const rand = mulberry32(20260810);
     const wordBank = [
-      'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa',
-      'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon',
-      'phi', 'chi', 'psi', 'omega', 'quartz', 'ember', 'lattice', 'marble', 'cobalt', 'willow',
-      'harbor', 'meadow', 'crimson', 'granite', 'velvet', 'canyon', 'thistle', 'ripple', 'signal', 'anchor',
+      'alpha',
+      'beta',
+      'gamma',
+      'delta',
+      'epsilon',
+      'zeta',
+      'eta',
+      'theta',
+      'iota',
+      'kappa',
+      'lambda',
+      'mu',
+      'nu',
+      'xi',
+      'omicron',
+      'pi',
+      'rho',
+      'sigma',
+      'tau',
+      'upsilon',
+      'phi',
+      'chi',
+      'psi',
+      'omega',
+      'quartz',
+      'ember',
+      'lattice',
+      'marble',
+      'cobalt',
+      'willow',
+      'harbor',
+      'meadow',
+      'crimson',
+      'granite',
+      'velvet',
+      'canyon',
+      'thistle',
+      'ripple',
+      'signal',
+      'anchor',
     ];
     const TENANTS = ['scale-t1', 'scale-t2', 'scale-t3'];
     const N_PER_TENANT = 700;
@@ -655,12 +704,20 @@ describe('(h) scale characterization', () => {
           // outcomes; a tenant-A-internal merge moving them is a different
           // question this test isn't asking).
           const layerRoll = rand();
-          const layer = tenantId === TENANTS[0]
-            ? (layerRoll < 0.6 ? Layer.Semantic : layerRoll < 0.85 ? Layer.Trace : Layer.Buffer)
-            : layerRoll < 0.9 ? Layer.Semantic
-            : layerRoll < 0.95 ? Layer.Trace
-            : layerRoll < 0.98 ? Layer.Buffer
-            : Layer.Episodic;
+          const layer =
+            tenantId === TENANTS[0]
+              ? layerRoll < 0.6
+                ? Layer.Semantic
+                : layerRoll < 0.85
+                  ? Layer.Trace
+                  : Layer.Buffer
+              : layerRoll < 0.9
+                ? Layer.Semantic
+                : layerRoll < 0.95
+                  ? Layer.Trace
+                  : layerRoll < 0.98
+                    ? Layer.Buffer
+                    : Layer.Episodic;
           const retrieval_count = Math.floor(rand() * 10);
           const outcome_positive = Math.floor(rand() * 5);
           const outcome_negative = Math.floor(rand() * 5);
@@ -783,9 +840,7 @@ describe('(h) scale characterization', () => {
     // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
     // rescue-audit write site).
     const cycle1ByIdMeta = new Map(
-      cycle1Events
-        .filter(hasStringTargetId)
-        .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
+      cycle1Events.filter(hasStringTargetId).map((e) => [e.targetId, e.metadata as MvAuditMeta]),
     );
     // One audit row per tenant-A rescue the pure rescueSet predicted; the count comes from its scores, not the seed alone.
     expect(cycle1ByIdMeta.size).toBe(perTenant[tenantAId].rescued);
@@ -812,9 +867,7 @@ describe('(h) scale characterization', () => {
     // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
     // rescue-audit write site).
     const mutatedByIdMeta = new Map(
-      mutatedEvents
-        .filter(hasStringTargetId)
-        .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
+      mutatedEvents.filter(hasStringTargetId).map((e) => [e.targetId, e.metadata as MvAuditMeta]),
     );
 
     expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());

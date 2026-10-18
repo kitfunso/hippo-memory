@@ -9,12 +9,25 @@ import { STORE_NOT_PORTED_MESSAGE } from '../../src/util/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../../src/mcp/server.js';
 import { TOOLS } from '../../src/mcp/tools.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore } from '../../src/entry/store-kit.js';
+import {
+  sqliteStore,
+  StoreBusyError,
+  type ApiKeyRecord,
+  type ContinuityKey,
+  type HippoStore,
+} from '../../src/entry/store-kit.js';
 import { OBJECT_ROW, V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { inMemoryGraphReadsStore, seedGraphRows, type SeededGraph } from '../_helpers/in-memory-graph-reads-store.js';
 import { inMemoryObjectsStore, type InMemoryObjectsStore } from '../_helpers/in-memory-objects-store.js';
 import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
-import { HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords, type InMemoryQuarantineStore } from '../_helpers/in-memory-quarantine-store.js';
+import {
+  HELD,
+  heldAt,
+  heldContent,
+  inMemoryQuarantineStore,
+  seedQuarantineRecords,
+  type InMemoryQuarantineStore,
+} from '../_helpers/in-memory-quarantine-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -23,15 +36,26 @@ const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 
 /** The entries that need hippo.db's local files, which no store but hippo.db's has. */
 function localFileRoutes(): string[] {
-  return V1_ROWS.filter(({ route }) => route.storeReady === 'localFiles' || route.sqliteOnly !== undefined).map(({ key }) => requestLine(key));
+  return V1_ROWS.filter(({ route }) => route.storeReady === 'localFiles' || route.sqliteOnly !== undefined).map(
+    ({ key }) => requestLine(key),
+  );
 }
 
 /** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the optional four. */
 function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
-  return { ...sqliteStore(root), kind: 'stub', localFiles: undefined, vectorViews: undefined, readiness: undefined, lastRecall: undefined, ...base };
+  return {
+    ...sqliteStore(root),
+    kind: 'stub',
+    localFiles: undefined,
+    vectorViews: undefined,
+    readiness: undefined,
+    lastRecall: undefined,
+    ...base,
+  };
 }
 
-const rpc = (method: string, params?: McpRequest['params']): string => JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
+const rpc = (method: string, params?: McpRequest['params']): string =>
+  JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 const base32 = (n: number): string => Array.from(randomBytes(n), (b) => BASE32[b % 32]).join('');
@@ -47,7 +71,11 @@ function newKey(): TestKey {
   const plaintext = `${keyId}.${base32(32)}`;
   const salt = randomBytes(16);
   const keyHash = `scrypt$${salt.toString('hex')}$${scryptSync(plaintext, salt, 32).toString('hex')}`;
-  return { keyId, plaintext, record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [], expiresAt: null } };
+  return {
+    keyId,
+    plaintext,
+    record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [], expiresAt: null },
+  };
 }
 
 const bearer = (key: TestKey) => ({ authorization: `Bearer ${key.plaintext}` });
@@ -96,18 +124,43 @@ describe('serve() under a store that is not hippo.db', () => {
     recordTokens: unported,
     async close(): Promise<void> {},
   };
-  const post = async (path: string, key: TestKey) => fetch(`${handle.url}${path}`, { method: 'POST', headers: { ...bearer(key), 'content-type': 'application/json' }, body: '{}' });
+  const post = async (path: string, key: TestKey) =>
+    fetch(`${handle.url}${path}`, {
+      method: 'POST',
+      headers: { ...bearer(key), 'content-type': 'application/json' },
+      body: '{}',
+    });
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = makeRoot('other-store', { init: false });
     handle = await serve({
-      hippoRoot: root, port: 0, store: stubStore(root, base), routes: [
-        { path: '/v1/x-addon', handler: async () => { addonRuns += 1; return {}; } },
+      hippoRoot: root,
+      port: 0,
+      store: stubStore(root, base),
+      routes: [
+        {
+          path: '/v1/x-addon',
+          handler: async () => {
+            addonRuns += 1;
+            return {};
+          },
+        },
         { path: '/v1/x-addon-base', storeReady: 'base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
-        { path: '/v1/x-addon-keyaudit', storeReady: 'keyAudit', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
-        { path: '/v1/x-addon-vectorviews', storeReady: 'vectorViews', handler: async () => { addonRuns += 1; return {}; } },
+        {
+          path: '/v1/x-addon-keyaudit',
+          storeReady: 'keyAudit',
+          handler: async ({ ctx }) => ({ tenant: ctx.tenantId }),
+        },
+        {
+          path: '/v1/x-addon-vectorviews',
+          storeReady: 'vectorViews',
+          handler: async () => {
+            addonRuns += 1;
+            return {};
+          },
+        },
       ],
     });
   });
@@ -122,7 +175,11 @@ describe('serve() under a store that is not hippo.db', () => {
     expect(routes).toEqual(['POST /v1/memories/1/promote', 'POST /v1/sleep']);
     for (const route of routes) {
       const res = await post(route.split(' ')[1]!, valid);
-      expect({ route, status: res.status, body: await res.json() }).toEqual({ route, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+      expect({ route, status: res.status, body: await res.json() }).toEqual({
+        route,
+        status: 501,
+        body: { error: STORE_NOT_PORTED_MESSAGE },
+      });
     }
   });
 
@@ -131,7 +188,11 @@ describe('serve() under a store that is not hippo.db', () => {
     const replies = new Map<string, number>();
     for (const route of V1_ROWS.map(({ key }) => requestLine(key)).filter((line) => !gated.has(line))) {
       const [method, path] = route.split(' ');
-      const res = await fetch(`${handle.url}${path}`, { method, headers: { ...bearer(valid), 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
+      const res = await fetch(`${handle.url}${path}`, {
+        method,
+        headers: { ...bearer(valid), 'content-type': 'application/json' },
+        body: method === 'GET' ? undefined : '{}',
+      });
       replies.set(route, res.status);
     }
     expect(replies.size).toBe(V1_ROWS.length - gated.size);
@@ -140,7 +201,10 @@ describe('serve() under a store that is not hippo.db', () => {
 
   it('answers 501 on an add-on route that names no group, and never runs its handler; a bad key is still a 401', async () => {
     const res = await post('/v1/x-addon', valid);
-    expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+    expect({ status: res.status, body: await res.json() }).toEqual({
+      status: 501,
+      body: { error: STORE_NOT_PORTED_MESSAGE },
+    });
     expect((await post('/v1/x-addon', newKey())).status).toBe(401);
     expect(addonRuns).toBe(0);
   });
@@ -148,11 +212,18 @@ describe('serve() under a store that is not hippo.db', () => {
   it('runs an add-on route that names a required group, and refuses one whose optional group the store lacks', async () => {
     for (const path of ['/v1/x-addon-base', '/v1/x-addon-keyaudit']) {
       const ran = await post(path, valid);
-      expect({ path, status: ran.status, body: await ran.json() }).toEqual({ path, status: 200, body: { tenant: valid.record.tenantId } });
+      expect({ path, status: ran.status, body: await ran.json() }).toEqual({
+        path,
+        status: 200,
+        body: { tenant: valid.record.tenantId },
+      });
     }
     expect((await post('/v1/x-addon-base', newKey())).status).toBe(401);
     const refused = await post('/v1/x-addon-vectorviews', valid);
-    expect({ status: refused.status, body: await refused.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+    expect({ status: refused.status, body: await refused.json() }).toEqual({
+      status: 501,
+      body: { error: STORE_NOT_PORTED_MESSAGE },
+    });
     expect(addonRuns).toBe(0);
   });
 
@@ -186,15 +257,29 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('a hippo.db open nothing catches answers 501 store_not_ported on /v1 and on /mcp', async () => {
-    for (const [method, path] of [['GET', '/v1/memories?q=deploy'], ['POST', '/mcp']] as const) {
-      const res = await fetch(`${handle.url}${path}`, { method, headers: bearer(leaky), body: method === 'GET' ? undefined : '{}' });
-      expect({ path, status: res.status, body: await res.json() }).toEqual({ path, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+    for (const [method, path] of [
+      ['GET', '/v1/memories?q=deploy'],
+      ['POST', '/mcp'],
+    ] as const) {
+      const res = await fetch(`${handle.url}${path}`, {
+        method,
+        headers: bearer(leaky),
+        body: method === 'GET' ? undefined : '{}',
+      });
+      expect({ path, status: res.status, body: await res.json() }).toEqual({
+        path,
+        status: 501,
+        body: { error: STORE_NOT_PORTED_MESSAGE },
+      });
     }
   });
 
   it('runs a store-ready route, and its hippo.db open answers 501 store_not_ported', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=deploy`, { headers: bearer(valid) });
-    expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
+    expect({ status: res.status, body: await res.json() }).toEqual({
+      status: 501,
+      body: { error: STORE_NOT_PORTED_MESSAGE },
+    });
   });
 
   it('POST /mcp lists every tool but the two that need local files, and a call reaching hippo.db answers store_not_ported', async () => {
@@ -209,19 +294,40 @@ describe('serve() under a store that is not hippo.db', () => {
     const listed = TOOLS.map((t) => t.name).filter((name) => name !== 'hippo_share' && name !== 'hippo_peers');
     // SAFETY: a tools/list result carries a tools array of named definitions.
     expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(listed);
-    const notPorted = { status: 200, body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } } };
-    for (const [name, args] of [['hippo_share', { id: 'mem_x' }], ['hippo_status', {}], ['hippo_recall', { query: 'deploy' }]] as const) {
-      expect({ name, ...(await postMcp(rpc('tools/call', { name, arguments: args }))) }).toEqual({ name, ...notPorted });
+    const notPorted = {
+      status: 200,
+      body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } },
+    };
+    for (const [name, args] of [
+      ['hippo_share', { id: 'mem_x' }],
+      ['hippo_status', {}],
+      ['hippo_recall', { query: 'deploy' }],
+    ] as const) {
+      expect({ name, ...(await postMcp(rpc('tools/call', { name, arguments: args }))) }).toEqual({
+        name,
+        ...notPorted,
+      });
     }
   });
 
   it('a SqliteBlockedError inside an MCP tool call answers store_not_ported, not an internal error', () => {
-    expect(mcpErrorResponse(7, new SqliteBlockedError('stub'))).toEqual({ jsonrpc: '2.0', id: 7, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
+    expect(mcpErrorResponse(7, new SqliteBlockedError('stub'))).toEqual({
+      jsonrpc: '2.0',
+      id: 7,
+      error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE },
+    });
   });
 
   it('a StoreBusyError from the store is a 503 with Retry-After on /v1 and on /mcp', async () => {
-    for (const [method, path] of [['GET', '/v1/memories?q=deploy'], ['POST', '/mcp']] as const) {
-      const res = await fetch(`${handle.url}${path}`, { method, headers: bearer(busy), body: method === 'GET' ? undefined : '{}' });
+    for (const [method, path] of [
+      ['GET', '/v1/memories?q=deploy'],
+      ['POST', '/mcp'],
+    ] as const) {
+      const res = await fetch(`${handle.url}${path}`, {
+        method,
+        headers: bearer(busy),
+        body: method === 'GET' ? undefined : '{}',
+      });
       expect(res.status).toBe(503);
       expect(res.headers.get('retry-after')).toBe('1');
       expect(await res.json()).toEqual({ error: STORE_BUSY_MESSAGE });
@@ -253,7 +359,8 @@ describe('serve() under a store that has the predictions group', () => {
     const db = openHippoDb(fixture.dir);
     try {
       // SAFETY: each SELECT names the one column n.
-      const count = (table: string): number => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+      const count = (table: string): number =>
+        (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
       return { predictions: count('predictions'), memories: count('memories'), audit: count('audit_log') };
     } finally {
       closeHippoDb(db);
@@ -274,29 +381,63 @@ describe('serve() under a store that has the predictions group', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  it('runs the five predictions routes on that store, inside the caller\'s tenant, and writes nothing to hippo.db', async () => {
+  it("runs the five predictions routes on that store, inside the caller's tenant, and writes nothing to hippo.db", async () => {
     const before = hippoDbRows();
-    const call = async (token: string, method: string, path: string, body?: string): Promise<{ status: number; body: unknown }> => {
+    const call = async (
+      token: string,
+      method: string,
+      path: string,
+      body?: string,
+    ): Promise<{ status: number; body: unknown }> => {
       const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
       const res = await fetch(`${handle.url}${path}`, { method, headers, body });
       return { status: res.status, body: await res.json() };
     };
     const { memberA, memberB } = fixture.tokens;
-    expect(await call(memberA, 'POST', '/v1/predictions', '{"claim":"the cutover takes two days","classTag":"cutover","estimate":2}')).toMatchObject({
-      status: 201, body: { prediction: { id: 1, tenantId: TENANT_A, classTag: 'cutover', estimateValue: 2, closureState: 'open' } },
+    expect(
+      await call(
+        memberA,
+        'POST',
+        '/v1/predictions',
+        '{"claim":"the cutover takes two days","classTag":"cutover","estimate":2}',
+      ),
+    ).toMatchObject({
+      status: 201,
+      body: { prediction: { id: 1, tenantId: TENANT_A, classTag: 'cutover', estimateValue: 2, closureState: 'open' } },
     });
-    expect(await call(memberA, 'GET', '/v1/predictions?status=open')).toMatchObject({ status: 200, body: { predictions: [{ id: 1 }], next_cursor: null } });
-    expect(await call(memberA, 'GET', '/v1/predictions/1')).toMatchObject({ status: 200, body: { prediction: { id: 1, claimText: 'the cutover takes two days' } } });
+    expect(await call(memberA, 'GET', '/v1/predictions?status=open')).toMatchObject({
+      status: 200,
+      body: { predictions: [{ id: 1 }], next_cursor: null },
+    });
+    expect(await call(memberA, 'GET', '/v1/predictions/1')).toMatchObject({
+      status: 200,
+      body: { prediction: { id: 1, claimText: 'the cutover takes two days' } },
+    });
     expect(await call(memberA, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).toMatchObject({
-      status: 200, body: { prediction: { id: 1, closureState: 'closed', actualValue: 3 } },
+      status: 200,
+      body: { prediction: { id: 1, closureState: 'closed', actualValue: 3 } },
     });
-    expect(await call(memberA, 'GET', '/v1/predictions/stats?class=cutover')).toMatchObject({ status: 200, body: { baserate: { nClosed: 1, meanRatio: 1.5 } } });
-    expect(await call(memberB, 'GET', '/v1/predictions')).toEqual({ status: 200, body: { predictions: [], next_cursor: null } });
+    expect(await call(memberA, 'GET', '/v1/predictions/stats?class=cutover')).toMatchObject({
+      status: 200,
+      body: { baserate: { nClosed: 1, meanRatio: 1.5 } },
+    });
+    expect(await call(memberB, 'GET', '/v1/predictions')).toEqual({
+      status: 200,
+      body: { predictions: [], next_cursor: null },
+    });
     expect((await call(memberB, 'GET', '/v1/predictions/1')).status).toBe(404);
     expect((await call(memberB, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).status).toBe(404);
     const actor = `api_key:${fixture.keys.memberA}`;
-    expect(memory.auditRows().slice(-4).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
-      ['predict_create', actor, TENANT_A], ['remember', actor, TENANT_A], ['predict_close', actor, TENANT_A], ['predict_baserate', actor, TENANT_A],
+    expect(
+      memory
+        .auditRows()
+        .slice(-4)
+        .map((e) => [e.op, e.actor, e.tenantId]),
+    ).toEqual([
+      ['predict_create', actor, TENANT_A],
+      ['remember', actor, TENANT_A],
+      ['predict_close', actor, TENANT_A],
+      ['predict_baserate', actor, TENANT_A],
     ]);
     expect(hippoDbRows()).toEqual(before);
   });
@@ -312,7 +453,9 @@ describe('serve() under a store that has the quarantine group', () => {
     const db = openHippoDb(fixture.dir);
     try {
       // SAFETY: each SELECT names exactly the columns of the type it is read as.
-      const records = db.prepare('SELECT tenant_id, memory_id, status, decided_at FROM memory_quarantine ORDER BY tenant_id, memory_id').all() as object[];
+      const records = db
+        .prepare('SELECT tenant_id, memory_id, status, decided_at FROM memory_quarantine ORDER BY tenant_id, memory_id')
+        .all() as object[];
       // SAFETY: as above.
       const scopes = db.prepare('SELECT id, scope FROM memories ORDER BY id').all() as object[];
       // SAFETY: the SELECT names the one column n.
@@ -345,31 +488,82 @@ describe('serve() under a store that has the quarantine group', () => {
     };
     const { adminA, memberA } = fixture.tokens;
     const item = (id: string, originalScope: string | null, second: number) => ({
-      id, originalScope, reason: 'test', status: 'pending', quarantinedAt: heldAt(second), decidedAt: null, decidedBy: null, contentPreview: heldContent(id),
+      id,
+      originalScope,
+      reason: 'test',
+      status: 'pending',
+      quarantinedAt: heldAt(second),
+      decidedAt: null,
+      decidedBy: null,
+      contentPreview: heldContent(id),
     });
     expect(await call(adminA, 'GET', '/v1/quarantine')).toEqual({
       status: 200,
-      body: { quarantine: [item(HELD.moved, 'team:alpha', 4), item(HELD.a3, 'team:alpha', 2), item(HELD.a2, null, 2), item(HELD.a1, 'team:alpha', 1)], next_cursor: null },
+      body: {
+        quarantine: [
+          item(HELD.moved, 'team:alpha', 4),
+          item(HELD.a3, 'team:alpha', 2),
+          item(HELD.a2, null, 2),
+          item(HELD.a1, 'team:alpha', 1),
+        ],
+        next_cursor: null,
+      },
     });
     expect((await call(memberA, 'GET', '/v1/quarantine')).status).toBe(403);
-    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a1}/approve`)).toEqual({ status: 200, body: { approved: HELD.a1 } });
-    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a1}/approve`)).toEqual({ status: 409, body: { error: `${HELD.a1} is already approved` } });
-    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.moved}/approve`)).toEqual({
-      status: 409, body: { error: `memory ${HELD.moved} scope changed since quarantine; refusing to approve` },
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a1}/approve`)).toEqual({
+      status: 200,
+      body: { approved: HELD.a1 },
     });
-    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a2}/reject`)).toEqual({ status: 200, body: { rejected: HELD.a2 } });
-    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a2}/reject`)).toEqual({ status: 409, body: { error: `${HELD.a2} is already rejected` } });
-    expect(await call(adminB, 'POST', `/v1/quarantine/${HELD.a3}/approve`)).toEqual({ status: 404, body: { error: `not quarantined: ${HELD.a3}` } });
-    expect(await call(adminB, 'POST', `/v1/quarantine/${HELD.a3}/reject`)).toEqual({ status: 404, body: { error: `not quarantined: ${HELD.a3}` } });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a1}/approve`)).toEqual({
+      status: 409,
+      body: { error: `${HELD.a1} is already approved` },
+    });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.moved}/approve`)).toEqual({
+      status: 409,
+      body: { error: `memory ${HELD.moved} scope changed since quarantine; refusing to approve` },
+    });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a2}/reject`)).toEqual({
+      status: 200,
+      body: { rejected: HELD.a2 },
+    });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a2}/reject`)).toEqual({
+      status: 409,
+      body: { error: `${HELD.a2} is already rejected` },
+    });
+    expect(await call(adminB, 'POST', `/v1/quarantine/${HELD.a3}/approve`)).toEqual({
+      status: 404,
+      body: { error: `not quarantined: ${HELD.a3}` },
+    });
+    expect(await call(adminB, 'POST', `/v1/quarantine/${HELD.a3}/reject`)).toEqual({
+      status: 404,
+      body: { error: `not quarantined: ${HELD.a3}` },
+    });
     expect(await call(adminA, 'GET', '/v1/quarantine?status=all&limit=2')).toMatchObject({
-      status: 200, body: { quarantine: [{ id: HELD.moved, status: 'pending' }, { id: HELD.gone, contentPreview: '' }], next_cursor: expect.any(String) },
+      status: 200,
+      body: {
+        quarantine: [
+          { id: HELD.moved, status: 'pending' },
+          { id: HELD.gone, contentPreview: '' },
+        ],
+        next_cursor: expect.any(String),
+      },
     });
     expect(await call(adminA, 'GET', '/v1/quarantine?status=approved')).toMatchObject({
-      status: 200, body: { quarantine: [{ id: HELD.a1, status: 'approved', decidedBy: `api_key:${fixture.keys.adminA}` }], next_cursor: null },
+      status: 200,
+      body: {
+        quarantine: [{ id: HELD.a1, status: 'approved', decidedBy: `api_key:${fixture.keys.adminA}` }],
+        next_cursor: null,
+      },
     });
     const actor = `api_key:${fixture.keys.adminA}`;
-    expect(memory.auditRows().slice(-2).map((e) => [e.op, e.actor, e.tenantId, e.targetId])).toEqual([
-      ['quarantine_approve', actor, TENANT_A, HELD.a1], ['quarantine_reject', actor, TENANT_A, HELD.a2],
+    expect(
+      memory
+        .auditRows()
+        .slice(-2)
+        .map((e) => [e.op, e.actor, e.tenantId, e.targetId]),
+    ).toEqual([
+      ['quarantine_approve', actor, TENANT_A, HELD.a1],
+      ['quarantine_reject', actor, TENANT_A, HELD.a2],
     ]);
     expect(hippoDbRows()).toEqual(before);
   });
@@ -384,8 +578,14 @@ describe('serve() under a store that has the graphReads group', () => {
     const db = openHippoDb(fixture.dir);
     try {
       // SAFETY: each SELECT names the one column n.
-      const count = (table: string): number => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
-      return { entities: count('entities'), relations: count('relations'), memories: count('memories'), audit: count('audit_log') };
+      const count = (table: string): number =>
+        (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+      return {
+        entities: count('entities'),
+        relations: count('relations'),
+        memories: count('memories'),
+        audit: count('audit_log'),
+      };
     } finally {
       closeHippoDb(db);
     }
@@ -424,22 +624,44 @@ describe('serve() under a store that has the graphReads group', () => {
       status: 200,
       body: {
         nodes: [
-          node(e.anchored, 'policy', 'Anchored'), shared, node(e.lone, 'decision', 'Lone'), node(e.twinOpen, 'person', 'Twin'), node(e.twinHeld, 'person', 'Twin'),
-          node(e.secret, 'customer', 'Secret'), spokes[1], spokes[0], hub,
+          node(e.anchored, 'policy', 'Anchored'),
+          shared,
+          node(e.lone, 'decision', 'Lone'),
+          node(e.twinOpen, 'person', 'Twin'),
+          node(e.twinHeld, 'person', 'Twin'),
+          node(e.secret, 'customer', 'Secret'),
+          spokes[1],
+          spokes[0],
+          hub,
         ],
         edges: [edge(e.shared, e.hub), edge(e.hub, e.secret), ...amongSpokes],
         truncated: false,
       },
     });
     expect(await get(memberA, '/v1/graph?entity=Hub')).toEqual({
-      status: 200, body: { nodes: [hub, ...spokes, shared], edges: [edge(e.shared, e.hub), ...amongSpokes], truncated: false },
+      status: 200,
+      body: { nodes: [hub, ...spokes, shared], edges: [edge(e.shared, e.hub), ...amongSpokes], truncated: false },
     });
-    expect(await get(memberA, '/v1/graph?entity=Secret')).toEqual({ status: 200, body: { nodes: [], edges: [], truncated: false } });
-    expect(await get(adminA, '/v1/graph?entity=Hub&limit=2')).toEqual({ status: 200, body: { nodes: [hub, shared], edges: [edge(e.shared, e.hub)], truncated: true } });
+    expect(await get(memberA, '/v1/graph?entity=Secret')).toEqual({
+      status: 200,
+      body: { nodes: [], edges: [], truncated: false },
+    });
+    expect(await get(adminA, '/v1/graph?entity=Hub&limit=2')).toEqual({
+      status: 200,
+      body: { nodes: [hub, shared], edges: [edge(e.shared, e.hub)], truncated: true },
+    });
     expect(await get(memberB, '/v1/graph?entity=Shared')).toEqual({
-      status: 200, body: { nodes: [node(e.sharedB, 'project', 'Shared'), node(e.otherB, 'system', 'Other')], edges: [edge(e.sharedB, e.otherB)], truncated: false },
+      status: 200,
+      body: {
+        nodes: [node(e.sharedB, 'project', 'Shared'), node(e.otherB, 'system', 'Other')],
+        edges: [edge(e.sharedB, e.otherB)],
+        truncated: false,
+      },
     });
-    expect(await get(adminA, '/v1/graph?limit=0')).toEqual({ status: 400, body: { error: 'limit must be a positive integer <= 1000' } });
+    expect(await get(adminA, '/v1/graph?limit=0')).toEqual({
+      status: 400,
+      body: { error: 'limit must be a positive integer <= 1000' },
+    });
     expect(hippoDbRows()).toEqual(before);
   });
 });
@@ -462,14 +684,66 @@ describe('serve() under a store that has the objects group', () => {
   }
 
   const SAVED: readonly SavedKind[] = [
-    { path: '/v1/decisions', one: 'decision', many: 'decisions', create: { text: 'ship on friday' }, revise: { text: 'ship on monday' }, revised: 201 },
-    { path: '/v1/processes', one: 'process', many: 'processes', create: { processName: 'release', steps: ['tag', 'publish'] }, revise: { steps: ['tag', 'publish', 'announce'] }, revised: 200 },
-    { path: '/v1/policies', one: 'policy', many: 'policies', create: { policyName: 'retention', policyText: 'keep logs 30 days' }, revise: { policyText: 'keep logs 90 days' }, revised: 200 },
-    { path: '/v1/skills', one: 'skill', many: 'skills', create: { skillName: 'triage', instructions: 'read the log first' }, revise: { instructions: 'read the trace first' }, revised: 200 },
-    { path: '/v1/project-briefs', one: 'brief', many: 'briefs', create: { repo: 'hippo', summary: 'memory for agents' }, revise: { summary: 'zero-touch memory' }, revised: 200 },
-    { path: '/v1/customer-notes', one: 'note', many: 'notes', create: { customer: 'acme', note: 'renewal in march' }, revise: { note: 'renewed' }, revised: 200 },
+    {
+      path: '/v1/decisions',
+      one: 'decision',
+      many: 'decisions',
+      create: { text: 'ship on friday' },
+      revise: { text: 'ship on monday' },
+      revised: 201,
+    },
+    {
+      path: '/v1/processes',
+      one: 'process',
+      many: 'processes',
+      create: { processName: 'release', steps: ['tag', 'publish'] },
+      revise: { steps: ['tag', 'publish', 'announce'] },
+      revised: 200,
+    },
+    {
+      path: '/v1/policies',
+      one: 'policy',
+      many: 'policies',
+      create: { policyName: 'retention', policyText: 'keep logs 30 days' },
+      revise: { policyText: 'keep logs 90 days' },
+      revised: 200,
+    },
+    {
+      path: '/v1/skills',
+      one: 'skill',
+      many: 'skills',
+      create: { skillName: 'triage', instructions: 'read the log first' },
+      revise: { instructions: 'read the trace first' },
+      revised: 200,
+    },
+    {
+      path: '/v1/project-briefs',
+      one: 'brief',
+      many: 'briefs',
+      create: { repo: 'hippo', summary: 'memory for agents' },
+      revise: { summary: 'zero-touch memory' },
+      revised: 200,
+    },
+    {
+      path: '/v1/customer-notes',
+      one: 'note',
+      many: 'notes',
+      create: { customer: 'acme', note: 'renewal in march' },
+      revise: { note: 'renewed' },
+      revised: 200,
+    },
   ];
-  const TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes', 'memories', 'audit_log'];
+  const TABLES = [
+    'decisions',
+    'incidents',
+    'processes',
+    'policies',
+    'skills',
+    'project_briefs',
+    'customer_notes',
+    'memories',
+    'audit_log',
+  ];
 
   const hippoDbRows = (): number[] => {
     const db = openHippoDb(fixture.dir);
@@ -495,62 +769,149 @@ describe('serve() under a store that has the objects group', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  it('runs every route ported to the group on that store, inside the caller\'s tenant, and writes nothing to hippo.db', async () => {
+  it("runs every route ported to the group on that store, inside the caller's tenant, and writes nothing to hippo.db", async () => {
     const before = hippoDbRows();
     const { memberA, memberB } = fixture.tokens;
     const answered = new Set<string>();
-    const call = async (token: string, method: string, path: string, body?: RouteBody): Promise<{ status: number; body: unknown }> => {
+    const call = async (
+      token: string,
+      method: string,
+      path: string,
+      body?: RouteBody,
+    ): Promise<{ status: number; body: unknown }> => {
       const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
       const res = await fetch(`${handle.url}${path}`, { method, headers, body: body && JSON.stringify(body) });
-      if (token === memberA && res.status < 300) answered.add(`${method} ${path.replace(/\?.*$/, '').replace(/\/\d+/g, '/1')}`);
+      if (token === memberA && res.status < 300) {
+        answered.add(`${method} ${path.replace(/\?.*$/, '').replace(/\/\d+/g, '/1')}`);
+      }
       return { status: res.status, body: await res.json() };
     };
     for (const k of SAVED) {
-      expect(await call(memberA, 'POST', k.path, k.create)).toMatchObject({ status: 201, body: { [k.one]: { id: 1, tenantId: TENANT_A, status: 'active' } } });
-      expect(await call(memberA, 'GET', k.path)).toMatchObject({ status: 200, body: { [k.many]: [{ id: 1 }], next_cursor: null } });
+      expect(await call(memberA, 'POST', k.path, k.create)).toMatchObject({
+        status: 201,
+        body: { [k.one]: { id: 1, tenantId: TENANT_A, status: 'active' } },
+      });
+      expect(await call(memberA, 'GET', k.path)).toMatchObject({
+        status: 200,
+        body: { [k.many]: [{ id: 1 }], next_cursor: null },
+      });
       expect(await call(memberA, 'GET', `${k.path}/1`)).toMatchObject({ status: 200, body: { [k.one]: { id: 1 } } });
-      expect(await call(memberA, 'POST', `${k.path}/1/supersede`, k.revise)).toMatchObject({ status: k.revised, body: { [k.one]: { id: 2, status: 'active' } } });
-      expect(await call(memberA, 'GET', `${k.path}?status=superseded`)).toMatchObject({ status: 200, body: { [k.many]: [{ id: 1, supersededBy: 2 }] } });
-      expect(await call(memberA, 'POST', `${k.path}/2/close`, {})).toMatchObject({ status: 200, body: { [k.one]: { id: 2, status: 'closed' } } });
+      expect(await call(memberA, 'POST', `${k.path}/1/supersede`, k.revise)).toMatchObject({
+        status: k.revised,
+        body: { [k.one]: { id: 2, status: 'active' } },
+      });
+      expect(await call(memberA, 'GET', `${k.path}?status=superseded`)).toMatchObject({
+        status: 200,
+        body: { [k.many]: [{ id: 1, supersededBy: 2 }] },
+      });
+      expect(await call(memberA, 'POST', `${k.path}/2/close`, {})).toMatchObject({
+        status: 200,
+        body: { [k.one]: { id: 2, status: 'closed' } },
+      });
       expect(await call(memberB, 'GET', k.path)).toEqual({ status: 200, body: { [k.many]: [], next_cursor: null } });
       expect((await call(memberB, 'GET', `${k.path}/1`)).status).toBe(404);
       expect((await call(memberB, 'POST', `${k.path}/1/supersede`, k.revise)).status).toBe(404);
     }
-    expect(await call(memberA, 'POST', '/v1/policies', { policyName: 'access', policyText: 'two reviewers', validFrom: '2026-01-01' })).toMatchObject({ status: 201, body: { policy: { id: 3 } } });
-    expect(await call(memberA, 'GET', '/v1/policies/asof?date=2026-02-01')).toMatchObject({ status: 200, body: { policies: [{ id: 3, policyName: 'access' }] } });
-    expect(await call(memberA, 'GET', '/v1/policies/asof?date=2025-12-31')).toEqual({ status: 200, body: { policies: [] } });
-    expect(await call(memberB, 'GET', '/v1/policies/asof?date=2026-02-01')).toEqual({ status: 200, body: { policies: [] } });
-    expect(await call(memberA, 'POST', '/v1/skills', { skillName: 'deploy', instructions: 'tag then publish' })).toMatchObject({ status: 201, body: { skill: { id: 3 } } });
-    expect(await call(memberA, 'GET', '/v1/skills/export')).toEqual({ status: 200, body: { markdown: '## deploy\n\ntag then publish' } });
+    expect(
+      await call(memberA, 'POST', '/v1/policies', {
+        policyName: 'access',
+        policyText: 'two reviewers',
+        validFrom: '2026-01-01',
+      }),
+    ).toMatchObject({ status: 201, body: { policy: { id: 3 } } });
+    expect(await call(memberA, 'GET', '/v1/policies/asof?date=2026-02-01')).toMatchObject({
+      status: 200,
+      body: { policies: [{ id: 3, policyName: 'access' }] },
+    });
+    expect(await call(memberA, 'GET', '/v1/policies/asof?date=2025-12-31')).toEqual({
+      status: 200,
+      body: { policies: [] },
+    });
+    expect(await call(memberB, 'GET', '/v1/policies/asof?date=2026-02-01')).toEqual({
+      status: 200,
+      body: { policies: [] },
+    });
+    expect(
+      await call(memberA, 'POST', '/v1/skills', { skillName: 'deploy', instructions: 'tag then publish' }),
+    ).toMatchObject({ status: 201, body: { skill: { id: 3 } } });
+    expect(await call(memberA, 'GET', '/v1/skills/export')).toEqual({
+      status: 200,
+      body: { markdown: '## deploy\n\ntag then publish' },
+    });
     expect(await call(memberB, 'GET', '/v1/skills/export')).toEqual({ status: 200, body: { markdown: '' } });
-    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo', dryRun: true })).toMatchObject({ status: 200, body: { receiptCount: 0 } });
-    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({ status: 200, body: { brief: { id: 3, repo: 'hippo', version: 1, status: 'active' } } });
+    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo', dryRun: true })).toMatchObject({
+      status: 200,
+      body: { receiptCount: 0 },
+    });
     expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({
-      status: 200, body: { brief: { id: 4, version: 2, changeSummary: 'auto-refresh from 0 receipt(s)', summary: expect.stringContaining('# Project Brief: hippo') } },
+      status: 200,
+      body: { brief: { id: 3, repo: 'hippo', version: 1, status: 'active' } },
     });
-    expect(await call(memberA, 'GET', '/v1/project-briefs?status=superseded')).toMatchObject({ status: 200, body: { briefs: [{ id: 3, supersededBy: 4 }, { id: 1 }] } });
+    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({
+      status: 200,
+      body: {
+        brief: {
+          id: 4,
+          version: 2,
+          changeSummary: 'auto-refresh from 0 receipt(s)',
+          summary: expect.stringContaining('# Project Brief: hippo'),
+        },
+      },
+    });
+    expect(await call(memberA, 'GET', '/v1/project-briefs?status=superseded')).toMatchObject({
+      status: 200,
+      body: { briefs: [{ id: 3, supersededBy: 4 }, { id: 1 }] },
+    });
 
-    expect(await call(memberA, 'POST', '/v1/incidents', { text: 'checkout latency' })).toMatchObject({ status: 201, body: { incident: { id: 1, tenantId: TENANT_A, status: 'open' } } });
-    expect(await call(memberA, 'POST', '/v1/incidents', { text: 'no evidence', linkedMemoryIds: ['mem_never_written'] })).toEqual({
-      status: 409, body: { error: `saveIncident: linked memory mem_never_written not found for tenant ${TENANT_A}` },
+    expect(await call(memberA, 'POST', '/v1/incidents', { text: 'checkout latency' })).toMatchObject({
+      status: 201,
+      body: { incident: { id: 1, tenantId: TENANT_A, status: 'open' } },
     });
-    expect(await call(memberA, 'GET', '/v1/incidents')).toMatchObject({ status: 200, body: { incidents: [{ id: 1, status: 'open' }], next_cursor: null } });
-    expect(await call(memberA, 'GET', '/v1/incidents/1')).toMatchObject({ status: 200, body: { incident: { id: 1, incidentText: 'checkout latency' } } });
+    expect(
+      await call(memberA, 'POST', '/v1/incidents', { text: 'no evidence', linkedMemoryIds: ['mem_never_written'] }),
+    ).toEqual({
+      status: 409,
+      body: { error: `saveIncident: linked memory mem_never_written not found for tenant ${TENANT_A}` },
+    });
+    expect(await call(memberA, 'GET', '/v1/incidents')).toMatchObject({
+      status: 200,
+      body: { incidents: [{ id: 1, status: 'open' }], next_cursor: null },
+    });
+    expect(await call(memberA, 'GET', '/v1/incidents/1')).toMatchObject({
+      status: 200,
+      body: { incident: { id: 1, incidentText: 'checkout latency' } },
+    });
     expect((await call(memberB, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'not ours' })).status).toBe(404);
-    expect(await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'scaled the pool' })).toMatchObject({
-      status: 200, body: { incident: { id: 1, status: 'resolved', resolutionText: 'scaled the pool' } },
-    });
+    expect(await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'scaled the pool' })).toMatchObject(
+      {
+        status: 200,
+        body: { incident: { id: 1, status: 'resolved', resolutionText: 'scaled the pool' } },
+      },
+    );
     expect((await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'again' })).status).toBe(409);
     expect((await call(memberB, 'POST', '/v1/incidents/1/close', {})).status).toBe(404);
-    expect(await call(memberA, 'POST', '/v1/incidents/1/close', {})).toMatchObject({ status: 200, body: { incident: { id: 1, status: 'closed' } } });
+    expect(await call(memberA, 'POST', '/v1/incidents/1/close', {})).toMatchObject({
+      status: 200,
+      body: { incident: { id: 1, status: 'closed' } },
+    });
 
     const ported = V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key }) => requestLine(key));
     expect(ported).toHaveLength(38);
     expect([...answered].sort()).toEqual([...ported].sort());
     const actor = `api_key:${fixture.keys.memberA}`;
-    expect(memory.auditRows().slice(-7).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
-      ['project_brief_supersede', actor, TENANT_A], ['project_brief_create', actor, TENANT_A], ['remember', actor, TENANT_A],
-      ['incident_open', actor, TENANT_A], ['remember', actor, TENANT_A], ['incident_resolve', actor, TENANT_A], ['incident_close', actor, TENANT_A],
+    expect(
+      memory
+        .auditRows()
+        .slice(-7)
+        .map((e) => [e.op, e.actor, e.tenantId]),
+    ).toEqual([
+      ['project_brief_supersede', actor, TENANT_A],
+      ['project_brief_create', actor, TENANT_A],
+      ['remember', actor, TENANT_A],
+      ['incident_open', actor, TENANT_A],
+      ['remember', actor, TENANT_A],
+      ['incident_resolve', actor, TENANT_A],
+      ['incident_close', actor, TENANT_A],
     ]);
     expect(hippoDbRows()).toEqual(before);
   });
@@ -562,8 +923,16 @@ describe('serve() under another store reads its folder as shared, though no conf
   const alice = newKey();
   const keys: (ContinuityKey | null)[] = [];
   const snapshot = {
-    id: 1, task: 'ship the eu cluster', summary: 'cutover planned', next_step: 'run the canary', status: 'active', source: 'cli',
-    session_id: 's1', scope: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
+    id: 1,
+    task: 'ship the eu cluster',
+    summary: 'cutover planned',
+    next_step: 'run the canary',
+    status: 'active',
+    source: 'cli',
+    session_id: 's1',
+    scope: null,
+    created_at: '2026-10-01T00:00:00.000Z',
+    updated_at: '2026-10-01T00:00:00.000Z',
   };
   const notRead = async (): Promise<never> => {
     throw new Error('this recall reads nothing else');
@@ -600,7 +969,7 @@ describe('serve() under another store reads its folder as shared, though no conf
     vi.unstubAllEnvs();
   });
 
-  it('keys an MCP recall\'s continuity to the caller\'s owner and project', async () => {
+  it("keys an MCP recall's continuity to the caller's owner and project", async () => {
     const headers = { ...bearer(alice), 'content-type': 'application/json', 'x-hippo-project': 'p' };
     const body = rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy', include_continuity: true } });
     const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
@@ -612,7 +981,9 @@ describe('serve() under another store reads its folder as shared, though no conf
     const res = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=true`, { headers: bearer(alice) });
     expect(res.status).toBe(200);
     expect(keys.at(-1)).toEqual({ owner: 'alice', project: [] });
-    expect(await res.json()).toMatchObject({ continuity: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] } });
+    expect(await res.json()).toMatchObject({
+      continuity: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] },
+    });
   });
 });
 
@@ -622,7 +993,12 @@ describe('a StoreBusyError on the hippo.db path', () => {
 
   beforeAll(async () => {
     root = makeRoot('store-busy');
-    const busyKeys: HippoStore = { ...sqliteStore(root), findApiKey: async () => { throw new StoreBusyError(); } };
+    const busyKeys: HippoStore = {
+      ...sqliteStore(root),
+      findApiKey: async () => {
+        throw new StoreBusyError();
+      },
+    };
     handle = await serve({ hippoRoot: root, port: 0, store: busyKeys });
   });
 
@@ -633,7 +1009,10 @@ describe('a StoreBusyError on the hippo.db path', () => {
   it('is a 503 with Retry-After on a /v1 route and on POST /mcp', async () => {
     const headers = { authorization: `Bearer ${newKey().plaintext}`, 'content-type': 'application/json' };
     const rpc = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
-    for (const [method, path, body] of [['GET', '/v1/memories?q=x', undefined], ['POST', '/mcp', rpc]] as const) {
+    for (const [method, path, body] of [
+      ['GET', '/v1/memories?q=x', undefined],
+      ['POST', '/mcp', rpc],
+    ] as const) {
       const res = await fetch(`${handle.url}${path}`, { method, headers, body });
       expect(res.status).toBe(503);
       expect(res.headers.get('retry-after')).toBe('1');
@@ -642,6 +1021,10 @@ describe('a StoreBusyError on the hippo.db path', () => {
   });
 
   it('a StoreBusyError thrown inside an MCP tool call answers with the busy message, not an internal error', () => {
-    expect(mcpErrorResponse(7, new StoreBusyError())).toEqual({ jsonrpc: '2.0', id: 7, error: { code: -32603, message: STORE_BUSY_MESSAGE } });
+    expect(mcpErrorResponse(7, new StoreBusyError())).toEqual({
+      jsonrpc: '2.0',
+      id: 7,
+      error: { code: -32603, message: STORE_BUSY_MESSAGE },
+    });
   });
 });

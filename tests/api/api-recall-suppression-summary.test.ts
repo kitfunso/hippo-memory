@@ -32,7 +32,9 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
 
 describe('RecallResult.suppressionSummary', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('c5'); });
+  beforeEach(() => {
+    root = makeRoot('c5');
+  });
 
   it('always present on api.recall response (back-compat preserved on existing fields)', async () => {
     writeEntry(root, makeRaw('alpha'));
@@ -45,13 +47,24 @@ describe('RecallResult.suppressionSummary', () => {
     expect(result.windowSize).toBe(200);
     // New field always present from api.recall.
     expect(result.suppressionSummary).toEqual({
-      totalCandidates: 1, droppedPreRank: 0, droppedByBudget: 0,
-      summarySubstitutionsAdded: 0, freshTailAdded: 0, suppressedByInterference: 0,
+      totalCandidates: 1,
+      droppedPreRank: 0,
+      droppedByBudget: 0,
+      summarySubstitutionsAdded: 0,
+      freshTailAdded: 0,
+      suppressedByInterference: 0,
     });
     // Each field is a non-negative integer counter (RecallSuppressionSummary,
     // src/api/index.ts); Number.isInteger is the domain-correct runtime shape check.
     const s = result.suppressionSummary!;
-    for (const n of [s.totalCandidates, s.droppedPreRank, s.droppedByBudget, s.summarySubstitutionsAdded, s.freshTailAdded, s.suppressedByInterference]) {
+    for (const n of [
+      s.totalCandidates,
+      s.droppedPreRank,
+      s.droppedByBudget,
+      s.summarySubstitutionsAdded,
+      s.freshTailAdded,
+      s.suppressedByInterference,
+    ]) {
       expect(Number.isInteger(n)).toBe(true);
       expect(n).toBeGreaterThanOrEqual(0);
     }

@@ -15,7 +15,13 @@ import { resolveTenantId } from '../src/store/tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import {
-  createCard, claimCard, addCardComment, blockCard, reviewCard, completeCard, heartbeatCard,
+  createCard,
+  claimCard,
+  addCardComment,
+  blockCard,
+  reviewCard,
+  completeCard,
+  heartbeatCard,
 } from './_helpers/root-forms.js';
 
 afterAll(() => {
@@ -33,7 +39,13 @@ function dashboardRequest(
 ): Promise<{ status: number; body: string; acaoPresent: boolean }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method, headers: { Host: host, cookie: sessionCookie(port, DASHBOARD_TOKEN), ...extraHeaders } },
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method,
+        headers: { Host: host, cookie: sessionCookie(port, DASHBOARD_TOKEN), ...extraHeaders },
+      },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -96,9 +108,7 @@ describe('dashboard entry', () => {
 
   afterEach(async () => {
     if (server) {
-      await new Promise<void>((resolve, reject) =>
-        server!.close((err) => (err ? reject(err) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => server!.close((err) => (err ? reject(err) : resolve())));
       server = undefined;
     }
   });
@@ -219,7 +229,9 @@ describe('card routes', () => {
 
     expect(claimCard(hippoRoot, tenant, P, 'r1')).not.toBeNull();
     expect(addCardComment(hippoRoot, tenant, P, 'a', 'note')).not.toBeNull();
-    expect(saveSessionHandoff(hippoRoot, tenant, { version: 1, sessionId: 's1', summary: 's', cardId: P })).not.toBeNull();
+    expect(
+      saveSessionHandoff(hippoRoot, tenant, { version: 1, sessionId: 's1', summary: 's', cardId: P }),
+    ).not.toBeNull();
 
     expect(blockCard(hippoRoot, tenant, P, 'waiting')).not.toBeNull();
     expect(claimCard(hippoRoot, tenant, P, 'r2')).not.toBeNull();
@@ -262,9 +274,7 @@ describe('card routes', () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) =>
-      server.close((err) => (err ? reject(err) : resolve())),
-    );
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
   const host = () => `127.0.0.1:${port}`;

@@ -23,13 +23,18 @@ function assertFreshBuild(): void {
   for (const name of ['cli.ts', 'cli/client.ts', 'server/server-detect.ts']) {
     const src = statSync(join(REPO_ROOT, 'src', name)).mtimeMs;
     if (src > dist) {
-      throw new Error(`dist/cli.js is older than src/${name}. Run \`npm run build\`; this test spawns the CLI from dist, so a stale build would test old code.`);
+      throw new Error(
+        `dist/cli.js is older than src/${name}. Run \`npm run build\`; this test spawns the CLI from dist, so a stale build would test old code.`,
+      );
     }
   }
 }
 
 /** Answers /health so detectServer accepts the pidfile, then commits POST /v1/memories and drops the socket unanswered. */
-async function startResettingServer(hippoRoot: string, startedAt: string): Promise<{ server: Server; port: number; posts: { count: number } }> {
+async function startResettingServer(
+  hippoRoot: string,
+  startedAt: string,
+): Promise<{ server: Server; port: number; posts: { count: number } }> {
   const posts = { count: 0 };
   const server = createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
@@ -43,10 +48,7 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
       req.on('data', (c: Buffer) => chunks.push(c));
       req.on('end', async () => {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        await remember(
-          apiCtx(hippoRoot, 'default', { subject: 'stub', role: 'admin' }),
-          { content: body.content },
-        );
+        await remember(apiCtx(hippoRoot, 'default', { subject: 'stub', role: 'admin' }), { content: body.content });
         res.socket?.destroy();
       });
       return;
@@ -60,11 +62,20 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
 function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const env = { ...process.env, ...ROUTED_CLI_ENV };
-    const child = spawn(process.execPath, [CLI_PATH, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const child = spawn(process.execPath, [CLI_PATH, ...args], {
+      cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (c: Buffer) => { stdout += c.toString('utf8'); });
-    child.stderr.on('data', (c: Buffer) => { stderr += c.toString('utf8'); });
+    child.stdout.on('data', (c: Buffer) => {
+      stdout += c.toString('utf8');
+    });
+    child.stderr.on('data', (c: Buffer) => {
+      stderr += c.toString('utf8');
+    });
     child.on('close', (code) => resolve({ status: code ?? -1, stdout, stderr }));
   });
 }
@@ -90,7 +101,9 @@ describe('classifyTransportFailure', () => {
   it('calls connect-phase failures safe to replay', () => {
     expect(classifyTransportFailure(fetchError('ECONNREFUSED'))).toBe('never-sent');
     expect(classifyTransportFailure(fetchError('ENOTFOUND'))).toBe('never-sent');
-    expect(classifyTransportFailure(Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' }))).toBe('never-sent');
+    expect(classifyTransportFailure(Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' }))).toBe(
+      'never-sent',
+    );
   });
 
   it('calls a socket that broke mid-request unsafe to replay', () => {
@@ -99,7 +112,9 @@ describe('classifyTransportFailure', () => {
     expect(classifyTransportFailure(fetchError('UND_ERR_SOCKET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('ECONNRESET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('EPIPE'))).toBe('delivery-unknown');
-    expect(classifyTransportFailure(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))).toBe('delivery-unknown');
+    expect(classifyTransportFailure(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))).toBe(
+      'delivery-unknown',
+    );
     // No syscall code to go on, so the conservative answer is the only safe one.
     expect(classifyTransportFailure(fetchError(undefined))).toBe('delivery-unknown');
   });

@@ -109,7 +109,13 @@ describe('cli recall scope default-deny', () => {
   it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', async () => {
     initStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
+    writeEntry(
+      globalDir,
+      createMemory('global private deploykey note', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        scope: 'slack:private:CG',
+      }),
+    );
 
     const out = await hippo(home, 'recall', 'deploykey', '--limit', '10');
     expect(out).toContain('global clean deploykey note');
@@ -122,7 +128,13 @@ describe('cli recall scope default-deny', () => {
     // covered on the local-only path.
     initStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
+    writeEntry(
+      globalDir,
+      createMemory('global private deploykey note', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        scope: 'slack:private:CG',
+      }),
+    );
 
     const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
     expect(out).toContain('global private deploykey note');
@@ -141,9 +153,18 @@ describe('cli recall scope default-deny', () => {
     // One connection for all 221 writes: a close per write checkpoints the WAL, which timed this out on Windows CI.
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 220; i++) {
-        writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:Cbulk' }));
+        writeEntry(
+          hippoDir,
+          createMemory(`windowstarve private filler row number ${i}`, {
+            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+            scope: 'slack:private:Cbulk',
+          }),
+        );
       }
-      writeEntry(hippoDir, createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+      writeEntry(
+        hippoDir,
+        createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      );
     });
 
     const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', undefined, 'default');
@@ -158,7 +179,9 @@ describe('cli recall scope default-deny', () => {
   });
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
-    const res = await runInProcess(() => handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }));
+    const res = await runInProcess(() =>
+      handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }),
+    );
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);
     expect(res.stdout).not.toContain(PRIV_GITHUB);

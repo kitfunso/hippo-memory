@@ -36,14 +36,19 @@ let stderr: string[];
 beforeEach(() => {
   root = makeRoot('embed-load');
   emptyCache = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty-model-cache-'));
-  writeEntry(root, createMemory('the deploy runbook lives in the ops wiki', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+  writeEntry(
+    root,
+    createMemory('the deploy runbook lives in the ops wiki', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+  );
   stderr = [];
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
     stderr.push(String(chunk));
     return true;
   });
   vi.spyOn(console, 'log').mockImplementation(() => {});
-  vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { stderr.push(a.join(' ')); });
+  vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {
+    stderr.push(a.join(' '));
+  });
   process.exitCode = undefined;
 });
 
@@ -57,13 +62,18 @@ describe('the local provider with a model that cannot load', () => {
   it('rejects with the reason instead of returning empty vectors', async () => {
     // An empty offline cache cannot hold the model, whether or not a transformers package is installed.
     vi.stubEnv('HIPPO_MODEL_CACHE', emptyCache);
-    await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage')).rejects.toThrow(/did not load: \S/);
+    await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage')).rejects.toThrow(
+      /did not load: \S/,
+    );
   });
 });
 
 describe('hippo embed exit code', () => {
   it('is 1 with the reason printed when the model cannot load', async () => {
-    await handleEmbed({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({ loadError: 'model file missing from the cache' }));
+    await handleEmbed(
+      { hippoRoot: root, tenantId: 'default', args: [], flags: {} },
+      localProvider({ loadError: 'model file missing from the cache' }),
+    );
     expect(process.exitCode).toBe(1);
     expect(stderr.join('')).toContain('did not load: model file missing');
     expect(Object.keys(loadEmbeddingIndex(root))).toEqual([]);
@@ -82,7 +92,10 @@ describe('hippo embed exit code', () => {
   });
 
   it('is 1 when no local embedding package is installed', async () => {
-    await handleEmbed({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({ available: false }));
+    await handleEmbed(
+      { hippoRoot: root, tenantId: 'default', args: [], flags: {} },
+      localProvider({ available: false }),
+    );
     expect(process.exitCode).toBe(1);
   });
 });

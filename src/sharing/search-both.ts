@@ -71,7 +71,7 @@ export async function searchBothHybrid(
   query: string,
   local: ConfiguredFolder,
   global: ConfiguredFolder,
-  options: HybridSearchOptions = {}
+  options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
@@ -128,28 +128,11 @@ function pricedAs(cost: ResultCost | undefined, isGlobal: boolean): ResultCost |
   return cost && ((r) => cost({ ...r, isGlobal }));
 }
 
-/** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
-export async function rankBothStores(
-  query: string,
-  sources: { local: VectorSource | undefined; global: VectorSource | undefined },
-  entries: { local: MemoryEntry[]; global: MemoryEntry[] },
-  vectorCandidates: HybridVectorCandidates,
-  options: HybridSearchOptions = {},
-): Promise<SearchResult[]> {
-  const {
-    budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda,
-    localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  } = options;
-  if (entries.local.length === 0 && entries.global.length === 0) return [];
-  // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
-  const shared = {
-    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
-    summaryDeboost, summaryFreshness, vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
-  };
-  const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
-  const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });
-  const globalResults = await hybridSearch(query, entries.global, { ...side(true), source: sources.global });
-
+function mergeStoreResults(
+  localResults: SearchResult[],
+  globalResults: SearchResult[],
+  localBump: number,
+): Array<SearchResult & { isGlobal: boolean }> {
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [
     ...localResults.map((r) => ({
@@ -175,6 +158,56 @@ export async function rankBothStores(
   // PLAIN stable score sort on purpose: both inputs are deterministically ordered, and an exact tie keeps the LOCAL
   // result ahead of the global one (concat order).
   deduped.sort((a, b) => compareScoresDesc(a.score, b.score));
+  return deduped;
+}
+
+/** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
+export async function rankBothStores(
+  query: string,
+  sources: { local: VectorSource | undefined; global: VectorSource | undefined },
+  entries: { local: MemoryEntry[]; global: MemoryEntry[] },
+  vectorCandidates: HybridVectorCandidates,
+  options: HybridSearchOptions = {},
+): Promise<SearchResult[]> {
+  const {
+    budget = DEFAULT_RECALL_BUDGET,
+    now = evalNow(),
+    embeddingWeight,
+    explain,
+    mmr,
+    mmrLambda,
+    localBump = DEFAULT_LOCAL_BUMP,
+    minResults,
+    cost,
+    scope,
+    includeSuperseded,
+    asOf,
+    summaryDeboost,
+    summaryFreshness,
+  } = options;
+  if (entries.local.length === 0 && entries.global.length === 0) return [];
+  // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
+  const shared = {
+    budget,
+    now,
+    embeddingWeight,
+    explain,
+    mmr,
+    mmrLambda,
+    minResults,
+    scope,
+    includeSuperseded,
+    asOf,
+    summaryDeboost,
+    summaryFreshness,
+    vectorCandidates,
+    queryEmbedDeadline: startQueryEmbedDeadline(),
+  };
+  const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
+  const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });
+  const globalResults = await hybridSearch(query, entries.global, { ...side(true), source: sources.global });
+
+  const deduped = mergeStoreResults(localResults, globalResults, localBump);
 
   return fitBudget(deduped, budget, minResults ?? 1, cost);
 }

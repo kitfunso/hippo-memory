@@ -51,7 +51,10 @@ describe('Extracted fact protection', () => {
 
     const base = 'the server crashed due to memory overflow in the worker process';
     const ep1 = createMemory(base, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
-    const ep2 = createMemory(base + ' again today', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const ep2 = createMemory(base + ' again today', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
     const ep3 = createMemory(base + ' once more', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
 
     writeEntry(tmpDir, ep1);

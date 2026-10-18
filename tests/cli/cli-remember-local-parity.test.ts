@@ -161,8 +161,12 @@ describe('hippo watch never gates or extracts (built CLI, no server)', () => {
 
 describe('embedding after a local write (built CLI, local embeddings server)', () => {
   let embeddings: HashedEmbeddings;
-  beforeAll(async () => { embeddings = await startHashedEmbeddings(); });
-  afterAll(async () => { await embeddings.close(); });
+  beforeAll(async () => {
+    embeddings = await startHashedEmbeddings();
+  });
+  afterAll(async () => {
+    await embeddings.close();
+  });
 
   // Spawned: watch exits before its embedding lands, which only a process that ends can show.
   it('remember leaves a vector for its row; watch exits before its own lands', async () => {
@@ -172,6 +176,9 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     failingScript(s);
     await s.run('remember', TEXT);
     await s.run('watch', 'node', 'fail.js');
-    s.expectPinned({ rows: query(s.root, 'SELECT id FROM memories ORDER BY rowid'), vectors: Object.keys(loadEmbeddingIndex(s.root)) });
+    s.expectPinned({
+      rows: query(s.root, 'SELECT id FROM memories ORDER BY rowid'),
+      vectors: Object.keys(loadEmbeddingIndex(s.root)),
+    });
   });
 });

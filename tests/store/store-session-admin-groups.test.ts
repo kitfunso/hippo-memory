@@ -45,7 +45,9 @@ describe('sessions group', () => {
     const r = root();
     const served = sqliteStore(r).sessions;
     await served.pushWorkingMemory(T, { scope: 'task', content: 'note one' });
-    expect((await served.readWorkingMemory(T, { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual(['note one']);
+    expect((await served.readWorkingMemory(T, { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual([
+      'note one',
+    ]);
     expect(await served.clearWorkingMemory(T, { scope: 'task' })).toBe(1);
   });
 });
@@ -105,7 +107,14 @@ describe('conflicts group', () => {
     expect(await served.get('other', open!.conflict.id)).toBeNull();
     const keep = { id: a.id, scope: a.scope ?? null };
     const loser = { id: b.id, scope: b.scope ?? null };
-    const resolution = { conflictId: open!.conflict.id, keep, loser, fate: { kind: 'weaken' } as const, actor: 'test', reason: '' };
+    const resolution = {
+      conflictId: open!.conflict.id,
+      keep,
+      loser,
+      fate: { kind: 'weaken' } as const,
+      actor: 'test',
+      reason: '',
+    };
     expect(await served.resolve(T, resolution)).toBe(true);
     expect(await served.resolve(T, resolution)).toBe(false);
     expect((await served.list(query(T))).rows).toHaveLength(0);
@@ -118,7 +127,9 @@ describe('dormant group', () => {
     const db = openHippoDb(r);
     try {
       insertDormantRow(db, { entry: row, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
     return row;
   }
 

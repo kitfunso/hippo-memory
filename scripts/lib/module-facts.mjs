@@ -4,7 +4,21 @@
 import ts from 'typescript';
 
 const K = ts.SyntaxKind;
-const MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin', 'set', 'add', 'delete', 'clear']);
+const MUTATORS = new Set([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse',
+  'fill',
+  'copyWithin',
+  'set',
+  'add',
+  'delete',
+  'clear',
+]);
 const OBJECT_WRITERS = new Set(['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf']);
 // These calls hand back a value the receiver still holds, so a write through the result is a write to the receiver.
 const PASS_THROUGH = new Set(['get', 'at', 'find']);
@@ -19,7 +33,8 @@ function boundIn(scope) {
   const names = new Set();
   if (hasOwnName(scope) && scope.name) names.add(scope.name.text);
   const visit = (n) => {
-    const binds = ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n) || ts.isTypeParameterDeclaration(n);
+    const binds =
+      ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n) || ts.isTypeParameterDeclaration(n);
     const declares = ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n) || ts.isEnumDeclaration(n);
     if ((binds || declares) && n.name && ts.isIdentifier(n.name)) names.add(n.name.text);
     if (!isScope(n)) ts.forEachChild(n, visit);
@@ -42,13 +57,26 @@ function isTypePosition(n) {
   if (!ts.isTypeNode(n)) return false;
   if (!ts.isExpressionWithTypeArguments(n)) return true;
   const clause = n.parent;
-  return ts.isHeritageClause(clause) && (clause.token === K.ImplementsKeyword || ts.isInterfaceDeclaration(clause.parent));
+  return (
+    ts.isHeritageClause(clause) && (clause.token === K.ImplementsKeyword || ts.isInterfaceDeclaration(clause.parent))
+  );
 }
 
 /** The expressions a node writes to: assignment targets, `++`/`--` operands, `delete` operands and receivers of mutating calls. */
 function writeTargets(n) {
-  if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment) return [n.left];
-  if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken)) return [n.operand];
+  if (
+    ts.isBinaryExpression(n) &&
+    n.operatorToken.kind >= K.FirstAssignment &&
+    n.operatorToken.kind <= K.LastAssignment
+  ) {
+    return [n.left];
+  }
+  if (
+    (ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) &&
+    (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken)
+  ) {
+    return [n.operand];
+  }
   if (ts.isDeleteExpression(n)) return [n.expression];
   if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression)) return [];
   const receiver = n.expression.expression;
@@ -59,9 +87,19 @@ function writeTargets(n) {
 
 /** Splits a destructuring target (`[a, b.c] = ...`, `({ x: d.e } = ...)`) into the single expressions it writes. */
 function leaves(e) {
-  if (ts.isArrayLiteralExpression(e)) return e.elements.flatMap((x) => leaves(ts.isSpreadElement(x) ? x.expression : x));
+  if (ts.isArrayLiteralExpression(e)) {
+    return e.elements.flatMap((x) => leaves(ts.isSpreadElement(x) ? x.expression : x));
+  }
   if (ts.isObjectLiteralExpression(e)) {
-    return e.properties.flatMap((p) => (ts.isPropertyAssignment(p) ? leaves(p.initializer) : ts.isSpreadAssignment(p) ? leaves(p.expression) : ts.isShorthandPropertyAssignment(p) ? [p.name] : []));
+    return e.properties.flatMap((p) =>
+      ts.isPropertyAssignment(p)
+        ? leaves(p.initializer)
+        : ts.isSpreadAssignment(p)
+          ? leaves(p.expression)
+          : ts.isShorthandPropertyAssignment(p)
+            ? [p.name]
+            : [],
+    );
   }
   if (ts.isBinaryExpression(e) && e.operatorToken.kind === K.EqualsToken) return leaves(e.left);
   return [e];
@@ -74,9 +112,25 @@ function rootOf(expression) {
   for (;;) {
     if (ts.isIdentifier(e)) return { name: e.text, prop };
     if (ts.isPropertyAccessExpression(e)) prop = e.name.text;
-    else if (ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression) && PASS_THROUGH.has(e.expression.name.text)) { e = e.expression; prop = null; }
-    else if (ts.isElementAccessExpression(e)) prop = null;
-    else if (!(ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e) || ts.isTypeAssertionExpression(e))) return null;
+    else if (
+      ts.isCallExpression(e) &&
+      ts.isPropertyAccessExpression(e.expression) &&
+      PASS_THROUGH.has(e.expression.name.text)
+    ) {
+      e = e.expression;
+      prop = null;
+    } else if (ts.isElementAccessExpression(e)) prop = null;
+    else if (
+      !(
+        ts.isParenthesizedExpression(e) ||
+        ts.isNonNullExpression(e) ||
+        ts.isAsExpression(e) ||
+        ts.isSatisfiesExpression(e) ||
+        ts.isTypeAssertionExpression(e)
+      )
+    ) {
+      return null;
+    }
     e = e.expression;
   }
 }

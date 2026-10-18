@@ -38,11 +38,21 @@ import { mulberry32 } from '../lib/prng.mjs';
 // filler so cross-fact token overlap stays low. Pools are large enough that
 // `numFacts` facts get distinct entries for reasonable counts.
 const TOPIC_HEADS = [
-  'Project Falcon deadline', 'Atlas budget cap', 'Nova release owner',
-  'Orion vendor contract', 'Pegasus rollout window', 'Vega staffing plan',
-  'Lyra compliance review', 'Draco migration target', 'Cygnus pricing tier',
-  'Hydra incident owner', 'Phoenix launch gate', 'Cobra security sign-off',
-  'Tucana data retention', 'Mensa latency budget', 'Carina backup cadence',
+  'Project Falcon deadline',
+  'Atlas budget cap',
+  'Nova release owner',
+  'Orion vendor contract',
+  'Pegasus rollout window',
+  'Vega staffing plan',
+  'Lyra compliance review',
+  'Draco migration target',
+  'Cygnus pricing tier',
+  'Hydra incident owner',
+  'Phoenix launch gate',
+  'Cobra security sign-off',
+  'Tucana data retention',
+  'Mensa latency budget',
+  'Carina backup cadence',
   'Lynx capacity ceiling',
 ];
 const FILLERS = [
@@ -74,14 +84,66 @@ const FILLERS = [
 // Jaccard stays well below 0.35 and only the intended redundant fact clusters
 // merge. Distractors stay realistic semantic noise.
 const NOISE_WORDS = [
-  'inventory', 'telemetry', 'roadmap', 'changelog', 'rota', 'backlog', 'dashboard',
-  'runbook', 'ledger', 'pipeline', 'manifest', 'catalogue', 'workspace', 'notebook',
-  'tracker', 'briefing', 'updated', 'archived', 'reviewed', 'circulated', 'reconciled',
-  'trimmed', 'annotated', 'reindexed', 'snapshotted', 'rebalanced', 'audited', 'rotated',
-  'quarterly', 'regional', 'sprint', 'vendor', 'staffing', 'latency', 'archive', 'access',
-  'rollup', 'release', 'survey', 'capacity', 'throughput', 'quota', 'cadence', 'baseline',
-  'rollout', 'partition', 'index', 'cursor', 'webhook', 'schema', 'cache', 'queue',
-  'metric', 'digest', 'memo', 'addendum', 'footnote', 'appendix', 'sidebar', 'errata',
+  'inventory',
+  'telemetry',
+  'roadmap',
+  'changelog',
+  'rota',
+  'backlog',
+  'dashboard',
+  'runbook',
+  'ledger',
+  'pipeline',
+  'manifest',
+  'catalogue',
+  'workspace',
+  'notebook',
+  'tracker',
+  'briefing',
+  'updated',
+  'archived',
+  'reviewed',
+  'circulated',
+  'reconciled',
+  'trimmed',
+  'annotated',
+  'reindexed',
+  'snapshotted',
+  'rebalanced',
+  'audited',
+  'rotated',
+  'quarterly',
+  'regional',
+  'sprint',
+  'vendor',
+  'staffing',
+  'latency',
+  'archive',
+  'access',
+  'rollup',
+  'release',
+  'survey',
+  'capacity',
+  'throughput',
+  'quota',
+  'cadence',
+  'baseline',
+  'rollout',
+  'partition',
+  'index',
+  'cursor',
+  'webhook',
+  'schema',
+  'cache',
+  'queue',
+  'metric',
+  'digest',
+  'memo',
+  'addendum',
+  'footnote',
+  'appendix',
+  'sidebar',
+  'errata',
 ];
 
 /**
@@ -113,7 +175,9 @@ export function injectStream({ seed, scaleMemories, numFacts, dupesPerFact }) {
   const usedAns = new Set();
   const ansToken = () => {
     let t;
-    do { t = `ANS${1000 + Math.floor(rng() * 9000)}`; } while (usedAns.has(t));
+    do {
+      t = `ANS${1000 + Math.floor(rng() * 9000)}`;
+    } while (usedAns.has(t));
     usedAns.add(t);
     return t;
   };
@@ -192,9 +256,15 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
   const numFacts = parseInt(flag('--facts', '6'), 10);
   const dupesPerFact = parseInt(flag('--dupes', '3'), 10);
   const { memories, labels } = injectStream({ seed, scaleMemories, numFacts, dupesPerFact });
-  console.log(JSON.stringify({
-    meta: { seed, scaleMemories, numFacts, dupesPerFact, memoryCount: memories.length },
-    labels,
-    sample: memories.slice(0, Math.min(memories.length, numFacts * dupesPerFact + 3)),
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        meta: { seed, scaleMemories, numFacts, dupesPerFact, memoryCount: memories.length },
+        labels,
+        sample: memories.slice(0, Math.min(memories.length, numFacts * dupesPerFact + 3)),
+      },
+      null,
+      2,
+    ),
+  );
 }

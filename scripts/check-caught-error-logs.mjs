@@ -13,13 +13,16 @@ const BASELINE = '.caught-error-logs-baseline.json';
 const LOGGERS = new Set(['log', 'logger']);
 
 const isLogCall = (n) =>
-  ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) &&
-  ts.isIdentifier(n.expression.expression) && LOGGERS.has(n.expression.expression.text);
+  ts.isCallExpression(n) &&
+  ts.isPropertyAccessExpression(n.expression) &&
+  ts.isIdentifier(n.expression.expression) &&
+  LOGGERS.has(n.expression.expression.text);
 
 /** The body a node hands to the failure path: a catch clause's block, or the callback of a `.catch(...)` call. */
 function failureBodies(node) {
   if (ts.isCatchClause(node)) return [node.block];
-  const callee = ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) ? node.expression : undefined;
+  const callee =
+    ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) ? node.expression : undefined;
   if (callee?.name.text !== 'catch') return [];
   return node.arguments.filter((a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a)).map((a) => a.body);
 }
@@ -33,7 +36,9 @@ export function unfieldedLogLines(text) {
   const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const hits = new Map();
   const collect = (node) => {
-    if (isLogCall(node) && !node.getText(sf).includes('errorFields')) hits.set(node.getStart(sf), sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
+    if (isLogCall(node) && !node.getText(sf).includes('errorFields')) {
+      hits.set(node.getStart(sf), sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
+    }
     ts.forEachChild(node, collect);
   };
   const visit = (node) => {
@@ -86,12 +91,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const base = readBaseline();
   const risen = Object.entries(counts).filter(([f, n]) => n > (base[f] ?? 0));
   if (process.argv.includes('--update')) {
-    if (risen.length > 0) { console.error('refusing to raise a number:', risen.map(([f]) => f).join(', ')); process.exit(1); }
+    if (risen.length > 0) {
+      console.error('refusing to raise a number:', risen.map(([f]) => f).join(', '));
+      process.exit(1);
+    }
     writeFileSync(BASELINE, `${JSON.stringify(counts, null, 2)}\n`);
     console.log(`Wrote ${BASELINE}: ${total} calls over ${Object.keys(counts).length} files.`);
   } else if (risen.length > 0) {
-    for (const [f, n] of risen) console.error(`${f}: ${n} log calls in a catch without errorFields(err) (baseline ${base[f] ?? 0})`);
-    console.error('Fix: pass errorFields(err) from src/util/log.ts as the fields argument, or spread it into the existing fields.');
+    for (const [f, n] of risen) {
+      console.error(`${f}: ${n} log calls in a catch without errorFields(err) (baseline ${base[f] ?? 0})`);
+    }
+    console.error(
+      'Fix: pass errorFields(err) from src/util/log.ts as the fields argument, or spread it into the existing fields.',
+    );
     process.exit(1);
   } else {
     console.log(`Caught-error log ratchet OK: ${total} calls, none above ${BASELINE}.`);

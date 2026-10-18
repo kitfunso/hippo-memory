@@ -5,8 +5,14 @@ import type { AddonRoute } from './types.js';
 const PLAIN_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
 
 function isPlainV1Path(path: string): boolean {
-  return path.startsWith('/v1/') && new URL(path, 'http://h').pathname === path
-    && path.slice('/v1/'.length).split('/').every((segment) => PLAIN_SEGMENT_RE.test(segment));
+  return (
+    path.startsWith('/v1/') &&
+    new URL(path, 'http://h').pathname === path &&
+    path
+      .slice('/v1/'.length)
+      .split('/')
+      .every((segment) => PLAIN_SEGMENT_RE.test(segment))
+  );
 }
 
 // A plain path never holds a `%`, so matchPath cannot throw here.

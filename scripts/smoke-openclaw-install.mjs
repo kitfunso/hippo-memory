@@ -92,8 +92,13 @@ try {
 
   const rootPackage = JSON.parse(fs.readFileSync(rootPackagePath, 'utf8'));
   const rootManifest = JSON.parse(fs.readFileSync(rootManifestPath, 'utf8'));
-  if (!Array.isArray(rootPackage.openclaw?.extensions) || !rootPackage.openclaw.extensions.includes('./extensions/openclaw-plugin/index.ts')) {
-    throw new Error(`Expected installed package.json to include openclaw.extensions, got:\n${JSON.stringify(rootPackage.openclaw)}`);
+  if (
+    !Array.isArray(rootPackage.openclaw?.extensions) ||
+    !rootPackage.openclaw.extensions.includes('./extensions/openclaw-plugin/index.ts')
+  ) {
+    throw new Error(
+      `Expected installed package.json to include openclaw.extensions, got:\n${JSON.stringify(rootPackage.openclaw)}`,
+    );
   }
   if (rootManifest.id !== 'hippo-memory') {
     throw new Error(`Expected installed root plugin manifest id to be hippo-memory, got: ${rootManifest.id}`);

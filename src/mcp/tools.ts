@@ -35,7 +35,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max tokens to return (default: config.defaultBudget, ${DEFAULT_RECALL_BUDGET}; max ` +
+          description:
+            `Max tokens to return (default: config.defaultBudget, ${DEFAULT_RECALL_BUDGET}; max ` +
             `${MAX_BUDGET_TOKENS})`,
         },
         include_continuity: {
@@ -86,7 +87,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
         session_id: {
           type: 'string',
           maxLength: MAX_ID_LEN,
-          description: `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, ` +
+          description:
+            `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, ` +
             `applies the dlPFC goal-stack boost to the ranked memories before formatting. ` +
             `Mirrors fresh_tail_session_id shape (${MAX_ID_LEN}-char cap).`,
         },
@@ -113,7 +115,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Token budget for the assembled context (default ${DEFAULT_ASSEMBLE_BUDGET}; max ` +
+          description:
+            `Token budget for the assembled context (default ${DEFAULT_ASSEMBLE_BUDGET}; max ` +
             `${MAX_BUDGET_TOKENS}). Eviction kicks in over budget.`,
         },
         fresh_tail_count: {
@@ -163,7 +166,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max total token cost (~ chars/4) of returned children (max ${MAX_BUDGET_TOKENS}). Truncates ` +
+          description:
+            `Max total token cost (~ chars/4) of returned children (max ${MAX_BUDGET_TOKENS}). Truncates ` +
             `chronologically.`,
         },
         depth: {
@@ -184,7 +188,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
     description:
       'Store a new memory. Use when you learn something non-obvious, hit an error, or discover a useful pattern. ' +
       'Memories decay over time unless retrieved. ' +
-        'Errors get 2x half-life.',
+      'Errors get 2x half-life.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -211,9 +215,9 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_outcome',
     description:
       "Report whether recalled memories were useful. Good outcomes slow a memory's decay and bad ones speed it up, " +
-      "in " +
-      "proportion to its record. Call after " +
-        "completing work.",
+      'in ' +
+      'proportion to its record. Call after ' +
+      'completing work.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -241,7 +245,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max tokens (default: config.defaultContextBudget, ${DEFAULT_CONFIG.defaultContextBudget}; ` +
+          description:
+            `Max tokens (default: config.defaultContextBudget, ${DEFAULT_CONFIG.defaultContextBudget}; ` +
             `max ${MAX_BUDGET_TOKENS})`,
         },
         scope: {
@@ -257,8 +262,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_status',
-    description:
-      'Check memory health: counts, strengths, at-risk memories, last consolidation time.',
+    description: 'Check memory health: counts, strengths, at-risk memories, last consolidation time.',
     inputSchema: {
       type: 'object' as const,
       properties: {},
@@ -277,8 +281,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_conflicts',
-    description:
-      'List open memory conflicts — contradictory memories that need resolution.',
+    description: 'List open memory conflicts — contradictory memories that need resolution.',
     inputSchema: {
       type: 'object' as const,
       properties: {},
@@ -286,8 +289,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_resolve',
-    description:
-      'Resolve a memory conflict by keeping one memory and weakening or deleting the other.',
+    description: 'Resolve a memory conflict by keeping one memory and weakening or deleting the other.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -308,8 +310,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_share',
-    description:
-      'Share a memory to the global store for cross-project use with transfer scoring.',
+    description: 'Share a memory to the global store for cross-project use with transfer scoring.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -321,8 +322,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_peers',
-    description:
-      'List all projects that have contributed memories to the global shared store.',
+    description: 'List all projects that have contributed memories to the global shared store.',
     inputSchema: {
       type: 'object' as const,
       properties: {},

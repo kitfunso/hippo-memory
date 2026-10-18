@@ -35,7 +35,8 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' }));
+const ctxFor = (hippoRoot: string): FullContext =>
+  apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' });
 
 function run(root: string, sql: string, ...params: string[]): void {
   const db = openHippoDb(root);
@@ -50,15 +51,34 @@ function linkOf(root: string, table: string, objectId: number): string | null {
   const db = openHippoDb(root);
   try {
     // SAFETY: row's shape matches the single memory_id column named in the SELECT.
-    return (db.prepare(`SELECT memory_id FROM ${table} WHERE id = ?`).get(objectId) as { memory_id: string | null }).memory_id;
+    return (db.prepare(`SELECT memory_id FROM ${table} WHERE id = ?`).get(objectId) as { memory_id: string | null })
+      .memory_id;
   } finally {
     closeHippoDb(db);
   }
 }
 
 const SAVERS = [
-  ['decision', 'decisions', async (root: string) => await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', 'incidents', async (root: string) => await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+  [
+    'decision',
+    'decisions',
+    async (root: string) =>
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Tuesdays after the staging soak',
+      }),
+  ],
+  [
+    'incident',
+    'incidents',
+    async (root: string) =>
+      await openIncident(
+        objectsAt(root),
+        loadConfig(root).defaultHalfLifeDays,
+        'default',
+        { incidentText: 'the billing cron charged twice on the 1st' },
+        'cli',
+      ),
+  ],
 ] as const;
 
 describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {

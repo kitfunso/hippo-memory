@@ -52,7 +52,12 @@ export function frontmatterList(value: string | undefined): string[] {
   if (v.startsWith('[') && v.endsWith(']')) v = v.slice(1, -1);
   return v
     .split(',')
-    .map((s) => s.trim().replace(/^['"]|['"]$/g, '').trim())
+    .map((s) =>
+      s
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .trim(),
+    )
     .filter(Boolean);
 }
 

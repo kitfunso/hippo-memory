@@ -7,8 +7,21 @@ import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js'
 import { normalizeHookPayload } from '../../src/cli/stdin.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 import {
-  SNAPSHOT_TASK, dispose, eventCount, events, eventsN, hippo, hippoAsync, ledgerLines, preCompactPayload, project, resumePayload,
-  tableRows, withDb, writeTranscript, type Project,
+  SNAPSHOT_TASK,
+  dispose,
+  eventCount,
+  events,
+  eventsN,
+  hippo,
+  hippoAsync,
+  ledgerLines,
+  preCompactPayload,
+  project,
+  resumePayload,
+  tableRows,
+  withDb,
+  writeTranscript,
+  type Project,
 } from '../_helpers/delivery-boundary.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { syncStore } from '../_helpers/cli-stores.js';
@@ -27,20 +40,31 @@ afterEach(() => {
 });
 
 const HOOKS = ['pre-compact', 'compact-resume'];
-const payloadFor = (hook: string, session: string): string => (hook === 'pre-compact' ? preCompactPayload(session) : resumePayload(session));
+const payloadFor = (hook: string, session: string): string =>
+  hook === 'pre-compact' ? preCompactPayload(session) : resumePayload(session);
 
 describe('B8: a hook registered twice does not number a compaction twice', () => {
-  it.each(HOOKS)('%s: two fires at one instant make one numbered row and one duplicate; 3 s later is number 2', (hook) => {
-    const input = payloadFor(hook, 'b8');
-    for (const now of [T0, T0, T0_PLUS_3S]) {
-      expect(hippo(p, [hook], { input, env: { HIPPO_FAKE_NOW: now } }).status).toBe(0);
-    }
-    const [first, twin, later] = eventsN(p, 'b8', 3);
-    expect([first.turn_seq, twin.turn_seq, twin.duplicate_of, later.turn_seq, later.duplicate_of]).toEqual([1, null, first.id, 2, null]);
-  });
+  it.each(HOOKS)(
+    '%s: two fires at one instant make one numbered row and one duplicate; 3 s later is number 2',
+    (hook) => {
+      const input = payloadFor(hook, 'b8');
+      for (const now of [T0, T0, T0_PLUS_3S]) {
+        expect(hippo(p, [hook], { input, env: { HIPPO_FAKE_NOW: now } }).status).toBe(0);
+      }
+      const [first, twin, later] = eventsN(p, 'b8', 3);
+      expect([first.turn_seq, twin.turn_seq, twin.duplicate_of, later.turn_seq, later.duplicate_of]).toEqual([
+        1,
+        null,
+        first.id,
+        2,
+        null,
+      ]);
+    },
+  );
 
   it.each(HOOKS)('%s: two processes started together leave one numbered row and no lost count', async (hook) => {
-    const run = (): ReturnType<typeof hippoAsync> => hippoAsync(p, [hook], { input: payloadFor(hook, 'b8-race'), env: { HIPPO_FAKE_NOW: T0 } });
+    const run = (): ReturnType<typeof hippoAsync> =>
+      hippoAsync(p, [hook], { input: payloadFor(hook, 'b8-race'), env: { HIPPO_FAKE_NOW: T0 } });
     const results = await Promise.all([run(), run()]);
     expect(results.map((r) => r.status)).toEqual([0, 0]);
     const rows = events(p, 'b8-race');
@@ -53,8 +77,13 @@ describe('B8: a hook registered twice does not number a compaction twice', () =>
     const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
     const camel = copilotPayload('preCompact', p.cwd, transcript);
     // SAFETY: the fixture is a JSON object; the second fire is the same compaction under the snake_case event name.
-    const snake = JSON.stringify({ ...JSON.parse(copilotPayload('PreCompact', p.cwd, transcript)), session_id: 'copilot-sess-1' });
-    for (const input of [camel, snake]) expect(hippo(p, ['pre-compact', '--runtime', 'copilot'], { input }).status).toBe(0);
+    const snake = JSON.stringify({
+      ...JSON.parse(copilotPayload('PreCompact', p.cwd, transcript)),
+      session_id: 'copilot-sess-1',
+    });
+    for (const input of [camel, snake]) {
+      expect(hippo(p, ['pre-compact', '--runtime', 'copilot'], { input }).status).toBe(0);
+    }
     expect(events(p, 'copilot-sess-1')).toHaveLength(1);
   });
 });
@@ -72,14 +101,25 @@ interface Observed {
 
 /** Pre-compact over a real transcript, then compact-resume over the snapshot it saved. */
 function scenario(proj: Project): Observed {
-  const pre = hippo(proj, ['pre-compact'], { input: preCompactPayload('inv', { transcript_path: writeTranscript(proj), cwd: proj.cwd }) });
+  const pre = hippo(proj, ['pre-compact'], {
+    input: preCompactPayload('inv', { transcript_path: writeTranscript(proj), cwd: proj.cwd }),
+  });
   const resume = hippo(proj, ['compact-resume'], { input: resumePayload('inv') });
   const snap = loadActiveTaskSnapshot(proj.hippoRoot, 'default');
   return {
     status: [pre.status, resume.status],
     stdout: [pre.stdout, maskTimes(resume.stdout)],
-    snapshot: [snap?.task ?? null, snap?.summary ?? null, snap?.next_step ?? null, snap?.session_id ?? null, snap?.source ?? null],
-    compactions: tableRows(proj, 'SELECT session_id, compact_trigger, snapshot_saved, items_written, status FROM compactions ORDER BY started_at, id'),
+    snapshot: [
+      snap?.task ?? null,
+      snap?.summary ?? null,
+      snap?.next_step ?? null,
+      snap?.session_id ?? null,
+      snap?.source ?? null,
+    ],
+    compactions: tableRows(
+      proj,
+      'SELECT session_id, compact_trigger, snapshot_saved, items_written, status FROM compactions ORDER BY started_at, id',
+    ),
     tokens: tableRows(proj, 'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id'),
   };
 }
@@ -110,14 +150,23 @@ describe('B9 and B10: the ledger never changes either hook', () => {
     try {
       const baseline = scenario(off);
       renameLedgerTable(p);
-      const pre = hippo(p, ['pre-compact'], { input: preCompactPayload('inv', { transcript_path: writeTranscript(p), cwd: p.cwd }) });
+      const pre = hippo(p, ['pre-compact'], {
+        input: preCompactPayload('inv', { transcript_path: writeTranscript(p), cwd: p.cwd }),
+      });
       const resume = hippo(p, ['compact-resume'], { input: resumePayload('inv') });
       expect([pre.status, resume.status]).toEqual(baseline.status);
       expect([pre.stdout, maskTimes(resume.stdout)]).toEqual(baseline.stdout);
       expect(ledgerLines(pre.stderr)).toHaveLength(1);
       expect(ledgerLines(resume.stderr)).toHaveLength(1);
-      expect(tableRows(p, 'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id')).toEqual(baseline.tokens);
-      expect(tableRows(p, 'SELECT session_id, compact_trigger, snapshot_saved, items_written, status FROM compactions ORDER BY started_at, id')).toEqual(baseline.compactions);
+      expect(tableRows(p, 'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id')).toEqual(
+        baseline.tokens,
+      );
+      expect(
+        tableRows(
+          p,
+          'SELECT session_id, compact_trigger, snapshot_saved, items_written, status FROM compactions ORDER BY started_at, id',
+        ),
+      ).toEqual(baseline.compactions);
       expect(loadActiveTaskSnapshot(p.hippoRoot, 'default')?.task).toBe(baseline.snapshot[0]);
     } finally {
       dispose(off);
@@ -128,7 +177,9 @@ describe('B9 and B10: the ledger never changes either hook', () => {
 describe('B11 and U1', () => {
   it('B11: no column of a boundary row holds the instruction or the snapshot text', () => {
     scenario(p);
-    const cells = tableRows(p, 'SELECT * FROM delivery_events').flatMap((r) => Object.values(r)).filter((v): v is string => typeof v === 'string');
+    const cells = tableRows(p, 'SELECT * FROM delivery_events')
+      .flatMap((r) => Object.values(r))
+      .filter((v): v is string => typeof v === 'string');
     // The two boundary rows, 11 non-null text cells each: ts, tenant, runtime, event, surface, two store
     // fields, session and its state, block state and emitted hash.
     expect(cells).toHaveLength(22);
@@ -146,12 +197,17 @@ describe('B11 and U1', () => {
         stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',
         logFile,
-        onBoundary: () => { throw new Error('boom'); },
+        onBoundary: () => {
+          throw new Error('boom');
+        },
       });
       const log = fs.readFileSync(logFile, 'utf8');
       expect(log).toContain('boundary callback failed: boom');
       expect(log).toContain('snapshot saved');
-      expect(loadActiveTaskSnapshot(p.hippoRoot, 'default')).toMatchObject({ session_id: 'copilot-sess-1', source: 'pre-compact' });
+      expect(loadActiveTaskSnapshot(p.hippoRoot, 'default')).toMatchObject({
+        session_id: 'copilot-sess-1',
+        source: 'pre-compact',
+      });
     } finally {
       exit.mockRestore();
     }

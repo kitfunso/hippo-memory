@@ -94,7 +94,8 @@ export interface GitHubRouting {
 
 /** One payload a webhook could not use, already redacted, for the dead-letter queue of its connector. */
 export type ConnectorDeadLetter =
-  ({ readonly connector: 'slack' } & SlackDlqInsert) | ({ readonly connector: 'github' } & GitHubDlqInsert);
+  | ({ readonly connector: 'slack' } & SlackDlqInsert)
+  | ({ readonly connector: 'github' } & GitHubDlqInsert);
 
 /** One row to park; the two Slack-only columns are stored NULL when left out. */
 export interface SlackDlqInsert {

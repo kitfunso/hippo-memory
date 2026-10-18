@@ -52,10 +52,18 @@ const VALUE_LESS: readonly Row[] = [
   ['snapshot save', 'task', () => handleSnapshot(c(['save'], { task: true, summary: 's', 'next-step': 'n' }))],
   ['snapshot save', 'summary', () => handleSnapshot(c(['save'], { task: 't', summary: true, 'next-step': 'n' }))],
   ['snapshot save', 'next-step', () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': true }))],
-  ['snapshot save', 'source', () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': 'n', source: true }))],
+  [
+    'snapshot save',
+    'source',
+    () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': 'n', source: true })),
+  ],
   ['session log', 'content', () => handleSession(c(['log'], { id: 's1', content: true }))],
   ['session log', 'type', () => handleSession(c(['log'], { id: 's1', content: 'c', type: true }))],
-  ['session complete', 'summary', () => handleSession(c(['complete'], { session: 's1', outcome: 'success', summary: true }))],
+  [
+    'session complete',
+    'summary',
+    () => handleSession(c(['complete'], { session: 's1', outcome: 'success', summary: true })),
+  ],
   ['handoff create', 'summary', () => handleHandoff(c(['create'], { summary: true }))],
   ['handoff create', 'next', () => handleHandoff(c(['create'], { summary: 'x', next: true }))],
   ['handoff create', 'session', () => handleHandoff(c(['create'], { summary: 'x', session: true }))],
@@ -63,7 +71,11 @@ const VALUE_LESS: readonly Row[] = [
   ['wm push', 'scope', () => handleWm(c(['push'], { content: 'c', scope: true }))],
   ['wm clear', 'session', () => handleWm(c(['clear'], { session: true }))],
   ['trace record', 'task', () => handleTrace(c(['record'], { task: true, steps: STEPS, outcome: 'success' }))],
-  ['trace record', 'source', () => handleTrace(c(['record'], { task: 't', steps: STEPS, outcome: 'success', source: true }))],
+  [
+    'trace record',
+    'source',
+    () => handleTrace(c(['record'], { task: 't', steps: STEPS, outcome: 'success', source: true })),
+  ],
   ['remember', 'scope', () => handleRemember(c(['the deploy runs at noon'], { scope: true }))],
   ['export', 'format', () => handleExport(c([], { format: true }))],
   ['import', 'file', () => handleImport(c([], { file: true }))],
@@ -92,28 +104,48 @@ describe('a text flag with no value', () => {
 
 describe('a text flag with a value', () => {
   it('snapshot save keeps the task, summary and next step it was given', async () => {
-    const result = await runInProcess(() => handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })));
+    const result = await runInProcess(() =>
+      handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })),
+    );
     expect(result.status).toBe(0);
-    expect(await snapshotLoad(cliApiContext(root, 'default'))).toMatchObject({ task: 'ship', summary: 'half done', next_step: 'merge', source: 'test' });
+    expect(await snapshotLoad(cliApiContext(root, 'default'))).toMatchObject({
+      task: 'ship',
+      summary: 'half done',
+      next_step: 'merge',
+      source: 'test',
+    });
   });
 
   it('session log and handoff create store the text they were given', async () => {
-    const log = await runInProcess(() => handleSession(c(['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })));
+    const log = await runInProcess(() =>
+      handleSession(c(['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })),
+    );
     expect(log.status).toBe(0);
-    expect(await sessionEventList(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([{ session_id: 's1', content: 'tried the fix', event_type: 'attempt' }]);
-    const made = await runInProcess(() => handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })));
+    expect(await sessionEventList(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([
+      { session_id: 's1', content: 'tried the fix', event_type: 'attempt' },
+    ]);
+    const made = await runInProcess(() =>
+      handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),
+    );
     expect(made.status).toBe(0);
-    expect(await handoffLatest(cliApiContext(root, 'default'), 's1')).toMatchObject({ summary: 'stopped at step 2', nextAction: 'run the suite' });
+    expect(await handoffLatest(cliApiContext(root, 'default'), 's1')).toMatchObject({
+      summary: 'stopped at step 2',
+      nextAction: 'run the suite',
+    });
   });
 
   it('wm push stores the scope and content it was given', async () => {
     const result = await runInProcess(() => handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })));
     expect(result.status).toBe(0);
-    expect(await workingMemoryRead(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([{ scope: 'plan', content: 'check the lease' }]);
+    expect(await workingMemoryRead(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([
+      { scope: 'plan', content: 'check the lease' },
+    ]);
   });
 
   it('trace record and remember store a row from their text flags', async () => {
-    const trace = await runInProcess(() => handleTrace(c(['record'], { task: 'build', steps: STEPS, outcome: 'success', session: 's1' })));
+    const trace = await runInProcess(() =>
+      handleTrace(c(['record'], { task: 'build', steps: STEPS, outcome: 'success', session: 's1' })),
+    );
     expect(trace.status).toBe(0);
     expect(trace.stdout).toContain('Recorded trace');
     const remembered = await runInProcess(() => handleRemember(c(['the deploy runs at noon'], { scope: 'team' })));
@@ -135,7 +167,9 @@ describe('a text flag with a value', () => {
   });
 
   it('recall, conflicts and context read their text flags', async () => {
-    expect((await runInProcess(() => handleRecall(c(['deploy'], { goal: 'ship', outcome: 'success' })))).status).toBe(0);
+    expect((await runInProcess(() => handleRecall(c(['deploy'], { goal: 'ship', outcome: 'success' })))).status).toBe(
+      0,
+    );
     expect((await runInProcess(() => handleConflicts(c([], { status: 'resolved' })))).status).toBe(0);
     expect((await runInProcess(() => handleContext(c([], { format: 'json' })))).status).toBe(0);
   });

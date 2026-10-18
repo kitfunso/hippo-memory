@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
 import { refineSemanticMemory, refineStore } from '../../src/cli/refine-llm.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
@@ -11,7 +11,9 @@ function tmpStore(): string {
   const dir = makeRoot('refine');
   return dir;
 }
-function cleanup(dir: string): void { fs.rmSync(dir, { recursive: true, force: true }); }
+function cleanup(dir: string): void {
+  fs.rmSync(dir, { recursive: true, force: true });
+}
 
 /** A fetch stub that returns a canned Claude-shaped JSON response. */
 function mockFetcher(body: string, ok = true): typeof fetch {
@@ -37,14 +39,36 @@ describe('refineSemanticMemory', () => {
     const API_KEY = 'refine-test-key-0000';
     let stderr: MockInstance<typeof process.stderr.write>;
     const warnLines = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('refine'));
-    beforeEach(() => { stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true); });
-    afterEach(() => { stderr.mockRestore(); });
+    beforeEach(() => {
+      stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    });
+    afterEach(() => {
+      stderr.mockRestore();
+    });
 
     it.each([
-      ['the request throws', async (): Promise<Response> => { throw new Error('socket hang up'); }, /request failed: socket hang up/],
-      ['the API answers non-2xx', async (): Promise<Response> => new Response('{"error":"bad"}', { status: 400 }), /HTTP 400/],
-      ['the body is not JSON', async (): Promise<Response> => new Response('not json', { status: 200 }), /unreadable response/],
-      ['the reply is too short', async (): Promise<Response> => new Response(JSON.stringify({ content: [{ text: 'ok' }] }), { status: 200 }), /empty or too short/],
+      [
+        'the request throws',
+        async (): Promise<Response> => {
+          throw new Error('socket hang up');
+        },
+        /request failed: socket hang up/,
+      ],
+      [
+        'the API answers non-2xx',
+        async (): Promise<Response> => new Response('{"error":"bad"}', { status: 400 }),
+        /HTTP 400/,
+      ],
+      [
+        'the body is not JSON',
+        async (): Promise<Response> => new Response('not json', { status: 200 }),
+        /unreadable response/,
+      ],
+      [
+        'the reply is too short',
+        async (): Promise<Response> => new Response(JSON.stringify({ content: [{ text: 'ok' }] }), { status: 200 }),
+        /empty or too short/,
+      ],
     ])('returns null and logs one warning when %s', async (_label, fetcher, pattern) => {
       const result = await refineSemanticMemory('merged', [], { apiKey: API_KEY, fetcher });
       expect(result).toBeNull();
@@ -61,10 +85,10 @@ describe('refineStore', () => {
   it('refines consolidated semantic memories and tags them llm-refined', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\nOriginal clumsy merged content here',
-        { layer: Layer.Semantic, tags: ['test'] },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\nOriginal clumsy merged content here', {
+        layer: Layer.Semantic,
+        tags: ['test'],
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('Clean refined summary.');
@@ -77,16 +101,18 @@ describe('refineStore', () => {
       const updated = readEntry(dir, semantic.id);
       expect(updated?.content).toBe('Clean refined summary.');
       expect(updated?.tags).toContain('llm-refined');
-    } finally { cleanup(dir); }
+    } finally {
+      cleanup(dir);
+    }
   });
 
   it('skips already-refined memories (idempotent)', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\nsome content',
-        { layer: Layer.Semantic, tags: ['llm-refined'] },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\nsome content', {
+        layer: Layer.Semantic,
+        tags: ['llm-refined'],
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be refined');
@@ -98,16 +124,18 @@ describe('refineStore', () => {
 
       const untouched = readEntry(dir, semantic.id);
       expect(untouched?.content).toContain('[Consolidated from');
-    } finally { cleanup(dir); }
+    } finally {
+      cleanup(dir);
+    }
   });
 
   it('--all flag forces re-refinement of tagged memories', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\nsome content',
-        { layer: Layer.Semantic, tags: ['llm-refined'] },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\nsome content', {
+        layer: Layer.Semantic,
+        tags: ['llm-refined'],
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('new refined content');
@@ -115,16 +143,17 @@ describe('refineStore', () => {
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toBe('new refined content');
-    } finally { cleanup(dir); }
+    } finally {
+      cleanup(dir);
+    }
   });
 
   it('dry-run does not write refinements', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\nunchanged content',
-        { layer: Layer.Semantic },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\nunchanged content', {
+        layer: Layer.Semantic,
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be new content');
@@ -133,7 +162,9 @@ describe('refineStore', () => {
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toContain('[Consolidated from');
       expect(readEntry(dir, semantic.id)?.tags).not.toContain('llm-refined');
-    } finally { cleanup(dir); }
+    } finally {
+      cleanup(dir);
+    }
   });
 
   it('ignores non-semantic and non-consolidated memories', async () => {
@@ -151,16 +182,17 @@ describe('refineStore', () => {
 
       expect(result.scanned).toBe(0);
       expect(result.refined).toBe(0);
-    } finally { cleanup(dir); }
+    } finally {
+      cleanup(dir);
+    }
   });
 
   it('counts API failures separately from skips', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\ncontent that will fail',
-        { layer: Layer.Semantic },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\ncontent that will fail', {
+        layer: Layer.Semantic,
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('ignored', false); // API error
@@ -171,6 +203,8 @@ describe('refineStore', () => {
       expect(result.failed).toBe(1);
       // Untouched on failure
       expect(readEntry(dir, semantic.id)?.content).toContain('[Consolidated from');
-    } finally { cleanup(dir); }
+    } finally {
+      cleanup(dir);
+    }
   });
 });

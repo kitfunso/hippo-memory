@@ -66,46 +66,49 @@ describe('server auth middleware', () => {
   });
 
   // RFC 6750 schemes are case-insensitive, so a lower-case and a mixed-case one both authenticate.
-  it.each(['bearer', 'BeArEr'])('loopback with valid %s scheme: 200 and audit shows actor=api_key:<keyId>', async (scheme) => {
-    const db = openHippoDb(home);
-    let keyId: string;
-    let plaintext: string;
-    try {
-      const created = createApiKey(db, { tenantId: 'default', label: 'auth-test' });
-      keyId = created.keyId;
-      plaintext = created.plaintext;
-    } finally {
-      closeHippoDb(db);
-    }
+  it.each(['bearer', 'BeArEr'])(
+    'loopback with valid %s scheme: 200 and audit shows actor=api_key:<keyId>',
+    async (scheme) => {
+      const db = openHippoDb(home);
+      let keyId: string;
+      let plaintext: string;
+      try {
+        const created = createApiKey(db, { tenantId: 'default', label: 'auth-test' });
+        keyId = created.keyId;
+        plaintext = created.plaintext;
+      } finally {
+        closeHippoDb(db);
+      }
 
-    const res = await fetch(`${handle.url}/v1/memories`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'Authorization': `${scheme} ${plaintext}`,
-      },
-      body: JSON.stringify({ content: 'auth-canary-bearer-valid' }),
-    });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<RememberResult>(res);
-    expect(body.id).toMatch(/^mem_/);
-    expect(body.tenantId).toBe('default');
+      const res = await fetch(`${handle.url}/v1/memories`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: `${scheme} ${plaintext}`,
+        },
+        body: JSON.stringify({ content: 'auth-canary-bearer-valid' }),
+      });
+      expect(res.status).toBe(200);
+      const body = await jsonAs<RememberResult>(res);
+      expect(body.id).toMatch(/^mem_/);
+      expect(body.tenantId).toBe('default');
 
-    const db2 = openHippoDb(home);
-    try {
-      const events = queryAuditEvents(db2, { tenantId: 'default', op: 'remember' });
-      expect(events.map((e) => [e.targetId, e.actor])).toEqual([[body.id, `api_key:${keyId}`]]);
-    } finally {
-      closeHippoDb(db2);
-    }
-  });
+      const db2 = openHippoDb(home);
+      try {
+        const events = queryAuditEvents(db2, { tenantId: 'default', op: 'remember' });
+        expect(events.map((e) => [e.targetId, e.actor])).toEqual([[body.id, `api_key:${keyId}`]]);
+      } finally {
+        closeHippoDb(db2);
+      }
+    },
+  );
 
   it('loopback with invalid Bearer: 401 and no remember audit event', async () => {
     const res = await fetch(`${handle.url}/v1/memories`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': 'Bearer hk_does_not_exist.bogussecret',
+        authorization: 'Bearer hk_does_not_exist.bogussecret',
       },
       body: JSON.stringify({ content: 'auth-canary-bearer-invalid' }),
     });
@@ -138,7 +141,7 @@ describe('server auth middleware', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': `Bearer ${plaintext}`,
+        authorization: `Bearer ${plaintext}`,
       },
       body: JSON.stringify({ content: 'auth-canary-revoked' }),
     });
@@ -150,7 +153,7 @@ describe('server auth middleware', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': 'just-a-token-no-scheme',
+        authorization: 'just-a-token-no-scheme',
       },
       body: JSON.stringify({ content: 'auth-canary-malformed' }),
     });
@@ -164,7 +167,7 @@ describe('server auth middleware', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': 'Basic dXNlcjpwYXNz',
+        authorization: 'Basic dXNlcjpwYXNz',
       },
       body: JSON.stringify({ content: 'auth-canary-basic' }),
     });

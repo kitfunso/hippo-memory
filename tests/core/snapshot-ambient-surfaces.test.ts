@@ -48,7 +48,15 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
         method: 'tools/call',
         params: { name: 'hippo_context', arguments: {} },
       },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
   }
 
@@ -250,7 +258,7 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     expect(result.stdout).toContain('DF1 CLI context host-var owner-match marker');
   });
 
-  it('payload wins over the host var: a different payload session_id still excludes the env owner\'s snapshot', async () => {
+  it("payload wins over the host var: a different payload session_id still excludes the env owner's snapshot", async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context payload-beats-hostvar marker',

@@ -177,8 +177,9 @@ describe('CLI end to end', () => {
     expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
     const db = openHippoDb(globalStore);
     try {
-      const contextAudits = queryAuditEvents(db, { tenantId: 'default', op: 'recall' })
-        .filter((e) => e.metadata?.mode === 'context');
+      const contextAudits = queryAuditEvents(db, { tenantId: 'default', op: 'recall' }).filter(
+        (e) => e.metadata?.mode === 'context',
+      );
       expect(contextAudits).toHaveLength(1);
       const traces = db.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all();
       expect(traces).toHaveLength(priorTraces + 1);
@@ -190,11 +191,14 @@ describe('CLI end to end', () => {
     expect(execFileSync('node', [hippoBin, 'context', 'absentxylophonezzq'], opts)).toBe('');
     const missedDb = openHippoDb(globalStore);
     try {
-      const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' })
-        .filter((e) => e.metadata?.mode === 'context');
+      const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' }).filter(
+        (e) => e.metadata?.mode === 'context',
+      );
       expect(audits).toHaveLength(2);
       // SAFETY: the SELECT names exactly one integer column.
-      const traces = missedDb.prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id").all() as Array<{ result_count: number }>;
+      const traces = missedDb
+        .prepare("SELECT result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id")
+        .all() as Array<{ result_count: number }>;
       expect(traces).toHaveLength(priorTraces + 2);
       expect(traces.at(-1)?.result_count).toBe(0);
     } finally {
@@ -202,15 +206,17 @@ describe('CLI end to end', () => {
     }
     expect(readEntry(globalStore, entry.id)!.retrieval_count).toBe(before + 1);
     expect(fs.existsSync(path.join(work, '.hippo'))).toBe(false);
-    const contextJson = JSON.parse(execFileSync('node', [hippoBin, 'context', 'projectless-orbit', '--format', 'json'], opts));
+    const contextJson = JSON.parse(
+      execFileSync('node', [hippoBin, 'context', 'projectless-orbit', '--format', 'json'], opts),
+    );
     expect(contextJson.memories[0].global).toBe(true);
     const why = JSON.parse(execFileSync('node', [hippoBin, 'recall', 'projectless-orbit', '--why', '--json'], opts));
     expect(why.results[0].source).toBe('global');
     vi.stubEnv('HIPPO_HOME', globalStore);
-    const direct = await retrieve(
-      apiCtx(globalStore, 'default', adminActor('test')),
-      { query: 'projectless-orbit', window: { includeContinuity: true } },
-    );
+    const direct = await retrieve(apiCtx(globalStore, 'default', adminActor('test')), {
+      query: 'projectless-orbit',
+      window: { includeContinuity: true },
+    });
     expect(direct.continuity?.activeSnapshot?.task).toBe('Foreign global active task');
     expect(direct.continuity?.sessionHandoff?.summary).toBe('Foreign global handoff summary');
     expect(direct.continuity?.recentSessionEvents[0].content).toBe('Foreign global event trail');
@@ -230,7 +236,10 @@ describe('CLI end to end', () => {
     expect(out).toContain('walkup-target');
     expect(fs.existsSync(path.join(src, '.hippo'))).toBe(false);
 
-    const again = execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: src, ...cliOpts });
+    const again = execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: src,
+      ...cliOpts,
+    });
     expect(again).toContain('Already initialized at');
     expect(fs.existsSync(path.join(src, '.hippo'))).toBe(false);
   });
@@ -248,7 +257,10 @@ describe('CLI end to end', () => {
     expect(res.stderr).toContain(path.join(lone, '.hippo'));
     expect(res.stderr).toContain('up to your home directory');
     expect(fs.existsSync(path.join(lone, '.hippo'))).toBe(false);
-    for (const args of [['context', '--auto'], ['context', 'anything']]) {
+    for (const args of [
+      ['context', '--auto'],
+      ['context', 'anything'],
+    ]) {
       const context = spawnSync('node', [hippoBin, ...args], {
         cwd: lone,
         env: { ...process.env, HIPPO_HOME: globalStore },
@@ -261,7 +273,6 @@ describe('CLI end to end', () => {
 });
 
 describe('MCP findHippoRoot', () => {
-
   it('HIPPO_HOME wins over home/.hippo when cwd is under home with no marker', () => {
     const globalStore = mkdirs('global-store');
     vi.stubEnv('HIPPO_HOME', globalStore);

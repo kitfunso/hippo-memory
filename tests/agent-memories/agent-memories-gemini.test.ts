@@ -124,7 +124,10 @@ describe('gemini adapter: user scope', () => {
   });
 
   it('a repeated bullet under the section gets ~2', () => {
-    write(path.join(geminiDir(), 'GEMINI.md'), lines('## Gemini Added Memories', '- same note', '- other note', '- same note'));
+    write(
+      path.join(geminiDir(), 'GEMINI.md'),
+      lines('## Gemini Added Memories', '- same note', '- other note', '- same note'),
+    );
     const [container] = geminiAdapter.list(ctxFor(), 'user').containers;
     const keys = container.items.map((i) => i.key);
     expect(keys).toHaveLength(3);

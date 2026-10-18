@@ -7,11 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  addWorkspace,
-  listWorkspaces,
-  removeWorkspace,
-} from '../../src/connectors/slack/workspaces.js';
+import { addWorkspace, listWorkspaces, removeWorkspace } from '../../src/connectors/slack/workspaces.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 describe('slack workspaces helper', () => {
@@ -31,28 +27,28 @@ describe('slack workspaces helper', () => {
   it('addWorkspace upserts on team_id conflict (operator moves workspace)', async () => {
     await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'acme' });
     await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'globex' });
-    const items = (await listWorkspaces(sqliteStore(hippoRoot)));
+    const items = await listWorkspaces(sqliteStore(hippoRoot));
     expect(items).toHaveLength(1);
     expect(items[0]!.teamId).toBe('T01');
     expect(items[0]!.tenantId).toBe('globex');
   });
 
   it('listWorkspaces returns empty array on empty table', async () => {
-    expect((await listWorkspaces(sqliteStore(hippoRoot)))).toEqual([]);
+    expect(await listWorkspaces(sqliteStore(hippoRoot))).toEqual([]);
   });
 
   it('listWorkspaces sorts by team_id for stable output', async () => {
     await addWorkspace(sqliteStore(hippoRoot), { teamId: 'TZZ', tenantId: 't1' });
     await addWorkspace(sqliteStore(hippoRoot), { teamId: 'TAA', tenantId: 't2' });
     await addWorkspace(sqliteStore(hippoRoot), { teamId: 'TMM', tenantId: 't3' });
-    const items = (await listWorkspaces(sqliteStore(hippoRoot)));
+    const items = await listWorkspaces(sqliteStore(hippoRoot));
     expect(items.map((w) => w.teamId)).toEqual(['TAA', 'TMM', 'TZZ']);
   });
 
   it('removeWorkspace returns true when a row was deleted', async () => {
     await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'acme' });
     expect(await removeWorkspace(sqliteStore(hippoRoot), 'T01')).toBe(true);
-    expect((await listWorkspaces(sqliteStore(hippoRoot)))).toEqual([]);
+    expect(await listWorkspaces(sqliteStore(hippoRoot))).toEqual([]);
   });
 
   it('removeWorkspace returns false when no row matched', async () => {

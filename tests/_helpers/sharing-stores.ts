@@ -10,6 +10,9 @@ export function folderStore(root: string): ConfiguredFolder {
 }
 
 /** The store under `localRoot` and the global store: the operator's own unless `globalRoot` names another folder. */
-export function sharingStores(localRoot: string, globalRoot: string = getGlobalRoot()): [ConfiguredFolder, ConfiguredFolder] {
+export function sharingStores(
+  localRoot: string,
+  globalRoot: string = getGlobalRoot(),
+): [ConfiguredFolder, ConfiguredFolder] {
   return [folderStore(localRoot), folderStore(globalRoot)];
 }

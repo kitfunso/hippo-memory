@@ -19,7 +19,7 @@ export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
     printError(
       `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run ` +
-      `\`hippo init\` first.`,
+        `\`hippo init\` first.`,
     );
     process.exit(1);
   }
@@ -63,7 +63,7 @@ function failIfServerRequired(reason: string): void {
   if (envRequireServer()) {
     throw new Error(
       `hippo: HIPPO_REQUIRE_SERVER is set but ${reason}. ` +
-      `Start \`hippo serve\`, or unset HIPPO_REQUIRE_SERVER to allow direct-mode fallback.`,
+        `Start \`hippo serve\`, or unset HIPPO_REQUIRE_SERVER to allow direct-mode fallback.`,
     );
   }
 }
@@ -101,7 +101,7 @@ export async function runViaServerIfAvailable(
       // leave the pidfile alone: the next command's connect-phase failure heals it.
       printError(
         `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been ` +
-        `applied. ` +
+          `applied. ` +
           'Not retrying locally. Check with `hippo recall` before running this again.',
       );
       process.exit(1);
@@ -128,7 +128,7 @@ export async function learnFromRepo(
   tenantId: string,
   repoPath: string,
   days: number,
-  label?: string
+  label?: string,
 ): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
   const result = await learn(cliApiContext(hippoRoot, tenantId), { repoPath, days, profile: CLI_LEARN });

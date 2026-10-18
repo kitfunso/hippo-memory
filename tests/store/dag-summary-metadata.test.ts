@@ -24,12 +24,18 @@ import { loadEntriesByIds } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 describe('schema v25 — DAG summary metadata', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v25-meta'); });
+  beforeEach(() => {
+    root = makeRoot('v25-meta');
+  });
   afterEach(() => safeRmSync(root));
 
   it('fresh init brings DB to v25 with the three new columns', () => {
@@ -72,7 +78,12 @@ describe('schema v25 — DAG summary metadata', () => {
   it('loadEntriesByIds returns matching rows scoped to tenant', () => {
     const a = createMemory('row A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0 });
     const b = createMemory('row B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0 });
-    const c = createMemory('row C', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0, tenantId: 'other' });
+    const c = createMemory('row C', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      dagLevel: 0,
+      tenantId: 'other',
+    });
     writeEntry(root, a);
     writeEntry(root, b);
     writeEntry(root, c);
@@ -120,7 +131,9 @@ describe('schema v25 — DAG summary metadata', () => {
     writeEntry(root, child2);
     writeEntry(root, grandchild);
 
-    const direct = sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} })?.levels[0] ?? [];
+    const direct =
+      sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} })
+        ?.levels[0] ?? [];
     expect(direct.map((e) => e.id)).toEqual([child1.id, child2.id]);
     // Grandchild reachable only via child1, not directly under parent.
     expect(direct.find((e) => e.id === grandchild.id)).toBeUndefined();

@@ -24,8 +24,9 @@ function walk(dir, keep, skip = new Set(), out = []) {
   if (!existsSync(dir)) return out;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
-    if (e.isDirectory()) { if (!skip.has(e.name)) walk(p, keep, skip, out); }
-    else if (keep(e.name)) out.push(p);
+    if (e.isDirectory()) {
+      if (!skip.has(e.name)) walk(p, keep, skip, out);
+    } else if (keep(e.name)) out.push(p);
   }
   return out;
 }
@@ -45,13 +46,17 @@ function entryFiles(root, pkg) {
     if (existsSync(join(root, bin))) dists.push(...(readFileSync(join(root, bin), 'utf8').match(DIST_RE) ?? []));
     else dists.push(bin);
   }
-  return new Set(dists.filter((d) => /(^|\/)dist\//.test(d)).map((d) => toSrc(d.replace(/^\.\//, '').replace(/^.*?(dist\/)/, '$1'))));
+  return new Set(
+    dists.filter((d) => /(^|\/)dist\//.test(d)).map((d) => toSrc(d.replace(/^\.\//, '').replace(/^.*?(dist\/)/, '$1'))),
+  );
 }
 
 /** Every `src/file.ts:NAME` exported by src/ that no other src/ file names but a test does, sorted. */
 function namedOnlyByTests(files, tests, entries) {
   const users = new Map();
-  for (const f of files) for (const id of idents(stripComments(f.text))) users.set(id, (users.get(id) ?? new Set()).add(f.file));
+  for (const f of files) {
+    for (const id of idents(stripComments(f.text))) users.set(id, (users.get(id) ?? new Set()).add(f.file));
+  }
   const inTests = new Set();
   for (const t of tests) for (const id of idents(t.text)) inTests.add(id);
   const found = [];
@@ -71,11 +76,23 @@ function namedOnlyByTests(files, tests, entries) {
  * @returns {{ key: string, counted: boolean, why: string }[]} `key` is `src/file.ts:NAME`; `counted` is false for a script-called or pure export
  */
 export function judgeExports(root = '.') {
-  const load = (dir, keep, skip) => walk(join(root, dir), keep, skip).map((p) => ({ file: relative(root, p).replaceAll(sep, '/'), text: readFileSync(p, 'utf8') }));
+  const load = (dir, keep, skip) =>
+    walk(join(root, dir), keep, skip).map((p) => ({
+      file: relative(root, p).replaceAll(sep, '/'),
+      text: readFileSync(p, 'utf8'),
+    }));
   const src = load('src', isSource);
-  const candidates = namedOnlyByTests(src, load('tests', (n) => /\.(ts|tsx|mts|js|mjs)$/.test(n)), entryFiles(root, readJson(join(root, 'package.json'), {})));
+  const candidates = namedOnlyByTests(
+    src,
+    load('tests', (n) => /\.(ts|tsx|mts|js|mjs)$/.test(n)),
+    entryFiles(root, readJson(join(root, 'package.json'), {})),
+  );
   const rule = createPurityRule(root, src);
-  const called = scriptCallers(CALLER_DIRS.flatMap((d) => load(d, isScript, BUILD_DIRS)), rule.has, rule.resolveExport);
+  const called = scriptCallers(
+    CALLER_DIRS.flatMap((d) => load(d, isScript, BUILD_DIRS)),
+    rule.has,
+    rule.resolveExport,
+  );
   return candidates.map((key) => {
     if (called.has(key)) return { key, counted: false, why: 'a script or benchmark imports it' };
     const at = key.lastIndexOf(':');
@@ -89,12 +106,14 @@ export function seamNameViolations(root = '.') {
   const bad = [];
   for (const p of walk(join(root, 'src'), isSource)) {
     const file = relative(root, p).replaceAll(sep, '/');
-    readFileSync(p, 'utf8').split(/\r?\n/).forEach((line, i) => {
-      const name = new RegExp(EXPORT_RE.source).exec(line)?.[1];
-      if (!name || SEAM_EXEMPT.has(name)) return;
-      const seam = name.startsWith('_') || name.endsWith('ForTests');
-      if (seam && !SEAM_RE.test(name)) bad.push(`${file}:${i + 1} ${name}`);
-    });
+    readFileSync(p, 'utf8')
+      .split(/\r?\n/)
+      .forEach((line, i) => {
+        const name = new RegExp(EXPORT_RE.source).exec(line)?.[1];
+        if (!name || SEAM_EXEMPT.has(name)) return;
+        const seam = name.startsWith('_') || name.endsWith('ForTests');
+        if (seam && !SEAM_RE.test(name)) bad.push(`${file}:${i + 1} ${name}`);
+      });
   }
   return bad;
 }
@@ -120,7 +139,9 @@ function check(current, wasSet, added) {
   }
   const currentSet = new Set(current);
   if ([...wasSet].some((e) => !currentSet.has(e))) {
-    console.log('Test-only exports went down; run `node scripts/check-test-only-exports.mjs --update` to lock that in.');
+    console.log(
+      'Test-only exports went down; run `node scripts/check-test-only-exports.mjs --update` to lock that in.',
+    );
   }
   console.log(`Test-only export ratchet OK: ${current.length} exports, none outside ${BASELINE}.`);
   return 0;
@@ -155,4 +176,6 @@ function main(args) {
 }
 
 // Guarded so the test can import judgeExports without running the check.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exit(main(process.argv.slice(2)));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(main(process.argv.slice(2)));
+}

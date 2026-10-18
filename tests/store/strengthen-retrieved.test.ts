@@ -42,7 +42,9 @@ describe('strengthenRetrieved', () => {
     const e = createMemory('the staging cluster restarts every sunday');
     writeEntry(root, e);
 
-    expect(strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }).size).toBe(0);
+    expect(strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }).size).toBe(
+      0,
+    );
     expect(readEntry(root, e.id)!.retrieval_count).toBe(0);
   });
 

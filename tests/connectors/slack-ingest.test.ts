@@ -5,11 +5,13 @@ import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('ingestMessage', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('slack-ingest');  });
+  beforeEach(() => {
+    root = makeRoot('slack-ingest');
+  });
 
   it('writes a kind=raw memory and is idempotent on replay', async () => {
     const evt = {

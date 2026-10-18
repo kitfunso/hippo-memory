@@ -209,9 +209,8 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
     staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
 
   const finalStatic = sendStatic ? staticBlock : '';
-  const additionalContext = finalStatic && recallBlock
-    ? `${finalStatic}\n\n${recallBlock}`
-    : finalStatic || recallBlock;
+  const additionalContext =
+    finalStatic && recallBlock ? `${finalStatic}\n\n${recallBlock}` : finalStatic || recallBlock;
   const staticReused = !sendStatic && staticBlock.trim().length > 0;
   if (!additionalContext.trim()) {
     rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
@@ -251,29 +250,43 @@ function skipUnchangedStatic(
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
-  const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
-    ? injectCfg.refreshTurns
-    : 10;
+  const refreshTurns =
+    Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0 ? injectCfg.refreshTurns : 10;
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
   const last = ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
-  bookLedgerTurn({
-    uses: [{
-      tenantId: view.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-      items: staticCount, tokens: estimateTokens(staticBlock), hash: staticHash,
-    }],
-    delivery: recallBlock.trim() ? undefined : (write) => {
-      rec?.delivered({ state: 'reused', staticHash, staticReused: true });
-      flushDeliveryRecorder(rec, write);
+  bookLedgerTurn(
+    {
+      uses: [
+        {
+          tenantId: view.tenantId,
+          sessionId: payloadSessionId,
+          surface,
+          event: 'skip',
+          items: staticCount,
+          tokens: estimateTokens(staticBlock),
+          hash: staticHash,
+        },
+      ],
+      delivery: recallBlock.trim()
+        ? undefined
+        : (write) => {
+            rec?.delivered({ state: 'reused', staticHash, staticReused: true });
+            flushDeliveryRecorder(rec, write);
+          },
     },
-  }, view.reach);
+    view.reach,
+  );
   return true;
 }
 
-interface InjectedBlock { readonly text: string; readonly items: number }
+interface InjectedBlock {
+  readonly text: string;
+  readonly items: number;
+}
 
 /** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not
  * break the hook. */
@@ -284,8 +297,13 @@ function recordAdditionalContextRows(
   recallPart: InjectedBlock,
 ): void {
   const row = (part: InjectedBlock, on: TokenSurface): TokenUse => ({
-    tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: on, event: 'inject',
-    items: part.items, tokens: estimateTokens(part.text), hash: blockHash(part.text),
+    tenantId: view.tenantId,
+    sessionId: view.ledgerSessionId,
+    surface: on,
+    event: 'inject',
+    items: part.items,
+    tokens: estimateTokens(part.text),
+    hash: blockHash(part.text),
   });
   bookLedgerTurn(
     {
@@ -356,7 +374,9 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
  * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
  * any arm is booked. */
 export async function promptHookContext(
-  ctx: Context, req: PromptHookRequest, opts: PromptHookOptions = {},
+  ctx: Context,
+  req: PromptHookRequest,
+  opts: PromptHookOptions = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;
@@ -383,8 +403,15 @@ export async function promptHookContext(
   });
   const rendered = hasContextData(result)
     ? renderAdditionalContext({
-        config: ctx.config, tenantId: ctx.tenantId, ledgerSessionId,
-        payloadSessionId: ledgerSessionId, pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach,
+        config: ctx.config,
+        tenantId: ctx.tenantId,
+        ledgerSessionId,
+        payloadSessionId: ledgerSessionId,
+        pinnedOnly: true,
+        framing: HOOK_FRAMING,
+        rec: null,
+        result,
+        reach,
         printedHash: req.printedHash ?? null,
       })
     : NOTHING_RENDERED;

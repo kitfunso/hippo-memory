@@ -1,10 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import {
-  vecDot, vecNorm, vecScale, vecAdd, vecSub, vecZero, vecNormalize, vecClampMagnitude,
-  computeMass, computeCharge, computeTemperature,
-  queryGravityMagnitude, velocityAlignmentBonus, attractionForce, repulsionForce, dragForce,
-  physicsScore, simulate, computeSystemEnergy,
-  type PhysicsParticle, type ForceContext,
+  vecDot,
+  vecNorm,
+  vecScale,
+  vecAdd,
+  vecSub,
+  vecZero,
+  vecNormalize,
+  vecClampMagnitude,
+  computeMass,
+  computeCharge,
+  computeTemperature,
+  queryGravityMagnitude,
+  velocityAlignmentBonus,
+  attractionForce,
+  repulsionForce,
+  dragForce,
+  physicsScore,
+  simulate,
+  computeSystemEnergy,
+  type PhysicsParticle,
+  type ForceContext,
 } from '../../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 
@@ -429,11 +445,10 @@ describe('Scoring', () => {
       const query = [1, 0, 0];
       const config = { ...DEFAULT_PHYSICS_CONFIG, momentum_weight: 0.5 };
       const results = physicsScore([still, moving], query, config);
-      const movingResult = results.find(r => r.memoryId === 'moving')!;
-      const stillResult = results.find(r => r.memoryId === 'still')!;
+      const movingResult = results.find((r) => r.memoryId === 'moving')!;
+      const stillResult = results.find((r) => r.memoryId === 'still')!;
       expect(movingResult.finalScore).toBeGreaterThan(stillResult.finalScore);
     });
-
   });
 
   describe('Cluster amplification', () => {
@@ -456,7 +471,7 @@ describe('Scoring', () => {
 
       // Score cluster particles
       const clusterResults = physicsScore([...cluster, isolated], query, config);
-      const c1Result = clusterResults.find(r => r.memoryId === 'c1')!;
+      const c1Result = clusterResults.find((r) => r.memoryId === 'c1')!;
       // c1 should get cluster amplification > 1 from c2 and c3
       expect(c1Result.clusterAmplification).toBeGreaterThan(1.0);
     });

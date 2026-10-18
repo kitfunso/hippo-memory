@@ -119,9 +119,15 @@ describe('POST /v1/sleep', () => {
   it('shares a high-value memory into the global store, as hippo sleep does', async () => {
     // Pinned with error and gotcha tags, so its transfer score clears the auto-share bar.
     const row = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
-    writeEntry(home, createMemory(row, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default',
-    }));
+    writeEntry(
+      home,
+      createMemory(row, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        pinned: true,
+        tags: ['error', 'gotcha'],
+        tenantId: 'default',
+      }),
+    );
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -204,7 +210,9 @@ describe('POST /v1/sleep', () => {
     fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 
   it('answers GET /health while a sleep is still running', async () => {
-    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), { content: 'a memory for the sleep to write' });
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'a memory for the sleep to write',
+    });
     // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
@@ -213,7 +221,10 @@ describe('POST /v1/sleep', () => {
     const health = new Promise<Response>((resolve, reject) => {
       handle.server?.once('request', () => fetch(`${handle.url}/health`).then(resolve, reject));
     });
-    const slept = postSleep().then((res) => { order.push('sleep'); return res; });
+    const slept = postSleep().then((res) => {
+      order.push('sleep');
+      return res;
+    });
     const healthStatus = (await health).status;
     order.push('health');
     lock.exec('ROLLBACK');
@@ -222,7 +233,9 @@ describe('POST /v1/sleep', () => {
   });
 
   it('still answers 503 with Retry-After when another connection holds the write lock', async () => {
-    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), { content: 'a memory for the sleep to write' });
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'a memory for the sleep to write',
+    });
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
     const busy = await postSleep();
@@ -232,7 +245,9 @@ describe('POST /v1/sleep', () => {
   });
 
   it('refuses a third sleep at once with 503 and Retry-After 30 while one runs and one waits, then takes sleeps again', async () => {
-    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), { content: 'a memory for the sleep to write' });
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'a memory for the sleep to write',
+    });
     // Neither admitted sleep can finish while this lock is held, so the first reply back is the refusal.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
@@ -243,7 +258,11 @@ describe('POST /v1/sleep', () => {
     closeHippoDb(lock);
     const statuses = (await Promise.all(sleeps)).map((res) => res.status).sort();
 
-    expect(refusal).toEqual([503, '30', { error: 'a sleep is already running and another is waiting; retry when one has finished' }]);
+    expect(refusal).toEqual([
+      503,
+      '30',
+      { error: 'a sleep is already running and another is waiting; retry when one has finished' },
+    ]);
     expect(statuses).toEqual([200, 200, 503]);
     expect((await postSleep()).status).toBe(200);
   });
@@ -256,7 +275,10 @@ describe('POST /v1/sleep', () => {
   it('stops a sleep at HIPPO_SLEEP_TIMEOUT_MS with 504 and leaves the store usable', async () => {
     vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
     const stopped = await postSleep();
-    expect([stopped.status, (await jsonAs<{ error: string }>(stopped)).error]).toEqual([504, expect.stringContaining('did not finish within 1 ms')]);
+    expect([stopped.status, (await jsonAs<{ error: string }>(stopped)).error]).toEqual([
+      504,
+      expect.stringContaining('did not finish within 1 ms'),
+    ]);
     vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', undefined);
     expect((await postSleep()).status).toBe(200);
   });

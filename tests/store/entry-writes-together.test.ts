@@ -17,7 +17,11 @@ describe('writeEntriesTogether', () => {
     roots.push(root);
     const entries = ['alpha', 'beta', 'gamma'].map((text) => createMemory(text));
     writeEntriesTogether(root, entries);
-    expect(loadAllEntries(root, 'default').map((e) => e.content).sort()).toEqual(['alpha', 'beta', 'gamma']);
+    expect(
+      loadAllEntries(root, 'default')
+        .map((e) => e.content)
+        .sort(),
+    ).toEqual(['alpha', 'beta', 'gamma']);
   });
 
   it('opens no store for an empty list', () => {
@@ -27,10 +31,14 @@ describe('writeEntriesTogether', () => {
   it('commits the rows in one transaction, so a failing last row leaves none', () => {
     const root = makeRoot('entry-writes-batch-atomic');
     roots.push(root);
-    onHandle(root, (db) => {
-      db.exec(`CREATE TRIGGER poison BEFORE INSERT ON memories WHEN NEW.content = 'poison'
+    onHandle(
+      root,
+      (db) => {
+        db.exec(`CREATE TRIGGER poison BEFORE INSERT ON memories WHEN NEW.content = 'poison'
         BEGIN SELECT RAISE(ABORT, 'poisoned row'); END`);
-    }, openStore);
+      },
+      openStore,
+    );
     const entries = ['alpha', 'beta', 'poison'].map((text) => createMemory(text));
     expect(() => writeEntriesTogether(root, entries)).toThrow(/poisoned row/);
     expect(loadAllEntries(root, 'default')).toHaveLength(0);

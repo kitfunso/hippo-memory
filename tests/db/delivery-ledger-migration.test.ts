@@ -3,20 +3,68 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const EVENT_COLUMNS = [
-  'id', 'ts', 'ledger_version', 'tenant_id', 'runtime', 'event_type', 'surface', 'store_hash', 'write_store',
-  'project_hash', 'session_id', 'session_state', 'host_turn_id', 'turn_seq', 'duplicate_of', 'prompt_hash',
-  'prompt_length', 'query_hash', 'recall_trace_id', 'block_state', 'prompt_recall', 'considered_count',
-  'filtered_count', 'selected_count', 'emitted_count', 'rejected_count', 'rejected_unlisted', 'sections_shown',
-  'sections_dropped', 'budget_tokens', 'selected_tokens', 'injected_tokens', 'static_hash', 'recall_hash',
-  'emitted_hash', 'elapsed_ms', 'tool_use_id', 'failure_id',
+  'id',
+  'ts',
+  'ledger_version',
+  'tenant_id',
+  'runtime',
+  'event_type',
+  'surface',
+  'store_hash',
+  'write_store',
+  'project_hash',
+  'session_id',
+  'session_state',
+  'host_turn_id',
+  'turn_seq',
+  'duplicate_of',
+  'prompt_hash',
+  'prompt_length',
+  'query_hash',
+  'recall_trace_id',
+  'block_state',
+  'prompt_recall',
+  'considered_count',
+  'filtered_count',
+  'selected_count',
+  'emitted_count',
+  'rejected_count',
+  'rejected_unlisted',
+  'sections_shown',
+  'sections_dropped',
+  'budget_tokens',
+  'selected_tokens',
+  'injected_tokens',
+  'static_hash',
+  'recall_hash',
+  'emitted_hash',
+  'elapsed_ms',
+  'tool_use_id',
+  'failure_id',
 ];
 const CANDIDATE_COLUMNS = [
-  'event_id', 'tenant_id', 'memory_id', 'source_store', 'pool', 'stage', 'outcome', 'reason', 'cand_rank', 'score', 'tokens',
+  'event_id',
+  'tenant_id',
+  'memory_id',
+  'source_store',
+  'pool',
+  'stage',
+  'outcome',
+  'reason',
+  'cand_rank',
+  'score',
+  'tokens',
 ];
 
 function names(db: DatabaseSyncLike, sql: string, ...params: string[]): string[] {
@@ -35,11 +83,15 @@ function meta(db: DatabaseSyncLike, key: string): string | undefined {
 }
 
 function insertEvent(db: DatabaseSyncLike, sessionId: string | null, turnSeq: number | null): number {
-  return Number(db.prepare(
-    `INSERT INTO delivery_events (ts, ledger_version, runtime, event_type, surface, store_hash, write_store, session_id,
+  return Number(
+    db
+      .prepare(
+        `INSERT INTO delivery_events (ts, ledger_version, runtime, event_type, surface, store_hash, write_store, session_id,
        session_state, turn_seq, block_state)
      VALUES (?, 1, 'claude-code', 'prompt-submit', 'hook', 'abcdef0123456789', 'local', ?, 'payload', ?, 'sent')`,
-  ).run(new Date().toISOString(), sessionId, turnSeq).lastInsertRowid);
+      )
+      .run(new Date().toISOString(), sessionId, turnSeq).lastInsertRowid,
+  );
 }
 
 function withStore(fn: (db: DatabaseSyncLike, home: string) => void): void {
@@ -67,17 +119,36 @@ describe('delivery ledger schema v50', () => {
 
   it('has two plain indexes and two partial unique indexes on events, and none on candidates', () => {
     withStore((db) => {
-      const idx = names(db, `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND sql IS NOT NULL ORDER BY name`, 'delivery_events');
-      expect(idx).toEqual(['idx_delivery_events_session', 'idx_delivery_events_tool_call', 'idx_delivery_events_ts', 'idx_delivery_events_turn']);
+      const idx = names(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND sql IS NOT NULL ORDER BY name`,
+        'delivery_events',
+      );
+      expect(idx).toEqual([
+        'idx_delivery_events_session',
+        'idx_delivery_events_tool_call',
+        'idx_delivery_events_ts',
+        'idx_delivery_events_turn',
+      ]);
       // SAFETY: one TEXT column `sql`.
-      const turn = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_turn'`).get() as { sql: string };
+      const turn = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_turn'`).get() as {
+        sql: string;
+      };
       expect(turn.sql).toMatch(/UNIQUE/);
       expect(turn.sql).toMatch(/WHERE turn_seq IS NOT NULL/);
       // SAFETY: one TEXT column `sql`.
-      const call = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_tool_call'`).get() as { sql: string };
+      const call = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_tool_call'`).get() as {
+        sql: string;
+      };
       expect(call.sql).toMatch(/UNIQUE/);
       expect(call.sql).toMatch(/WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL/);
-      expect(names(db, `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND sql IS NOT NULL`, 'delivery_candidates')).toEqual([]);
+      expect(
+        names(
+          db,
+          `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND sql IS NOT NULL`,
+          'delivery_candidates',
+        ),
+      ).toEqual([]);
     });
   });
 

@@ -3,9 +3,9 @@
  */
 
 export interface MarkdownItem {
-  readonly heading: string;      // nearest heading text above the item, '' when none
-  readonly headingSlug: string;  // slug of heading, 'top' when heading is ''
-  readonly text: string;         // the item text
+  readonly heading: string; // nearest heading text above the item, '' when none
+  readonly headingSlug: string; // slug of heading, 'top' when heading is ''
+  readonly text: string; // the item text
 }
 
 interface Block {
@@ -66,7 +66,11 @@ function isIndented(line: string): boolean {
 
 function headingText(line: string): string {
   // A closing run of '#' counts only after a space, so `## C#` keeps its name.
-  return line.replace(HEADING, '').trim().replace(/(?:^|\s+)#+$/, '').trim();
+  return line
+    .replace(HEADING, '')
+    .trim()
+    .replace(/(?:^|\s+)#+$/, '')
+    .trim();
 }
 
 // Rules are tested first so `- - -` is a rule, not a bullet.
@@ -134,5 +138,11 @@ function readBlock(lines: readonly string[], start: number): Block {
   const body = lines.slice(start, end);
   if (!isBullet) return { end, text: body.join('\n').trim() };
   body[0] = body[0].replace(BULLET, '');
-  return { end, text: body.map((l) => l.trimEnd()).join('\n').trim() };
+  return {
+    end,
+    text: body
+      .map((l) => l.trimEnd())
+      .join('\n')
+      .trim(),
+  };
 }

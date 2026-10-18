@@ -87,7 +87,11 @@ describe('every pattern family still extracts', () => {
     for (const junk of ['TODO fix this thing', 'LGTM ship it', 'FYI all done here', 'IIRC that was fine']) {
       expect(isContentWorthStoring(junk), `${junk} must stay rejected`).toBe(false);
     }
-    for (const real of ['every PR needs two approvals', 'the CI runs on every push here', 'restart the DB pool after deploy']) {
+    for (const real of [
+      'every PR needs two approvals',
+      'the CI runs on every push here',
+      'restart the DB pool after deploy',
+    ]) {
       expect(isContentWorthStoring(real), `${real} must be stored`).toBe(true);
     }
     // capitalisation alone still buys nothing

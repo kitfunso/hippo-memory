@@ -40,7 +40,13 @@ mkdirSync(dataDir, { recursive: true });
 initStore(dataDir);
 
 // Admin, as the connector webhooks ingest: a restricted-scope write needs a role that can read that scope.
-const ctx = { hippoRoot: dataDir, tenantId: 'default', actor: adminActor('ci:seed'), store: sqliteStore(dataDir), config: loadConfig(dataDir) };
+const ctx = {
+  hippoRoot: dataDir,
+  tenantId: 'default',
+  actor: adminActor('ci:seed'),
+  store: sqliteStore(dataDir),
+  config: loadConfig(dataDir),
+};
 
 const ghEvent = {
   eventName: 'issues',

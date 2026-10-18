@@ -56,7 +56,12 @@ function elsewhere(root: string, write: (db: DatabaseSyncLike) => void): void {
 }
 
 function tenantRows(tenantId: string, n: number, seed: number, scope?: string): VectorRowSeed[] {
-  return clusteredVectors(n, DIM, seed).map((vector, i) => ({ id: `${tenantId}-${i}`, tenantId, vector, ...(scope && { scope }) }));
+  return clusteredVectors(n, DIM, seed).map((vector, i) => ({
+    id: `${tenantId}-${i}`,
+    tenantId,
+    vector,
+    ...(scope && { scope }),
+  }));
 }
 
 function spec(tenantId: string, extra: Partial<VectorCandidateSpec> = {}): VectorCandidateSpec {
@@ -138,7 +143,10 @@ describe('a row the scan would not admit', () => {
   ];
 
   it('never comes back from the graph, which still finds the admitted rows the scan finds', async () => {
-    const admitted = [...tenantRows('a', 300, 3), ...tenantRows('team', 60, 4, 'team-a').map((r) => ({ ...r, tenantId: 'a' }))];
+    const admitted = [
+      ...tenantRows('a', 300, 3),
+      ...tenantRows('team', 60, 4, 'team-a').map((r) => ({ ...r, tenantId: 'a' })),
+    ];
     const f = fixture([...admitted, ...tenantRows('b', 100, 5), ...banned]);
     await built(f, twin, spec('a'));
     elsewhere(f.root, (db) => db.prepare("DELETE FROM memories WHERE id = 'forgotten'").run());
@@ -146,7 +154,10 @@ describe('a row the scan would not admit', () => {
     const anyScope = await nearest(f, twin, spec('a'));
     const exactScope = await nearest(f, twin, spec('a', { scope: { mode: 'exact', value: 'team-a' } }));
 
-    for (const [answer, refused] of [[anyScope, banned.slice(0, 4)], [exactScope, banned]] as const) {
+    for (const [answer, refused] of [
+      [anyScope, banned.slice(0, 4)],
+      [exactScope, banned],
+    ] as const) {
       expect(answer).toHaveLength(10);
       for (const row of refused) expect(answer).not.toContain(row.id);
     }
@@ -211,7 +222,13 @@ describe('a write by another connection', () => {
     await built(f, q, spec('t1'));
     const moved = clusteredVectors(60, DIM, 80);
 
-    elsewhere(f.root, (db) => upsertVectors(db, moved.map((v, i): [string, readonly number[]] => [rows[i].id, v]), MODEL));
+    elsewhere(f.root, (db) =>
+      upsertVectors(
+        db,
+        moved.map((v, i): [string, readonly number[]] => [rows[i].id, v]),
+        MODEL,
+      ),
+    );
     const answers: string[][] = [];
     // Behind by more rows than one read inserts, then stale past a tenth, then rebuilt.
     for (let step = 0; step < 4; step++) {

@@ -12,22 +12,37 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
-const Q = ['frobnicate baz quux', 'frobnicate baz different words', 'frobnicate quux yet another', 'frobnicate quux baz once more'] as const;
+const Q = [
+  'frobnicate baz quux',
+  'frobnicate baz different words',
+  'frobnicate quux yet another',
+  'frobnicate quux baz once more',
+] as const;
 type Flags = Record<string, string | boolean>;
-interface RecallJson { suppressionSummary: { suppressedByInterference: number }; anchoringHint?: { reason: string; memoryId: string } }
+interface RecallJson {
+  suppressionSummary: { suppressedByInterference: number };
+  anchoringHint?: { reason: string; memoryId: string };
+}
 
 let root: string;
 let memoryId: string;
 
 function seed(tenantId: string): string {
-  const entry = createMemory(`frobnicate baz quux ${tenantId} memory`, { layer: Layer.Buffer, confidence: 'observed', kind: 'raw', tenantId });
+  const entry = createMemory(`frobnicate baz quux ${tenantId} memory`, {
+    layer: Layer.Buffer,
+    confidence: 'observed',
+    kind: 'raw',
+    tenantId,
+  });
   writeEntry(root, entry);
   return entry.id;
 }
 
 async function recall(query: string, flags: Flags = { 'session-id': 's1' }): Promise<string> {
   // Dispatch resolves the tenant per call, so a test that switches HIPPO_TENANT midway sees the switch.
-  const run = await runInProcess(() => handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags }));
+  const run = await runInProcess(() =>
+    handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags }),
+  );
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
 }

@@ -24,7 +24,7 @@ async function runRecall(query: string, sessionId: string): Promise<string> {
   return res.stdout;
 }
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 describe('goal recall log and retrieval policy failure paths', () => {
   let env: TestEnv;
@@ -70,9 +70,9 @@ describe('goal recall log and retrieval policy failure paths', () => {
     try {
       // SAFETY: goal_recall_log's memory_id column is a NOT NULL TEXT FK;
       // .all() rows always match the queried SELECT's single column.
-      const rows = db.prepare(
-        `SELECT memory_id FROM goal_recall_log WHERE goal_id = ?`,
-      ).all(goal.id) as Array<{ memory_id: string }>;
+      const rows = db.prepare(`SELECT memory_id FROM goal_recall_log WHERE goal_id = ?`).all(goal.id) as Array<{
+        memory_id: string;
+      }>;
       const ids = rows.map((r) => r.memory_id);
       expect(ids).not.toContain(globalMem.id);
     } finally {
@@ -92,20 +92,24 @@ describe('goal recall log and retrieval policy failure paths', () => {
     try {
       // Out-of-range value (>100) must be rejected by the CHECK constraint.
       expect(() =>
-        db.prepare(`
+        db
+          .prepare(`
           INSERT INTO retrieval_policy
             (id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority)
           VALUES (?, ?, 'error-prioritized', 1.0, 1.0, 1.0, ?)
-        `).run('rp_bad_extreme', g.id, 999.0)
+        `)
+          .run('rp_bad_extreme', g.id, 999.0),
       ).toThrow(/CHECK|constraint/i);
 
       // Negative value also rejected.
       expect(() =>
-        db.prepare(`
+        db
+          .prepare(`
           INSERT INTO retrieval_policy
             (id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority)
           VALUES (?, ?, 'error-prioritized', ?, 1.0, 1.0, 1.0)
-        `).run('rp_bad_neg', g.id, -1.0)
+        `)
+          .run('rp_bad_neg', g.id, -1.0),
       ).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);

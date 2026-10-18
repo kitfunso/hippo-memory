@@ -20,7 +20,8 @@ const EMPTY = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents:
 let home: string;
 let handle: ServerHandle | undefined;
 
-const ctx = (owner: string): FullContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
+const ctx = (owner: string): FullContext =>
+  apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner });
 
 function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
@@ -44,10 +45,19 @@ describe('continuity on a shared store', () => {
 
   it('A and B recall with a project each see only their own continuity', async () => {
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
-    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa', summary: 'alice handoff' }, { owner: 'alice', project: ['p'] });
+    saveSessionHandoff(
+      home,
+      'default',
+      { version: 1, sessionId: 'sa', summary: 'alice handoff' },
+      { owner: 'alice', project: ['p'] },
+    );
     const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), { owner: 'bob', project: ['p'] });
-    const forA = (await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })).continuity;
-    const forB = (await retrieve(ctx('bob'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })).continuity;
+    const forA = (
+      await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })
+    ).continuity;
+    const forB = (
+      await retrieve(ctx('bob'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })
+    ).continuity;
     expect(forA?.activeSnapshot?.id).toBe(a.id);
     expect(forA?.sessionHandoff?.summary).toBe('alice handoff');
     expect(forB?.activeSnapshot?.id).toBe(b.id);
@@ -60,17 +70,32 @@ describe('continuity on a shared store', () => {
     const seed = openHippoDb(home);
     try {
       const at = new Date().toISOString();
-      seed.prepare(`INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at) VALUES ('legacy task', 's', 'n', 'active', 'cli', 'sl', 'default', ?, ?)`).run(at, at);
+      seed
+        .prepare(
+          `INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at) VALUES ('legacy task', 's', 'n', 'active', 'cli', 'sl', 'default', ?, ?)`,
+        )
+        .run(at, at);
     } finally {
       closeHippoDb(seed);
     }
     const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
     writeEntry(home, createMemory('the deploy script lives in ops/deploy.sh'));
-    expect((await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true }, filter: { project: P } })).continuity?.activeSnapshot?.id).toBe(a.id);
-    expect((await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true } })).continuity).toEqual(EMPTY);
+    expect(
+      (await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true }, filter: { project: P } }))
+        .continuity?.activeSnapshot?.id,
+    ).toBe(a.id);
+    expect((await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true } })).continuity).toEqual(
+      EMPTY,
+    );
 
     const db = openHippoDb(home);
-    const key = (() => { try { return createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'alice' }); } finally { closeHippoDb(db); } })();
+    const key = (() => {
+      try {
+        return createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'alice' });
+      } finally {
+        closeHippoDb(db);
+      }
+    })();
     handle = await serve({ hippoRoot: home, host: '127.0.0.1', port: 0 });
     const auth = { authorization: `Bearer ${key.plaintext}` };
     const rest = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=1`, { headers: auth });
@@ -81,14 +106,23 @@ describe('continuity on a shared store', () => {
     const mcp = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'deploy', include_continuity: true } } }),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_recall', arguments: { query: 'deploy', include_continuity: true } },
+      }),
     });
     expect(mcp.status).toBe(200);
     // SAFETY: a tools/call reply carries one text content item.
-    const { content, isError } = ((await mcp.json()) as { result: { content: Array<{ text: string }>; isError?: boolean } }).result;
+    const { content, isError } = (
+      (await mcp.json()) as { result: { content: Array<{ text: string }>; isError?: boolean } }
+    ).result;
     const text = content[0]!.text;
     expect(isError).toBe(true);
-    expect(text).toBe("hippo_recall needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header");
+    expect(text).toBe(
+      "hippo_recall needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header",
+    );
     expect(text).not.toContain('alice task');
     expect(text).not.toContain('legacy task');
   });

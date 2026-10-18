@@ -8,7 +8,8 @@ const storeDir = fileURLToPath(new URL('../../src/store/', import.meta.url));
 
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? sources(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []);
+    e.isDirectory() ? sources(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : [],
+  );
 }
 
 describe('the store picks no embedding provider', () => {
@@ -21,6 +22,8 @@ describe('the store picks no embedding provider', () => {
     const storeExports = Object.keys(await import('../../src/store/vector-index.js'));
     expect(storeExports).not.toContain('embedMemory');
     expect(storeExports).not.toContain('embedAll');
-    expect(Object.keys(await import('../../src/search/embed-memories.js'))).toEqual(expect.arrayContaining(['embedMemory', 'embedAll']));
+    expect(Object.keys(await import('../../src/search/embed-memories.js'))).toEqual(
+      expect.arrayContaining(['embedMemory', 'embedAll']),
+    );
   });
 });

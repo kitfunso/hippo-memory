@@ -21,12 +21,26 @@ function mergeKinds(kinds) {
 
 function loadEnv(repo) {
   const ts = createRequire(path.join(repo, 'package.json'))('typescript');
-  const parsed = ts.getParsedCommandLineOfConfigFile(path.join(repo, 'tsconfig.json'), {}, {
-    ...ts.sys,
-    onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, '\n')); },
-  });
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    path.join(repo, 'tsconfig.json'),
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (d) => {
+        throw new Error(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+      },
+    },
+  );
   const program = ts.createProgram(parsed.fileNames, { ...parsed.options, noEmit: true });
-  return { ts, repo, program, checker: program.getTypeChecker(), unfollowed: [], memo: new Map(), inProgress: new Set() };
+  return {
+    ts,
+    repo,
+    program,
+    checker: program.getTypeChecker(),
+    unfollowed: [],
+    memo: new Map(),
+    inProgress: new Set(),
+  };
 }
 
 function where(env, node) {
@@ -42,12 +56,25 @@ function lineText(node) {
 
 function strip(ts, expr) {
   let cur = expr;
-  while (cur && (ts.isParenthesizedExpression(cur) || ts.isNonNullExpression(cur) || ts.isAsExpression(cur) || ts.isSatisfiesExpression(cur))) cur = cur.expression;
+  while (
+    cur &&
+    (ts.isParenthesizedExpression(cur) ||
+      ts.isNonNullExpression(cur) ||
+      ts.isAsExpression(cur) ||
+      ts.isSatisfiesExpression(cur))
+  ) {
+    cur = cur.expression;
+  }
   return cur;
 }
 
 function isFunctionLike(ts, node) {
-  return ts.isFunctionDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isMethodDeclaration(node);
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isMethodDeclaration(node)
+  );
 }
 
 function enclosingFunction(ts, node) {
@@ -65,10 +92,14 @@ function literalKeys(env, expr) {
     const parts = e.elements.map((el) => literalKeys(env, ts.isSpreadElement(el) ? el.expression : el));
     return parts.includes(null) ? null : parts.flat();
   }
-  if (ts.isNewExpression(e) && e.expression.getText() === 'Set' && e.arguments?.length === 1) return literalKeys(env, e.arguments[0]);
+  if (ts.isNewExpression(e) && e.expression.getText() === 'Set' && e.arguments?.length === 1) {
+    return literalKeys(env, e.arguments[0]);
+  }
   if (ts.isIdentifier(e)) {
     const decl = checker.getSymbolAtLocation(e)?.valueDeclaration;
-    if (decl && ts.isVariableDeclaration(decl) && decl.initializer && decl !== e.parent) return literalKeys(env, decl.initializer);
+    if (decl && ts.isVariableDeclaration(decl) && decl.initializer && decl !== e.parent) {
+      return literalKeys(env, decl.initializer);
+    }
   }
   return null;
 }
@@ -78,11 +109,20 @@ function loopKeys(env, ident) {
   const { ts, checker } = env;
   const decl = checker.getSymbolAtLocation(ident)?.valueDeclaration;
   if (!decl) return null;
-  if (ts.isVariableDeclaration(decl) && ts.isVariableDeclarationList(decl.parent) && ts.isForOfStatement(decl.parent.parent)) {
+  if (
+    ts.isVariableDeclaration(decl) &&
+    ts.isVariableDeclarationList(decl.parent) &&
+    ts.isForOfStatement(decl.parent.parent)
+  ) {
     return literalKeys(env, decl.parent.parent.expression);
   }
   const call = ts.isParameter(decl) && isFunctionLike(ts, decl.parent) ? decl.parent.parent : null;
-  if (call && ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression) && ARRAY_CALLBACKS.has(call.expression.name.text)) {
+  if (
+    call &&
+    ts.isCallExpression(call) &&
+    ts.isPropertyAccessExpression(call.expression) &&
+    ARRAY_CALLBACKS.has(call.expression.name.text)
+  ) {
     return literalKeys(env, call.expression.expression);
   }
   return null;
@@ -93,7 +133,9 @@ function functionOf(env, expr) {
   const e = strip(ts, expr);
   if (isFunctionLike(ts, e)) return e;
   if (!ts.isIdentifier(e)) return null;
-  let sym = ts.isShorthandPropertyAssignment(e.parent) ? checker.getShorthandAssignmentValueSymbol(e.parent) : checker.getSymbolAtLocation(e);
+  let sym = ts.isShorthandPropertyAssignment(e.parent)
+    ? checker.getShorthandAssignmentValueSymbol(e.parent)
+    : checker.getSymbolAtLocation(e);
   if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
   const decl = sym?.valueDeclaration;
   if (decl && isFunctionLike(ts, decl)) return decl;
@@ -109,8 +151,13 @@ function tableHandlers(env, call) {
   const decl = checker.getSymbolAtLocation(strip(ts, callee.expression))?.valueDeclaration;
   const table = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
   if (!table || !ts.isObjectLiteralExpression(table)) return null;
-  return table.properties.map((prop) => (ts.isPropertyAssignment(prop) ? functionOf(env, prop.initializer)
-    : ts.isShorthandPropertyAssignment(prop) ? functionOf(env, prop.name) : null));
+  return table.properties.map((prop) =>
+    ts.isPropertyAssignment(prop)
+      ? functionOf(env, prop.initializer)
+      : ts.isShorthandPropertyAssignment(prop)
+        ? functionOf(env, prop.name)
+        : null,
+  );
 }
 
 function usesOf(env, nameNode, scope, depth) {
@@ -118,7 +165,9 @@ function usesOf(env, nameNode, scope, depth) {
   const sym = checker.getSymbolAtLocation(nameNode);
   const kinds = [];
   const walk = (n) => {
-    if (ts.isIdentifier(n) && n !== nameNode && checker.getSymbolAtLocation(n) === sym) kinds.push(useKind(env, n, depth + 1));
+    if (ts.isIdentifier(n) && n !== nameNode && checker.getSymbolAtLocation(n) === sym) {
+      kinds.push(useKind(env, n, depth + 1));
+    }
     ts.forEachChild(n, walk);
   };
   if (sym && scope) walk(scope);
@@ -131,7 +180,8 @@ function argumentKind(env, call, arg, depth) {
   if (name === 'Boolean') return 'on-off';
   if (VALUE_CALLS.has(name)) return 'value';
   const decl = depth < 2 ? checker.getResolvedSignature(call)?.declaration : undefined;
-  const param = decl && isFunctionLike(ts, decl) && decl.body ? decl.parameters[call.arguments.indexOf(arg)] : undefined;
+  const param =
+    decl && isFunctionLike(ts, decl) && decl.body ? decl.parameters[call.arguments.indexOf(arg)] : undefined;
   return param && ts.isIdentifier(param.name) ? mergeKinds(usesOf(env, param.name, decl.body, depth)) : 'unknown';
 }
 
@@ -145,8 +195,12 @@ function operandKind(ts, binary, operand) {
     return ts.isStringLiteral(other) ? 'value' : 'unknown';
   }
   // `flag || 'default'` takes the flag's value; `flag || other.setting` only asks whether it is on.
-  const literal = ts.isStringLiteralLike(other) || ts.isNumericLiteral(other) || ts.isTemplateExpression(other)
-    || other.kind === ts.SyntaxKind.NullKeyword || other.getText() === 'undefined';
+  const literal =
+    ts.isStringLiteralLike(other) ||
+    ts.isNumericLiteral(other) ||
+    ts.isTemplateExpression(other) ||
+    other.kind === ts.SyntaxKind.NullKeyword ||
+    other.getText() === 'undefined';
   if (op === '||') return binary.left === operand && literal ? 'value' : 'on-off';
   if (op === '&&') return 'on-off';
   if (op === '??') return 'value';
@@ -158,9 +212,14 @@ function useKind(env, node, depth = 0) {
   const { ts } = env;
   let cur = node;
   let p = node.parent;
-  while (p && (ts.isParenthesizedExpression(p) || ts.isNonNullExpression(p))) { cur = p; p = p.parent; }
+  while (p && (ts.isParenthesizedExpression(p) || ts.isNonNullExpression(p))) {
+    cur = p;
+    p = p.parent;
+  }
   if (!p) return 'unknown';
-  if (ts.isAsExpression(p)) return /string|number/.test(p.type.getText()) ? 'value' : p.type.getText() === 'boolean' ? 'on-off' : 'unknown';
+  if (ts.isAsExpression(p)) {
+    return /string|number/.test(p.type.getText()) ? 'value' : p.type.getText() === 'boolean' ? 'on-off' : 'unknown';
+  }
   if (ts.isPrefixUnaryExpression(p) && p.operator === ts.SyntaxKind.ExclamationToken) return 'on-off';
   if (ts.isTypeOfExpression(p) || ts.isTemplateSpan(p)) return 'value';
   if (ts.isCallExpression(p) && p.arguments.includes(cur)) return argumentKind(env, p, cur, depth);
@@ -168,7 +227,9 @@ function useKind(env, node, depth = 0) {
   if (ts.isIfStatement(p) && p.expression === cur) return 'on-off';
   if (ts.isConditionalExpression(p)) return p.condition === cur ? 'on-off' : 'value';
   if (ts.isPropertyAccessExpression(p) && p.expression === cur) return 'value';
-  if (ts.isVariableDeclaration(p) && ts.isIdentifier(p.name) && depth < 2) return mergeKinds(usesOf(env, p.name, enclosingFunction(ts, p), depth));
+  if (ts.isVariableDeclaration(p) && ts.isIdentifier(p.name) && depth < 2) {
+    return mergeKinds(usesOf(env, p.name, enclosingFunction(ts, p), depth));
+  }
   return ts.isReturnStatement(p) || ts.isArrowFunction(p) ? 'returned' : 'unknown';
 }
 
@@ -179,7 +240,8 @@ function noteUnfollowed(env, node, why) {
 /** Binds a name as the flags object ('flags') or a context holding it ('ctx'); a `{ flags }` pattern unpacks a context. */
 function bind(env, scope, name, kind) {
   const { ts, checker } = env;
-  const target = ts.isIdentifier(name) ? name
+  const target = ts.isIdentifier(name)
+    ? name
     : kind === 'ctx' && ts.isObjectBindingPattern(name)
       ? name.elements.find((el) => (el.propertyName ?? el.name).getText() === 'flags' && ts.isIdentifier(el.name))?.name
       : undefined;
@@ -213,7 +275,9 @@ function valueOf(env, scope, expr, depth = 0) {
   if (!ts.isCallExpression(e)) return null;
   const fn = valueOf(env, scope, e.expression, depth + 1);
   if (!fn || fn === ABSENT || !isFunctionLike(ts, fn) || !fn.body) return null;
-  const ret = ts.isBlock(fn.body) ? fn.body.statements.find((s) => ts.isReturnStatement(s) && s.expression)?.expression : fn.body;
+  const ret = ts.isBlock(fn.body)
+    ? fn.body.statements.find((s) => ts.isReturnStatement(s) && s.expression)?.expression
+    : fn.body;
   return ret ? valueOf(env, null, ret, depth + 1) : null;
 }
 
@@ -230,7 +294,14 @@ function boundParams(env, scope, decl, callArgs) {
 }
 
 function newScope(env, fn, taint, bound) {
-  const scope = { flags: new Set(), ctx: new Set(), paramIndex: new Map(), bound: new Map(bound), reads: [], keyParams: new Map() };
+  const scope = {
+    flags: new Set(),
+    ctx: new Set(),
+    paramIndex: new Map(),
+    bound: new Map(bound),
+    reads: [],
+    keyParams: new Map(),
+  };
   fn.parameters.forEach((param, index) => {
     const sym = env.ts.isIdentifier(param.name) ? env.checker.getSymbolAtLocation(param.name) : undefined;
     if (sym) scope.paramIndex.set(sym, index);
@@ -247,13 +318,26 @@ function taintOf(env, scope, expr) {
     const sym = checker.getSymbolAtLocation(e);
     return sym && scope.flags.has(sym) ? 'flags' : sym && scope.ctx.has(sym) ? 'ctx' : null;
   }
-  if (ts.isPropertyAccessExpression(e) && e.name.text === 'flags' && taintOf(env, scope, e.expression) === 'ctx') return 'flags';
+  if (ts.isPropertyAccessExpression(e) && e.name.text === 'flags' && taintOf(env, scope, e.expression) === 'ctx') {
+    return 'flags';
+  }
   if (!ts.isObjectLiteralExpression(e)) return null;
   for (const prop of e.properties) {
-    if (ts.isSpreadAssignment(prop) && taintOf(env, scope, prop.expression)) return taintOf(env, scope, prop.expression);
-    const shorthand = ts.isShorthandPropertyAssignment(prop) && prop.name.text === 'flags' ? checker.getShorthandAssignmentValueSymbol(prop) : undefined;
+    if (ts.isSpreadAssignment(prop) && taintOf(env, scope, prop.expression)) {
+      return taintOf(env, scope, prop.expression);
+    }
+    const shorthand =
+      ts.isShorthandPropertyAssignment(prop) && prop.name.text === 'flags'
+        ? checker.getShorthandAssignmentValueSymbol(prop)
+        : undefined;
     if (shorthand && scope.flags.has(shorthand)) return 'ctx';
-    if (ts.isPropertyAssignment(prop) && prop.name.getText() === 'flags' && taintOf(env, scope, prop.initializer) === 'flags') return 'ctx';
+    if (
+      ts.isPropertyAssignment(prop) &&
+      prop.name.getText() === 'flags' &&
+      taintOf(env, scope, prop.initializer) === 'flags'
+    ) {
+      return 'ctx';
+    }
   }
   return null;
 }
@@ -277,14 +361,24 @@ function followCall(env, scope, call) {
   const { ts, checker } = env;
   const callArgs = call.arguments ?? [];
   const tainted = new Map();
-  callArgs.forEach((arg, index) => { if (taintOf(env, scope, arg)) tainted.set(index, taintOf(env, scope, arg)); });
+  callArgs.forEach((arg, index) => {
+    if (taintOf(env, scope, arg)) tainted.set(index, taintOf(env, scope, arg));
+  });
   const name = call.expression.getText();
   if (tainted.size === 0 || name === 'Object.keys') return;
-  if (name === 'Object.hasOwn' && callArgs.length === 2) { addRead(env, scope, callArgs[1], call, 'presence'); return; }
-  if (WHOLE_OBJECT_CALLS.has(name)) { noteUnfollowed(env, call, 'whole object'); return; }
+  if (name === 'Object.hasOwn' && callArgs.length === 2) {
+    addRead(env, scope, callArgs[1], call, 'presence');
+    return;
+  }
+  if (WHOLE_OBJECT_CALLS.has(name)) {
+    noteUnfollowed(env, call, 'whole object');
+    return;
+  }
   const target = valueOf(env, scope, call.expression);
   if (target === ABSENT) return;
-  const decls = tableHandlers(env, call) ?? [target && isFunctionLike(ts, target) ? target : checker.getResolvedSignature(call)?.declaration];
+  const decls = tableHandlers(env, call) ?? [
+    target && isFunctionLike(ts, target) ? target : checker.getResolvedSignature(call)?.declaration,
+  ];
   if (decls.some((d) => !d || !isFunctionLike(ts, d) || !d.body || d.getSourceFile().isDeclarationFile)) {
     noteUnfollowed(env, call, 'call not followed');
     return;
@@ -295,7 +389,11 @@ function followCall(env, scope, call) {
     for (const [index, kinds] of callee.keyParams) {
       if (!callArgs[index]) noteUnfollowed(env, call, 'missing key argument');
       // A helper that hands the value back is classed by what its caller does with it.
-      else for (const kind of kinds) addRead(env, scope, callArgs[index], call, kind === 'returned' ? useKind(env, call) : kind);
+      else {
+        for (const kind of kinds) {
+          addRead(env, scope, callArgs[index], call, kind === 'returned' ? useKind(env, call) : kind);
+        }
+      }
     }
   }
 }
@@ -307,7 +405,10 @@ function visitDeclaration(env, scope, node) {
   if (sym) scope.bound.set(sym, value);
   const kind = taintOf(env, scope, node.initializer);
   if (!kind) return;
-  if (kind === 'ctx' || ts.isIdentifier(node.name)) { bind(env, scope, node.name, kind); return; }
+  if (kind === 'ctx' || ts.isIdentifier(node.name)) {
+    bind(env, scope, node.name, kind);
+    return;
+  }
   for (const el of node.name.elements ?? []) {
     const key = (el.propertyName ?? el.name).getText().replace(/['"]/g, '');
     const uses = usesOf(env, el.name, enclosingFunction(ts, node), 0);
@@ -324,7 +425,11 @@ function visitNode(env, scope, node) {
     if (kind !== 'write') addRead(env, scope, node.argumentExpression, node, kind);
   } else if (ts.isPropertyAccessExpression(node) && onFlags(node.expression)) {
     scope.reads.push({ key: node.name.text, kind: useKind(env, node), at: where(env, node), text: lineText(node) });
-  } else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InKeyword && onFlags(node.right)) {
+  } else if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.InKeyword &&
+    onFlags(node.right)
+  ) {
     addRead(env, scope, node.left, node, 'presence');
   } else if ((ts.isForInStatement(node) || ts.isSpreadAssignment(node)) && onFlags(node.expression)) {
     noteUnfollowed(env, node, 'whole object');
@@ -336,7 +441,9 @@ function visitNode(env, scope, node) {
 
 /** One function's reads, given which parameters (by index) are the flags object or a context holding it. */
 function analyze(env, fn, taint, bound = new Map()) {
-  const boundKey = [...bound].map(([sym, value]) => `${sym.valueDeclaration?.pos}=${value.pos}:${value.getSourceFile().fileName}`).sort();
+  const boundKey = [...bound]
+    .map(([sym, value]) => `${sym.valueDeclaration?.pos}=${value.pos}:${value.getSourceFile().fileName}`)
+    .sort();
   const memoKey = `${fn.pos}:${fn.getSourceFile().fileName}:${[...taint].sort().join(',')}:${boundKey.join(',')}`;
   if (env.memo.has(memoKey)) return env.memo.get(memoKey);
   if (env.inProgress.has(memoKey)) return { reads: [], keyParams: new Map() };
@@ -359,7 +466,8 @@ function rowHandler(env, call) {
   };
   find(load);
   const moduleSym = loaded ? checker.getSymbolAtLocation(loaded) : undefined;
-  let sym = moduleSym && ts.isStringLiteral(name) ? checker.tryGetMemberInModuleExports(name.text, moduleSym) : undefined;
+  let sym =
+    moduleSym && ts.isStringLiteral(name) ? checker.tryGetMemberInModuleExports(name.text, moduleSym) : undefined;
   if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
   const decl = sym?.valueDeclaration;
   const init = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
@@ -367,7 +475,9 @@ function rowHandler(env, call) {
   if (fn) return { run: fn, bound: new Map() };
   const factory = init && ts.isCallExpression(init) ? valueOf(env, null, init.expression) : null;
   const made = factory && factory !== ABSENT && isFunctionLike(ts, factory) ? valueOf(env, null, init) : null;
-  if (!made || made === ABSENT || !isFunctionLike(ts, made)) throw new Error(`verb row handler not found: ${where(env, call)}`);
+  if (!made || made === ABSENT || !isFunctionLike(ts, made)) {
+    throw new Error(`verb row handler not found: ${where(env, call)}`);
+  }
   return { run: made, bound: boundParams(env, null, factory, init.arguments) };
 }
 
@@ -377,8 +487,15 @@ function commandRows(env) {
   const verbsDir = path.resolve(repo, 'src', 'cli', 'verbs');
   const rows = [];
   const find = (node) => {
-    if (ts.isPropertyAssignment(node) && ts.isCallExpression(node.initializer) && node.initializer.expression.getText() === 'verb') {
-      rows.push({ verb: ts.isStringLiteral(node.name) ? node.name.text : node.name.getText(), ...rowHandler(env, node.initializer) });
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isCallExpression(node.initializer) &&
+      node.initializer.expression.getText() === 'verb'
+    ) {
+      rows.push({
+        verb: ts.isStringLiteral(node.name) ? node.name.text : node.name.getText(),
+        ...rowHandler(env, node.initializer),
+      });
     }
     ts.forEachChild(node, find);
   };
@@ -393,12 +510,16 @@ export function collectVerbReads(repo = '.') {
   const unclassed = [];
   const verbs = commandRows(env).map(({ verb, run, bound }) => {
     const byKey = new Map();
-    for (const read of analyze(env, run, new Map([[0, 'ctx']]), bound).reads) byKey.set(read.key, [...(byKey.get(read.key) ?? []), read]);
+    for (const read of analyze(env, run, new Map([[0, 'ctx']]), bound).reads) {
+      byKey.set(read.key, [...(byKey.get(read.key) ?? []), read]);
+    }
     const flags = {};
     for (const key of [...byKey.keys()].sort()) {
       flags[key] = mergeKinds(byKey.get(key).map((read) => read.kind));
       if (flags[key] !== 'unknown') continue;
-      for (const read of byKey.get(key)) if (mergeKinds([read.kind]) === 'unknown') unclassed.push(`${verb} --${key}  ${read.at}  ${read.text}`);
+      for (const read of byKey.get(key)) {
+        if (mergeKinds([read.kind]) === 'unknown') unclassed.push(`${verb} --${key}  ${read.at}  ${read.text}`);
+      }
     }
     return { verb, flags };
   });
@@ -410,7 +531,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify(found, null, 1));
   } else {
-    for (const { verb, flags } of found.verbs) console.log(`${verb}: ${Object.entries(flags).map(([key, kind]) => `${key}(${kind})`).join(' ') || '-'}`);
+    for (const { verb, flags } of found.verbs) {
+      console.log(
+        `${verb}: ${
+          Object.entries(flags)
+            .map(([key, kind]) => `${key}(${kind})`)
+            .join(' ') || '-'
+        }`,
+      );
+    }
     for (const line of found.unfollowed) console.log(`unfollowed  ${line}`);
     for (const line of found.unclassed) console.log(`unclassed  ${line}`);
   }

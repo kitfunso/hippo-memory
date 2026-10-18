@@ -32,11 +32,7 @@ describe('computeSchemaFit', () => {
   it('returns high fit for content+tags matching existing patterns', () => {
     const pool = makePool();
     // New memory about data pipeline errors — fits the dominant pattern
-    const fit = computeSchemaFit(
-      'World Bank data download failed with SSL error',
-      ['data-pipeline', 'error'],
-      pool
-    );
+    const fit = computeSchemaFit('World Bank data download failed with SSL error', ['data-pipeline', 'error'], pool);
     expect(fit).toBeGreaterThan(0.5);
   });
 
@@ -46,7 +42,7 @@ describe('computeSchemaFit', () => {
     const fit = computeSchemaFit(
       'Kubernetes pod scaling requires HPA configuration',
       ['kubernetes', 'devops', 'infrastructure'],
-      pool
+      pool,
     );
     expect(fit).toBeLessThan(0.3);
   });
@@ -54,16 +50,8 @@ describe('computeSchemaFit', () => {
   it('tag overlap matters: shared rare tags score higher than no overlap', () => {
     const pool = makePool();
 
-    const fitWithTags = computeSchemaFit(
-      'New data source failed',
-      ['data-pipeline', 'error'],
-      pool
-    );
-    const fitNoTags = computeSchemaFit(
-      'New data source failed',
-      ['unrelated', 'novel'],
-      pool
-    );
+    const fitWithTags = computeSchemaFit('New data source failed', ['data-pipeline', 'error'], pool);
+    const fitNoTags = computeSchemaFit('New data source failed', ['unrelated', 'novel'], pool);
 
     expect(fitWithTags).toBeGreaterThan(fitNoTags);
   });
@@ -74,13 +62,13 @@ describe('computeSchemaFit', () => {
     // Same tags but different content relevance
     const fitRelevantContent = computeSchemaFit(
       'FRED cache silently dropped another series during refresh',
-      [],  // no tags
-      pool
+      [], // no tags
+      pool,
     );
     const fitIrrelevantContent = computeSchemaFit(
       'Kubernetes namespace isolation for multi-tenant clusters',
-      [],  // no tags
-      pool
+      [], // no tags
+      pool,
     );
 
     expect(fitRelevantContent).toBeGreaterThan(fitIrrelevantContent);
@@ -91,7 +79,7 @@ describe('computeSchemaFit', () => {
     const fit = computeSchemaFit(
       'data-pipeline FRED cache error staleness EIA refresh',
       ['data-pipeline', 'fred', 'eia', 'error', 'staleness', 'cache'],
-      pool
+      pool,
     );
     expect(fit).toBeGreaterThanOrEqual(0);
     expect(fit).toBeLessThanOrEqual(1);
@@ -112,9 +100,14 @@ describe('contextReads.schemaFit', () => {
       createMemory('One row carrying a tag twice', { tags: ['rule', 'rule'] }),
       createMemory('A row with no tags at all'),
       // Eight matching texts pass the five that cap the content score, so the store's text walk stops early.
-      ...Array.from({ length: 8 }, (_, i) => createMemory(`zephyrine refresh dropped series ${i}`, { tags: ['data-pipeline'] })),
+      ...Array.from({ length: 8 }, (_, i) =>
+        createMemory(`zephyrine refresh dropped series ${i}`, { tags: ['data-pipeline'] }),
+      ),
     ];
-    const elsewhere = createMemory('zephyrine refresh for another tenant', { tags: ['data-pipeline', 'error', 'kubernetes'], tenantId: 'other' });
+    const elsewhere = createMemory('zephyrine refresh for another tenant', {
+      tags: ['data-pipeline', 'error', 'kubernetes'],
+      tenantId: 'other',
+    });
     for (const entry of [...pool, elsewhere]) writeEntry(root, entry);
     const loaded = loadAllEntries(root, 'default');
     expect(loaded).toHaveLength(pool.length);
@@ -127,7 +120,9 @@ describe('contextReads.schemaFit', () => {
       ['Walk-forward Sharpe overestimates returns', []],
       ['another tenant', []],
     ];
-    const fits = probes.map(([content, tags]) => sqliteSyncStore(root).contextReads.schemaFit('default', content, tags));
+    const fits = probes.map(([content, tags]) =>
+      sqliteSyncStore(root).contextReads.schemaFit('default', content, tags),
+    );
     expect(fits).toEqual(probes.map(([content, tags]) => computeSchemaFit(content, tags, loaded)));
     expect(fits.filter((fit) => fit > 0 && fit < 1)).toHaveLength(3);
     // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.

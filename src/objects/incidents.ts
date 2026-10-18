@@ -58,9 +58,7 @@ function incidentOpen(
   assertTenantId('saveIncident', tenantId);
   if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
   const at = new Date().toISOString();
-  const content = opts.context
-    ? `${opts.incidentText}\n\nContext: ${opts.context}`
-    : opts.incidentText;
+  const content = opts.context ? `${opts.incidentText}\n\nContext: ${opts.context}` : opts.incidentText;
   const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] });
   const fields = {
     incidentText: opts.incidentText,
@@ -137,11 +135,7 @@ export function closeIncident(
   return closeObject(objects, INCIDENT, tenantId, id, actor);
 }
 
-export function loadIncidentById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<Incident | null> {
+export function loadIncidentById(objects: Objects, tenantId: string, id: number): Promise<Incident | null> {
   return objectById(objects, INCIDENT, tenantId, id);
 }
 

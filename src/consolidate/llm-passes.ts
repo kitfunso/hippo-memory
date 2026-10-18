@@ -14,13 +14,15 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
   // extraction.enabled=false is the opt-out for every LLM phase below, key or no key.
   const apiKey = config.extraction.enabled !== false ? (envAnthropicApiKey() ?? '') : '';
   const llmErrorsSeen = new Set<string>();
-  const llmError = (phase: string) => (msg: string): void => {
-    const line = `  ⚠️ ${phase}: ${msg}`;
-    if (llmErrorsSeen.has(line)) return;
-    llmErrorsSeen.add(line);
-    result.details.push(line);
-    log.warn(`consolidate ${phase}: ${msg}`);
-  };
+  const llmError =
+    (phase: string) =>
+    (msg: string): void => {
+      const line = `  ⚠️ ${phase}: ${msg}`;
+      if (llmErrorsSeen.has(line)) return;
+      llmErrorsSeen.add(line);
+      result.details.push(line);
+      log.warn(`consolidate ${phase}: ${msg}`);
+    };
   const llmOpts = { apiKey, model: config.extraction.model, fetcher };
   return { apiKey, llmError, llmOpts };
 }
@@ -34,8 +36,14 @@ function extractionBatch(run: SleepRun, limit: number): MemoryEntry[] {
   const batch: MemoryEntry[] = [];
   let candidates = 0;
   for (const e of run.survivors.rows()) {
-    const candidate = e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e)
-      && e.trace_outcome === null && e.source !== 'auto-promote' && isReusable(e);
+    const candidate =
+      e.layer === Layer.Episodic &&
+      !e.superseded_by &&
+      !extractedFromIds.has(e.id) &&
+      !keptAsWritten(e) &&
+      e.trace_outcome === null &&
+      e.source !== 'auto-promote' &&
+      isReusable(e);
     if (!candidate) continue;
     if (candidates++ < limit) batch.push(e);
   }
@@ -89,7 +97,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
       const skipped = batch.length - index - 1;
       report(
         `stopped after a failure that will not clear on retry; ${skipped} of ${batch.length} candidates skipped, and ` +
-        `the DAG passes with them`,
+          `the DAG passes with them`,
       );
       break;
     }
@@ -115,7 +123,9 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   try {
     const { buildDag } = await import('./dag.js');
     const dagResult = await buildDag(dagStore(run), extractedFacts, {
-      ...llmOpts, onError: llmError('dag'), baseHalfLifeDays: run.config.defaultHalfLifeDays,
+      ...llmOpts,
+      onError: llmError('dag'),
+      baseHalfLifeDays: run.config.defaultHalfLifeDays,
     });
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;

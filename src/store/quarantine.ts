@@ -44,7 +44,8 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
 }
 
 function getQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
-  const row = db.prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`)
+  const row = db
+    .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`)
     .get<QuarantineDbRow>(tenantId, memoryId);
   return row ? fromDbRow(row) : null;
 }
@@ -61,7 +62,7 @@ function listQuarantineRows(
   const live =
     status === 'pending'
       ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = ' +
-      'memory_quarantine.tenant_id)'
+        'memory_quarantine.tenant_id)'
       : '';
   const after = keysetAfter('quarantined_at', 'memory_id', afterRow);
   const order = 'ORDER BY quarantined_at DESC, memory_id DESC LIMIT ?';
@@ -73,7 +74,7 @@ function listQuarantineRows(
       : db
           .prepare(
             `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live}${after.sql} ` +
-            `${order}`,
+              `${order}`,
           )
           .all(tenantId, status, ...after.params, limit);
   // SAFETY: both branches select SELECT_COLUMNS, matching QuarantineDbRow's field set.
@@ -106,14 +107,14 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
 function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
   db.prepare(
     `UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
-    `memory_id = ?`,
+      `memory_id = ?`,
   ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
 }
 
 function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
   db.prepare(
     `UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
-    `memory_id = ?`,
+      `memory_id = ?`,
   ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
 }
 

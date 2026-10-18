@@ -24,7 +24,11 @@ let localPin: string;
 let globalPin: string;
 
 function seedPin(root: string, content: string): string {
-  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, pinned: true };
+  const entry = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    origin_project: PROJECT,
+    pinned: true,
+  };
   writeEntry(root, entry);
   return entry.id;
 }
@@ -70,6 +74,8 @@ describe('getContext without a reach', () => {
   it('still reads the shared flag from config, so a shared store needs the caller project', async () => {
     fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ sharedStore: true }));
     const { reach: _reach, ...bare } = apiCtx(local);
-    await expect(getContext(bare, { pinnedOnly: true, currentProject: '' })).rejects.toThrow(/shared store needs the caller's project/);
+    await expect(getContext(bare, { pinnedOnly: true, currentProject: '' })).rejects.toThrow(
+      /shared store needs the caller's project/,
+    );
   });
 });

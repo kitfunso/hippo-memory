@@ -24,7 +24,10 @@ import type { AppendAuditOpts } from '../store/port/types.js';
 import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from './survivors.js';
 
 export type ConsolidateOptions = {
-  dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget;
+  dryRun?: boolean;
+  now?: Date;
+  fetcher?: typeof fetch;
+  budget?: WriteBudget;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
   config?: HippoConfig;
 };
@@ -52,7 +55,15 @@ export async function runConsolidation(
   const decayOpts = sessionDecayOptions(store, config);
 
   const run: SleepRun = {
-    learning, store, now, dryRun, config, decayOpts, result, rows, retirable,
+    learning,
+    store,
+    now,
+    dryRun,
+    config,
+    decayOpts,
+    result,
+    rows,
+    retirable,
     tombstones: store.tombstoneChecks(dryRun),
     survivors: new Survivors(rows),
     // Collect all writes/deletes and batch them at the end
@@ -64,14 +75,18 @@ export async function runConsolidation(
     units: [],
   };
 
+  await runAndFlush(run, options);
+  return result;
+}
+
+async function runAndFlush(run: SleepRun, options: ConsolidateOptions): Promise<void> {
   const decay = decayPass(run);
   await runPassesAfterDecay(run, options.fetcher);
 
   const budget = options.budget ?? WRITE_BUDGET;
   await flushPending(run, budget);
   await expireDormant(run, budget);
-  if (!dryRun) logRun(run, decay);
-  return result;
+  if (!run.dryRun) logRun(run, decay);
 }
 
 // Load decay options from config + session context
@@ -100,9 +115,7 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
   }
 
   if (mergesSkippedRejected > 0) {
-    log.warn(
-      `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
-    );
+    log.warn(`consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`);
   }
 }
 
@@ -118,7 +131,7 @@ function migrateHalfLives(
   if (halfLife.rescaled > 0) {
     result.details.push(
       `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ` +
-      `${halfLife.to}-day half-life`,
+        `${halfLife.to}-day half-life`,
     );
   }
   if (halfLife.typed > 0) {
@@ -135,7 +148,10 @@ async function flushPending(run: SleepRun, budget: WriteBudget): Promise<void> {
   result.removedIds = pendingDeletes;
   if (run.dryRun) return;
   const ops = {
-    refreshes: run.pendingRefreshes, writes: run.pendingWrites, deletes: pendingDeletes, dormant: pendingDormant,
+    refreshes: run.pendingRefreshes,
+    writes: run.pendingWrites,
+    deletes: pendingDeletes,
+    dormant: pendingDormant,
   };
   const units = [...run.units, ...familyUnits(ops, (id) => run.parentOf.get(id))];
   const components = groupFlush(ops, units);
@@ -160,7 +176,7 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
   if (result.dormantExpired > 0) {
     result.details.push(
       `  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant ` +
-      `memor${result.dormantExpired === 1 ? 'y' : 'ies'} ` +
+        `memor${result.dormantExpired === 1 ? 'y' : 'ies'} ` +
         `older than ${config.dormant.retentionDays} days`,
     );
   }
@@ -170,15 +186,13 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
 function logRun(run: SleepRun, decay: DecayOutcome): void {
   const { store, now, result } = run;
   const { survivors } = run;
-  const detectedConflicts = detectConflicts(
-    survivors.rows(), now, run.decayOpts, decay.rescuedIds, (ids) => survivors.pagesOf(ids),
+  const detectedConflicts = detectConflicts(survivors.rows(), now, run.decayOpts, decay.rescuedIds, (ids) =>
+    survivors.pagesOf(ids),
   );
   store.replaceConflicts(detectedConflicts, now.toISOString());
 
   if (detectedConflicts.length > 0) {
-    result.details.push(
-      `  ⚠️ detected ${plural(detectedConflicts.length, 'memory conflict')}`,
-    );
+    result.details.push(`  ⚠️ detected ${plural(detectedConflicts.length, 'memory conflict')}`);
   }
 
   store.recordRun({
@@ -213,7 +227,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     if (auditFailures > 0) {
       result.details.push(
         `  ⚠️ memory-value: ${plural(auditFailures, 'mv_rescue audit row')} ` +
-        `failed to write (the rescue itself still landed)`,
+          `failed to write (the rescue itself still landed)`,
       );
     }
   } catch (err) {
@@ -221,7 +235,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, { errorClass: errorFields(err).errorClass });
     result.details.push(
       `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
-      `(${plural(rescuedEntries.length, 'rescue')} not audited)`,
+        `(${plural(rescuedEntries.length, 'rescue')} not audited)`,
     );
   }
 }

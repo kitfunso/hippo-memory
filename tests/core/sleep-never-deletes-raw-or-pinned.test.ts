@@ -23,7 +23,8 @@ import { loadEveryTenantEntries, deleteEntry, loadAllDirtySummaries } from '../_
 import { handlesOf } from '../../src/store/open.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 const DAY = 86_400_000;
 const roots: string[] = [];
@@ -38,12 +39,17 @@ function newRoot(configJson?: string): string {
 const rawRow = (content: string): MemoryEntry =>
   createMemory7(content, { kind: 'raw', artifactRef: 'slack://T1/C1/1.0', owner: 'user:U1' });
 const ctxFor = (hippoRoot: string): FullContext =>
-  (apiCtx(hippoRoot, 'default', { subject: 'sleep-test', role: 'admin' }));
+  apiCtx(hippoRoot, 'default', { subject: 'sleep-test', role: 'admin' });
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const CACHE_FACT = 'the build cache lives in /var/cache/hippo on the CI runners';
 
 function summarizer(text: string) {
-  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('real network call in a test'); }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new Error('real network call in a test');
+    }),
+  );
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
   return vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text }] }), { status: 200 }));
 }
@@ -127,9 +133,13 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, pinned);
     const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
 
-    const result = await runSleep(ctxFor(root), { noShare: true }, {
-      auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }),
-    });
+    const result = await runSleep(
+      ctxFor(root),
+      { noShare: true },
+      {
+        auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }),
+      },
+    );
 
     expect(readEntry(root, pinned.id)).not.toBeNull();
     expect(result.audit?.errorsRemoved ?? 0).toBe(0);
@@ -150,7 +160,12 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
 
   it('the dry-run render says "would" instead of "removed"', () => {
     const out = sleepResultLines({
-      active: 3, removed: 0, mergedEpisodic: 0, newSemantic: 0, dryRun: true, details: [],
+      active: 3,
+      removed: 0,
+      mergedEpisodic: 0,
+      newSemantic: 0,
+      dryRun: true,
+      details: [],
       deduped: { removed: 1, semDups: 0, epiDups: 1, crossDups: 0 },
       audit: { errorsRemoved: 1, warningCount: 0 },
     }).join('\n');
@@ -177,7 +192,12 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
       }
       return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
     });
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('real network call in a test'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('real network call in a test');
+      }),
+    );
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
 
     const result = await consolidate(root, { now: sixtyDaysOn(), fetcher });
@@ -193,8 +213,11 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
 
   it('facts linked to a new summary keep the link, so the next sleep pays for no duplicate or rebuild', async () => {
     const root = newRoot();
-    const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change']
-      .map((text) => createMemory7(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
+    const facts = [
+      'alice moved the deploy to friday',
+      'alice owns the billing service',
+      'alice reviews every schema change',
+    ].map((text) => createMemory7(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
     const fetcher = summarizer('Alice moved the deploy to Friday, owns billing and reviews schema changes.');
 
@@ -211,12 +234,20 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a summary rebuilt during sleep keeps its new text', async () => {
     const root = newRoot();
     const summary = createMemory7('alice owns the billing service', {
-      layer: Layer.Semantic, dagLevel: 2, tags: ['speaker:alice', 'dag-summary'],
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      tags: ['speaker:alice', 'dag-summary'],
     });
     writeEntry(root, summary);
-    writeEntry(root, createMemory7('alice now also runs the friday deploy', {
-      layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted', 'speaker:alice'],
-    }));
+    writeEntry(
+      root,
+      createMemory7('alice now also runs the friday deploy', {
+        layer: Layer.Semantic,
+        dagLevel: 1,
+        dagParentId: summary.id,
+        tags: ['extracted', 'speaker:alice'],
+      }),
+    );
     const rebuilt = 'Alice owns the billing service and runs the Friday deploy.';
 
     await consolidate(root, { now: new Date(Date.now() + DAY), fetcher: summarizer(rebuilt) });
@@ -230,7 +261,15 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     const [loaded] = loadEveryTenantEntries(root);
     const snapshot = new Map([[loaded!.id, structuredClone(loaded!)]]);
 
-    batchWriteAndDelete(root, [{ ...loaded!, strength: 0.5 }, { ...loaded!, retrieval_count: 1 }], [], { snapshot });
+    batchWriteAndDelete(
+      root,
+      [
+        { ...loaded!, strength: 0.5 },
+        { ...loaded!, retrieval_count: 1 },
+      ],
+      [],
+      { snapshot },
+    );
 
     expect(readEntry(root, loaded!.id)).toMatchObject({ strength: loaded!.strength, retrieval_count: 1 });
   });

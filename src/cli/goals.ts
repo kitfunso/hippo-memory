@@ -118,17 +118,17 @@ async function cmdGoalList(hippoRoot: string, defaultTenantId: string, flags: Cl
   }
 
   // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is not asserted.
-  const rows = goals.map(g => ({
+  const rows = goals.map((g) => ({
     id: g.id,
     status: g.status,
     name: sanitizeGoalName(g.goalName),
     outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
   }));
   const widths = {
-    id: Math.max(2, ...rows.map(r => r.id.length)),
-    status: Math.max(6, ...rows.map(r => r.status.length)),
-    name: Math.max(4, ...rows.map(r => r.name.length)),
-    outcome: Math.max(7, ...rows.map(r => r.outcome.length)),
+    id: Math.max(2, ...rows.map((r) => r.id.length)),
+    status: Math.max(6, ...rows.map((r) => r.status.length)),
+    name: Math.max(4, ...rows.map((r) => r.name.length)),
+    outcome: Math.max(7, ...rows.map((r) => r.outcome.length)),
   };
   const pad = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - s.length));
   console.log(

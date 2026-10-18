@@ -212,8 +212,12 @@ export async function retrieveWithCliCore(
   const store = ctx.store;
   const ranking = await rankRecall(
     {
-      store, config: ctx.config, onHippoDb: ctx.reach?.isHippoDb, global: rankGlobal(ctx, core.sources),
-      tenantId: ctx.tenantId, note: core.note,
+      store,
+      config: ctx.config,
+      onHippoDb: ctx.reach?.isHippoDb,
+      global: rankGlobal(ctx, core.sources),
+      tenantId: ctx.tenantId,
+      note: core.note,
     },
     { ...core.rank, query: opts.query, boost: opts.boost },
   );

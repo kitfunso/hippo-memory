@@ -56,8 +56,8 @@ const GOAL_STACK_SCHEMA_SQL = `
       `;
 
 export const v18: Migration = {
-    version: 18,
-    up: (db) => {
-      db.exec(GOAL_STACK_SCHEMA_SQL);
-    },
+  version: 18,
+  up: (db) => {
+    db.exec(GOAL_STACK_SCHEMA_SQL);
+  },
 };

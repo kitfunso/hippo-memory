@@ -2,18 +2,85 @@ import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, DAG_LEVEL, type Memory
 import { heldTexts } from '../util/same-text.js';
 
 export const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
-  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'it',
-  'this', 'that', 'and', 'or', 'but', 'not', 'no', 'so', 'if', 'do',
-  'did', 'does', 'has', 'had', 'have', 'will', 'would', 'could', 'should',
-  'may', 'might', 'can', 'shall', 'we', 'i', 'you', 'they', 'he', 'she',
-  'my', 'our', 'your', 'its', 'his', 'her', 'their', 'up', 'out', 'just',
-  'also', 'then', 'than', 'some', 'all', 'any', 'each', 'very', 'too',
+  'the',
+  'a',
+  'an',
+  'is',
+  'was',
+  'are',
+  'were',
+  'be',
+  'been',
+  'being',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'at',
+  'by',
+  'from',
+  'it',
+  'this',
+  'that',
+  'and',
+  'or',
+  'but',
+  'not',
+  'no',
+  'so',
+  'if',
+  'do',
+  'did',
+  'does',
+  'has',
+  'had',
+  'have',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'can',
+  'shall',
+  'we',
+  'i',
+  'you',
+  'they',
+  'he',
+  'she',
+  'my',
+  'our',
+  'your',
+  'its',
+  'his',
+  'her',
+  'their',
+  'up',
+  'out',
+  'just',
+  'also',
+  'then',
+  'than',
+  'some',
+  'all',
+  'any',
+  'each',
+  'very',
+  'too',
 ]);
 
 export type AutomaticMemoryDefect =
-  | 'too-short' | 'release-activity' | 'sentence-fragment' | 'possible-fragment' | 'subjectless-outcome'
-  | 'raw-output' | 'too-vague' | 'no-specificity';
+  | 'too-short'
+  | 'release-activity'
+  | 'sentence-fragment'
+  | 'possible-fragment'
+  | 'subjectless-outcome'
+  | 'raw-output'
+  | 'too-vague'
+  | 'no-specificity';
 
 /** `reason` names a defect even when `accepted`: a possible fragment is stored and listed for review. */
 export interface AutomaticMemoryAssessment {
@@ -27,17 +94,22 @@ const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|W
 /** Counts spaced words plus CJK letters without lowering mixed-script counts. */
 export function substantiveWordCount(text: string): number {
   const cjkLetterCount = (text.match(CJK_LETTERS) ?? []).length;
-  const spacedCount = text.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w)).length;
+  const spacedCount = text
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w)).length;
   return spacedCount + Math.floor(cjkLetterCount / 2);
 }
 
 /** Preserves the auditor's existing destructive release-noise classification. */
 export function isReleaseCommitNoise(text: string): boolean {
-  return /^(?:bump|release|prep|tag)\s+(?:to\s+)?v?\d+\.\d+/i.test(text)
-    || /^v?\d+\.\d+\.\d+\s*$/i.test(text)
-    || /^chore(?:\([^)]+\))?:\s*(?:release|bump|version|tag|prep)\b/i.test(text)
-    || /^(?:Merge branch|Merge pull request)\b/i.test(text)
-    || /^WIP\b/i.test(text);
+  return (
+    /^(?:bump|release|prep|tag)\s+(?:to\s+)?v?\d+\.\d+/i.test(text) ||
+    /^v?\d+\.\d+\.\d+\s*$/i.test(text) ||
+    /^chore(?:\([^)]+\))?:\s*(?:release|bump|version|tag|prep)\b/i.test(text) ||
+    /^(?:Merge branch|Merge pull request)\b/i.test(text) ||
+    /^WIP\b/i.test(text)
+  );
 }
 
 const NOT_FILLER_WORD = String.raw`(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+`;
@@ -46,7 +118,7 @@ const ALWAYS_NEVER_TARGET = new RegExp(String.raw`\b(?:never|always|must)\s+` + 
 
 /** Short preferences and rules carry a useful relationship even without a path or number. */
 export function hasNoSpecificity(text: string): boolean {
-  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
+  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter((a) => !CHAT_ACRONYMS.test(a));
   if (/\d|[A-Z][a-z]{2,}|[/\\.]|[`_{}()[\]]/.test(text)) return false;
   if (domainAcronyms.length > 0 && /[a-z]/.test(text)) return false;
   if (PREFER_TARGET.test(text)) return false;
@@ -75,8 +147,7 @@ function isRoutineReleaseActivity(text: string): boolean {
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
   if (VERSION_BUMP.test(subject)) return true;
   return (
-    DEPLOY_ACTION.test(subject) ||
-    /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
+    DEPLOY_ACTION.test(subject) || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
   );
 }
 
@@ -235,9 +306,14 @@ type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extra
  */
 export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;
-  return AUTOMATIC_SOURCES.has(entry.source) || entry.source.startsWith(COMPACTION_SOURCE_PREFIX)
-    || (COPY_SOURCE.test(entry.source) && entry.tags.some((tag) => AUTOMATIC_TAGS.has(tag)))
-    || entry.extracted_from !== null || entry.dag_level >= DAG_LEVEL.extracted || BUNDLE_HEADER.test(entry.content);
+  return (
+    AUTOMATIC_SOURCES.has(entry.source) ||
+    entry.source.startsWith(COMPACTION_SOURCE_PREFIX) ||
+    (COPY_SOURCE.test(entry.source) && entry.tags.some((tag) => AUTOMATIC_TAGS.has(tag))) ||
+    entry.extracted_from !== null ||
+    entry.dag_level >= DAG_LEVEL.extracted ||
+    BUNDLE_HEADER.test(entry.content)
+  );
 }
 
 /**
@@ -260,7 +336,7 @@ export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null
   if (!isAutomaticEntry(entry)) return null;
   const parts = bundleParts(entry);
   const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map((text) => assessAutomaticMemory(text).reason);
-  return reasons.every((reason) => reason !== null) ? reasons[0] ?? null : null;
+  return reasons.every((reason) => reason !== null) ? (reasons[0] ?? null) : null;
 }
 
 /**
@@ -287,6 +363,11 @@ export function isWorthSurfacing(entry: MemoryEntry): boolean {
     return bundleParts(entry).length > 0 ? !hasCertainDefect(entry) : isContentWorthStoring(entry.content);
   }
   const text = entry.content.trim();
-  return text.length >= 10 && !isReleaseCommitNoise(text) && !isFragment(text)
-    && substantiveWordCount(text) >= 2 && !(text.length < 40 && hasNoSpecificity(text));
+  return (
+    text.length >= 10 &&
+    !isReleaseCommitNoise(text) &&
+    !isFragment(text) &&
+    substantiveWordCount(text) >= 2 &&
+    !(text.length < 40 && hasNoSpecificity(text))
+  );
 }

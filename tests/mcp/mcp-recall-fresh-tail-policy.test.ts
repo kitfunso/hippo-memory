@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
@@ -35,11 +35,7 @@ type HippoRecallToolArgs = {
   fresh_tail_session_id?: string;
 };
 
-function callTool(
-  name: string,
-  args: HippoRecallToolArgs,
-  ctx: McpContext,
-) {
+function callTool(name: string, args: HippoRecallToolArgs, ctx: McpContext) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -66,17 +62,28 @@ describe('mcp hippo_recall fresh-tail policy', () => {
   it('env=1, no session_id, fresh_tail_count > 0 → throws typed RecallContractError to the transport', async () => {
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) {
-      writeEntry(home, createMemory(`event ${i}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-      }));
+      writeEntry(
+        home,
+        createMemory(`event ${i}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+        }),
+      );
     }
     let thrown = null;
     try {
       await callTool(
         'hippo_recall',
         { query: 'event', fresh_tail_count: 3 },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+        {
+          hippoRoot: home,
+          tenantId: 'default',
+          actor: 'mcp',
+          role: 'admin',
+          hostAdmin: true,
+          store: sqliteStore(home),
+          config: loadConfig(home),
+        },
       );
     } catch (err) {
       thrown = err;
@@ -84,29 +91,36 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     expect(thrown).toBeInstanceOf(RecallContractError);
     // SAFETY: the toBeInstanceOf(RecallContractError) assertion above just
     // confirmed thrown's runtime type.
-    expect((thrown as RecallContractError).code).toBe(
-      'fresh_tail_requires_session_id',
-    );
+    expect((thrown as RecallContractError).code).toBe('fresh_tail_requires_session_id');
     // SAFETY: the toBeInstanceOf(RecallContractError) assertion above just
     // confirmed thrown's runtime type.
-    expect((thrown as RecallContractError).message).toContain(
-      'HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL',
-    );
+    expect((thrown as RecallContractError).message).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
   });
 
   it('env=1, session_id provided → no error, content returned', async () => {
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) {
-      writeEntry(home, createMemory(`event ${i}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-        sourceSessionId: 'sess-A',
-      }));
+      writeEntry(
+        home,
+        createMemory(`event ${i}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          sourceSessionId: 'sess-A',
+        }),
+      );
     }
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     // SAFETY: hippo_recall's MCP tool result envelope always carries
     // result.content per src/mcp/server.ts; McpResponse.result is typed
@@ -125,15 +139,26 @@ describe('mcp hippo_recall fresh-tail policy', () => {
 
   it('env unset, no session_id, fresh_tail_count > 0 → no error (back-compat)', async () => {
     for (let i = 0; i < 3; i++) {
-      writeEntry(home, createMemory(`event ${i}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-      }));
+      writeEntry(
+        home,
+        createMemory(`event ${i}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+        }),
+      );
     }
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3 },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     const r = res!;
     expect(r.error).toBeUndefined();
@@ -155,14 +180,32 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
 
   it("keeps the tail to the caller's project, with or without a session id", async () => {
     const rows = (['acme', 'beta', null] as const).map((origin) => {
-      const entry = { ...createMemory(`tail row from ${origin ?? 'no project'}`, { layer: Layer.Buffer, kind: 'raw', sourceSessionId: 'sess-A' }), origin_project: origin };
+      const entry = {
+        ...createMemory(`tail row from ${origin ?? 'no project'}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          sourceSessionId: 'sess-A',
+        }),
+        origin_project: origin,
+      };
       writeEntry(shared, entry);
       return entry;
     });
-    const ctx: McpContext = { hippoRoot: shared, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } , store: sqliteStore(shared), config: loadConfig(shared) };
+    const ctx: McpContext = {
+      hippoRoot: shared,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      project: { name: 'acme', legacyName: 'acme' },
+      store: sqliteStore(shared),
+      config: loadConfig(shared),
+    };
     for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
       // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.
-      const r = (await callTool('hippo_recall', { query: 'zzqqxx', ...args }, ctx)) as { result?: { content: Array<{ text: string }> } };
+      const r = (await callTool('hippo_recall', { query: 'zzqqxx', ...args }, ctx)) as {
+        result?: { content: Array<{ text: string }> };
+      };
       const text = r.result?.content?.[0]?.text ?? '';
       expect(text, JSON.stringify(args)).toContain(`[tail] ${rows[0]!.id}: tail row from acme`);
       for (const hidden of rows.slice(1)) expect(text, JSON.stringify(args)).not.toContain(hidden.id);

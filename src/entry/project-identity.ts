@@ -5,5 +5,5 @@ export {
   MCP_PROJECT_SCOPED_HEADER,
   resolveProjectIdentity,
   type ProjectIdentity,
-  type ResolveProjectIdentityOpts
+  type ResolveProjectIdentityOpts,
 } from '../core/project-identity.js';

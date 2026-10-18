@@ -82,20 +82,20 @@ const TRG_POLICIES_SUPERSEDE_TENANT_MATCH_UPDATE = `
         `;
 
 export const v33: Migration = {
-    version: 33,
-    up: (db) => {
-      // Policy first-class object: a rule in force over an effective-time range (valid_to nullable = open-ended);
-      // supersedes like v32 processes.
-      // Dates are ISO-8601 (toISOString) at the store boundary so values sort lexically and the half-open [valid_from,
-      // valid_to) as-of comparison is correct.
-      if (!tableExists(db, 'policies')) {
-        db.exec(POLICIES_TABLE);
-        db.exec(IDX_POLICIES_TENANT_STATUS);
-        db.exec(IDX_POLICIES_MEMORY);
-        db.exec(IDX_POLICIES_ASOF);
-        db.exec(TRG_POLICIES_TENANT_MATCH_INSERT);
-        db.exec(TRG_POLICIES_TENANT_MATCH_UPDATE);
-        db.exec(TRG_POLICIES_SUPERSEDE_TENANT_MATCH_UPDATE);
-      }
-    },
+  version: 33,
+  up: (db) => {
+    // Policy first-class object: a rule in force over an effective-time range (valid_to nullable = open-ended);
+    // supersedes like v32 processes.
+    // Dates are ISO-8601 (toISOString) at the store boundary so values sort lexically and the half-open [valid_from,
+    // valid_to) as-of comparison is correct.
+    if (!tableExists(db, 'policies')) {
+      db.exec(POLICIES_TABLE);
+      db.exec(IDX_POLICIES_TENANT_STATUS);
+      db.exec(IDX_POLICIES_MEMORY);
+      db.exec(IDX_POLICIES_ASOF);
+      db.exec(TRG_POLICIES_TENANT_MATCH_INSERT);
+      db.exec(TRG_POLICIES_TENANT_MATCH_UPDATE);
+      db.exec(TRG_POLICIES_SUPERSEDE_TENANT_MATCH_UPDATE);
+    }
+  },
 };

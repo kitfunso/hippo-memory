@@ -61,7 +61,11 @@ describe('invalidateMatching', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
+      from: 'REST',
+      to: 'GraphQL',
+      type: 'migration',
+    });
 
     expect(result.invalidated).toBe(1);
     const updated = readEntry(hippoRoot, mem.id);
@@ -76,7 +80,11 @@ describe('invalidateMatching', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
+      from: 'REST',
+      to: 'GraphQL',
+      type: 'migration',
+    });
 
     expect(result.invalidated).toBe(0);
     const updated = readEntry(hippoRoot, mem.id);
@@ -90,7 +98,11 @@ describe('invalidateMatching', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
+      from: 'REST',
+      to: 'GraphQL',
+      type: 'migration',
+    });
 
     expect(result.invalidated).toBe(0);
   });

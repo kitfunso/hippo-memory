@@ -12,11 +12,7 @@ import { CLI_ACTOR } from '../core/actor.js';
 
 export type { CustomerNote, NoteStatus } from '../core/object-types.js';
 
-export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
-  'active',
-  'superseded',
-  'closed',
-]);
+export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>(['active', 'superseded', 'closed']);
 
 /** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap
  *  than the 4096 short-field convention. */
@@ -104,11 +100,7 @@ export function closeCustomerNote(
   return closeObject(objects, CUSTOMER_NOTE, tenantId, id, actor);
 }
 
-export function loadCustomerNoteById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<CustomerNote | null> {
+export function loadCustomerNoteById(objects: Objects, tenantId: string, id: number): Promise<CustomerNote | null> {
   return objectById(objects, CUSTOMER_NOTE, tenantId, id);
 }
 

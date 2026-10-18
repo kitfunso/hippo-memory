@@ -45,7 +45,10 @@ export interface AddonRoute {
   readonly loop?: 'off';
 }
 
-export interface RateLimitSpec { ratePerSec: number; burst: number }
+export interface RateLimitSpec {
+  ratePerSec: number;
+  burst: number;
+}
 
 export interface ServeOpts {
   hippoRoot: string;
@@ -117,9 +120,7 @@ export interface AuthedRouteRequest extends RouteRequest {
 
 /** A route's store status: the optional group it needs, a `sqliteOnly`
  * reason, or neither for a route that runs on any store; never both. */
-type StoreStatus =
-  | { storeReady?: OptionalGroup; sqliteOnly?: never }
-  | { sqliteOnly: string; storeReady?: never };
+type StoreStatus = { storeReady?: OptionalGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, or nothing, for
  * a route whose handler checks the sender's signature itself. */
@@ -132,10 +133,8 @@ export type RouteEndpoint<R> =
 
 /** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another
  * store it runs only with its `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread. */
-export type Route =
-  & { method: string; loop?: 'off' }
-  & StoreStatus
-  & (
+export type Route = { method: string; loop?: 'off' } & StoreStatus &
+  (
     | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest>)
     | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
   );

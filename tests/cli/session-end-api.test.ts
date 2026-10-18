@@ -34,20 +34,33 @@ function work(over: Partial<Work> = {}): Work {
     mode: 'full',
     sessionId: 's1',
     transcriptPath: undefined,
-    log: (line) => { lines.push(line); },
-    sleep: async () => { steps.push('sleep'); },
-    importAgentNotes: () => { steps.push('import'); },
-    readScan: () => { steps.push('scan'); return { turns: ['t1', 't2', 't3'] }; },
+    log: (line) => {
+      lines.push(line);
+    },
+    sleep: async () => {
+      steps.push('sleep');
+    },
+    importAgentNotes: () => {
+      steps.push('import');
+    },
+    readScan: () => {
+      steps.push('scan');
+      return { turns: ['t1', 't2', 't3'] };
+    },
     cursor: {
       after: (_id, _file, turns) => turns.slice(1),
-      save: (_id, _file, turns) => { steps.push(`cursor:${turns.length}`); },
+      save: (_id, _file, turns) => {
+        steps.push(`cursor:${turns.length}`);
+      },
     },
     currentProject: () => PROJECT,
     capture: (into, turns, origin) => {
       steps.push(`capture:${into.hippoRoot === root ? 'own' : 'global'}:${turns?.join(',') ?? 'all'}:${origin ?? '-'}`);
       return true;
     },
-    digest: (scan, key) => { steps.push(`digest:${scan === null ? 'none' : scan.turns.length}:${key}`); },
+    digest: (scan, key) => {
+      steps.push(`digest:${scan === null ? 'none' : scan.turns.length}:${key}`);
+    },
     workingState: () => null,
     evidence: () => ({}),
     ...over,
@@ -97,7 +110,12 @@ describe('sessionEndWork', () => {
   });
 
   it('a turn close with no new turns captures nothing and keeps the cursor', async () => {
-    const cursor = { after: () => [], save: () => { steps.push('cursor'); } };
+    const cursor = {
+      after: () => [],
+      save: () => {
+        steps.push('cursor');
+      },
+    };
     await sessionEndWork(withAutoSleep(1000), work({ mode: 'turn', transcriptPath: `${root}/s1.jsonl`, cursor }));
     expect(steps).toEqual(['scan', 'digest:3:s1']);
     expect(lines).toContain('skip capture: no new turns since the last reply');
@@ -146,9 +164,12 @@ describe('sessionEndWork', () => {
 
   it('still logs the re-read lines at exit when sleep throws before they are written', async () => {
     const before = process.listeners('exit');
-    const sleep = async (): Promise<void> => { throw new Error('sleep failed'); };
-    await expect(sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}-missing.jsonl`, sleep })))
-      .rejects.toThrow('sleep failed');
+    const sleep = async (): Promise<void> => {
+      throw new Error('sleep failed');
+    };
+    await expect(
+      sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}-missing.jsonl`, sleep })),
+    ).rejects.toThrow('sleep failed');
     const added = process.listeners('exit').filter((l) => !before.includes(l));
     expect(added).toHaveLength(1);
     try {

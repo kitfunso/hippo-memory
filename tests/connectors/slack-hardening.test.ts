@@ -46,8 +46,7 @@ interface SlackDlqUnroutableRow {
 function withEnv(name: string, value: string | undefined): () => void {
   if (value === undefined) vi.stubEnv(name, undefined);
   else vi.stubEnv(name, value);
-  return () => {
-  };
+  return () => {};
 }
 
 describe('Slack hardening + migration v19', () => {
@@ -92,9 +91,11 @@ describe('Slack hardening + migration v19', () => {
     const restore = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', undefined);
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('TKNOWN', 'tenant-known', new Date().toISOString());
+      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'TKNOWN',
+        'tenant-known',
+        new Date().toISOString(),
+      );
       expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -108,9 +109,11 @@ describe('Slack hardening + migration v19', () => {
     const r2 = withEnv('HIPPO_TENANT', 'env-fallback');
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('TKNOWN', 'tenant-known', new Date().toISOString());
+      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'TKNOWN',
+        'tenant-known',
+        new Date().toISOString(),
+      );
       expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-fallback');
     } finally {
       closeHippoDb(db);
@@ -127,9 +130,11 @@ describe('Slack hardening + migration v19', () => {
     {
       const db = openHippoDb(root);
       try {
-        db.prepare(
-          `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-        ).run('TREGISTERED', 'tenant-known', new Date().toISOString());
+        db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+          'TREGISTERED',
+          'tenant-known',
+          new Date().toISOString(),
+        );
       } finally {
         closeHippoDb(db);
       }
@@ -169,9 +174,7 @@ describe('Slack hardening + migration v19', () => {
       try {
         // SAFETY: SELECT explicitly projects these five NOT NULL slack_dlq columns.
         const rows = db
-          .prepare(
-            `SELECT tenant_id, team_id, bucket, signature, slack_timestamp FROM slack_dlq ORDER BY id`,
-          )
+          .prepare(`SELECT tenant_id, team_id, bucket, signature, slack_timestamp FROM slack_dlq ORDER BY id`)
           .all() as SlackDlqUnroutableRow[];
         expect(rows).toHaveLength(1);
         expect(rows[0].bucket).toBe('unroutable');
@@ -231,7 +234,11 @@ describe('Slack hardening + migration v19', () => {
     let settled: IngestResult[];
     let loser: IngestResult;
     const winnerCtx = apiCtx(scratch, 'default', { subject: 'connector:slack', role: 'admin' });
-    const w = await remember(winnerCtx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
+    const w = await remember(winnerCtx, {
+      ...racedOpts,
+      untrusted: true,
+      event: { connector: 'slack', eventId: racedEventId },
+    });
     settled = [{ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id }];
     const staged = await stageScratchWinner(root, scratch, ['memories', 'slack_event_log']);
     loser = await ingestMessage(ctx, raced);
@@ -247,9 +254,9 @@ describe('Slack hardening + migration v19', () => {
       const db = openHippoDb(root);
       try {
         // SAFETY: SELECT memory_id projects only the memory_id column.
-        const rows = db
-          .prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`)
-          .all(racedEventId) as Array<{ memory_id: string }>;
+        const rows = db.prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`).all(racedEventId) as Array<{
+          memory_id: string;
+        }>;
         expect(rows).toHaveLength(1);
         expect(rows[0].memory_id).toBe(settled[0].memoryId);
       } finally {
@@ -282,17 +289,17 @@ describe('Slack hardening + migration v19', () => {
 
       // Memory is still present — SAVEPOINT rolled back.
       // SAFETY: SELECT id, kind projects only these two columns.
-      const stillThere = db
-        .prepare(`SELECT id, kind FROM memories WHERE id = ?`)
-        .get(mem.id) as { id?: string; kind?: string } | undefined;
+      const stillThere = db.prepare(`SELECT id, kind FROM memories WHERE id = ?`).get(mem.id) as
+        | { id?: string; kind?: string }
+        | undefined;
       expect(stillThere?.id).toBe(mem.id);
       expect(stillThere?.kind).toBe('raw');
 
       // raw_archive has no row for this id.
       // SAFETY: SELECT COUNT(*) AS c always returns exactly one row with a numeric c column.
-      const archCount = db
-        .prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE memory_id = ?`)
-        .get(mem.id) as { c: number | bigint };
+      const archCount = db.prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE memory_id = ?`).get(mem.id) as {
+        c: number | bigint;
+      };
       expect(Number(archCount.c)).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -325,9 +332,11 @@ describe('Slack hardening + migration v19', () => {
     {
       const db = openHippoDb(root);
       try {
-        db.prepare(
-          `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-        ).run('TREPLAY', 'default', new Date().toISOString());
+        db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+          'TREPLAY',
+          'default',
+          new Date().toISOString(),
+        );
       } finally {
         closeHippoDb(db);
       }
@@ -365,9 +374,10 @@ describe('Slack hardening + migration v19', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: SELECT retried_at, retry_count projects only these two columns.
-      const after = db
-        .prepare(`SELECT retried_at, retry_count FROM slack_dlq WHERE id = ?`)
-        .get(dlqId) as { retried_at?: string; retry_count?: number | bigint };
+      const after = db.prepare(`SELECT retried_at, retry_count FROM slack_dlq WHERE id = ?`).get(dlqId) as {
+        retried_at?: string;
+        retry_count?: number | bigint;
+      };
       expect(after.retried_at).toBeTruthy();
       expect(Number(after.retry_count)).toBe(1);
     } finally {
@@ -465,9 +475,10 @@ describe('Slack hardening + migration v19', () => {
       const db = openHippoDb(root);
       try {
         // SAFETY: SELECT team_id, bucket projects only these two columns.
-        const rows = db
-          .prepare(`SELECT team_id, bucket FROM slack_dlq ORDER BY id DESC LIMIT 1`)
-          .all() as Array<{ team_id?: string; bucket?: string }>;
+        const rows = db.prepare(`SELECT team_id, bucket FROM slack_dlq ORDER BY id DESC LIMIT 1`).all() as Array<{
+          team_id?: string;
+          bucket?: string;
+        }>;
         expect(rows).toHaveLength(1);
         expect(rows[0].team_id).toBe('TPARTIAL');
         expect(rows[0].bucket).toBe('parse_error');

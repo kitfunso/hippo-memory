@@ -88,7 +88,10 @@ describe('detectSecret patterns', () => {
     ['a prefixed password', 'run DB_PASSWORD=' + 'Hunter2Hunter2' + ' before the migration'],
     ['a prefixed token', 'set MY_API_TOKEN=' + 'abc123def456ghi789'],
     ['a prefixed secret after a colon', 'CLIENT_SECRET: ' + '4f9a8b7c6d5e4f3a2b1c'],
-    ['a name that runs on past the keyword', 'AWS_SECRET_ACCESS_KEY=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY'],
+    [
+      'a name that runs on past the keyword',
+      'AWS_SECRET_ACCESS_KEY=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY',
+    ],
     ['a lower-case prefixed name', 'aws_secret_access_key=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY'],
     ['a URL password', 'DATABASE_URL=postgres://admin:' + 'S3cretPw9' + '@localhost:5432/app'],
     ['a passwd name', 'export SMTP_PASSWD=' + 'Tr0ub4dor3x99'],
@@ -143,7 +146,22 @@ describe('redactSecretsStrict', () => {
   const BASIC_CREDENTIAL = Buffer.from(`alice:${'p'.repeat(12)}`).toString('base64');
 
   it('redactSecretsStrict removes every canary shape, keyword context or not', () => {
-    const canaries = [AWS, GHP, GH_PAT, SLACK, STRIPE, GOOGLE, PEM, SK_NO_KEYWORD, SK_X_NO_KEYWORD, ASSIGNMENT, BEARER, BEARER_UPPER, JWT, ...PROVIDER_TOKENS];
+    const canaries = [
+      AWS,
+      GHP,
+      GH_PAT,
+      SLACK,
+      STRIPE,
+      GOOGLE,
+      PEM,
+      SK_NO_KEYWORD,
+      SK_X_NO_KEYWORD,
+      ASSIGNMENT,
+      BEARER,
+      BEARER_UPPER,
+      JWT,
+      ...PROVIDER_TOKENS,
+    ];
     for (const canary of canaries) {
       expect(redactSecretsStrict(`before ${canary} after`), canary).not.toContain(canary);
     }
@@ -160,7 +178,13 @@ describe('redactSecretsStrict', () => {
   });
 
   it('redactSecretsStrict removes a JWT at the start, after a space, after Bearer, after = and inside JSON quotes', () => {
-    for (const text of [`${JWT} was issued`, `the token is ${JWT}`, `Authorization: Bearer ${JWT}`, `jwt=${JWT}`, `{"id_token":"${JWT}"}`]) {
+    for (const text of [
+      `${JWT} was issued`,
+      `the token is ${JWT}`,
+      `Authorization: Bearer ${JWT}`,
+      `jwt=${JWT}`,
+      `{"id_token":"${JWT}"}`,
+    ]) {
       expect(redactSecretsStrict(text), text).not.toContain('eyJ');
     }
   });
@@ -281,7 +305,10 @@ describe('producer + sync vetoes (real stores)', () => {
 
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {
     writeEntry(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), origin_project: 'proj-b' });
-    writeEntry(globalStore, { ...createMemory('a user-global secret sk_vendor_cafe0123456', { pinned: true }), origin_project: '' });
+    writeEntry(globalStore, {
+      ...createMemory('a user-global secret sk_vendor_cafe0123456', { pinned: true }),
+      origin_project: '',
+    });
     const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     const base = await getContext(ctx, { pinnedOnly: true, currentProject: 'proj-a' });

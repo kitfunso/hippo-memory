@@ -1,13 +1,7 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
-import {
-  envAllowKeylessLocal,
-  envPort,
-  envRequireAuth,
-  envTlsCert,
-  envTlsKey,
-} from '../util/env.js';
+import { envAllowKeylessLocal, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { flagIsTrue, stringFlagOrExit, type CommandContext, stringFlag, numberFlag } from './flag-values.js';
@@ -64,13 +58,17 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
 function keyRuleLine(): string {
   if (envRequireAuth()) return 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)';
   if (envAllowKeylessLocal()) {
-    return 'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); ' +
-      'unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request';
+    return (
+      'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); ' +
+      'unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request'
+    );
   }
-  return 'every request needs an API key: mint one with `hippo auth create` and send it as ' +
+  return (
+    'every request needs an API key: mint one with `hippo auth create` and send it as ' +
     '"Authorization: Bearer <key>" ' +
     '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, ' +
-    'start with HIPPO_ALLOW_KEYLESS_LOCAL=1';
+    'start with HIPPO_ALLOW_KEYLESS_LOCAL=1'
+  );
 }
 
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {

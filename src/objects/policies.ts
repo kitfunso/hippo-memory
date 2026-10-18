@@ -14,11 +14,7 @@ import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Policy, PolicyStatus } from '../core/object-types.js';
 
-export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
-  'active',
-  'superseded',
-  'closed',
-]);
+export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>(['active', 'superseded', 'closed']);
 
 export interface SavePolicyOptions {
   policyName: string;
@@ -53,30 +49,17 @@ export function normalizePolicyDate(input: string, label: string = 'date'): stri
 }
 
 /** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to > valid_from. */
-export function validatePolicyDates(
-  validFromRaw: string | undefined,
-  validToRaw: string | undefined,
-  nowIso: string,
-) {
+export function validatePolicyDates(validFromRaw: string | undefined, validToRaw: string | undefined, nowIso: string) {
   const validFrom = validFromRaw !== undefined ? normalizePolicyDate(validFromRaw, 'valid_from') : nowIso;
-  const validTo = validToRaw !== undefined && validToRaw !== null
-    ? normalizePolicyDate(validToRaw, 'valid_to')
-    : null;
+  const validTo = validToRaw !== undefined && validToRaw !== null ? normalizePolicyDate(validToRaw, 'valid_to') : null;
   if (validTo !== null && validTo <= validFrom) {
-    throw new BadRequestError(
-      `policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`,
-    );
+    throw new BadRequestError(`policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`);
   }
   return { validFrom, validTo };
 }
 
 /** Recall-surface content for the memory mirror: name + rule + effective range. */
-function buildPolicyContent(
-  policyName: string,
-  policyText: string,
-  validFrom: string,
-  validTo: string | null,
-): string {
+function buildPolicyContent(policyName: string, policyText: string, validFrom: string, validTo: string | null): string {
   const range = validTo ? `${validFrom} to ${validTo}` : `${validFrom} onward`;
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
@@ -132,19 +115,11 @@ export function closePolicy(
   return closeObject(objects, POLICY, tenantId, id, actor);
 }
 
-export function loadPolicyById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<Policy | null> {
+export function loadPolicyById(objects: Objects, tenantId: string, id: number): Promise<Policy | null> {
   return objectById(objects, POLICY, tenantId, id);
 }
 
-export function loadPolicies(
-  objects: Objects,
-  tenantId: string,
-  opts: ListPoliciesOptions = {},
-): Promise<Policy[]> {
+export function loadPolicies(objects: Objects, tenantId: string, opts: ListPoliciesOptions = {}): Promise<Policy[]> {
   return listObjects(objects, POLICY, tenantId, opts);
 }
 

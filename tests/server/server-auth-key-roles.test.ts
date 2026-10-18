@@ -82,10 +82,16 @@ describe('/v1/auth/keys role rules', () => {
     try {
       const admin = mint('admin');
       // SAFETY: the mint route returns AuthCreateResult as JSON.
-      const made = (await (await post(admin.plaintext, {})).json()) as { keyId: string; plaintext: string; role: string };
+      const made = (await (await post(admin.plaintext, {})).json()) as {
+        keyId: string;
+        plaintext: string;
+        role: string;
+      };
       expect((await post(admin.plaintext, { role: 'admin' })).status).toBe(200);
       expect(made.role).toBe('member');
-      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(made.plaintext))).toEqual([]);
+      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(made.plaintext))).toEqual(
+        [],
+      );
     } finally {
       warn.mockRestore();
     }

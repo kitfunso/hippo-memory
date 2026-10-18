@@ -67,9 +67,27 @@ function embeddingRoot(port: number): string {
 
 describe('rethrown errors keep their cause', () => {
   it.each([
-    ['trace steps that are not JSON', () => { parseSteps('{not json'); }, 'Invalid trace steps JSON'],
-    ['a git read in a folder that is not a repository', () => { gitLsFilesAtHead(mkdtemp()); }, 'failed'],
-    ['a TLS certificate OpenSSL refuses', () => { createListener({ cert: 'nope', key: 'nope' }, () => undefined); }, 'refused'],
+    [
+      'trace steps that are not JSON',
+      () => {
+        parseSteps('{not json');
+      },
+      'Invalid trace steps JSON',
+    ],
+    [
+      'a git read in a folder that is not a repository',
+      () => {
+        gitLsFilesAtHead(mkdtemp());
+      },
+      'failed',
+    ],
+    [
+      'a TLS certificate OpenSSL refuses',
+      () => {
+        createListener({ cert: 'nope', key: 'nope' }, () => undefined);
+      },
+      'refused',
+    ],
   ])('%s', async (_label, run, text) => {
     const err = await caught(run);
     expect(err.message).toContain(text);
@@ -83,7 +101,6 @@ describe('rethrown errors keep their cause', () => {
   });
 
   describe('embedding provider', () => {
-
     it('keeps the transport error when the API port refuses the connection', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'test-key');
       const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
@@ -94,7 +111,12 @@ describe('rethrown errors keep their cause', () => {
 
     it('keeps the parse error when a 200 answer is not JSON', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'test-key');
-      const port = portOf(await listen((_req, res) => { res.writeHead(200); res.end('not json'); }));
+      const port = portOf(
+        await listen((_req, res) => {
+          res.writeHead(200);
+          res.end('not json');
+        }),
+      );
       const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(port)).embeddings);
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('returned invalid JSON');

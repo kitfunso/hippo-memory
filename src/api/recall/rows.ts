@@ -65,8 +65,11 @@ export async function loadCliRecallContinuity(
   if (!wanted || setting.primaryIsGlobal) {
     return { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
   }
-  const { activeSnapshot: rawSnapshot, sessionHandoff: rawHandoff, recentSessionEvents: rawEvents } =
-    await ctx.store.continuity(ctx.tenantId, 5, null);
+  const {
+    activeSnapshot: rawSnapshot,
+    sessionHandoff: rawHandoff,
+    recentSessionEvents: rawEvents,
+  } = await ctx.store.continuity(ctx.tenantId, 5, null);
   // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
   const effectiveScope = setting.activeScope || undefined;
   const passes = (r: { scope?: string | null }): boolean => passesScopeFilterForRecall(r.scope ?? null, effectiveScope);

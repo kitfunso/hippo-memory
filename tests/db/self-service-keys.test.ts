@@ -7,7 +7,16 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { listAuditEventsAfter } from '../../src/store/audit.js';
-import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeResult } from '../../src/api/index.js';
+import {
+  adminActor,
+  authCreate,
+  authCreateSelf,
+  authRevoke,
+  type Actor,
+  type AuthCreateSelfOpts,
+  type AuthCreateSelfResult,
+  type AuthRevokeResult,
+} from '../../src/api/index.js';
 import { ForbiddenError } from '../../src/core/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -54,29 +63,54 @@ function mintAs(actor: Actor, label = 'laptop', over: Partial<AuthCreateSelfOpts
   return authCreateSelf(apiCtx(home, TENANT, actor), { label, ...OPTS, ...over });
 }
 
-const selfMint = (token = ALICE, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): Promise<AuthCreateSelfResult> => mintAs(actorOf(token), label, over);
+const selfMint = (
+  token = ALICE,
+  label = 'laptop',
+  over: Partial<AuthCreateSelfOpts> = {},
+): Promise<AuthCreateSelfResult> => mintAs(actorOf(token), label, over);
 
-interface KeyRow { key_id: string; owner_subject: string | null; expires_at: string | null; role: string; revoked_at: string | null }
+interface KeyRow {
+  key_id: string;
+  owner_subject: string | null;
+  expires_at: string | null;
+  role: string;
+  revoked_at: string | null;
+}
 
 function keyRows(): KeyRow[] {
   // SAFETY: the SELECT names exactly the KeyRow columns.
-  return withDb((db) => db.prepare(`SELECT key_id, owner_subject, expires_at, role, revoked_at FROM api_keys WHERE tenant_id = ? ORDER BY id`).all(TENANT) as KeyRow[]);
+  return withDb(
+    (db) =>
+      db
+        .prepare(
+          `SELECT key_id, owner_subject, expires_at, role, revoked_at FROM api_keys WHERE tenant_id = ? ORDER BY id`,
+        )
+        .all(TENANT) as KeyRow[],
+  );
 }
 
-const liveOwned = (owner: string): KeyRow[] => keyRows().filter((r) => r.owner_subject === owner && r.revoked_at === null);
+const liveOwned = (owner: string): KeyRow[] =>
+  keyRows().filter((r) => r.owner_subject === owner && r.revoked_at === null);
 
 function auditRows(): ReturnType<typeof listAuditEventsAfter> {
   return withDb((db) => listAuditEventsAfter(db, { afterId: 0, tenantId: TENANT }));
 }
 
 function breakAuditLog(): void {
-  withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
+  withDb((db) =>
+    db.exec(
+      `CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
+    ),
+  );
 }
 
-const revokeAs = async (token: string, keyId: string): Promise<AuthRevokeResult> => await authRevoke(apiCtx(home, TENANT, actorOf(token)), keyId);
+const revokeAs = async (token: string, keyId: string): Promise<AuthRevokeResult> =>
+  await authRevoke(apiCtx(home, TENANT, actorOf(token)), keyId);
 
 async function listKeys(token: string): Promise<string[]> {
-  const res = await fetch(`${handle!.url}/v1/auth/keys?active=false`, { headers: { authorization: `Bearer ${token}` } });
+  const res = await fetch(`${handle!.url}/v1/auth/keys?active=false`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
   expect(res.status).toBe(200);
   // SAFETY: GET /v1/auth/keys returns a bare array of key records.
   return ((await res.json()) as Array<{ keyId: string }>).map((k) => k.keyId).sort();
@@ -91,9 +125,17 @@ function postInTwoParts(path: string, token: string, body: string, between: () =
         `POST ${path} HTTP/1.1\r\nHost: 127.0.0.1:${handle!.port}\r\nAuthorization: Bearer ${token}\r\n` +
           `Content-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n`,
       );
-      between().then(() => socket.write(body), (err: Error) => { socket.destroy(); reject(err); });
+      between().then(
+        () => socket.write(body),
+        (err: Error) => {
+          socket.destroy();
+          reject(err);
+        },
+      );
     });
-    socket.on('data', (chunk) => { data += chunk.toString('utf8'); });
+    socket.on('data', (chunk) => {
+      data += chunk.toString('utf8');
+    });
     socket.on('end', () => resolve(Number(data.split(' ')[1])));
     socket.on('error', reject);
   });
@@ -101,10 +143,15 @@ function postInTwoParts(path: string, token: string, body: string, between: () =
 
 /** Settles once the next request's handler has started reading the body; arm it before the body is sent. */
 function handlerAwaitsBody(): Promise<void> {
-  return new Promise((resolve) => handle!.server!.once('request', (req: IncomingMessage) => {
-    const poll = (): void => { if (req.listenerCount('data') > 0 || req.destroyed) resolve(); else setImmediate(poll); };
-    poll();
-  }));
+  return new Promise((resolve) =>
+    handle!.server!.once('request', (req: IncomingMessage) => {
+      const poll = (): void => {
+        if (req.listenerCount('data') > 0 || req.destroyed) resolve();
+        else setImmediate(poll);
+      };
+      poll();
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -126,8 +173,20 @@ describe('authCreateSelf', () => {
     expect(minted).toMatchObject({ tenantId: TENANT, role: 'member' });
     expect(Date.parse(minted.expiresAt)).toBeGreaterThanOrEqual(before + 90 * DAY_MS);
     expect(Date.parse(minted.expiresAt)).toBeLessThanOrEqual(Date.now() + 90 * DAY_MS);
-    expect(keyRows()).toEqual([{ key_id: minted.keyId, owner_subject: 'alice@corp.example', expires_at: minted.expiresAt, role: 'member', revoked_at: null }]);
-    expect(withDb((db) => validateApiKey(db, minted.plaintext))).toMatchObject({ valid: true, tenantId: TENANT, role: 'member' });
+    expect(keyRows()).toEqual([
+      {
+        key_id: minted.keyId,
+        owner_subject: 'alice@corp.example',
+        expires_at: minted.expiresAt,
+        role: 'member',
+        revoked_at: null,
+      },
+    ]);
+    expect(withDb((db) => validateApiKey(db, minted.plaintext))).toMatchObject({
+      valid: true,
+      tenantId: TENANT,
+      role: 'member',
+    });
   });
 
   it('gives a signed-in admin a member key too', async () => {
@@ -157,7 +216,11 @@ describe('authCreateSelf', () => {
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
     const audit = auditRows();
     expect(audit.filter((r) => r.op === 'auth_revoke')).toEqual([
-      expect.objectContaining({ actor: 'alice@corp.example', targetId: first.keyId, metadata: { replacedBy: third.keyId } }),
+      expect.objectContaining({
+        actor: 'alice@corp.example',
+        targetId: first.keyId,
+        metadata: { replacedBy: third.keyId },
+      }),
     ]);
     expect(audit.find((r) => r.op === 'auth_create' && r.targetId === third.keyId)).toMatchObject({
       actor: 'alice@corp.example',
@@ -244,7 +307,7 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
     ]);
   });
 
-  it('refuses another member\'s self-minted key', async () => {
+  it("refuses another member's self-minted key", async () => {
     const bobs = await selfMint('tok.bob');
     await expect(revokeAs(ALICE, bobs.keyId)).rejects.toThrow(ForbiddenError);
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
@@ -256,11 +319,13 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
     expect(keyRows().find((r) => r.key_id === plain.keyId)?.revoked_at).toBeNull();
   });
 
-  it('refuses its own subject\'s key in another tenant, and an unknown key, with the same error', async () => {
+  it("refuses its own subject's key in another tenant, and an unknown key, with the same error", async () => {
     const elsewhere = await authCreateSelf(apiCtx(home, 'other-tenant', actorOf(ALICE)), OPTS);
     const bobs = await selfMint('tok.bob');
     for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
-      await expect(revokeAs(ALICE, keyId)).rejects.toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
+      await expect(revokeAs(ALICE, keyId)).rejects.toThrow(
+        new ForbiddenError('A member can revoke only the keys it minted'),
+      );
     }
     expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
   });
@@ -272,7 +337,10 @@ describe('DELETE /v1/auth/keys/:keyId on hippo.db', () => {
     const own = await selfMint();
     breakAuditLog();
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const res = await fetch(`${handle!.url}/v1/auth/keys/${own.keyId}`, { method: 'DELETE', headers: { authorization: 'Bearer tok.boss' } });
+    const res = await fetch(`${handle!.url}/v1/auth/keys/${own.keyId}`, {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer tok.boss' },
+    });
     expect(res.status).toBe(500);
     expect(keyRows()).toEqual([expect.objectContaining({ key_id: own.keyId, revoked_at: null })]);
     expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([]);

@@ -7,10 +7,16 @@ describe('a GitHub error whose body cannot be read', () => {
 
   it('still throws the status, with the URL cut to host and path', async () => {
     const broken = new ReadableStream<Uint8Array>({ start: (c) => c.error(new Error('connection reset')) });
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(broken, { status: 404 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(broken, { status: 404 })),
+    );
     let err: GitHubFetchError | undefined;
     try {
-      await realGitHubFetcher({ url: 'https://api.github.com/repos/acme/app/issues?since=2026-01-01&page=3', token: 't' });
+      await realGitHubFetcher({
+        url: 'https://api.github.com/repos/acme/app/issues?since=2026-01-01&page=3',
+        token: 't',
+      });
     } catch (caught) {
       if (caught instanceof GitHubFetchError) err = caught;
     }

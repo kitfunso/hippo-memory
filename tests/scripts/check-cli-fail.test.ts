@@ -6,8 +6,12 @@ import { failPairLines, findFailPairs } from '../../scripts/check-cli-fail.mjs';
 
 describe('check-cli-fail', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cli-fail-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cli-fail-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);

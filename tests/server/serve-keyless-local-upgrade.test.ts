@@ -26,7 +26,12 @@ let stops: Array<() => Promise<void>>;
 
 /** The test run's env with the three auth switches removed, so each case states the ones it sets. */
 function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(workspace, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ...ROUTED_CLI_ENV };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HIPPO_HOME: join(workspace, 'global-hippo'),
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    ...ROUTED_CLI_ENV,
+  };
   for (const key of MODE_KEYS) delete env[key];
   return { ...env, ...extra };
 }
@@ -34,7 +39,10 @@ function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessE
 function startServe(extra: Readonly<Record<string, string>> = {}): Promise<Served> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [HIPPO_BIN, 'serve', '--port', '0'], {
-      cwd: workspace, env: childEnv(extra), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      cwd: workspace,
+      env: childEnv(extra),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     });
     const exited = new Promise<void>((done) => child.once('exit', () => done()));
     const stop = async (): Promise<void> => {
@@ -46,8 +54,13 @@ function startServe(extra: Readonly<Record<string, string>> = {}): Promise<Serve
     stops.push(stop);
     let stdout = '';
     let stderr = '';
-    const timer = setTimeout(() => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)), 30_000);
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    const timer = setTimeout(
+      () => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)),
+      30_000,
+    );
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8');
       if (!stdout.includes('press Ctrl+C to stop')) return;
@@ -83,9 +96,17 @@ describe('hippo serve says its key rule at start', () => {
   it.each([
     ['no switch set', {}, KEY_REQUIRED_LINE],
     ['HIPPO_ALLOW_KEYLESS_LOCAL=1', { HIPPO_ALLOW_KEYLESS_LOCAL: '1' }, KEYLESS_LINE],
-    ['HIPPO_KEYLESS_LOCAL_ROLE=admin, which nothing reads', { HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_KEYLESS_LOCAL_ROLE: 'admin' }, KEYLESS_LINE],
+    [
+      'HIPPO_KEYLESS_LOCAL_ROLE=admin, which nothing reads',
+      { HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_KEYLESS_LOCAL_ROLE: 'admin' },
+      KEYLESS_LINE,
+    ],
     ['HIPPO_REQUIRE_AUTH=1', { HIPPO_REQUIRE_AUTH: '1' }, 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)'],
-    ['both switches', { HIPPO_REQUIRE_AUTH: '1', HIPPO_ALLOW_KEYLESS_LOCAL: '1' }, 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)'],
+    [
+      'both switches',
+      { HIPPO_REQUIRE_AUTH: '1', HIPPO_ALLOW_KEYLESS_LOCAL: '1' },
+      'every request needs an API key (HIPPO_REQUIRE_AUTH=1)',
+    ],
   ])('with %s', async (_name, env, line) => {
     const { stdout } = await startServe(env);
     expect(stdout.split(/\r?\n/)).toContain(line);
@@ -106,8 +127,13 @@ describe('a routed CLI write against a server on the new default', () => {
 
     // The host CLI opens the store itself, so a key can be minted while the server refuses keyless requests.
     // SAFETY: `hippo auth create --json` prints one JSON object whose `plaintext` is the key.
-    const minted = JSON.parse(hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], { cwd: workspace, env: childEnv() })) as { plaintext: string };
-    const keyed = hippoRun(['remember', 'upgrade-canary-with-key'], { cwd: workspace, env: childEnv({ HIPPO_API_KEY: minted.plaintext }) });
+    const minted = JSON.parse(
+      hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], { cwd: workspace, env: childEnv() }),
+    ) as { plaintext: string };
+    const keyed = hippoRun(['remember', 'upgrade-canary-with-key'], {
+      cwd: workspace,
+      env: childEnv({ HIPPO_API_KEY: minted.plaintext }),
+    });
     expect(keyed.stderr).not.toContain('auth required');
     expect(keyed.status).toBe(0);
     expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);

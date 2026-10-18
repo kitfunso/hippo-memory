@@ -15,8 +15,13 @@ import { inMemoryContextStore } from '../_helpers/in-memory-context-store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
-type Call = { readonly via: 'http'; readonly query: string } | { readonly via: 'mcp'; readonly args: { readonly scope?: string } };
-interface Reply { readonly status: number; readonly body: unknown }
+type Call =
+  | { readonly via: 'http'; readonly query: string }
+  | { readonly via: 'mcp'; readonly args: { readonly scope?: string } };
+interface Reply {
+  readonly status: number;
+  readonly body: unknown;
+}
 
 const CALLS: readonly Call[] = [
   { via: 'http', query: `project=${PROJECT}` },

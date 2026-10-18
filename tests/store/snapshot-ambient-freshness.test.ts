@@ -4,7 +4,9 @@ import { saveActiveTaskSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../src/s
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  loadActiveTaskSnapshot, loadFreshActiveTaskSnapshot, closeTaskSnapshotsForSession,
+  loadActiveTaskSnapshot,
+  loadFreshActiveTaskSnapshot,
+  closeTaskSnapshotsForSession,
 } from '../_helpers/root-forms.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
@@ -147,19 +149,11 @@ describe('loadFreshActiveTaskSnapshot', () => {
       });
 
       // Exactly at the bound — cross-session (age check path), still injects.
-      backdateSnapshot(
-        tmpDir,
-        saved.id,
-        new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS).toISOString(),
-      );
+      backdateSnapshot(tmpDir, saved.id, new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS).toISOString());
       expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' })).not.toBeNull();
 
       // 1ms past the bound — does not.
-      backdateSnapshot(
-        tmpDir,
-        saved.id,
-        new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS - 1).toISOString(),
-      );
+      backdateSnapshot(tmpDir, saved.id, new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS - 1).toISOString());
       expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' })).toBeNull();
     } finally {
       vi.useRealTimers();

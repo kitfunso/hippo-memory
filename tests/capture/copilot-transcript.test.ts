@@ -13,7 +13,8 @@ afterEach(() => {
 });
 
 const TASK = 'fix the flaky login test in auth.spec.ts';
-const DECISION = 'We decided to keep the retry budget at three attempts for the login client. Next I will rerun the auth suite.';
+const DECISION =
+  'We decided to keep the retry budget at three attempts for the login client. Next I will rerun the auth suite.';
 
 let dir: string;
 
@@ -59,14 +60,24 @@ describe('copilotTurn', () => {
   it('skips a sub-agent line by agentId or by the deprecated parentToolCallId', () => {
     expect(copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: 'explore-1' })).toBeNull();
     expect(copilotTurn({ type: 'assistant.message', data: { content: 'x', parentToolCallId: 'call_2' } })).toBeNull();
-    expect(copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: '' })).toEqual({ role: 'assistant', text: 'x' });
+    expect(copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: '' })).toEqual({
+      role: 'assistant',
+      text: 'x',
+    });
   });
 
   it('skips a user message a skill, another agent or autopilot wrote', () => {
-    for (const data of [{ content: 'x', source: 'skill-pdf' }, { content: 'x', source: 'agent-42' }, { content: 'x', isAutopilotContinuation: true }]) {
+    for (const data of [
+      { content: 'x', source: 'skill-pdf' },
+      { content: 'x', source: 'agent-42' },
+      { content: 'x', isAutopilotContinuation: true },
+    ]) {
       expect(copilotTurn({ type: 'user.message', data })).toBeNull();
     }
-    expect(copilotTurn({ type: 'user.message', data: { content: ' x ', source: 'user' } })).toEqual({ role: 'user', text: 'x' });
+    expect(copilotTurn({ type: 'user.message', data: { content: ' x ', source: 'user' } })).toEqual({
+      role: 'user',
+      text: 'x',
+    });
   });
 
   it('gives nothing for other event types, blank content or a missing data object', () => {

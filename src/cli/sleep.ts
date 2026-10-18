@@ -77,7 +77,7 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
   if (learn && flags['dry-run']) {
     console.log(
       "Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` " +
-      "previews those).",
+        'previews those).',
     );
   } else if (learn) {
     const config = cliConfig(hippoRoot);
@@ -98,11 +98,7 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
   }
 }
 
-async function cmdSleepCore(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags
-): Promise<void> {
+async function cmdSleepCore(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
@@ -112,9 +108,7 @@ async function cmdSleepCore(
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
     const finished = replayCompactions({ root: hippoRoot, files: cliLocalFiles(hippoRoot) }, warn);
     if (finished > 0) {
-      console.log(
-        `Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`,
-      );
+      console.log(`Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`);
     }
     repairProjectTagsOnce(hippoRoot, tenantId);
     await repairQualityOnceAt(hippoRoot, tenantId);

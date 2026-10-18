@@ -39,12 +39,15 @@ let handle: ServerHandle;
 beforeEach(async () => {
   home = makeRoot('http-sw');
   for (let i = 0; i < 10; i++) {
-    writeEntry(home, createMemory(`alpha ${i}`, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Buffer,
-      kind: 'raw',
-      tenantId: 'default',
-    }));
+    writeEntry(
+      home,
+      createMemory(`alpha ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Buffer,
+        kind: 'raw',
+        tenantId: 'default',
+      }),
+    );
   }
   handle = await serve({ hippoRoot: home, port: 0 });
 });

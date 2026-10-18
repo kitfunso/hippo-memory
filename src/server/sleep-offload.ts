@@ -35,8 +35,10 @@ export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   if (message.ok === true) return 'result' in message && typeof message.result === 'object' && message.result !== null;
   return (
     message.ok === false &&
-    'busy' in message && typeof message.busy === 'boolean' &&
-    'message' in message && typeof message.message === 'string'
+    'busy' in message &&
+    typeof message.busy === 'boolean' &&
+    'message' in message &&
+    typeof message.message === 'string'
   );
 }
 

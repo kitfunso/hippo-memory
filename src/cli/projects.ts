@@ -111,14 +111,14 @@ function projectsRepair(ctx: CliContext, flags: CliFlags): void {
   for (const c of r.collisions) {
     console.log(
       `  ${c.name} left as it is: its folders now resolve to ${c.ids.join(', ')}; fold it by hand with hippo ` +
-      `projects merge`,
+        `projects merge`,
     );
   }
   console.log(`  sleep's user-global merged rows: ${r.toProject.length} re-tagged to their parents' project`);
   console.log(`  ${r.setAside.length} set aside (parents in two projects; sleep re-merges them per project)`);
   console.log(
     `  ${r.untraced.length} left as they are (no parent left to show which project; check them with hippo inspect ` +
-    `<id>)`,
+      `<id>)`,
   );
   console.log(
     apply

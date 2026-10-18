@@ -73,13 +73,22 @@ export interface RecallSearchOptions {
 }
 
 /** `--graph-hops` and `--graph-seeds`. */
-export interface RecallGraphStream { hops?: number; seeds?: number }
+export interface RecallGraphStream {
+  hops?: number;
+  seeds?: number;
+}
 
 /** `--hops` and `--max-neighbors`. */
-export interface RecallGraphHops { hops: number; maxNeighbors: number }
+export interface RecallGraphHops {
+  hops: number;
+  maxNeighbors: number;
+}
 
 /** A reranker from the registry and how many head rows it sees. */
-export interface RecallReranker { fn: RerankerFn; topK: number }
+export interface RecallReranker {
+  fn: RerankerFn;
+  topK: number;
+}
 
 /** A stage rankRecall can stop before, in pipeline order. */
 export type RankStage = 'expand' | 'rerank' | 'salience' | 'outcome' | 'layer';
@@ -225,7 +234,7 @@ function graphStreamSearch(
   if (!isEmbeddingAvailable()) {
     ctx.note?.(
       '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
-      '`hippo embed` first.',
+        '`hippo embed` first.',
     );
   }
   if (ctx.global && pool.global.length > 0) {
@@ -233,7 +242,15 @@ function graphStreamSearch(
   }
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
   return hybridSearch(query, pool.local, {
-    budget, cost, source: vectorSourceOf(ctx), mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
+    budget,
+    cost,
+    source: vectorSourceOf(ctx),
+    mmr,
+    mmrLambda,
+    minResults,
+    scope,
+    includeSuperseded,
+    asOf,
     scoring: 'rrf',
     graphStream: {
       weight: DEFAULT_GRAPH_STREAM_WEIGHT,
@@ -321,7 +338,10 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
 
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
 async function expandGraph(
-  ctx: RankRecallCtx, opts: RankRecallOptions, graph: RecallGraphHops, state: RankState,
+  ctx: RankRecallCtx,
+  opts: RankRecallOptions,
+  graph: RecallGraphHops,
+  state: RankState,
 ): Promise<void> {
   if (graph.hops <= 0) return;
   // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would hide both.
@@ -380,10 +400,7 @@ function applyValueAware(opts: RankRecallOptions, state: RankState): void {
       const pos = r.entry.outcome_positive ?? 0;
       const neg = r.entry.outcome_negative ?? 0;
       if (pos === 0 && neg === 0) return r;
-      const valueMult = Math.max(
-        VALUE_MULT_MIN,
-        Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)),
-      );
+      const valueMult = Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
       const next = { ...r, score: r.score * valueMult };
       return traced(opts, r, next, {
         stage: 'value',

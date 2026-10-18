@@ -53,11 +53,20 @@ function mapProblems(map, srcDir) {
   const problems = [];
   const entries = readdirSync(srcDir, { withFileTypes: true });
   const folders = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  const roots = entries.filter((e) => e.isFile() && e.name.endsWith('.ts') && !e.name.endsWith('.d.ts')).map((e) => e.name);
-  for (const [kind, listed, actual] of [['folder', map.folders, folders], ['root file', map.rootFiles, roots]]) {
+  const roots = entries
+    .filter((e) => e.isFile() && e.name.endsWith('.ts') && !e.name.endsWith('.d.ts'))
+    .map((e) => e.name);
+  for (const [kind, listed, actual] of [
+    ['folder', map.folders, folders],
+    ['root file', map.rootFiles, roots],
+  ]) {
     for (const name of actual) if (!(name in listed)) problems.push(`${kind} src/${name} is not listed in ${MAP}`);
-    for (const name of Object.keys(listed)) if (!actual.includes(name)) problems.push(`${kind} src/${name} is listed in ${MAP} but does not exist`);
-    for (const [name, layer] of Object.entries(listed)) if (!map.order.includes(layer)) problems.push(`${kind} src/${name} names unknown layer "${layer}"`);
+    for (const name of Object.keys(listed)) {
+      if (!actual.includes(name)) problems.push(`${kind} src/${name} is listed in ${MAP} but does not exist`);
+    }
+    for (const [name, layer] of Object.entries(listed)) {
+      if (!map.order.includes(layer)) problems.push(`${kind} src/${name} names unknown layer "${layer}"`);
+    }
   }
   return problems;
 }
@@ -103,8 +112,14 @@ function findRouteStoreReaches(srcDir) {
     const text = readFileSync(file, 'utf8');
     // An identifier cannot exist without its text, so a route file with neither name skips the parse.
     if (![...ROUTE_STORE_NAMES].some((name) => text.includes(name))) continue;
-    const lines = new Set(readFacts(text, 'file.ts', ['identifiers']).identifiers.filter((id) => ROUTE_STORE_NAMES.has(id.name)).map((id) => id.line));
-    for (const line of [...lines].sort((x, y) => x - y)) out.push(`${relative(root, file).replaceAll('\\', '/')}:${line}`);
+    const lines = new Set(
+      readFacts(text, 'file.ts', ['identifiers'])
+        .identifiers.filter((id) => ROUTE_STORE_NAMES.has(id.name))
+        .map((id) => id.line),
+    );
+    for (const line of [...lines].sort((x, y) => x - y)) {
+      out.push(`${relative(root, file).replaceAll('\\', '/')}:${line}`);
+    }
   }
   return out;
 }
@@ -124,7 +139,9 @@ function findCliStoreImports(srcDir) {
     for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
       const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
       const to = target && rel(target);
-      if (to && isStoreFile(to) && !out.has(`${from}\t${to}`)) out.set(`${from}\t${to}`, { file: from, target: to, line });
+      if (to && isStoreFile(to) && !out.has(`${from}\t${to}`)) {
+        out.set(`${from}\t${to}`, { file: from, target: to, line });
+      }
     }
   }
   return [...out.values()];
@@ -138,9 +155,15 @@ function cliStoreProblems(srcDir) {
   const foundKeys = new Set(found.map(key));
   const allowedKeys = new Set(allowed.map(key));
   return [
-    ...found.filter((e) => !allowedKeys.has(key(e))).map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`),
-    ...allowed.filter((e) => !String(e.why ?? '').trim()).map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} gives no reason`),
-    ...allowed.filter((e) => !foundKeys.has(key(e))).map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`),
+    ...found
+      .filter((e) => !allowedKeys.has(key(e)))
+      .map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`),
+    ...allowed
+      .filter((e) => !String(e.why ?? '').trim())
+      .map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} gives no reason`),
+    ...allowed
+      .filter((e) => !foundKeys.has(key(e)))
+      .map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`),
   ];
 }
 
@@ -160,7 +183,9 @@ function findSqliteReaches(srcDir) {
     for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
       const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
       const to = target && rel(target);
-      if (to?.startsWith(SQLITE_DIR) && !out.has(`${from}\t${to}`)) out.set(`${from}\t${to}`, { file: from, target: to, line });
+      if (to?.startsWith(SQLITE_DIR) && !out.has(`${from}\t${to}`)) {
+        out.set(`${from}\t${to}`, { file: from, target: to, line });
+      }
     }
   }
   return [...out.values()];
@@ -173,8 +198,14 @@ function sqliteReachProblems(srcDir) {
   const foundKeys = new Set(found.map(key));
   const pinnedKeys = new Set(SQLITE_PINNED.map(key));
   return [
-    ...found.filter((e) => !pinnedKeys.has(key(e))).map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; take the store from the Context instead`),
-    ...SQLITE_PINNED.filter((e) => existsSync(join(srcDir, e.file)) && !foundKeys.has(key(e))).map((e) => `pinned: src/${e.file} no longer imports src/${e.target}; delete the entry`),
+    ...found
+      .filter((e) => !pinnedKeys.has(key(e)))
+      .map(
+        (e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; take the store from the Context instead`,
+      ),
+    ...SQLITE_PINNED.filter((e) => existsSync(join(srcDir, e.file)) && !foundKeys.has(key(e))).map(
+      (e) => `pinned: src/${e.file} no longer imports src/${e.target}; delete the entry`,
+    ),
   ];
 }
 
@@ -196,19 +227,24 @@ function findDbReaches(map, srcDir) {
       for (const name of names) {
         if (!used.has(from)) used.set(from, new Set());
         used.get(from).add(name);
-        if (!(allowed[from]?.names ?? []).includes(name)) reaches.push(`${from}:${line} imports ${name} from ${rel(target)}`);
+        if (!(allowed[from]?.names ?? []).includes(name)) {
+          reaches.push(`${from}:${line} imports ${name} from ${rel(target)}`);
+        }
       }
     }
   }
   const stale = [];
   for (const [file, entry] of Object.entries(allowed)) {
     if (!entry.why?.trim()) stale.push(`${file} gives no why`);
-    for (const name of entry.names ?? []) if (!used.get(file)?.has(name)) stale.push(`${file} no longer imports ${name}`);
+    for (const name of entry.names ?? []) {
+      if (!used.get(file)?.has(name)) stale.push(`${file} no longer imports ${name}`);
+    }
   }
   return { reaches, stale };
 }
 
-const describe = (e) => `${e.from}:${e.line} -> ${e.to} (${e.layerFrom} -> ${e.layerTo}, ${e.kind === 'typeOnly' ? 'type' : 'runtime'})`;
+const describe = (e) =>
+  `${e.from}:${e.line} -> ${e.to} (${e.layerFrom} -> ${e.layerTo}, ${e.kind === 'typeOnly' ? 'type' : 'runtime'})`;
 
 const args = process.argv.slice(2);
 const map = readJson(MAP, null);
@@ -226,7 +262,9 @@ if (problems.length > 0) {
 
 const routeReaches = findRouteStoreReaches('src');
 if (routeReaches.length > 0 && !args.includes('--update') && !args.includes('--list')) {
-  console.error('A route handler names requireGroup or storeFor; call a src/api function that takes the Context instead:');
+  console.error(
+    'A route handler names requireGroup or storeFor; call a src/api function that takes the Context instead:',
+  );
   for (const r of routeReaches) console.error(`  ${r}`);
   process.exit(1);
 }
@@ -240,7 +278,9 @@ if (cliProblems.length > 0 && !args.includes('--list')) {
 
 const sqliteProblems = sqliteReachProblems('src');
 if (sqliteProblems.length > 0 && !args.includes('--list')) {
-  console.error('The api, connectors, dashboard or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:');
+  console.error(
+    'The api, connectors, dashboard or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:',
+  );
   for (const p of sqliteProblems) console.error(`  ${p}`);
   process.exit(1);
 }
@@ -250,8 +290,12 @@ if (dbReach.reaches.length + dbReach.stale.length > 0 && !args.includes('--updat
   const layer = map.dbReach.layer;
   for (const r of dbReach.reaches) console.error(`  ${r}`);
   for (const s of dbReach.stale) console.error(`  ${MAP} dbReach.allowed: ${s}`);
-  console.error(`src/${map.dbReach.from.join(', src/')} reach the ${layer} layer through a src/store function and the store errors in src/store/port.ts.`);
-  console.error(`Move the ${layer} work into src/store; an import that must stay goes in ${MAP} dbReach.allowed with its why, and an unused one leaves it.`);
+  console.error(
+    `src/${map.dbReach.from.join(', src/')} reach the ${layer} layer through a src/store function and the store errors in src/store/port.ts.`,
+  );
+  console.error(
+    `Move the ${layer} work into src/store; an import that must stay goes in ${MAP} dbReach.allowed with its why, and an unused one leaves it.`,
+  );
   process.exit(1);
 }
 
@@ -278,7 +322,9 @@ if (edges.length > 0 || rootFiles > cap) {
   console.error('Imports go up a layer, or root files grew past the cap:');
   for (const e of edges) console.error(`  ${describe(e)}`);
   if (rootFiles > cap) console.error(`  rootFiles: ${cap} -> ${rootFiles}`);
-  console.error(`Import only from the same layer or a lower one (order: ${map.order.join(' < ')}); move the shared piece down instead.`);
+  console.error(
+    `Import only from the same layer or a lower one (order: ${map.order.join(' < ')}); move the shared piece down instead.`,
+  );
   console.error('`node scripts/check-layers.mjs --list` shows every upward import.');
   process.exit(1);
 }

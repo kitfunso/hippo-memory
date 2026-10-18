@@ -11,7 +11,7 @@ import { hybridSearch } from '../../src/entry/folder-search.js';
 import { explainMatch } from '../../src/search/explain.js';
 import type { SearchResult } from '../../src/core/search-types.js';
 import { tokenize } from '../../src/util/tokenize.js';
-import { resolveConfidence, Layer} from '../../src/core/memory.js';
+import { resolveConfidence, Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 // ---------------------------------------------------------------------------

@@ -30,11 +30,25 @@ const HOOK_ARGS = HIPPO_PINNED_INJECT_COMMAND.split(' ').slice(1);
 
 // The env inputs a direct call cannot see are dropped from the CLI side.
 const CLI_ENV: NodeJS.ProcessEnv = { ...process.env };
-for (const name of ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL', 'HIPPO_TENANT']) {
+for (const name of [
+  'HIPPO_SESSION_ID',
+  'CLAUDE_CODE_SESSION_ID',
+  'HIPPO_SCOPE',
+  'GSTACK_SKILL',
+  'OPENCLAW_SKILL',
+  'HIPPO_TENANT',
+]) {
   delete CLI_ENV[name];
 }
 
-interface LedgerRow { session_id: string | null; tenant_id: string; surface: string; event: string; items: number; block_hash: string | null }
+interface LedgerRow {
+  session_id: string | null;
+  tenant_id: string;
+  surface: string;
+  event: string;
+  items: number;
+  block_hash: string | null;
+}
 type HookPayload = { session_id: string; prompt?: string; hook_event_name?: string; agent_id?: string };
 
 let tmp: string;
@@ -50,7 +64,9 @@ function makeProject(dir: string, rateBp: number | null = null): string {
   const store = path.join(dir, '.hippo');
   fs.mkdirSync(store, { recursive: true });
   initStore(store);
-  if (rateBp !== null) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: rateBp } }));
+  if (rateBp !== null) {
+    fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: rateBp } }));
+  }
   return store;
 }
 
@@ -58,20 +74,28 @@ function pin(store: string, content: string, origin: string): void {
   writeEntry(store, { ...createMemory(content), pinned: true, origin_project: origin });
 }
 
-const ctxFor = (store: string): FullContext => (apiCtx(store, 'default', adminActor('prompt-hook-test')));
+const ctxFor = (store: string): FullContext => apiCtx(store, 'default', adminActor('prompt-hook-test'));
 
 function ledger(store: string, where: string): LedgerRow[] {
   const db = openHippoDb(store);
   try {
     // SAFETY: the SELECT names exactly the columns of LedgerRow.
-    return db.prepare(`SELECT session_id, tenant_id, surface, event, items, block_hash FROM token_ledger WHERE ${where} ORDER BY id`).all() as LedgerRow[];
+    return db
+      .prepare(
+        `SELECT session_id, tenant_id, surface, event, items, block_hash FROM token_ledger WHERE ${where} ORDER BY id`,
+      )
+      .all() as LedgerRow[];
   } finally {
     closeHippoDb(db);
   }
 }
 
 function localHook(projectDir: string, payload: HookPayload): string {
-  const r = hippoRun(HOOK_ARGS, { cwd: projectDir, env: { ...CLI_ENV, HIPPO_HOME: path.join(tmp, 'global') }, input: JSON.stringify(payload) });
+  const r = hippoRun(HOOK_ARGS, {
+    cwd: projectDir,
+    env: { ...CLI_ENV, HIPPO_HOME: path.join(tmp, 'global') },
+    input: JSON.stringify(payload),
+  });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }
@@ -98,19 +122,35 @@ describe('promptHookContext', () => {
     pin(cliStore, 'PINNED: the remote-named rows still reach this checkout', 'github.com/acme/proj');
     pin(cliStore, 'PINNED: the other team rotates the handshake key', 'other');
     writeEntry(cliStore, {
-      ...createMemory('Kafka consumers in the billing service must be paused with kafka-pause.sh before a schema migration'),
+      ...createMemory(
+        'Kafka consumers in the billing service must be paused with kafka-pause.sh before a schema migration',
+      ),
       origin_project: 'proj',
     });
     for (let i = 0; i < 7; i++) {
-      writeEntry(cliStore, { ...createMemory(`Release train ${i}: the payments worker on port 80${i}1 drains for 90 seconds before the cutover`), origin_project: 'proj' });
+      writeEntry(cliStore, {
+        ...createMemory(
+          `Release train ${i}: the payments worker on port 80${i}1 drains for 90 seconds before the cutover`,
+        ),
+        origin_project: 'proj',
+      });
     }
-    saveActiveTaskSnapshot(cliStore, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'parity' });
+    saveActiveTaskSnapshot(cliStore, 'default', {
+      task: 'ship',
+      summary: 'half done',
+      next_step: 'run tests',
+      session_id: 'parity',
+    });
     // Copied before either side runs: the first prompt of a session must not see the other side's ledger rows.
     const srvStore = path.join(tmp, 'srv', 'proj', '.hippo');
     fs.cpSync(cliStore, srvStore, { recursive: true });
 
     // A prompt swaps the recent-5 backfill for prompt recall, so one session takes each path.
-    const withPrompt: HookPayload = { session_id: 'parity', prompt: 'how do we pause the kafka consumers for the billing migration', hook_event_name: 'UserPromptSubmit' };
+    const withPrompt: HookPayload = {
+      session_id: 'parity',
+      prompt: 'how do we pause the kafka consumers for the billing migration',
+      hook_event_name: 'UserPromptSubmit',
+    };
     const noPrompt: HookPayload = { session_id: 'parity-recent', hook_event_name: 'UserPromptSubmit' };
     const expected = [localHook(cliProj, withPrompt), localHook(cliProj, noPrompt)];
     expect(expected[0]).toContain('Active Task Snapshot');
@@ -126,14 +166,27 @@ describe('promptHookContext', () => {
     expect(project).toMatchObject({ name: 'acme-proj', legacyName: 'proj', aliases: ['github.com/acme/proj', 'proj'] });
     const ctx = ctxFor(srvStore);
     const staticHash = expect.stringMatching(BLOCK_HASH_RE);
-    expect(await promptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt })).toEqual({ arm: null, stdout: expected[0], staticHash });
-    expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({ arm: null, stdout: expected[1], staticHash });
+    expect(await promptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt })).toEqual({
+      arm: null,
+      stdout: expected[0],
+      staticHash,
+    });
+    expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({
+      arm: null,
+      stdout: expected[1],
+      staticHash,
+    });
   });
 
   it('prints the task state when no pin or memory is there to pick, as the local hook does', async () => {
     const dir = path.join(tmp, 'p');
     const store = makeProject(dir);
-    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'state-only' });
+    saveActiveTaskSnapshot(store, 'default', {
+      task: 'ship',
+      summary: 'half done',
+      next_step: 'run tests',
+      session_id: 'state-only',
+    });
     const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
     const out = await promptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
     expect(out.stdout).toContain('Active Task Snapshot');
@@ -143,7 +196,10 @@ describe('promptHookContext', () => {
   it('rate 10000: books a holdout arm row and prints nothing, as the local holdout does', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    expect(await promptHookContext(ctxFor(store), { sessionId: 'h1', project: PROJECT_P })).toEqual({ arm: 'holdout', ...NOTHING });
+    expect(await promptHookContext(ctxFor(store), { sessionId: 'h1', project: PROJECT_P })).toEqual({
+      arm: 'holdout',
+      ...NOTHING,
+    });
     expect(ledger(store, `event = 'arm'`)).toEqual([
       { session_id: 'h1', tenant_id: 'default', surface: 'pilot', event: 'arm', items: 10000, block_hash: 'holdout' },
     ]);
@@ -153,7 +209,10 @@ describe('promptHookContext', () => {
   it('books the holdout arm row under the caller tenant, never the default one', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     const ctx: FullContext = apiCtx(store, 't1', adminActor('prompt-hook-test'));
-    expect(await promptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({ arm: 'holdout', ...NOTHING });
+    expect(await promptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({
+      arm: 'holdout',
+      ...NOTHING,
+    });
     expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.tenant_id])).toEqual([['h-t1', 't1']]);
   });
 
@@ -164,7 +223,9 @@ describe('promptHookContext', () => {
     const reply = await promptHookContext(ctxFor(store), { sessionId: id, project: PROJECT_P });
     expect(reply.arm).toBe('hippo');
     expect(reply.stdout).toContain('rollback plan');
-    expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.block_hash, r.items])).toEqual([[id, 'hippo', 5000]]);
+    expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.block_hash, r.items])).toEqual([
+      [id, 'hippo', 5000],
+    ]);
   });
 
   it('rate 0: arm is null and no arm row is booked', async () => {
@@ -181,9 +242,17 @@ describe('promptHookContext', () => {
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
     await promptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P });
-    const sub = await promptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P, payload: { session_id: 'parent', agent_id: 'a1' } });
+    const sub = await promptHookContext(ctx, {
+      sessionId: 'parent',
+      project: PROJECT_P,
+      payload: { session_id: 'parent', agent_id: 'a1' },
+    });
     expect(sub).toEqual({ arm: 'holdout', ...NOTHING });
-    const lonely = await promptHookContext(ctx, { sessionId: 'lonely', project: PROJECT_P, payload: { session_id: 'lonely', agent_id: 'a2' } });
+    const lonely = await promptHookContext(ctx, {
+      sessionId: 'lonely',
+      project: PROJECT_P,
+      payload: { session_id: 'lonely', agent_id: 'a2' },
+    });
     expect(lonely).toEqual({ arm: 'holdout', ...NOTHING });
     expect(ledger(store, `event = 'arm'`).map((r) => r.session_id)).toEqual(['parent']);
   });
@@ -196,7 +265,10 @@ describe('promptHookContext', () => {
     expect(first.stdout).toContain('rollback plan');
     expect(first.staticHash).toMatch(BLOCK_HASH_RE);
     const printedHash = first.staticHash ?? undefined;
-    expect(await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P, printedHash })).toEqual({ arm: null, ...NOTHING });
+    expect(await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P, printedHash })).toEqual({
+      arm: null,
+      ...NOTHING,
+    });
     expect(ledger(store, `event = 'skip'`).map((r) => [r.session_id, r.surface])).toEqual([['again', 'hook']]);
   });
 
@@ -208,7 +280,10 @@ describe('promptHookContext', () => {
     // A reply lost on the way, or a compaction the server never saw: the caller has no hash to send.
     const second = await promptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
     expect(second).toEqual(first);
-    expect(ledger(store, `event = 'inject' AND surface = 'hook'`).map((r) => r.block_hash)).toEqual([first.staticHash, first.staticHash]);
+    expect(ledger(store, `event = 'inject' AND surface = 'hook'`).map((r) => r.block_hash)).toEqual([
+      first.staticHash,
+      first.staticHash,
+    ]);
     expect(ledger(store, `event = 'skip'`)).toEqual([]);
   });
 
@@ -218,7 +293,11 @@ describe('promptHookContext', () => {
     const ctx = ctxFor(store);
     const first = await promptHookContext(ctx, { sessionId: 'old', project: PROJECT_P });
     pin(store, 'PINNED: the canary runs for an hour before the full rollout', 'p');
-    const second = await promptHookContext(ctx, { sessionId: 'old', project: PROJECT_P, printedHash: first.staticHash ?? undefined });
+    const second = await promptHookContext(ctx, {
+      sessionId: 'old',
+      project: PROJECT_P,
+      printedHash: first.staticHash ?? undefined,
+    });
     expect(second.stdout).toContain('canary runs');
     expect(second.staticHash).toMatch(BLOCK_HASH_RE);
     expect(second.staticHash).not.toBe(first.staticHash);
@@ -244,7 +323,9 @@ describe('promptHookContext', () => {
     const printedHash = first.staticHash ?? undefined;
     const sent: boolean[] = [];
     for (let i = 0; i < 4; i++) {
-      sent.push((await promptHookContext(ctx, { sessionId: 'refresh', project: PROJECT_P, printedHash })).stdout !== '');
+      sent.push(
+        (await promptHookContext(ctx, { sessionId: 'refresh', project: PROJECT_P, printedHash })).stdout !== '',
+      );
     }
     expect(sent).toEqual([false, false, true, false]);
   });
@@ -256,13 +337,19 @@ describe('promptHookContext', () => {
     ['a non-hex letter', '0123456789abcdeg'],
   ])('rejects a printed hash in %s as a bad request', async (_name, printedHash) => {
     const store = makeProject(path.join(tmp, 'p'));
-    await expect(promptHookContext(ctxFor(store), { sessionId: 's', project: PROJECT_P, printedHash })).rejects.toBeInstanceOf(BadRequestError);
+    await expect(
+      promptHookContext(ctxFor(store), { sessionId: 's', project: PROJECT_P, printedHash }),
+    ).rejects.toBeInstanceOf(BadRequestError);
   });
 
   it('gives a sub-agent the block but no hash to record', async () => {
     const store = makeProject(path.join(tmp, 'p'), 0);
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    const sub = await promptHookContext(ctxFor(store), { sessionId: 'parent', project: PROJECT_P, payload: { session_id: 'parent', agent_id: 'a1' } });
+    const sub = await promptHookContext(ctxFor(store), {
+      sessionId: 'parent',
+      project: PROJECT_P,
+      payload: { session_id: 'parent', agent_id: 'a1' },
+    });
     expect(sub.stdout).toContain('rollback plan');
     expect(sub.staticHash).toBeNull();
   });
@@ -280,7 +367,10 @@ describe('promptHookContext', () => {
     ['a long session id', { sessionId: 'x'.repeat(MAX_ID_LEN + 1), project: PROJECT_P }],
     ['a long project name', { sessionId: 's', project: { ...PROJECT_P, name: 'n'.repeat(MAX_ID_LEN + 1) } }],
     ['a long alias', { sessionId: 's', project: { ...PROJECT_P, aliases: ['a'.repeat(MAX_ID_LEN + 1)] } }],
-    ['eleven aliases', { sessionId: 's', project: { ...PROJECT_P, aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) } }],
+    [
+      'eleven aliases',
+      { sessionId: 's', project: { ...PROJECT_P, aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) } },
+    ],
   ])('rejects %s as a bad request', async (_name, req) => {
     const store = makeProject(path.join(tmp, 'p'));
     await expect(promptHookContext(ctxFor(store), req)).rejects.toBeInstanceOf(BadRequestError);
@@ -290,7 +380,9 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const aliases = Array.from({ length: 10 }, (_, i) => `${i}`.padEnd(MAX_ID_LEN, 'a'));
-    expect((await promptHookContext(ctxFor(store), { sessionId: 's', project: { ...PROJECT_P, aliases } })).stdout).toContain('rollback plan');
+    expect(
+      (await promptHookContext(ctxFor(store), { sessionId: 's', project: { ...PROJECT_P, aliases } })).stdout,
+    ).toContain('rollback plan');
   });
 });
 
@@ -302,8 +394,14 @@ describe('promptHookContext on a shared store', () => {
   it('keeps only the caller project rows in the recent tail; pins are unchanged', async () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: the user-global pin about the rollback plan', '');
-    writeEntry(store, { ...createMemory('Kafka consumers in the billing service must be paused with kafka-pause.sh first'), origin_project: 'p' });
-    writeEntry(store, { ...createMemory('Somebody keeps personal shell aliases in the dotfiles repo on the build box'), origin_project: '' });
+    writeEntry(store, {
+      ...createMemory('Kafka consumers in the billing service must be paused with kafka-pause.sh first'),
+      origin_project: 'p',
+    });
+    writeEntry(store, {
+      ...createMemory('Somebody keeps personal shell aliases in the dotfiles repo on the build box'),
+      origin_project: '',
+    });
     const own = await ask(store, 'tail-own', false);
     expect(own.stdout).toContain('dotfiles');
     const shared = await ask(store, 'tail-shared', true);
@@ -327,7 +425,12 @@ describe('promptHookContext on a shared store', () => {
   it('shows task state only to the owner that saved it, in any of its sessions', async () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' }, { owner: 'prompt-hook-test', project: ['p'] });
+    saveActiveTaskSnapshot(
+      store,
+      'default',
+      { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' },
+      { owner: 'prompt-hook-test', project: ['p'] },
+    );
     expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');
     const otherCtx: FullContext = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
     const other = await promptHookContext(otherCtx, { sessionId: 'someone-else-shared', project: PROJECT_P }, SHARED);
@@ -380,7 +483,11 @@ describe('subpath exports resolve', () => {
   ])('%s: typeof %s is %s in the build', (specifier, name, type) => {
     const script = `const m = await import('${specifier}'); console.log(typeof m.${name});`;
     // cwd is the checkout because self-reference resolves from the nearest package.json.
-    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: REPO, encoding: 'utf-8', timeout: 30_000 });
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: REPO,
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
     expect(child.status, child.stderr).toBe(0);
     expect(child.stdout.trim()).toBe(type);
   });

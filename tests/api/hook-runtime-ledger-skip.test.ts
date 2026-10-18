@@ -15,17 +15,30 @@ afterEach(() => {
 });
 
 describe('startDeliveryRecorder when the recorder cannot start', () => {
-  afterEach(() => { vi.restoreAllMocks(); });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('returns null and writes one warn line with a space after the colon', () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     // A number where a root path belongs, for the context and its store: path.join throws on it, which is the start-up
     // failure under test.
     const badRoot: string = JSON.parse('42');
-    const ctx = { hippoRoot: badRoot, store: sqliteStore(badRoot), tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false }, config: { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } } };
-    expect(startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined })).toBeNull();
+    const ctx = {
+      hippoRoot: badRoot,
+      store: sqliteStore(badRoot),
+      tenantId: 'default',
+      actor: adminActor('cli'),
+      reach: { hasLocal: true, isGlobal: false, shared: false },
+      config: { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } },
+    };
+    expect(
+      startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined }),
+    ).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+ errorClass=\w+ stack=.*\n$/);
+    expect(String(err.mock.calls[0][0])).toMatch(
+      /^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+ errorClass=\w+ stack=.*\n$/,
+    );
   });
 });
 

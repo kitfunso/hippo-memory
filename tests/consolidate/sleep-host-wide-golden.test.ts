@@ -37,7 +37,13 @@ type Tenant = (typeof TENANTS)[number];
 /** Seeded rows get fixed ids and times; every row starts on the 7-day base the half-life move leaves. */
 function rowsOf(tenant: Tenant): MemoryEntry[] {
   let n = 0;
-  const row = (text: string, ageDays: number, idleDays: number, opts: Partial<CreateMemoryOptions> = {}, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
+  const row = (
+    text: string,
+    ageDays: number,
+    idleDays: number,
+    opts: Partial<CreateMemoryOptions> = {},
+    extra: Partial<MemoryEntry> = {},
+  ): MemoryEntry => ({
     ...createMemory(`${tenant} ${text}`, { baseHalfLifeDays: 7, tenantId: tenant, ...opts }),
     id: `mem_${tenant}_${String(n).padStart(2, '0')}`,
     created: new Date(NOW.getTime() - ageDays * DAY + n++ * 1000).toISOString(),
@@ -45,17 +51,31 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
     origin_project: 'hippo',
     ...extra,
   });
-  const cluster = [0, 1, 2].map((k) => row(`rotate the staging tls certificates before expiry and page the on-call channel v${k}`, 30, 1));
+  const cluster = [0, 1, 2].map((k) =>
+    row(`rotate the staging tls certificates before expiry and page the on-call channel v${k}`, 30, 1),
+  );
   const kept = row('the billing export lands in the shared bucket nightly', 25, 2);
   const gone = row('the billing export lands in the legacy ftp drop nightly', 26, 2, {}, { superseded_by: kept.id });
   return [
     ...cluster,
-    row('rotate the staging tls certificates before expiry and page the on-call channel v9', 30, 1, {}, { origin_project: 'other' }),
+    row(
+      'rotate the staging tls certificates before expiry and page the on-call channel v9',
+      30,
+      1,
+      {},
+      { origin_project: 'other' },
+    ),
     row('payments webhook retries are enabled for the eu cluster', 12, 1, { pinned: true }),
     row('payments webhook retries are disabled for the eu cluster', 11, 1),
     row('faded note about the retired staging cluster', 400, 400, {}, { half_life_days: 3 }),
     // Outcomes the memory-value weights rank in the tenant's top 30%, so that case rescues it.
-    row('faded note about the old vpn gateway', 390, 390, {}, { half_life_days: 3, outcome_positive: 6, outcome_negative: 9 }),
+    row(
+      'faded note about the old vpn gateway',
+      390,
+      390,
+      {},
+      { half_life_days: 3, outcome_positive: 6, outcome_negative: 9 },
+    ),
     row('faded deploy key for the build agents', 380, 380, { tags: ['secret'] }, { half_life_days: 3 }),
     row('decision: the api keeps semver for every public route', 60, 5, { source: 'decision' }, { half_life_days: 90 }),
     row('the dashboard caches tenant snapshots for five minutes', 50, 3, { layer: Layer.Semantic }),
@@ -63,17 +83,31 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
     row('the search index rebuild runs after every schema change', 15, 2),
     kept,
     gone,
-    row('merged', 24, 2, { layer: Layer.Semantic, source: 'consolidation' }, {
-      parents: [gone.id, kept.id],
-      content: mergedText('[Consolidated from 2 related memories, newest first]', [kept.content, gone.content]),
-    }),
+    row(
+      'merged',
+      24,
+      2,
+      { layer: Layer.Semantic, source: 'consolidation' },
+      {
+        parents: [gone.id, kept.id],
+        content: mergedText('[Consolidated from 2 related memories, newest first]', [kept.content, gone.content]),
+      },
+    ),
   ];
 }
 
 function particle(memoryId: string, i: number): PhysicsParticle {
   const raw = [Math.cos(i), Math.sin(i), Math.cos(i * 0.7), Math.sin(i * 1.3)];
   const norm = Math.hypot(...raw);
-  return { memoryId, position: raw.map((v) => v / norm), velocity: [0, 0, 0, 0], mass: 1, charge: 0, temperature: 1, lastSimulation: SEEDED_SIM };
+  return {
+    memoryId,
+    position: raw.map((v) => v / norm),
+    velocity: [0, 0, 0, 0],
+    mass: 1,
+    charge: 0,
+    temperature: 1,
+    lastSimulation: SEEDED_SIM,
+  };
 }
 
 function onStore<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
@@ -93,22 +127,43 @@ function seed(config: { memoryValue?: { enabled: boolean } }): string {
     db.exec('BEGIN');
     for (const row of rows) upsertEntryRow(db, row);
     db.exec('COMMIT');
-    savePhysicsState(db, rows.filter((_, i) => i % 3 === 0).map((r, i) => particle(r.id, i)));
+    savePhysicsState(
+      db,
+      rows.filter((_, i) => i % 3 === 0).map((r, i) => particle(r.id, i)),
+    );
     setMeta(db, HALF_LIFE_BASE_META_KEY, '7');
     setMeta(db, TYPED_HALF_LIFE_META_KEY, '');
-    const globex = rowsOf('globex').slice(0, 3).map((r) => r.content).reverse();
+    const globex = rowsOf('globex')
+      .slice(0, 3)
+      .map((r) => r.content)
+      .reverse();
     const refused = mergedText(CLUSTER_HEADER, globex);
     insertRejectedValue(db, {
-      tenantId: 'globex', digest: rejectionDigest(refused), reason: 'pinned refusal', rejectedBy: 'test',
-      rejectedAt: NOW.toISOString(), normalizedChars: normalizeValueForRejection(refused).length,
+      tenantId: 'globex',
+      digest: rejectionDigest(refused),
+      reason: 'pinned refusal',
+      rejectedBy: 'test',
+      rejectedAt: NOW.toISOString(),
+      normalizedChars: normalizeValueForRejection(refused).length,
     });
   });
   sqliteSyncStore(root).localFiles.consolidation.replaceConflicts(
-    [{ memory_a_id: 'mem_acme_04', memory_b_id: 'mem_acme_11', reason: 'stale', score: 0.6 }], NOW.toISOString());
+    [{ memory_a_id: 'mem_acme_04', memory_b_id: 'mem_acme_11', reason: 'stale', score: 0.6 }],
+    NOW.toISOString(),
+  );
   const session = 'sess-golden';
-  appendSessionEvent(root, 'default', { session_id: session, event_type: 'action', content: 'read the deploy runbook', source: 'agent' });
   appendSessionEvent(root, 'default', {
-    session_id: session, event_type: 'session_complete', content: 'success', source: 'agent', metadata: { summary: 'deployed the fix' },
+    session_id: session,
+    event_type: 'action',
+    content: 'read the deploy runbook',
+    source: 'agent',
+  });
+  appendSessionEvent(root, 'default', {
+    session_id: session,
+    event_type: 'session_complete',
+    content: 'success',
+    source: 'agent',
+    metadata: { summary: 'deployed the fix' },
   });
   return root;
 }
@@ -116,7 +171,9 @@ function seed(config: { memoryValue?: { enabled: boolean } }): string {
 /** Ids from a counter, so every run mints the same ones; generateId keeps randomUUID's first 12 hex digits. */
 async function withCountedIds<T>(run: () => Promise<T>): Promise<T> {
   let n = 0;
-  const spy = vi.spyOn(crypto, 'randomUUID').mockImplementation(() => `${(++n).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
+  const spy = vi
+    .spyOn(crypto, 'randomUUID')
+    .mockImplementation(() => `${(++n).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
   syncBuiltinESMExports();
   try {
     return await run();
@@ -128,14 +185,20 @@ async function withCountedIds<T>(run: () => Promise<T>): Promise<T> {
 
 function columnsBut(db: DatabaseSyncLike, table: string, skip: readonly string[]): string {
   // SAFETY: pragma_table_info yields one row per column with its name.
-  const names = (db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as Array<{ name: string }>).map((c) => c.name);
+  const names = (db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as Array<{ name: string }>).map(
+    (c) => c.name,
+  );
   return names.filter((name) => !skip.includes(name)).join(', ');
 }
 
 /** Everything a sleep writes, one JSON line per row, minus wall-clock stamps. */
 function hostState(root: string) {
   return onStore(root, (db) => {
-    const lines = (sql: string): string[] => db.prepare(sql).all().map((r) => JSON.stringify(r));
+    const lines = (sql: string): string[] =>
+      db
+        .prepare(sql)
+        .all()
+        .map((r) => JSON.stringify(r));
     return {
       memories: lines(`SELECT ${columnsBut(db, 'memories', ['updated_at'])} FROM memories ORDER BY id`),
       dormant: lines(`SELECT ${columnsBut(db, 'dormant_memories', ['updated_at'])} FROM dormant_memories ORDER BY id`),
@@ -146,9 +209,11 @@ function hostState(root: string) {
       audit: lines('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id'),
       particles: lines(
         `SELECT memory_id, hex(position_blob) AS position, hex(velocity_blob) AS velocity, mass, charge, temperature, ` +
-        `last_simulation != '${SEEDED_SIM}' AS simulated FROM memory_physics ORDER BY memory_id`),
+          `last_simulation != '${SEEDED_SIM}' AS simulated FROM memory_physics ORDER BY memory_id`,
+      ),
       fts: lines('SELECT id, content, tags FROM memories_fts ORDER BY id, content'),
-      mirrors: fs.readdirSync(root, { recursive: true, withFileTypes: true })
+      mirrors: fs
+        .readdirSync(root, { recursive: true, withFileTypes: true })
         .filter((e) => e.isFile() && !e.name.startsWith('hippo.db'))
         .map((e) => path.relative(root, path.join(e.parentPath, e.name)).replace(/\\/g, '/'))
         .sort(),
@@ -158,7 +223,9 @@ function hostState(root: string) {
 
 async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: number } = {}) {
   const local = sqliteSyncStore(root).localFiles;
-  const result = await withCountedIds(() => runConsolidation(local, { ...opts, now: NOW, config: loadConfig(root), budget: fastBudget }));
+  const result = await withCountedIds(() =>
+    runConsolidation(local, { ...opts, now: NOW, config: loadConfig(root), budget: fastBudget }),
+  );
   return { result, state: hostState(root) };
 }
 

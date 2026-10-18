@@ -95,13 +95,13 @@ describe('JSON hook installer', () => {
       // SessionStart now carries two entries: the pre-existing un-matched
       // last-sleep entry and the new matcher:'compact' compact-resume entry.
       expect(settings.hooks.SessionStart).toHaveLength(2);
-      const compactEntry = settings.hooks.SessionStart.find(
-        (e: { hooks: Array<{ command: string }> }) => e.hooks[0].command.includes('hippo compact-resume'),
+      const compactEntry = settings.hooks.SessionStart.find((e: { hooks: Array<{ command: string }> }) =>
+        e.hooks[0].command.includes('hippo compact-resume'),
       );
       expect(compactEntry).toBeDefined();
       expect(compactEntry.matcher).toBe('compact');
-      const lastSleepEntry = settings.hooks.SessionStart.find(
-        (e: { hooks: Array<{ command: string }> }) => e.hooks[0].command.includes('hippo last-sleep'),
+      const lastSleepEntry = settings.hooks.SessionStart.find((e: { hooks: Array<{ command: string }> }) =>
+        e.hooks[0].command.includes('hippo last-sleep'),
       );
       expect(lastSleepEntry).toBeDefined();
       expect(lastSleepEntry.matcher).toBeUndefined();
@@ -134,9 +134,7 @@ describe('JSON hook installer', () => {
           hooks: {
             SessionEnd: [
               {
-                hooks: [
-                  { type: 'command', command: `hippo sleep --log-file "${logFile}"`, timeout: 60 },
-                ],
+                hooks: [{ type: 'command', command: `hippo sleep --log-file "${logFile}"`, timeout: 60 }],
               },
               {
                 hooks: [
@@ -172,9 +170,7 @@ describe('JSON hook installer', () => {
           hooks: {
             Stop: [
               {
-                hooks: [
-                  { type: 'command', command: 'hippo sleep 2>/dev/null || true', timeout: 30 },
-                ],
+                hooks: [{ type: 'command', command: 'hippo sleep 2>/dev/null || true', timeout: 30 }],
               },
             ],
           },
@@ -205,7 +201,8 @@ describe('JSON hook installer', () => {
                 hooks: [
                   {
                     type: 'command',
-                    command: "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')",
+                    command:
+                      "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')",
                     timeout: 30,
                   },
                 ],
@@ -280,9 +277,7 @@ describe('JSON hook installer', () => {
 
       // Add a legacy Stop entry alongside the current ones.
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      settings.hooks.Stop = [
-        { hooks: [{ type: 'command', command: 'hippo sleep 2>/dev/null', timeout: 30 }] },
-      ];
+      settings.hooks.Stop = [{ hooks: [{ type: 'command', command: 'hippo sleep 2>/dev/null', timeout: 30 }] }];
       fs.writeFileSync(settingsPath, JSON.stringify(settings), 'utf8');
 
       const removed = uninstallJsonHooks('claude-code');
@@ -304,9 +299,7 @@ describe('JSON hook installer', () => {
       // the same SessionStart array before uninstall runs.
       const before = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       expect(before.hooks.SessionStart).toHaveLength(2);
-      const lastSleepBefore = before.hooks.SessionStart.find(
-        (e: { matcher?: string }) => e.matcher === undefined,
-      );
+      const lastSleepBefore = before.hooks.SessionStart.find((e: { matcher?: string }) => e.matcher === undefined);
       expect(lastSleepBefore.hooks[0].command).toContain('hippo last-sleep');
       expect(lastSleepBefore.matcher).toBeUndefined();
 
@@ -331,7 +324,11 @@ describe('JSON hook installer', () => {
           hooks: {
             SessionEnd: [
               { hooks: [{ type: 'command', command: `hippo sleep --log-file "${logFile}"`, timeout: 60 }] },
-              { hooks: [{ type: 'command', command: `hippo capture --last-session --log-file "${logFile}"`, timeout: 15 }] },
+              {
+                hooks: [
+                  { type: 'command', command: `hippo capture --last-session --log-file "${logFile}"`, timeout: 15 },
+                ],
+              },
             ],
           },
         }),
@@ -404,7 +401,12 @@ describe('JSON hook installer', () => {
       const file = seedSettings({
         hooks: {
           SessionEnd: [
-            { hooks: [{ type: 'command', command: 'hippo session-end --log-file "x"' }, { type: 'command', command: 'hippo sleep' }] },
+            {
+              hooks: [
+                { type: 'command', command: 'hippo session-end --log-file "x"' },
+                { type: 'command', command: 'hippo sleep' },
+              ],
+            },
             userGroup,
           ],
           PostCompact: [{ hooks: [{ type: 'command', command: 'hippo post-compact --log-file "x"' }] }],
@@ -419,7 +421,14 @@ describe('JSON hook installer', () => {
     it('removes every command install writes, leaving no hooks key', () => {
       const result = installJsonHooks('claude-code');
       const events = Object.keys(readSettings(result.settingsPath).hooks).sort();
-      expect(events).toEqual(['PostCompact', 'PostToolUseFailure', 'PreCompact', 'SessionEnd', 'SessionStart', 'UserPromptSubmit']);
+      expect(events).toEqual([
+        'PostCompact',
+        'PostToolUseFailure',
+        'PreCompact',
+        'SessionEnd',
+        'SessionStart',
+        'UserPromptSubmit',
+      ]);
 
       expect(uninstallJsonHooks('claude-code')).toBe(true);
 
@@ -441,7 +450,14 @@ describe('JSON hook installer', () => {
 
     it("keeps a group's matcher while a user handler is left in it", () => {
       const file = seedSettings({
-        hooks: { SessionStart: [{ matcher: 'compact', hooks: [USER_HANDLER, { type: 'command', command: 'hippo compact-resume', timeout: 10 }] }] },
+        hooks: {
+          SessionStart: [
+            {
+              matcher: 'compact',
+              hooks: [USER_HANDLER, { type: 'command', command: 'hippo compact-resume', timeout: 10 }],
+            },
+          ],
+        },
       });
 
       expect(uninstallJsonHooks('claude-code')).toBe(true);
@@ -466,10 +482,14 @@ describe('JSON hook installer', () => {
     });
   });
 
-  describe('installJsonHooks(claude-code) migrations keep a handler that is not hippo\'s', () => {
+  describe("installJsonHooks(claude-code) migrations keep a handler that is not hippo's", () => {
     it('Stop: removes hippo sleep from a group it shares, keeping the user handler', () => {
       const file = seedSettings({
-        hooks: { Stop: [{ hooks: [USER_HANDLER, { type: 'command', command: 'hippo sleep 2>/dev/null || true', timeout: 30 }] }] },
+        hooks: {
+          Stop: [
+            { hooks: [USER_HANDLER, { type: 'command', command: 'hippo sleep 2>/dev/null || true', timeout: 30 }] },
+          ],
+        },
       });
 
       const result = installJsonHooks('claude-code');
@@ -490,13 +510,15 @@ describe('JSON hook installer', () => {
     it('SessionEnd: removes legacy sleep and capture handlers from a group they share, keeping the user handler', () => {
       const file = seedSettings({
         hooks: {
-          SessionEnd: [{
-            hooks: [
-              USER_HANDLER,
-              { type: 'command', command: 'hippo sleep --log-file "x"', timeout: 60 },
-              { type: 'command', command: 'hippo capture --last-session --log-file "x"', timeout: 15 },
-            ],
-          }],
+          SessionEnd: [
+            {
+              hooks: [
+                USER_HANDLER,
+                { type: 'command', command: 'hippo sleep --log-file "x"', timeout: 60 },
+                { type: 'command', command: 'hippo capture --last-session --log-file "x"', timeout: 15 },
+              ],
+            },
+          ],
         },
       });
 
@@ -520,7 +542,6 @@ describe('JSON hook installer', () => {
   });
 
   describe('CLAUDE_CONFIG_DIR', () => {
-
     it('moves the claude-code settings there, for install and for uninstall', () => {
       const config = fs.mkdtempSync(path.join(env.home, 'claude-config-'));
       vi.stubEnv('CLAUDE_CONFIG_DIR', config);
@@ -535,7 +556,10 @@ describe('JSON hook installer', () => {
       expect(readSettings(settingsPath)).toEqual({});
     });
 
-    it.each([['unset', undefined], ['empty', '']])('keeps ~/.claude when it is %s', (_label, value) => {
+    it.each([
+      ['unset', undefined],
+      ['empty', ''],
+    ])('keeps ~/.claude when it is %s', (_label, value) => {
       vi.stubEnv('CLAUDE_CONFIG_DIR', value);
 
       expect(resolveJsonHookPaths('claude-code').settings).toBe(path.join(env.home, '.claude', 'settings.json'));
@@ -550,7 +574,10 @@ describe('JSON hook installer', () => {
       expect(expected).toBe(path.join(env.home, '.claude'));
       expect(resolveJsonHookPaths('claude-code').settings).toBe(path.join(expected, 'settings.json'));
       fs.mkdirSync(expected);
-      expect(detectInstalledTools().find((t) => t.name === 'claude-code')).toMatchObject({ detected: true, configDir: expected });
+      expect(detectInstalledTools().find((t) => t.name === 'claude-code')).toMatchObject({
+        detected: true,
+        configDir: expected,
+      });
     });
 
     it('makes detectInstalledTools look there for Claude Code', () => {
@@ -566,10 +593,15 @@ describe('JSON hook installer', () => {
     const BOM = String.fromCodePoint(0xfeff);
 
     it("uninstall removes hippo's handlers, keeps the user's, and rewrites the file without the mark", () => {
-      const file = seedRaw(BOM + JSON.stringify({
-        theme: 'dark',
-        hooks: { SessionEnd: [{ hooks: [USER_HANDLER, { type: 'command', command: 'hippo session-end --log-file "x"' }] }] },
-      }));
+      const file = seedRaw(
+        BOM +
+          JSON.stringify({
+            theme: 'dark',
+            hooks: {
+              SessionEnd: [{ hooks: [USER_HANDLER, { type: 'command', command: 'hippo session-end --log-file "x"' }] }],
+            },
+          }),
+      );
 
       expect(uninstallJsonHooks('claude-code')).toBe(true);
 
@@ -593,9 +625,14 @@ describe('JSON hook installer', () => {
   });
 
   describe('writing settings.json', () => {
-    const seedForStep = (step: string): string => seedSettings(step === 'install' ? { theme: 'dark' } : {
-      hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file "x"' }] }] },
-    });
+    const seedForStep = (step: string): string =>
+      seedSettings(
+        step === 'install'
+          ? { theme: 'dark' }
+          : {
+              hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file "x"' }] }] },
+            },
+      );
     const runStep = (step: string): void => {
       if (step === 'install') installJsonHooks('claude-code');
       else uninstallJsonHooks('claude-code');
@@ -615,18 +652,21 @@ describe('JSON hook installer', () => {
     });
 
     // A rename would give the file a new inode and leave the other link on the old content.
-    it.each(['install', 'uninstall'])('%s writes a hard-linked file in place, so every link sees the new content', (step) => {
-      const file = seedForStep(step);
-      const before = fs.readFileSync(file, 'utf8');
-      const link = path.join(path.dirname(file), 'settings.link');
-      fs.linkSync(file, link);
+    it.each(['install', 'uninstall'])(
+      '%s writes a hard-linked file in place, so every link sees the new content',
+      (step) => {
+        const file = seedForStep(step);
+        const before = fs.readFileSync(file, 'utf8');
+        const link = path.join(path.dirname(file), 'settings.link');
+        fs.linkSync(file, link);
 
-      runStep(step);
+        runStep(step);
 
-      expect(fs.readFileSync(file, 'utf8')).not.toBe(before);
-      expect(fs.readFileSync(link, 'utf8')).toBe(fs.readFileSync(file, 'utf8'));
-      expect(fs.readdirSync(path.dirname(file)).sort()).toEqual(['settings.json', 'settings.link']);
-    });
+        expect(fs.readFileSync(file, 'utf8')).not.toBe(before);
+        expect(fs.readFileSync(link, 'utf8')).toBe(fs.readFileSync(file, 'utf8'));
+        expect(fs.readdirSync(path.dirname(file)).sort()).toEqual(['settings.json', 'settings.link']);
+      },
+    );
 
     it('writes through a symlinked settings.json and leaves the link in place', (ctx) => {
       const real = path.join(env.home, 'dotfiles', 'settings.json');

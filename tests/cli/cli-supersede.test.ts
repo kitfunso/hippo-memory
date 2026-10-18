@@ -53,14 +53,15 @@ describe('hippo supersede', () => {
     expect(newEntry).not.toBeNull();
     expect(newEntry!.content).toContain('X is false now');
     expect(newEntry!.superseded_by).toBeNull();
-
   });
 
   it('keeps the old row origin project and session on the new row', async () => {
     const hippoRoot = join(home, '.hippo');
     // The origin differs from the one this store would stamp, as a project row held in the global store does.
     const old = {
-      ...createMemory('the billing service retries a failed charge three times', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ...createMemory('the billing service retries a failed charge three times', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
       origin_project: 'proj-a',
       source_session_id: 'sess-old',
     };
@@ -76,7 +77,11 @@ describe('hippo supersede', () => {
   it('carries layer, tags and pin from the old row unless a flag overrides them', async () => {
     const hippoRoot = join(home, '.hippo');
     const seed = (content: string) => {
-      const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['billing', 'retry'], pinned: true });
+      const entry = createMemory(content, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: ['billing', 'retry'],
+        pinned: true,
+      });
       writeEntry(hippoRoot, entry);
       return entry.id;
     };
@@ -89,7 +94,15 @@ describe('hippo supersede', () => {
     expect(successor(kept).layer).toBe('episodic');
 
     const changed = seed('the billing service pages after a failed charge retry');
-    await hippo('supersede', changed, 'the billing service pages after two failed charge retries', '--tag', 'paging', '--layer', 'semantic');
+    await hippo(
+      'supersede',
+      changed,
+      'the billing service pages after two failed charge retries',
+      '--tag',
+      'paging',
+      '--layer',
+      'semantic',
+    );
     expect(successor(changed).tags).toEqual(['paging']);
     expect(successor(changed).layer).toBe('semantic');
   });

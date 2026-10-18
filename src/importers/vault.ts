@@ -49,6 +49,18 @@ export async function importVault(
   return syncVaultFolder(folderPath, options, store, identity);
 }
 
+function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): Context {
+  return {
+    hippoRoot,
+    tenantId,
+    // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
+    // a bearer-authed request. archiveRaw / remember thread this into audit.
+    actor: { subject: 'connector:vault', role: 'admin' },
+    store,
+    config: loadConfig(hippoRoot),
+  };
+}
+
 async function syncVaultFolder(
   folderPath: string,
   options: ImportOptions,
@@ -60,16 +72,7 @@ async function syncVaultFolder(
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
 
-  const ctx: Context = {
-    hippoRoot,
-    tenantId,
-    // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
-    // a bearer-authed request. archiveRaw / remember thread this into audit.
-    actor: { subject: 'connector:vault', role: 'admin' },
-    store,
-    config: loadConfig(hippoRoot),
-  };
-
+  const ctx = vaultContext(hippoRoot, tenantId, store);
   const existing = await loadVaultRows(ctx, vaultName);
   const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
   const tally: VaultTally = { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, redacted: 0, entries: [] };
@@ -77,7 +80,16 @@ async function syncVaultFolder(
   const seen = new Set<string>();
 
   const run: VaultImportRun = {
-    ctx, folderPath, vaultName, scope, extraTags, dryRun, existing, seen, baseHalfLifeDays, tally,
+    ctx,
+    folderPath,
+    vaultName,
+    scope,
+    extraTags,
+    dryRun,
+    existing,
+    seen,
+    baseHalfLifeDays,
+    tally,
   };
   const importNotes = async (): Promise<void> => {
     for (const relpath of relpaths) await importVaultNote(run, relpath);
@@ -86,6 +98,13 @@ async function syncVaultFolder(
   if (dryRun) await runWithRequestStores(importNotes);
   else await importNotes();
 
+  await archiveVanishedNotes(run);
+
+  const { total, imported, skipped, rejected, archived, redacted, entries } = tally;
+  return { total, imported, skipped, rejected, archived, redacted, entries };
+}
+
+async function archiveVanishedNotes({ ctx, existing, seen, dryRun, tally }: VaultImportRun): Promise<void> {
   // Deletion-sync: an artifactRef in the Map but not seen this run vanished from the source, so archive its raw row.
   // Per-file archiveRaw, no outer SAVEPOINT: there is no cross-file idempotency row to commit atomically.
   for (const [artifactRef, rows] of existing) {
@@ -95,9 +114,6 @@ async function syncVaultFolder(
       if (!dryRun) await archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
     }
   }
-
-  const { total, imported, skipped, rejected, archived, redacted, entries } = tally;
-  return { total, imported, skipped, rejected, archived, redacted, entries };
 }
 
 interface VaultTally {
@@ -200,7 +216,8 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
     return;
   }
 
-  const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
+  const tags = vaultNoteTags(run, hashTag, fm, body);
+  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
     tally.skipped++;
     return;
   }
@@ -267,20 +284,10 @@ async function archivePriors(run: VaultImportRun, priors: readonly { id: string 
 function vaultNoteTags(run: VaultImportRun, hashTag: string, fm: Record<string, string>, body: string): string[] {
   // Build the FULL tag envelope before the idempotency decision, de-duplicated and order-preserving (createMemory
   // stores tags verbatim).
-  const frontmatterTags = [
-    ...frontmatterList(fm['tags']),
-    ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
-  ];
+  const frontmatterTags = [...frontmatterList(fm['tags']), ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`)];
   const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
   return Array.from(
-    new Set([
-      'source:vault',
-      `vault:${run.vaultName}`,
-      hashTag,
-      ...frontmatterTags,
-      ...wikilinkTags,
-      ...run.extraTags,
-    ]),
+    new Set(['source:vault', `vault:${run.vaultName}`, hashTag, ...frontmatterTags, ...wikilinkTags, ...run.extraTags]),
   );
 }
 

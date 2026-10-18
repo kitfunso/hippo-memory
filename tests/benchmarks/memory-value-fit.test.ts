@@ -46,7 +46,12 @@ afterEach(() => {
 // Each case ingests, simulates and extracts a question against real stores on disk.
 vi.setConfig({ testTimeout: 30_000 });
 
-type GateOptions = { splitRegistered?: object; registeredResults?: object; expectedFitDims?: readonly string[]; needTrainRows?: boolean };
+type GateOptions = {
+  splitRegistered?: object;
+  registeredResults?: object;
+  expectedFitDims?: readonly string[];
+  needTrainRows?: boolean;
+};
 // SAFETY: fit.mjs destructures all four options, but its inferred parameter type omits splitRegistered and registeredResults.
 const gate = runIntegrityGate as (opts?: GateOptions) => ReturnType<typeof runIntegrityGate>;
 
@@ -284,7 +289,11 @@ describe('computeFit (real fixture)', () => {
     expect(() => buildScorers(CONFIG.FEATURES, weights)).not.toThrow();
     const rows = readJsonl(featuresPathFor(QUESTIONS[0].question_id));
     // SAFETY: computeFit returns one numeric weight per FIT_DIMS entry (asserted above); the inferred type is {}.
-    type Scored = { N: number; goldCount: number; perScorer: Record<string, Record<number, { retention: number; keepN: number }>> };
+    type Scored = {
+      N: number;
+      goldCount: number;
+      perScorer: Record<string, Record<number, { retention: number; keepN: number }>>;
+    };
     // SAFETY: evaluateStore is untyped .mjs; this is the shape its return statement builds.
     const fitted = evaluateStore(rows, [0.3], weights as Record<string, number>) as Scored;
     // SAFETY: same return shape, without the weights.
@@ -359,9 +368,9 @@ describe('runIntegrityGate (real fixture)', () => {
     };
     const bogusExpectedFitDims = [...good.varyingFeatures, 'not_a_real_dim'];
 
-    expect(() =>
-      gate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims }),
-    ).toThrow(/varying-features set must equal FIT_DIMS/);
+    expect(() => gate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims })).toThrow(
+      /varying-features set must equal FIT_DIMS/,
+    );
   });
 
   it('(6) fails loudly, naming assertion (c), on a tampered features.jsonl value', async () => {
@@ -512,9 +521,7 @@ describe('computeFit (degenerate-input guards)', () => {
 
 describe('initVectorForRestart / recencyVector', () => {
   it('initVectorForRestart throws a named error when dims is missing "age_days" (restart 0)', () => {
-    expect(() => initVectorForRestart(0, ['strength', 'content_length'], () => 0.5)).toThrow(
-      /missing "age_days"/,
-    );
+    expect(() => initVectorForRestart(0, ['strength', 'content_length'], () => 0.5)).toThrow(/missing "age_days"/);
   });
 
   it('recencyVector throws a named error directly when dims is missing "age_days"', () => {

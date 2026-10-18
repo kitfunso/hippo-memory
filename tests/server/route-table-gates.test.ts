@@ -7,7 +7,10 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/auth.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-interface Reply { status: number; error: string }
+interface Reply {
+  status: number;
+  error: string;
+}
 
 let handle: ServerHandle;
 let adminKey: string;
@@ -33,12 +36,22 @@ afterEach(async () => {
 function post(path: string, key: string, body: string, headers: Record<string, string> = {}): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { host: '127.0.0.1', port: handle.port, method: 'POST', path, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', ...headers } },
+      {
+        host: '127.0.0.1',
+        port: handle.port,
+        method: 'POST',
+        path,
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', ...headers },
+      },
       (res) => {
         let text = '';
         res.setEncoding('utf8');
-        res.on('data', (chunk: string) => { text += chunk; });
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, error: String(JSON.parse(text || '{}').error ?? '') }));
+        res.on('data', (chunk: string) => {
+          text += chunk;
+        });
+        res.on('end', () =>
+          resolve({ status: res.statusCode ?? 0, error: String(JSON.parse(text || '{}').error ?? '') }),
+        );
       },
     );
     req.on('error', reject);
@@ -60,7 +73,10 @@ describe('POST /v1/sleep', () => {
 
 describe('POST /v1/auth/keys', () => {
   it('refuses a member key at the gate', async () => {
-    expect(await post('/v1/auth/keys', memberKey, '{"role":"member"}')).toEqual({ status: 403, error: '/v1/auth/keys requires admin role' });
+    expect(await post('/v1/auth/keys', memberKey, '{"role":"member"}')).toEqual({
+      status: 403,
+      error: '/v1/auth/keys requires admin role',
+    });
   });
 
   it('refuses a member key before reading a body over the mint cap', async () => {

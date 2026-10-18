@@ -12,7 +12,7 @@ import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 let root: string;
 const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
-const ctxFor = (actor: Actor): FullContext => (apiCtx(root, 'default', actor));
+const ctxFor = (actor: Actor): FullContext => apiCtx(root, 'default', actor);
 
 beforeEach(() => {
   root = makeRoot('api-admin-reads', { config: { embeddings: { enabled: false } } });

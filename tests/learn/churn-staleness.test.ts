@@ -5,10 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
-import {
-  extractChurnRefs,
-  detectChurnStale,
-} from '../../src/learn/invalidation.js';
+import { extractChurnRefs, detectChurnStale } from '../../src/learn/invalidation.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
@@ -115,7 +112,10 @@ describe('detectChurnStale', () => {
     fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  function storeMemory(content: string, opts: { created?: string; pinned?: boolean; origin?: string | null } = {}): ReturnType<typeof createMemory> {
+  function storeMemory(
+    content: string,
+    opts: { created?: string; pinned?: boolean; origin?: string | null } = {},
+  ): ReturnType<typeof createMemory> {
     const mem = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], pinned: opts.pinned });
     if (opts.created) mem.created = opts.created;
     mem.origin_project = opts.origin === undefined ? project : opts.origin;
@@ -130,7 +130,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-changed: a.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -145,7 +148,10 @@ describe('detectChurnStale', () => {
 
     const opts = { tenantId: 'default', projectName: 'github.com/acme/churn', dryRun: true };
     expect(detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, opts).preview).toHaveLength(0);
-    expect(detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { ...opts, legacyName: project }).preview).toHaveLength(1);
+    expect(
+      detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { ...opts, legacyName: project })
+        .preview,
+    ).toHaveLength(1);
   });
 
   it('file-deleted: a tracked file removed after the anchor is evidence (--no-renames)', () => {
@@ -155,20 +161,29 @@ describe('detectChurnStale', () => {
     fs.rmSync(path.join(repoDir, 'b.ts'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-deleted: b.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
   it('a rename shows as delete+add and is still evidence (--no-renames)', () => {
-    fs.writeFileSync(path.join(repoDir, 'old.ts'), 'v1 has enough content to avoid a similarity-based rename detection false negative');
+    fs.writeFileSync(
+      path.join(repoDir, 'old.ts'),
+      'v1 has enough content to avoid a similarity-based rename detection false negative',
+    );
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see old.ts for the setup', { created: ANCHOR });
     fs.renameSync(path.join(repoDir, 'old.ts'), path.join(repoDir, 'new.ts'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-deleted: old.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -181,7 +196,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'c.ts'), 'export function renamedFunction() {}\n');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('symbol-gone: `helperSymbolName`');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -194,7 +212,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { newscript: 'echo hi' } }));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('script-gone: oldscript');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -207,7 +228,10 @@ describe('detectChurnStale', () => {
     commit(repoDir, new Date(new Date(ANCHOR).getTime() - 1).toISOString());
     const mem = storeMemory('see d.ts for the setup', { created: ANCHOR });
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -217,7 +241,10 @@ describe('detectChurnStale', () => {
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see phantom-file-that-never-existed.ts for setup', { created: ANCHOR });
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -231,7 +258,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'n.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, root, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, root, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.preview.map((p) => p.id)).toEqual([inside.id]);
     expect(readEntry(hippoRoot, outside.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -243,7 +273,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'o.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.preview[0]?.evidence).toBe('file-changed: o.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
@@ -255,7 +288,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'package.json'), '{"version":"2.0.0"}');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.preview[0]?.evidence).toBe('file-changed: package.json');
   });
 
@@ -266,7 +302,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'q.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.error).toBeUndefined();
     expect(result.checked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -279,7 +318,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'e.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(0);
     expect(result.skippedPinned).toContain(mem.id);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -292,7 +334,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'f.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -304,7 +349,10 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'g.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(0);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
@@ -316,9 +364,15 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'h.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const first = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const first = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(first.marked).toBe(1);
-    const second = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const second = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(second.marked).toBe(0);
     expect(second.alreadyMarked).toBe(1);
   });
@@ -330,7 +384,11 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'i.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+      dryRun: true,
+    });
     expect(result.dryRun).toBe(true);
     expect(result.marked).toBe(1);
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -346,14 +404,20 @@ describe('detectChurnStale', () => {
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.marked).toBe(0);
   });
 
   it('a merge after the anchor of a branch commit dated before it is evidence (first-parent diff)', () => {
     fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v1');
     commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
-    const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoDir, encoding: 'utf8' }).trim();
+    const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repoDir,
+      encoding: 'utf8',
+    }).trim();
     execFileSync('git', ['checkout', '-q', '-b', 'side'], { cwd: repoDir });
     fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v2');
     commit(repoDir, BEFORE_ANCHOR);
@@ -364,7 +428,10 @@ describe('detectChurnStale', () => {
       env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
     });
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+    });
     expect(result.preview[0]?.evidence).toBe('file-changed: m.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
@@ -372,7 +439,10 @@ describe('detectChurnStale', () => {
   it('resolves the anchor snapshot on first-parent history, so a merged side-branch removal counts', () => {
     fs.writeFileSync(path.join(repoDir, 's.ts'), 'export function mergedAwaySymbol() {}\n');
     commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
-    const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoDir, encoding: 'utf8' }).trim();
+    const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repoDir,
+      encoding: 'utf8',
+    }).trim();
     execFileSync('git', ['checkout', '-q', '-b', 'side'], { cwd: repoDir });
     fs.writeFileSync(path.join(repoDir, 's.ts'), 'export function replacement() {}\n');
     commit(repoDir, BEFORE_ANCHOR);
@@ -383,7 +453,11 @@ describe('detectChurnStale', () => {
       env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
     });
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+      dryRun: true,
+    });
     expect(result.preview[0]?.evidence).toBe('symbol-gone: `mergedAwaySymbol`');
   });
 
@@ -395,7 +469,11 @@ describe('detectChurnStale', () => {
     commit(repoDir, AFTER_ANCHOR);
     execFileSync('git', ['rm', '-q', '--cached', 'r.ts'], { cwd: repoDir });
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+      dryRun: true,
+    });
     expect(result.preview[0]?.evidence).toBe('file-changed: r.ts');
   });
 
@@ -407,7 +485,11 @@ describe('detectChurnStale', () => {
     fs.rmSync(path.join(repoDir, 'package.json'));
     commit(repoDir, AFTER_ANCHOR);
 
-    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    const result = detectChurnStale(sqliteSyncStore(hippoRoot).localFiles.learning, repoDir, {
+      tenantId: 'default',
+      projectName: project,
+      dryRun: true,
+    });
     expect(result.preview[0]?.evidence).toBe('script-gone: goner');
   });
 });
@@ -428,7 +510,10 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   it('drops the churn-stale tag on good=true', async () => {
-    const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+    const mem = createMemory('some tagged content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [CHURN_STALE_TAG],
+    });
     writeEntry(hippoRoot, mem);
 
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
@@ -438,7 +523,10 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   it('keeps the churn-stale tag on good=false', async () => {
-    const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+    const mem = createMemory('some tagged content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [CHURN_STALE_TAG],
+    });
     writeEntry(hippoRoot, mem);
 
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
@@ -463,10 +551,18 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
 // ---------------------------------------------------------------------------
 
 describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
-  const STALE_FACTOR = churnStaleFactor(createMemory('any', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] }));
+  const STALE_FACTOR = churnStaleFactor(
+    createMemory('any', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] }),
+  );
   it('halves the sync search() score for a churn-stale entry vs an otherwise-identical one', () => {
-    const plain = createMemory('widget factory configuration details here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['sometag'] });
-    const stale = createMemory('widget factory configuration details here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['sometag', CHURN_STALE_TAG] });
+    const plain = createMemory('widget factory configuration details here', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['sometag'],
+    });
+    const stale = createMemory('widget factory configuration details here', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['sometag', CHURN_STALE_TAG],
+    });
 
     const results = search('widget factory configuration', [plain, stale]);
     const plainResult = results.find((r) => r.entry.id === plain.id)!;
@@ -475,14 +571,23 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('applies CHURN_STALE_RANK_MULTIPLIER in the hybrid explain breakdown', async () => {
-    const stale = createMemory('gadget assembly line documentation notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+    const stale = createMemory('gadget assembly line documentation notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [CHURN_STALE_TAG],
+    });
     const [result] = await hybridSearch('gadget assembly line', [stale], { explain: true });
     expect(result.breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
   });
 
   it('ranks a churn-stale entry below an identical untagged one in hybridSearch', async () => {
-    const plain = createMemory('sprocket calibration procedure notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
-    const stale = createMemory('sprocket calibration procedure notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+    const plain = createMemory('sprocket calibration procedure notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [],
+    });
+    const stale = createMemory('sprocket calibration procedure notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [CHURN_STALE_TAG],
+    });
     const results = await hybridSearch('sprocket calibration', [stale, plain]);
     expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
   });
@@ -491,12 +596,20 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     const hippoRoot = makeRoot('churn-physics');
     try {
       const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
-      const stale = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+      const stale = createMemory('flywheel torque limits', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: [CHURN_STALE_TAG],
+      });
       writeEntry(hippoRoot, plain);
       writeEntry(hippoRoot, stale);
       const particle = (id: string): PhysicsParticle => ({
-        memoryId: id, position: [1, 0, 0, 0], velocity: [0, 0, 0, 0], mass: 1.0, charge: 0,
-        temperature: 0.5, lastSimulation: new Date().toISOString(),
+        memoryId: id,
+        position: [1, 0, 0, 0],
+        velocity: [0, 0, 0, 0],
+        mass: 1.0,
+        charge: 0,
+        temperature: 0.5,
+        lastSimulation: new Date().toISOString(),
       });
       const db = openHippoDb(hippoRoot);
       try {
@@ -505,7 +618,9 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
         db.close();
       }
       const results = await physicsSearch('flywheel torque', [stale, plain], {
-        hippoRoot, queryEmbedding: [1, 0, 0, 0], explain: true,
+        hippoRoot,
+        queryEmbedding: [1, 0, 0, 0],
+        explain: true,
       });
       expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
       expect(results[1].breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
@@ -518,19 +633,32 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     const hippoRoot = makeRoot('churn-pool');
     try {
       const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
-      const stale = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+      const stale = createMemory('flywheel torque limits', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: [CHURN_STALE_TAG],
+      });
       writeEntry(hippoRoot, plain);
       writeEntry(hippoRoot, stale);
       const db = openHippoDb(hippoRoot);
       try {
-        savePhysicsState(db, [{
-          memoryId: stale.id, position: [1, 0, 0, 0], velocity: [0, 0, 0, 0], mass: 1.0, charge: 0,
-          temperature: 0.5, lastSimulation: new Date().toISOString(),
-        }]);
+        savePhysicsState(db, [
+          {
+            memoryId: stale.id,
+            position: [1, 0, 0, 0],
+            velocity: [0, 0, 0, 0],
+            mass: 1.0,
+            charge: 0,
+            temperature: 0.5,
+            lastSimulation: new Date().toISOString(),
+          },
+        ]);
       } finally {
         db.close();
       }
-      const results = await physicsSearch('flywheel torque', [stale, plain], { hippoRoot, queryEmbedding: [1, 0, 0, 0] });
+      const results = await physicsSearch('flywheel torque', [stale, plain], {
+        hippoRoot,
+        queryEmbedding: [1, 0, 0, 0],
+      });
       const staleScore = results.find((r) => r.entry.id === stale.id)!.score;
       expect(staleScore).toBeCloseTo(STALE_FACTOR, 5);
       expect(results[0].entry.id).toBe(plain.id);
@@ -540,10 +668,19 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('penalises a churn-stale child injected by DAG drill-down (sync and hybrid)', async () => {
-    const parent = createMemory('quasar ledger overview', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['dag-summary'] });
-    const child = createMemory('unrelated detail text', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
+    const parent = createMemory('quasar ledger overview', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['dag-summary'],
+    });
+    const child = createMemory('unrelated detail text', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [CHURN_STALE_TAG],
+    });
     child.dag_parent_id = parent.id;
-    for (const results of [search('quasar ledger', [parent, child]), await hybridSearch('quasar ledger', [parent, child])]) {
+    for (const results of [
+      search('quasar ledger', [parent, child]),
+      await hybridSearch('quasar ledger', [parent, child]),
+    ]) {
       const p = results.find((r) => r.entry.id === parent.id)!;
       const c = results.find((r) => r.entry.id === child.id)!;
       expect(c.score).toBeCloseTo(p.score * 0.9 * STALE_FACTOR, 6);
@@ -553,9 +690,18 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   it('sinks a churn-stale row in the default api.recall path (no search scorer)', async () => {
     const hippoRoot = makeRoot('churn-recall');
     try {
-      const stale = createMemory('zephyr zephyr zephyr gearbox', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
-      const b = createMemory('zephyr gearbox notes with a few more words', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
-      const c = createMemory('zephyr gearbox notes with many many more padding words here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+      const stale = createMemory('zephyr zephyr zephyr gearbox', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: [CHURN_STALE_TAG],
+      });
+      const b = createMemory('zephyr gearbox notes with a few more words', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: [],
+      });
+      const c = createMemory('zephyr gearbox notes with many many more padding words here', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: [],
+      });
       for (const m of [stale, b, c]) writeEntry(hippoRoot, m);
       const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
       const ids = (await api.retrieve(ctx, { query: 'zephyr' })).results.map((r) => r.id);
@@ -567,7 +713,10 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   });
 
   it('records churnStaleMultiplier as 1.0 for a non-tagged entry', async () => {
-    const plain = createMemory('gadget assembly line documentation notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+    const plain = createMemory('gadget assembly line documentation notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [],
+    });
     const [result] = await hybridSearch('gadget assembly line', [plain], { explain: true });
     expect(result.breakdown!.churnStaleMultiplier).toBe(1.0);
   });
@@ -625,7 +774,12 @@ describe('config.churnStaleness', () => {
 // ---------------------------------------------------------------------------
 
 // In process, so coverage sees invalidate and sleep; a non-zero exit throws unless the case expects it.
-async function runCli(cwd: string, args: string[], env: NodeJS.ProcessEnv, opts: { ok?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
+async function runCli(
+  cwd: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  opts: { ok?: boolean } = {},
+): Promise<{ stdout: string; stderr: string }> {
   const r = await runCliAs(args, { cwd, env });
   if (r.status === 0) return { stdout: r.stdout, stderr: '' };
   if (opts.ok === false) return { stdout: r.stdout, stderr: r.stderr };
@@ -676,7 +830,7 @@ describe('hippo invalidate --churn (CLI)', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('also tags this repo\'s memories in the global store', async () => {
+  it("also tags this repo's memories in the global store", async () => {
     initStore(globalRoot);
     const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;

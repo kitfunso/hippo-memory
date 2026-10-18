@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  calculateStrength,
+  confidenceFacets,
+  createMemory,
+  DEFAULT_HALF_LIFE_DAYS,
+  Layer,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { listMemoryConflicts } from '../_helpers/root-forms.js';
@@ -15,7 +22,11 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
 import {
-  loadEveryTenantEntries, replaceDetectedConflicts, appendConsolidationRun, resolveConflictKeeping, saveStoredVectors,
+  loadEveryTenantEntries,
+  replaceDetectedConflicts,
+  appendConsolidationRun,
+  resolveConflictKeeping,
+  saveStoredVectors,
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
 
@@ -37,7 +48,13 @@ const daysAgo = (days: number): string => new Date(Date.parse(NOW) - days * DAY_
 /** `hippo status` run in this process from `home`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function status(): Promise<string[]> {
   // No provider key, so the availability line never depends on the machine.
-  const env = { HIPPO_HOME: path.join(home, 'global'), HOME: home, USERPROFILE: home, HIPPO_FAKE_NOW: NOW, OPENAI_API_KEY: '' };
+  const env = {
+    HIPPO_HOME: path.join(home, 'global'),
+    HOME: home,
+    USERPROFILE: home,
+    HIPPO_FAKE_NOW: NOW,
+    OPENAI_API_KEY: '',
+  };
   for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
   _resetAblationCacheForTests();
   const saved = process.cwd();
@@ -63,7 +80,15 @@ afterEach(() => {
 describe('storedVectorSummary', () => {
   it('returns every vector id, orphans included, and the dimension', () => {
     const [a, b] = liveIds(2);
-    saveStoredVectors(root, [[a, [1, 2, 3, 4]], [b, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
+    saveStoredVectors(
+      root,
+      [
+        [a, [1, 2, 3, 4]],
+        [b, [4, 3, 2, 1]],
+        ['orphan', [0, 1, 0, 1]],
+      ],
+      'm',
+    );
     const summary = storedVectorSummary(root);
     expect([...summary.ids].sort()).toEqual([a, b, 'orphan'].sort());
     expect(summary.dims).toBe(4);
@@ -77,7 +102,15 @@ describe('storedVectorSummary', () => {
 describe('hippo status embedding lines', () => {
   it('prints the same embedded count, dimension and orphan note as before', async () => {
     const [a, b] = liveIds(3);
-    saveStoredVectors(root, [[a, [1, 2, 3, 4]], [b, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
+    saveStoredVectors(
+      root,
+      [
+        [a, [1, 2, 3, 4]],
+        [b, [4, 3, 2, 1]],
+        ['orphan', [0, 1, 0, 1]],
+      ],
+      'm',
+    );
     const lines = (await status()).filter((l) => l.startsWith('Embedded:') || l.includes('model changed'));
     expect(lines).toEqual([
       'Embedded:          2/3 memories (4-dim) (1 orphaned, run `hippo embed` to prune)',
@@ -87,13 +120,23 @@ describe('hippo status embedding lines', () => {
 
   it('reads no vector element while counting them', async () => {
     const [a, b] = liveIds(2);
-    saveStoredVectors(root, [[a, [1, 2, 3, 4]], [b, [4, 3, 2, 1]]], 'm');
+    saveStoredVectors(
+      root,
+      [
+        [a, [1, 2, 3, 4]],
+        [b, [4, 3, 2, 1]],
+      ],
+      'm',
+    );
     // Array.from over a decoded Float32Array walks this iterator once per vector, so a decode shows as a call.
     // SAFETY: %TypedArray%.prototype always carries Symbol.iterator, whose receiver is a typed array.
     const proto = Object.getPrototypeOf(Float32Array.prototype) as { [Symbol.iterator]: Walk };
     const original = proto[Symbol.iterator];
     let walks = 0;
-    proto[Symbol.iterator] = function (this: Float32Array) { walks++; return original.call(this); };
+    proto[Symbol.iterator] = function (this: Float32Array) {
+      walks++;
+      return original.call(this);
+    };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
       await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} });
@@ -115,7 +158,14 @@ function row(lastRetrieved: string, fields: Partial<MemoryEntry> = {}): string {
   seq += 1;
   const id = `mem_status${String(seq).padStart(2, '0')}`;
   const base = createMemory(`status row ${seq}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-  writeEntry(root, { ...base, id, created: daysAgo(500 - seq), last_retrieved: lastRetrieved, confidence: 'observed', ...fields });
+  writeEntry(root, {
+    ...base,
+    id,
+    created: daysAgo(500 - seq),
+    last_retrieved: lastRetrieved,
+    confidence: 'observed',
+    ...fields,
+  });
   return id;
 }
 
@@ -132,17 +182,34 @@ function seedEveryCase(): void {
   row('Wed, 01 Apr 2026 00:00:00 GMT');
   const otherA = row(daysAgo(90), { confidence: 'verified', tenant_id: 'other' });
   const otherB = row(daysAgo(20), { layer: Layer.Buffer, half_life_days: 1, tenant_id: 'other' });
-  const boosted = row(daysAgo(2), { layer: Layer.Semantic, emotional_valence: 'critical', retrieval_count: 5, outcome_positive: 2 });
+  const boosted = row(daysAgo(2), {
+    layer: Layer.Semantic,
+    emotional_valence: 'critical',
+    retrieval_count: 5,
+    outcome_positive: 2,
+  });
   row(daysAgo(45), { confidence: 'stale', half_life_days: 30, superseded_by: boosted });
-  replaceDetectedConflicts(root, [
-    { memory_a_id: fresh, memory_b_id: aged, reason: 'open, one tenant', score: 0.9 },
-    { memory_a_id: otherA, memory_b_id: otherB, reason: 'open, the other tenant', score: 0.8 },
-    { memory_a_id: fresh, memory_b_id: boosted, reason: 'resolved below', score: 0.7 },
-  ], NOW);
+  replaceDetectedConflicts(
+    root,
+    [
+      { memory_a_id: fresh, memory_b_id: aged, reason: 'open, one tenant', score: 0.9 },
+      { memory_a_id: otherA, memory_b_id: otherB, reason: 'open, the other tenant', score: 0.8 },
+      { memory_a_id: fresh, memory_b_id: boosted, reason: 'resolved below', score: 0.7 },
+    ],
+    NOW,
+  );
   const resolved = listMemoryConflicts(root).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
   if (!resolveConflictKeeping(root, 'default', resolved.id, fresh)) throw new Error('fixture conflict not resolved');
-  saveStoredVectors(root, [[fresh, [1, 2, 3, 4]], [otherA, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
+  saveStoredVectors(
+    root,
+    [
+      [fresh, [1, 2, 3, 4]],
+      [otherA, [4, 3, 2, 1]],
+      ['orphan', [0, 1, 0, 1]],
+    ],
+    'm',
+  );
   updateStats(root, { remembered: 5, recalled: 3, forgotten: 1 });
   appendConsolidationRun(root, { timestamp: daysAgo(2), decayed: 1, merged: 0, removed: 0 });
 }
@@ -236,15 +303,19 @@ describe('hippo status read bound', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { statements } = await (async () => {
       try {
-        return await recordStatementsAsync(() => handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }));
+        return await recordStatementsAsync(() =>
+          handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }),
+        );
       } finally {
         log.mockRestore();
       }
     })();
     const rowReads = statements.filter((sql) => /^\s*SELECT\b[^;]*\bFROM memories\b/.test(sql));
     // The read count is the code's to change; the one read that walks every row must be among them.
-    expect(rowReads).toContain('SELECT layer, confidence, pinned, created, last_retrieved, half_life_days, retrieval_count, '
-      + 'emotional_valence, outcome_positive, outcome_negative FROM memories ORDER BY created ASC, id ASC');
+    expect(rowReads).toContain(
+      'SELECT layer, confidence, pinned, created, last_retrieved, half_life_days, retrieval_count, ' +
+        'emotional_valence, outcome_positive, outcome_negative FROM memories ORDER BY created ASC, id ASC',
+    );
     expect(rowReads.filter((sql) => /\b(content|\w+_json)\b/.test(sql))).toEqual([]);
   });
 });

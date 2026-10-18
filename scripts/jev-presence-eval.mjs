@@ -34,40 +34,57 @@ const JUDGE_FILES = new Set(['queries3.json', 'queries4.json']);
 const PRESENT_QUESTION = {
   type: 'noul',
   instructions: {
-    question: 'Does at least one numbered candidate memory contain the specific information needed to answer the query?',
-    context: 'The candidates were fetched by a keyword and embedding search, so they often share words or a topic with the query without answering it.',
-    focus: 'Judge whether the answer itself is present in a candidate, not whether a candidate is on the same topic or uses the same terms.',
+    question:
+      'Does at least one numbered candidate memory contain the specific information needed to answer the query?',
+    context:
+      'The candidates were fetched by a keyword and embedding search, so they often share words or a topic with the query without answering it.',
+    focus:
+      'Judge whether the answer itself is present in a candidate, not whether a candidate is on the same topic or uses the same terms.',
   },
   criteria: {
     true: {
       what: 'At least one candidate states the fact, rule, fix or decision the query asks for.',
-      not_for: 'Candidates that only mention the same tool, file, project or error name without giving what the query asks for.',
-      examples: ['Query asks how to stop a flaky deploy script from hanging; one candidate says the deploy script hangs when stdin is open and the fix is to close stdin.'],
+      not_for:
+        'Candidates that only mention the same tool, file, project or error name without giving what the query asks for.',
+      examples: [
+        'Query asks how to stop a flaky deploy script from hanging; one candidate says the deploy script hangs when stdin is open and the fix is to close stdin.',
+      ],
     },
     false: {
       what: 'No candidate gives what the query asks for, even if several are on a related topic.',
       not_for: 'Cases where one candidate answers the query in different words from the query.',
-      examples: ['Query asks which port the staging database listens on; candidates discuss database migrations and backup schedules but none states a port.'],
+      examples: [
+        'Query asks which port the staging database listens on; candidates discuss database migrations and backup schedules but none states a port.',
+      ],
     },
   },
 };
 
 const pilotIdx = process.argv.indexOf('--pilot');
 const PILOT_N = pilotIdx >= 0 ? Number.parseInt(process.argv[pilotIdx + 1], 10) : null;
-if (pilotIdx >= 0 && !Number.isFinite(PILOT_N)) { console.error('--pilot needs a number'); process.exit(1); }
+if (pilotIdx >= 0 && !Number.isFinite(PILOT_N)) {
+  console.error('--pilot needs a number');
+  process.exit(1);
+}
 
 const apiKey = process.env.TYPESAFE_API_KEY?.trim();
-if (!apiKey) { console.error('TYPESAFE_API_KEY is not set.'); process.exit(1); }
+if (!apiKey) {
+  console.error('TYPESAFE_API_KEY is not set.');
+  process.exit(1);
+}
 
 // The free lint() lives in a CJS hook lib; dynamic import gets its CJS default export in an .mjs file.
 const { lint } = (await import(pathToFileURL(join(homedir(), '.claude/scripts/hooks/lib/jev.js')).href)).default;
 
 // A third-party error body can echo the request; strip anything token-shaped before it hits a log or file.
 function redact(s) {
-  return String(s).replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]');
+  return String(s)
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]');
 }
 
-const quantile = (sortedAsc, p) => sortedAsc[Math.min(sortedAsc.length - 1, Math.max(0, Math.floor(sortedAsc.length * p)))];
+const quantile = (sortedAsc, p) =>
+  sortedAsc[Math.min(sortedAsc.length - 1, Math.max(0, Math.floor(sortedAsc.length * p)))];
 
 // Mid-rank Mann-Whitney: mathematically equivalent to counting a tie as half a win.
 function auc(scores, labels) {
@@ -82,8 +99,15 @@ function auc(scores, labels) {
     for (let k = i; k <= j; k++) ranks[order[k]] = avgRank;
     i = j + 1;
   }
-  let nPos = 0, nNeg = 0, rankSumPos = 0;
-  for (let k = 0; k < n; k++) { if (labels[k]) { nPos++; rankSumPos += ranks[k]; } else nNeg++; }
+  let nPos = 0,
+    nNeg = 0,
+    rankSumPos = 0;
+  for (let k = 0; k < n; k++) {
+    if (labels[k]) {
+      nPos++;
+      rankSumPos += ranks[k];
+    } else nNeg++;
+  }
   if (!nPos || !nNeg) return null;
   return (rankSumPos - (nPos * (nPos + 1)) / 2) / (nPos * nNeg);
 }
@@ -97,9 +121,14 @@ function rankByScore(pool, scores, targetId) {
 async function runPool(items, worker, concurrency) {
   const out = Array.from({ length: items.length });
   let cursor = 0;
-  await Promise.all(Array.from({ length: concurrency }, async () => {
-    while (cursor < items.length) { const i = cursor++; out[i] = await worker(items[i]); }
-  }));
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (cursor < items.length) {
+        const i = cursor++;
+        out[i] = await worker(items[i]);
+      }
+    }),
+  );
   return out;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -108,7 +137,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hippoRoot = join(homedir(), '.hippo');
 const dir = 'evals/paraphrase';
 const queries = [];
-for (const fn of readdirSync(dir).filter((x) => /^queries\d+\.json$/.test(x)).sort()) {
+for (const fn of readdirSync(dir)
+  .filter((x) => /^queries\d+\.json$/.test(x))
+  .sort()) {
   const part = JSON.parse(readFileSync(join(dir, fn), 'utf8'));
   for (const q of part) queries.push({ ...q, file: fn });
   console.error(`  ${fn}: ${part.length} queries`);
@@ -128,7 +159,10 @@ const ceReranker = getReranker('cross-encoder');
 const warmup = [{ entry: { id: '__warmup__', content: 'warm up the cross encoder' }, score: 1, tokens: 10 }];
 let fallbackWarning = null;
 const realWarn = console.warn;
-console.warn = (...a) => { fallbackWarning = a.join(' '); realWarn(...a); };
+console.warn = (...a) => {
+  fallbackWarning = a.join(' ');
+  realWarn(...a);
+};
 await ceReranker('warm up query', warmup, { topK: 1 });
 console.warn = realWarn;
 if (fallbackWarning) {
@@ -159,11 +193,17 @@ let lintedOnce = false;
 let inputTokensTotal = 0;
 
 function buildRequestBody(query, pool) {
-  const lines = pool.map((r, i) => `[${i + 1}] ${r.entry.content.length <= TRUNCATE_CHARS ? r.entry.content : `${r.entry.content.slice(0, TRUNCATE_CHARS)}...`}`);
+  const lines = pool.map(
+    (r, i) =>
+      `[${i + 1}] ${r.entry.content.length <= TRUNCATE_CHARS ? r.entry.content : `${r.entry.content.slice(0, TRUNCATE_CHARS)}...`}`,
+  );
   const state = `Query: ${query}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
   const questions = {};
   for (let i = 1; i <= pool.length; i++) {
-    questions[`c${i}`] = { type: 'noul', instructions: `Probability that candidate ${i} (numbered in the state above) helps answer the query.` };
+    questions[`c${i}`] = {
+      type: 'noul',
+      instructions: `Probability that candidate ${i} (numbered in the state above) helps answer the query.`,
+    };
   }
   questions.present = PRESENT_QUESTION;
   return { state, questions };
@@ -183,11 +223,21 @@ async function callJevOnce(body) {
     });
     const text = await res.text();
     let json = null;
-    try { json = JSON.parse(text); } catch { /* non-JSON error body */ }
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* non-JSON error body */
+    }
     if (res.status === 422) jevHttp.code422++;
     return { ok: res.ok, status: res.status, json, rawText: res.ok ? null : redact(text).slice(0, 2000) };
   } catch (err) {
-    return { ok: false, status: null, json: null, error: redact(err?.name === 'AbortError' ? `timeout after ${TIMEOUT_MS}ms` : (err?.message ?? String(err))), networkError: true };
+    return {
+      ok: false,
+      status: null,
+      json: null,
+      error: redact(err?.name === 'AbortError' ? `timeout after ${TIMEOUT_MS}ms` : (err?.message ?? String(err))),
+      networkError: true,
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -208,16 +258,24 @@ const cachePath = (id) => join(CACHE_DIR, `${id}.json`);
 async function getJevRaw(row) {
   const cp = cachePath(row.id);
   if (existsSync(cp)) {
-    try { return { ...JSON.parse(readFileSync(cp, 'utf8')), fromCache: true }; } catch { /* corrupt cache, refetch below */ }
+    try {
+      return { ...JSON.parse(readFileSync(cp, 'utf8')), fromCache: true };
+    } catch {
+      /* corrupt cache, refetch below */
+    }
   }
   const body = buildRequestBody(row.query, row.pool);
   if (!lintedOnce) {
     lintedOnce = true;
     const problems = lint(body.state, body.questions).filter((p) => !p.startsWith('warn:'));
-    if (problems.length) { console.error('LINT FAILED:', problems); process.exit(1); }
+    if (problems.length) {
+      console.error('LINT FAILED:', problems);
+      process.exit(1);
+    }
   }
   const result = await callJevWithRetry(body);
-  if (result.ok) jevHttp.ok++; else jevHttp.failed++;
+  if (result.ok) jevHttp.ok++;
+  else jevHttp.failed++;
   const record = { id: row.id, query: row.query, request: body, response: result };
   // Only a success is cached: a failed shape must stay retryable on the next pilot round.
   if (result.ok) writeFileSync(cp, JSON.stringify(record, null, 2));
@@ -226,7 +284,10 @@ async function getJevRaw(row) {
 
 const expectedNewCalls = rows.filter((r) => !existsSync(cachePath(r.id))).length;
 console.error(`Jev: ${rows.length} rows, ${expectedNewCalls} need a new call (cap ${CALL_CAP})\n`);
-if (expectedNewCalls > CALL_CAP) { console.error('STOPPING before any calls: expected new calls exceed the cap.'); process.exit(1); }
+if (expectedNewCalls > CALL_CAP) {
+  console.error('STOPPING before any calls: expected new calls exceed the cap.');
+  process.exit(1);
+}
 
 const jevOut = await runPool(rows, getJevRaw, CONCURRENCY);
 
@@ -234,7 +295,9 @@ for (let i = 0; i < rows.length; i++) {
   const row = rows[i];
   const raw = jevOut[i];
   row.jevOk = raw.response.ok;
-  row.jevError = raw.response.ok ? null : (raw.response.error ?? raw.response.rawText ?? `status ${raw.response.status}`);
+  row.jevError = raw.response.ok
+    ? null
+    : (raw.response.error ?? raw.response.rawText ?? `status ${raw.response.status}`);
   const usage = raw.response.json?.usage;
   if (Number.isFinite(usage?.input_tokens)) inputTokensTotal += usage.input_tokens;
   else if (Number.isFinite(usage?.prompt_tokens)) inputTokensTotal += usage.prompt_tokens;
@@ -250,7 +313,10 @@ for (let i = 0; i < rows.length; i++) {
     row.J2 = Number.isFinite(answers.present?.noul) ? answers.present.noul : null;
     row.jevRank = row.J1 !== null ? rankByScore(row.pool, cScores, row.id) : Infinity;
   } else {
-    row.cScores = null; row.J1 = null; row.J2 = null; row.jevRank = Infinity;
+    row.cScores = null;
+    row.J1 = null;
+    row.J2 = null;
+    row.jevRank = Infinity;
   }
 }
 console.error('phase 2 done\n');
@@ -259,12 +325,17 @@ if (PILOT_N) {
   console.log('\n=== PILOT GATE ===');
   let allOk = true;
   for (const r of rows) {
-    const cComplete = Array.isArray(r.cScores) && r.cScores.length === r.pool.length && r.cScores.every((v) => Number.isFinite(v));
+    const cComplete =
+      Array.isArray(r.cScores) && r.cScores.length === r.pool.length && r.cScores.every((v) => Number.isFinite(v));
     const presentOk = Number.isFinite(r.J2) && r.J2 >= 0 && r.J2 <= 1;
-    console.log(`${r.id}: ok=${r.jevOk} cComplete=${cComplete} (${r.cScores?.length ?? 0}/${r.pool.length}) present=${r.J2} presentOk=${presentOk}${r.jevError ? ` error=${r.jevError}` : ''}`);
+    console.log(
+      `${r.id}: ok=${r.jevOk} cComplete=${cComplete} (${r.cScores?.length ?? 0}/${r.pool.length}) present=${r.J2} presentOk=${presentOk}${r.jevError ? ` error=${r.jevError}` : ''}`,
+    );
     if (!r.jevOk || !cComplete || !presentOk) allOk = false;
   }
-  console.log(`HTTP: ${jevHttp.ok} ok / ${jevHttp.failed} failed / ${jevHttp.code422} code422 / ${jevHttp.calls} calls`);
+  console.log(
+    `HTTP: ${jevHttp.ok} ok / ${jevHttp.failed} failed / ${jevHttp.code422} code422 / ${jevHttp.calls} calls`,
+  );
   console.log(allOk ? 'PILOT GATE: PASS' : 'PILOT GATE: FAIL');
   process.exit(allOk ? 0 : 2);
 }
@@ -273,7 +344,12 @@ if (PILOT_N) {
 const usable = rows.filter((r) => r.F1 != null && r.F2 != null && r.J1 != null && r.J2 != null);
 const excludedIncomplete = rows.length - usable.length;
 const labels = usable.map((r) => r.answerable);
-const arms = { F1: usable.map((r) => r.F1), F2: usable.map((r) => r.F2), J1: usable.map((r) => r.J1), J2: usable.map((r) => r.J2) };
+const arms = {
+  F1: usable.map((r) => r.F1),
+  F2: usable.map((r) => r.F2),
+  J1: usable.map((r) => r.J1),
+  J2: usable.map((r) => r.J2),
+};
 const aucTable = Object.fromEntries(Object.entries(arms).map(([k, s]) => [k, auc(s, labels)]));
 const bestFreeArm = (aucTable.F1 ?? -1) >= (aucTable.F2 ?? -1) ? 'F1' : 'F2';
 
@@ -284,8 +360,14 @@ function bootstrapDeltas(paidKey) {
   const out = [];
   for (const draw of draws) {
     const lab = draw.map((i) => labels[i]);
-    const a = auc(draw.map((i) => arms[paidKey][i]), lab);
-    const b = auc(draw.map((i) => arms[bestFreeArm][i]), lab);
+    const a = auc(
+      draw.map((i) => arms[paidKey][i]),
+      lab,
+    );
+    const b = auc(
+      draw.map((i) => arms[bestFreeArm][i]),
+      lab,
+    );
     if (a !== null && b !== null) out.push(a - b);
   }
   return out.sort((x, y) => x - y);
@@ -293,16 +375,32 @@ function bootstrapDeltas(paidKey) {
 const deltasJ2 = bootstrapDeltas('J2');
 const deltasJ1 = bootstrapDeltas('J1');
 const contrasts = {
-  '21a_J2_minus_bestFree': { paid: 'J2', free: bestFreeArm, delta: aucTable.J2 - aucTable[bestFreeArm], ci_97_5: { lo: quantile(deltasJ2, 0.0125), hi: quantile(deltasJ2, 0.9875) } },
-  '21b_J1_minus_bestFree': { paid: 'J1', free: bestFreeArm, delta: aucTable.J1 - aucTable[bestFreeArm], ci_97_5: { lo: quantile(deltasJ1, 0.0125), hi: quantile(deltasJ1, 0.9875) } },
+  '21a_J2_minus_bestFree': {
+    paid: 'J2',
+    free: bestFreeArm,
+    delta: aucTable.J2 - aucTable[bestFreeArm],
+    ci_97_5: { lo: quantile(deltasJ2, 0.0125), hi: quantile(deltasJ2, 0.9875) },
+  },
+  '21b_J1_minus_bestFree': {
+    paid: 'J1',
+    free: bestFreeArm,
+    delta: aucTable.J1 - aucTable[bestFreeArm],
+    ci_97_5: { lo: quantile(deltasJ1, 0.0125), hi: quantile(deltasJ1, 0.9875) },
+  },
 };
 
 const nullRng = mulberry32(2021); // separate stream from the bootstrap's seed 21
 const nullStats = [];
 for (let t = 0; t < 1000; t++) {
   const shuffled = labels.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(nullRng() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
-  const a1 = auc(arms.J1, shuffled), a2 = auc(arms.J2, shuffled), f1 = auc(arms.F1, shuffled), f2 = auc(arms.F2, shuffled);
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(nullRng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const a1 = auc(arms.J1, shuffled),
+    a2 = auc(arms.J2, shuffled),
+    f1 = auc(arms.F1, shuffled),
+    f2 = auc(arms.F2, shuffled);
   if (a1 !== null && a2 !== null && f1 !== null && f2 !== null) nullStats.push(Math.max(a1, a2) - Math.max(f1, f2));
 }
 nullStats.sort((a, b) => a - b);
@@ -310,19 +408,27 @@ const nullP95 = quantile(nullStats, 0.95);
 
 // ---------- Operating point: dev picks the cut, judge reports it ----------
 function pickThreshold(devScores, devLabels, wrongCap = 0.02) {
-  const answerableScores = devScores.filter((_, i) => devLabels[i]).slice().sort((a, b) => a - b);
+  const answerableScores = devScores
+    .filter((_, i) => devLabels[i])
+    .slice()
+    .sort((a, b) => a - b);
   if (!answerableScores.length) return null;
   const k = Math.min(answerableScores.length - 1, Math.floor(wrongCap * answerableScores.length));
   return answerableScores[k];
 }
 function applyThreshold(judgeScores, judgeLabels, t) {
-  const notAnswerable = [], answerable = [];
+  const notAnswerable = [],
+    answerable = [];
   judgeScores.forEach((s, i) => (judgeLabels[i] ? answerable : notAnswerable).push(s));
   const caughtN = notAnswerable.filter((s) => s < t).length;
   const wrongN = answerable.filter((s) => s < t).length;
   return {
     t,
-    caught: { n: caughtN, N: notAnswerable.length, share: notAnswerable.length ? caughtN / notAnswerable.length : null },
+    caught: {
+      n: caughtN,
+      N: notAnswerable.length,
+      share: notAnswerable.length ? caughtN / notAnswerable.length : null,
+    },
     wrong: { n: wrongN, N: answerable.length, share: answerable.length ? wrongN / answerable.length : null },
   };
 }
@@ -339,7 +445,9 @@ for (const armKey of ['F1', 'F2', 'J1', 'J2']) {
   const judgeScores = judgeRows.map((r) => r[armKey]);
   const t = pickThreshold(devScores, devLabels);
   const res = applyThreshold(judgeScores, judgeLabels, t);
-  if (armKey === 'J1' || armKey === 'J2') res.within_0_06_of_t = judgeScores.filter((s) => Math.abs(s - t) <= 0.06).length;
+  if (armKey === 'J1' || armKey === 'J2') {
+    res.within_0_06_of_t = judgeScores.filter((s) => Math.abs(s - t) <= 0.06).length;
+  }
   operatingPoint[armKey] = res;
 }
 const underpowered = devNotAnswerable < 25 || judgeNotAnswerable < 25;
@@ -347,7 +455,12 @@ const underpowered = devNotAnswerable < 25 || judgeNotAnswerable < 25;
 // ---------- Integrity ----------
 function armStats(vals) {
   const finite = vals.filter((v) => Number.isFinite(v));
-  return { count: finite.length, distinct: new Set(finite).size, min: finite.length ? Math.min(...finite) : null, max: finite.length ? Math.max(...finite) : null };
+  return {
+    count: finite.length,
+    distinct: new Set(finite).size,
+    min: finite.length ? Math.min(...finite) : null,
+    max: finite.length ? Math.max(...finite) : null,
+  };
 }
 let lane15 = null;
 const notes = [];
@@ -358,50 +471,85 @@ try {
   notes.push(`could not read Lane 15 reference file: ${err.message}`);
 }
 const jevR1ThisRun = rows.length ? rows.filter((r) => r.jevRank === 1).length / rows.length : null;
-if (excludedIncomplete > 0) notes.push(`${excludedIncomplete} row(s) excluded from AUC/bootstrap/operating-point analysis for a missing F1/F2/J1/J2 value`);
-if (inputTokensTotal === 0) notes.push('usage.input_tokens/prompt_tokens was absent on every response; cost_usd is not computable from usage and is reported as 0');
+if (excludedIncomplete > 0) {
+  notes.push(
+    `${excludedIncomplete} row(s) excluded from AUC/bootstrap/operating-point analysis for a missing F1/F2/J1/J2 value`,
+  );
+}
+if (inputTokensTotal === 0) {
+  notes.push(
+    'usage.input_tokens/prompt_tokens was absent on every response; cost_usd is not computable from usage and is reported as 0',
+  );
+}
 
 mkdirSync('results', { recursive: true });
-writeFileSync(OUT_PATH, JSON.stringify({
-  protocol: 'docs/EXPERIMENT-PROTOCOL.md, LANE 21 (presence)',
-  now: NOW.toISOString(),
-  usable_cases: rows.length,
-  usable_for_analysis: usable.length,
-  excluded_incomplete: excludedIncomplete,
-  label_split: { answerable: usable.filter((r) => r.answerable).length, not_answerable: usable.filter((r) => !r.answerable).length },
-  dev_judge_split: { dev_not_answerable: devNotAnswerable, judge_not_answerable: judgeNotAnswerable, underpowered },
-  auc: aucTable,
-  best_free_arm: bestFreeArm,
-  contrasts,
-  null_permutation: { draws: 1000, seed: 2021, p95: nullP95 },
-  operating_point: operatingPoint,
-  integrity: {
-    jev_r1_this_run: jevR1ThisRun,
-    lane15_reference: lane15,
-    distinct_J2: new Set(usable.map((r) => r.J2)).size,
-    arm_stats: { F1: armStats(arms.F1), F2: armStats(arms.F2), J1: armStats(arms.J1), J2: armStats(arms.J2) },
-    http: jevHttp,
-    input_tokens_total: inputTokensTotal,
-    cost_usd: (inputTokensTotal / 1e6) * USD_PER_MTOK,
-  },
-  notes,
-  rows: rows.map((r) => ({ id: r.id, query: r.query, file: r.file, answerable: r.answerable, F1: r.F1, F2: r.F2, J1: r.J1, J2: r.J2 })),
-}, null, 2));
+writeFileSync(
+  OUT_PATH,
+  JSON.stringify(
+    {
+      protocol: 'docs/EXPERIMENT-PROTOCOL.md, LANE 21 (presence)',
+      now: NOW.toISOString(),
+      usable_cases: rows.length,
+      usable_for_analysis: usable.length,
+      excluded_incomplete: excludedIncomplete,
+      label_split: {
+        answerable: usable.filter((r) => r.answerable).length,
+        not_answerable: usable.filter((r) => !r.answerable).length,
+      },
+      dev_judge_split: { dev_not_answerable: devNotAnswerable, judge_not_answerable: judgeNotAnswerable, underpowered },
+      auc: aucTable,
+      best_free_arm: bestFreeArm,
+      contrasts,
+      null_permutation: { draws: 1000, seed: 2021, p95: nullP95 },
+      operating_point: operatingPoint,
+      integrity: {
+        jev_r1_this_run: jevR1ThisRun,
+        lane15_reference: lane15,
+        distinct_J2: new Set(usable.map((r) => r.J2)).size,
+        arm_stats: { F1: armStats(arms.F1), F2: armStats(arms.F2), J1: armStats(arms.J1), J2: armStats(arms.J2) },
+        http: jevHttp,
+        input_tokens_total: inputTokensTotal,
+        cost_usd: (inputTokensTotal / 1e6) * USD_PER_MTOK,
+      },
+      notes,
+      rows: rows.map((r) => ({
+        id: r.id,
+        query: r.query,
+        file: r.file,
+        answerable: r.answerable,
+        F1: r.F1,
+        F2: r.F2,
+        J1: r.J1,
+        J2: r.J2,
+      })),
+    },
+    null,
+    2,
+  ),
+);
 
 const notAnswerableUsable = usable.filter((r) => !r.answerable);
-const handlook = notAnswerableUsable.slice().sort((a, b) => b.J2 - a.J2).slice(0, 15).map((r) => ({
-  id: r.id,
-  query: r.query,
-  J2: r.J2,
-  top3: r.pool
-    .map((p, i) => ({ id: p.entry.id, cScore: r.cScores[i], content: p.entry.content }))
-    .sort((a, b) => b.cScore - a.cScore)
-    .slice(0, 3)
-    .map((x) => ({ id: x.id, cScore: x.cScore, contentPreview: x.content.slice(0, 200) })),
-}));
+const handlook = notAnswerableUsable
+  .slice()
+  .sort((a, b) => b.J2 - a.J2)
+  .slice(0, 15)
+  .map((r) => ({
+    id: r.id,
+    query: r.query,
+    J2: r.J2,
+    top3: r.pool
+      .map((p, i) => ({ id: p.entry.id, cScore: r.cScores[i], content: p.entry.content }))
+      .sort((a, b) => b.cScore - a.cScore)
+      .slice(0, 3)
+      .map((x) => ({ id: x.id, cScore: x.cScore, contentPreview: x.content.slice(0, 200) })),
+  }));
 writeFileSync(HANDLOOK_PATH, JSON.stringify(handlook, null, 2));
 
 console.log(`\nWrote ${OUT_PATH} and ${HANDLOOK_PATH}`);
-console.log(`calls: ${jevHttp.calls} (ok ${jevHttp.ok}, failed ${jevHttp.failed}, 422 ${jevHttp.code422}), cost $${((inputTokensTotal / 1e6) * USD_PER_MTOK).toFixed(4)}`);
-console.log(`AUC: F1=${aucTable.F1?.toFixed(4)} F2=${aucTable.F2?.toFixed(4)} J1=${aucTable.J1?.toFixed(4)} J2=${aucTable.J2?.toFixed(4)}`);
+console.log(
+  `calls: ${jevHttp.calls} (ok ${jevHttp.ok}, failed ${jevHttp.failed}, 422 ${jevHttp.code422}), cost $${((inputTokensTotal / 1e6) * USD_PER_MTOK).toFixed(4)}`,
+);
+console.log(
+  `AUC: F1=${aucTable.F1?.toFixed(4)} F2=${aucTable.F2?.toFixed(4)} J1=${aucTable.J1?.toFixed(4)} J2=${aucTable.J2?.toFixed(4)}`,
+);
 if (notes.length) console.log('NOTES:', notes.join(' | '));

@@ -29,15 +29,16 @@ export interface ExtractOptions {
   onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
 }
 
-const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. ` +
-`Extract 1-8 standalone factual statements that would be useful to remember later.
+const EXTRACTION_PROMPT =
+  `You are extracting factual statements from a conversation or memory entry. ` +
+  `Extract 1-8 standalone factual statements that would be useful to remember later.
 
 Rules:
 - Each fact must be a complete, standalone sentence
 - Include the speaker's name in every fact (e.g. "Alice prefers..." not "She prefers...")
 - Preserve specific details: names, numbers, dates, paths, IDs
 - Return a JSON array of objects with: content (string), tags (array of "speaker:X" and "topic:Y" strings), ` +
-`valence ("neutral", "positive", "negative", or "critical")
+  `valence ("neutral", "positive", "negative", or "critical")
 - Return an empty array [] for small talk with no extractable facts
 - Output ONLY the JSON array, no preamble or explanation
 
@@ -47,10 +48,7 @@ Input text:
 // Output budget for one extraction reply.
 const EXTRACTION_MAX_TOKENS = 1200;
 
-export async function extractFacts(
-  text: string,
-  opts: ExtractOptions,
-): Promise<ExtractedFact[]> {
+export async function extractFacts(text: string, opts: ExtractOptions): Promise<ExtractedFact[]> {
   const reply = await sendAnthropicMessage({
     apiKey: opts.apiKey,
     model: opts.model,
@@ -90,23 +88,16 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
   for (const item of parsed) {
     if (facts.length >= 8) break;
-    if (
-      !item ||
-      !isJsonString(item.content) ||
-      item.content.length < 3
-    ) {
+    if (!item || !isJsonString(item.content) || item.content.length < 3) {
       continue;
     }
 
     const itemTags = item.tags;
-    const tags = Array.isArray(itemTags)
-      ? itemTags.filter((t) => isJsonString(t))
-      : [];
+    const tags = Array.isArray(itemTags) ? itemTags.filter((t) => isJsonString(t)) : [];
     // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings
     // of EmotionalValence.
-    const valence: EmotionalValence = isJsonString(item.valence) && validValences.has(item.valence)
-      ? (item.valence as EmotionalValence)
-      : 'neutral';
+    const valence: EmotionalValence =
+      isJsonString(item.valence) && validValences.has(item.valence) ? (item.valence as EmotionalValence) : 'neutral';
 
     facts.push({ content: item.content, tags, valence });
   }
@@ -117,7 +108,10 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
 export function storeExtractedFacts(
-  learning: Learning, source: MemoryEntry, facts: ExtractedFact[], baseHalfLifeDays: number,
+  learning: Learning,
+  source: MemoryEntry,
+  facts: ExtractedFact[],
+  baseHalfLifeDays: number,
 ): MemoryEntry[] {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
@@ -163,17 +157,20 @@ function buildExtractedEntry(
   baseHalfLifeDays: number,
 ): MemoryEntry {
   const tags = ['extracted', ...inheritedTags, ...fact.tags];
-  return { ...createMemory(fact.content, {
-    layer: Layer.Semantic,
-    tags,
-    emotionalValence: fact.valence,
-    confidence: 'inferred',
-    source: source.source,
-    extractedFrom: source.id,
-    scope: source.scope,
-    // Without it createMemory stamps 'default', and extracted facts leave
-    // the tenant of the episodic memory they were extracted from.
-    tenantId: source.tenant_id,
-    baseHalfLifeDays,
-  }), origin_project: source.origin_project };
+  return {
+    ...createMemory(fact.content, {
+      layer: Layer.Semantic,
+      tags,
+      emotionalValence: fact.valence,
+      confidence: 'inferred',
+      source: source.source,
+      extractedFrom: source.id,
+      scope: source.scope,
+      // Without it createMemory stamps 'default', and extracted facts leave
+      // the tenant of the episodic memory they were extracted from.
+      tenantId: source.tenant_id,
+      baseHalfLifeDays,
+    }),
+    origin_project: source.origin_project,
+  };
 }

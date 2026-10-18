@@ -3,7 +3,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getHippoDbPath,
+  getSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { DECAY_KEY_INDEX, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../src/db/decay-key.js';
 import { v60 } from '../../src/db/migrations/v60.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -25,7 +31,11 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 function indexSql(db: DatabaseSyncLike): string | undefined {
   // SAFETY: one TEXT `sql` column.
-  return (db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(DECAY_KEY_INDEX) as { sql?: string } | undefined)?.sql;
+  return (
+    db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(DECAY_KEY_INDEX) as
+      | { sql?: string }
+      | undefined
+  )?.sql;
 }
 
 beforeEach(() => {
@@ -49,11 +59,13 @@ describe('schema v60', () => {
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
     const old = new DatabaseSync(getHippoDbPath(home));
     old.exec(readFileSync(V56_SCHEMA, 'utf8'));
-    old.prepare(
-      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json,
+    old
+      .prepare(
+        `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json,
         emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content)
        VALUES ('mem_v56_row', '2025-01-02T03:04:05.000Z', '2025-02-03T04:05:06.000Z', 0, 1, 30, 'semantic', '[]', 'neutral', 0.5, 'cli', '[]', 0, 'verified', 'survives the index build')`,
-    ).run();
+      )
+      .run();
     expect(old.prepare(`SELECT name FROM sqlite_master WHERE name = ?`).get(DECAY_KEY_INDEX)).toBeUndefined();
     old.close();
     withDb((db) => {

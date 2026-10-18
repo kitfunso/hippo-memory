@@ -155,7 +155,7 @@ export interface SessionDecayContext {
 /** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal
  * rebuild. */
 export interface RebuildPatch {
-  content: string;            // new content for normal rebuild; summary.content for zero-child
+  content: string; // new content for normal rebuild; summary.content for zero-child
   descendant_count: number;
   earliest_at: string | null;
   latest_at: string | null;

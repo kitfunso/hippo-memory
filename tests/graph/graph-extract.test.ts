@@ -18,7 +18,13 @@ import { saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { loadEntities, loadRelations } from '../../src/store/graph-reads.js';
 import type { Entity } from '../../src/store/graph-rows.js';
 import { extractGraph, extractGraphChunked } from '../../src/graph/extract.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getHippoDbPath,
+  runWithRequestStores,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../src/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -47,7 +53,11 @@ db.close();
 `;
 
 /** The real clock with the hold a test picks, and a pause that yields once instead of waiting out the real gap. */
-const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({ ...WRITE_BUDGET, holdMs, pause });
+const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({
+  ...WRITE_BUDGET,
+  holdMs,
+  pause,
+});
 
 const GRAPH_WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(entities|relations)\b/i;
 
@@ -55,7 +65,10 @@ const GRAPH_WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(entities|rela
 function graphWritesDuring(run: () => void): string[] {
   const writes: string[] = [];
   const prepare = DatabaseSync.prototype.prepare;
-  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+    this: DatabaseSyncLike,
+    sql: string,
+  ) {
     if (GRAPH_WRITE_SQL.test(sql)) writes.push(sql.trim());
     return prepare.call(this, sql);
   });
@@ -81,7 +94,10 @@ function callStack(): string {
 function countRebuildBegins() {
   let begins = 0;
   const exec = DatabaseSync.prototype.exec;
-  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+    this: DatabaseSyncLike,
+    sql: string,
+  ) {
     if (sql === 'BEGIN IMMEDIATE' && callStack().includes('runGraphRebuildTransaction')) begins++;
     exec.call(this, sql);
   });
@@ -96,7 +112,10 @@ function graphByKey(home: string, tenant = 'default') {
   return {
     entities: ents.map((e) => `${keyOf(e)} ${e.name} ${e.memoryId} ${e.sourceKind}`).sort(),
     relations: loadRelations(home, tenant, { limit: 10_000 })
-      .map((r) => `${keyById.get(r.fromEntityId)}>${keyById.get(r.toEntityId)} ${r.relType} ${r.memoryId} ${r.sourceKind} ${r.sourceObjectType}:${r.sourceObjectId}`)
+      .map(
+        (r) =>
+          `${keyById.get(r.fromEntityId)}>${keyById.get(r.toEntityId)} ${r.relType} ${r.memoryId} ${r.sourceKind} ${r.sourceObjectType}:${r.sourceObjectId}`,
+      )
       .sort(),
   };
 }
@@ -107,26 +126,51 @@ function entityCount(home: string): number {
     // SAFETY: COUNT(*) always returns exactly one row shaped { c: number };
     // better-sqlite3's .get() types as `unknown` with no query-shape knowledge.
     return (db.prepare(`SELECT COUNT(*) c FROM entities`).get() as { c: number }).c;
+  } finally {
+    closeHippoDb(db);
   }
-  finally { closeHippoDb(db); }
 }
 
 describe('graph extraction (deterministic, from consolidated first-class objects)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('graph-extract'); });
-  afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
+  beforeEach(() => {
+    home = makeRoot('graph-extract');
+  });
+  afterEach(() => {
+    try {
+      rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  });
 
   it('extracts entities (4 types) + a supersedes relation; excludes closed; idempotent', async () => {
     // decision v1 -> superseded by v2 (active)
-    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres' });
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Adopt Postgres',
+    });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Adopt Postgres (managed)',
+      supersedesDecisionId: d1.id,
+    });
     // a closed decision (must be excluded)
-    const dc = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Retired idea' });
+    const dc = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Retired idea',
+    });
     await closeDecision(objectsAt(home), 'default', dc.id);
     // one of each other type
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Data retention', policyText: 'Delete logs after 90 days' });
-    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal in Q3' });
-    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'Data retention',
+      policyText: 'Delete logs after 90 days',
+    });
+    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      customer: 'Acme Corp',
+      note: 'renewal in Q3',
+    });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'hippo',
+      summary: 'agent-memory lib',
+    });
 
     const r = await extractGraph(sqliteStore(home), 'default');
     expect(r.byType).toEqual({ decision: 2, policy: 1, customer: 1, project: 1 }); // dc excluded
@@ -149,7 +193,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     expect(rels.length).toBe(1);
     expect(rels[0].relType).toBe('supersedes');
     expect(rels[0].fromEntityId).toBe(e2.id); // successor
-    expect(rels[0].toEntityId).toBe(e1.id);   // superseded
+    expect(rels[0].toEntityId).toBe(e1.id); // superseded
 
     // idempotent: re-running rebuilds to the same graph (no duplication)
     const r2 = await extractGraph(sqliteStore(home), 'default');
@@ -163,9 +207,13 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     // v38: extraction anchors provenance to the authoritative E2 object, so an in-force
     // decision STAYS in the graph after its mirror is forgotten (memory_id -> NULL), now
     // anchored via source_object_type/id.
-    const dn = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Will lose its memory' });
+    const dn = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Will lose its memory',
+    });
     deleteEntry(home, dn.memoryId!); // distilled delete is allowed; decisions.memory_id -> NULL
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Keeps its memory' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Keeps its memory',
+    });
     const r = await extractGraph(sqliteStore(home), 'default');
     expect(r.byType.decision).toBe(2); // BOTH extracted (the forgotten-mirror one survives)
     const ents = loadEntities(home, 'default', { limit: 100 });
@@ -180,8 +228,13 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
   it('skips a supersedes relation when the successor is not extracted (closed)', async () => {
     // d1 superseded by d2, then d2 closed -> d1 superseded (extracted), d2 closed (not)
-    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'orig' });
-    const d2 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'replacement', supersedesDecisionId: d1.id });
+    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'orig',
+    });
+    const d2 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'replacement',
+      supersedesDecisionId: d1.id,
+    });
     await closeDecision(objectsAt(home), 'default', d2.id);
     const r = await extractGraph(sqliteStore(home), 'default');
     // d1 (superseded) extracted; d2 (closed) excluded -> no relation (successor missing)
@@ -190,7 +243,9 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('rebuild reflects current state: a brand-new object appears, a closed one disappears, on re-extract', async () => {
-    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'first' });
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'first',
+    });
     await extractGraph(sqliteStore(home), 'default');
     expect(entityCount(home)).toBe(1);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'second' });
@@ -218,13 +273,17 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('trims leading whitespace before capping: a long whitespace-prefix name must not brick', async () => {
-    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'placeholder' });
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'placeholder',
+    });
     // Inject a name whose first 512 chars are whitespace (slice-without-trim would
     // yield a whitespace-only label -> insertEntity trims to '' -> throws -> brick).
     const db = openHippoDb(home);
     try {
       db.prepare(`UPDATE decisions SET decision_text = ? WHERE id = ?`).run(' '.repeat(600) + 'real decision', d.id);
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
     const r = await extractGraph(sqliteStore(home), 'default'); // must not throw
     expect(r.byType.decision).toBe(1);
     const ent = loadEntities(home, 'default', { limit: 100 })[0];
@@ -234,16 +293,43 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
   it('empty store extracts to an empty graph (no crash)', async () => {
     const r = await extractGraph(sqliteStore(home), 'default');
-    expect(r).toEqual({ entities: 0, relations: 0, references: 0, byType: { decision: 0, policy: 0, customer: 0, project: 0 }, truncated: [] });
+    expect(r).toEqual({
+      entities: 0,
+      relations: 0,
+      references: 0,
+      byType: { decision: 0, policy: 0, customer: 0, project: 0 },
+      truncated: [],
+    });
   });
 
   it('a rerun on unchanged objects prepares no write to entities or relations', async () => {
-    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres' });
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres (managed) under RetryPolicy', supersedesDecisionId: d1.id });
-    deleteEntry(home, (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'RetryPolicy covers search too' })).memoryId!);
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal in Q3, wants RetryPolicy' });
-    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib for Acme Corp' });
+    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Adopt Postgres',
+    });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Adopt Postgres (managed) under RetryPolicy',
+      supersedesDecisionId: d1.id,
+    });
+    deleteEntry(
+      home,
+      (
+        await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+          decisionText: 'RetryPolicy covers search too',
+        })
+      ).memoryId!,
+    );
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'RetryPolicy',
+      policyText: 'retry 3x',
+    });
+    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      customer: 'Acme Corp',
+      note: 'renewal in Q3, wants RetryPolicy',
+    });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'hippo',
+      summary: 'agent-memory lib for Acme Corp',
+    });
     const first = await extractGraph(sqliteStore(home), 'default');
     // Both active decisions and the note name RetryPolicy, and the brief names Acme Corp; superseded rows make none.
     expect(first.references).toBe(4);
@@ -252,14 +338,23 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('renaming a policy three decisions reference keeps its entity id and all three references', async () => {
-    const pol = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Retry Policy', policyText: 'retry 3x' });
-    for (const team of ['billing', 'search', 'checkout']) await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: `${team} adopts Retry Policy v2` });
+    const pol = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'Retry Policy',
+      policyText: 'retry 3x',
+    });
+    for (const team of ['billing', 'search', 'checkout']) {
+      await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        decisionText: `${team} adopts Retry Policy v2`,
+      });
+    }
     await extractGraph(sqliteStore(home), 'default');
     const before = loadEntities(home, 'default', { entityType: 'policy', limit: 10 })[0];
     const db = openHippoDb(home);
     try {
       db.prepare(`UPDATE policies SET policy_name = ? WHERE id = ?`).run('Retry Policy v2', pol.id);
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
 
     await extractGraph(sqliteStore(home), 'default');
 
@@ -270,10 +365,18 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('a chunked rebuild commits in several transactions and ends where one transaction would', async () => {
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'RetryPolicy',
+      policyText: 'retry 3x',
+    });
     let prev: number | undefined;
     for (let i = 0; i < 40; i++) {
-      prev = (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: `Call ${i} adopts RetryPolicy`, supersedesDecisionId: i % 10 === 9 ? prev : undefined })).id;
+      prev = (
+        await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+          decisionText: `Call ${i} adopts RetryPolicy`,
+          supersedesDecisionId: i % 10 === 9 ? prev : undefined,
+        })
+      ).id;
     }
     const copy = `${home}-copy`;
     cpSync(home, copy, { recursive: true });
@@ -291,9 +394,13 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
   it('a mirrorless object closed between the load and its chunk gets no entity row', async () => {
     // Loaders return newest first, so the older decision's insert lands in a later chunk than the newer one's.
-    const older = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Older call, mirror forgotten' });
+    const older = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Older call, mirror forgotten',
+    });
     deleteEntry(home, older.memoryId!);
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Newer call' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'Newer call',
+    });
     let pauses = 0;
     const closeOlderOnce = async (): Promise<void> => {
       if (pauses++ === 0) await closeDecision(objectsAt(home), 'default', older.id);
@@ -309,17 +416,25 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('an incremental rebuild keeps unchanged rows, so the new entity and relation sort first in the graph reads', async () => {
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'D1 adopts RetryPolicy' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'RetryPolicy',
+      policyText: 'retry 3x',
+    });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'D1 adopts RetryPolicy',
+    });
     await extractGraph(sqliteStore(home), 'default');
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'D2 adopts RetryPolicy' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      decisionText: 'D2 adopts RetryPolicy',
+    });
 
     await extractGraph(sqliteStore(home), 'default');
 
     const ents = loadEntities(home, 'default', { limit: 10 });
     expect(ents.map((e) => e.name)).toEqual(['D2 adopts RetryPolicy', 'RetryPolicy', 'D1 adopts RetryPolicy']);
     const [d2, pol, d1] = ents;
-    const fromNames = (rels: { fromEntityId: number }[]) => rels.map((r) => ents.find((e) => e.id === r.fromEntityId)?.name);
+    const fromNames = (rels: { fromEntityId: number }[]) =>
+      rels.map((r) => ents.find((e) => e.id === r.fromEntityId)?.name);
     const newestFirst = ['D2 adopts RetryPolicy', 'D1 adopts RetryPolicy'];
     expect(fromNames(loadRelations(home, 'default', { limit: 10 }))).toEqual(newestFirst);
     expect(fromNames(loadNeighborRelations(home, 'default', [pol.id]))).toEqual(newestFirst);
@@ -327,8 +442,15 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('a chunked rebuild inside a server request waits out a writer that holds the lock between chunks', async () => {
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    for (let i = 0; i < 10; i++) await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: `Call ${i} adopts RetryPolicy` });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'RetryPolicy',
+      policyText: 'retry 3x',
+    });
+    for (let i = 0; i < 10; i++) {
+      await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        decisionText: `Call ${i} adopts RetryPolicy`,
+      });
+    }
     let exited: Promise<unknown[]> | undefined;
     const holdsOnFirstPause = budget(0, async () => {
       if (exited) return yieldOnce();
@@ -337,7 +459,10 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       await once(holder, 'message');
     });
 
-    const r = await runWithRequestStores(async () => await extractGraphChunked(sqliteStore(home), 'default', holdsOnFirstPause), { busyWaitMs: 250 });
+    const r = await runWithRequestStores(
+      async () => await extractGraphChunked(sqliteStore(home), 'default', holdsOnFirstPause),
+      { busyWaitMs: 250 },
+    );
 
     expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);

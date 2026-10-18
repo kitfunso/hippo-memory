@@ -14,9 +14,14 @@ export function collectHandoffEvidence(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let gitRef: string | null = null;
   try {
-    gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    }).trim() || null;
+    gitRef =
+      execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd,
+        encoding: 'utf8',
+        timeout: timeoutMs,
+        stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
+      }).trim() || null;
   } catch {
     // No git, not a repo, or timed out: evidence is optional, so the field stays null.
     gitRef = null;
@@ -24,7 +29,11 @@ export function collectHandoffEvidence(
   let dirtyTree: boolean | null = null;
   try {
     const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
+      cwd,
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     dirtyTree = status.trim().length > 0;
   } catch {

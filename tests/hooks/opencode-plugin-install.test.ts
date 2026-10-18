@@ -103,16 +103,23 @@ describe('installOpencodePlugin (real-FS)', () => {
   it('migrates: removes only hippo-owned hook entries from opencode.json', () => {
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      theme: 'dark',
-      hooks: {
-        SessionEnd: [
-          { hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] },
-          { hooks: [{ type: 'command', command: 'echo my own hook', timeout: 5 }] },
-        ],
-        SessionStart: [{ hooks: [{ type: 'command', command: 'hippo last-sleep --path bar', timeout: 5 }] }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          theme: 'dark',
+          hooks: {
+            SessionEnd: [
+              { hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] },
+              { hooks: [{ type: 'command', command: 'echo my own hook', timeout: 5 }] },
+            ],
+            SessionStart: [{ hooks: [{ type: 'command', command: 'hippo last-sleep --path bar', timeout: 5 }] }],
+          },
+        },
+        null,
+        2,
+      ),
+    );
 
     const result = installOpencodePlugin();
     expect(result.migratedLegacyHooks).toBe(true);
@@ -129,11 +136,18 @@ describe('installOpencodePlugin (real-FS)', () => {
   it('drops the empty hooks key entirely when nothing survives', () => {
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      hooks: {
-        SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }],
+          },
+        },
+        null,
+        2,
+      ),
+    );
     installOpencodePlugin();
     const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
     expect(after.hooks).toBeUndefined();
@@ -144,9 +158,9 @@ describe('installOpencodePlugin (real-FS)', () => {
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     fs.writeFileSync(opencodeJsonPath, '{ "hooks": ["unterminated string ');
     const result = installOpencodePlugin();
-    expect(result.installed).toBe(true);            // plugin file still written
+    expect(result.installed).toBe(true); // plugin file still written
     expect(result.migratedLegacyHooks).toBe(false); // nothing migrated
-    expect(result.jsonRepairFailed).toBe(true);     // structured error surfaced
+    expect(result.jsonRepairFailed).toBe(true); // structured error surfaced
   });
 
   it('does NOT create opencode.json on a fresh install with no legacy block', () => {
@@ -160,11 +174,18 @@ describe('installOpencodePlugin (real-FS)', () => {
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     // User's coincidental substring "hippo sleep" inside an echo payload —
     // must NOT trigger hippo-owned detection.
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      hooks: {
-        SessionEnd: [{ hooks: [{ type: 'command', command: 'echo "remember to hippo sleep your laptop"' }] }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionEnd: [{ hooks: [{ type: 'command', command: 'echo "remember to hippo sleep your laptop"' }] }],
+          },
+        },
+        null,
+        2,
+      ),
+    );
     const result = installOpencodePlugin();
     expect(result.migratedLegacyHooks).toBe(false);
     const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
@@ -199,16 +220,25 @@ describe('installOpencodePlugin (real-FS)', () => {
     // command, the user command must survive.
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      hooks: {
-        SessionEnd: [{
-          hooks: [
-            { type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 },
-            { type: 'command', command: 'echo "my custom cleanup"', timeout: 10 },
-          ],
-        }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionEnd: [
+              {
+                hooks: [
+                  { type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 },
+                  { type: 'command', command: 'echo "my custom cleanup"', timeout: 10 },
+                ],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+    );
 
     const result = installOpencodePlugin();
     expect(result.migratedLegacyHooks).toBe(true);
@@ -225,12 +255,21 @@ describe('installOpencodePlugin (real-FS)', () => {
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     const mine = { type: 'command', command: 'hippo sleep-report-of-mine --weekly', timeout: 10 };
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      hooks: {
-        SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }, mine] }],
-        Stop: [{ hooks: [{ type: 'command', command: 'hippo capture-notes' }] }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionEnd: [
+              { hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }, mine] },
+            ],
+            Stop: [{ hooks: [{ type: 'command', command: 'hippo capture-notes' }] }],
+          },
+        },
+        null,
+        2,
+      ),
+    );
 
     const result = installOpencodePlugin();
     expect(result.migratedLegacyHooks).toBe(true);
@@ -246,11 +285,18 @@ describe('installOpencodePlugin (real-FS)', () => {
     // not have their entry deleted.
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      hooks: {
-        SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo deploy', timeout: 5 }] }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo deploy', timeout: 5 }] }],
+          },
+        },
+        null,
+        2,
+      ),
+    );
     const result = installOpencodePlugin();
     expect(result.migratedLegacyHooks).toBe(false);
     const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
@@ -288,9 +334,16 @@ describe('uninstallOpencodePlugin (real-FS)', () => {
   it('ALSO runs the legacy-hooks migration (downgrade path)', () => {
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
-    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
-      hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }] },
-    }, null, 2));
+    fs.writeFileSync(
+      opencodeJsonPath,
+      JSON.stringify(
+        {
+          hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }] },
+        },
+        null,
+        2,
+      ),
+    );
     // No plugin installed; uninstall should still clean the legacy block so a
     // user running `hippo hook uninstall opencode` to remove hippo entirely
     // leaves opencode launchable.

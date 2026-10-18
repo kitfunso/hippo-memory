@@ -8,8 +8,18 @@ import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import type { SnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import {
-  NOW, call, embed, get, makeStore, parse, postJson, seed, snapshotsOf, startDashboard,
-  type RunningDashboard, type TmpStore,
+  NOW,
+  call,
+  embed,
+  get,
+  makeStore,
+  parse,
+  postJson,
+  seed,
+  snapshotsOf,
+  startDashboard,
+  type RunningDashboard,
+  type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 
@@ -23,7 +33,11 @@ let service: SnapshotService;
 beforeEach(() => {
   store = makeStore('hippo-dash-cache');
   clock = NOW;
-  service = snapshotsOf(store.hippoRoot, () => clock, () => clock);
+  service = snapshotsOf(
+    store.hippoRoot,
+    () => clock,
+    () => clock,
+  );
 });
 
 afterEach(() => {
@@ -73,7 +87,11 @@ describe('snapshot reuse and rebuild', () => {
 
   it('ages the cache on its own clock, so a frozen eval clock still shows an outside write', () => {
     let wall = NOW;
-    const frozen = snapshotsOf(store.hippoRoot, () => NOW, () => wall);
+    const frozen = snapshotsOf(
+      store.hippoRoot,
+      () => NOW,
+      () => wall,
+    );
     try {
       seed(store.hippoRoot, 'first');
       const first = frozen.get('default');
@@ -109,7 +127,11 @@ describe('snapshot reuse and rebuild', () => {
   it('serves an empty snapshot while hippo.db is missing, then picks the database up', () => {
     const emptyRoot = join(store.home, 'fresh', '.hippo');
     mkdirSync(emptyRoot, { recursive: true });
-    const early = snapshotsOf(emptyRoot, () => clock, () => clock);
+    const early = snapshotsOf(
+      emptyRoot,
+      () => clock,
+      () => clock,
+    );
     try {
       expect(early.get('default').facts).toHaveLength(0);
       seed(emptyRoot, 'now there is a row');
@@ -257,8 +279,12 @@ describe('through the server', () => {
     const first = parse<Overview>(await get(dash.port, '/api/overview'));
     seed(store.hippoRoot, 'written elsewhere');
 
-    const crossSite = parse<Overview>(await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'cross-site' } }));
-    const sameOrigin = parse<Overview>(await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'same-origin' } }));
+    const crossSite = parse<Overview>(
+      await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'cross-site' } }),
+    );
+    const sameOrigin = parse<Overview>(
+      await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'same-origin' } }),
+    );
 
     expect(crossSite.snapshotId).toBe(first.snapshotId);
     expect(sameOrigin.snapshotId).toBeGreaterThan(first.snapshotId);

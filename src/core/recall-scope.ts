@@ -22,9 +22,7 @@ export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
  * is reachable and testable. */
 export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
   if (arr.length === 0) {
-    throw new Error(
-      `${name} cannot be empty — would silently allow quarantine scopes`,
-    );
+    throw new Error(`${name} cannot be empty — would silently allow quarantine scopes`);
   }
 }
 
@@ -136,10 +134,7 @@ export function passesScopeFilterForRecall(
  * Includes private/quarantine scopes (owner access); a named personal scope never unlocks: the CLI has no caller
  * identity.
  */
-export function passesCliRecallScopeFilter(
-  scope: string | null,
-  requested: string | undefined,
-): boolean {
+export function passesCliRecallScopeFilter(scope: string | null, requested: string | undefined): boolean {
   if (requested !== undefined && requested !== '' && !isPersonalScope(requested) && scope === requested) {
     return true;
   }
@@ -224,7 +219,9 @@ export function commonDerivationScope(
 /** Map-partition key for consolidate/dag/dedup producers: tenant + derivation scope + origin project,
  *  so a derived row never blends two restricted scopes, a mixed pair, or two projects. */
 export function derivationPartitionKey(
-  tenantId: string, scope: string | null | undefined, origin: string | null | undefined,
+  tenantId: string,
+  scope: string | null | undefined,
+  origin: string | null | undefined,
 ): string {
   // unstamped, unknown and named never share a bucket
   const project = origin === undefined ? '\u0002' : (origin ?? '\u0001');

@@ -37,7 +37,10 @@ export async function captureToolFailure(
 
 /** Logs the failure, then tells the caller the row id, or null when the write threw; the throw goes on. */
 async function logAndReport(
-  target: FailureTarget, payload: JsonValue, lesson: FailureReading, outcome: FailureOutcome,
+  target: FailureTarget,
+  payload: JsonValue,
+  lesson: FailureReading,
+  outcome: FailureOutcome,
   onLogged: ((failureId: number | null) => void) | undefined,
 ): Promise<void> {
   let id: number;
@@ -91,9 +94,10 @@ export async function storeLesson(
     baseHalfLifeDays: config.defaultHalfLifeDays,
   });
   // A caller's project is its checked one; the store's own folder would name the server.
-  const write = caller === undefined
-    ? { entry, actor: CLI_ACTOR }
-    : { entry: { ...entry, origin_project: caller.originProject }, actor: caller.actor };
+  const write =
+    caller === undefined
+      ? { entry, actor: CLI_ACTOR }
+      : { entry: { ...entry, origin_project: caller.originProject }, actor: caller.actor };
   await store.entryWrites.writeEntry(write);
   return 'stored';
 }

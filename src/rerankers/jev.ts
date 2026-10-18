@@ -53,7 +53,8 @@ export function buildRelevanceRequest(query: string, head: readonly SearchResult
   const lines = head.map(
     (r, i) => `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
   );
-  const state = `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's ` +
+  const state =
+    `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's ` +
     `project store:\n\n${lines.join('\n\n')}`;
   const questions: RelevanceRequest['questions'] = {};
   for (let i = 1; i <= head.length; i++) {
@@ -72,17 +73,24 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
 
   const { state, questions } = buildRelevanceRequest(query, head);
 
-  const resp = await rerankerPost(ENDPOINT, {
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      state,
-      model: envJevModel() ?? DEFAULT_MODEL,
-      questions,
-    }),
-  }, envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS);
+  const resp = await rerankerPost(
+    ENDPOINT,
+    {
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        state,
+        model: envJevModel() ?? DEFAULT_MODEL,
+        questions,
+      }),
+    },
+    envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
+  );
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
-    const requestId = resp.headers.get('x-request-id')?.replace(/[^\x20-\x7e]/g, '').slice(0, REQUEST_ID_MAX_CHARS);
+    const requestId = resp.headers
+      .get('x-request-id')
+      ?.replace(/[^\x20-\x7e]/g, '')
+      .slice(0, REQUEST_ID_MAX_CHARS);
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${requestId ? `, request ${requestId}` : ''}`);
   }

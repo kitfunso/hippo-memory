@@ -61,14 +61,14 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 export function wmPushAt(
   db: DatabaseSyncLike,
   opts: {
-  scope: string;
-  content: string;
-  importance?: number;
-  sessionId?: string;
-  taskId?: string;
-  metadata?: JsonObject;
-  tenantId?: string;
-},
+    scope: string;
+    content: string;
+    importance?: number;
+    sessionId?: string;
+    taskId?: string;
+    metadata?: JsonObject;
+    tenantId?: string;
+  },
 ): number {
   const now = new Date().toISOString();
   const importance = opts.importance ?? 0;
@@ -106,9 +106,11 @@ export function wmPushAt(
 function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tenantId: string): void {
   // Evict if over capacity for this scope.
   // SAFETY: `COUNT(*) AS cnt` always returns exactly one row { cnt }, so `.get()` never yields undefined.
-  const countRow = db.prepare(`
+  const countRow = db
+    .prepare(`
     SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
-  `).get(scope, tenantId) as { cnt: number } | undefined;
+  `)
+    .get(scope, tenantId) as { cnt: number } | undefined;
 
   const count = Number(countRow?.cnt ?? 0);
   if (count > WM_MAX_ENTRIES) {
@@ -129,11 +131,11 @@ function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tena
 export function wmReadAt(
   db: DatabaseSyncLike,
   opts?: {
-  scope?: string;
-  sessionId?: string;
-  limit?: number;
-  tenantId?: string;
-},
+    scope?: string;
+    sessionId?: string;
+    limit?: number;
+    tenantId?: string;
+  },
 ): WorkingMemoryItem[] {
   const clauses: string[] = ['tenant_id = ?'];
   const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
@@ -153,13 +155,15 @@ export function wmReadAt(
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the
   // same names, from the working_memory table this module owns.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
     FROM working_memory
     ${where}
     ORDER BY importance DESC, created_at DESC
     LIMIT ?
-  `).all(...params) as WorkingMemoryRow[];
+  `)
+    .all(...params) as WorkingMemoryRow[];
 
   return rows.map(rowToItem);
 }
@@ -168,10 +172,10 @@ export function wmReadAt(
 export function wmClearAt(
   db: DatabaseSyncLike,
   opts?: {
-  scope?: string;
-  sessionId?: string;
-  tenantId?: string;
-},
+    scope?: string;
+    sessionId?: string;
+    tenantId?: string;
+  },
 ): number {
   const clauses: string[] = ['tenant_id = ?'];
   const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
@@ -189,4 +193,3 @@ export function wmClearAt(
   const result = db.prepare(`DELETE FROM working_memory ${where}`).run(...params);
   return Number(result.changes ?? 0);
 }
-

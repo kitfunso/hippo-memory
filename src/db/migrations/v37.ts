@@ -181,35 +181,35 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
         `;
 
 export const v37: Migration = {
-    version: 37,
-    up: (db) => {
-      // Graph-on-consolidated guard: entities, relations and graph_extraction_queue may reference only consolidated
-      // memories (distilled|superseded), never raw.
-      // The kind match needs a subquery, so it is a BEFORE INSERT and UPDATE trigger (INSERT-only is bypassable).
-      // rel_type avoids the reserved word REFERENCES.
-      if (!tableExists(db, 'entities')) {
-        db.exec(ENTITIES_TABLE);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
-        db.exec(RELATIONS_TABLE);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
-        db.exec(GRAPH_EXTRACTION_QUEUE_TABLE);
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_graph_queue_status ON graph_extraction_queue(tenant_id, status)`);
+  version: 37,
+  up: (db) => {
+    // Graph-on-consolidated guard: entities, relations and graph_extraction_queue may reference only consolidated
+    // memories (distilled|superseded), never raw.
+    // The kind match needs a subquery, so it is a BEFORE INSERT and UPDATE trigger (INSERT-only is bypassable).
+    // rel_type avoids the reserved word REFERENCES.
+    if (!tableExists(db, 'entities')) {
+      db.exec(ENTITIES_TABLE);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
+      db.exec(RELATIONS_TABLE);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
+      db.exec(GRAPH_EXTRACTION_QUEUE_TABLE);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_graph_queue_status ON graph_extraction_queue(tenant_id, status)`);
 
-        db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT);
-        db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE);
+      db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT);
+      db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE);
 
-        db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT);
-        db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE);
+      db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_INSERT);
+      db.exec(TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE);
 
-        db.exec(TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_INSERT);
-        db.exec(TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE);
+      db.exec(TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_INSERT);
+      db.exec(TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE);
 
-        db.exec(TRG_MEMORIES_GRAPH_REFERENCED_GUARD);
-        db.exec(TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED);
-      }
-    },
+      db.exec(TRG_MEMORIES_GRAPH_REFERENCED_GUARD);
+      db.exec(TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED);
+    }
+  },
 };

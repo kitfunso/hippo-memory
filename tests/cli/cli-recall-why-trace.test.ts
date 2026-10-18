@@ -30,7 +30,18 @@ describe('recall --why rerankTrace', () => {
   const tenantId = 'default';
   const sessionId = 'sess-a7-cli';
   let heroId: string;
-  const WHY_ARGS = ['recall', 'auth', '--why', '--filter-conflicts', '--value-aware', '--rerank-utility', '--salience-threshold', '5', '--limit', '10'];
+  const WHY_ARGS = [
+    'recall',
+    'auth',
+    '--why',
+    '--filter-conflicts',
+    '--value-aware',
+    '--rerank-utility',
+    '--salience-threshold',
+    '5',
+    '--limit',
+    '10',
+  ];
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-a7-cli-'));
@@ -42,7 +53,11 @@ describe('recall --why rerankTrace', () => {
 
     // peer: matches the query and is referenced by the hero's conflicts_with,
     // so --filter-conflicts fires the interference stage on the hero.
-    const peer = createMemory('auth token refresh peer', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['ui'], tenantId });
+    const peer = createMemory('auth token refresh peer', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['ui'],
+      tenantId,
+    });
     writeEntry(localRoot, peer);
 
     // hero: qualifies for value (outcomes set), utility (always), goal-boost
@@ -96,7 +111,11 @@ describe('recall --why rerankTrace', () => {
     expect(hero!.rerankTrace).toBeDefined();
     const trace = hero!.rerankTrace!;
     expect(trace.map((s) => s.stage)).toEqual([
-      'interference', 'value', 'utility', 'goal-boost', 'retrieval-count-downweight',
+      'interference',
+      'value',
+      'utility',
+      'goal-boost',
+      'retrieval-count-downweight',
     ]);
     // Contiguous chain: each step's scoreBefore == prior step's scoreAfter.
     for (let i = 1; i < trace.length; i++) {

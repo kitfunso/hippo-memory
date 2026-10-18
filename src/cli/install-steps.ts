@@ -23,7 +23,7 @@ export function installCodexMemoryHooks(indent: string): void {
   if (result.invalidJson) {
     console.log(
       `${indent}WARNING: ${result.settingsPath} is not a hooks file hippo can merge into; fix it, then run \`hippo ` +
-      `hook install codex\`.`,
+        `hook install codex\`.`,
     );
     return;
   }
@@ -31,9 +31,11 @@ export function installCodexMemoryHooks(indent: string): void {
     result.installedUserPromptSubmit ? 'UserPromptSubmit' : '',
     result.installedCompactResume ? 'SessionStart(compact)' : '',
   ].filter(Boolean);
-  console.log(added.length > 0
-    ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
-    : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
+  console.log(
+    added.length > 0
+      ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
+      : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`,
+  );
   console.log(`${indent}${CODEX_TRUST_LINE}`);
 }
 
@@ -85,7 +87,7 @@ function schedulerTimedOut<E>(err: E): boolean {
 function warnSchedulerTimedOut(command: string): void {
   console.log(
     `   ${command} did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so the daily runner ` +
-    `is not scheduled.`,
+      `is not scheduled.`,
   );
 }
 
@@ -129,7 +131,7 @@ function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): vo
     console.log(`   To schedule the machine-level daily runner, run:`);
     console.log(
       `   schtasks /create /tn "${taskName}" /tr "${quoteInsideWindowsArg(buildWindowsTaskRun(cmd))}" /sc daily /st ` +
-      `06:15`,
+        `06:15`,
     );
   }
 }

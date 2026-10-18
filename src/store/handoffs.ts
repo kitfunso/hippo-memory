@@ -29,7 +29,7 @@ function insertHandoffRow(
   return db
     .prepare(
       `\n      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, ` +
-      `scope, tenant_id, created_at, ` +
+        `scope, tenant_id, created_at, ` +
         `constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)\n` +
         `      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n    `,
     )
@@ -71,7 +71,8 @@ export function saveSessionHandoffAt(
   const id = Number(result.lastInsertRowid ?? 0);
   // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
-    SessionHandoffRow | undefined;
+    | SessionHandoffRow
+    | undefined;
   if (!row) {
     throw new Error('Failed to reload saved session handoff');
   }
@@ -122,7 +123,7 @@ function handoffConditions(
     // cannot hide it.
     conditions.push(
       `id IN (SELECT MAX(id) FROM session_handoffs WHERE tenant_id = ?${owned ? ` AND ${owned.sql}` : ''} GROUP BY ` +
-      `session_id)`,
+        `session_id)`,
     );
     params.push(tenantId, ...(owned?.params ?? []));
     conditions.push(`(outcome IS NULL OR outcome IN ('partial','failure'))`);
@@ -151,13 +152,15 @@ export function loadLatestHandoffAt(
   assertTenantId('loadLatestHandoff', tenantId);
   const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
   // SAFETY: row's shape matches HANDOFF_COLUMNS.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT ${HANDOFF_COLUMNS}
     FROM session_handoffs
     WHERE ${conditions.join(' AND ')}
     ORDER BY created_at DESC, id DESC
     LIMIT 1
-  `).get(...params) as SessionHandoffRow | undefined;
+  `)
+    .get(...params) as SessionHandoffRow | undefined;
 
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -166,11 +169,13 @@ export function loadLatestHandoffAt(
 export function loadHandoffByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
   // SAFETY: row's shape matches HANDOFF_COLUMNS.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT ${HANDOFF_COLUMNS}
     FROM session_handoffs
     WHERE id = ? AND tenant_id = ?
-  `).get(id, tenantId) as SessionHandoffRow | undefined;
+  `)
+    .get(id, tenantId) as SessionHandoffRow | undefined;
 
   return row ? rowToSessionHandoff(row) : null;
 }
@@ -208,8 +213,8 @@ function replaceTranscriptHandoffAt(
   key: ContinuityKey | undefined,
 ): SessionHandoff | null {
   const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
-  const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC, id ` +
-  `DESC LIMIT 1`;
+  const newest =
+    `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC, id ` + `DESC LIMIT 1`;
   const result = db
     .prepare(
       `
@@ -238,7 +243,8 @@ function replaceTranscriptHandoffAt(
   if (Number(result.changes ?? 0) === 0) return null;
   // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(...params) as
-    SessionHandoffRow | undefined;
+    | SessionHandoffRow
+    | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
 
@@ -275,8 +281,8 @@ function buildSessionEndHandoff(
 ): Omit<SessionHandoff, 'updatedAt'> {
   // A same-task refresh carries forward envelope fields nobody cleared; a scope
   // mismatch must not leak private metadata into an unscoped envelope.
-  const carryForward = existing != null && existing.taskId === snapshot.task
-    && (existing.scope ?? null) === (snapshot.scope ?? null);
+  const carryForward =
+    existing != null && existing.taskId === snapshot.task && (existing.scope ?? null) === (snapshot.scope ?? null);
 
   return {
     version: 1,
@@ -343,10 +349,14 @@ export function writeSessionEndHandoffAt(
 
 function sessionOutcomeAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
   // SAFETY: row's shape matches the single `content` column below.
-  const content = (db.prepare(`
+  const content = (
+    db
+      .prepare(`
     SELECT content FROM session_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = 'session_complete'
     ORDER BY created_at DESC, id DESC LIMIT 1
-  `).get(tenantId, sessionId) as { content?: string } | undefined)?.content;
+  `)
+      .get(tenantId, sessionId) as { content?: string } | undefined
+  )?.content;
   return isHandoffOutcome(content) ? content : null;
 }

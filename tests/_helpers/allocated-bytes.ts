@@ -8,6 +8,11 @@ export function allocatedBytes(run: () => void): number {
   const before = getHeapStatistics().used_heap_size;
   run();
   const after = getHeapStatistics().used_heap_size;
-  const freed = profiler.stop().statistics.reduce((sum, gc) => sum + gc.beforeGC.heapStatistics.usedHeapSize - gc.afterGC.heapStatistics.usedHeapSize, 0);
+  const freed = profiler
+    .stop()
+    .statistics.reduce(
+      (sum, gc) => sum + gc.beforeGC.heapStatistics.usedHeapSize - gc.afterGC.heapStatistics.usedHeapSize,
+      0,
+    );
   return after - before + freed;
 }

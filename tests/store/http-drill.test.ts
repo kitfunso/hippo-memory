@@ -21,7 +21,11 @@ afterEach(() => {
 });
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 let home: string;
@@ -49,20 +53,23 @@ describe('GET /v1/recall/drill/:id', () => {
     summary.descendant_count = 3;
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {
-      writeEntry(home, createMemory(`alpha detail event ${i}`, {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Episodic,
-        confidence: 'observed',
-        dagLevel: 1,
-        dagParentId: summary.id,
-      }));
+      writeEntry(
+        home,
+        createMemory(`alpha detail event ${i}`, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          layer: Layer.Episodic,
+          confidence: 'observed',
+          dagLevel: 1,
+          dagParentId: summary.id,
+        }),
+      );
     }
 
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}`);
     expect(res.status).toBe(200);
     // SAFETY: GET /v1/recall/drill's response body is fixed by the handler
     // in src/server.ts and checked by the assertions immediately below.
-    const body = await res.json() as {
+    const body = (await res.json()) as {
       summary: { id: string; descendantCount: number };
       children: Array<{ id: string; content: string }>;
       totalChildren: number;
@@ -95,7 +102,9 @@ describe('GET /v1/recall/drill/:id', () => {
   it('400 on bad limit', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      confidence: 'inferred',
     });
     writeEntry(home, summary);
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=0`);
@@ -105,7 +114,9 @@ describe('GET /v1/recall/drill/:id', () => {
   it('400 past the list ceiling in the words the list routes use, and 200 at it', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      confidence: 'inferred',
     });
     writeEntry(home, summary);
     const over = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1001`);
@@ -118,7 +129,9 @@ describe('GET /v1/recall/drill/:id', () => {
   it('400 on bad budget', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      confidence: 'inferred',
     });
     writeEntry(home, summary);
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=-1`);
@@ -133,20 +146,28 @@ describe('GET /v1/recall/drill/:id', () => {
   it('budget truncates and sets truncated=true', async () => {
     const summary: MemoryEntry = createMemory('topic budget', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      confidence: 'inferred',
     });
     writeEntry(home, summary);
     for (let i = 0; i < 8; i++) {
-      writeEntry(home, createMemory(`detail row content ${i} `.repeat(15), {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Episodic, dagLevel: 1, dagParentId: summary.id, confidence: 'observed',
-      }));
+      writeEntry(
+        home,
+        createMemory(`detail row content ${i} `.repeat(15), {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          layer: Layer.Episodic,
+          dagLevel: 1,
+          dagParentId: summary.id,
+          confidence: 'observed',
+        }),
+      );
     }
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=80`);
     expect(res.status).toBe(200);
     // SAFETY: GET /v1/recall/drill's response body is fixed by the handler
     // in src/server.ts and checked by the assertions immediately below.
-    const body = await res.json() as { children: unknown[]; truncated: boolean };
+    const body = (await res.json()) as { children: unknown[]; truncated: boolean };
     expect(body.truncated).toBe(true);
     expect(body.children.length).toBeLessThan(8);
   });

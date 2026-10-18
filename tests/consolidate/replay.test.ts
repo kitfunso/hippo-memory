@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sampleForReplay, replayPriority } from '../../src/consolidate/replay.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 function fakeEntry(overrides: Partial<MemoryEntry>): MemoryEntry {
@@ -67,10 +67,7 @@ describe('sampleForReplay', () => {
     }
     const heroHits = counts.get(hero.id) ?? 0;
     // Most common neutral memory's count
-    const peerHits = Math.max(
-      0,
-      ...[...counts.entries()].filter(([id]) => id !== hero.id).map(([, c]) => c)
-    );
+    const peerHits = Math.max(0, ...[...counts.entries()].filter(([id]) => id !== hero.id).map(([, c]) => c));
     expect(heroHits).toBeGreaterThan(peerHits);
   });
 
@@ -108,19 +105,12 @@ describe('sampleForReplay', () => {
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const freshHits = counts.get(fresh.id) ?? 0;
-    const peerMax = Math.max(
-      0,
-      ...[...counts.entries()].filter(([id]) => id !== fresh.id).map(([, c]) => c)
-    );
+    const peerMax = Math.max(0, ...[...counts.entries()].filter(([id]) => id !== fresh.id).map(([, c]) => c));
     expect(freshHits).toBeGreaterThan(peerMax);
   });
 
   it('does not sample the same memory twice within one call', () => {
-    const entries = [
-      fakeEntry({ content: 'a' }),
-      fakeEntry({ content: 'b' }),
-      fakeEntry({ content: 'c' }),
-    ];
+    const entries = [fakeEntry({ content: 'a' }), fakeEntry({ content: 'b' }), fakeEntry({ content: 'c' })];
     const sample = sampleForReplay(entries, 3, new Date(), 42);
     expect(new Set(sample).size).toBe(sample.length);
   });

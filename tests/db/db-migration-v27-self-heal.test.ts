@@ -20,18 +20,15 @@ import { makeRoot } from '../_helpers/make-root.js';
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; the row shape is guaranteed
   // by the `SELECT name FROM sqlite_master` projection above.
-  return (db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
-    .all() as Array<{ name: string }>)
-    .map((r) => r.name);
+  return (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`).all() as Array<{ name: string }>
+  ).map((r) => r.name);
 }
 
 function getMeta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: DatabaseSyncLike#get() returns `unknown`; the row shape is guaranteed
   // by the `SELECT value FROM meta` projection above (undefined when no row matches).
-  const row = db
-    .prepare(`SELECT value FROM meta WHERE key = ?`)
-    .get(key) as { value?: string } | undefined;
+  const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value;
 }
 
@@ -61,7 +58,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
     }
   }
 
-  it('re-opening a DB in Keith\'s partial-v16 state heals it to v27', () => {
+  it("re-opening a DB in Keith's partial-v16 state heals it to v27", () => {
     simulatePartialV16State();
 
     // Re-open triggers runMigrations which should run v26 (no-op on missing
@@ -84,10 +81,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
     try {
       // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; PRAGMA table_info always
       // yields rows with a `name` column, which is all this test reads.
-      const cols = (db
-        .prepare(`PRAGMA table_info(api_keys)`)
-        .all() as Array<{ name: string }>)
-        .map((r) => r.name);
+      const cols = (db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string }>).map((r) => r.name);
       expect(cols).toContain('role');
       expect(cols).toContain('key_id');
       expect(cols).toContain('key_hash');
@@ -104,10 +98,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
     try {
       // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; PRAGMA table_info always
       // yields rows with a `name` column, which is all this test reads.
-      const cols = (db
-        .prepare(`PRAGMA table_info(audit_log)`)
-        .all() as Array<{ name: string }>)
-        .map((r) => r.name);
+      const cols = (db.prepare(`PRAGMA table_info(audit_log)`).all() as Array<{ name: string }>).map((r) => r.name);
       expect(cols).toEqual(
         expect.arrayContaining(['id', 'ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json']),
       );

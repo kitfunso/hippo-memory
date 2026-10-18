@@ -8,7 +8,15 @@ describe('destructive verbs', () => {
       .map(([name]) => name)
       .sort();
     expect(flagged).toEqual([
-      'audit', 'dedup', 'forget', 'invalidate', 'projects', 'reject', 'resolve', 'sleep', 'supersede',
+      'audit',
+      'dedup',
+      'forget',
+      'invalidate',
+      'projects',
+      'reject',
+      'resolve',
+      'sleep',
+      'supersede',
     ]);
   });
 });

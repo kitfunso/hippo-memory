@@ -42,7 +42,10 @@ afterEach(() => {
   _resetSharedStoreCacheForTests();
 });
 
-interface Layout { readonly store: string; readonly folderStamp: string }
+interface Layout {
+  readonly store: string;
+  readonly folderStamp: string;
+}
 
 /** a: a server folder with no project marker (stamps ''); b: a store inside a git checkout (stamps 'team'). */
 function layouts(flagged: boolean): readonly Layout[] {
@@ -55,7 +58,10 @@ function layouts(flagged: boolean): readonly Layout[] {
     initStore(store);
     if (flagged) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   }
-  return [{ store: a, folderStamp: '' }, { store: b, folderStamp: 'team' }];
+  return [
+    { store: a, folderStamp: '' },
+    { store: b, folderStamp: 'team' },
+  ];
 }
 
 function originOf(store: string, id: string): string | null | undefined {
@@ -166,7 +172,10 @@ describe('shared store origin stamp', () => {
   });
 });
 
-interface TaggedStore { readonly store: string; readonly id: string }
+interface TaggedStore {
+  readonly store: string;
+  readonly id: string;
+}
 
 /** `<tmp>/c/hippo-team/.hippo`, whose folder's id `server-id` is unlike its legacy name `hippo-team`, holding one row a member tagged `hippo-team`. */
 function storeWithFoldableTag(flagged: boolean): TaggedStore {
@@ -202,12 +211,20 @@ describe('the one-time sleep repair', () => {
 const ITEM = 'The billing service drains its queue before every deploy.';
 
 function compact(store: string, cwd: string | null): void {
-  const payload = { sessionId: `s-${cwd === null ? 'none' : 'cwd'}`, trigger: 'auto', cwd, transcriptPath: null, compactSummary: summaryWith([ITEM]) };
+  const payload = {
+    sessionId: `s-${cwd === null ? 'none' : 'cwd'}`,
+    trigger: 'auto',
+    cwd,
+    transcriptPath: null,
+    compactSummary: summaryWith([ITEM]),
+  };
   expect(saveCompaction(folderFiles(store), payload, () => undefined).written).toBe(1);
 }
 
 const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>
-  loadAllEntries(store, 'default').filter((e) => e.tags.includes(COMPACTION_MEMORY_TAG)).map((e) => e.origin_project);
+  loadAllEntries(store, 'default')
+    .filter((e) => e.tags.includes(COMPACTION_MEMORY_TAG))
+    .map((e) => e.origin_project);
 
 describe('compaction items', () => {
   it("take the session folder's project on a flagged store", () => {

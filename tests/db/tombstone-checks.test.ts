@@ -23,7 +23,14 @@ function storeWithTombstone(): string {
   roots.push(root);
   const db = openHippoDb(root);
   try {
-    insertRejectedValue(db, { tenantId: 'ta', digest: DIGEST, reason: 'leaked', rejectedBy: 'test', rejectedAt: '2026-06-01T12:00:00.000Z', normalizedChars: 31 });
+    insertRejectedValue(db, {
+      tenantId: 'ta',
+      digest: DIGEST,
+      reason: 'leaked',
+      rejectedBy: 'test',
+      rejectedAt: '2026-06-01T12:00:00.000Z',
+      normalizedChars: 31,
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -39,7 +46,13 @@ function refusals(root: string, tenantId: string) {
   }
 }
 
-const refusal = (targetId: string): AppendAuditOpts => ({ tenantId: 'ta', actor: 'sleep', op: 'reject_refusal', targetId, metadata: { digest: DIGEST } });
+const refusal = (targetId: string): AppendAuditOpts => ({
+  tenantId: 'ta',
+  actor: 'sleep',
+  op: 'reject_refusal',
+  targetId,
+  metadata: { digest: DIGEST },
+});
 
 describe('lazyTombstoneChecks', () => {
   it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', () => {
@@ -53,7 +66,9 @@ describe('lazyTombstoneChecks', () => {
     } finally {
       checks.close();
     }
-    expect(refusals(root, 'ta').map((e) => [e.actor, e.targetId, e.metadata])).toEqual([['sleep', 'm1', { digest: DIGEST }]]);
+    expect(refusals(root, 'ta').map((e) => [e.actor, e.targetId, e.metadata])).toEqual([
+      ['sleep', 'm1', { digest: DIGEST }],
+    ]);
   });
 
   it('under a dry run finds nothing, writes nothing and never opens the store', () => {

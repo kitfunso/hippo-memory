@@ -80,10 +80,7 @@ function eventUpdatedAt(event: IngestEvent): string | null {
 
 export async function ingestEvent(ctx: Context, input: IngestInput): Promise<IngestResult> {
   const events = ctx.store.connectorEvents;
-  const idempotencyKey = computeIdempotencyKey(
-    eventArtifactRef(input.event),
-    eventUpdatedAt(input.event),
-  );
+  const idempotencyKey = computeIdempotencyKey(eventArtifactRef(input.event), eventUpdatedAt(input.event));
   const event: ConnectorEvent = {
     connector: 'github',
     idempotencyKey,

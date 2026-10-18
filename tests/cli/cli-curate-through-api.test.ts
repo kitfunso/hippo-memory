@@ -12,7 +12,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 let root: string;
-const cli = (tenantId = 'default'): FullContext => (apiCtx(root, tenantId, adminActor('cli')));
+const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminActor('cli'));
 
 beforeEach(() => {
   root = makeRoot('cli-curate-api', { config: { embeddings: { enabled: false } } });
@@ -22,15 +22,26 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 describe('the CLI curate verbs go through src/api', () => {
   it('hippo reject writes the tombstone under the api actor and removes the row', async () => {
     const id = (await remember(cli(), { content: 'the backup job runs on tuesdays at noon' })).id;
-    const run = await runInProcess(() => handleReject({ hippoRoot: root, tenantId: 'default', args: [id], flags: { reason: 'wrong day' } }));
+    const run = await runInProcess(() =>
+      handleReject({ hippoRoot: root, tenantId: 'default', args: [id], flags: { reason: 'wrong day' } }),
+    );
     expect(run.status).toBe(0);
     expect(readEntry(root, id, 'default')).toBeNull();
-    expect((await listRejectionsForTenant(sqliteStore(root), 'default')).map((row) => row.rejectedBy)).toEqual([adminActor('cli').subject]);
+    expect((await listRejectionsForTenant(sqliteStore(root), 'default')).map((row) => row.rejectedBy)).toEqual([
+      adminActor('cli').subject,
+    ]);
   });
 
   it('hippo invalidate weakens the matching row through the api', async () => {
     const id = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
-    const run = await runInProcess(() => handleInvalidate({ hippoRoot: root, tenantId: 'default', args: ['jenkins'], flags: { reason: 'github actions' } }));
+    const run = await runInProcess(() =>
+      handleInvalidate({
+        hippoRoot: root,
+        tenantId: 'default',
+        args: ['jenkins'],
+        flags: { reason: 'github actions' },
+      }),
+    );
     expect(run.status).toBe(0);
     expect(run.stdout).toContain(id);
     expect(readEntry(root, id, 'default')?.confidence).toBe('stale');
@@ -49,7 +60,9 @@ describe('the CLI curate verbs go through src/api', () => {
   it('rejectOnHost keeps the personal refusal for a personal row by id', async () => {
     const owner: FullContext = apiCtx(root, 'default', { subject: 'api_key:hk_a', role: 'member', owner: 'a' });
     const id = (await remember(owner, { content: 'my own reminder about the dentist', personal: true })).id;
-    await expect(rejectOnHost(cli(), { memoryId: id, reason: 'x' })).rejects.toThrow("Personal memories can't be rejected. Use forget to remove it.");
+    await expect(rejectOnHost(cli(), { memoryId: id, reason: 'x' })).rejects.toThrow(
+      "Personal memories can't be rejected. Use forget to remove it.",
+    );
   });
 
   it('invalidateMemories weakens only the context tenant', async () => {

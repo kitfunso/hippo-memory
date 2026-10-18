@@ -26,8 +26,16 @@ let root: string;
 
 /** Three closed migration-effort predictions (actual twice the estimate), then every memory they wrote forgotten. */
 async function seedBaserateWithNoMemories(): Promise<void> {
-  for (const [estimate, actual] of [[2, 4], [3, 6], [4, 8]]) {
-    const p = savePrediction(root, 'default', { classTag: 'migration-effort', claimText: `migration effort estimate ${estimate} days`, estimateValue: estimate });
+  for (const [estimate, actual] of [
+    [2, 4],
+    [3, 6],
+    [4, 8],
+  ]) {
+    const p = savePrediction(root, 'default', {
+      classTag: 'migration-effort',
+      claimText: `migration effort estimate ${estimate} days`,
+      estimateValue: estimate,
+    });
     closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
   }
   const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });

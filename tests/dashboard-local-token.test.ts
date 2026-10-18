@@ -58,15 +58,21 @@ describe('dashboard local access token', () => {
     expect(cookie).not.toContain(TOKEN);
     expect(cookie.split(';')[0]).toMatch(new RegExp(`^hippo_dashboard_${port}=[0-9a-f]{64}$`));
 
-    const raw = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` } });
+    const raw = await fetch(`http://127.0.0.1:${port}/api/overview`, {
+      headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` },
+    });
     expect(raw.status).toBe(401);
-    const rawPage = await fetch(`http://127.0.0.1:${port}/`, { headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` } });
+    const rawPage = await fetch(`http://127.0.0.1:${port}/`, {
+      headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` },
+    });
     expect(rawPage.status).toBe(401);
   });
 
   it('refuses a session cookie minted for another port', async () => {
     const otherPortSession = sessionCookie(port + 1, TOKEN).split('=')[1];
-    const res = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: `hippo_dashboard_${port}=${otherPortSession}` } });
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview`, {
+      headers: { cookie: `hippo_dashboard_${port}=${otherPortSession}` },
+    });
     expect(res.status).toBe(401);
   });
 
@@ -76,7 +82,9 @@ describe('dashboard local access token', () => {
   });
 
   it('answers a page load that carries the token with the cookie and a 303 to the same address without it, never to another host', async () => {
-    const first = await fetch(`http://127.0.0.1:${port}/memory/abc?tab=links&token=${TOKEN}&q=a%26b`, { redirect: 'manual' });
+    const first = await fetch(`http://127.0.0.1:${port}/memory/abc?tab=links&token=${TOKEN}&q=a%26b`, {
+      redirect: 'manual',
+    });
     expect([first.status, first.headers.get('location')]).toEqual([303, '/memory/abc?tab=links&q=a%26b']);
     const pair = (first.headers.get('set-cookie') ?? '').split(';')[0]!;
     expect((await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } })).status).toBe(200);
@@ -85,7 +93,10 @@ describe('dashboard local access token', () => {
   });
 
   it('moves a visit another site started off the token URL with a refresh page, since a strict cookie skips that redirect', async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/memory/abc?token=${TOKEN}&q=a%26b`, { redirect: 'manual', headers: { 'sec-fetch-site': 'cross-site' } });
+    const res = await fetch(`http://127.0.0.1:${port}/memory/abc?token=${TOKEN}&q=a%26b`, {
+      redirect: 'manual',
+      headers: { 'sec-fetch-site': 'cross-site' },
+    });
     const html = await res.text();
     expect(res.status).toBe(200);
     expect(res.headers.get('set-cookie')?.split(';')[0]).toBe(sessionCookie(port, TOKEN));
@@ -98,16 +109,25 @@ describe('dashboard local access token', () => {
     const redirect = await fetch(`${base}/?token=${TOKEN}`, { redirect: 'manual' });
     const signedIn = { headers: { cookie: (redirect.headers.get('set-cookie') ?? '').split(';')[0]! } };
     const page = await fetch(`${base}/`, signedIn);
-    const others = [redirect, await fetch(`${base}/api/overview`, signedIn), await fetch(`${base}/api/nope`, signedIn), await fetch(`${base}/`)];
+    const others = [
+      redirect,
+      await fetch(`${base}/api/overview`, signedIn),
+      await fetch(`${base}/api/nope`, signedIn),
+      await fetch(`${base}/`),
+    ];
     expect(others.map((r) => r.status)).toEqual([303, 200, 404, 401]);
     const policy = page.headers.get('content-security-policy') ?? '';
     for (const reply of [page, ...others]) {
-      expect(['x-content-type-options', 'referrer-policy', 'x-frame-options', 'content-security-policy'].map((name) => reply.headers.get(name)))
-        .toEqual(['nosniff', 'no-referrer', 'DENY', policy]);
+      expect(
+        ['x-content-type-options', 'referrer-policy', 'x-frame-options', 'content-security-policy'].map((name) =>
+          reply.headers.get(name),
+        ),
+      ).toEqual(['nosniff', 'no-referrer', 'DENY', policy]);
     }
     const directives = new Map(policy.split('; ').map((d) => [d.split(' ')[0]!, d.split(' ').slice(1)]));
-    expect(['default-src', 'script-src', 'connect-src', 'frame-ancestors'].map((name) => directives.get(name)))
-      .toEqual([["'none'"], ["'self'"], ["'self'"], ["'none'"]]);
+    expect(['default-src', 'script-src', 'connect-src', 'frame-ancestors'].map((name) => directives.get(name))).toEqual(
+      [["'none'"], ["'self'"], ["'self'"], ["'none'"]],
+    );
     expect(policy).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
     // A page that breaks its own policy renders blank: every script comes from a file, every style block is named by hash.
     const html = await page.text();
@@ -157,14 +177,18 @@ describe('dashboard local access token', () => {
   it('prints the dashboard URL with the token once at start on a terminal', async () => {
     const { lines, port: secondPort } = await startLines(true);
     const withToken = lines.filter((l) => l.includes('token=another-token-abcdef'));
-    expect(withToken).toEqual([`Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`]);
+    expect(withToken).toEqual([
+      `Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`,
+    ]);
   });
 
   it('keeps the token off a captured stdout and writes the full URL to an owner-only file in the hippo root', async () => {
     const urlFile = join(hippoRoot, 'dashboard.url');
     const { lines, port: secondPort } = await startLines(false);
     expect(lines.join('\n')).not.toContain('token=');
-    expect(lines).toContain(`Hippo Dashboard running at http://localhost:${secondPort}/ (open the URL with its token from ${urlFile})`);
+    expect(lines).toContain(
+      `Hippo Dashboard running at http://localhost:${secondPort}/ (open the URL with its token from ${urlFile})`,
+    );
     expect(existsSync(urlFile)).toBe(true);
     expect(readFileSync(urlFile, 'utf8')).toBe(`http://localhost:${secondPort}/?token=another-token-abcdef\n`);
     if (process.platform !== 'win32') expect(statSync(urlFile).mode & 0o777).toBe(0o600);

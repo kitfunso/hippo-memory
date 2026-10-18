@@ -7,13 +7,15 @@ import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js
 import type { JsonValue } from '../../src/util/json.js';
 
 // The SessionEnd command hippo 0.20.3 wrote, with a `(` in front of `hippo sleep`.
-const HIPPO_0_20_3 = "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')";
+const HIPPO_0_20_3 =
+  "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')";
 const LOOKALIKES = [
   'echo "hippo sleep done" >> ~/log',
   'notify-send "hippo session-end ran"',
   'say hippo sleep',
   'notify-send "Turn done (hippo sleep runs at exit)"',
   'echo "a; hippo sleep later"',
+  'echo "a\\" (hippo sleep"',
   './backup.sh && hippo sleep',
   'echo hi; hippo sleep',
 ];
@@ -106,7 +108,7 @@ describe('a hooks value hippo cannot merge into', () => {
   });
 });
 
-describe("a hippo handler the user gave a launcher or env prefix, which install must still see", () => {
+describe('a hippo handler the user gave a launcher or env prefix, which install must still see', () => {
   it.each([
     'HIPPO_TENANT=work hippo session-end --log-file "x"',
     'env X=1 hippo session-end --log-file "x"',
@@ -129,7 +131,9 @@ describe("a hippo handler the user gave a launcher or env prefix, which install 
     try {
       expect(uninstallJsonHooks('claude-code')).toBe(true);
 
-      const lines = stderr.mock.calls.map(([chunk]) => String(chunk)).filter((line) => line.includes('remove any that are hippo'));
+      const lines = stderr.mock.calls
+        .map(([chunk]) => String(chunk))
+        .filter((line) => line.includes('remove any that are hippo'));
       expect(lines).toHaveLength(1);
       expect(lines[0]).toContain(file);
       for (const command of prefixed) expect(lines[0]).toContain(JSON.stringify(command));

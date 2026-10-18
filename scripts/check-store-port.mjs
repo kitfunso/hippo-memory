@@ -17,13 +17,31 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, posix, sep } from 'node:path';
 import ts from 'typescript';
+import { lineOf, parse, portFunctionParams, resolveSpec } from './lib/port-type-facts.mjs';
 
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesNeedingHippoDb', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
-  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'storeImportsInDomain', 'handleHoldersOutside', 'storeFilesWithoutSql',
-  'portImportsFromSql', 'buildsOutsideRoots', 'groupChecksInApi', 'portFunctionParams'];
+const NUMBERS = [
+  'openersOutside',
+  'openersInCli',
+  'storeBranches',
+  'routesNeedingHippoDb',
+  'sqliteOnlyRoutes',
+  'routesOnLoop',
+  'twinFunctions',
+  'sqlOutside',
+  'txLiterals',
+  'tenantResolvesInCli',
+  'storeImportsInCli',
+  'storeImportsInDomain',
+  'handleHoldersOutside',
+  'storeFilesWithoutSql',
+  'portImportsFromSql',
+  'buildsOutsideRoots',
+  'groupChecksInApi',
+  'portFunctionParams',
+];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
@@ -122,7 +140,13 @@ function holdsHandle(sf) {
 function countPrepares(sf) {
   let n = 0;
   const visit = (node) => {
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'prepare') n++;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'prepare'
+    ) {
+      n++;
+    }
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -145,7 +169,9 @@ function countTxLiterals(sf) {
 function countTenantResolves(sf) {
   let n = 0;
   const visit = (node) => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'resolveTenantId') n++;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'resolveTenantId') {
+      n++;
+    }
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -153,19 +179,32 @@ function countTenantResolves(sf) {
 }
 
 const reachesDataLayer = (file, spec) => spec.startsWith('.') && isDataLayer(posix.join(posix.dirname(file), spec));
-const namesOnlyTypes = (clause) => clause.isTypeOnly ||
-  (!clause.name && clause.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.every((e) => e.isTypeOnly));
+const namesOnlyTypes = (clause) =>
+  clause.isTypeOnly ||
+  (!clause.name &&
+    clause.namedBindings &&
+    ts.isNamedImports(clause.namedBindings) &&
+    clause.namedBindings.elements.every((e) => e.isTypeOnly));
 
 /** Import lines that bring a value in from src/store or src/db: what the CLI still reads past the api. */
 function countStoreImports(file, sf) {
-  return sf.statements.filter((s) => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) &&
-    reachesDataLayer(file, s.moduleSpecifier.text) && !(s.importClause && namesOnlyTypes(s.importClause))).length;
+  return sf.statements.filter(
+    (s) =>
+      ts.isImportDeclaration(s) &&
+      ts.isStringLiteral(s.moduleSpecifier) &&
+      reachesDataLayer(file, s.moduleSpecifier.text) &&
+      !(s.importClause && namesOnlyTypes(s.importClause)),
+  ).length;
 }
 
-const DOMAIN = Object.entries(JSON.parse(readFileSync('layers.json', 'utf8')).folders).filter(([, layer]) => layer === 'domain').map(([folder]) => `src/${folder}/`);
+const DOMAIN = Object.entries(JSON.parse(readFileSync('layers.json', 'utf8')).folders)
+  .filter(([, layer]) => layer === 'domain')
+  .map(([folder]) => `src/${folder}/`);
 const isDomain = (f) => DOMAIN.some((d) => f.startsWith(d));
 const isValueImport = (s) => ts.isImportDeclaration(s) && !(s.importClause && namesOnlyTypes(s.importClause));
-const isValueReexport = (s) => ts.isExportDeclaration(s) && !s.isTypeOnly &&
+const isValueReexport = (s) =>
+  ts.isExportDeclaration(s) &&
+  !s.isTypeOnly &&
   !(s.exportClause && ts.isNamedExports(s.exportClause) && s.exportClause.elements.every((e) => e.isTypeOnly));
 
 /** Value imports, value re-exports and `import()` calls of src/store or src/db: what domain code reads past the port. */
@@ -173,7 +212,13 @@ function countDomainStoreImports(file, sf) {
   const reaches = (spec) => spec && ts.isStringLiteral(spec) && reachesDataLayer(file, spec.text);
   let n = sf.statements.filter((s) => (isValueImport(s) || isValueReexport(s)) && reaches(s.moduleSpecifier)).length;
   const visit = (node) => {
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && reaches(node.arguments[0])) n++;
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      reaches(node.arguments[0])
+    ) {
+      n++;
+    }
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -189,7 +234,10 @@ const COMPOSITION_ROOTS = new Map([
   ['src/mcp/stdio.ts', 'the stdio MCP server, the one entry with no store found yet'],
   ['src/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
   ['src/index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
-  ['src/entry/folder-search.ts', 'the published hybridSearch and physicsSearch build the store of the folder they name'],
+  [
+    'src/entry/folder-search.ts',
+    'the published hybridSearch and physicsSearch build the store of the folder they name',
+  ],
   ['src/entry/importers.ts', 'the published importers build the store of the folder their options name'],
 ]);
 const LAYERS = JSON.parse(readFileSync('layers.json', 'utf8'));
@@ -197,26 +245,24 @@ const layerOf = (f) => {
   const rel = f.slice('src/'.length);
   return rel.includes('/') ? LAYERS.folders[rel.split('/')[0]] : LAYERS.rootFiles?.[rel];
 };
-const parse = (file) => ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const lineOf = (sf, node) => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
-
-/** The src file a relative specifier names, with .js read as .ts; undefined when it is not a file on disk. */
-function resolveSpec(file, spec) {
-  if (!spec.startsWith('.')) return undefined;
-  const base = posix.join(posix.dirname(file), spec).replace(/\.js$/, '');
-  return [`${base}.ts`, `${base}/index.ts`].find((c) => existsSync(c));
-}
-
 const sqlCache = new Map();
 /** True when the file calls `<x>.prepare(` or `<x>.exec(` or imports node:sqlite; comments and strings never match. */
 function runsSql(file) {
   if (!sqlCache.has(file)) {
     const sf = parse(file);
-    let found = sf.statements.some((s) => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === 'node:sqlite');
+    let found = sf.statements.some(
+      (s) =>
+        ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === 'node:sqlite',
+    );
     const visit = (node) => {
       if (found) return;
-      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && /^(prepare|exec)$/.test(node.expression.name.text)) found = true;
-      else ts.forEachChild(node, visit);
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        /^(prepare|exec)$/.test(node.expression.name.text)
+      ) {
+        found = true;
+      } else ts.forEachChild(node, visit);
     };
     visit(sf);
     sqlCache.set(file, found);
@@ -227,7 +273,13 @@ function runsSql(file) {
 /** `file:line` of each import or re-export in a port file whose target, under src/store or src/db, runs SQL. */
 function portSqlImports(file, sf) {
   if (file !== 'src/store/port.ts' && !file.startsWith('src/store/port/')) return [];
-  return sf.statements.filter((s) => (ts.isImportDeclaration(s) || ts.isExportDeclaration(s)) && s.moduleSpecifier && ts.isStringLiteral(s.moduleSpecifier))
+  return sf.statements
+    .filter(
+      (s) =>
+        (ts.isImportDeclaration(s) || ts.isExportDeclaration(s)) &&
+        s.moduleSpecifier &&
+        ts.isStringLiteral(s.moduleSpecifier),
+    )
     .filter((s) => {
       const target = resolveSpec(file, s.moduleSpecifier.text);
       return target && isDataLayer(target) && runsSql(target);
@@ -235,113 +287,23 @@ function portSqlImports(file, sf) {
     .map((s) => `${file}:${lineOf(sf, s)}`);
 }
 
-// port-groups.ts holds the session and admin groups (conflicts, dormant), so it is a port file here too.
-const declaresPort = (f) => f === 'src/store/port.ts' || f.startsWith('src/store/port/') || f === 'src/store/port-groups.ts';
-const typeTables = new Map();
-
-/** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */
-function typeTable(file) {
-  if (typeTables.has(file)) return typeTables.get(file);
-  const sf = parse(file);
-  const decls = new Map();
-  const links = new Map();
-  for (const s of sf.statements) {
-    if (ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s)) decls.set(s.name.text, [...(decls.get(s.name.text) ?? []), s]);
-    const target = s.moduleSpecifier && ts.isStringLiteral(s.moduleSpecifier) ? resolveSpec(file, s.moduleSpecifier.text) : undefined;
-    const named = ts.isImportDeclaration(s) ? s.importClause?.namedBindings : ts.isExportDeclaration(s) ? s.exportClause : undefined;
-    if (target && named && (ts.isNamedImports(named) || ts.isNamedExports(named))) {
-      for (const e of named.elements) links.set(e.name.text, { file: target, name: (e.propertyName ?? e.name).text });
-    }
-  }
-  const table = { sf, decls, links };
-  typeTables.set(file, table);
-  return table;
-}
-
-/** The declarations `name` resolves to from `file`, following imports and re-exports into src; [] for a lib or generic name. */
-function declarationsOf(file, name, hops = 0) {
-  const { decls, links } = typeTable(file);
-  if (decls.has(name)) return decls.get(name).map((node) => ({ file, node }));
-  const link = links.get(name);
-  return link && hops < 10 ? declarationsOf(link.file, link.name, hops + 1) : [];
-}
-
-/** The first function a member list holds, as `.member` plus its path, or null. */
-function functionInMembers(file, members, seen) {
-  for (const m of members) {
-    if (ts.isMethodSignature(m)) return `.${m.name.getText()}`;
-    if (ts.isCallSignatureDeclaration(m) || ts.isConstructSignatureDeclaration(m)) return '';
-    const inner = ts.isPropertySignature(m) ? functionIn(file, m.type, seen) : null;
-    if (inner !== null) return `.${m.name.getText()}${inner}`;
-  }
-  return null;
-}
-
-/** The path to the first function a type holds ('' when it is one), or null when it is data. Lib and generic names are
- * data; src interfaces and aliases are read through their members, unions, intersections, arrays and type arguments. */
-function functionIn(file, node, seen) {
-  if (!node) return null;
-  if (ts.isFunctionTypeNode(node) || ts.isConstructorTypeNode(node)) return '';
-  if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) return functionIn(file, node.type, seen);
-  if (ts.isArrayTypeNode(node)) return functionIn(file, node.elementType, seen);
-  if (ts.isTypeLiteralNode(node)) return functionInMembers(file, node.members, seen);
-  const parts = ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node) ? node.types
-    : ts.isTupleTypeNode(node) ? node.elements : ts.isTypeReferenceNode(node) ? node.typeArguments ?? [] : [];
-  for (const part of parts) {
-    const inner = functionIn(file, part, seen);
-    if (inner !== null) return inner;
-  }
-  if (!ts.isTypeReferenceNode(node) || !ts.isIdentifier(node.typeName)) return null;
-  for (const decl of declarationsOf(file, node.typeName.text)) {
-    const key = `${decl.file}#${node.typeName.text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const inner = ts.isTypeAliasDeclaration(decl.node) ? functionIn(decl.file, decl.node.type, seen) : functionInDeclared(decl.file, decl.node, seen);
-    if (inner !== null) return inner;
-  }
-  return null;
-}
-
-/** An interface's own members, then each interface it extends. */
-function functionInDeclared(file, iface, seen) {
-  const own = functionInMembers(file, iface.members, seen);
-  if (own !== null) return own;
-  for (const clause of iface.heritageClauses ?? []) {
-    for (const base of clause.types) {
-      const inner = ts.isIdentifier(base.expression) ? functionIn(file, ts.factory.createTypeReferenceNode(base.expression.text, base.typeArguments), seen) : null;
-      if (inner !== null) return inner;
-    }
-  }
-  return null;
-}
-
-/** `file:line Owner.method(param.path)` for each parameter of a method on a port interface or object alias whose type holds a function. */
-function portFunctionParams(file) {
-  if (!declaresPort(file)) return [];
-  const { sf, decls } = typeTable(file);
-  const hits = [];
-  for (const [owner, nodes] of decls) {
-    for (const node of nodes) {
-      const members = ts.isInterfaceDeclaration(node) ? node.members : ts.isTypeLiteralNode(node.type) ? node.type.members : [];
-      for (const m of members) {
-        const fn = ts.isMethodSignature(m) ? m : ts.isPropertySignature(m) && m.type && ts.isFunctionTypeNode(m.type) ? m.type : undefined;
-        for (const p of fn?.parameters ?? []) {
-          const path = functionIn(file, p.type, new Set());
-          if (path !== null) hits.push(`${file}:${lineOf(sf, p)} ${owner}.${m.name.getText(sf)}(${p.name.getText(sf)}${path})`);
-        }
-      }
-    }
-  }
-  return hits;
-}
-
 /** Local names bound to a src/store or src/db export of a builder name, so a same-named local function never counts. */
 function builderNames(file, sf) {
   const names = new Set();
   for (const s of sf.statements) {
-    if (!ts.isImportDeclaration(s) || !ts.isStringLiteral(s.moduleSpecifier) || !reachesDataLayer(file, s.moduleSpecifier.text)) continue;
+    if (
+      !ts.isImportDeclaration(s) ||
+      !ts.isStringLiteral(s.moduleSpecifier) ||
+      !reachesDataLayer(file, s.moduleSpecifier.text)
+    ) {
+      continue;
+    }
     const bindings = s.importClause?.namedBindings;
-    if (bindings && ts.isNamedImports(bindings)) for (const e of bindings.elements) if (STORE_BUILDERS.has((e.propertyName ?? e.name).text)) names.add(e.name.text);
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const e of bindings.elements) {
+        if (STORE_BUILDERS.has((e.propertyName ?? e.name).text)) names.add(e.name.text);
+      }
+    }
   }
   return names;
 }
@@ -351,7 +313,9 @@ function callsOf(file, sf, names) {
   const hits = [];
   if (names.size === 0) return hits;
   const visit = (node) => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) hits.push(`${file}:${lineOf(sf, node)}`);
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) {
+      hits.push(`${file}:${lineOf(sf, node)}`);
+    }
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -372,7 +336,9 @@ function countTwins(sf) {
 }
 
 const routeFail = (why, file = 'src/server/route-table.ts') => {
-  console.error(`check-store-port: ${file} ${why}; the route count would read low. Declare each route as an object literal whose storeReady, sqliteOnly and loop, if any, are string literals, or update readRoutes.`);
+  console.error(
+    `check-store-port: ${file} ${why}; the route count would read low. Declare each route as an object literal whose storeReady, sqliteOnly and loop, if any, are string literals, or update readRoutes.`,
+  );
   process.exit(1);
 };
 
@@ -382,7 +348,9 @@ function declaredValue(sf, name) {
   const visit = (n) => {
     if (ts.isVariableDeclaration(n) && n.name.getText(sf) === name && n.initializer) {
       let init = n.initializer;
-      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) init = init.expression;
+      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) {
+        init = init.expression;
+      }
       found = init;
     }
     ts.forEachChild(n, visit);
@@ -391,7 +359,8 @@ function declaredValue(sf, name) {
   return found;
 }
 
-const propNamed = (row, name) => row.properties.find((p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === name);
+const propNamed = (row, name) =>
+  row.properties.find((p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === name);
 const rowLabel = (row, sf) => {
   const m = propNamed(row, 'method');
   const where = ['path', 'pattern', 'regex'].map((k) => propNamed(row, k)).find(Boolean);
@@ -399,16 +368,25 @@ const rowLabel = (row, sf) => {
   return `${text(m).replace(/'/g, '')} ${text(where).replace(/'/g, '')}`;
 };
 
-const isOffLoop = (p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'loop' && ts.isStringLiteralLike(p.initializer) && p.initializer.text === 'off';
+const isOffLoop = (p) =>
+  ts.isPropertyAssignment(p) &&
+  ts.isIdentifier(p.name) &&
+  p.name.text === 'loop' &&
+  ts.isStringLiteralLike(p.initializer) &&
+  p.initializer.text === 'off';
 
 /** HOST_ROUTES entries that do not declare `loop: 'off'`: the routes boot.ts dispatches outside V1_ROUTES. */
 function hostRoutesOnLoop(sf) {
   const table = declaredValue(sf, 'HOST_ROUTES');
-  if (!table || !ts.isObjectLiteralExpression(table)) return routeFail('HOST_ROUTES is not declared as an object literal');
+  if (!table || !ts.isObjectLiteralExpression(table)) {
+    return routeFail('HOST_ROUTES is not declared as an object literal');
+  }
   let onLoop = 0;
   for (const entry of table.properties) {
     const at = `line ${sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1}`;
-    if (!ts.isPropertyAssignment(entry) || !ts.isObjectLiteralExpression(entry.initializer)) return routeFail(`HOST_ROUTES has a spread or non-object entry (${at})`);
+    if (!ts.isPropertyAssignment(entry) || !ts.isObjectLiteralExpression(entry.initializer)) {
+      return routeFail(`HOST_ROUTES has a spread or non-object entry (${at})`);
+    }
     if (!entry.initializer.properties.some(isOffLoop)) onLoop++;
   }
   return onLoop;
@@ -430,9 +408,19 @@ function readRoutes(sf) {
     const store = propNamed(row, 'storeReady');
     const only = propNamed(row, 'sqliteOnly');
     if (store && only) return routeFail(`V1_ROUTES row ${label} declares both storeReady and sqliteOnly`);
-    if (store && !(ts.isPropertyAssignment(store) && ts.isStringLiteralLike(store.initializer))) return routeFail(`V1_ROUTES row ${label} has a storeReady that is not a string literal`);
+    if (store && !(ts.isPropertyAssignment(store) && ts.isStringLiteralLike(store.initializer))) {
+      return routeFail(`V1_ROUTES row ${label} has a storeReady that is not a string literal`);
+    }
     if (only) {
-      if (!(ts.isPropertyAssignment(only) && ts.isStringLiteralLike(only.initializer) && only.initializer.text.trim() !== '')) return routeFail(`V1_ROUTES row ${label} has a sqliteOnly that is not a non-empty string literal`);
+      if (
+        !(
+          ts.isPropertyAssignment(only) &&
+          ts.isStringLiteralLike(only.initializer) &&
+          only.initializer.text.trim() !== ''
+        )
+      ) {
+        return routeFail(`V1_ROUTES row ${label} has a sqliteOnly that is not a non-empty string literal`);
+      }
       sqliteOnly.push(label);
       needsHippoDb++;
     } else if (store && store.initializer.text === 'localFiles') needsHippoDb++;
@@ -452,17 +440,22 @@ function usesCarrier(sf) {
   return found;
 }
 
-const namesRecallLabel = (node) => (ts.isStringLiteralLike(node) && RECALL_LEDGER_LABELS.has(node.text)) || ts.forEachChild(node, namesRecallLabel) === true;
+const namesRecallLabel = (node) =>
+  (ts.isStringLiteralLike(node) && RECALL_LEDGER_LABELS.has(node.text)) ||
+  ts.forEachChild(node, namesRecallLabel) === true;
 
 /** `file:line name` for each mention of a recall recorder, and each recordTokens call that names a recall label; comments and strings never match. */
 function recallRecordsIn(file, sf) {
   const hits = [];
-  const at = (node, what) => hits.push(`${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1} ${what}`);
+  const at = (node, what) =>
+    hits.push(`${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1} ${what}`);
   const visit = (node) => {
     if (ts.isIdentifier(node) && RECALL_RECORDERS.has(node.text)) at(node, node.text);
     else if (ts.isCallExpression(node)) {
       const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression;
-      if (ts.isIdentifier(callee) && callee.text === 'recordTokens' && node.arguments.some(namesRecallLabel)) at(node, 'recordTokens with a recall label');
+      if (ts.isIdentifier(callee) && callee.text === 'recordTokens' && node.arguments.some(namesRecallLabel)) {
+        at(node, 'recordTokens with a recall label');
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -474,7 +467,12 @@ function recallRecordsIn(file, sf) {
 function strayRecallRecords() {
   return (existsSync('src') ? tsFiles('src') : [])
     .filter(recordsItsOwnRecall)
-    .flatMap((file) => recallRecordsIn(file, ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)));
+    .flatMap((file) =>
+      recallRecordsIn(
+        file,
+        ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS),
+      ),
+    );
 }
 
 /** True when the file runs SQL itself (`<x>.prepare` or `<x>.exec`), holds a handle, or opens one; comments and strings never match. */
@@ -483,14 +481,20 @@ function touchesHippoDb(sf) {
   const visit = (node) => {
     if (found) return;
     if (ts.isIdentifier(node) && DB_TOUCH_NAMES.has(node.text)) found = true;
-    else if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && /^(prepare|exec)$/.test(node.expression.name.text)) found = true;
-    else ts.forEachChild(node, visit);
+    else if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      /^(prepare|exec)$/.test(node.expression.name.text)
+    ) {
+      found = true;
+    } else ts.forEachChild(node, visit);
   };
   visit(sf);
   return found;
 }
 
-const isDbDefinitionFile = (f) => Object.keys(DB_DEFINITION_FILES).some((k) => (k.endsWith('/') ? f.startsWith(k) : f === k));
+const isDbDefinitionFile = (f) =>
+  Object.keys(DB_DEFINITION_FILES).some((k) => (k.endsWith('/') ? f.startsWith(k) : f === k));
 
 /** Method names of an `interface SqliteLocal` in any src file: each is a write only hippo.db can run, so the list grows only by a hand edit of the baseline. */
 function localMethods(sf) {
@@ -528,12 +532,16 @@ function measure() {
     }
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
     if (file.startsWith('src/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
-    if (file.startsWith('src/cli/') && !COMPOSITION_ROOTS.has(file)) out.storeImportsInCli += countStoreImports(file, sf);
+    if (file.startsWith('src/cli/') && !COMPOSITION_ROOTS.has(file)) {
+      out.storeImportsInCli += countStoreImports(file, sf);
+    }
     if (isDomain(file)) out.storeImportsInDomain += countDomainStoreImports(file, sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (usesCarrier(sf)) carrierFilesList.push(file);
-    if (file.startsWith('src/store/') && !isDbDefinitionFile(file) && !touchesHippoDb(sf)) storeFilesWithoutSqlList.push(file);
+    if (file.startsWith('src/store/') && !isDbDefinitionFile(file) && !touchesHippoDb(sf)) {
+      storeFilesWithoutSqlList.push(file);
+    }
     if (file === 'src/server/route-table.ts') {
       const routes = readRoutes(sf);
       out.routesNeedingHippoDb = routes.needsHippoDb;
@@ -549,7 +557,18 @@ function measure() {
   }
   for (const k of Object.keys(sites)) out[k] = sites[k].length;
   out.storeFilesWithoutSql = storeFilesWithoutSqlList.length;
-  return { ...out, sites, storeFilesWithoutSqlList, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, handleHoldersOutsideByFile: holdersByFile, sqliteLocalMethods: sqliteLocalMethods.sort(), sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
+  return {
+    ...out,
+    sites,
+    storeFilesWithoutSqlList,
+    openersOutsideByFile: byFile,
+    sqlOutsideByFile: sqlByFile,
+    handleHoldersOutsideByFile: holdersByFile,
+    sqliteLocalMethods: sqliteLocalMethods.sort(),
+    sqliteOnlyRoutesList,
+    carrierFiles: carrierFilesList.length,
+    carrierFilesList,
+  };
 }
 
 /** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
@@ -563,17 +582,31 @@ function rises(base, cur) {
     const was = base?.[key] ?? {};
     for (const [f, n] of Object.entries(cur[key])) if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
   }
-  if (!firstWrite('carrierFiles') && cur.carrierFiles > (base?.carrierFiles ?? 0)) rose.push(['carrierFiles', base?.carrierFiles ?? 0, cur.carrierFiles]);
+  if (!firstWrite('carrierFiles') && cur.carrierFiles > (base?.carrierFiles ?? 0)) {
+    rose.push(['carrierFiles', base?.carrierFiles ?? 0, cur.carrierFiles]);
+  }
   if (!firstWrite('carrierFilesList')) {
-    for (const f of cur.carrierFilesList) if (!(base?.carrierFilesList ?? []).includes(f)) rose.push([f, 'not a carrier file', 'uses andThen, onStore or StoreReply']);
+    for (const f of cur.carrierFilesList) {
+      if (!(base?.carrierFilesList ?? []).includes(f)) {
+        rose.push([f, 'not a carrier file', 'uses andThen, onStore or StoreReply']);
+      }
+    }
   }
   if (!firstWrite('storeFilesWithoutSqlList')) {
-    for (const f of cur.storeFilesWithoutSqlList) if (!(base?.storeFilesWithoutSqlList ?? []).includes(f)) rose.push([f, 'unlisted', 'under src/store, runs no SQL']);
+    for (const f of cur.storeFilesWithoutSqlList) {
+      if (!(base?.storeFilesWithoutSqlList ?? []).includes(f)) {
+        rose.push([f, 'unlisted', 'under src/store, runs no SQL']);
+      }
+    }
   }
   const listed = base?.sqliteLocalMethods ?? [];
-  for (const m of cur.sqliteLocalMethods) if (!listed.includes(m)) rose.push([`SqliteLocal.${m}`, 'unlisted', 'declared']);
+  for (const m of cur.sqliteLocalMethods) {
+    if (!listed.includes(m)) rose.push([`SqliteLocal.${m}`, 'unlisted', 'declared']);
+  }
   const onlyListed = base?.sqliteOnlyRoutesList ?? [];
-  for (const r of cur.sqliteOnlyRoutesList) if (!onlyListed.includes(r)) rose.push([`sqliteOnly ${r}`, 'unlisted', 'declared']);
+  for (const r of cur.sqliteOnlyRoutesList) {
+    if (!onlyListed.includes(r)) rose.push([`sqliteOnly ${r}`, 'unlisted', 'declared']);
+  }
   return rose;
 }
 
@@ -581,7 +614,9 @@ const strays = strayRecallRecords();
 if (strays.length > 0) {
   console.error('A surface records a recall itself:');
   for (const hit of strays) console.error(`  ${hit}`);
-  console.error('Pass `recordAs` to retrieve() instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.');
+  console.error(
+    'Pass `recordAs` to retrieve() instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.',
+  );
   process.exit(1);
 }
 
@@ -603,7 +638,9 @@ const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 if (args.includes('--list')) {
   for (const k of NUMBERS) console.log(`${current[k]}\t${k}`);
   console.log(`${current.carrierFiles}\tcarrierFiles`);
-  for (const [counter, where] of Object.entries(current.sites)) for (const site of where) console.log(`${counter}\t${site}`);
+  for (const [counter, where] of Object.entries(current.sites)) {
+    for (const site of where) console.log(`${counter}\t${site}`);
+  }
   for (const f of current.storeFilesWithoutSqlList) console.log(`no SQL\t${f}`);
   for (const key of BY_FILE_KEYS) {
     for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
@@ -628,14 +665,20 @@ if (args.includes('--update')) {
 if (rose.length > 0) {
   console.error('Store-port counts rose above the baseline:');
   for (const [key, was, n] of rose) console.error(`  ${key}: ${was} -> ${n}`);
-  console.error('Reach the database through the store port instead of opening it, branching on the store, or adding a twin.');
+  console.error(
+    'Reach the database through the store port instead of opening it, branching on the store, or adding a twin.',
+  );
   console.error('`node scripts/check-store-port.mjs --list` shows every count.');
   process.exit(1);
 }
-const fell = baseline && (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
-  BY_FILE_KEYS.some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
-  (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length ||
-  (baseline.sqliteOnlyRoutesList ?? []).length > current.sqliteOnlyRoutesList.length ||
-  current.carrierFiles < (baseline.carrierFiles ?? 0));
-if (fell) console.log('Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.');
+const fell =
+  baseline &&
+  (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
+    BY_FILE_KEYS.some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
+    (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length ||
+    (baseline.sqliteOnlyRoutesList ?? []).length > current.sqliteOnlyRoutesList.length ||
+    current.carrierFiles < (baseline.carrierFiles ?? 0));
+if (fell) {
+  console.log('Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.');
+}
 console.log(`Store-port ratchet OK: ${total}, none above ${BASELINE}.`);

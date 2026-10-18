@@ -27,7 +27,10 @@ async function graphExtract(hippoRoot: string, tenantId: string): Promise<void> 
 }
 
 async function graphShow(
-  hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags,
+  hippoRoot: string,
+  tenantId: string,
+  entity: string | undefined,
+  flags: CliFlags,
 ): Promise<void> {
   const { graphReads } = cliApiContext(hippoRoot, tenantId).store;
   const model = await buildGraphModel(graphReads, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
@@ -62,7 +65,10 @@ async function graphShow(
 }
 
 async function graphView(
-  hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags,
+  hippoRoot: string,
+  tenantId: string,
+  entity: string | undefined,
+  flags: CliFlags,
 ): Promise<void> {
   const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {

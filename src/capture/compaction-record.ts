@@ -4,7 +4,11 @@ import { isStringValue } from '../core/capture-contract.js';
 import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems } from '../util/compaction-items.js';
 import { importSpool, spool } from './compaction-spool.js';
 import type {
-  CompactionSaveResult, CompactionText, Log, ReplayOptions, ReplaySources,
+  CompactionSaveResult,
+  CompactionText,
+  Log,
+  ReplayOptions,
+  ReplaySources,
 } from '../store/compactions-record.js';
 import type { FolderFiles } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
@@ -16,8 +20,8 @@ import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-ta
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summarizer as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
   "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', " +
-  "each lesson learned, decision made (with its reason) and correction the user gave in this session that " +
-  "should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an " +
+  'each lesson learned, decision made (with its reason) and correction the user gave in this session that ' +
+  'should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an ' +
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
 
@@ -82,7 +86,9 @@ function spoolSummary(
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
  * defers. Never throws. */
 export function saveCompaction(
-  { root, files }: FolderFiles, payload: PostCompactPayload, log: Log,
+  { root, files }: FolderFiles,
+  payload: PostCompactPayload,
+  log: Log,
 ): CompactionSaveResult {
   if (payload.compactSummary === null) {
     log('skip: payload has no compact_summary');
@@ -134,9 +140,8 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
         continue; // the tail can start mid-line; a torn line holds no summary
       }
     }
-    const stamp = (line: TranscriptLine): number => (
-      isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN
-    );
+    const stamp = (line: TranscriptLine): number =>
+      isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN;
     const first = lines.map(stamp).find((ms) => !Number.isNaN(ms));
     const hit = lines.find((line) => line.isCompactSummary === true && stamp(line) > afterMs && stamp(line) < beforeMs);
     if (hit) return lineText(hit);
@@ -160,9 +165,12 @@ function replaySources(hippoRoot: string, log: Log): ReplaySources {
 
 /** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left, never throws. */
 export function replayCompactions(
-  { root, files }: FolderFiles, log: Log, opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
+  { root, files }: FolderFiles,
+  log: Log,
+  opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
 ): number {
   return files.compactionHooks.replay(replaySources(root, log), log, {
-    ...opts, baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+    ...opts,
+    baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
   });
 }

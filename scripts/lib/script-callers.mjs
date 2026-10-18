@@ -16,7 +16,10 @@ function toSrc(has, from, spec) {
 /** The src module a path literal names when the file builds its import path at run time (`load('store/open.js')`). */
 function fromLiteral(has, text) {
   if (!JS_PATH.test(text)) return null;
-  const file = `src/${text.replace(/^.*(?:^|\/)(?:dist|src)\//, '').replace(/^\.\//, '').replace(/\.js$/, '.ts')}`;
+  const file = `src/${text
+    .replace(/^.*(?:^|\/)(?:dist|src)\//, '')
+    .replace(/^\.\//, '')
+    .replace(/\.js$/, '.ts')}`;
   return has(file) ? file : null;
 }
 
@@ -26,7 +29,9 @@ function readStatic(found, st, resolve) {
   const clause = ts.isImportDeclaration(st) ? st.importClause?.namedBindings : st.exportClause;
   if (!target || !clause || st.importClause?.isTypeOnly || st.isTypeOnly) return;
   if (ts.isNamespaceImport(clause)) found.spaces.set(clause.name.text, target);
-  else if (!ts.isNamespaceExport(clause)) for (const el of clause.elements) if (!el.isTypeOnly) found.named.push([target, (el.propertyName ?? el.name).text]);
+  else if (!ts.isNamespaceExport(clause)) {
+    for (const el of clause.elements) if (!el.isTypeOnly) found.named.push([target, (el.propertyName ?? el.name).text]);
+  }
 }
 
 function readCall(found, call, resolve) {
@@ -57,14 +62,25 @@ function readCall(found, call, resolve) {
 function scan(file, text, has) {
   const kind = /\.[cm]?ts$/.test(file) ? ts.ScriptKind.TS : ts.ScriptKind.JS;
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false, kind);
-  const found = { named: [], spaces: new Map(), loose: new Set(), literals: new Set(), joined: new Set(), ids: new Set(), computed: false };
+  const found = {
+    named: [],
+    spaces: new Map(),
+    loose: new Set(),
+    literals: new Set(),
+    joined: new Set(),
+    ids: new Set(),
+    computed: false,
+  };
   const resolve = (spec) => toSrc(has, file, spec);
   for (const st of sf.statements) readStatic(found, st, resolve);
   const visit = (n) => {
     if (ts.isIdentifier(n)) found.ids.add(n.text);
-    else if (ts.isStringLiteralLike(n)) { if (!found.joined.has(n)) found.literals.add(n.text); }
-    else if (ts.isCallExpression(n)) readCall(found, n, resolve);
-    else if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && found.spaces.has(n.expression.text)) found.named.push([found.spaces.get(n.expression.text), n.name.text]);
+    else if (ts.isStringLiteralLike(n)) {
+      if (!found.joined.has(n)) found.literals.add(n.text);
+    } else if (ts.isCallExpression(n)) readCall(found, n, resolve);
+    else if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && found.spaces.has(n.expression.text)) {
+      found.named.push([found.spaces.get(n.expression.text), n.name.text]);
+    }
     ts.forEachChild(n, visit);
   };
   visit(sf);

@@ -1,7 +1,8 @@
 // tests/store/goal-push.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 
-const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
+const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) =>
+  activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { activeGoalsWithPolicies, pushGoal } from '../_helpers/root-forms.js';
@@ -43,7 +44,9 @@ describe('pushGoal + activeGoalsOf', () => {
       policy: { policyType: 'error-prioritized', errorPriority: 2.0 },
     });
     expect(g.retrievalPolicyId).toBeDefined();
-    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })[0].retrievalPolicyId).toBe(g.retrievalPolicyId);
+    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })[0].retrievalPolicyId).toBe(
+      g.retrievalPolicyId,
+    );
   });
   function goalRowCount(): number {
     const db = openHippoDb(root);
@@ -56,25 +59,40 @@ describe('pushGoal + activeGoalsOf', () => {
   }
 
   it('refuses a parent goal id that does not exist and writes no row', () => {
-    expect(() => pushGoal(root, {
-      sessionId: 's1', tenantId: 'default', goalName: 'child', parentGoalId: 'g_missing',
-    })).toThrow(new Error('parent goal not found: g_missing'));
+    expect(() =>
+      pushGoal(root, {
+        sessionId: 's1',
+        tenantId: 'default',
+        goalName: 'child',
+        parentGoalId: 'g_missing',
+      }),
+    ).toThrow(new Error('parent goal not found: g_missing'));
     expect(goalRowCount()).toBe(0);
   });
 
   it('refuses a parent goal owned by another tenant and writes no new row', () => {
     const parent = pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'parent' });
-    expect(() => pushGoal(root, {
-      sessionId: 's1', tenantId: 'default', goalName: 'child', parentGoalId: parent.id,
-    })).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
+    expect(() =>
+      pushGoal(root, {
+        sessionId: 's1',
+        tenantId: 'default',
+        goalName: 'child',
+        parentGoalId: parent.id,
+      }),
+    ).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
     expect(goalRowCount()).toBe(1);
   });
 
   it('refuses a parent goal sitting in another session and writes no new row', () => {
     const parent = pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'parent' });
-    expect(() => pushGoal(root, {
-      sessionId: 's1', tenantId: 'default', goalName: 'child', parentGoalId: parent.id,
-    })).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
+    expect(() =>
+      pushGoal(root, {
+        sessionId: 's1',
+        tenantId: 'default',
+        goalName: 'child',
+        parentGoalId: parent.id,
+      }),
+    ).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
     expect(goalRowCount()).toBe(1);
   });
 });

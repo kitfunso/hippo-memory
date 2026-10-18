@@ -31,12 +31,13 @@ afterEach(() => {
 /** Replaces each distinct id matching `pattern` with its first-seen order, and every ISO timestamp with <ts>. */
 function masker(pattern: RegExp, label: string): (text: string) => string {
   const ids = new Map<string, string>();
-  return (text) => text
-    .replace(pattern, (id) => {
-      if (!ids.has(id)) ids.set(id, `${label}#${ids.size + 1}`);
-      return ids.get(id)!;
-    })
-    .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
+  return (text) =>
+    text
+      .replace(pattern, (id) => {
+        if (!ids.has(id)) ids.set(id, `${label}#${ids.size + 1}`);
+        return ids.get(id)!;
+      })
+      .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
 }
 
 function rows(sql: string, ...params: string[]): unknown[] {
@@ -56,7 +57,9 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     const acme = await mint('acme');
     const spare = await mint('acme');
     const mask = masker(/hk_[a-z2-7]{24}/g, 'key');
-    mask(home.keyId); mask(acme.keyId); mask(spare.keyId);
+    mask(home.keyId);
+    mask(acme.keyId);
+    mask(spare.keyId);
 
     // Prove both secrets first, so the revoke and the grant below must show on keys this process already trusts.
     expect((await verifyApiKeyCached(acme.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
@@ -114,8 +117,17 @@ describe('hippo goal (in process)', () => {
     await step('push (valueless success)', ['push', 'ship'], { ...s, success: true });
     await step('push (bad level)', ['push', 'ship'], { ...s, level: '3' });
     await step('push (valueless parent)', ['push', 'ship'], { ...s, parent: true });
-    const top = await step('push', ['push', 'ship', 'the', 'release'], { ...s, policy: 'error-prioritized', success: 'CI green', level: '0' });
-    const child = await step('push (control chars, parent)', ['push', 'fix\x1b[31m', 'ci'], { ...s, parent: top, level: '1' });
+    const top = await step('push', ['push', 'ship', 'the', 'release'], {
+      ...s,
+      policy: 'error-prioritized',
+      success: 'CI green',
+      level: '0',
+    });
+    const child = await step('push (control chars, parent)', ['push', 'fix\x1b[31m', 'ci'], {
+      ...s,
+      parent: top,
+      level: '1',
+    });
     await step('push (other tenant)', ['push', 'acme goal'], { ...s, 'tenant-id': 'acme' });
     vi.stubEnv('HIPPO_SESSION_ID', 's1');
     const third = await step('push (session from env)', ['push', 'write docs']);

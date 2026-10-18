@@ -13,22 +13,41 @@ import { evalNow } from '../core/ablation.js';
 import { loadConfig } from '../core/config.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
 import { envTenant } from '../util/env.js';
-import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
+import {
+  bodyDeadlineMs,
+  BodyTimeoutError,
+  closeAfterReply,
+  isCrossSite,
+  LOOPBACK_HOST_HEADER,
+} from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
-  buildMemoryDetail, buildMemoryPage, buildOverview, buildProjectDetail, buildSearch,
+  buildMemoryDetail,
+  buildMemoryPage,
+  buildOverview,
+  buildProjectDetail,
+  buildSearch,
 } from './dashboard-queries.js';
+import { forgetMemory, markWrong, pinMemory, resolveOpenConflict, type ActionResult } from './dashboard-actions.js';
 import {
-  forgetMemory, markWrong, pinMemory, resolveOpenConflict, type ActionResult,
-} from './dashboard-actions.js';
-import {
-  ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
+  ParamError,
+  parseActionBody,
+  parseConflictId,
+  parseMemoryId,
+  parseMemoryQuery,
+  parseSearchText,
+  type ActionBody,
 } from './dashboard-params.js';
 import type { MemoryDetail } from './dashboard-types.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { installSignalHandlers } from '../util/crash-handlers.js';
-import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
+import {
+  DEFAULT_SHUTDOWN_DRAIN_MS,
+  drainAndClose,
+  setKeepAliveTimeouts,
+  shutdownBoundMs,
+} from '../server/lifecycle.js';
 import { printError } from '../cli/output.js';
 import { PACKAGE_ROOT } from '../core/package-root.js';
 import { DAY_MS } from '../util/time.js';
@@ -105,11 +124,16 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
       clearTimeout(timer);
       reject(err);
     };
-    const timer = setTimeout(() => fail(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
+    const timer = setTimeout(
+      () => fail(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)),
+      deadlineMs,
+    );
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size <= BODY_MAX_BYTES) chunks.push(chunk);
-      if (size > BODY_DRAIN_MAX_BYTES) fail(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
+      if (size > BODY_DRAIN_MAX_BYTES) {
+        fail(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
+      }
     });
     req.on('error', fail);
     // A client that hangs up mid-body sends no 'end'; after a whole body this reject is a no-op.
@@ -199,7 +223,9 @@ function matchAction(segments: string[]): ((ctx: Context, body: ActionBody) => P
   if (head === 'memory' && verb === 'pin') return (ctx, body) => pinMemory(ctx, id, body);
   if (head === 'memory' && verb === 'wrong') return (ctx) => markWrong(ctx, id);
   if (head === 'memory' && verb === 'forget') return (ctx) => forgetMemory(ctx, id);
-  if (head === 'conflicts' && verb === 'resolve') return (ctx, body) => resolveOpenConflict(ctx, parseConflictId(id), body);
+  if (head === 'conflicts' && verb === 'resolve') {
+    return (ctx, body) => resolveOpenConflict(ctx, parseConflictId(id), body);
+  }
   return null;
 }
 
@@ -318,7 +344,9 @@ function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url:
   // A browser withholds a SameSite=Strict cookie from a redirect another site started; a refresh from this page is same-site.
   const target = location.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(`<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${target}"><title>Hippo Dashboard</title></head><body></body></html>`);
+  res.end(
+    `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${target}"><title>Hippo Dashboard</title></head><body></body></html>`,
+  );
   return true;
 }
 
@@ -343,7 +371,10 @@ function admitDashboardRequest(
   const cookieName = `hippo_dashboard_${port}`;
   const session = sessionValue(token, port);
   if (sameSecret(url.searchParams.get('token') ?? undefined, token)) {
-    res.setHeader('Set-Cookie', `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
+    res.setHeader(
+      'Set-Cookie',
+      `${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`,
+    );
     if (leaveTokenUrl(req, res, url)) return false;
   } else if (!sameSecret(cookieValue(req.headers.cookie, cookieName), session)) {
     res.writeHead(401, { 'Content-Type': 'text/plain' });
@@ -357,7 +388,11 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
   // A cut-short response is logged even for a client fault; a bare 400 is not.
   if (res.headersSent || !clientFault) {
-    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: (req.url ?? '/').split('?')[0] });
+    log.error('dashboard request failed', {
+      ...errorFields(err),
+      error: errorMessage(err),
+      path: (req.url ?? '/').split('?')[0],
+    });
   }
   if (res.headersSent) {
     res.end();
@@ -395,9 +430,11 @@ function printDashboardBanner(hippoRoot: string, boundPort: number, token: strin
 /** A port that will not open is the user's to fix, so it gets one plain line and a failure exit code, not an uncaught error's stack. */
 function reportListenFailure(port: number, err: Error): void {
   const inUse = 'code' in err && err.code === 'EADDRINUSE';
-  printError(inUse
-    ? `hippo dashboard: port ${port} is already in use. Stop the program that holds it, or choose another port with --port <number>.`
-    : `hippo dashboard: could not listen on port ${port}: ${err.message}. Choose another port with --port <number>.`);
+  printError(
+    inUse
+      ? `hippo dashboard: port ${port} is already in use. Stop the program that holds it, or choose another port with --port <number>.`
+      : `hippo dashboard: could not listen on port ${port}: ${err.message}. Choose another port with --port <number>.`,
+  );
   process.exitCode = 1;
 }
 
@@ -450,7 +487,11 @@ function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): Dashboard
     now,
     snapshots,
     context: () => ({
-      hippoRoot, tenantId: envTenant(), actor: adminActor(DASHBOARD_ACTOR), store, config: loadConfig(hippoRoot),
+      hippoRoot,
+      tenantId: envTenant(),
+      actor: adminActor(DASHBOARD_ACTOR),
+      store,
+      config: loadConfig(hippoRoot),
     }),
     release: () => {
       snapshots.close();
@@ -458,6 +499,40 @@ function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): Dashboard
         log.error(`dashboard: closing the store failed: ${errorMessage(err)}`, errorFields(err));
       });
     },
+  };
+}
+
+function dashboardRequestHandler(
+  root: ReturnType<typeof openDashboardRoot>,
+  spa: { distUiDir: string; hasDistUi: boolean },
+  auth: { token: string; port: number },
+): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
+  return async (req, res) => {
+    const host = req.headers.host;
+    if (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) return forbidden(res);
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+    if (!admitDashboardRequest(req, res, url, auth)) return;
+
+    if (url.pathname.startsWith('/api/')) {
+      // A malformed % sequence throws URIError here; the caller answers 400.
+      const segments = url.pathname
+        .split('/')
+        .filter((s) => s !== '')
+        .map((s) => decodeURIComponent(s));
+      const ctx: RouteContext = { ...root, req, res, url };
+      const handled =
+        req.method === 'GET'
+          ? await handleRead(ctx, segments)
+          : req.method === 'POST'
+            ? await handlePost(ctx, segments)
+            : false;
+      if (!handled) notFoundJson(res);
+      return;
+    }
+
+    if (spa.hasDistUi) return serveSpa(res, spa.distUiDir, url.pathname);
+    notBuilt(res);
   };
 }
 
@@ -472,27 +547,7 @@ export function serveDashboard(
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
   const root = openDashboardRoot(hippoRoot, opts ?? {});
 
-  const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
-    const host = req.headers.host;
-    if (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) return forbidden(res);
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-
-    if (!admitDashboardRequest(req, res, url, { token, port })) return;
-
-    if (url.pathname.startsWith('/api/')) {
-      // A malformed % sequence throws URIError here; the caller answers 400.
-      const segments = url.pathname.split('/').filter((s) => s !== '').map((s) => decodeURIComponent(s));
-      const ctx: RouteContext = { ...root, req, res, url };
-      const handled = req.method === 'GET' ? await handleRead(ctx, segments)
-        : req.method === 'POST' ? await handlePost(ctx, segments)
-        : false;
-      if (!handled) notFoundJson(res);
-      return;
-    }
-
-    if (hasDistUi) return serveSpa(res, distUiDir, url.pathname);
-    notBuilt(res);
-  };
+  const handleRequest = dashboardRequestHandler(root, { distUiDir, hasDistUi }, { token, port });
 
   const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);

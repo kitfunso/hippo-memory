@@ -137,7 +137,10 @@ async function requestScores(
   const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
-    const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, RAY_ID_MAX_CHARS);
+    const ray = resp.headers
+      .get('cf-ray')
+      ?.replace(/[^\x20-\x7e]/g, '')
+      .slice(0, RAY_ID_MAX_CHARS);
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
   }

@@ -13,7 +13,21 @@ import type { Predictions } from '../../src/store/port.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import {
-  auditFailures, auditRows, cleanups, execOn, get, holdWriteLock, keyFor, newRoot, onDb, patientStore, post, postText, seen, start, undoAll,
+  auditFailures,
+  auditRows,
+  cleanups,
+  execOn,
+  get,
+  holdWriteLock,
+  keyFor,
+  newRoot,
+  onDb,
+  patientStore,
+  post,
+  postText,
+  seen,
+  start,
+  undoAll,
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/open.js';
@@ -32,7 +46,9 @@ afterEach(undoAll);
 
 function claims(root: string): string[] {
   // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
-  const rows = onDb(root, (db) => db.prepare('SELECT claim_text FROM predictions ORDER BY id').all()) as Array<{ claim_text: string }>;
+  const rows = onDb(root, (db) => db.prepare('SELECT claim_text FROM predictions ORDER BY id').all()) as Array<{
+    claim_text: string;
+  }>;
   return rows.map((row) => row.claim_text);
 }
 
@@ -75,9 +91,24 @@ interface Caller {
 type Step = readonly [label: string, send: (server: ServerHandle, keys: Caller) => Promise<Response>];
 
 const STEPS: readonly Step[] = [
-  ['create', (s, k) => post(s, '/v1/predictions', { claim: 'ships in three days', classTag: 'release', estimate: 3, unit: 'days', targetDate: '2026-12-01' }, k.main)],
-  ['create a second', (s, k) => post(s, '/v1/predictions', { claim: 'migration takes two', classTag: 'release', estimate: 2 }, k.main)],
-  ['create for the other tenant', (s, k) => post(s, '/v1/predictions', { claim: 'their claim', classTag: 'release', estimate: 1 }, k.other)],
+  [
+    'create',
+    (s, k) =>
+      post(
+        s,
+        '/v1/predictions',
+        { claim: 'ships in three days', classTag: 'release', estimate: 3, unit: 'days', targetDate: '2026-12-01' },
+        k.main,
+      ),
+  ],
+  [
+    'create a second',
+    (s, k) => post(s, '/v1/predictions', { claim: 'migration takes two', classTag: 'release', estimate: 2 }, k.main),
+  ],
+  [
+    'create for the other tenant',
+    (s, k) => post(s, '/v1/predictions', { claim: 'their claim', classTag: 'release', estimate: 1 }, k.other),
+  ],
   ['create without a claim', (s, k) => post(s, '/v1/predictions', { classTag: 'release' }, k.main)],
   ['create with a broken body', (s, k) => postText(s, '/v1/predictions', '{', k.main)],
   ['create with an unknown key', (s) => post(s, '/v1/predictions', claim('never saved'), 'hk_unknown')],
@@ -88,12 +119,18 @@ const STEPS: readonly Step[] = [
   ['list as the other tenant', (s, k) => get(s, '/v1/predictions', k.other)],
   ['list with an unknown key', (s) => get(s, '/v1/predictions', 'hk_unknown')],
   ['get', (s, k) => get(s, '/v1/predictions/1', k.main)],
-  ['get the other tenant\'s row', (s, k) => get(s, '/v1/predictions/3', k.main)],
+  ["get the other tenant's row", (s, k) => get(s, '/v1/predictions/3', k.main)],
   ['get a missing row', (s, k) => get(s, '/v1/predictions/99', k.main)],
   ['get with an unknown key', (s) => get(s, '/v1/predictions/1', 'hk_unknown')],
-  ['close', (s, k) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 5, note: 'two days late' }, k.main)],
+  [
+    'close',
+    (s, k) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 5, note: 'two days late' }, k.main),
+  ],
   ['close it again', (s, k) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 5 }, k.main)],
-  ['close the other tenant\'s row', (s, k) => post(s, '/v1/predictions/3/close', { state: 'closed', actual: 1 }, k.main)],
+  [
+    "close the other tenant's row",
+    (s, k) => post(s, '/v1/predictions/3/close', { state: 'closed', actual: 1 }, k.main),
+  ],
   ['close a missing row', (s, k) => post(s, '/v1/predictions/99/close', { state: 'closed', actual: 1 }, k.main)],
   ['close to an open state', (s, k) => post(s, '/v1/predictions/2/close', { state: 'open' }, k.main)],
   ['close with an unknown key', (s) => post(s, '/v1/predictions/2/close', { state: 'closed' }, 'hk_unknown')],
@@ -111,7 +148,9 @@ async function runSteps(root: string, store?: HippoStore) {
   const keyIds = [main.keyId, other.keyId];
   const server = await start(root, store);
   const replies = [];
-  for (const [label, send] of STEPS) replies.push(await seen(label, await send(server, { main: main.plaintext, other: other.plaintext }), keyIds));
+  for (const [label, send] of STEPS) {
+    replies.push(await seen(label, await send(server, { main: main.plaintext, other: other.plaintext }), keyIds));
+  }
   return { replies, audit: auditRows(root, keyIds) };
 }
 
@@ -125,8 +164,18 @@ describe('worker-backed predictions against the in-process store', () => {
     expect(onWorkers.audit).toEqual(inProcess.audit);
     const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
     expect(statusOf).toMatchObject({
-      create: 201, 'create without a claim': 400, 'create with an unknown key': 401, list: 200, get: 200, 'get the other tenant\'s row': 404,
-      'get a missing row': 404, close: 200, 'close it again': 400, 'close the other tenant\'s row': 404, stats: 200, 'stats without a class': 400,
+      create: 201,
+      'create without a claim': 400,
+      'create with an unknown key': 401,
+      list: 200,
+      get: 200,
+      "get the other tenant's row": 404,
+      'get a missing row': 404,
+      close: 200,
+      'close it again': 400,
+      "close the other tenant's row": 404,
+      stats: 200,
+      'stats without a class': 400,
     });
   });
 
@@ -207,13 +256,19 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     const root = newRoot();
     const info = vi.spyOn(log, 'info');
     // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), { predictions: served<Predictions>(sqlitePredictions(handlesOf(root).on)) });
+    const store = Object.assign(workerSqliteStore(root), {
+      predictions: served<Predictions>(sqlitePredictions(handlesOf(root).on)),
+    });
     const server = await start(root, store);
 
     const res = await send(server);
 
     expect(res.status).toBe(501);
-    expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('opened on the server thread by a route'))).toHaveLength(1);
+    expect(
+      info.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes('opened on the server thread by a route')),
+    ).toHaveLength(1);
     expect(claims(root)).toEqual([]);
   });
 
@@ -243,7 +298,11 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     expect((await post(server, '/v1/predictions', claim('creates the store'))).status).toBe(201);
     expect((await get(server, '/health')).status).toBe(200);
 
-    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('could not hold a store connection'))).toEqual([]);
+    expect(
+      warn.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes('could not hold a store connection')),
+    ).toEqual([]);
   });
 });
 
@@ -283,7 +342,10 @@ describe('an audit write failure counted on a worker thread', () => {
     const root = newRoot();
     const server = await start(root);
     const before = await auditFailures(server);
-    execOn(root, `CREATE TRIGGER remember_audit_broken BEFORE INSERT ON audit_log WHEN NEW.op = 'remember' BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`);
+    execOn(
+      root,
+      `CREATE TRIGGER remember_audit_broken BEFORE INSERT ON audit_log WHEN NEW.op = 'remember' BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
+    );
 
     expect((await post(server, '/v1/predictions', claim('kept without its audit row'))).status).toBe(201);
 

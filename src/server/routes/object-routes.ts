@@ -87,7 +87,9 @@ export async function closeRoute<K extends ObjectKind>(
 }
 
 export async function supersedeRoute<K extends SavableKind, W>(
-  cfg: VersionedRouteConfig<K, W>, rr: AuthedRouteRequest, match: RegExpMatchArray,
+  cfg: VersionedRouteConfig<K, W>,
+  rr: AuthedRouteRequest,
+  match: RegExpMatchArray,
 ): Promise<void> {
   const id = parseInt(match[1], 10);
   const { ctx } = rr;

@@ -6,7 +6,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copilotHomeDir, detectInstalledTools } from '../../src/hooks/shared.js';
-import { VSCODE_MCP, copilotMcpSnippet, copilotPaths, installCopilot, uninstallCopilot } from '../../src/hooks/copilot.js';
+import {
+  VSCODE_MCP,
+  copilotMcpSnippet,
+  copilotPaths,
+  installCopilot,
+  uninstallCopilot,
+} from '../../src/hooks/copilot.js';
 import { HOOKS } from '../../src/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import type { JsonValue } from '../../src/util/json.js';
@@ -16,12 +22,23 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 // The committed text installCopilot must write; edit it with the instructions in src/hooks/copilot.ts.
-const COPILOT_INSTRUCTIONS = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'copilot', 'instructions.md'), 'utf8').trim();
+const COPILOT_INSTRUCTIONS = fs
+  .readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'copilot', 'instructions.md'),
+    'utf8',
+  )
+  .trim();
 const VSCODE_INSTRUCTIONS = `---\napplyTo: "**"\n---\n${COPILOT_INSTRUCTIONS}\n`;
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 const BOM = String.fromCodePoint(0xfeff);
-const HIPPO_SERVER = { type: 'local', command: process.platform === 'win32' ? 'hippo.cmd' : 'hippo', args: ['mcp'], env: {}, tools: ['*'] };
+const HIPPO_SERVER = {
+  type: 'local',
+  command: process.platform === 'win32' ? 'hippo.cmd' : 'hippo',
+  args: ['mcp'],
+  env: {},
+  tools: ['*'],
+};
 const USER_SERVER = { type: 'local', command: 'npx', args: ['@playwright/mcp@latest'], tools: ['*'] };
 
 interface HookEntry {
@@ -40,7 +57,9 @@ interface CopilotFiles {
   readonly instructions: string;
 }
 
-const entry = (args: string, timeoutSec: number): HookEntry[] => [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec }];
+const entry = (args: string, timeoutSec: number): HookEntry[] => [
+  { type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec },
+];
 
 /** The command contract the runtime side implements; no command names a path. */
 const CONTRACT_HOOKS: HooksFile = {
@@ -95,7 +114,11 @@ describe('installCopilot and uninstallCopilot', () => {
     vi.stubEnv('HIPPO_HOME', path.join(fake.home, 'hippo-global'));
     // VS Code's own override, so its User folders sit under the fake home on every platform.
     vi.stubEnv('VSCODE_APPDATA', vscodeData);
-    files = { hooks: path.join(copilotHome, 'hooks', 'hippo.json'), mcp: path.join(copilotHome, 'mcp-config.json'), instructions: path.join(copilotHome, 'copilot-instructions.md') };
+    files = {
+      hooks: path.join(copilotHome, 'hooks', 'hippo.json'),
+      mcp: path.join(copilotHome, 'mcp-config.json'),
+      instructions: path.join(copilotHome, 'copilot-instructions.md'),
+    };
     // The Copilot CLI's folder, there before setup; the VS Code-only tests take it away.
     fs.mkdirSync(copilotHome);
   });
@@ -137,7 +160,16 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it.each([
     ['a partial table', '{"version":1,"hooks":{"sessionStart":[]}}'],
-    ['the earlier table whose sessionEnd named a quoted log path', JSON.stringify({ version: 1, hooks: { ...CONTRACT_HOOKS.hooks, sessionEnd: entry("session-end --runtime copilot --log-file '/home/you/.hippo/logs/copilot-sleep.log'", 30) } })],
+    [
+      'the earlier table whose sessionEnd named a quoted log path',
+      JSON.stringify({
+        version: 1,
+        hooks: {
+          ...CONTRACT_HOOKS.hooks,
+          sessionEnd: entry("session-end --runtime copilot --log-file '/home/you/.hippo/logs/copilot-sleep.log'", 30),
+        },
+      }),
+    ],
   ])("rewrites hippo's own hooks file when it holds %s", (_label, text) => {
     writeFile(files.hooks, text);
     expect(installCopilot().hooks).toBe(true);
@@ -146,7 +178,9 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it('no hook command names a path, so neither shell has anything to quote', () => {
     installCopilot();
-    const commands = Object.values(readHooks(files.hooks).hooks).flatMap((hooks) => hooks.flatMap((h) => [h.bash, h.powershell]));
+    const commands = Object.values(readHooks(files.hooks).hooks).flatMap((hooks) =>
+      hooks.flatMap((h) => [h.bash, h.powershell]),
+    );
     expect(commands).toHaveLength(12);
     for (const command of commands) {
       expect(command).not.toMatch(/['"\\/]|--log-file/);
@@ -157,7 +191,10 @@ describe('installCopilot and uninstallCopilot', () => {
   it("keeps the user's other MCP servers and top-level keys", () => {
     writeFile(files.mcp, JSON.stringify({ theme: 'dark', mcpServers: { playwright: USER_SERVER } }));
     expect(installCopilot().mcp).toBe('added');
-    expect(readJson(files.mcp)).toEqual({ theme: 'dark', mcpServers: { playwright: USER_SERVER, hippo: HIPPO_SERVER } });
+    expect(readJson(files.mcp)).toEqual({
+      theme: 'dark',
+      mcpServers: { playwright: USER_SERVER, hippo: HIPPO_SERVER },
+    });
   });
 
   it('reads an mcp-config.json saved with a byte order mark and writes it back without one', () => {
@@ -205,7 +242,10 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it("uninstall removes only hippo's hooks file, its MCP key and its block, and a second uninstall finds nothing", () => {
     const userHooks = path.join(copilotHome, 'hooks', 'mine.json');
-    const userHooksText = JSON.stringify({ version: 1, hooks: { sessionStart: [{ type: 'command', bash: 'echo hi', powershell: 'echo hi', timeoutSec: 5 }] } });
+    const userHooksText = JSON.stringify({
+      version: 1,
+      hooks: { sessionStart: [{ type: 'command', bash: 'echo hi', powershell: 'echo hi', timeoutSec: 5 }] },
+    });
     writeFile(userHooks, userHooksText);
     writeFile(files.mcp, JSON.stringify({ mcpServers: { playwright: USER_SERVER } }));
     writeFile(files.instructions, '# My rules\n\nUse tabs.\n');
@@ -280,7 +320,11 @@ describe('installCopilot and uninstallCopilot', () => {
   });
 
   it.each([
-    ['CRLF text either side, extra blank lines kept', `# Mine\r\n\r\n\r\n${copilotBlock('\r\n')}\r\n\r\nAfter.  \r\n\r\n`, '# Mine\r\n\r\n\r\n\r\nAfter.  \r\n\r\n'],
+    [
+      'CRLF text either side, extra blank lines kept',
+      `# Mine\r\n\r\n\r\n${copilotBlock('\r\n')}\r\n\r\nAfter.  \r\n\r\n`,
+      '# Mine\r\n\r\n\r\n\r\nAfter.  \r\n\r\n',
+    ],
     ['a block at the end with no line break after it', `Top\n${copilotBlock()}`, 'Top'],
     ['a block first in the file', `${copilotBlock()}\nBelow.`, 'Below.'],
   ])('uninstall splices out only the block and one line break: %s', (_label, text, left) => {
@@ -328,15 +372,25 @@ describe('installCopilot and uninstallCopilot', () => {
     const stable = vscodeUser();
     const insiders = vscodeUser('Code - Insiders');
     writeFile(stable.mcp, JSON.stringify({ servers: { playwright: USER_SERVER }, inputs: [] }));
-    const statuses = (result: ReturnType<typeof installCopilot> | ReturnType<typeof uninstallCopilot>) => result.vscode.map((v) => [v.paths.userDir, v.mcp, v.instructions]);
+    const statuses = (result: ReturnType<typeof installCopilot> | ReturnType<typeof uninstallCopilot>) =>
+      result.vscode.map((v) => [v.paths.userDir, v.mcp, v.instructions]);
 
-    expect(statuses(installCopilot())).toEqual([[stable.dir, 'added', 'written'], [insiders.dir, 'added', 'written']]);
+    expect(statuses(installCopilot())).toEqual([
+      [stable.dir, 'added', 'written'],
+      [insiders.dir, 'added', 'written'],
+    ]);
     expect(readJson(stable.mcp)).toEqual({ servers: { playwright: USER_SERVER, hippo: VSCODE_SERVER }, inputs: [] });
     expect(readJson(insiders.mcp)).toEqual({ servers: { hippo: VSCODE_SERVER } });
     expect(read(stable.instructions)).toBe(VSCODE_INSTRUCTIONS);
-    expect(statuses(installCopilot())).toEqual([[stable.dir, 'present', 'present'], [insiders.dir, 'present', 'present']]);
+    expect(statuses(installCopilot())).toEqual([
+      [stable.dir, 'present', 'present'],
+      [insiders.dir, 'present', 'present'],
+    ]);
 
-    expect(statuses(uninstallCopilot())).toEqual([[stable.dir, 'removed', 'removed'], [insiders.dir, 'removed', 'removed']]);
+    expect(statuses(uninstallCopilot())).toEqual([
+      [stable.dir, 'removed', 'removed'],
+      [insiders.dir, 'removed', 'removed'],
+    ]);
     expect(readJson(stable.mcp)).toEqual({ servers: { playwright: USER_SERVER }, inputs: [] });
     expect(readJson(insiders.mcp)).toEqual({});
     expect(fs.existsSync(stable.instructions)).toBe(false);
@@ -345,16 +399,22 @@ describe('installCopilot and uninstallCopilot', () => {
   it.each([
     ['comments', '{\n  // mine\n  "servers": {}\n}\n'],
     ['a trailing comma', '{\n  "servers": {},\n}\n'],
-  ])('refuses a VS Code mcp.json with %s, leaves it untouched, and still writes the instructions file', (_label, text) => {
-    const user = vscodeUser();
-    writeFile(user.mcp, text);
-    expect(installCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'written' });
-    expect(uninstallCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'removed' });
-    expect(read(user.mcp)).toBe(text);
-    expect(JSON.parse(`{${copilotMcpSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
-  });
+  ])(
+    'refuses a VS Code mcp.json with %s, leaves it untouched, and still writes the instructions file',
+    (_label, text) => {
+      const user = vscodeUser();
+      writeFile(user.mcp, text);
+      expect(installCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'written' });
+      expect(uninstallCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'removed' });
+      expect(read(user.mcp)).toBe(text);
+      expect(JSON.parse(`{${copilotMcpSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
+    },
+  );
 
-  it.each([['empty', ''], ['whitespace-only', '\r\n  \n']])('takes an %s VS Code mcp.json as one with no servers yet', (_label, text) => {
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '\r\n  \n'],
+  ])('takes an %s VS Code mcp.json as one with no servers yet', (_label, text) => {
     const user = vscodeUser();
     writeFile(user.mcp, text);
     expect(installCopilot().vscode[0].mcp).toBe('added');
@@ -374,7 +434,11 @@ describe('installCopilot and uninstallCopilot', () => {
     fs.rmSync(copilotHome, { recursive: true });
     const user = vscodeUser();
     for (let run = 0; run < 2; run++) {
-      expect(installCopilot()).toMatchObject({ mcp: null, instructions: null, vscode: [{ mcp: run === 0 ? 'added' : 'present' }] });
+      expect(installCopilot()).toMatchObject({
+        mcp: null,
+        instructions: null,
+        vscode: [{ mcp: run === 0 ? 'added' : 'present' }],
+      });
       expect(fs.readdirSync(copilotHome)).toEqual(['hooks']);
     }
     expect(readHooks(files.hooks)).toEqual(CONTRACT_HOOKS);
@@ -399,7 +463,11 @@ describe('installCopilot and uninstallCopilot', () => {
   });
 });
 
-interface Machine { root: string; home: string; copilot: string }
+interface Machine {
+  root: string;
+  home: string;
+  copilot: string;
+}
 const machines: string[] = [];
 afterEach(() => {
   while (machines.length) fs.rmSync(machines.pop()!, { recursive: true, force: true });
@@ -416,7 +484,13 @@ function machine(): Machine {
 // A PATH with no codex on it, because setup renames a codex launcher it finds there. In process, so coverage sees setup.
 async function hippo(m: Machine, ...args: string[]): Promise<string> {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of Object.keys(env)) if (/^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(key)) delete env[key];
+  for (const key of Object.keys(env)) {
+    if (
+      /^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(key)
+    ) {
+      delete env[key];
+    }
+  }
   Object.assign(env, {
     HOME: m.home,
     USERPROFILE: m.home,
@@ -435,7 +509,9 @@ async function hippo(m: Machine, ...args: string[]): Promise<string> {
 describe('hippo setup and hippo hook with Copilot', () => {
   it('setup skips Copilot and creates nothing when its folder is missing, and installs all three files once it exists', async () => {
     const m = machine();
-    expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(`copilot        not detected at ${m.copilot} -- skipping`);
+    expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(
+      `copilot        not detected at ${m.copilot} -- skipping`,
+    );
     expect(fs.existsSync(m.copilot)).toBe(false);
 
     fs.mkdirSync(m.copilot);
@@ -452,7 +528,9 @@ describe('hippo setup and hippo hook with Copilot', () => {
   it('setup --dry-run names the three files and writes none', async () => {
     const m = machine();
     fs.mkdirSync(m.copilot);
-    expect(await hippo(m, 'setup', '--dry-run', '--no-schedule', '--no-learn')).toContain(`[dry-run] would install hooks in ${path.join(m.copilot, 'hooks', 'hippo.json')}`);
+    expect(await hippo(m, 'setup', '--dry-run', '--no-schedule', '--no-learn')).toContain(
+      `[dry-run] would install hooks in ${path.join(m.copilot, 'hooks', 'hippo.json')}`,
+    );
     expect(fs.readdirSync(m.copilot)).toEqual([]);
   });
 
@@ -475,7 +553,9 @@ describe('hippo setup and hippo hook with Copilot', () => {
     expect(out).toContain("Removed hippo's Copilot hooks file");
     expect(out).toContain('Removed the "hippo" MCP server');
     expect(fs.existsSync(path.join(m.copilot, 'hooks', 'hippo.json'))).toBe(false);
-    expect(await hippo(m, 'hook', 'uninstall', 'copilot')).toContain('No hippo Copilot hooks, MCP server or instructions found.');
+    expect(await hippo(m, 'hook', 'uninstall', 'copilot')).toContain(
+      'No hippo Copilot hooks, MCP server or instructions found.',
+    );
   });
 
   it('setup on a machine with only VS Code installs the hooks and both VS Code files, and names the hook version and the profiles it left alone', async () => {
@@ -484,9 +564,13 @@ describe('hippo setup and hippo hook with Copilot', () => {
     fs.mkdirSync(path.join(user, 'profiles', 'work'), { recursive: true });
     const out = await hippo(m, 'setup', '--no-schedule', '--no-learn');
     expect(out).toContain(`Installed hippo's Copilot hooks (${HOOK_LIST})`);
-    expect(out).toContain('hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the instructions file only');
+    expect(out).toContain(
+      'hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the instructions file only',
+    );
     expect(out).toContain(`Found VS Code profiles (work) under ${path.join(user, 'profiles')}`);
-    expect(out).toContain(`No Copilot CLI files in ${m.copilot}, so hippo skipped mcp-config.json and copilot-instructions.md`);
+    expect(out).toContain(
+      `No Copilot CLI files in ${m.copilot}, so hippo skipped mcp-config.json and copilot-instructions.md`,
+    );
     expect(fs.readdirSync(m.copilot)).toEqual(['hooks']);
     expect(readHooks(path.join(m.copilot, 'hooks', 'hippo.json'))).toEqual(CONTRACT_HOOKS);
     expect(readJson(path.join(user, 'mcp.json'))).toEqual({ servers: { hippo: VSCODE_SERVER } });
@@ -495,7 +579,9 @@ describe('hippo setup and hippo hook with Copilot', () => {
 
     const removed = await hippo(m, 'hook', 'uninstall', 'copilot');
     expect(removed).toContain(`Removed the "hippo" MCP server from ${path.join(user, 'mcp.json')}`);
-    expect(removed).toContain(`Removed the hippo instructions file ${path.join(user, 'prompts', 'hippo.instructions.md')}`);
+    expect(removed).toContain(
+      `Removed the hippo instructions file ${path.join(user, 'prompts', 'hippo.instructions.md')}`,
+    );
   });
 
   it('setup prints the "servers" snippet when a VS Code mcp.json has comments, and --dry-run names the VS Code files', async () => {
@@ -503,23 +589,34 @@ describe('hippo setup and hippo hook with Copilot', () => {
     const user = path.join(m.root, 'vscode-data', 'Code', 'User');
     const text = '{\n  // mine\n  "servers": {}\n}\n';
     writeFile(path.join(user, 'mcp.json'), text);
-    expect(await hippo(m, 'setup', '--dry-run', '--no-schedule', '--no-learn')).toContain(`[dry-run] would add the MCP server to ${path.join(user, 'mcp.json')} and write ${path.join(user, 'prompts', 'hippo.instructions.md')}`);
+    expect(await hippo(m, 'setup', '--dry-run', '--no-schedule', '--no-learn')).toContain(
+      `[dry-run] would add the MCP server to ${path.join(user, 'mcp.json')} and write ${path.join(user, 'prompts', 'hippo.instructions.md')}`,
+    );
     expect(fs.existsSync(m.copilot)).toBe(false);
-    expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(`add this under "servers" by hand: ${copilotMcpSnippet(VSCODE_MCP)}`);
+    expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(
+      `add this under "servers" by hand: ${copilotMcpSnippet(VSCODE_MCP)}`,
+    );
     expect(read(path.join(user, 'mcp.json'))).toBe(text);
   });
 
   it.each([
     ['an edited block', `${START}\nmy own hippo notes\n${END}\n`, 'Kept the hippo block in'],
-    ['a start marker with no end', `${START}\nhalf a block\n`, `has ${START} with no ${END}, so hippo left it unchanged`],
-  ])('setup leaves copilot-instructions.md holding %s as it was and says so in one line', async (_label, text, line) => {
-    const m = machine();
-    const file = path.join(m.copilot, 'copilot-instructions.md');
-    writeFile(file, text);
-    const out = await hippo(m, 'setup', '--no-schedule', '--no-learn');
-    expect(out.split('\n').filter((l) => l.includes(line))).toHaveLength(1);
-    expect(read(file)).toBe(text);
-  });
+    [
+      'a start marker with no end',
+      `${START}\nhalf a block\n`,
+      `has ${START} with no ${END}, so hippo left it unchanged`,
+    ],
+  ])(
+    'setup leaves copilot-instructions.md holding %s as it was and says so in one line',
+    async (_label, text, line) => {
+      const m = machine();
+      const file = path.join(m.copilot, 'copilot-instructions.md');
+      writeFile(file, text);
+      const out = await hippo(m, 'setup', '--no-schedule', '--no-learn');
+      expect(out.split('\n').filter((l) => l.includes(line))).toHaveLength(1);
+      expect(read(file)).toBe(text);
+    },
+  );
 
   it('setup reports a filesystem error on mcp-config.json with its own message and goes on to finish', async () => {
     const m = machine();

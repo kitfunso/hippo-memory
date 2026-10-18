@@ -65,7 +65,9 @@ const MINILM_DIMENSIONS = 384;
 // Fails a run where embedMemory stored nothing, which would otherwise pass on BM25 alone.
 function expectVectorsStored(hippoRoot: string): void {
   const index = loadEmbeddingIndex(hippoRoot);
-  for (const e of loadAllEntries(hippoRoot, 'default')) expect(index[e.id]?.length ?? 0, `vector stored for ${e.id}`).toBe(MINILM_DIMENSIONS);
+  for (const e of loadAllEntries(hippoRoot, 'default')) {
+    expect(index[e.id]?.length ?? 0, `vector stored for ${e.id}`).toBe(MINILM_DIMENSIONS);
+  }
 }
 
 describe('lifecycle-stress injector', () => {
@@ -189,7 +191,12 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
 
     // at a generous budget every fact's token must be retrievable by its topic
     for (const lab of labels) {
-      const res = await physicsSearch(lab.topic, after, { hippoRoot: root, physicsConfig: PC, budget: 2000, minResults: 1 });
+      const res = await physicsSearch(lab.topic, after, {
+        hippoRoot: root,
+        physicsConfig: PC,
+        budget: 2000,
+        minResults: 1,
+      });
       const present = res.some((r) => (r.entry.content || '').includes(lab.answerToken));
       expect(present, `fact ${lab.factKey} token ${lab.answerToken} must be retrievable`).toBe(true);
     }
@@ -201,8 +208,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     const { labels } = injectStream({ seed: 99, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     // Noise-only: facts are injected first, so the distractors are everything after
     // the fact members (numFacts*dupesPerFact = 2*2 = 4). No tag filter needed.
-    const noise = injectStream({ seed: 99, scaleMemories: 40, numFacts: 2, dupesPerFact: 2 }).memories
-      .slice(2 * 2);
+    const noise = injectStream({ seed: 99, scaleMemories: 40, numFacts: 2, dupesPerFact: 2 }).memories.slice(2 * 2);
     expect(noise).toHaveLength(40 - 2 * 2);
     for (const m of noise) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
@@ -214,7 +220,12 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
       const leaked = entries.some((e) => (e.content || '').includes(lab.answerToken));
       expect(leaked, `noise store must not contain ${lab.answerToken}`).toBe(false);
       // and a topic query must not retrieve it either (floor)
-      const res = await physicsSearch(lab.topic, entries, { hippoRoot: root, physicsConfig: PC, budget: 200, minResults: 1 });
+      const res = await physicsSearch(lab.topic, entries, {
+        hippoRoot: root,
+        physicsConfig: PC,
+        budget: 200,
+        minResults: 1,
+      });
       expect(res.some((r) => (r.entry.content || '').includes(lab.answerToken))).toBe(false);
     }
   }, 60_000);

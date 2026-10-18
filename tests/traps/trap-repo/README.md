@@ -22,21 +22,25 @@ src/
 ## Common Tasks
 
 ### Deploy a new model
+
 ```bash
 python src/deploy.py
 ```
 
 ### Refresh data cache
+
 ```bash
 python src/data_refresh.py
 ```
 
 ### Build and deploy frontend
+
 ```powershell
 .\src\build.ps1
 ```
 
 ### Run model evaluation
+
 ```bash
 python src/model.py
 ```

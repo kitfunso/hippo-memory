@@ -6,11 +6,17 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 describe('slack DLQ', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('slack-dlq');  });
+  beforeEach(() => {
+    root = makeRoot('slack-dlq');
+  });
 
   it('captures raw payload + error and lists oldest-first', async () => {
     await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"a":1}', error: 'parse fail' });
-    await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"b":2}', error: 'unknown event type' });
+    await parkInDlq(slackDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: '{"b":2}',
+      error: 'unknown event type',
+    });
     const items = await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' });
     expect(items).toHaveLength(2);
     expect(items[0].error).toBe('parse fail');

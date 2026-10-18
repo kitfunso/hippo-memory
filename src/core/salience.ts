@@ -59,9 +59,7 @@ export function computeSalience(
     return { decision: 'skip', reason: 'content_too_short', score: 0 };
   }
 
-  const isError = tags.some(t =>
-    t === 'error' || t === 'critical' || t.startsWith('error:')
-  );
+  const isError = tags.some((t) => t === 'error' || t === 'critical' || t.startsWith('error:'));
 
   const window = recentMemories.slice(-opts.recentWindow);
 
@@ -72,7 +70,8 @@ export function computeSalience(
       if (recentErrors >= opts.maxRepeatErrors) {
         return {
           decision: 'start_weak',
-          reason: `repeat_error (${recentErrors} recent errors, overlap ` +
+          reason:
+            `repeat_error (${recentErrors} recent errors, overlap ` +
             `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
           score: REPEAT_ERROR_SCORE,
         };
@@ -108,8 +107,8 @@ function judgeOverlappingNonError(
 }
 
 function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
-  const hasStructuredTags = tags.some(t =>
-    t.startsWith('speaker:') || t.startsWith('topic:') || t.startsWith('scope:')
+  const hasStructuredTags = tags.some(
+    (t) => t.startsWith('speaker:') || t.startsWith('topic:') || t.startsWith('scope:'),
   );
 
   let score = NOVEL_BASE_SCORE;
@@ -120,10 +119,7 @@ function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
   return { decision: 'store', reason: 'novel', score: Math.min(score, 1.0) };
 }
 
-function findBestOverlap(
-  content: string,
-  memories: MemoryEntry[],
-) {
+function findBestOverlap(content: string, memories: MemoryEntry[]) {
   let best = 0;
   let matchId: string | null = null;
   for (const m of memories) {
@@ -137,7 +133,5 @@ function findBestOverlap(
 }
 
 function countRecentErrors(memories: MemoryEntry[]): number {
-  return memories.filter(m =>
-    m.emotional_valence === 'negative' || m.emotional_valence === 'critical'
-  ).length;
+  return memories.filter((m) => m.emotional_valence === 'negative' || m.emotional_valence === 'critical').length;
 }

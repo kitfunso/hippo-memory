@@ -5,8 +5,17 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, forget, outcome, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
-  type OutcomeResult, type RememberResult, type SupersedeResult,
+  archiveRaw,
+  forget,
+  outcome,
+  remember,
+  supersede,
+  type Actor,
+  type ArchiveRawResult,
+  type ForgetResult,
+  type OutcomeResult,
+  type RememberResult,
+  type SupersedeResult,
 } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
@@ -83,8 +92,20 @@ describe('the api with ctx.store', () => {
     });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(memory.forgotten()).toBe(2);
-    const ops = memory.auditRows().filter((r) => r.ts === NOW).map((r) => r.op);
-    expect(ops).toEqual(['remember', 'remember', 'remember', 'outcome', 'remember', 'supersede', 'archive_raw', 'forget']);
+    const ops = memory
+      .auditRows()
+      .filter((r) => r.ts === NOW)
+      .map((r) => r.op);
+    expect(ops).toEqual([
+      'remember',
+      'remember',
+      'remember',
+      'outcome',
+      'remember',
+      'supersede',
+      'archive_raw',
+      'forget',
+    ]);
   });
 });
 
@@ -99,9 +120,12 @@ interface RouteBody {
 
 describe('the entry write routes', () => {
   let handle: ServerHandle | undefined;
-  const send = (path: string, method: string, token: string, body?: RouteBody): Promise<Response> => fetch(`${handle?.url}${path}`, {
-    method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
-  });
+  const send = (path: string, method: string, token: string, body?: RouteBody): Promise<Response> =>
+    fetch(`${handle?.url}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
   const json = async <T>(res: Promise<Response>): Promise<T> => {
     const reply = await res;
     expect(reply.status).toBe(200);
@@ -125,19 +149,37 @@ describe('the entry write routes', () => {
     const memory = inMemoryEntryWritesStore(root);
     handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
     const token = fixture.tokens.adminA;
-    const note = await json<RememberResult>(send('/v1/memories', 'POST', token, { content: 'deploys go out on tuesdays' }));
-    const raw = await json<RememberResult>(send('/v1/memories', 'POST', token, { content: 'raw call transcript', kind: 'raw' }));
-    expect(await json<Pick<OutcomeResult, 'applied'>>(send('/v1/outcome', 'POST', token, { ids: [note.id], good: true }))).toEqual({ applied: 1 });
+    const note = await json<RememberResult>(
+      send('/v1/memories', 'POST', token, { content: 'deploys go out on tuesdays' }),
+    );
+    const raw = await json<RememberResult>(
+      send('/v1/memories', 'POST', token, { content: 'raw call transcript', kind: 'raw' }),
+    );
+    expect(
+      await json<Pick<OutcomeResult, 'applied'>>(send('/v1/outcome', 'POST', token, { ids: [note.id], good: true })),
+    ).toEqual({ applied: 1 });
     const lastRecall = await send('/v1/outcome', 'POST', token, { good: true });
     expect({ status: lastRecall.status, body: await lastRecall.json() }).toEqual({
-      status: 501, body: { error: 'this store keeps no last recall: send the ids your recall returned' },
+      status: 501,
+      body: { error: 'this store keeps no last recall: send the ids your recall returned' },
     });
-    const { newId } = await json<SupersedeResult>(send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }));
-    expect(await json<ArchiveRawResult>(send(`/v1/memories/${raw.id}/archive`, 'POST', token, { reason: 'source deleted' }))).toMatchObject({ ok: true });
+    const { newId } = await json<SupersedeResult>(
+      send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }),
+    );
+    expect(
+      await json<ArchiveRawResult>(send(`/v1/memories/${raw.id}/archive`, 'POST', token, { reason: 'source deleted' })),
+    ).toMatchObject({ ok: true });
     expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({ ok: true, id: newId });
-    expect(memory.auditRows().slice(-4).map((r) => [r.op, r.actor])).toEqual([
-      ['remember', `api_key:${fixture.keys.adminA}`], ['supersede', `api_key:${fixture.keys.adminA}`],
-      ['archive_raw', `api_key:${fixture.keys.adminA}`], ['forget', `api_key:${fixture.keys.adminA}`],
+    expect(
+      memory
+        .auditRows()
+        .slice(-4)
+        .map((r) => [r.op, r.actor]),
+    ).toEqual([
+      ['remember', `api_key:${fixture.keys.adminA}`],
+      ['supersede', `api_key:${fixture.keys.adminA}`],
+      ['archive_raw', `api_key:${fixture.keys.adminA}`],
+      ['forget', `api_key:${fixture.keys.adminA}`],
     ]);
     expect(auditIdsOnHippoDb(root)).toEqual(before);
   });
@@ -147,9 +189,13 @@ describe('the entry write routes', () => {
     handle = await serve({ hippoRoot: root, port: 0 });
     const token = fixture.tokens.adminA;
     const mirror = (id: string): boolean => existsSync(join(root, 'episodic', `${id}.md`));
-    const note = await json<RememberResult>(send('/v1/memories', 'POST', token, { content: 'deploys go out on tuesdays' }));
+    const note = await json<RememberResult>(
+      send('/v1/memories', 'POST', token, { content: 'deploys go out on tuesdays' }),
+    );
     expect(mirror(note.id)).toBe(true);
-    const { newId } = await json<SupersedeResult>(send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }));
+    const { newId } = await json<SupersedeResult>(
+      send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }),
+    );
     expect(mirror(newId)).toBe(true);
     expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({ ok: true, id: newId });
     expect(mirror(newId)).toBe(false);
@@ -160,9 +206,20 @@ describe('hippo_remember and hippo_outcome under another store', () => {
   it('remember and apply an outcome through the store, with hippo.db blocked', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryEntryWritesStore(copyOf());
-    const ctx: McpContext = { hippoRoot, tenantId: TENANT_A, actor: 'mcp', role: 'admin', hostAdmin: true, store: memory.store, clientKey: 'entry-writes-store', config: loadConfig(hippoRoot) };
-    const call = (name: string, args: Record<string, string | boolean>) => withSqliteBlocked('in-memory', () =>
-      handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx));
+    const ctx: McpContext = {
+      hippoRoot,
+      tenantId: TENANT_A,
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: memory.store,
+      clientKey: 'entry-writes-store',
+      config: loadConfig(hippoRoot),
+    };
+    const call = (name: string, args: Record<string, string | boolean>) =>
+      withSqliteBlocked('in-memory', () =>
+        handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx),
+      );
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>
       // SAFETY: a tools/call reply carries { content: [{ type: 'text', text }] }.
       (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;

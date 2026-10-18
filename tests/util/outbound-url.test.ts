@@ -39,7 +39,10 @@ describe('config.embeddings.apiBaseUrl', () => {
   });
 
   const provider = (apiBaseUrl: string) => {
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm', apiBaseUrl } }));
+    fs.writeFileSync(
+      path.join(root, 'config.json'),
+      JSON.stringify({ embeddings: { provider: 'openai', model: 'm', apiBaseUrl } }),
+    );
     return () => resolveEmbeddingProvider(loadConfig(root).embeddings);
   };
 
@@ -58,7 +61,11 @@ describe('config.embeddings.apiBaseUrl', () => {
 
 describe('HIPPO_LLM_RERANKER_URL', () => {
   const head: SearchResult[] = ['alpha', 'beta'].map((content, i) => ({
-    entry: createMemory(content), score: 1 - i, bm25: 1 - i, cosine: 0, tokens: 10,
+    entry: createMemory(content),
+    score: 1 - i,
+    bm25: 1 - i,
+    cosine: 0,
+    tokens: 10,
   }));
 
   beforeEach(() => {

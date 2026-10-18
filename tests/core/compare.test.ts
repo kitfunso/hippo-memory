@@ -5,11 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  compareEntryIdentity,
-  compareScoredResults,
-  comparePhysicsResultsBy,
-} from '../../src/core/compare.js';
+import { compareEntryIdentity, compareScoredResults, comparePhysicsResultsBy } from '../../src/core/compare.js';
 
 describe('compareEntryIdentity', () => {
   it('orders by content ascending when content differs', () => {
@@ -47,7 +43,14 @@ describe('compareEntryIdentity', () => {
 
   it('ranks layer semantic -> episodic -> trace -> buffer on a content tie, unknown layers last', () => {
     const mk = (layer: string | undefined, id: string) => ({ content: 'same', id, layer });
-    const shuffled = [mk('buffer', '1'), mk('weird', '2'), mk('episodic', '3'), mk(undefined, '4'), mk('semantic', '5'), mk('trace', '6')];
+    const shuffled = [
+      mk('buffer', '1'),
+      mk('weird', '2'),
+      mk('episodic', '3'),
+      mk(undefined, '4'),
+      mk('semantic', '5'),
+      mk('trace', '6'),
+    ];
     const sorted = [...shuffled].sort(compareEntryIdentity);
     expect(sorted.map((e) => e.layer)).toEqual(['semantic', 'episodic', 'trace', 'buffer', undefined, 'weird']);
   });
@@ -92,7 +95,11 @@ describe('compareEntryIdentity', () => {
       { content: 'other', id: 'i5' },
       { content: 'same', id: 'i0', layer: 'episodic', tags: ['a'], source: 's' },
     ];
-    const orders = [entries, [...entries].reverse(), [entries[3], entries[0], entries[5], entries[1], entries[4], entries[2]]];
+    const orders = [
+      entries,
+      [...entries].reverse(),
+      [entries[3], entries[0], entries[5], entries[1], entries[4], entries[2]],
+    ];
     const results = orders.map((o) => [...o].sort(compareEntryIdentity).map((e) => e.id));
     expect(results[1]).toEqual(results[0]);
     expect(results[2]).toEqual(results[0]);
@@ -162,7 +169,10 @@ describe('comparePhysicsResultsBy tieKeyOf (content-stable cluster selection)', 
   it('breaks score ties by the supplied tie key, not memoryId', () => {
     const a = { memoryId: 'id-zzz', baseScore: 1 };
     const b = { memoryId: 'id-aaa', baseScore: 1 };
-    const cmp = comparePhysicsResultsBy<typeof a>((r) => r.baseScore, (r) => (r.memoryId === 'id-zzz' ? 'alpha content' : 'beta content'));
+    const cmp = comparePhysicsResultsBy<typeof a>(
+      (r) => r.baseScore,
+      (r) => (r.memoryId === 'id-zzz' ? 'alpha content' : 'beta content'),
+    );
     // tie key 'alpha content' < 'beta content' -> a first despite larger memoryId
     expect([b, a].sort(cmp).map((r) => r.memoryId)).toEqual(['id-zzz', 'id-aaa']);
   });
@@ -170,7 +180,10 @@ describe('comparePhysicsResultsBy tieKeyOf (content-stable cluster selection)', 
   it('falls through tie-key collisions to memoryId for a total order', () => {
     const a = { memoryId: 'id-bbb', baseScore: 1 };
     const b = { memoryId: 'id-aaa', baseScore: 1 };
-    const cmp = comparePhysicsResultsBy<typeof a>((r) => r.baseScore, () => 'same content');
+    const cmp = comparePhysicsResultsBy<typeof a>(
+      (r) => r.baseScore,
+      () => 'same content',
+    );
     expect([a, b].sort(cmp).map((r) => r.memoryId)).toEqual(['id-aaa', 'id-bbb']);
   });
 });

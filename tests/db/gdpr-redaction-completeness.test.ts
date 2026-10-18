@@ -3,11 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import {
-  openHippoDb,
-  closeHippoDb,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { remember, archiveRaw, retrieve } from '../../src/api/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { recordStatements, countMatching } from '../_helpers/count-statements.js';
@@ -86,11 +82,7 @@ describe('GDPR Path A completeness fixes', () => {
     const episodicDir = join(root, 'episodic');
     mkdirSync(episodicDir, { recursive: true });
     const orphanPath = join(episodicDir, 'mem_legacy_canary_1.md');
-    writeFileSync(
-      orphanPath,
-      '# legacy memory\n\noriginal-content-canary-FORGET-ME-quaxle',
-      'utf8',
-    );
+    writeFileSync(orphanPath, '# legacy memory\n\noriginal-content-canary-FORGET-ME-quaxle', 'utf8');
     expect(existsSync(orphanPath)).toBe(true);
 
     // Re-open: reaper runs, file disappears, per-row timestamp set.
@@ -131,10 +123,7 @@ describe('GDPR Path A completeness fixes', () => {
     // Fresh open — no raw_archive rows. Reaper should exit cleanly.
     const db = openHippoDb(root);
     try {
-      const count = queryOne<{ c?: number }>(
-        db,
-        `SELECT COUNT(*) AS c FROM raw_archive`,
-      )?.c;
+      const count = queryOne<{ c?: number }>(db, `SELECT COUNT(*) AS c FROM raw_archive`)?.c;
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -180,9 +169,7 @@ describe('GDPR Path A completeness fixes', () => {
     // The live memory's markdown file should still exist somewhere under the
     // layer dirs (writeEntry mirrors it on remember).
     const layers = ['episodic', 'buffer', 'semantic'];
-    const liveStillPresent = layers.some((layer) =>
-      existsSync(join(root, layer, `${live.id}.md`)),
-    );
+    const liveStillPresent = layers.some((layer) => existsSync(join(root, layer, `${live.id}.md`)));
     expect(liveStillPresent).toBe(true);
   });
 

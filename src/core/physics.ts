@@ -14,8 +14,8 @@ import { comparePhysicsResultsBy } from './compare.js';
 
 export interface PhysicsParticle {
   memoryId: string;
-  position: number[];    // 384-dim, unit-normalized
-  velocity: number[];    // 384-dim
+  position: number[]; // 384-dim, unit-normalized
+  velocity: number[]; // 384-dim
   mass: number;
   charge: number;
   temperature: number;
@@ -123,20 +123,13 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
  * Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0,
  * cosine(pos, query))^2.
  */
-export function queryGravityMagnitude(
-  particle: PhysicsParticle,
-  queryEmbedding: number[],
-  G_query: number,
-): number {
+export function queryGravityMagnitude(particle: PhysicsParticle, queryEmbedding: number[], G_query: number): number {
   const cos = cosineOf(particle.position, queryEmbedding);
   return G_query * particle.mass * Math.pow(Math.max(0, cos), 2);
 }
 
 /** Momentum bonus in [0, 1]: how aligned the particle's velocity is with the query direction. */
-export function velocityAlignmentBonus(
-  particle: PhysicsParticle,
-  queryEmbedding: number[],
-): number {
+export function velocityAlignmentBonus(particle: PhysicsParticle, queryEmbedding: number[]): number {
   if (particle.velocity.length === 0 || particle.velocity.length !== queryEmbedding.length) return 0;
   const velMag = vecNorm(particle.velocity);
   const qNorm = vecNorm(queryEmbedding);
@@ -175,14 +168,10 @@ export function attractionForce(
  * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where
  * cosine_distance = 1 - cosine_similarity.
  */
-export function repulsionForce(
-  pi: PhysicsParticle,
-  pj: PhysicsParticle,
-  K_repulsion: number,
-): number[] {
+export function repulsionForce(pi: PhysicsParticle, pj: PhysicsParticle, K_repulsion: number): number[] {
   const cos = cosineOf(pi.position, pj.position);
   const dist = Math.max(MIN_COSINE_DISTANCE, 1 - cos);
-  const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
+  const magnitude = (K_repulsion * pi.mass * pj.mass) / (dist * dist);
   // Direction: away from j
   const direction = vecNormalize(vecSub(pi.position, pj.position));
   return vecScale(direction, magnitude);
@@ -192,11 +181,7 @@ export function repulsionForce(
  * Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the
  * memory's current half_life_days.
  */
-export function dragForce(
-  particle: PhysicsParticle,
-  drag: number,
-  effectiveHalfLife: number,
-): number[] {
+export function dragForce(particle: PhysicsParticle, drag: number, effectiveHalfLife: number): number[] {
   const damping = drag / Math.max(1, effectiveHalfLife);
   return vecScale(particle.velocity, -damping);
 }
@@ -214,12 +199,7 @@ function addInto(net: number[], force: number[]): void {
 }
 
 /** The net force on particle i, accumulated into one new array; `diff` is the caller's scratch for pair directions. */
-function computeNetForce(
-  i: number,
-  particles: PhysicsParticle[],
-  ctx: ForceContext,
-  diff: number[],
-): number[] {
+function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceContext, diff: number[]): number[] {
   const pi = particles[i];
   const dim = pi.position.length;
   const net = vecZero(dim);
@@ -252,11 +232,7 @@ function computeAcceleration(i: number, particles: PhysicsParticle[], ctx: Force
 }
 
 /** One Velocity Verlet step for all particles; mutates in place for performance. */
-function verletStep(
-  particles: PhysicsParticle[],
-  accelerations: number[][],
-  ctx: ForceContext,
-): void {
+function verletStep(particles: PhysicsParticle[], accelerations: number[][], ctx: ForceContext): void {
   const dt = ctx.config.dt;
   const maxVel = ctx.config.max_velocity;
 
@@ -292,10 +268,7 @@ function verletStep(
 }
 
 /** Full physics simulation for one sleep cycle; mutates particles in place and returns simulation statistics. */
-export function simulate(
-  particles: PhysicsParticle[],
-  ctx: ForceContext,
-): SimulationStats {
+export function simulate(particles: PhysicsParticle[], ctx: ForceContext): SimulationStats {
   if (particles.length === 0) {
     return {
       particleCount: 0,
@@ -338,10 +311,7 @@ export function simulate(
 }
 
 /** Kinetic plus pairwise potential energy; all pairs, so a caller reads it only on demand and under a particle cap. */
-export function computeSystemEnergy(
-  particles: PhysicsParticle[],
-  G_memory: number,
-): SystemEnergy {
+export function computeSystemEnergy(particles: PhysicsParticle[], G_memory: number): SystemEnergy {
   let kinetic = 0;
   let potential = 0;
 
@@ -443,11 +413,7 @@ function applyClusterAmplification(
  * Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the
  * caller must save).
  */
-export function initializeParticle(
-  entry: MemoryEntry,
-  embedding: number[],
-  now: Date = evalNow(),
-): PhysicsParticle {
+export function initializeParticle(entry: MemoryEntry, embedding: number[], now: Date = evalNow()): PhysicsParticle {
   const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
   const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 

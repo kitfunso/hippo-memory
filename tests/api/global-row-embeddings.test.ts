@@ -86,7 +86,9 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 
   it('promote succeeds and writes no embedding index entry', async () => {
-    const entry = createMemory('deterministic no-embed promote test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('deterministic no-embed promote test content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(localRoot, entry);
 
     const promoted = await promote(apiCtx(localRoot), entry.id);
@@ -100,7 +102,10 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 
   it('shareMemory succeeds and writes no embedding index entry', async () => {
-    const entry = createMemory('deterministic no-embed share test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'] });
+    const entry = createMemory('deterministic no-embed share test content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['error'],
+    });
     writeEntry(localRoot, entry);
 
     const shared = await shareMemory(...sharingStores(localRoot), entry.id, { force: true });
@@ -112,7 +117,9 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 
   it('autoShare succeeds and writes no embedding index entry (skipEmbed + batch embedAll no-op)', () => {
-    const entry = createMemory('deterministic no-embed autoshare test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('deterministic no-embed autoshare test content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(localRoot, entry);
 
     const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
@@ -124,7 +131,9 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
 
   it('syncGlobalToLocal succeeds and writes no embedding index entry on the local store', () => {
     disableEmbeddings(localRoot);
-    const entry = createMemory('deterministic no-embed sync test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('deterministic no-embed sync test content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(globalRoot, entry);
 
     const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
@@ -155,7 +164,9 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
   it('syncGlobalToLocal-copied rows gain vectors after an awaited embedAll(localRoot)', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
-    const entry = createMemory('awaited batch sync test content unique alpha', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('awaited batch sync test content unique alpha', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(globalRoot, entry);
 
     const count = syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
@@ -174,7 +185,9 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
   it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
-    const entry = createMemory('awaited batch autoshare test content unique beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('awaited batch autoshare test content unique beta', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(localRoot, entry);
 
     const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
@@ -208,16 +221,21 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
 
   it('promote fire-and-forget embed eventually lands in the global index', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
-    const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('fire and forget integration promote test content gamma', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(localRoot, entry);
 
     const promoted = await promote(apiCtx(localRoot), entry.id);
 
     // Generous timeout: first-run model load can be slow.
-    await vi.waitFor(() => {
-      const index = loadEmbeddingIndex(globalRoot);
-      expect(index[promoted.globalId]).toBeDefined();
-    }, { timeout: 30_000, interval: 250 });
+    await vi.waitFor(
+      () => {
+        const index = loadEmbeddingIndex(globalRoot);
+        expect(index[promoted.globalId]).toBeDefined();
+      },
+      { timeout: 30_000, interval: 250 },
+    );
   }, 35_000);
 });
 
@@ -244,14 +262,18 @@ describe('global-row-embeddings: the first promote, before any global store exis
   });
 
   it('embeds the copy into the global store the promote created', async () => {
-    const entry = createMemory('first promote embeds into a new global store', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('first promote embeds into a new global store', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(localRoot, entry);
     const ctx = apiCtx(localRoot);
     expect(ctx.reach?.global).toBeUndefined();
 
     const promoted = await promote(ctx, entry.id);
 
-    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toBeDefined(), { timeout: 10_000 });
+    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toBeDefined(), {
+      timeout: 10_000,
+    });
   });
 });
 
@@ -312,18 +334,18 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
     const env = { ...process.env, HIPPO_HOME: globalRoot };
 
     try {
-      execFileSync(
-        'node',
-        [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'],
-        { cwd, env, encoding: 'utf-8' },
-      );
+      execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+        cwd,
+        env,
+        encoding: 'utf-8',
+      });
 
       const nonce = `wiring-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const rememberOut = execFileSync(
-        'node',
-        [HIPPO_BIN, 'remember', `${nonce} wiring probe`],
-        { cwd, env, encoding: 'utf-8' },
-      );
+      const rememberOut = execFileSync('node', [HIPPO_BIN, 'remember', `${nonce} wiring probe`], {
+        cwd,
+        env,
+        encoding: 'utf-8',
+      });
       const rememberMatch = rememberOut.match(/Remembered \[(\S+)\]/);
       expect(rememberMatch).not.toBeNull();
       const localId = rememberMatch![1];
@@ -333,11 +355,7 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       // promote runs.
       if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
-      const promoteOut = execFileSync(
-        'node',
-        [HIPPO_BIN, 'promote', localId],
-        { cwd, env, encoding: 'utf-8' },
-      );
+      const promoteOut = execFileSync('node', [HIPPO_BIN, 'promote', localId], { cwd, env, encoding: 'utf-8' });
       const promoteMatch = promoteOut.match(/Promoted \S+ to global store as (\S+)/);
       expect(promoteMatch).not.toBeNull();
       const globalId = promoteMatch![1];
@@ -352,11 +370,14 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
         // embedMemory promise settles — same reasoning as handleImport's batch
         // embed comment (src/cli.ts:6086-6093). The poll is a safety margin,
         // not a requirement to wait out a race.
-        await vi.waitFor(() => {
-          const index = loadEmbeddingIndex(globalRoot);
-          expect(index[globalId]).toBeDefined();
-          expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
-        }, { timeout: 60_000, interval: 250 });
+        await vi.waitFor(
+          () => {
+            const index = loadEmbeddingIndex(globalRoot);
+            expect(index[globalId]).toBeDefined();
+            expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
+          },
+          { timeout: 60_000, interval: 250 },
+        );
       }
     } finally {
       cleanUp(home, cwd);

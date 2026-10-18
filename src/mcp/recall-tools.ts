@@ -1,11 +1,7 @@
 // Read-side tool handlers: hippo_recall, hippo_assemble, hippo_drill and hippo_context.
 
 import * as path from 'path';
-import {
-  drillDown as apiDrillDown,
-  assemble as apiAssemble,
-  getContext as apiGetContext,
-} from '../api/index.js';
+import { drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext } from '../api/index.js';
 import { autoDetectContext } from '../api/context-auto.js';
 import { sharedStoreOf } from '../api/types.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
@@ -55,9 +51,7 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
   const budget = Number(args.budget);
   const freshTailCount = Number(args.fresh_tail_count);
   const summarizeOlder = args.summarize_older !== false;
-  const explicitScope = isJsonString(args.scope) && args.scope.length > 0
-    ? args.scope
-    : undefined;
+  const explicitScope = isJsonString(args.scope) && args.scope.length > 0 ? args.scope : undefined;
   const assembleExtra: AssembleExtraOptions = {};
   if (Number.isFinite(budget) && budget > 0) assembleExtra.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
@@ -102,9 +96,7 @@ function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
   return storeProject.name !== '' || !ownsCwd ? storeProject : resolveProjectIdentity(process.cwd());
 }
 
-export async function runContextTool(
-  { args, ctx, hippoRoot, config }: ToolCall
-): Promise<string> {
+export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall): Promise<string> {
   // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
   if (sharedStoreOf(ctx) && ctx.project === undefined) {
     return 'hippo_context needs a project on a shared store; use hippo_recall';
@@ -114,21 +106,23 @@ export async function runContextTool(
   if (budget === 0) return '';
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
-  const result = await apiGetContext(
-    mcpApiContext(ctx),
-    {
-      // The server's git state is no remote caller's, so a project
-      // or remote caller gets rows by strength without a query.
-      q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
-      budget,
-      exactScope,
-      currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd),
-      cost: contextCost,
-    },
+  const result = await apiGetContext(mcpApiContext(ctx), {
+    // The server's git state is no remote caller's, so a project
+    // or remote caller gets rows by strength without a query.
+    q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
+    budget,
+    exactScope,
+    currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd),
+    cost: contextCost,
+  });
+  lastRecalledIds.set(
+    resolveClientKey(ctx),
+    result.entries.map((r) => r.entry.id),
   );
-  lastRecalledIds.set(resolveClientKey(ctx), result.entries.map((r) => r.entry.id));
-  return (result.activeSnapshot ? snapshotPiece(result.activeSnapshot) : '')
-    + (result.sessionHandoff ? handoffPiece(result.sessionHandoff) : '')
-    + (result.recentEvents ? trailPiece(result.recentEvents) : '')
-    + formatMemories(result.entries);
+  return (
+    (result.activeSnapshot ? snapshotPiece(result.activeSnapshot) : '') +
+    (result.sessionHandoff ? handoffPiece(result.sessionHandoff) : '') +
+    (result.recentEvents ? trailPiece(result.recentEvents) : '') +
+    formatMemories(result.entries)
+  );
 }

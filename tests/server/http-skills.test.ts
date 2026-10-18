@@ -35,7 +35,9 @@ beforeEach(async () => {
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-skill', role: 'admin' });
     apiKeyB = createApiKey(db, { tenantId: 'tenant-b', label: 'test-skill-b', role: 'admin' });
-  } finally { closeHippoDb(db); }
+  } finally {
+    closeHippoDb(db);
+  }
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {
@@ -60,11 +62,15 @@ describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
   it('GET /v1/skills lists + filters by status', async () => {
     const v1 = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'S', instructions: 'a' }))).skill;
     await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ instructions: 'b', changeSummary: 'c' }),
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ instructions: 'b', changeSummary: 'c' }),
     });
     const all = await jsonAs<{ skills: Skill[] }>(await fetch(`${handle.url}/v1/skills`, { headers: authHeaders() }));
     expect(all.skills.length).toBe(2);
-    const active = await jsonAs<{ skills: Skill[] }>(await fetch(`${handle.url}/v1/skills?status=active`, { headers: authHeaders() }));
+    const active = await jsonAs<{ skills: Skill[] }>(
+      await fetch(`${handle.url}/v1/skills?status=active`, { headers: authHeaders() }),
+    );
     expect(active.skills.length).toBe(1);
     expect(active.skills[0].version).toBe(2);
   });
@@ -84,7 +90,9 @@ describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
 
   it('cross-tenant isolation: tenant-b export holds no default-tenant skill', async () => {
     await createSkill({ skillName: 'secret', instructions: 'a' });
-    const bExport = await jsonAs<{ markdown: string }>(await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders(apiKeyB) }));
+    const bExport = await jsonAs<{ markdown: string }>(
+      await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders(apiKeyB) }),
+    );
     expect(bExport.markdown).toBe('');
   });
 });

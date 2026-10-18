@@ -3,9 +3,12 @@ import type { ConfidenceInputs, MemoryEntry, StrengthInputs } from '../../core/m
 import type { ConflictRow } from './conflicts.js';
 
 /** One live row as the dashboard lists it. `head` is the whole content or at least its first 241 characters. */
-export type DashboardRow = StrengthInputs & ConfidenceInputs
-  & Pick<MemoryEntry, 'id' | 'layer' | 'scope' | 'origin_project' | 'kind' | 'superseded_by'>
-  & { readonly head: string; readonly embedded: boolean };
+export type DashboardRow = StrengthInputs &
+  ConfidenceInputs &
+  Pick<MemoryEntry, 'id' | 'layer' | 'scope' | 'origin_project' | 'kind' | 'superseded_by'> & {
+    readonly head: string;
+    readonly embedded: boolean;
+  };
 
 export type DashboardText = Pick<MemoryEntry, 'id' | 'content' | 'tags'>;
 

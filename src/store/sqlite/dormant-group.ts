@@ -1,6 +1,9 @@
 // hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
 import {
-  forgetDormantMemoryAt, holdsDormantMemoryAt, loadDormantMemoriesAt, restoreDormantMemoryAt,
+  forgetDormantMemoryAt,
+  holdsDormantMemoryAt,
+  loadDormantMemoriesAt,
+  restoreDormantMemoryAt,
 } from '../dormant.js';
 import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
 import type { Dormant } from '../port-groups.js';

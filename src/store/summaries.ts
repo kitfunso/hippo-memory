@@ -22,7 +22,8 @@ import type { RebuildPatch } from './port/consolidation.js';
 export function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
       FROM memories
      WHERE dag_level = ${DAG_LEVEL.topic}
@@ -30,7 +31,8 @@ export function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
        AND kind != 'archived'
        AND superseded_by IS NULL
      ORDER BY created ASC, id ASC
-  `).all() as MemoryRow[];
+  `)
+    .all() as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -40,14 +42,16 @@ export function loadAllL2SummariesAt(db: DatabaseSyncLike): MemoryEntry[] {
 export function loadAllDirtySummariesAt(db: DatabaseSyncLike, limit?: number): MemoryEntry[] {
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
       FROM memories
      WHERE summary_dirty = 1
        AND kind != 'archived'
      ORDER BY latest_at DESC NULLS LAST, id ASC
      LIMIT ?
-  `).all(limit ?? -1) as MemoryRow[];
+  `)
+    .all(limit ?? -1) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -57,7 +61,8 @@ export function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string,
   assertTenantId('loadChildrenOfSummary', tenantId);
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
       FROM memories
      WHERE dag_parent_id = ?
@@ -65,7 +70,8 @@ export function loadChildrenOfSummaryAt(db: DatabaseSyncLike, summaryId: string,
        AND kind != 'archived'
        AND superseded_by IS NULL
      ORDER BY created ASC
-  `).all(summaryId, tenantId) as MemoryRow[];
+  `)
+    .all(summaryId, tenantId) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -86,7 +92,8 @@ export function loadChildrenOfSummariesAt(
   for (const [tenantId, ids] of byTenant) {
     for (const slice of chunked(ids)) {
       // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-      const rows = db.prepare(`
+      const rows = db
+        .prepare(`
         SELECT ${MEMORY_SELECT_COLUMNS}
           FROM memories
          WHERE dag_parent_id IN (${placeholders(slice.length)})
@@ -94,11 +101,13 @@ export function loadChildrenOfSummariesAt(
            AND kind != 'archived'
            AND superseded_by IS NULL
          ORDER BY created ASC
-      `).all(...slice, tenantId) as MemoryRow[];
+      `)
+        .all(...slice, tenantId) as MemoryRow[];
       for (const entry of rows.map(rowToEntry)) {
         const key = childrenKey(tenantId, entry.dag_parent_id ?? '');
         const list = out.get(key);
-        if (list) list.push(entry); else out.set(key, [entry]);
+        if (list) list.push(entry);
+        else out.set(key, [entry]);
       }
     }
   }
@@ -143,11 +152,7 @@ const REBUILD_METADATA_SQL = `UPDATE memories
               AND summary_dirty = 1
               AND kind != 'archived'`;
 
-function applyRebuildInSavepoint(
-  db: DatabaseSyncLike,
-  summary: MemoryEntry,
-  patch: RebuildPatch,
-) {
+function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, patch: RebuildPatch) {
   const nowIso = new Date().toISOString();
 
   // Check tombstones before choosing the UPDATE: this direct UPDATE bypasses upsertEntryRow's guard, and
@@ -161,22 +166,20 @@ function applyRebuildInSavepoint(
   const applyContentWrite = patch.bumpRebuildCount && !tombstone;
 
   const result = applyContentWrite
-    ? db.prepare(REBUILD_CONTENT_SQL).run(
-        patch.content,
-        patch.descendant_count,
-        patch.earliest_at,
-        patch.latest_at,
-        nowIso,
-        summary.id,
-        summary.tenant_id,
-      )
-    : db.prepare(REBUILD_METADATA_SQL).run(
-        patch.descendant_count,
-        patch.earliest_at,
-        patch.latest_at,
-        summary.id,
-        summary.tenant_id,
-      );
+    ? db
+        .prepare(REBUILD_CONTENT_SQL)
+        .run(
+          patch.content,
+          patch.descendant_count,
+          patch.earliest_at,
+          patch.latest_at,
+          nowIso,
+          summary.id,
+          summary.tenant_id,
+        )
+    : db
+        .prepare(REBUILD_METADATA_SQL)
+        .run(patch.descendant_count, patch.earliest_at, patch.latest_at, summary.id, summary.tenant_id);
 
   // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry
   // the doomed rebuild forever); `refused` lets the caller count it as refused rather than rebuilt.
@@ -203,7 +206,7 @@ function auditRefusedRebuild(
     targetId: summary.id,
     metadata: { digest: tombstone.digest, reason: tombstone.reason },
     actor: patch.actor,
-    tenantId: summary.tenant_id
+    tenantId: summary.tenant_id,
   });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
@@ -228,19 +231,22 @@ function syncRebuiltSummary(
     latest_at: patch.latest_at,
     summary_dirty: false,
     last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
-    rebuild_count: applyContentWrite
-      ? (summary.rebuild_count ?? 0) + 1
-      : summary.rebuild_count,
+    rebuild_count: applyContentWrite ? (summary.rebuild_count ?? 0) + 1 : summary.rebuild_count,
   };
   syncFtsRow(db, patchedEntry);
 
-  audit(db, 'summary_rebuilt', { targetId: summary.id, metadata: {
+  audit(db, 'summary_rebuilt', {
+    targetId: summary.id,
+    metadata: {
       // Actual level from the summary in scope, never hardcoded: L2 -> 2, L3 -> 3.
       dag_level: summary.dag_level,
       source: 'E3-rebuild',
       zero_children: patch.zeroChildren,
       descendant_count: patch.descendant_count,
-    }, actor: patch.actor, tenantId: summary.tenant_id });
+    },
+    actor: patch.actor,
+    tenantId: summary.tenant_id,
+  });
 }
 
 /** Clear summary_dirty on a new summary after buildDag's child-link loop (each member's writeEntry marks the parent
@@ -256,7 +262,8 @@ export function clearSummaryDirtyAfterBuildAt(
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
   // RETURNING dag_level reads the actual level so audit metadata stays accurate without an extra SELECT.
   // SAFETY: result's shape matches the single `dag_level` column returned below.
-  const result = db.prepare(`
+  const result = db
+    .prepare(`
     UPDATE memories
        SET summary_dirty = 0
      WHERE id = ?
@@ -265,7 +272,8 @@ export function clearSummaryDirtyAfterBuildAt(
        AND summary_dirty = 1
        AND kind != 'archived'
     RETURNING dag_level
-  `).get(summaryId, tenantId) as { dag_level: number } | undefined;
+  `)
+    .get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (result) {
     // source tells buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
     audit(db, 'summary_marked_clean', {

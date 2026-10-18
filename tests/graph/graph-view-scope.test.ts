@@ -18,8 +18,12 @@ const OWN_A = 'personal:private:alice';
 function mem(home: string, text: string, scope: string | null): MemoryEntry {
   const m = createMemory(text, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test',
-    tenantId: T, scope,
+    tags: [],
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'test',
+    tenantId: T,
+    scope,
   });
   writeEntry(home, m, { actor: 'test' });
   return m;
@@ -40,10 +44,24 @@ describe('graph-view personal scope', () => {
     const ePriv = insertEntityAt(home, T, { entityType: 'decision', name: 'PRIV-A', memoryId: priv.id }).id;
     // A team-sourced edge into A's entity must still go when its endpoint goes.
     insertRelationAt(home, T, { fromEntityId: eTeam, toEntityId: ePriv, relType: 'references', memoryId: team.id });
-    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Anchored', policyText: 'kept by its object' });
-    insertEntityAt(home, T, { entityType: 'policy', name: 'ANCHORED', memoryId: null, sourceObject: { type: 'policy', id: policy.id } });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'Anchored',
+      policyText: 'kept by its object',
+    });
+    insertEntityAt(home, T, {
+      entityType: 'policy',
+      name: 'ANCHORED',
+      memoryId: null,
+      sourceObject: { type: 'policy', id: policy.id },
+    });
   });
-  afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ } });
+  afterEach(() => {
+    try {
+      rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  });
 
   it('A sees its own entity and the edge to it; B sees neither; a NULL-memory entity stays for both', async () => {
     const a = await buildGraphModel(sqliteStore(home).graphReads, T, { reader: alice });
@@ -60,7 +78,11 @@ describe('graph-view personal scope', () => {
     expect(names(a)).toEqual(['PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
 
-    expect(await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: bob })).toEqual({ nodes: [], edges: [], truncated: false });
+    expect(await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: bob })).toEqual({
+      nodes: [],
+      edges: [],
+      truncated: false,
+    });
     const viaTeam = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'TEAM', reader: bob });
     expect(names(viaTeam)).toEqual(['TEAM']);
     expect(viaTeam.edges).toHaveLength(0);

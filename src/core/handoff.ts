@@ -74,10 +74,12 @@ const absent = (v: JsonValue | undefined): v is null | undefined => v === undefi
 function isHandoffEvidence(v: JsonValue): v is JsonValue & HandoffEvidence {
   if (!(v instanceof Object) || Array.isArray(v)) return false;
   const { gitRef, dirtyTree, testStatus, derivedFrom } = v;
-  return (absent(gitRef) || isJsonString(gitRef))
-    && (absent(dirtyTree) || dirtyTree === true || dirtyTree === false)
-    && (absent(testStatus) || TEST_STATUSES.has(testStatus))
-    && (derivedFrom === undefined || derivedFrom === 'transcript');
+  return (
+    (absent(gitRef) || isJsonString(gitRef)) &&
+    (absent(dirtyTree) || dirtyTree === true || dirtyTree === false) &&
+    (absent(testStatus) || TEST_STATUSES.has(testStatus)) &&
+    (derivedFrom === undefined || derivedFrom === 'transcript')
+  );
 }
 
 /** A stored list column as strings; a damaged one logs and reads as empty instead of hiding the whole handoff. */

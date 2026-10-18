@@ -26,7 +26,8 @@ afterEach(() => {
 });
 
 const REFUSAL = 'hippo_context needs a project on a shared store; use hippo_recall';
-const GATE = "hippo_context needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header";
+const GATE =
+  "hippo_context needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header";
 const ROWS = {
   acme: 'acme deploys go through the blue green switch',
   alias: 'acme alias rows keep the old repo name',
@@ -35,8 +36,12 @@ const ROWS = {
   global: 'the operator likes tabs over spaces',
 } as const;
 
-interface ContextBody { readonly entries: ReadonlyArray<{ readonly entry: { readonly content: string } }> }
-interface McpBody { readonly result?: { readonly content: ReadonlyArray<{ readonly text: string }>; readonly isError?: boolean } }
+interface ContextBody {
+  readonly entries: ReadonlyArray<{ readonly entry: { readonly content: string } }>;
+}
+interface McpBody {
+  readonly result?: { readonly content: ReadonlyArray<{ readonly text: string }>; readonly isError?: boolean };
+}
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: only this file's /v1/context and /mcp replies, whose fields the callers assert on next.
@@ -61,18 +66,30 @@ async function start(flagged: boolean, extra: Record<string, boolean> = {}): Pro
   return handle;
 }
 
-async function contextTexts(h: ServerHandle, query: string, headers: Record<string, string> = {}): Promise<{ status: number; texts: readonly string[] }> {
+async function contextTexts(
+  h: ServerHandle,
+  query: string,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; texts: readonly string[] }> {
   const res = await fetch(`${h.url}/v1/context${query}`, { headers });
   if (res.status !== 200) return { status: res.status, texts: [] };
   const body = await jsonAs<ContextBody>(res);
   return { status: 200, texts: body.entries.map((e) => e.entry.content) };
 }
 
-async function mcpContext(h: ServerHandle, headers: Record<string, string> = {}): Promise<{ text: string; isError: boolean }> {
+async function mcpContext(
+  h: ServerHandle,
+  headers: Record<string, string> = {},
+): Promise<{ text: string; isError: boolean }> {
   const res = await fetch(`${h.url}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: {} } }),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'hippo_context', arguments: {} },
+    }),
   });
   expect(res.status).toBe(200);
   const result = (await jsonAs<McpBody>(res)).result;
@@ -118,7 +135,12 @@ describe('context reads on a shared store', () => {
 
   it('GET /v1/context refuses a name or alias with capitals, padding or a colon', async () => {
     const h = await start(true);
-    for (const query of ['?project=Acme%2Fapp', '?project=%20acme%2Fapp', '?project=acme%3Aapp', '?project=acme%2Fapp&alias=App']) {
+    for (const query of [
+      '?project=Acme%2Fapp',
+      '?project=%20acme%2Fapp',
+      '?project=acme%3Aapp',
+      '?project=acme%2Fapp&alias=App',
+    ]) {
       expect((await contextTexts(h, query)).status, query).toBe(400);
     }
   });
@@ -126,7 +148,9 @@ describe('context reads on a shared store', () => {
   it('GET /v1/context answers 401 for a bad key before it looks at the project', async () => {
     const h = await start(true);
     const bogus = { authorization: 'Bearer hk_bogus' };
-    for (const query of ['', '?project=Acme%2Fapp']) expect((await contextTexts(h, query, bogus)).status, query).toBe(401);
+    for (const query of ['', '?project=Acme%2Fapp']) {
+      expect((await contextTexts(h, query, bogus)).status, query).toBe(401);
+    }
   });
 
   it('GET /v1/context with cross_project=1 opts in to other projects and NULL rows, never the global store', async () => {
@@ -160,18 +184,23 @@ describe('context reads on a shared store', () => {
 
   it("MCP hippo_context with X-Hippo-Project returns the caller's and alias rows and no other project's, NULL or global row", async () => {
     const h = await start(true);
-    const { text, isError } = await mcpContext(h, { 'x-hippo-project': 'acme%2Fapp', 'x-hippo-project-aliases': 'app' });
+    const { text, isError } = await mcpContext(h, {
+      'x-hippo-project': 'acme%2Fapp',
+      'x-hippo-project-aliases': 'app',
+    });
     expect(isError, text).toBe(false);
     expect(text).toContain(ROWS.acme);
     expect(text).toContain(ROWS.alias);
     for (const hidden of [ROWS.beta, ROWS.none, ROWS.global]) expect(text).not.toContain(hidden);
   });
 
-  it("getContext refuses a caller with no project", async () => {
+  it('getContext refuses a caller with no project', async () => {
     await start(true);
     const ctx: FullContext = apiCtx(home, 'default', adminActor('shared-ctx-test'));
     await expect(getContext(ctx, { currentProject: '' })).rejects.toBeInstanceOf(BadRequestError);
-    await expect(getContext(ctx, { currentProject: { name: '  ', legacyName: '' } })).rejects.toBeInstanceOf(BadRequestError);
+    await expect(getContext(ctx, { currentProject: { name: '  ', legacyName: '' } })).rejects.toBeInstanceOf(
+      BadRequestError,
+    );
   });
 });
 
@@ -210,7 +239,9 @@ describe('the prompt hook on a shared store', () => {
     const ctx: FullContext = apiCtx(root, 'default', adminActor('shared-ctx-test'));
     const names = ['', '  ', 'Acme/App'];
     for (const [i, name] of names.entries()) {
-      await expect(promptHookContext(ctx, { sessionId: `s-${i}`, project: { name, legacyName: '' } }, opts)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(
+        promptHookContext(ctx, { sessionId: `s-${i}`, project: { name, legacyName: '' } }, opts),
+      ).rejects.toBeInstanceOf(BadRequestError);
     }
     expect(armRows(root)).toBe(0);
   }
@@ -231,7 +262,10 @@ describe('hippo context on a shared store', () => {
     home = makeRoot('shared-cli', { config: { sharedStore: true } });
     const cwd = makeRoot('shared-cli-cwd', { init: false });
     const r = spawnSync(process.execPath, [resolve(__dirname, '..', '..', 'bin', 'hippo.js'), 'context'], {
-      cwd, env: { ...process.env, HIPPO_HOME: home }, encoding: 'utf8', timeout: 60_000,
+      cwd,
+      env: { ...process.env, HIPPO_HOME: home },
+      encoding: 'utf8',
+      timeout: 60_000,
     });
     expect(r.status, r.stderr).toBe(1);
     expect(r.stderr).toContain("a shared store needs the caller's project");

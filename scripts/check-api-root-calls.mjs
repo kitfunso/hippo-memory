@@ -22,7 +22,9 @@ function rootKeyedNames() {
     const text = readFileSync(file, 'utf8');
     // A first parameter named hippoRoot cannot exist without that text, so other files skip the parse.
     if (!text.includes('hippoRoot')) continue;
-    for (const fn of readFacts(text, file, ['exportedFunctions']).exportedFunctions) if (fn.firstParam === 'hippoRoot') names.add(fn.name);
+    for (const fn of readFacts(text, file, ['exportedFunctions']).exportedFunctions) {
+      if (fn.firstParam === 'hippoRoot') names.add(fn.name);
+    }
   }
   return names;
 }

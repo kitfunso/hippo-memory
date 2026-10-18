@@ -17,7 +17,7 @@ import {
   rowToEntity,
   rowToRelation,
   ENTITY_COLS,
-  RELATION_COLS
+  RELATION_COLS,
 } from './graph-rows.js';
 import { placeholders } from '../util/sql.js';
 
@@ -38,10 +38,12 @@ export function loadEntitiesByNameAt(
     throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
   // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
     ORDER BY id ASC LIMIT ?
-  `).all(tenantId, name, limit) as EntityRow[];
+  `)
+    .all(tenantId, name, limit) as EntityRow[];
   return rows.map(rowToEntity);
 }
 
@@ -65,12 +67,14 @@ export function loadEntitiesAt(
   }
   params.push(limit);
   // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${ENTITY_COLS} FROM entities
     WHERE ${clauses.join(' AND ')}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `).all(...params) as EntityRow[];
+  `)
+    .all(...params) as EntityRow[];
   return rows.map(rowToEntity);
 }
 
@@ -97,12 +101,14 @@ export function loadRelationsAt(
   }
   params.push(limit);
   // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${RELATION_COLS} FROM relations
     WHERE ${clauses.join(' AND ')}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `).all(...params) as RelationRow[];
+  `)
+    .all(...params) as RelationRow[];
   return rows.map(rowToRelation);
 }
 
@@ -120,11 +126,7 @@ export const IN_LIST_CHUNK = 400;
 
 /** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped,
  * read-only. */
-export function loadEntitiesByIdsAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  ids: readonly number[],
-): Entity[] {
+export function loadEntitiesByIdsAt(db: DatabaseSyncLike, tenantId: string, ids: readonly number[]): Entity[] {
   assertTenantId('loadEntitiesByIds', tenantId);
   if (ids.length === 0) return [];
   const out: Entity[] = [];
@@ -132,10 +134,12 @@ export function loadEntitiesByIdsAt(
     const slice = ids.slice(i, i + IN_LIST_CHUNK);
     const ph = placeholders(slice.length);
     // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(`
       SELECT ${ENTITY_COLS} FROM entities
       WHERE tenant_id = ? AND id IN (${ph})
-    `).all(tenantId, ...slice) as EntityRow[];
+    `)
+      .all(tenantId, ...slice) as EntityRow[];
     out.push(...rows.map(rowToEntity));
   }
   return out;
@@ -163,12 +167,14 @@ export function loadNeighborRelationsAt(
     const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
     const ph = placeholders(slice.length);
     // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(`
       SELECT ${RELATION_COLS} FROM relations
       WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(tenantId, ...slice, ...slice, limit) as RelationRow[];
+    `)
+      .all(tenantId, ...slice, ...slice, limit) as RelationRow[];
     for (const r of rows) byId.set(r.id, rowToRelation(r));
   }
   return Array.from(byId.values());
@@ -191,12 +197,14 @@ export function loadRelationsAmongAt(
   }
   const ph = placeholders(entityIds.length);
   // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${RELATION_COLS} FROM relations
     WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `).all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
+  `)
+    .all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
   return rows.map(rowToRelation);
 }
 
@@ -215,11 +223,13 @@ export function loadEntitiesByMemoryIdAt(
     const ph = placeholders(slice.length);
     // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
     // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(`
       SELECT ${ENTITY_COLS} FROM entities
       WHERE tenant_id = ? AND memory_id IN (${ph})
       ORDER BY id ASC
-    `).all(tenantId, ...slice) as EntityRow[];
+    `)
+      .all(tenantId, ...slice) as EntityRow[];
     out.push(...rows.map(rowToEntity));
   }
   return out;
@@ -233,21 +243,24 @@ export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds:
   const entities = db
     .prepare(
       `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities ` +
-      `WHERE tenant_id = ? ORDER BY id`,
+        `WHERE tenant_id = ? ORDER BY id`,
     )
     .all(tenantId) as StoredEntity[];
   // SAFETY: the SELECT names exactly the columns of StoredRelation.
-  const relations = db.prepare(
-    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id ` +
-      `FROM relations WHERE tenant_id = ? ORDER BY id`,
-  ).all(tenantId) as StoredRelation[];
+  const relations = db
+    .prepare(
+      `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id ` +
+        `FROM relations WHERE tenant_id = ? ORDER BY id`,
+    )
+    .all(tenantId) as StoredRelation[];
   return { kinds, entities, relations };
 }
 
 function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): ReadonlyMap<string, string> {
   if (memoryIds.length === 0) return new Map();
   // SAFETY: the SELECT names exactly the two columns of the row type.
-  const rows = db.prepare(`SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`)
+  const rows = db
+    .prepare(`SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`)
     .all(JSON.stringify(memoryIds)) as Array<{ id: string; kind: string }>;
   return new Map(rows.map((row) => [row.id, row.kind]));
 }

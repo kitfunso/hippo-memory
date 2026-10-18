@@ -40,9 +40,17 @@ describe('git-learned rows and the global store', () => {
     initStore(hippoRoot);
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The tags learnFromRepo gives every seed.
-    seed = createMemory(SEED, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
+    seed = createMemory(SEED, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['error', 'git-learned'],
+      source: 'git-learn',
+      tenantId: 'default',
+    });
     writeEntry(hippoRoot, seed);
-    writeEntry(hippoRoot, createMemory(ORDINARY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'], tenantId: 'default' }));
+    writeEntry(
+      hippoRoot,
+      createMemory(ORDINARY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'], tenantId: 'default' }),
+    );
     expect(transferScore(seed)).toBeGreaterThanOrEqual(0.6);
   });
 
@@ -76,9 +84,18 @@ describe('git-learned rows and the global store', () => {
   });
 
   it('a fact extracted from a git-learned row keeps the tag and stays local after three recalls', () => {
-    const [fact] = storeExtractedFacts(sqliteSyncStore(hippoRoot).localFiles.learning, seed, [
-      { content: 'The uploader retries when the storage token expires mid-transfer.', tags: ['topic:upload'], valence: 'neutral' },
-    ], DEFAULT_HALF_LIFE_DAYS);
+    const [fact] = storeExtractedFacts(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      seed,
+      [
+        {
+          content: 'The uploader retries when the storage token expires mid-transfer.',
+          tags: ['topic:upload'],
+          valence: 'neutral',
+        },
+      ],
+      DEFAULT_HALF_LIFE_DAYS,
+    );
     expect(fact.tags).toContain('git-learned');
     const recalled = { ...fact, retrieval_count: 3 };
     writeEntry(hippoRoot, recalled);
@@ -91,17 +108,39 @@ describe('git-learned rows and the global store', () => {
     let calls = 0;
     // Stands in for the summary model, so no API key is read.
     const fetcher = async (): Promise<Response> =>
-      new Response(JSON.stringify({ content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }] }), { status: 200 });
-    const facts = storeExtractedFacts(sqliteSyncStore(hippoRoot).localFiles.learning, seed, [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => (
-      { content: `Upload fact ${n}: the storage token can expire mid-transfer.`, tags: ['topic:upload'], valence: 'neutral' }
-    )), DEFAULT_HALF_LIFE_DAYS).map((f) => ({ ...f, dag_level: 1 }));
-    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test', fetcher });
-    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test', fetcher });
+      new Response(
+        JSON.stringify({ content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }] }),
+        { status: 200 },
+      );
+    const facts = storeExtractedFacts(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      seed,
+      [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => ({
+        content: `Upload fact ${n}: the storage token can expire mid-transfer.`,
+        tags: ['topic:upload'],
+        valence: 'neutral',
+      })),
+      DEFAULT_HALF_LIFE_DAYS,
+    ).map((f) => ({ ...f, dag_level: 1 }));
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'test',
+      fetcher,
+    });
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'test',
+      fetcher,
+    });
     const summaries = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 2);
     expect(summaries).toHaveLength(2);
     for (const s of summaries) expect(s.tags).toContain('git-learned');
 
-    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test', fetcher });
+    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'test',
+      fetcher,
+    });
     const profiles = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 3);
     expect(profiles).toHaveLength(1);
     expect(profiles[0].tags).toContain('git-learned');
@@ -124,7 +163,11 @@ describe('hippo share --auto --dry-run', () => {
     const home = join(root, 'home');
     for (const dir of [proj, home, join(root, 'appdata')]) mkdirSync(dir, { recursive: true });
     const git = (...args: string[]): void => {
-      execFileSync('git', ['-c', 'user.name=Test User', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd: proj, stdio: 'ignore' });
+      execFileSync(
+        'git',
+        ['-c', 'user.name=Test User', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args],
+        { cwd: proj, stdio: 'ignore' },
+      );
     };
     git('init');
     git('commit', '--allow-empty', '-m', SEED);

@@ -51,9 +51,7 @@ export function validateProcessSteps(steps: JsonValue): string[] {
     throw new BadRequestError('saveProcess: steps must be an array of strings');
   }
   if (steps.length > MAX_PROCESS_STEPS) {
-    throw new BadRequestError(
-      `saveProcess: steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`,
-    );
+    throw new BadRequestError(`saveProcess: steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`);
   }
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {
@@ -66,9 +64,7 @@ export function validateProcessSteps(steps: JsonValue): string[] {
       throw new BadRequestError(`saveProcess: step ${i + 1} is empty`);
     }
     if (trimmed.length > MAX_PROCESS_STEP_LEN) {
-      throw new BadRequestError(
-        `saveProcess: step ${i + 1} exceeds the ${MAX_PROCESS_STEP_LEN}-char cap`,
-      );
+      throw new BadRequestError(`saveProcess: step ${i + 1} exceeds the ${MAX_PROCESS_STEP_LEN}-char cap`);
     }
     out.push(trimmed);
   }
@@ -133,18 +129,10 @@ export function closeProcess(
   return closeObject(objects, PROCESS, tenantId, id, actor);
 }
 
-export function loadProcessById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<Process | null> {
+export function loadProcessById(objects: Objects, tenantId: string, id: number): Promise<Process | null> {
   return objectById(objects, PROCESS, tenantId, id);
 }
 
-export function loadProcesses(
-  objects: Objects,
-  tenantId: string,
-  opts: ListProcessesOptions = {},
-): Promise<Process[]> {
+export function loadProcesses(objects: Objects, tenantId: string, opts: ListProcessesOptions = {}): Promise<Process[]> {
   return listObjects(objects, PROCESS, tenantId, opts);
 }

@@ -15,7 +15,14 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
-  CONTEXT_NOW, contextRowsOf, OWNER, PROJECT, rounded, SESSION, seedContextGlobal, seedContextRows,
+  CONTEXT_NOW,
+  contextRowsOf,
+  OWNER,
+  PROJECT,
+  rounded,
+  SESSION,
+  seedContextGlobal,
+  seedContextRows,
 } from '../_helpers/context-fixture.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { inMemoryContextStore, type InMemoryContextStore } from '../_helpers/in-memory-context-store.js';
@@ -68,8 +75,22 @@ const CASES: readonly Case[] = [
     opts: { currentSessionId: SESSION },
     expected: {
       ids: [
-        'mem_a_error', 'mem_a_pin', 'mem_a_liked', ...OWN_STEPS, 'mem_a_global_0', 'mem_a_global_1', 'mem_a_global_2', 'mem_a_team',
-        'mem_a_new', 'mem_a_blank', 'mem_a_archived', 'mem_a_secret_own', 'mem_g_pin', 'mem_g_note', 'mem_a_decayed', 'mem_a_flat',
+        'mem_a_error',
+        'mem_a_pin',
+        'mem_a_liked',
+        ...OWN_STEPS,
+        'mem_a_global_0',
+        'mem_a_global_1',
+        'mem_a_global_2',
+        'mem_a_team',
+        'mem_a_new',
+        'mem_a_blank',
+        'mem_a_archived',
+        'mem_a_secret_own',
+        'mem_g_pin',
+        'mem_g_note',
+        'mem_a_decayed',
+        'mem_a_flat',
       ],
       tokens: 253,
       blocks: ALL_BLOCKS,
@@ -81,7 +102,10 @@ const CASES: readonly Case[] = [
       expect(p.result.activeSnapshot?.task).toBe('unkeyed task for session a');
       // The session's five newest events, oldest first, less the private ping the scope filter drops.
       expect(p.result.recentEvents?.map((e) => e.content)).toEqual([
-        'promoted the canary', 'paged the on-call', 'same time, lower id', 'same time, higher id',
+        'promoted the canary',
+        'paged the on-call',
+        'same time, lower id',
+        'same time, higher id',
       ]);
       expect(p.result.ambientState).toBeDefined();
       expect(p.result.entries.some((e) => e.isGlobal)).toBe(true);
@@ -92,7 +116,16 @@ const CASES: readonly Case[] = [
     name: 'query',
     opts: { q: 'rollout queue' },
     expected: {
-      ids: [...OWN_STEPS, 'mem_g_note', 'mem_g_pin', 'mem_a_liked', 'mem_a_new', 'mem_a_team', 'mem_a_flat', 'mem_a_decayed'],
+      ids: [
+        ...OWN_STEPS,
+        'mem_g_note',
+        'mem_g_pin',
+        'mem_a_liked',
+        'mem_a_new',
+        'mem_a_team',
+        'mem_a_flat',
+        'mem_a_decayed',
+      ],
       tokens: 151,
       blocks: ALL_BLOCKS,
       traced: 13,
@@ -107,7 +140,16 @@ const CASES: readonly Case[] = [
     name: 'query without physics',
     opts: { q: 'rollout' },
     expected: {
-      ids: ['mem_g_note', 'mem_g_pin', 'mem_a_liked', 'mem_a_new', ...OWN_STEPS, 'mem_a_team', 'mem_a_flat', 'mem_a_decayed'],
+      ids: [
+        'mem_g_note',
+        'mem_g_pin',
+        'mem_a_liked',
+        'mem_a_new',
+        ...OWN_STEPS,
+        'mem_a_team',
+        'mem_a_flat',
+        'mem_a_decayed',
+      ],
       tokens: 151,
       blocks: ALL_BLOCKS,
       traced: 13,
@@ -130,7 +172,11 @@ const CASES: readonly Case[] = [
   {
     name: 'pinned only, with recent rows and prompt recall',
     opts: { pinnedOnly: true, includeRecent: 5, prompt: 'what is the rule for billing deploys on fridays' },
-    expected: { ids: ['mem_a_pin', 'mem_g_pin'], tokens: 29, blocks: ['activeSnapshot', 'sessionHandoff', 'recentEvents'] },
+    expected: {
+      ids: ['mem_a_pin', 'mem_g_pin'],
+      tokens: 29,
+      blocks: ['activeSnapshot', 'sessionHandoff', 'recentEvents'],
+    },
     reaches: (p) => expect(p.result.entries.some((e) => e.entry.pinned)).toBe(true),
     storeReads: ['ambientCandidates'],
   },
@@ -139,8 +185,21 @@ const CASES: readonly Case[] = [
     opts: {},
     expected: {
       ids: [
-        'mem_a_error', 'mem_a_pin', 'mem_a_liked', ...OWN_STEPS, 'mem_a_global_0', 'mem_a_global_1', 'mem_a_global_2', 'mem_a_team',
-        'mem_a_alice', 'mem_a_new', 'mem_a_blank', 'mem_a_archived', 'mem_a_secret_own', 'mem_a_decayed', 'mem_a_flat',
+        'mem_a_error',
+        'mem_a_pin',
+        'mem_a_liked',
+        ...OWN_STEPS,
+        'mem_a_global_0',
+        'mem_a_global_1',
+        'mem_a_global_2',
+        'mem_a_team',
+        'mem_a_alice',
+        'mem_a_new',
+        'mem_a_blank',
+        'mem_a_archived',
+        'mem_a_secret_own',
+        'mem_a_decayed',
+        'mem_a_flat',
       ],
       tokens: 241,
       blocks: ALL_BLOCKS,
@@ -158,7 +217,16 @@ const CASES: readonly Case[] = [
     name: 'shared store, member across projects',
     opts: { crossProject: true, q: 'rollout' },
     expected: {
-      ids: ['mem_a_liked', 'mem_a_alice', 'mem_a_new', ...OWN_STEPS, 'mem_a_team', 'mem_a_no_origin', 'mem_a_flat', 'mem_a_decayed'],
+      ids: [
+        'mem_a_liked',
+        'mem_a_alice',
+        'mem_a_new',
+        ...OWN_STEPS,
+        'mem_a_team',
+        'mem_a_no_origin',
+        'mem_a_flat',
+        'mem_a_decayed',
+      ],
       tokens: 152,
       blocks: ALL_BLOCKS,
       traced: 13,
@@ -195,7 +263,9 @@ type ContextRows = ReturnType<typeof contextRowsOf>;
 function lastRecallMeta(root: string): unknown[] {
   const db = openHippoDb(root);
   try {
-    return db.prepare("SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id') ORDER BY key").all();
+    return db
+      .prepare("SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id') ORDER BY key")
+      .all();
   } finally {
     closeHippoDb(db);
   }
@@ -206,7 +276,9 @@ function seedVectors(dir: string): void {
   const db = openHippoDb(dir);
   try {
     // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const entries = (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY id`).all() as MemoryRow[]).map(rowToEntry);
+    const entries = (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY id`).all() as MemoryRow[]).map(
+      rowToEntry,
+    );
     const index = Object.fromEntries(entries.map((e): [string, number[]] => [e.id, hashedVector(e.content)]));
     const identity = embeddingIndexIdentity(`openai:${MODEL}`);
     upsertVectors(db, Object.entries(index), identity);
@@ -279,7 +351,11 @@ interface PassConfig {
 }
 
 /** One getContext on a fresh copy of the fixture. */
-async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedded, prepare }: PassOptions, makeStore?: (root: string) => HippoStore): Promise<Pass> {
+async function runPass(
+  c: Omit<Case, 'name' | 'expected'>,
+  { withGlobal, embedded, prepare }: PassOptions,
+  makeStore?: (root: string) => HippoStore,
+): Promise<Pass> {
   _resetSharedStoreCacheForTests();
   _resetAblationCacheForTests();
   const home = makeRoot('context-parity', { init: false });
@@ -300,11 +376,19 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
   const served = store ?? sqliteStore(root);
   // A store of another kind gets no reach: the api reads it as one project with no global store.
   const reach = served.kind === 'sqlite' ? contextReach(sqliteReach(root, served), loadConfig) : undefined;
-  const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach, config: loadConfig(root) };
+  const ctx = {
+    hippoRoot: root,
+    tenantId: c.tenantId ?? TENANT_A,
+    actor: c.actor ?? ADMIN,
+    store: served,
+    reach,
+    config: loadConfig(root),
+  };
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
-  const result = store && store.kind !== 'sqlite'
-    ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
-    : await getContext(ctx, opts);
+  const result =
+    store && store.kind !== 'sqlite'
+      ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
+      : await getContext(ctx, opts);
   await store?.close();
   return {
     result,
@@ -323,10 +407,16 @@ describe('getContext on hippo.db returns and records what each case lists', () =
     expect(result.entries.map((e) => e.entry.id)).toEqual(ids);
     expect(result.tokens).toBe(tokens);
     expect(ALL_BLOCKS.filter((block) => result[block] !== undefined)).toEqual(blocks);
-    expect(pass.rows.local.traces).toEqual(traced === undefined ? [] : [expect.objectContaining({ pipeline: 'context', result_count: traced })]);
+    expect(pass.rows.local.traces).toEqual(
+      traced === undefined ? [] : [expect.objectContaining({ pipeline: 'context', result_count: traced })],
+    );
     expect(pass.rows.local.traceResults).toHaveLength(traced ?? 0);
-    expect(pass.stats).toEqual(recalled === undefined ? null : expect.stringContaining(`"total_recalled": ${recalled},`));
-    expect(pass.rows.global?.retrieved).toEqual(globalRetrieved.map((id) => expect.objectContaining({ id, retrieval_count: 1 })));
+    expect(pass.stats).toEqual(
+      recalled === undefined ? null : expect.stringContaining(`"total_recalled": ${recalled},`),
+    );
+    expect(pass.rows.global?.retrieved).toEqual(
+      globalRetrieved.map((id) => expect.objectContaining({ id, retrieval_count: 1 })),
+    );
   });
 });
 
@@ -339,18 +429,28 @@ describe('the recall getContext records on hippo.db', () => {
     };
     const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: mirror });
     expect(idsOf(pass)).toContain('mem_a_own_0');
-    expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 1 }));
-    expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 0 }));
+    expect(pass.rows.local.strengthened).toContainEqual(
+      expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 1 }),
+    );
+    expect(pass.rows.global?.strengthened).toContainEqual(
+      expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 0 }),
+    );
   });
 
   it('strengthens the row in the global store when the local store holds its id for another tenant', async () => {
     const copyToOtherTenant = (root: string, globalRoot: string): void => {
-      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenant_id: TENANT_B });
+      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) {
+        writeEntry(root, { ...entry, tenant_id: TENANT_B });
+      }
     };
     const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: copyToOtherTenant });
     expect(idsOf(pass)).toContain('mem_g_note');
-    expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 0 }));
-    expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 1 }));
+    expect(pass.rows.local.strengthened).toContainEqual(
+      expect.objectContaining({ id: 'mem_g_note', retrieval_count: 0 }),
+    );
+    expect(pass.rows.global?.strengthened).toContainEqual(
+      expect.objectContaining({ id: 'mem_g_note', retrieval_count: 1 }),
+    );
   });
 
   it('saves the ids with no trace id, never the previous one, when the trace write fails', async () => {
@@ -358,7 +458,9 @@ describe('the recall getContext records on hippo.db', () => {
       const db = openHippoDb(root);
       try {
         setMeta(db, 'last_trace_id', '41');
-        db.exec("CREATE TRIGGER refuse_trace BEFORE INSERT ON recall_traces BEGIN SELECT RAISE(ABORT, 'trace refused'); END");
+        db.exec(
+          "CREATE TRIGGER refuse_trace BEFORE INSERT ON recall_traces BEGIN SELECT RAISE(ABORT, 'trace refused'); END",
+        );
       } finally {
         closeHippoDb(db);
       }
@@ -378,7 +480,11 @@ describe('getContext on a store held in memory, with hippo.db blocked', () => {
     const before = embeddings.requests();
     let memory: InMemoryContextStore | undefined;
     // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
-    const inMemory = await runPass(c, { withGlobal: true, embedded: true }, (root) => (memory = inMemoryContextStore(root)).store);
+    const inMemory = await runPass(
+      c,
+      { withGlobal: true, embedded: true },
+      (root) => (memory = inMemoryContextStore(root)).store,
+    );
     expect(rounded(inMemory.result)).toEqual(rounded(onHippoDb.result));
     expect(inMemory.rows.local).toEqual(onHippoDb.rows.local);
     expect(inMemory.rows.global).toEqual(globalRows);

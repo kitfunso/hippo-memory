@@ -44,7 +44,11 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
     },
     async run(derive) {
       if (inFlight < MAX_IN_FLIGHT) inFlight++;
-      else await new Promise<void>((resolve) => { waiting.push(resolve); });
+      else {
+        await new Promise<void>((resolve) => {
+          waiting.push(resolve);
+        });
+      }
       try {
         return await derive();
       } finally {

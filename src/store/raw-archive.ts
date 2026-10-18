@@ -29,9 +29,7 @@ export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: st
 function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
   // SAFETY: SELECT * returns every memories column; only kind, tenant_id and dag_parent_id are read below, all
   // guaranteed present (possibly null) by the schema.
-  const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as
-    | ArchivedMemoryRow
-    | undefined;
+  const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as ArchivedMemoryRow | undefined;
   if (!row) throw new NotFoundError(`memory not found: ${id}`);
   if (row.kind !== 'raw') {
     throw new BadRequestError(`memory ${id} is not raw (kind=${String(row.kind)})`);

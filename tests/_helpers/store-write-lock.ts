@@ -12,7 +12,9 @@ setTimeout(() => { db.exec('ROLLBACK'); db.close(); }, Number(process.argv[2]));
 
 /** Resolves once a child process holds the write lock on `dbPath`. The child lets go after `holdMs` by itself, so a test that dies leaves no lock behind. */
 export function holdStoreWriteLock(dbPath: string, holdMs = 30_000): Promise<ChildProcess> {
-  const child = spawn(process.execPath, ['--no-warnings', '-e', HOLDER_SRC, dbPath, String(holdMs)], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const child = spawn(process.execPath, ['--no-warnings', '-e', HOLDER_SRC, dbPath, String(holdMs)], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
   return new Promise((resolve, reject) => {
     child.stdout?.on('data', (chunk: Buffer) => {
       if (chunk.toString().includes('locked')) resolve(child);

@@ -19,7 +19,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {
   return {
@@ -104,10 +104,16 @@ async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Prom
   const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
   if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
   const { issue, repository } = event.payload;
-  const idempotencyKey = computeIdempotencyKey(`github://${repository?.full_name}/issue/${issue.number}`, issue.updated_at ?? null);
+  const idempotencyKey = computeIdempotencyKey(
+    `github://${repository?.full_name}/issue/${issue.number}`,
+    issue.updated_at ?? null,
+  );
   const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
   const stored = await remember(ctx(scratch), { ...opts, untrusted: true, event: logged });
-  return { status: stored.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: stored.duplicate?.memoryId ?? stored.id };
+  return {
+    status: stored.duplicate ? 'skipped_duplicate' : 'ingested',
+    memoryId: stored.duplicate?.memoryId ?? stored.id,
+  };
 }
 
 /** Ingests `input` as the loser of a race: another process holds the write lock with the second worker's rows, and commits them while this ingest waits. */
@@ -159,7 +165,9 @@ describe('ingestEvent', () => {
       // SAFETY: the SELECT explicitly lists idempotency_key, delivery_id,
       // event_name, memory_id, so the row shape matches.
       const row = db
-        .prepare(`SELECT idempotency_key, delivery_id, event_name, memory_id FROM github_event_log WHERE idempotency_key = ?`)
+        .prepare(
+          `SELECT idempotency_key, delivery_id, event_name, memory_id FROM github_event_log WHERE idempotency_key = ?`,
+        )
         .get(idempotencyKey) as
         | { idempotency_key: string; delivery_id: string; event_name: string; memory_id: string | null }
         | undefined;
@@ -221,9 +229,9 @@ describe('ingestEvent', () => {
     try {
       const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
       // SAFETY: the SELECT explicitly lists memory_id, so the row shape matches.
-      const row = db
-        .prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`)
-        .get(key) as { memory_id: string | null } | undefined;
+      const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(key) as
+        | { memory_id: string | null }
+        | undefined;
       expect(row).toBeDefined();
       expect(row?.memory_id).toBeNull();
     } finally {
@@ -281,7 +289,11 @@ describe('ingestEvent', () => {
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const { loser: result, winner } = await ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
+    const { loser: result, winner } = await ingestBehindAnotherWorker(root, {
+      event,
+      rawBody,
+      deliveryId: 'd-this-worker',
+    });
     const otherWorkerMemoryId = winner.memoryId;
 
     expect(winner.status).toBe('ingested');
@@ -346,7 +358,11 @@ describe('ingestEvent', () => {
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const { loser: result, winner } = await ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
+    const { loser: result, winner } = await ingestBehindAnotherWorker(root, {
+      event,
+      rawBody,
+      deliveryId: 'd-this-worker',
+    });
     const otherWorkerMemoryId = winner.memoryId;
 
     expect(result.status).toBe('skipped_duplicate');

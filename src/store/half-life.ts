@@ -61,7 +61,10 @@ function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): Ha
 
 /** Writes the move, then one audit event per tenant with each id's old half-life, so the move can be undone. */
 function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): void {
-  setHalfLivesAt(db, move.entries.map((e) => ({ id: e.id, halfLifeDays: e.halfLifeDays })));
+  setHalfLivesAt(
+    db,
+    move.entries.map((e) => ({ id: e.id, halfLifeDays: e.halfLifeDays })),
+  );
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of move.entries) {
     // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
@@ -74,7 +77,7 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): voi
       tenantId,
       actor,
       op: 'half_life_migrate',
-      metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives }
+      metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives },
     });
   }
 }

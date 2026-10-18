@@ -12,8 +12,14 @@ const BASELINE = '.comment-history-baseline.json';
 // BM25, FTS5, SHA1, UTF8, P95 percentiles, a prereg "amendment A1", invalid example dates, and the Codex product.
 const PATTERNS = [
   ['version', /\bv\d+\.\d+(?:\.\d+)?\b/],
-  ['ticket', /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H1|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/],
-  ['review', /\b[Cc]odex[- ](?:[Rr]eview|[Rr]ound|P\d|R\d|catch|finding|flagged|CRITICAL|diff-pass)|\([Cc]odex\b|\b[Cc]odex\)|\b[Cc]ritic\b|\bsenior-review\b|\b[Rr]ound[- ]?\d+\b|\bCRIT\b|\bP[0-3]s?\b/],
+  [
+    'ticket',
+    /\b(?!(?:BM25|FTS5|FP32|NAT64|C0|H1|MD5|X509|V\d|SHA\d|UTF\d|IPV\d|HTTP\d|P\d\d|L[0-3])\b)(?<!amendment )[A-Z]{1,4}\d{1,2}(?:\.\d+)?\b/,
+  ],
+  [
+    'review',
+    /\b[Cc]odex[- ](?:[Rr]eview|[Rr]ound|P\d|R\d|catch|finding|flagged|CRITICAL|diff-pass)|\([Cc]odex\b|\b[Cc]odex\)|\b[Cc]ritic\b|\bsenior-review\b|\b[Rr]ound[- ]?\d+\b|\bCRIT\b|\bP[0-3]s?\b/,
+  ],
   ['plan', /docs\/plans\/|\bplan v\d|\bTask \d/],
   ['date', /\b(?!\d{4}-02-3[01]\b|20(?:[02468][1235679]|[13579][01345789])-02-29\b)20\d\d-\d\d-\d\d\b/],
   ['pr', /\(#\d{2,4}\)|\bPR ?#?\d+|\bissue #\d+/],
@@ -43,6 +49,11 @@ function skipRegexLiteral(src, start) {
     i++;
   }
   return i + 1;
+}
+
+function opensRegex(src, i, prev) {
+  if (prev === '' || PRECEDES_REGEX.includes(prev)) return true;
+  return /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i));
 }
 
 /** Returns [lineNumber, text] for every comment line: `//` tails and each line of a block comment. */
@@ -103,7 +114,7 @@ function commentLines(src) {
       i++;
       continue;
     }
-    if (c === '/' && (prev === '' || PRECEDES_REGEX.includes(prev) || /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i)))) {
+    if (c === '/' && opensRegex(src, i, prev)) {
       i = skipRegexLiteral(src, i);
       prev = ')';
       continue;
@@ -169,13 +180,17 @@ const rose = Object.entries(counts).filter(([file, n]) => n > (baseline[file] ??
 const fell = Object.entries(baseline).filter(([file, n]) => (counts[file] ?? 0) < n);
 
 if (rose.length > 0) {
-  console.error('Comment lines carrying ticket codes, versions, reviewer notes, dates or plan paths rose above the baseline:');
+  console.error(
+    'Comment lines carrying ticket codes, versions, reviewer notes, dates or plan paths rose above the baseline:',
+  );
   for (const [file, n] of rose) console.error(`  ${file}: ${baseline[file] ?? 0} -> ${n}`);
   console.error('Say why in one line and move the history to docs or the commit message.');
   console.error('`node scripts/check-comment-history.mjs --list <file>` shows the matching lines.');
   process.exit(1);
 }
 if (fell.length > 0) {
-  console.log(`${fell.length} files fell below the baseline; run \`node scripts/check-comment-history.mjs --update\` to lock that in.`);
+  console.log(
+    `${fell.length} files fell below the baseline; run \`node scripts/check-comment-history.mjs --update\` to lock that in.`,
+  );
 }
 console.log(`Comment history ratchet OK: ${hits.length} lines, none above ${BASELINE}.`);

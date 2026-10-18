@@ -10,7 +10,13 @@ import { errorMessage, log } from '../util/log.js';
 import type { Ledger } from './port/ledger.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType =
-  'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context' | 'tool-failure';
+  | 'prompt-submit'
+  | 'pinned-manual'
+  | 'pre-compact'
+  | 'compact-resume'
+  | 'session-end'
+  | 'context'
+  | 'tool-failure';
 /** True for the boundary types: a compaction's two hooks and the end of a session. */
 export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
   type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
@@ -24,7 +30,13 @@ export type DeliveryPool = 'pin' | 'recent' | 'prompt-recall' | 'strength' | 'se
 export type DeliveryStage = 'load' | 'eligible' | 'gate' | 'budget' | 'limit' | 'final';
 export type DeliveryOutcome = 'emitted' | 'reused' | 'rejected';
 export type DeliveryRejectReason =
-  | 'budget' | 'gate-below-threshold' | 'gate-max-items' | 'duplicate' | 'scope' | 'quality' | 'limit';
+  | 'budget'
+  | 'gate-below-threshold'
+  | 'gate-max-items'
+  | 'duplicate'
+  | 'scope'
+  | 'quality'
+  | 'limit';
 
 /** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows
  * and hashes the store's resolved root. */
@@ -34,7 +46,12 @@ const DELIVERY_REJECTED_ROW_CAP = 16;
 
 // Deeper stages were closer to being sent, so the row cap keeps them first.
 const STAGE_DEPTH: ReadonlyMap<DeliveryStage, number> = new Map<DeliveryStage, number>([
-  ['load', 0], ['eligible', 1], ['gate', 2], ['budget', 3], ['limit', 4], ['final', 5],
+  ['load', 0],
+  ['eligible', 1],
+  ['gate', 2],
+  ['budget', 3],
+  ['limit', 4],
+  ['final', 5],
 ]);
 
 export interface DeliveryCandidateInput {
@@ -251,7 +268,11 @@ function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const toolUseId = rawToolUseId !== '' ? rawToolUseId.slice(0, 128) : null;
   const sessionState: DeliverySessionState = subagent
     ? 'subagent'
-    : payloadSession !== null ? 'payload' : envSession !== null ? 'env' : 'missing';
+    : payloadSession !== null
+      ? 'payload'
+      : envSession !== null
+        ? 'env'
+        : 'missing';
   return { payloadSession, envSession, prompt, hostTurnId, hookEvent, toolUseId, sessionState };
 }
 
@@ -315,15 +336,46 @@ function rejectedRows(state: RecorderState): RejectedRows {
   }
   rejected.sort(byDepthThenScore);
   const rows = rejected.slice(0, DELIVERY_REJECTED_ROW_CAP).map((c): DeliveryCandidateInput => ({
-    memoryId: c.id, sourceStore: c.sourceStore, pool: c.pool, stage: c.stage ?? 'load', outcome: 'rejected',
-    reason: c.reason, rank: null, score: c.score, tokens: c.tokens,
+    memoryId: c.id,
+    sourceStore: c.sourceStore,
+    pool: c.pool,
+    stage: c.stage ?? 'load',
+    outcome: 'rejected',
+    reason: c.reason,
+    rank: null,
+    score: c.score,
+    tokens: c.tokens,
   }));
   const overflow = Math.max(0, rejected.length - DELIVERY_REJECTED_ROW_CAP);
   return { rows, rejected: rejected.length, undecided, overflow };
 }
 
+type DeliveryCounts = Pick<
+  DeliveryEventInput,
+  'consideredCount' | 'filteredCount' | 'selectedCount' | 'emittedCount' | 'rejectedCount' | 'rejectedUnlisted'
+>;
+
+function deliveryCounts(
+  state: RecorderState,
+  rows: DeliveryEventInput['candidates'],
+  rejected: ReturnType<typeof rejectedRows>,
+): DeliveryCounts {
+  return {
+    consideredCount: new Set([...state.candidates.keys(), ...state.picked.keys()]).size,
+    filteredCount: state.filtered.size,
+    selectedCount: state.picked.size,
+    emittedCount: rows.filter((r) => r.outcome === 'emitted').length,
+    rejectedCount: rejected.rejected + rejected.undecided,
+    rejectedUnlisted: rejected.overflow + rejected.undecided,
+  };
+}
+
 function buildEvent(
-  init: DeliveryRecorderInit, payload: PayloadFacts, state: RecorderState, ts: string, startedMs: number,
+  init: DeliveryRecorderInit,
+  payload: PayloadFacts,
+  state: RecorderState,
+  ts: string,
+  startedMs: number,
 ): DeliveryEventInput {
   const { facts, outcome } = state;
   const picked = pickedRows(state);
@@ -352,12 +404,7 @@ function buildEvent(
     recallTraceId: state.recallTraceId,
     blockState: state.disabledSeen ? 'disabled' : outcome.state,
     promptRecall: facts?.promptRecall === true,
-    consideredCount: new Set([...state.candidates.keys(), ...state.picked.keys()]).size,
-    filteredCount: state.filtered.size,
-    selectedCount: state.picked.size,
-    emittedCount: rows.filter((r) => r.outcome === 'emitted').length,
-    rejectedCount: rejected.rejected + rejected.undecided,
-    rejectedUnlisted: rejected.overflow + rejected.undecided,
+    ...deliveryCounts(state, rows, rejected),
     sectionsShown: state.shown,
     sectionsDropped: state.dropped,
     budgetTokens: facts?.budgetTokens ?? 0,
@@ -482,6 +529,58 @@ function newRecorderState(): RecorderState {
   };
 }
 
+type StateMethods = Pick<
+  DeliveryRecorder,
+  'facts' | 'sections' | 'watchAdmit' | 'filtered' | 'disabled' | 'queried' | 'traced' | 'delivered' | 'logged'
+>;
+
+function stateMethods(state: RecorderState, guard: Guard): StateMethods {
+  return {
+    facts: (f) =>
+      guard(() => {
+        state.facts = { ...f };
+      }),
+    sections: (s, d) =>
+      guard(() => {
+        state.shown = s;
+        state.dropped = d;
+      }),
+    watchAdmit: (admit) => (e) => {
+      const ok = admit(e);
+      if (!ok) {
+        guard(() => {
+          state.filtered.add(e.id);
+        });
+      }
+      return ok;
+    },
+    filtered: (id) =>
+      guard(() => {
+        state.filtered.add(id);
+      }),
+    disabled: () =>
+      guard(() => {
+        state.disabledSeen = true;
+      }),
+    queried: (query) =>
+      guard(() => {
+        state.queryHash = blockHash(query);
+      }),
+    traced: (traceId) =>
+      guard(() => {
+        state.recallTraceId = traceId;
+      }),
+    delivered: (o) =>
+      guard(() => {
+        state.outcome = { ...o };
+      }),
+    logged: (failureId) =>
+      guard(() => {
+        state.failureId = failureId;
+      }),
+  };
+}
+
 /** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
   const startedMs = Date.now();
@@ -495,37 +594,36 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
 
   return {
     ledger: init.ledger,
-    facts: (f) => guard(() => { state.facts = { ...f }; }),
-    sections: (s, d) => guard(() => { state.shown = s; state.dropped = d; }),
-    watchAdmit: (admit) => (e) => {
-      const ok = admit(e);
-      if (!ok) guard(() => { state.filtered.add(e.id); });
-      return ok;
-    },
-    filtered: (id) => guard(() => { state.filtered.add(id); }),
+    ...stateMethods(state, guard),
     qualityDropped,
-    disabled: () => guard(() => { state.disabledSeen = true; }),
     offer,
     reject,
     dropMissing,
     gated,
     selected,
-    queried: (query) => guard(() => { state.queryHash = blockHash(query); }),
-    traced: (traceId) => guard(() => { state.recallTraceId = traceId; }),
-    delivered: (o) => guard(() => { state.outcome = { ...o }; }),
-    logged: (failureId) => guard(() => { state.failureId = failureId; }),
-    flush: (write) => {
-      if (state.flushed) return;
-      state.flushed = true;
-      if (state.broken !== null) {
-        log.warn(`delivery ledger skipped: recorder failed: ${state.broken}`);
-        return;
-      }
-      if (fault === 'build') throw new Error('injected build fault');
-      const input = buildEvent(init, payload, state, ts, startedMs);
-      if (fault === 'flush') throw new Error('injected flush fault');
-      write(input);
-    },
+    flush: recorderFlush(init, payload, state, ts, startedMs),
+  };
+}
+
+function recorderFlush(
+  init: DeliveryRecorderInit,
+  payload: PayloadFacts,
+  state: RecorderState,
+  ts: string,
+  startedMs: number,
+): DeliveryRecorder['flush'] {
+  const fault = init.fault ?? null;
+  return (write) => {
+    if (state.flushed) return;
+    state.flushed = true;
+    if (state.broken !== null) {
+      log.warn(`delivery ledger skipped: recorder failed: ${state.broken}`);
+      return;
+    }
+    if (fault === 'build') throw new Error('injected build fault');
+    const input = buildEvent(init, payload, state, ts, startedMs);
+    if (fault === 'flush') throw new Error('injected flush fault');
+    write(input);
   };
 }
 

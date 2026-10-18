@@ -21,7 +21,10 @@ export class SqliteBlockedError extends Error {
  * hippo.db.
  */
 export class StoreNotPortedError extends SqliteBlockedError {
-  constructor(storeKind: string, readonly group: string) {
+  constructor(
+    storeKind: string,
+    readonly group: string,
+  ) {
     super(storeKind, `the '${storeKind}' store has no '${group}' group; this code path is not ported to the store yet`);
     this.name = 'StoreNotPortedError';
   }

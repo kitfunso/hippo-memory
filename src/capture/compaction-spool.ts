@@ -250,12 +250,24 @@ function parseLock(text: string): LockBody | null {
 /** The lock's body; its mtime stands in for the time when the body does not parse. */
 function readLock(fsx: SpoolFs, lock: string, log: Log): LockBody | 'gone' | 'busy' {
   let text = '';
-  const read = settle(() => { text = fsx.readFileSync(lock, 'utf8'); }, log, 'spool lock not read');
+  const read = settle(
+    () => {
+      text = fsx.readFileSync(lock, 'utf8');
+    },
+    log,
+    'spool lock not read',
+  );
   if (read !== 'done') return read;
   const body = parseLock(text);
   if (body !== null) return body;
   let mtime = 0;
-  const stat = settle(() => { mtime = fsx.statSync(lock).mtimeMs; }, log, 'spool lock not read');
+  const stat = settle(
+    () => {
+      mtime = fsx.statSync(lock).mtimeMs;
+    },
+    log,
+    'spool lock not read',
+  );
   return stat === 'done' ? { pid: null, at: mtime, token: null } : stat;
 }
 
@@ -331,7 +343,18 @@ function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[],
     const file = path.join(dir, claim.name);
     const what = `spool file ${claim.name} not recovered`;
     let at = claim.claimedAt ?? 0;
-    if (claim.claimedAt === null && settle(() => { at = fsx.statSync(file).mtimeMs; }, log, what) !== 'done') continue;
+    if (
+      claim.claimedAt === null &&
+      settle(
+        () => {
+          at = fsx.statSync(file).mtimeMs;
+        },
+        log,
+        what,
+      ) !== 'done'
+    ) {
+      continue;
+    }
     if (Math.abs(now - at) <= STALE_MS) continue;
     const next = claim.attempt + 1;
     if (setAside.has(claim.stem)) {
@@ -340,14 +363,14 @@ function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[],
       if (settle(() => fsx.renameSync(file, path.join(dir, `${claim.stem}.a${next}.json`)), log, what) === 'done') {
         log(
           `spool file ${claim.name} was claimed by a replayer that never finished, put back (try ${next} of ` +
-          `${MAX_ATTEMPTS})`,
+            `${MAX_ATTEMPTS})`,
         );
         putBackOne = true;
       }
     } else if (moveBad(fsx, dir, file, { stem: claim.stem, attempt: claim.attempt, cause: 'interrupted', log })) {
       log(
         `spool file ${claim.name} was claimed by a replayer that never finished ${MAX_ATTEMPTS} times, set aside as ` +
-        `.bad`,
+          `.bad`,
       );
     }
   }
@@ -454,7 +477,17 @@ function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantI
       settle(() => fsx.unlinkSync(file), log, `spool file ${name} not removed`);
       continue;
     }
-    if (settle(() => { text = fsx.readFileSync(file, 'utf8'); }, log, what) !== 'done') continue;
+    if (
+      settle(
+        () => {
+          text = fsx.readFileSync(file, 'utf8');
+        },
+        log,
+        what,
+      ) !== 'done'
+    ) {
+      continue;
+    }
     if (parseSpooled(text, tenantId) !== null) {
       if (settle(() => fsx.renameSync(file, file.slice(0, -'.tmp'.length)), log, what) === 'done') {
         log(`spool file ${name} was never renamed into place, promoted`);
@@ -536,7 +569,13 @@ function importFile(
   if (BUSY_CODES.has(taken.code)) log(`spool file ${name} is locked by another program, left for the next run`);
   if (taken.settled !== 'done') return 'skipped';
   let text = '';
-  const read = settle(() => { text = fsx.readFileSync(claim, 'utf8'); }, log, `spool file ${name} not read`);
+  const read = settle(
+    () => {
+      text = fsx.readFileSync(claim, 'utf8');
+    },
+    log,
+    `spool file ${name} not read`,
+  );
   if (read === 'gone') log(`spool file ${name} vanished`);
   if (read === 'busy') putBack(fsx, dir, claim, entry.stem, entry.attempt, log);
   if (read !== 'done') return 'skipped';

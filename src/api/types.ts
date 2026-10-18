@@ -93,15 +93,8 @@ export function ownerOrSubject(actor: Actor): string {
  * message. 'fresh_tail_requires_session_id' (needs HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or
  * 'invalid_scorer_window' (0 would hit an uncapped fallback). */
 export class RecallContractError extends BadRequestError {
-  public readonly code:
-    | 'fresh_tail_requires_session_id'
-    | 'invalid_scorer_window';
-  constructor(
-    code:
-      | 'fresh_tail_requires_session_id'
-      | 'invalid_scorer_window',
-    message: string,
-  ) {
+  public readonly code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window';
+  constructor(code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window', message: string) {
     super(message);
     this.name = 'RecallContractError';
     this.code = code;

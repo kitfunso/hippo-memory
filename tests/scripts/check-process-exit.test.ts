@@ -6,8 +6,12 @@ import { findProcessExits, processExitLines } from '../../scripts/check-process-
 
 describe('check-process-exit', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'process-exit-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'process-exit-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);
@@ -30,8 +34,9 @@ describe('check-process-exit', () => {
     file('entry.ts', 'process.exit(1);\n');
     file('cli/verb.ts', 'export function run(): void {\n  process.exit(2);\n}\n');
     file('cli/clean.ts', 'export const x = 1;\n');
-    expect(findProcessExits(dir, { 'entry.ts': { count: 1, reason: 'the entry' } }))
-      .toEqual([{ file: 'cli/verb.ts', line: 2, found: 1, allowed: 0 }]);
+    expect(findProcessExits(dir, { 'entry.ts': { count: 1, reason: 'the entry' } })).toEqual([
+      { file: 'cli/verb.ts', line: 2, found: 1, allowed: 0 },
+    ]);
   });
 
   it('fails a listed file that holds one call more than its count, and passes it at the count', () => {
@@ -39,7 +44,11 @@ describe('check-process-exit', () => {
     file('entry.ts', 'process.exit(1);\nprocess.exit(2);\n');
     expect(findProcessExits(dir, allowed)).toEqual([]);
     file('entry.ts', 'process.exit(1);\nprocess.exit(2);\nprocess.exit(3);\n');
-    expect(findProcessExits(dir, allowed).map((hit) => [hit.line, hit.found, hit.allowed])).toEqual([[1, 3, 2], [2, 3, 2], [3, 3, 2]]);
+    expect(findProcessExits(dir, allowed).map((hit) => [hit.line, hit.found, hit.allowed])).toEqual([
+      [1, 3, 2],
+      [2, 3, 2],
+      [3, 3, 2],
+    ]);
   });
 
   it('passes on the real src tree', () => {

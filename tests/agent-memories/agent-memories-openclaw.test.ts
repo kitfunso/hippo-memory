@@ -65,9 +65,7 @@ describe('openclaw adapter: workspace precedence', () => {
   ];
 
   it.each(cases)('%s', (_name, relEnv, expected) => {
-    const env = Object.fromEntries(
-      Object.entries(relEnv).map(([k, v]) => [k, k === 'OPENCLAW_PROFILE' ? v : at(v)]),
-    );
+    const env = Object.fromEntries(Object.entries(relEnv).map(([k, v]) => [k, k === 'OPENCLAW_PROFILE' ? v : at(v)]));
     const workspace = at(...expected);
     write(path.join(workspace, 'MEMORY.md'), '- the memory that belongs to this workspace');
     // Every other candidate holds a decoy so a wrong pick shows in the items.
@@ -113,7 +111,14 @@ describe('openclaw adapter: MEMORY.md items', () => {
       ),
     );
     const [container] = openclawAdapter.list(ctxFor(), 'user').containers;
-    expect(container).toMatchObject({ scope: 'user', path: file, readable: true, skipped: [], warnings: [], textKeyed: true });
+    expect(container).toMatchObject({
+      scope: 'user',
+      path: file,
+      readable: true,
+      skipped: [],
+      warnings: [],
+      textKeyed: true,
+    });
     expect(container.items.map((i) => i.text)).toEqual([
       'a bullet before any heading',
       'Preferences: likes tabs\n  - even in Go',
@@ -162,7 +167,12 @@ describe('openclaw adapter: MEMORY.md items', () => {
     write(memoryFile(), '- a user memory');
     write(at('proj', 'MEMORY.md'), '- a project file');
     const listing = openclawAdapter.list(ctxFor({}, { projectRoot: at('proj') }), 'project');
-    expect(listing).toMatchObject({ tool: 'openclaw', home: at('home', '.openclaw', 'workspace'), containers: [], warnings: [] });
+    expect(listing).toMatchObject({
+      tool: 'openclaw',
+      home: at('home', '.openclaw', 'workspace'),
+      containers: [],
+      warnings: [],
+    });
   });
 
   it.each([

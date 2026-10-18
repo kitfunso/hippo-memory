@@ -9,7 +9,10 @@ import type { SearchResult } from '../../src/core/search-types.js';
 /** A reranker over a stand-in for the optional package, which these tests never install; `fetch` decides how each from_pretrained ends. */
 function rerankerFetching(fetch: () => Promise<void>): RerankerFn {
   const pairs = new WeakMap<object, string>();
-  const tokenizer = async (_query: string, opts: { text_pair: string }): Promise<{ input_ids: object; attention_mask: object }> => {
+  const tokenizer = async (
+    _query: string,
+    opts: { text_pair: string },
+  ): Promise<{ input_ids: object; attention_mask: object }> => {
     const ids = {};
     pairs.set(ids, opts.text_pair);
     return { input_ids: ids, attention_mask: {} };
@@ -27,12 +30,19 @@ function rerankerFetching(fetch: () => Promise<void>): RerankerFn {
   }));
 }
 
-const asResult = (content: string, score: number): SearchResult => ({ entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 });
+const asResult = (content: string, score: number): SearchResult => ({
+  entry: createMemory(content),
+  score,
+  bm25: score,
+  cosine: 0,
+  tokens: 10,
+});
 const INPUTS = [asResult('alpha', 1.0), asResult('beta', 0.5)];
 const order = (out: readonly SearchResult[]): string[] => out.map((r) => r.entry.content);
 
 let stderr: MockInstance<typeof process.stderr.write>;
-const warnings = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('cross-encoder reranker unavailable'));
+const warnings = (): string[] =>
+  stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('cross-encoder reranker unavailable'));
 
 beforeEach(() => {
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

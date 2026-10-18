@@ -382,8 +382,10 @@ export function ensureCodexWrapperInstalled(): EnsureCodexWrapperResult {
     const { metadataPath } = resolveCodexWrapperPaths();
     // Metadata hippo never wrote could aim a repair at any file, so it changes nothing until the user reinstalls.
     if (!namesInstallerPaths(metadata)) {
-      log.warn(`codex wrapper metadata ${metadataPath} names paths hippo never wrote, so the wrapper was not ` +
-        'repaired; run `hippo hook install codex` to replace it');
+      log.warn(
+        `codex wrapper metadata ${metadataPath} names paths hippo never wrote, so the wrapper was not ` +
+          'repaired; run `hippo hook install codex` to replace it',
+      );
       return { status: 'foreign-metadata', metadataPath };
     }
     uninstallCodexWrapper();

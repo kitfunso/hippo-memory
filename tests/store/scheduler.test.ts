@@ -15,9 +15,13 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 // The registry stores forward-slash paths on every platform.
 const norm = (p: string): string => resolve(p).replace(/\\/g, '/');
-interface RegistryFile { version: number; workspaces: string[] }
+interface RegistryFile {
+  version: number;
+  workspaces: string[];
+}
 // SAFETY: the file under test is written by registerWorkspace, whose shape the assertions then check.
-const registryOf = (globalRoot: string): RegistryFile => JSON.parse(readFileSync(workspaceRegistryPath(globalRoot), 'utf8')) as RegistryFile;
+const registryOf = (globalRoot: string): RegistryFile =>
+  JSON.parse(readFileSync(workspaceRegistryPath(globalRoot), 'utf8')) as RegistryFile;
 
 describe('scheduler', () => {
   let root: string;
@@ -97,15 +101,25 @@ describe('hippo daily-runner', () => {
     initStore(join(workspace, '.hippo'));
     writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
     // The runner runs in process so coverage sees it; each step it starts is still a real child with a real deadline.
-    const run = (extraEnv: Record<string, string>) => runCliAs(['daily-runner'], {
-      cwd: dir,
-      env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: 'warn', HIPPO_LOG_FORMAT: '', ...extraEnv },
-    });
+    const run = (extraEnv: Record<string, string>) =>
+      runCliAs(['daily-runner'], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          HIPPO_HOME: globalRoot,
+          HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+          HIPPO_LOG: 'warn',
+          HIPPO_LOG_FORMAT: '',
+          ...extraEnv,
+        },
+      });
 
     // One millisecond is less than a node start, so both child steps are stopped at the deadline.
     const cut = await run({ HIPPO_DAILY_STEP_TIMEOUT_MS: '1' });
     expect(cut.stdout).toContain('0 workspaces processed, 2 command failures.');
-    expect(cut.stderr).toMatch(/error: daily-runner failed in .*repo during `sleep`: timed out after 1 ms and was stopped .*workspace=.*repo/);
+    expect(cut.stderr).toMatch(
+      /error: daily-runner failed in .*repo during `sleep`: timed out after 1 ms and was stopped .*workspace=.*repo/,
+    );
     expect(cut.stderr).toMatch(/daily-runner failed in .*workspace=.* errorClass=\w+ stack=\S*Error.* at /);
     expect(cut.status).toBe(1);
 

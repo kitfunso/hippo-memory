@@ -6,7 +6,16 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, authCreate, authCreateSelf, authListRows, authRevoke, forget, outcome, outcomeForLastRecall, remember, supersede,
+  archiveRaw,
+  authCreate,
+  authCreateSelf,
+  authListRows,
+  authRevoke,
+  forget,
+  outcome,
+  outcomeForLastRecall,
+  remember,
+  supersede,
   type Actor,
 } from '../../src/api/index.js';
 import { rememberLocally } from '../../src/api/memories/remember-local.js';
@@ -30,9 +39,18 @@ const stores: HippoStore[] = [];
 function seededRoot(): string {
   const root = makeRoot('async-contract');
   roots.push(root);
-  writeEntry(root, seeded('the deploy pipeline uses a blue green rollout', 'mem_plain', SEEDED_AT, {}, { tenantId: ACME }));
-  writeEntry(root, seeded('the billing service freezes deploys on fridays', 'mem_second', SEEDED_AT, {}, { tenantId: ACME }));
-  writeEntry(root, seeded('raw chat line about the staging cluster move', 'mem_raw', SEEDED_AT, {}, { tenantId: ACME, kind: 'raw' }));
+  writeEntry(
+    root,
+    seeded('the deploy pipeline uses a blue green rollout', 'mem_plain', SEEDED_AT, {}, { tenantId: ACME }),
+  );
+  writeEntry(
+    root,
+    seeded('the billing service freezes deploys on fridays', 'mem_second', SEEDED_AT, {}, { tenantId: ACME }),
+  );
+  writeEntry(
+    root,
+    seeded('raw chat line about the staging cluster move', 'mem_raw', SEEDED_AT, {}, { tenantId: ACME, kind: 'raw' }),
+  );
   return root;
 }
 
@@ -61,8 +79,13 @@ const CASES = {
   archiveRaw: async (ctx) => () => archiveRaw(ctx, 'mem_raw', 'user asked'),
   remember: async (ctx) => () => remember(ctx, { content: 'the api gateway retries three times' }),
   // importVault takes no store and rememberLocally gets the folder's own: both write through its sqliteStore.
-  rememberLocally: async (ctx) => () => rememberLocally(apiCtx(ctx.hippoRoot, ctx.tenantId, ctx.actor), { content: 'the cache warms on every deploy', tags: [] }),
-  importVault: async (ctx) => () => importVault(vaultFolder(), { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, name: 'notes' }),
+  rememberLocally: async (ctx) => () =>
+    rememberLocally(apiCtx(ctx.hippoRoot, ctx.tenantId, ctx.actor), {
+      content: 'the cache warms on every deploy',
+      tags: [],
+    }),
+  importVault: async (ctx) => () =>
+    importVault(vaultFolder(), { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, name: 'notes' }),
 } satisfies Record<string, Case>;
 
 // The key fields each call answers with, so a resolved value that lost its shape fails here.

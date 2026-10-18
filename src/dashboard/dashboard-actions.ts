@@ -70,7 +70,11 @@ export async function forgetMemory(ctx: api.Context, rawId: string): Promise<Act
 }
 
 /** Keeps one side of an open conflict and weakens the other; the api's refusals keep their old statuses and texts. */
-export async function resolveOpenConflict(ctx: api.Context, conflictId: number, body: ActionBody): Promise<ActionResult> {
+export async function resolveOpenConflict(
+  ctx: api.Context,
+  conflictId: number,
+  body: ActionBody,
+): Promise<ActionResult> {
   const { keep } = body;
   if (keep === undefined) throw new ParamError('keep must be a memory id');
   parseMemoryId(keep);

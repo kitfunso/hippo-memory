@@ -17,27 +17,43 @@ import { saveIndex, closePrediction, recordRereads } from '../_helpers/root-form
 
 let root: string;
 
-beforeEach(() => { root = makeRoot('write-scope'); });
-afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+beforeEach(() => {
+  root = makeRoot('write-scope');
+});
+afterEach(() => {
+  fs.rmSync(root, { recursive: true, force: true });
+});
 
 function run(sql: string): void {
   const db = openHippoDb(root);
-  try { db.exec(sql); } finally { closeHippoDb(db); }
+  try {
+    db.exec(sql);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function count(sql: string): number {
   const db = openHippoDb(root);
-  try { return Number(db.prepare(sql).get<{ n: number | bigint }>()?.n ?? -1); } finally { closeHippoDb(db); }
+  try {
+    return Number(db.prepare(sql).get<{ n: number | bigint }>()?.n ?? -1);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function refuse(table: string, when: string): void {
-  run(`CREATE TRIGGER refuse_${table} BEFORE INSERT ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'refused'); END`);
+  run(
+    `CREATE TRIGGER refuse_${table} BEFORE INSERT ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'refused'); END`,
+  );
 }
 
 describe('a write scope that fails in the middle rolls back', () => {
   it('saveIndex keeps neither meta key when the second one is refused', () => {
     const before = count("SELECT COUNT(*) AS n FROM meta WHERE value LIKE '%marker%'");
-    run("CREATE TRIGGER refuse_meta BEFORE UPDATE ON meta WHEN NEW.key = 'last_trace_id' BEGIN SELECT RAISE(ABORT, 'refused'); END");
+    run(
+      "CREATE TRIGGER refuse_meta BEFORE UPDATE ON meta WHEN NEW.key = 'last_trace_id' BEGIN SELECT RAISE(ABORT, 'refused'); END",
+    );
     expect(() => saveIndex(root, { last_retrieval_ids: ['marker'], last_trace_id: 't' })).toThrow('refused');
     expect(count("SELECT COUNT(*) AS n FROM meta WHERE value LIKE '%marker%'")).toBe(before);
   });
@@ -50,8 +66,18 @@ describe('a write scope that fails in the middle rolls back', () => {
     const db = openHippoDb(root);
     try {
       createPhysicsTable(db);
-      db.exec(`CREATE TRIGGER refuse_second BEFORE INSERT ON memory_physics WHEN NEW.memory_id = '${b.id}' BEGIN SELECT RAISE(ABORT, 'refused'); END`);
-      const particle = (memoryId: string) => ({ memoryId, position: [0.5], velocity: [0], mass: 1, charge: 0, temperature: 1, lastSimulation: new Date().toISOString() });
+      db.exec(
+        `CREATE TRIGGER refuse_second BEFORE INSERT ON memory_physics WHEN NEW.memory_id = '${b.id}' BEGIN SELECT RAISE(ABORT, 'refused'); END`,
+      );
+      const particle = (memoryId: string) => ({
+        memoryId,
+        position: [0.5],
+        velocity: [0],
+        mass: 1,
+        charge: 0,
+        temperature: 1,
+        lastSimulation: new Date().toISOString(),
+      });
       expect(() => savePhysicsState(db, [particle(a.id), particle(b.id)])).toThrow('refused');
       expect(db.prepare('SELECT COUNT(*) AS n FROM memory_physics').get<{ n: number }>()?.n).toBe(0);
     } finally {
@@ -61,23 +87,49 @@ describe('a write scope that fails in the middle rolls back', () => {
 
   it('pruneAuditLog keeps the old rows when the prune record is refused', async () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString();
-    run(`INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`);
+    run(
+      `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`,
+    );
     refuse('audit_log', "NEW.op = 'audit_prune'");
-    await expect(pruneAuditLog(apiCtx(root, 'default', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow('refused');
+    await expect(pruneAuditLog(apiCtx(root, 'default', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(
+      'refused',
+    );
     expect(count(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'recall'`)).toBe(1);
   });
 
   it('saveActiveTaskSnapshot keeps the old snapshot active when the new one is refused', () => {
-    saveActiveTaskSnapshot(root, 'default', { task: 'first', summary: 's', next_step: 'n', session_id: 'x', source: 'test' });
+    saveActiveTaskSnapshot(root, 'default', {
+      task: 'first',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'x',
+      source: 'test',
+    });
     refuse('task_snapshots', "NEW.task = 'second'");
-    expect(() => saveActiveTaskSnapshot(root, 'default', { task: 'second', summary: 's', next_step: 'n', session_id: 'x', source: 'test' })).toThrow('refused');
+    expect(() =>
+      saveActiveTaskSnapshot(root, 'default', {
+        task: 'second',
+        summary: 's',
+        next_step: 'n',
+        session_id: 'x',
+        source: 'test',
+      }),
+    ).toThrow('refused');
     expect(count(`SELECT COUNT(*) AS n FROM task_snapshots WHERE status = 'active' AND task = 'first'`)).toBe(1);
   });
 
   it('closePrediction leaves the prediction open when its audit row is refused', () => {
-    const pred = savePrediction(root, 'default', { classTag: 'c', claimText: 'takes 2 days', estimateValue: 2, estimateUnit: 'days', targetDate: '2026-06-15' });
+    const pred = savePrediction(root, 'default', {
+      classTag: 'c',
+      claimText: 'takes 2 days',
+      estimateValue: 2,
+      estimateUnit: 'days',
+      targetDate: '2026-06-15',
+    });
     refuse('audit_log', "NEW.op = 'predict_close'");
-    expect(() => closePrediction(root, 'default', pred.id, { closureState: 'closed', actualValue: 3 })).toThrow('refused');
+    expect(() => closePrediction(root, 'default', pred.id, { closureState: 'closed', actualValue: 3 })).toThrow(
+      'refused',
+    );
     expect(count(`SELECT COUNT(*) AS n FROM predictions WHERE closure_state = 'open'`)).toBe(1);
   });
 
@@ -99,7 +151,12 @@ describe('a write scope that fails in the middle rolls back', () => {
     refuse('recall_trace_results', '1');
     const db = openHippoDb(root);
     try {
-      const id = writeRecallTrace(db, { tenantId: 'default', pipeline: 'cli', query: 'q', results: [{ memoryId: 'm1', score: 1 }] });
+      const id = writeRecallTrace(db, {
+        tenantId: 'default',
+        pipeline: 'cli',
+        query: 'q',
+        results: [{ memoryId: 'm1', score: 1 }],
+      });
       expect(id).toBeNull();
     } finally {
       closeHippoDb(db);

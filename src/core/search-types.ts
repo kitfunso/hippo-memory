@@ -34,9 +34,9 @@ export interface RerankStep {
 
 export interface SearchResult {
   entry: MemoryEntry;
-  score: number;          // composite score
+  score: number; // composite score
   bm25: number;
-  cosine: number;         // cosine similarity (0 when embeddings not used)
+  cosine: number; // cosine similarity (0 when embeddings not used)
   tokens: number;
   /** Populated when search is called with options.explain === true. */
   breakdown?: ScoreBreakdown;

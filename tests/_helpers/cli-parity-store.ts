@@ -4,7 +4,12 @@ import { afterAll, expect } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  DEFAULT_HALF_LIFE_DAYS,
+  type CreateMemoryOptions,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { initStore } from '../../src/store/open.js';
@@ -16,8 +21,23 @@ import { hippoRunAsync } from './spawn-hippo.js';
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session, a server, a clock or a home for the child, so the developer's shell cannot change a row.
 const DROPPED_ENV = [
-  'HIPPO_TENANT', 'HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_API_KEY',
-  'HIPPO_REQUIRE_SERVER', 'HIPPO_STRICT_OWNER', 'HIPPO_FAKE_NOW', 'HIPPO_LOG', 'XDG_DATA_HOME', 'HIPPO_HOME', 'HOME', 'USERPROFILE', 'APPDATA', 'PATH',
+  'HIPPO_TENANT',
+  'HIPPO_SCOPE',
+  'GSTACK_SKILL',
+  'OPENCLAW_SKILL',
+  'HIPPO_SESSION_ID',
+  'CLAUDE_CODE_SESSION_ID',
+  'HIPPO_API_KEY',
+  'HIPPO_REQUIRE_SERVER',
+  'HIPPO_STRICT_OWNER',
+  'HIPPO_FAKE_NOW',
+  'HIPPO_LOG',
+  'XDG_DATA_HOME',
+  'HIPPO_HOME',
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'PATH',
 ];
 const VOLATILE_COLUMNS = ['created', 'last_retrieved', 'valid_from', 'updated_at'];
 const STRENGTH_DECIMALS = 6;
@@ -59,8 +79,19 @@ function childEnv(home: string, user: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(process.env)) if (!dropped.has(key.toUpperCase())) env[key] = value;
   // The global npm folder holds the developer's own `hippo` and agent CLIs, which no case may start.
-  const path = (process.env['PATH'] ?? '').split(delimiter).filter((dir) => !/[\\/]npm[\\/]?$/i.test(dir)).join(delimiter);
-  return { ...env, PATH: path, HIPPO_HOME: home, HOME: user, USERPROFILE: user, APPDATA: join(user, 'AppData', 'Roaming'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+  const path = (process.env['PATH'] ?? '')
+    .split(delimiter)
+    .filter((dir) => !/[\\/]npm[\\/]?$/i.test(dir))
+    .join(delimiter);
+  return {
+    ...env,
+    PATH: path,
+    HIPPO_HOME: home,
+    HOME: user,
+    USERPROFILE: user,
+    APPDATA: join(user, 'AppData', 'Roaming'),
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+  };
 }
 
 /** Every way a run spells the temp folder: as made and resolved (macOS reaches it through a symlink), with either slash, and JSON-escaped. */
@@ -109,25 +140,40 @@ export class Store {
   }
 
   /** A row with a fixed id, age and strength, for `sleep`, which decays from `created` against the fixed clock. */
-  seedAged(id: string, created: string, content: string, options: Partial<CreateMemoryOptions> = {}, fields: Partial<MemoryEntry> = {}): void {
+  seedAged(
+    id: string,
+    created: string,
+    content: string,
+    options: Partial<CreateMemoryOptions> = {},
+    fields: Partial<MemoryEntry> = {},
+  ): void {
     this.seed(content, options, { id, created, last_retrieved: created, valid_from: created, strength: 1, ...fields });
   }
 
   private record(args: readonly string[], r: { status: number | null; stdout: string; stderr: string }): void {
-    this.transcript.push(`$ hippo ${args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${ownStderr(r.stderr)}`);
+    this.transcript.push(
+      `$ hippo ${args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${ownStderr(r.stderr)}`,
+    );
   }
 
   async run(...args: string[]): Promise<void> {
     const opts = { cwd: this.cwd, env: this.env };
     // Async in both modes, so a run that calls a server this process holds leaves the thread free to answer.
-    this.record(args, this.spawned ? await hippoRunAsync(args, { ...opts, timeout: SPAWN_MS }) : await runCliAs(args, opts));
+    this.record(
+      args,
+      this.spawned ? await hippoRunAsync(args, { ...opts, timeout: SPAWN_MS }) : await runCliAs(args, opts),
+    );
   }
 
   /** A verb function with no flag for its test seam (the refine fetcher), run in this process with its output captured. */
   async call<T>(label: string, fn: () => Promise<T>): Promise<void> {
     let answer: T | undefined;
-    const r = await runInProcess(async () => { answer = await fn(); });
-    this.transcript.push(`$ ${label} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr}--- result\n${JSON.stringify(answer, null, 1)}\n`);
+    const r = await runInProcess(async () => {
+      answer = await fn();
+    });
+    this.transcript.push(
+      `$ ${label} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr}--- result\n${JSON.stringify(answer, null, 1)}\n`,
+    );
   }
 
   /** The newest row's id. */
@@ -159,7 +205,9 @@ export class Store {
   /** Four snapshots, so a change to the audit rows alone shows as that and nothing else; `extra` is state the case names itself. */
   expectPinned(extra: ExtraState = {}): void {
     expect(this.mask(this.transcript.join('\n'))).toMatchSnapshot('output');
-    expect(this.mask(JSON.stringify({ local: this.memories(this.root), global: this.memories(this.home) }, null, 1))).toMatchSnapshot('memory rows');
+    expect(
+      this.mask(JSON.stringify({ local: this.memories(this.root), global: this.memories(this.home) }, null, 1)),
+    ).toMatchSnapshot('memory rows');
     const audit = {
       local: query(this.root, `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE id > ? ORDER BY id`, this.auditMark),
       global: query(this.home, `SELECT ${AUDIT_COLUMNS} FROM audit_log ORDER BY id`),
@@ -167,7 +215,10 @@ export class Store {
     expect(this.mask(JSON.stringify(audit, null, 1))).toMatchSnapshot('audit rows');
     const other = {
       storeMade: existsSync(join(this.root, 'hippo.db')),
-      meta: query(this.root, `SELECT key, value FROM meta WHERE key IN (${META_KEYS.map((key) => `'${key}'`).join(', ')}) ORDER BY key`),
+      meta: query(
+        this.root,
+        `SELECT key, value FROM meta WHERE key IN (${META_KEYS.map((key) => `'${key}'`).join(', ')}) ORDER BY key`,
+      ),
       ...extra,
     };
     expect(this.mask(JSON.stringify(other, null, 1))).toMatchSnapshot('other state');

@@ -15,11 +15,15 @@ export async function rerankerPost(url: string, init: RequestInit, budgetMs: num
   // The budget bounds the whole call, retries included, so recall never waits past the configured timeout.
   const budget = AbortSignal.timeout(budgetMs);
   try {
-    return await fetchWithRetry(url, { ...init, method: 'POST', signal: budget }, {
-      timeoutMs: budgetMs,
-      retryTransport: true,
-      maxDelayMs: RETRY_WAIT_CAP_MS,
-    });
+    return await fetchWithRetry(
+      url,
+      { ...init, method: 'POST', signal: budget },
+      {
+        timeoutMs: budgetMs,
+        retryTransport: true,
+        maxDelayMs: RETRY_WAIT_CAP_MS,
+      },
+    );
   } catch (err) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       throw new Error(`no answer within ${budgetMs} ms`, { cause: err });

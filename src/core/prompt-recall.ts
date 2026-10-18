@@ -33,18 +33,12 @@ export interface OverlapScore {
 }
 
 /** Overlap of two token sets under `metric`. 0 when either set is empty. */
-export function scoreOverlap(
-  p: ReadonlySet<string>,
-  m: ReadonlySet<string>,
-  metric: PromptRecallMetric,
-): OverlapScore {
+export function scoreOverlap(p: ReadonlySet<string>, m: ReadonlySet<string>, metric: PromptRecallMetric): OverlapScore {
   if (p.size === 0 || m.size === 0) return { score: 0, shared: 0 };
   const [small, large] = p.size <= m.size ? [p, m] : [m, p];
   let shared = 0;
   for (const t of small) if (large.has(t)) shared++;
-  const score = metric === 'jaccard'
-    ? shared / (p.size + m.size - shared)
-    : shared / Math.sqrt(p.size * m.size);
+  const score = metric === 'jaccard' ? shared / (p.size + m.size - shared) : shared / Math.sqrt(p.size * m.size);
   return { score, shared };
 }
 
@@ -60,7 +54,7 @@ export function gatePromptRecall<T extends { id: string; tokens: ReadonlySet<str
     const { score, shared } = scoreOverlap(p, item.tokens, gate.metric);
     if (score >= gate.threshold && shared >= gate.minShared) kept.push({ item, score, shared });
   }
-  kept.sort((a, b) => (b.score - a.score) || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
+  kept.sort((a, b) => b.score - a.score || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
   return kept.slice(0, gate.maxItems);
 }
 
@@ -77,7 +71,7 @@ export function rarestPromptTerms(
   return Array.from(terms)
     .map((t) => ({ t, c: docCount(t) }))
     .filter((x) => x.c > 0)
-    .sort((a, b) => (a.c - b.c) || (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
+    .sort((a, b) => a.c - b.c || (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
     .slice(0, maxTerms)
     .map((x) => x.t);
 }

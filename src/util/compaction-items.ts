@@ -115,14 +115,30 @@ export function writableItemRows(items: readonly string[], note: (message: strin
 }
 
 /** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
-const PROTECTED_WORDS = new Set(['not', 'no', 'never', 'none', 'nor', 'without', 'cannot', 't', 'only', 'except',
-  'unless', 'until']);
+const PROTECTED_WORDS = new Set([
+  'not',
+  'no',
+  'never',
+  'none',
+  'nor',
+  'without',
+  'cannot',
+  't',
+  'only',
+  'except',
+  'unless',
+  'until',
+]);
 /** Below this share of the held text's words, an item is a fragment of something longer, not a restatement. */
 const RESTATE_MIN_SHARE = 0.5;
 
 /** The words restates compares: NFC, lower case, split on anything that is not a letter, mark, digit or `_`. */
 export function itemWords(text: string): string[] {
-  return text.normalize('NFC').toLowerCase().split(/[^\p{L}\p{M}\p{N}_]+/u).filter(Boolean);
+  return text
+    .normalize('NFC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{M}\p{N}_]+/u)
+    .filter(Boolean);
 }
 
 /** True when `item` is `held` with words left out, in the same order, keeping every number and protected word. Spacing,

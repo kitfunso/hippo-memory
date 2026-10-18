@@ -48,7 +48,9 @@ describe('loadContextCandidates over the cap', () => {
         row('i-superseded', 0, { superseded_by: 'b-fresh' }),
         row('j-acme', 0, { tenant_id: 'acme' }),
         row('k-team', 0, { scope: 'team:x' }),
-      ]) writeEntry(root, e);
+      ]) {
+        writeEntry(root, e);
+      }
     });
   });
 
@@ -64,8 +66,18 @@ describe('loadContextCandidates over the cap', () => {
 
   it('applies scope, origin, tenant and supersession in SQL', () => {
     const all = (filter: Parameters<typeof loadContextCandidates>[2]): string[] =>
-      loadContextCandidates(root, 'default', filter).map((e) => e.id).sort();
-    expect(all({ project: ['proj'], cap: 100, now: NOW })).toEqual(['a-old-pin', 'b-fresh', 'c-stale', 'd-rewarded', 'e-mid', 'h-global', 'k-team']);
+      loadContextCandidates(root, 'default', filter)
+        .map((e) => e.id)
+        .sort();
+    expect(all({ project: ['proj'], cap: 100, now: NOW })).toEqual([
+      'a-old-pin',
+      'b-fresh',
+      'c-stale',
+      'd-rewarded',
+      'e-mid',
+      'h-global',
+      'k-team',
+    ]);
     expect(all({ cap: 100, now: NOW })).toContain('g-other');
     expect(all({ exactScope: 'team:x', cap: 100, now: NOW })).toEqual(['k-team']);
     expect(all({ project: ['proj'], cap: 100, now: NOW })).not.toContain('f-private');
@@ -75,9 +87,14 @@ describe('loadContextCandidates over the cap', () => {
   it('tallies sources and finds rows by a word they hold', () => {
     expect(tallySources(root, 'default').map((t) => [t.source, t.count])).toEqual([['cli', 10]]);
     expect(tallySources(root).reduce((n, t) => n + t.count, 0)).toBe(11);
-    expect(loadTextsHoldingWords(root, 'default', ['e-mid', 'nothing']).map((r) => r.content)).toEqual(['row e-mid body']);
+    expect(loadTextsHoldingWords(root, 'default', ['e-mid', 'nothing']).map((r) => r.content)).toEqual([
+      'row e-mid body',
+    ]);
     const scoped = loadTextsHoldingWords(root, 'default', ['e-mid', 'g-other', 'h-global', 'j-acme'], ['proj']);
-    expect(scoped.map((r) => [r.content, r.origin_project]).sort()).toEqual([['row e-mid body', 'proj'], ['row h-global body', '']]);
+    expect(scoped.map((r) => [r.content, r.origin_project]).sort()).toEqual([
+      ['row e-mid body', 'proj'],
+      ['row h-global body', ''],
+    ]);
   });
 });
 
@@ -97,16 +114,23 @@ describe('loadContextCandidates reward factor', () => {
 
   // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.
   async function survivor(rows: MemoryEntry[]): Promise<{ id: string; strongest: string }> {
-    await withSharedStoreHandles(() => { for (const e of rows) writeEntry(root, e); });
+    await withSharedStoreHandles(() => {
+      for (const e of rows) writeEntry(root, e);
+    });
     const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
     const options = { ablation: strengthAblation() };
-    const strongest = [...rows].sort((a, b) => calculateStrength(b, NOW, options) - calculateStrength(a, NOW, options))[0].id;
+    const strongest = [...rows].sort(
+      (a, b) => calculateStrength(b, NOW, options) - calculateStrength(a, NOW, options),
+    )[0].id;
     return { id: got[0].id, strongest };
   }
 
   it('ranks asymmetric outcomes the way calculateStrength does', async () => {
     // 20 days old: rewarded x8 at slope 0.5 is 13.75 days against plain y's 14.5; a slope of 0.7 would give 15.25 and flip them.
-    const { id, strongest } = await survivor([row('x-rewarded', 20, { outcome_positive: 3 }), row('y-plain', 20, { half_life_days: 14.5 })]);
+    const { id, strongest } = await survivor([
+      row('x-rewarded', 20, { outcome_positive: 3 }),
+      row('y-plain', 20, { half_life_days: 14.5 }),
+    ]);
     expect(strongest).toBe('y-plain');
     expect(id).toBe(strongest);
   });
@@ -114,7 +138,10 @@ describe('loadContextCandidates reward factor', () => {
   it('drops the reward factor from the rank when outcome-slow is ablated', async () => {
     vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
     _resetAblationCacheForTests();
-    const { id, strongest } = await survivor([row('x-rewarded', 20, { outcome_positive: 3 }), row('z-plain', 20, { half_life_days: 12 })]);
+    const { id, strongest } = await survivor([
+      row('x-rewarded', 20, { outcome_positive: 3 }),
+      row('z-plain', 20, { half_life_days: 12 }),
+    ]);
     expect(strongest).toBe('z-plain');
     expect(id).toBe(strongest);
   });

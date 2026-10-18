@@ -49,9 +49,16 @@ function auditRows(root: string): AuditRow[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: SELECT projects only the op and metadata_json TEXT columns.
-    const rows = db.prepare('SELECT op, metadata_json FROM audit_log').all() as Array<{ op: string; metadata_json: string }>;
+    const rows = db.prepare('SELECT op, metadata_json FROM audit_log').all() as Array<{
+      op: string;
+      metadata_json: string;
+    }>;
     // SAFETY: metadata_json is written by appendAuditEvent via JSON.stringify.
-    return rows.map((r) => ({ op: r.op, metadata: JSON.parse(r.metadata_json) as RecallMetadata, text: r.metadata_json }));
+    return rows.map((r) => ({
+      op: r.op,
+      metadata: JSON.parse(r.metadata_json) as RecallMetadata,
+      text: r.metadata_json,
+    }));
   } finally {
     closeHippoDb(db);
   }
@@ -99,9 +106,14 @@ describe('recall audits store a query hash, never the text', () => {
 
   it('context recall writes the same hashed row into the global store it reached', async () => {
     initStore(globalRoot);
-    await getContext(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), { currentProject: cwdProject(), q: QUERY, crossProject: true });
+    await getContext(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), {
+      currentProject: cwdProject(),
+      q: QUERY,
+      crossProject: true,
+    });
     const [local, global] = [localRoot, globalRoot].map((root) =>
-      auditRows(root).filter((r) => r.op === 'recall' && r.metadata.mode === 'context'));
+      auditRows(root).filter((r) => r.op === 'recall' && r.metadata.mode === 'context'),
+    );
     expect(global).toHaveLength(1);
     expectHashedOnly(global[0], QUERY);
     expect(global[0].metadata).toEqual(local[0].metadata);
@@ -128,7 +140,15 @@ describe('census: a canary query reaches no audit metadata value', () => {
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(localRoot), config: loadConfig(localRoot) };
+    const mcpCtx: McpContext = {
+      hippoRoot: localRoot,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(localRoot),
+      config: loadConfig(localRoot),
+    };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

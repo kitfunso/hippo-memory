@@ -210,11 +210,15 @@ export function batchWriteAndDelete(
   const dormant = opts?.dormant ?? [];
   if (toWrite.length === 0 && toDeleteIds.length === 0 && dormant.length === 0) return [];
 
-  return onHandle(hippoRoot, (db) => {
-    // One component, so every op keeps the statement order this call has always had.
-    const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant };
-    return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
-  }, openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      // One component, so every op keeps the statement order this call has always had.
+      const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant };
+      return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
+    },
+    openStore,
+  );
 }
 
 const failedUnits = new WeakMap<Error, string[]>();
@@ -224,7 +228,9 @@ const failedUnits = new WeakMap<Error, string[]>();
 function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
   if (!component || failedUnits.has(err)) return;
   const ids = [
-    ...component.refreshes.map((r) => r.id), ...component.writes.map((e) => e.id), ...component.deletes,
+    ...component.refreshes.map((r) => r.id),
+    ...component.writes.map((e) => e.id),
+    ...component.deletes,
     ...component.dormant.map((m) => m.entry.id),
   ];
   failedUnits.set(err, [...new Set(ids)]);
@@ -251,7 +257,7 @@ function batchWriteAndDeleteOn(
     removedIds: [],
     rejectedSkips: 0,
     fts: { rows: [], staleIds: [] },
-    dirty: { parents: new Set(), tenantById: new Map() }
+    dirty: { parents: new Set(), tenantById: new Map() },
   };
   let next = from;
   // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
@@ -268,7 +274,11 @@ function batchWriteAndDeleteOn(
       }
     } while (next < components.length && now() - begunAt < opts.holdMs);
     const removed = new Set(out.removedIds);
-    replaceFtsRows(db, out.fts.rows.filter((row) => !removed.has(row.id)), [...out.fts.staleIds, ...out.removedIds]);
+    replaceFtsRows(
+      db,
+      out.fts.rows.filter((row) => !removed.has(row.id)),
+      [...out.fts.staleIds, ...out.removedIds],
+    );
     // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
     // dirty flag commits atomically with the writes + deletes.
     for (const parentId of out.dirty.parents) {
@@ -324,7 +334,7 @@ function reportChunk(hippoRoot: string, out: ChunkLog): void {
   if (out.rejectedSkips > 0) {
     log.warn(
       `batchWriteAndDelete: skipped ${out.rejectedSkips} write(s) whose content matches a rejected value (tombstone ` +
-      `hit during the batch transaction)`,
+        `hit during the batch transaction)`,
     );
   }
   // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of the DB.
@@ -372,13 +382,13 @@ function selectAutoDeletableRows(
   const rows = db
     .prepare(
       `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders(ids.length)}) AND ` +
-      `${AUTOMATIC_DELETE.sql}`,
+        `${AUTOMATIC_DELETE.sql}`,
     )
     .all(...ids, ...AUTOMATIC_DELETE.params) as Array<{
-      id: string;
-      dag_parent_id: string | null;
-      tenant_id: string | null;
-    }>;
+    id: string;
+    dag_parent_id: string | null;
+    tenant_id: string | null;
+  }>;
   for (const row of rows) {
     if (row.dag_parent_id) {
       dirty.parents.add(row.dag_parent_id);

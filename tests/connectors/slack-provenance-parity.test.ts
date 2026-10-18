@@ -39,7 +39,11 @@ function makeMessage(i: number, opts: Partial<SlackMessageEvent> = {}): SlackMes
 }
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 describe('Slack connector — provenance coverage parity', () => {
@@ -115,9 +119,7 @@ describe('Slack connector — provenance coverage parity', () => {
       message: reply,
       eventId: 'EvReply',
     });
-    const replyRow = loadAllEntries(root, 'default').find((e) =>
-      e.tags.includes('thread:1700000000.000001'),
-    );
+    const replyRow = loadAllEntries(root, 'default').find((e) => e.tags.includes('thread:1700000000.000001'));
     expect(replyRow?.owner).toMatch(/^user:U/);
     expect(buildProvenanceCoverage(loadAllEntries(root, 'default')).gaps).toHaveLength(0);
   });
@@ -126,7 +128,10 @@ describe('Slack connector — provenance coverage parity', () => {
     const ctx = ctxFor(root);
     const original = makeMessage(50);
     await ingestMessage(ctx, {
-      teamId: TEAM_ID, channel: PUBLIC_CHANNEL, message: original, eventId: 'EvOrig',
+      teamId: TEAM_ID,
+      channel: PUBLIC_CHANNEL,
+      message: original,
+      eventId: 'EvOrig',
     });
     const edited: SlackMessageEvent = {
       ...original,
@@ -134,7 +139,10 @@ describe('Slack connector — provenance coverage parity', () => {
       text: `${original.text} (edited)`,
     };
     await ingestMessage(ctx, {
-      teamId: TEAM_ID, channel: PUBLIC_CHANNEL, message: edited, eventId: 'EvEdit',
+      teamId: TEAM_ID,
+      channel: PUBLIC_CHANNEL,
+      message: edited,
+      eventId: 'EvEdit',
     });
     expect(buildProvenanceCoverage(loadAllEntries(root, 'default')).gaps).toHaveLength(0);
   });

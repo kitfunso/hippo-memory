@@ -24,7 +24,11 @@ describe('hippo slack CLI', () => {
   });
 
   it('hippo slack dlq list prints DLQ rows', async () => {
-    await parkInDlq(slackDlq, sqliteStore(join(root, '.hippo')), { tenantId: 'default', rawPayload: '{"x":1}', error: 'bad event' });
+    await parkInDlq(slackDlq, sqliteStore(join(root, '.hippo')), {
+      tenantId: 'default',
+      rawPayload: '{"x":1}',
+      error: 'bad event',
+    });
     const out = runCli(root, ['slack', 'dlq', 'list']);
     expect(out).toContain('bad event');
   });

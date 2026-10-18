@@ -10,7 +10,9 @@ const MIGRATIONS_DIR = 'src/db/migrations';
 
 /** The version each MIGRATIONS entry declares, in list order. */
 export function readMigrationVersions(dir = MIGRATIONS_DIR) {
-  const body = /export const MIGRATIONS: Migration\[\] = \[([\s\S]*?)\];/.exec(readFileSync(join(dir, 'index.ts'), 'utf8'));
+  const body = /export const MIGRATIONS: Migration\[\] = \[([\s\S]*?)\];/.exec(
+    readFileSync(join(dir, 'index.ts'), 'utf8'),
+  );
   if (!body) throw new Error(`${dir}/index.ts has no MIGRATIONS array.`);
   return (body[1].match(/\bv\d+\b/g) ?? []).map((name) => {
     const declared = /\bversion:\s*(\d+)/.exec(readFileSync(join(dir, `${name}.ts`), 'utf8'));
@@ -41,7 +43,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error('');
     console.error('MIGRATION LINE: the MIGRATIONS versions are not consecutive.');
     for (const gap of gaps) console.error(`  ${describeGap(gap)}`);
-    console.error('Fix: land the missing migrations before publishing, or renumber so each version is the previous plus one.');
+    console.error(
+      'Fix: land the missing migrations before publishing, or renumber so each version is the previous plus one.',
+    );
     console.error('');
     process.exit(1);
   }

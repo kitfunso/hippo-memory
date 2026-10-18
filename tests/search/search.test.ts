@@ -54,7 +54,7 @@ describe('BM25 search', () => {
   it('respects token budget', () => {
     // Create many entries with known token sizes
     const bigEntries = Array.from({ length: 20 }, (_, i) =>
-      createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`)
+      createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`),
     );
 
     const results = search('cache error', bigEntries, { budget: 300 });
@@ -140,8 +140,8 @@ describe('decision recall boost', () => {
     const results = search('cache refresh', [withDecision, without], { budget: 4000 });
 
     expect(results.length).toBe(2);
-    const decisionResult = results.find(r => r.entry.tags.includes('decision'))!;
-    const normalResult = results.find(r => !r.entry.tags.includes('decision'))!;
+    const decisionResult = results.find((r) => r.entry.tags.includes('decision'))!;
+    const normalResult = results.find((r) => !r.entry.tags.includes('decision'))!;
     // The decision tag adds "decision" to the BM25 doc text which slightly affects
     // corpus stats, so we check a looser tolerance
     expect(decisionResult.score).toBeGreaterThan(normalResult.score);

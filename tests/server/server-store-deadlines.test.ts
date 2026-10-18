@@ -10,7 +10,12 @@ import type { JsonValue } from '../../src/util/json.js';
 import { log, type LogFields } from '../../src/util/log.js';
 import { currentSignal } from '../../src/util/request-scope.js';
 import { serve, type AuthResolver, type ServeOpts, type ServerHandle } from '../../src/server.js';
-import { type CallOptions, createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from '../../src/store/sqlite/executor.js';
+import {
+  type CallOptions,
+  createSqliteExecutor,
+  type ExecutorOptions,
+  type SqliteExecutor,
+} from '../../src/store/sqlite/executor.js';
 import { initStore } from '../../src/store/open.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
@@ -21,7 +26,9 @@ beforeEach(() => {
 });
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: new (path: string) => DatabaseSyncLike };
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: new (path: string) => DatabaseSyncLike;
+};
 
 const SAVE = 'predictions.savePrediction';
 // Far past any test's own timeout, so a call behind a held lock can only end when the test releases the lock or the executor stops the thread.
@@ -135,7 +142,8 @@ const auditOps = (root: string): string[] => columnOf(root, 'SELECT op AS value 
 const JSON_TYPE = { 'content-type': 'application/json' };
 const post = (server: ServerHandle, path: string, body: JsonValue): Promise<Response> =>
   fetch(`${server.url}${path}`, { method: 'POST', headers: JSON_TYPE, body: JSON.stringify(body) });
-const get = (server: ServerHandle, path: string): Promise<Response> => fetch(`${server.url}${path}`, { headers: JSON_TYPE });
+const get = (server: ServerHandle, path: string): Promise<Response> =>
+  fetch(`${server.url}${path}`, { headers: JSON_TYPE });
 const claim = (text: string) => ({ claim: text, classTag: 'release', estimate: 3, unit: 'days' });
 const save = (server: ServerHandle, text: string): Promise<Response> => post(server, '/v1/predictions', claim(text));
 
@@ -154,7 +162,11 @@ async function counts(server: ServerHandle): Promise<Counts> {
 /** What a 504 of the deadline must carry: the code, the request's own id, and the sentence that says what became of the work. */
 async function expectDeadlineReply(res: Response, sentence: string): Promise<void> {
   expect(res.status).toBe(504);
-  expect(await res.json()).toEqual({ error: expect.stringContaining(sentence), code: 'deadline_exceeded', requestId: res.headers.get('x-request-id') });
+  expect(await res.json()).toEqual({
+    error: expect.stringContaining(sentence),
+    code: 'deadline_exceeded',
+    requestId: res.headers.get('x-request-id'),
+  });
 }
 
 async function expectBusyReply(res: Response): Promise<void> {
@@ -183,28 +195,43 @@ if (workerData.during === 'statement') {
 
 describe('a writer thread killed inside an open transaction on a WAL database', () => {
   // A worker thread starts, writes until it is killed, and the file is reopened and checked; CI runners take tens of seconds.
-  it.each(['between statements', 'statement'])('leaves the file consistent with none of its rows, and the next write lands (killed during: %s)', async (during) => {
-    const root = newRoot();
-    const file = getHippoDbPath(root);
-    const flag = new SharedArrayBuffer(4);
-    const messages: string[] = [];
-    const worker = new Worker(KILLED_WRITER, { eval: true, execArgv: ['--no-warnings'], workerData: { file, during, flag } });
-    const exited = new Promise<void>((resolve) => worker.once('exit', () => resolve()));
-    await new Promise<void>((resolve) => worker.on('message', (message: string) => { messages.push(message); resolve(); }));
+  it.each(['between statements', 'statement'])(
+    'leaves the file consistent with none of its rows, and the next write lands (killed during: %s)',
+    async (during) => {
+      const root = newRoot();
+      const file = getHippoDbPath(root);
+      const flag = new SharedArrayBuffer(4);
+      const messages: string[] = [];
+      const worker = new Worker(KILLED_WRITER, {
+        eval: true,
+        execArgv: ['--no-warnings'],
+        workerData: { file, during, flag },
+      });
+      const exited = new Promise<void>((resolve) => worker.once('exit', () => resolve()));
+      await new Promise<void>((resolve) =>
+        worker.on('message', (message: string) => {
+          messages.push(message);
+          resolve();
+        }),
+      );
 
-    void worker.terminate();
-    await exited;
+      void worker.terminate();
+      await exited;
 
-    const next = new DatabaseSync(file);
-    cleanups.push(() => next.close());
-    next.exec('PRAGMA busy_timeout = 0');
-    expect(next.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
-    expect(next.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
-    expect([messages, new Int32Array(flag)[0]]).toEqual([['in-transaction'], 0]);
-    expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get()).toEqual({ n: 0 });
-    next.exec("INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('t', 'default', 'kill-proof', 'after', NULL, '{}')");
-    expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
-  }, 120_000);
+      const next = new DatabaseSync(file);
+      cleanups.push(() => next.close());
+      next.exec('PRAGMA busy_timeout = 0');
+      expect(next.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
+      expect(next.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+      expect([messages, new Int32Array(flag)[0]]).toEqual([['in-transaction'], 0]);
+      expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get()).toEqual({ n: 0 });
+      next.exec(
+        "INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('t', 'default', 'kill-proof', 'after', NULL, '{}')",
+      );
+      expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
+    },
+    120_000,
+  );
 });
 
 describe("a store thread's queue", () => {
@@ -258,7 +285,11 @@ describe("a store thread's queue", () => {
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());
 
-    const call = executor.call('predictions.listPredictions', ['default', { limit: 1 }], { mode: 'read', requestId: undefined, deadlineAt: Date.now() - 1 });
+    const call = executor.call('predictions.listPredictions', ['default', { limit: 1 }], {
+      mode: 'read',
+      requestId: undefined,
+      deadlineAt: Date.now() - 1,
+    });
 
     await expect(call).rejects.toBeInstanceOf(StoreBusyError);
     expect(executor.liveThreads()).toBe(0);
@@ -296,8 +327,13 @@ describe("a read still running at its request's deadline", () => {
     // The stopped thread exits once its statement has met the freed lock; each look is a round trip, never a pause.
     let after = await counts(server);
     while (after.store_workers_replaced === before.store_workers_replaced) after = await counts(server);
-    expect([after.store_workers_replaced, after.store_jobs_expired]).toEqual([before.store_workers_replaced + 1, before.store_jobs_expired + 1]);
-    expect((await Promise.all([get(server, '/v1/predictions'), get(server, '/v1/predictions')])).map((res) => res.status)).toEqual([200, 200]);
+    expect([after.store_workers_replaced, after.store_jobs_expired]).toEqual([
+      before.store_workers_replaced + 1,
+      before.store_jobs_expired + 1,
+    ]);
+    expect(
+      (await Promise.all([get(server, '/v1/predictions'), get(server, '/v1/predictions')])).map((res) => res.status),
+    ).toEqual([200, 200]);
   });
 });
 
@@ -376,10 +412,23 @@ describe('the handler deadline', () => {
   it('answers 504 with the request id while the handler still runs, and drops what the handler returns later', async () => {
     const root = newRoot();
     let release = (): void => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     let returned = (): void => {};
-    const handlerDone = new Promise<void>((resolve) => { returned = resolve; });
-    const routes = [{ path: '/v1/slow', handler: async () => { await gate; returned(); return { late: true }; } }];
+    const handlerDone = new Promise<void>((resolve) => {
+      returned = resolve;
+    });
+    const routes = [
+      {
+        path: '/v1/slow',
+        handler: async () => {
+          await gate;
+          returned();
+          return { late: true };
+        },
+      },
+    ];
     const server = await start(root, { routes });
     const before = await counts(server);
     const errors = vi.spyOn(log, 'error').mockImplementation(() => {});
@@ -397,18 +446,31 @@ describe('the handler deadline', () => {
     expect(await finished).toEqual({ requestId: late.headers.get('x-request-id'), method: 'POST', route: '/v1/slow' });
     const after = await counts(server);
     expect(after.handler_deadlines).toBe(before.handler_deadlines + 1);
-    expect(errors.mock.calls.map((call) => call[0])).toEqual([expect.stringContaining('POST /v1/slow failed: the request did not finish by its deadline')]);
+    expect(errors.mock.calls.map((call) => call[0])).toEqual([
+      expect.stringContaining('POST /v1/slow failed: the request did not finish by its deadline'),
+    ]);
     expect(warns.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
   });
 
   it('aborts the signal of a handler that runs past the deadline, and not one that finishes inside it', async () => {
     const root = newRoot();
     let release = (): void => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     let seen = (_aborted: boolean): void => {};
-    const afterGate = new Promise<boolean>((resolve) => { seen = resolve; });
+    const afterGate = new Promise<boolean>((resolve) => {
+      seen = resolve;
+    });
     const routes = [
-      { path: '/v1/slow', handler: async () => { await gate; seen(currentSignal()?.aborted === true); return {}; } },
+      {
+        path: '/v1/slow',
+        handler: async () => {
+          await gate;
+          seen(currentSignal()?.aborted === true);
+          return {};
+        },
+      },
       { path: '/v1/quick', handler: async () => ({ aborted: currentSignal()?.aborted === true }) },
     ];
     const server = await start(root, { routes });
@@ -431,7 +493,11 @@ describe('the handler deadline', () => {
     const lock = holdWriteLock(root);
     const first = executor.call(SAVE, [{ claim: 'held' }], { mode: 'write', requestId: 'a' });
     first.catch(() => {});
-    const second = executor.call(SAVE, [{ claim: 'dropped' }], { mode: 'write', requestId: 'b', signal: controller.signal });
+    const second = executor.call(SAVE, [{ claim: 'dropped' }], {
+      mode: 'write',
+      requestId: 'b',
+      signal: controller.signal,
+    });
     const outcome = expect(second).rejects.toBeInstanceOf(StoreBusyError);
     controller.abort();
     lock.release();
@@ -443,13 +509,27 @@ describe('the handler deadline', () => {
   it('logs one warn line when the handler fails after the 504, with the request id and the route and none of the error text', async () => {
     const root = newRoot();
     let release = (): void => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const routes = [{ path: '/v1/slow', handler: async () => { await gate; throw new RangeError('no row for private-caller-text'); } }];
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const routes = [
+      {
+        path: '/v1/slow',
+        handler: async () => {
+          await gate;
+          throw new RangeError('no row for private-caller-text');
+        },
+      },
+    ];
     const server = await start(root, { routes });
     vi.spyOn(log, 'error').mockImplementation(() => {});
     const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
     const warned = vi.spyOn(log, 'warn');
-    const failed = new Promise<void>((resolve) => { warned.mockImplementation((message) => { if (message.includes(LATE)) resolve(); }); });
+    const failed = new Promise<void>((resolve) => {
+      warned.mockImplementation((message) => {
+        if (message.includes(LATE)) resolve();
+      });
+    });
 
     deadline(SHORT_DEADLINE_MS);
     const late = await post(server, '/v1/slow?q=private-query', {});
@@ -460,8 +540,16 @@ describe('the handler deadline', () => {
     await failed;
     await counts(server);
     expect(warned.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([
-      ['request failed after its deadline reply',
-        { requestId: late.headers.get('x-request-id'), method: 'POST', route: '/v1/slow', failureStatus: 500, errorClass: 'RangeError' }],
+      [
+        'request failed after its deadline reply',
+        {
+          requestId: late.headers.get('x-request-id'),
+          method: 'POST',
+          route: '/v1/slow',
+          failureStatus: 500,
+          errorClass: 'RangeError',
+        },
+      ],
     ]);
     expect(infos.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
     expect(JSON.stringify([warned.mock.calls, infos.mock.calls])).not.toContain('private-');
@@ -470,8 +558,13 @@ describe('the handler deadline', () => {
   it('says nothing when a read finishes after its 504: nothing was written', async () => {
     const root = newRoot();
     let release = (): void => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const authResolver: AuthResolver = async () => { await gate; return { tenantId: 'default', subject: 'user-1', role: 'member' }; };
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const authResolver: AuthResolver = async () => {
+      await gate;
+      return { tenantId: 'default', subject: 'user-1', role: 'member' };
+    };
     // The in-process store, since the workers refuse a call that arrives past its request's deadline and the read would fail.
     const server = await start(root, { store: sqliteStore(root), authResolver, authResolverTimeoutMs: LONG_WAIT_MS });
     vi.spyOn(log, 'error').mockImplementation(() => {});
@@ -479,7 +572,9 @@ describe('the handler deadline', () => {
     const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
 
     deadline(SHORT_DEADLINE_MS);
-    const late = await fetch(`${server.url}/v1/predictions`, { headers: { ...JSON_TYPE, authorization: 'Bearer ext.reader' } });
+    const late = await fetch(`${server.url}/v1/predictions`, {
+      headers: { ...JSON_TYPE, authorization: 'Bearer ext.reader' },
+    });
 
     await expectDeadlineReply(late, 'did not finish by its deadline');
     deadline('0');
@@ -534,7 +629,9 @@ async function replies(root: string, opts: Partial<ServeOpts> = {}) {
   for (const [label, send] of STEPS) {
     const res = await send(server);
     const headers = [...res.headers].filter(([name]) => !PER_REQUEST_HEADERS.has(name)).sort();
-    const body = (await res.text()).replace(/sem_[0-9a-f]+/g, '<memory>').replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>');
+    const body = (await res.text())
+      .replace(/sem_[0-9a-f]+/g, '<memory>')
+      .replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>');
     seen.push({ label, status: res.status, headers, body });
   }
   return seen;

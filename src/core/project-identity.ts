@@ -102,10 +102,7 @@ function isDirectoryAt(p: string): boolean {
 
 /** Resolves the project identity for a working directory (default process.cwd()); results are cached per resolved
  * input path. */
-export function resolveProjectIdentity(
-  cwd?: string,
-  opts?: ResolveProjectIdentityOpts,
-): ProjectIdentity {
+export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdentityOpts): ProjectIdentity {
   const startInput = path.resolve(cwd ?? process.cwd());
   const cacheable = !opts?.homeDir && !opts?.stopDir;
   if (cacheable) {
@@ -152,7 +149,12 @@ function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
     const common = realpathOrResolve(path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()));
     const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
     if (samePath(repo, home)) return null; // a dotfiles repo at home must not make its worktrees user-global
-    return path.basename(repo).replace(/\.git$/i, '').toLowerCase() || null;
+    return (
+      path
+        .basename(repo)
+        .replace(/\.git$/i, '')
+        .toLowerCase() || null
+    );
   } catch {
     return null; // an unreadable link is still a checkout, named after its own folder
   }
@@ -294,10 +296,7 @@ export function isGlobalStoreRoot(p: string): boolean {
  * owning project; the home dir basename
  * maps to '' (user-global). Returns null without origin evidence. Pure string logic, since recorded paths may no
  * longer exist. */
-export function originFromSource(
-  source: string | null | undefined,
-  homeName?: string,
-): string | null {
+export function originFromSource(source: string | null | undefined, homeName?: string): string | null {
   if (!source) return null;
   const home = (homeName ?? path.basename(os.homedir())).toLowerCase();
   const shared = /^shared:([^:]+):/.exec(source);
@@ -319,10 +318,7 @@ export function originFromSource(
  * outside a project.
  * NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient
  * context treats it as deny. */
-export function deriveOriginProject(
-  cwd?: string,
-  opts?: ResolveProjectIdentityOpts,
-): string {
+export function deriveOriginProject(cwd?: string, opts?: ResolveProjectIdentityOpts): string {
   return resolveProjectIdentity(cwd, opts).name;
 }
 

@@ -24,8 +24,11 @@ export async function quarantineList(
   ctx: Context,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
 ): Promise<QuarantineListItem[]> {
-  const rows = await ctx.store.quarantine
-    .listQuarantined(ctx.tenantId, { status: opts.status ?? 'pending', limit: opts.limit, after: opts.after });
+  const rows = await ctx.store.quarantine.listQuarantined(ctx.tenantId, {
+    status: opts.status ?? 'pending',
+    limit: opts.limit,
+    after: opts.after,
+  });
   return rows.map((row) => ({
     id: row.memoryId,
     originalScope: row.originalScope,

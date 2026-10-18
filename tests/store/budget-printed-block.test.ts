@@ -18,14 +18,20 @@ import { makeStore } from '../_helpers/make-root.js';
 import { loadLastRecall } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
 const TAGS = [
-  'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
-  'observability-alerting-runbook-owner', 'incident-review-follow-up-action-item',
-  'customer-facing-latency-regression', 'quarterly-reliability-objective-review',
+  'deployment-pipeline-infrastructure-alpha',
+  'database-migration-rollback-procedure',
+  'observability-alerting-runbook-owner',
+  'incident-review-follow-up-action-item',
+  'customer-facing-latency-regression',
+  'quarterly-reliability-objective-review',
 ];
 const NOTES = 12;
 const OVERSIZE = `Zanzibar ferry timetable: ${Array.from({ length: 300 }, (_, i) => `stop${i}`).join(' ')}`;
 
-interface LedgerRow { surface: string; tokens: number }
+interface LedgerRow {
+  surface: string;
+  tokens: number;
+}
 type McpArgs = Record<string, string | number | boolean>;
 
 const savedCwd = process.cwd();
@@ -72,8 +78,12 @@ function ledger(): LedgerRow[] {
   const db = openHippoDb(hippoDir);
   try {
     // SAFETY: the SELECT names exactly these two token_ledger columns.
-    return (db.prepare('SELECT surface, tokens FROM token_ledger ORDER BY id').all() as Array<{ surface: string; tokens: number }>)
-      .map((r) => ({ surface: String(r.surface), tokens: Number(r.tokens) }));
+    return (
+      db.prepare('SELECT surface, tokens FROM token_ledger ORDER BY id').all() as Array<{
+        surface: string;
+        tokens: number;
+      }>
+    ).map((r) => ({ surface: String(r.surface), tokens: Number(r.tokens) }));
   } finally {
     closeHippoDb(db);
   }
@@ -83,7 +93,8 @@ function retrievalCount(id: string): number {
   const db = openHippoDb(hippoDir);
   try {
     // SAFETY: the SELECT names exactly this one column.
-    return (db.prepare('SELECT retrieval_count FROM memories WHERE id = ?').get(id) as { retrieval_count: number }).retrieval_count;
+    return (db.prepare('SELECT retrieval_count FROM memories WHERE id = ?').get(id) as { retrieval_count: number })
+      .retrieval_count;
   } finally {
     closeHippoDb(db);
   }
@@ -92,7 +103,15 @@ function retrievalCount(id: string): number {
 async function mcpText(name: string, args: McpArgs): Promise<string> {
   const res: McpResponse | null = await handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: hippoDir, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
+    {
+      hippoRoot: hippoDir,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(hippoDir),
+      config: loadConfig(hippoDir),
+    },
   );
   // SAFETY: tools/call answers carry one MCP text content block.
   return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
@@ -135,24 +154,34 @@ describe('hippo context', () => {
   });
 
   it('the per-prompt hook fits the budget, and each block header and ledger row counts its own block', async () => {
-    fs.writeFileSync(path.join(hippoDir, 'config.json'), JSON.stringify({
-      pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
-    }));
+    fs.writeFileSync(
+      path.join(hippoDir, 'config.json'),
+      JSON.stringify({
+        pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
+      }),
+    );
     seedNotes();
     seed('Pinned rule one: always run the postgres migration dry run before a deploy', { pinned: true });
     seed('Pinned rule two: never drop a column in the same release that stops reading it', { pinned: true });
-    const out = await hippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '600'],
-      JSON.stringify({ session_id: 'sess-budget', prompt: 'postgres migration rollback plan dry run' }));
+    const out = await hippo(
+      ['context', '--pinned-only', '--format', 'additional-context', '--budget', '600'],
+      JSON.stringify({ session_id: 'sess-budget', prompt: 'postgres migration rollback plan dry run' }),
+    );
     // SAFETY: the hook prints one hookSpecificOutput JSON object.
-    const ac = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    const ac = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput
+      .additionalContext;
     expect(estimateTokens(ac)).toBeLessThanOrEqual(600);
     const cut = ac.indexOf('## Prompt-Relevant Memory');
     // The static block is a 42-char heading and the two pin lines (326 and 330 chars), then a blank line.
     expect(cut).toBe(702);
     const staticBlock = ac.slice(0, cut - 2);
     const recallBlock = ac.slice(cut);
-    expect(headerTokens(staticBlock, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(staticBlock));
-    expect(headerTokens(recallBlock, /## Prompt-Relevant Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(recallBlock));
+    expect(headerTokens(staticBlock, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(
+      estimateTokens(staticBlock),
+    );
+    expect(headerTokens(recallBlock, /## Prompt-Relevant Memory \(\d+ entries, (\d+) tokens\)/)).toBe(
+      estimateTokens(recallBlock),
+    );
     // Headings take 12 + 14 and the pins 82 + 83 of 600, so 409 holds 4 of the 5 gated 87-token notes.
     expectBudgetBinds(recallBlock, 4);
     expect(ledger()).toEqual([
@@ -238,13 +267,22 @@ describe('MCP recall and context', () => {
 });
 
 describe('assemble and drill', () => {
-  const ctx: Omit<Context, 'hippoRoot' | 'store' | 'config'> = { tenantId: 'default', actor: { subject: 'test:budget', role: 'admin' } };
+  const ctx: Omit<Context, 'hippoRoot' | 'store' | 'config'> = {
+    tenantId: 'default',
+    actor: { subject: 'test:budget', role: 'admin' },
+  };
   const sid = 'sess-budget-window';
   const line = (i: number): string => `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;
 
   function seedSession(n: number): string[] {
     return Array.from({ length: n }, (_, i) => {
-      const e = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, kind: 'raw', sourceSessionId: sid, tags: TAGS });
+      const e = createMemory(line(i), {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Buffer,
+        kind: 'raw',
+        sourceSessionId: sid,
+        tags: TAGS,
+      });
       e.created = new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
       writeEntry(hippoDir, e);
       return e.id;
@@ -252,11 +290,21 @@ describe('assemble and drill', () => {
   }
 
   function seedSummary(children: number): string {
-    const s = createMemory('Rollup of the rollback runbook thread', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2, tags: ['dag-summary'] });
+    const s = createMemory('Rollup of the rollback runbook thread', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      tags: ['dag-summary'],
+    });
     s.descendant_count = children;
     writeEntry(hippoDir, s);
     for (let i = 0; i < children; i++) {
-      const c = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dagLevel: 1, dagParentId: s.id, tags: TAGS });
+      const c = createMemory(line(i), {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        dagLevel: 1,
+        dagParentId: s.id,
+        tags: TAGS,
+      });
       c.created = new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
       writeEntry(hippoDir, c);
     }
@@ -277,7 +325,11 @@ describe('assemble and drill', () => {
 
   it('never evicts the fresh tail, even when the tail alone exceeds the budget', async () => {
     const rows = seedSession(5);
-    const r = await assemble({ ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, sid, { budget: 20, freshTailCount: 2, cost: assembleCost(sid) });
+    const r = await assemble(
+      { ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
+      sid,
+      { budget: 20, freshTailCount: 2, cost: assembleCost(sid) },
+    );
     expect(r.items.map((it) => it.id)).toEqual(rows.slice(3));
     expect(r.evicted).toBe(3);
   });
@@ -295,7 +347,11 @@ describe('assemble and drill', () => {
 
   it('drill keeps the first child when it alone exceeds the budget', async () => {
     const id = seedSummary(3);
-    const r = await drillDown({ ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, id, { budget: 5, cost: drillCost });
+    const r = await drillDown(
+      { ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
+      id,
+      { budget: 5, cost: drillCost },
+    );
     expect('children' in r && r.children.map((c) => c.content)).toEqual([line(0)]);
   });
 });

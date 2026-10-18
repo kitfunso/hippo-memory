@@ -39,13 +39,18 @@ export async function replayDlqEntry(
   id: number,
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
-  return replayParked<'slack', JsonValue & SlackEventEnvelope>({
-    dlq: slackDlq,
-    refuseSignature: (row) => refuseSignature(row, opts),
-    isEnvelope: isSlackEventEnvelope,
-    notEnvelope: 'not an event_callback envelope',
-    reingest: (_row, envelope) => reingest(ctx, envelope),
-  }, ctx.store, id, opts.force === true);
+  return replayParked<'slack', JsonValue & SlackEventEnvelope>(
+    {
+      dlq: slackDlq,
+      refuseSignature: (row) => refuseSignature(row, opts),
+      isEnvelope: isSlackEventEnvelope,
+      notEnvelope: 'not an event_callback envelope',
+      reingest: (_row, envelope) => reingest(ctx, envelope),
+    },
+    ctx.store,
+    id,
+    opts.force === true,
+  );
 }
 
 /** A missing signature or timestamp refuses even without a secret; a mismatch needs the current secret to show. */

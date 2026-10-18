@@ -2,7 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { boolFlag, flagIsTrue, numberFlag, parseCountFlag, parseLimitFlag, stringFlag, type CliFlags } from '../../src/cli/flag-values.js';
+import {
+  boolFlag,
+  flagIsTrue,
+  numberFlag,
+  parseCountFlag,
+  parseLimitFlag,
+  stringFlag,
+  type CliFlags,
+} from '../../src/cli/flag-values.js';
 
 const cases: ReadonlyArray<[string, CliFlags]> = [
   ['absent', {}],
@@ -19,7 +27,11 @@ describe('flag readers', () => {
 
   it('numberFlag parses only a real string', () => {
     expect(numberFlag({ x: '12' }, 'x')).toBe(12);
-    expect(cases.filter(([n]) => n !== 'string' && n !== 'empty string').map(([, f]) => numberFlag(f, 'x'))).toEqual([undefined, undefined, undefined]);
+    expect(cases.filter(([n]) => n !== 'string' && n !== 'empty string').map(([, f]) => numberFlag(f, 'x'))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 
   it('integer flags refuse a value that is not all digits', () => {

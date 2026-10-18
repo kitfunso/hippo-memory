@@ -65,11 +65,17 @@ describe('staleDependencies', () => {
     mkdirSync(dirname(join(tree, rel)), { recursive: true });
     writeFileSync(join(tree, rel), text);
   };
-  const install = (name: string, version: string): void => json(`node_modules/${name}/package.json`, JSON.stringify({ name, version }));
+  const install = (name: string, version: string): void =>
+    json(`node_modules/${name}/package.json`, JSON.stringify({ name, version }));
 
   beforeEach(() => {
     json('package.json', JSON.stringify({ dependencies: { sharp: '^1.0.0' }, devDependencies: { vitest: '^5.0.3' } }));
-    json('package-lock.json', JSON.stringify({ packages: { '': {}, 'node_modules/sharp': { version: '1.2.0' }, 'node_modules/vitest': { version: '5.0.3' } } }));
+    json(
+      'package-lock.json',
+      JSON.stringify({
+        packages: { '': {}, 'node_modules/sharp': { version: '1.2.0' }, 'node_modules/vitest': { version: '5.0.3' } },
+      }),
+    );
     install('sharp', '1.2.0');
     install('vitest', '5.0.3');
   });

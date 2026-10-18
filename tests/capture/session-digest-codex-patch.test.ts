@@ -51,7 +51,10 @@ describe('shellPatch', () => {
   });
 
   it('keeps the cd target of a cd-and-patch heredoc', () => {
-    expect(shellPatch(['bash', '-lc', `cd "pkg one" && apply_patch <<'PATCH'\n${body}\nPATCH`])).toEqual({ body, cd: 'pkg one' });
+    expect(shellPatch(['bash', '-lc', `cd "pkg one" && apply_patch <<'PATCH'\n${body}\nPATCH`])).toEqual({
+      body,
+      cd: 'pkg one',
+    });
   });
 
   it('reads PowerShell and a plain command string', () => {

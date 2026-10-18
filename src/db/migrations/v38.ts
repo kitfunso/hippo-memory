@@ -221,15 +221,15 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
       `;
 
 export const v38: Migration = {
-    version: 38,
-    up: (db) => {
-      // Anchor graph provenance to the authoritative object, not the decaying mirror memory; the graph is a derived
-      // cache, so entities/relations are recreated.
-      // memory_id is NULLABLE ON DELETE SET NULL; node:sqlite fires the BEFORE UPDATE guard on that SET NULL, so the
-      // UPDATE triggers omit the all-null ABORT.
-      recreateGraphTables(db);
-      createGraphGuards(db);
-    },
+  version: 38,
+  up: (db) => {
+    // Anchor graph provenance to the authoritative object, not the decaying mirror memory; the graph is a derived
+    // cache, so entities/relations are recreated.
+    // memory_id is NULLABLE ON DELETE SET NULL; node:sqlite fires the BEFORE UPDATE guard on that SET NULL, so the
+    // UPDATE triggers omit the all-null ABORT.
+    recreateGraphTables(db);
+    createGraphGuards(db);
+  },
 };
 
 function recreateGraphTables(db: DatabaseSyncLike): void {

@@ -79,7 +79,11 @@ function projectContainers(
   if (!fs.existsSync(storage)) return [];
   let ids: string[];
   try {
-    ids = fs.readdirSync(storage, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+    ids = fs
+      .readdirSync(storage, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
   } catch (err) {
     warnings.push(`${storage}: ${errorMessage(err)}`);
     return [];

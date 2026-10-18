@@ -11,7 +11,8 @@ const ARTIFACT = 'github://acme/repo/issue/42/comment/123';
 const SCOPE_PUBLIC = 'github:public:acme/repo';
 const SCOPE_PRIVATE = 'github:private:acme/secret';
 
-const ctxFor = (root: string, tenantId = 'default'): FullContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
+const ctxFor = (root: string, tenantId = 'default'): FullContext =>
+  apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' });
 
 interface SeedOptions {
   tenantId?: string;
@@ -47,9 +48,7 @@ function archiveRowCount(root: string, memoryId: string): number {
   try {
     // SAFETY: the query always selects a single `SELECT COUNT(*) as c` aggregate,
     // so the driver always returns one row shaped { c: number }.
-    const row = db
-      .prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`)
-      .get(memoryId) as { c: number };
+    const row = db.prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`).get(memoryId) as { c: number };
     return Number(row.c);
   } finally {
     closeHippoDb(db);

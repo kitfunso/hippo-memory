@@ -8,14 +8,20 @@ import { join, resolve } from 'node:path';
 // Imported from the .mjs script; the CLI main is guarded so this import does NOT run it.
 import { runtimeComponents, mergeRuntimeBoms } from '../../scripts/sbom.mjs';
 
-interface CdxProperty { readonly name: string; readonly value: string }
+interface CdxProperty {
+  readonly name: string;
+  readonly value: string;
+}
 interface CdxComponent {
   readonly 'bom-ref': string;
   readonly name: string;
   readonly version: string;
   readonly properties: readonly CdxProperty[];
 }
-interface CdxDependency { readonly ref: string; readonly dependsOn: readonly string[] }
+interface CdxDependency {
+  readonly ref: string;
+  readonly dependsOn: readonly string[];
+}
 interface CdxBom {
   readonly specVersion: string;
   readonly metadata: { readonly component: CdxComponent };
@@ -109,11 +115,18 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
       const names = bom.components.map((c) => c.name);
 
       for (const want of ['react', 'react-dom']) {
-        expect(names, `expected ${want} in the merged runtime SBOM (npm's sbom output may have changed)`).toContain(want);
+        expect(names, `expected ${want} in the merged runtime SBOM (npm's sbom output may have changed)`).toContain(
+          want,
+        );
       }
       expect(names, 'the Living Map is gone, so three must not ship').not.toContain('three');
-      const devComponent = bom.components.find((c) => c.properties.some((p) => p.name === 'cdx:npm:package:development' && p.value === 'true'));
-      expect(devComponent, `found a dev component npm's development property did not filter: ${devComponent?.['bom-ref']}`).toBeUndefined();
+      const devComponent = bom.components.find((c) =>
+        c.properties.some((p) => p.name === 'cdx:npm:package:development' && p.value === 'true'),
+      );
+      expect(
+        devComponent,
+        `found a dev component npm's development property did not filter: ${devComponent?.['bom-ref']}`,
+      ).toBeUndefined();
 
       const validRefs = new Set([bom.metadata.component['bom-ref'], ...bom.components.map((c) => c['bom-ref'])]);
       const dangling: string[] = [];
@@ -121,7 +134,10 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
         if (!validRefs.has(d.ref)) dangling.push(`dependency ref ${d.ref}`);
         for (const r of d.dependsOn) if (!validRefs.has(r)) dangling.push(`${d.ref} -> ${r}`);
       }
-      expect(dangling, `dangling refs (npm's cyclonedx shape may differ on this npm version): ${dangling.join(', ')}`).toEqual([]);
+      expect(
+        dangling,
+        `dangling refs (npm's cyclonedx shape may differ on this npm version): ${dangling.join(', ')}`,
+      ).toEqual([]);
 
       const uiRef = bom.components.find((c) => c.name === 'hippo-brain-observatory')?.['bom-ref'];
       const rootEntry = bom.dependencies.find((d) => d.ref === bom.metadata.component['bom-ref']);

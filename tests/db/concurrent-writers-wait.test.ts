@@ -38,7 +38,10 @@ interface Worker {
 let root: string;
 
 function startWorker(args: readonly string[]): Worker {
-  const child = spawn(process.execPath, [join(root, 'worker.mjs'), ...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawn(process.execPath, [join(root, 'worker.mjs'), ...args], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
   let stdout = '';
   let stderr = '';
   const found = new Promise<string>((resolve) => {
@@ -48,7 +51,9 @@ function startWorker(args: readonly string[]): Worker {
     });
     child.on('close', () => resolve(stdout.split('\n')[0]!));
   });
-  child.stderr.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+  child.stderr.on('data', (d: Buffer) => {
+    stderr += d.toString('utf8');
+  });
   const finished = new Promise<{ code: number | null; stderr: string }>((resolve, fail) => {
     child.on('error', fail);
     child.on('close', (code) => resolve({ code, stderr }));
@@ -64,10 +69,14 @@ interface StoreCounts {
 
 function storeCounts(hippoRoot: string): StoreCounts {
   // SAFETY: the SELECT names exactly these three aliased COUNT columns.
-  const row = withDb(hippoRoot, (db) => db.prepare(`SELECT
+  const row = withDb(hippoRoot, (db) =>
+    db
+      .prepare(`SELECT
     (SELECT COUNT(*) FROM memories) AS rows,
     (SELECT COUNT(*) FROM audit_log WHERE op = 'remember') AS audits,
-    (SELECT COUNT(DISTINCT a.target_id) FROM audit_log a JOIN memories m ON m.id = a.target_id WHERE a.op = 'remember') AS matched`).get()) as StoreCounts;
+    (SELECT COUNT(DISTINCT a.target_id) FROM audit_log a JOIN memories m ON m.id = a.target_id WHERE a.op = 'remember') AS matched`)
+      .get(),
+  ) as StoreCounts;
   return { rows: Number(row.rows), audits: Number(row.audits), matched: Number(row.matched) };
 }
 
@@ -82,7 +91,15 @@ describe('two hippo processes writing to one store at once', () => {
     try {
       holder.exec('BEGIN IMMEDIATE');
       workers = Array.from({ length: WORKERS }, (_, i) =>
-        startWorker([distUrl('core/memory.js'), distUrl('store/entry-writes.js'), root, getHippoDbPath(root), String(i), String(ROWS)]));
+        startWorker([
+          distUrl('core/memory.js'),
+          distUrl('store/entry-writes.js'),
+          root,
+          getHippoDbPath(root),
+          String(i),
+          String(ROWS),
+        ]),
+      );
       expect(await Promise.all(workers.map((w) => w.found))).toEqual(Array(WORKERS).fill('held'));
     } finally {
       if (holder.isTransaction) holder.exec('ROLLBACK');
@@ -95,8 +112,8 @@ describe('two hippo processes writing to one store at once', () => {
   });
 });
 
-describe('writeEntryDbOnly inside the caller\'s transaction', () => {
-  it('a throwing afterWrite undoes only its own row and leaves the caller\'s transaction open', () => {
+describe("writeEntryDbOnly inside the caller's transaction", () => {
+  it("a throwing afterWrite undoes only its own row and leaves the caller's transaction open", () => {
     root = makeRoot('nested-write');
     const kept = createMemory('The caller keeps this row when a nested write fails.', { baseHalfLifeDays: 30 });
     const dropped = createMemory('This nested row rolls back on its own.', { baseHalfLifeDays: 30 });
@@ -104,13 +121,21 @@ describe('writeEntryDbOnly inside the caller\'s transaction', () => {
     try {
       db.exec('BEGIN IMMEDIATE');
       writeEntryDbOnly(db, kept);
-      expect(() => writeEntryDbOnly(db, dropped, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
+      expect(() =>
+        writeEntryDbOnly(db, dropped, {
+          afterWrite: () => {
+            throw new Error('forced');
+          },
+        }),
+      ).toThrow('forced');
       expect(db.isTransaction).toBe(true);
       db.exec('COMMIT');
     } finally {
       closeHippoDb(db);
     }
-    const ids = withDb(root, (db2) => db2.prepare(`SELECT id FROM memories UNION ALL SELECT target_id FROM audit_log WHERE op = 'remember'`).all());
+    const ids = withDb(root, (db2) =>
+      db2.prepare(`SELECT id FROM memories UNION ALL SELECT target_id FROM audit_log WHERE op = 'remember'`).all(),
+    );
     expect(ids).toEqual([{ id: kept.id }, { id: kept.id }]);
   });
 });

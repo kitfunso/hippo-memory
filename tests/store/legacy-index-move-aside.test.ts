@@ -64,7 +64,9 @@ describe('moving the imported embeddings.json aside', () => {
     expect(fs.existsSync(legacy)).toBe(false);
     expect(asides()).toHaveLength(1);
     expect(fs.readFileSync(path.join(root, asides()[0]!), 'utf8')).toBe(RAW(id));
-    expect(logged()).toMatch(/\[hippo\] warn: could not rename embeddings\.json aside \(EBUSY\); copying it instead .*errorClass=Error/);
+    expect(logged()).toMatch(
+      /\[hippo\] warn: could not rename embeddings\.json aside \(EBUSY\); copying it instead .*errorClass=Error/,
+    );
   });
 
   it('leaves the file in place for the next open on any other rename failure, without a copy', () => {

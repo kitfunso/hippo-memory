@@ -83,14 +83,24 @@ export function addAmbientTallies(a: AmbientTallies, b: AmbientTallies): Ambient
 
 /** Whether a tag list marks its memory as an error for errorDensity. */
 export function isErrorTagged(tags: readonly string[]): boolean {
-  return tags.some(tag => tag === 'error' || tag === 'critical' || tag.startsWith('error:'));
+  return tags.some((tag) => tag === 'error' || tag === 'critical' || tag.startsWith('error:'));
 }
 
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   const t: AmbientTallies = {
-    total: 0, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
-    semantic: 0, episodic: 0, conflicts: 0, extracted: 0, maxDagLevel: 0, tagCounts: new Map(),
+    total: 0,
+    strengthSum: 0,
+    fresh: 0,
+    negative: 0,
+    highSchemaFit: 0,
+    errors: 0,
+    semantic: 0,
+    episodic: 0,
+    conflicts: 0,
+    extracted: 0,
+    maxDagLevel: 0,
+    tagCounts: new Map(),
   };
   foldAmbientRows(t, entries, now ?? evalNow()); // honors HIPPO_FAKE_NOW (eval-only)
   return t;
@@ -125,10 +135,17 @@ export function ambientStateFromTallies(t: AmbientTallies): AmbientState {
   const n = t.total;
   if (n === 0) {
     return {
-      tagEntropy: 0, avgStrength: 0, recencyFreshness: 0,
-      emotionalSkew: 0, schemaFitRatio: 0, errorDensity: 0,
-      consolidationRatio: 0, conflictIntensity: 0,
-      extractionCoverage: 0, dagDepth: 0, totalMemories: 0,
+      tagEntropy: 0,
+      avgStrength: 0,
+      recencyFreshness: 0,
+      emotionalSkew: 0,
+      schemaFitRatio: 0,
+      errorDensity: 0,
+      consolidationRatio: 0,
+      conflictIntensity: 0,
+      extractionCoverage: 0,
+      dagDepth: 0,
+      totalMemories: 0,
     };
   }
 

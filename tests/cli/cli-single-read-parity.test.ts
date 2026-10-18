@@ -5,7 +5,12 @@
 import { describe, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  DEFAULT_HALF_LIFE_DAYS,
+  type CreateMemoryOptions,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { Store } from '../_helpers/cli-parity-store.js';
 import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
@@ -24,9 +29,23 @@ function clocked(opts: { global?: boolean; spawned?: boolean } = {}): Store {
 }
 
 /** A row in the global store, which `Store.seedAged` does not reach. */
-function seedGlobal(s: Store, id: string, content: string, options: Partial<CreateMemoryOptions> = {}, fields: Partial<MemoryEntry> = {}): void {
+function seedGlobal(
+  s: Store,
+  id: string,
+  content: string,
+  options: Partial<CreateMemoryOptions> = {},
+  fields: Partial<MemoryEntry> = {},
+): void {
   const made = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });
-  writeEntry(s.home, { ...made, id, created: CREATED, last_retrieved: CREATED, valid_from: CREATED, strength: 1, ...fields });
+  writeEntry(s.home, {
+    ...made,
+    id,
+    created: CREATED,
+    last_retrieved: CREATED,
+    valid_from: CREATED,
+    strength: 1,
+    ...fields,
+  });
 }
 
 /** Runs `args` while hippo.db holds bytes SQLite cannot open, then puts the store back so its rows can be pinned. */
@@ -84,7 +103,11 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
     const s = new Store({ spawned: true });
     s.seedAged(A, CREATED, CLEAN);
     s.seedAged(B, CREATED, LONG);
-    replaceDetectedConflicts(s.root, [{ memory_a_id: A, memory_b_id: B, reason: 'retry counts differ', score: 0.8 }], NOW);
+    replaceDetectedConflicts(
+      s.root,
+      [{ memory_a_id: A, memory_b_id: B, reason: 'retry counts differ', score: 0.8 }],
+      NOW,
+    );
     s.settle();
     await s.run('resolve', '1');
     await s.run('resolve', 'conflict_1');
@@ -95,7 +118,11 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
     const s = new Store();
     s.seedAged(A, CREATED, CLEAN, { tenantId: 'other' });
     s.seedAged(B, CREATED, LONG, { tenantId: 'other' });
-    replaceDetectedConflicts(s.root, [{ memory_a_id: A, memory_b_id: B, reason: 'retry counts differ', score: 0.8 }], NOW);
+    replaceDetectedConflicts(
+      s.root,
+      [{ memory_a_id: A, memory_b_id: B, reason: 'retry counts differ', score: 0.8 }],
+      NOW,
+    );
     s.settle();
     await s.run('resolve', '7');
     await s.run('resolve', '1');
@@ -108,9 +135,18 @@ describe('hippo inspect (built CLI, no server)', () => {
   it('prints a plain row, and a row with outcomes, tags and a conflict', async () => {
     const s = clocked({ spawned: true });
     s.seedAged('mem_inspect_plain', CREATED, CLEAN);
-    s.seedAged('mem_inspect_full', CREATED, LONG, { tags: ['billing', 'error'], pinned: true }, {
-      outcome_positive: 2, outcome_negative: 1, conflicts_with: ['mem_inspect_plain'], retrieval_count: 4,
-    });
+    s.seedAged(
+      'mem_inspect_full',
+      CREATED,
+      LONG,
+      { tags: ['billing', 'error'], pinned: true },
+      {
+        outcome_positive: 2,
+        outcome_negative: 1,
+        conflicts_with: ['mem_inspect_plain'],
+        retrieval_count: 4,
+      },
+    );
     s.settle();
     await s.run('inspect', 'mem_inspect_plain');
     await s.run('inspect', 'mem_inspect_full');
@@ -140,7 +176,10 @@ describe('hippo share (built CLI, no server)', () => {
 
   it('an unknown id, a row of another tenant, no id, and a store that cannot be read', async () => {
     const s = new Store({ global: true });
-    const other = s.seed('the deploy cron reads its endpoint from config', { tags: ['deploy', 'cron', 'config'], tenantId: 'other' });
+    const other = s.seed('the deploy cron reads its endpoint from config', {
+      tags: ['deploy', 'cron', 'config'],
+      tenantId: 'other',
+    });
     s.settle();
     await s.run('share', MISSING);
     await s.run('share', other);
@@ -155,7 +194,13 @@ describe('hippo trace <id> (built CLI, no server)', () => {
     const s = clocked({ global: true, spawned: true });
     s.seedAged('mem_trace_parent', CREATED, LONG);
     seedGlobal(s, 'mem_trace_gparent', 'a parent that only the global store holds');
-    s.seedAged('mem_trace_child', CREATED, CLEAN, { tags: ['billing'] }, { parents: ['mem_trace_parent', 'mem_trace_gparent', MISSING] });
+    s.seedAged(
+      'mem_trace_child',
+      CREATED,
+      CLEAN,
+      { tags: ['billing'] },
+      { parents: ['mem_trace_parent', 'mem_trace_gparent', MISSING] },
+    );
     s.settle();
     await s.run('trace', 'mem_trace_child');
     await s.run('trace', 'mem_trace_child', '--json');

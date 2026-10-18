@@ -17,7 +17,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -50,7 +54,9 @@ function makeChild(text: string, parentId: string, opts: Partial<MemoryEntry> = 
 
 describe('drillDown', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('drill'); });
+  beforeEach(() => {
+    root = makeRoot('drill');
+  });
   afterEach(() => safeRmSync(root));
 
   it('returns the summary plus its direct children', async () => {

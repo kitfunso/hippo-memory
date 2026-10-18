@@ -11,7 +11,13 @@ import { loadConfig } from '../../src/core/config.js';
 describe('hippo-memory/server exports authCreate', () => {
   it('mints a key into the named store for the given tenant and role', async () => {
     const root = makeRoot('server-auth-create', { init: false });
-    const ctx: Context = { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root), tenantId: 'acme', actor: { subject: 'addon:install', role: 'admin', hostAdmin: true } };
+    const ctx: Context = {
+      hippoRoot: root,
+      store: sqliteStore(root),
+      config: loadConfig(root),
+      tenantId: 'acme',
+      actor: { subject: 'addon:install', role: 'admin', hostAdmin: true },
+    };
     const minted = await authCreate(ctx, { label: 'first-admin', role: 'admin' });
     expect(minted.tenantId).toBe('acme');
     expect(minted.role).toBe('admin');

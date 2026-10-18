@@ -139,14 +139,18 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
     console.log(JSON.stringify(r, null, 2));
     return;
   }
-  console.log(settleTokens((t) => captureConsole(() => {
-    console.log(assembleHeading({ ...r, items: r.items.length, tokens: t }));
-    for (const it of r.items) {
-      const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-      const head = it.content.slice(0, DAG_HEAD_CHARS);
-      console.log(`  ${prefix} ${it.createdAt} ${it.id} \u2014 ${head}${it.content.length > 120 ? '…' : ''}`);
-    }
-  })));
+  console.log(
+    settleTokens((t) =>
+      captureConsole(() => {
+        console.log(assembleHeading({ ...r, items: r.items.length, tokens: t }));
+        for (const it of r.items) {
+          const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
+          const head = it.content.slice(0, DAG_HEAD_CHARS);
+          console.log(`  ${prefix} ${it.createdAt} ${it.id} \u2014 ${head}${it.content.length > 120 ? '…' : ''}`);
+        }
+      }),
+    ),
+  );
 }
 
 async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: string, flags: CliFlags): Promise<void> {
@@ -188,8 +192,10 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     console.log(JSON.stringify(r, null, 2));
     return;
   }
-  console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants` +
-    `${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
+  console.log(
+    `Summary ${r.summary.id} — ${r.summary.descendantCount} descendants` +
+      `${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`,
+  );
   console.log(`  ${truncateWithEllipsis(r.summary.content, DAG_SUMMARY_PREVIEW_CHARS, '…')}`);
   console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
   for (const c of r.children) {

@@ -18,7 +18,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
-const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
+const NO_OWNER_TEXT =
+  'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
 
 let root: string;
 
@@ -47,15 +48,22 @@ afterEach(() => {
 });
 
 describe('remember with personal', () => {
-  it('stamps the owner\'s scope and origin \'\' even when the caller names a project', async () => {
-    const { id } = await remember(ctxFor(ownerA), { content: 'my editor keybindings live in dotfiles', personal: true, project: { name: 'alpha' } });
+  it("stamps the owner's scope and origin '' even when the caller names a project", async () => {
+    const { id } = await remember(ctxFor(ownerA), {
+      content: 'my editor keybindings live in dotfiles',
+      personal: true,
+      project: { name: 'alpha' },
+    });
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBe('personal:private:a');
     expect(row?.origin_project).toBe('');
   });
 
   it('a team write with the same project still stamps that project, so the personal branch is what drops it', async () => {
-    const { id } = await remember(ctxFor(ownerA), { content: 'the alpha build runs on node 22', project: { name: 'alpha' } });
+    const { id } = await remember(ctxFor(ownerA), {
+      content: 'the alpha build runs on node 22',
+      project: { name: 'alpha' },
+    });
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBeNull();
     expect(row?.origin_project).toBe('alpha');
@@ -68,24 +76,34 @@ describe('remember with personal', () => {
     ['a control character in the owner', { subject: 'api_key:hk_c', role: 'member', owner: 'a\u0007b' }],
   ];
   it.each(ownerless)('%s gets a 400 and stores nothing', async (_label, actor) => {
-    expect(await refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true }))).toEqual({ status: 400, message: NO_OWNER_TEXT });
+    expect(await refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true }))).toEqual({
+      status: 400,
+      message: NO_OWNER_TEXT,
+    });
     expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('a 239-character owner fits', async () => {
     const owner = 'y'.repeat(239);
-    const { id } = await remember(ctxFor({ subject: 'api_key:hk_y', role: 'member', owner }), { content: 'longest owner note', personal: true });
+    const { id } = await remember(ctxFor({ subject: 'api_key:hk_y', role: 'member', owner }), {
+      content: 'longest owner note',
+      personal: true,
+    });
     expect(readEntry(root, id, 'default')?.scope).toBe(`personal:private:${owner}`);
   });
 
   it('personal with a scope is a 400', async () => {
-    expect(await refusal(() => remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' })))
-      .toEqual({ status: 400, message: 'send personal or scope, not both' });
+    expect(await refusal(() => remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' }))).toEqual({
+      status: 400,
+      message: 'send personal or scope, not both',
+    });
     expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('personal with untrusted throws a plain error, never a quarantine row', async () => {
-    const fn = async (): Promise<void> => { await remember(ctxFor(ownerA), { content: 'note', personal: true, untrusted: true }); };
+    const fn = async (): Promise<void> => {
+      await remember(ctxFor(ownerA), { content: 'note', personal: true, untrusted: true });
+    };
     await expect(Promise.resolve().then(fn)).rejects.toThrow(Error);
     expect((await refusal(fn)).status).toBe(500);
     expect(loadEveryTenantEntries(root)).toHaveLength(0);
@@ -99,7 +117,10 @@ describe('client scopes', () => {
   });
 
   it('a connector scope still passes', async () => {
-    const { id } = await remember(ctxFor({ ...ownerA, scopes: ['slack:private:C1'] }), { content: 'channel note', scope: 'slack:private:C1' });
+    const { id } = await remember(ctxFor({ ...ownerA, scopes: ['slack:private:C1'] }), {
+      content: 'channel note',
+      scope: 'slack:private:C1',
+    });
     expect(readEntry(root, id, 'default')?.scope).toBe('slack:private:C1');
   });
 
@@ -107,8 +128,12 @@ describe('client scopes', () => {
     const vault = mkdtempSync(join(tmpdir(), 'hippo-personal-vault-'));
     try {
       writeFileSync(join(vault, 'note.md'), '# note\nsome vault text\n');
-      await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' })).rejects.toThrow(BadRequestError);
-      await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' })).rejects.toThrow(BadRequestError);
+      await expect(
+        importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' }),
+      ).rejects.toThrow(BadRequestError);
+      await expect(
+        importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' }),
+      ).rejects.toThrow(BadRequestError);
       expect(loadEveryTenantEntries(root)).toHaveLength(0);
       await importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'vault:private:v' });
       expect(loadEveryTenantEntries(root).map((e) => e.scope)).toEqual(['vault:private:v']);
@@ -120,9 +145,21 @@ describe('client scopes', () => {
   it('CLI remember --scope refuses a personal scope', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      await expect(handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
+      await expect(
+        handleRemember({
+          hippoRoot: root,
+          tenantId: 'default',
+          args: ['cli personal attempt'],
+          flags: { force: true, scope: 'personal:private:b' },
+        }),
+      ).rejects.toThrow(BadRequestError);
       expect(loadEveryTenantEntries(root)).toHaveLength(0);
-      await handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli team note'], flags: { force: true, scope: 'team' } });
+      await handleRemember({
+        hippoRoot: root,
+        tenantId: 'default',
+        args: ['cli team note'],
+        flags: { force: true, scope: 'team' },
+      });
     } finally {
       log.mockRestore();
     }
@@ -163,11 +200,11 @@ describe('POST /v1/memories personal field', () => {
     expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
-  it('personal: true stores the key owner\'s scope and drops a well-formed project', async () => {
+  it("personal: true stores the key owner's scope and drops a well-formed project", async () => {
     const res = await post({ content: 'my own terminal theme', personal: true, project: { name: 'alpha' } });
     expect(res.status).toBe(200);
     // SAFETY: a 200 from POST /v1/memories is a RememberResult, which carries the new row's id.
-    const { id } = await res.json() as { id: string };
+    const { id } = (await res.json()) as { id: string };
     const row = readEntry(root, id, 'default');
     expect(row?.scope).toBe('personal:private:oid-a');
     expect(row?.origin_project).toBe('');

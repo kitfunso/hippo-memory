@@ -60,16 +60,38 @@ export function autoCheckpointPages(dbPath: string): number {
   return backgrounded.has(path.resolve(dbPath)) ? BACKSTOP_CHECKPOINT_PAGES : INLINE_CHECKPOINT_PAGES;
 }
 
+interface CheckpointWorker {
+  readonly worker: Worker;
+  /** Settles once the worker has ended. */
+  readonly exited: Promise<void>;
+}
+
 /** An explicit execArgv keeps the parent's loaders out of the
  * worker and silences its repeat of the node:sqlite warning. */
-function newCheckpointWorker(key: string): Worker {
+function newCheckpointWorker(
+  key: string,
+  onSettled: (settled: boolean) => void,
+  onFailed: () => void,
+): CheckpointWorker {
   const started = new Worker(WORKER_SOURCE, {
     eval: true,
     execArgv: ['--no-warnings'],
     workerData: { dbPath: key, maxPasses: MAX_PASSES },
   });
   started.unref();
-  return started;
+  started.on('message', onSettled);
+  started.on('error', (err) => {
+    onFailed();
+    log.warn(
+      `background checkpoint of ${key} stopped (${errorMessage(err)}); ` +
+        `each connection checkpoints inside its own commit again`,
+      errorFields(err),
+    );
+  });
+  const exited = new Promise<void>((resolve) => {
+    started.once('exit', () => resolve());
+  });
+  return { worker: started, exited };
 }
 
 /** Checkpoints `dbPath` off the calling thread until `stop()`;
@@ -89,21 +111,13 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
     backgrounded.delete(key);
   };
   const spawn = (): Worker => {
-    const started = newCheckpointWorker(key);
-    started.on('message', (settled: boolean) => {
+    const settle = (settled: boolean): void => {
       running = false;
       due = settled ? RESPONSES_PER_CHECKPOINT : RESPONSES_PER_RETRY;
-    });
-    started.on('error', (err) => {
-      end();
-      log.warn(
-        `background checkpoint of ${key} stopped (${errorMessage(err)}); ` +
-          `each connection checkpoints inside its own commit again`,
-        errorFields(err),
-      );
-    });
-    exited = new Promise<void>((resolve) => { started.once('exit', () => resolve()); });
-    return started;
+    };
+    const started = newCheckpointWorker(key, settle, end);
+    exited = started.exited;
+    return started.worker;
   };
 
   return {

@@ -40,7 +40,7 @@ export function assertBinaryCompatible(db: DatabaseSyncLike): void {
 
 const FTS_IN_SYNC_KEY = 'fts_in_sync';
 
-const META_DEFAULTS:ReadonlyArray<readonly [string, string]> = [
+const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
   ['schema_version', String(CURRENT_SCHEMA_VERSION)],
   ['last_retrieval_ids', '[]'],
   ['last_trace_id', ''],
@@ -99,11 +99,12 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   }
   if (!probe) return null;
   assertMinBinary(probe.min_binary);
-  const current = Number(probe.user_version) === CURRENT_SCHEMA_VERSION
-    && Number(probe.schema_version) === CURRENT_SCHEMA_VERSION
-    && Number(probe.meta_keys) === META_DEFAULTS.length
-    && Number(probe.objects) === REQUIRED_SCHEMA_OBJECTS.length
-    && probe.fts5 === '1';
+  const current =
+    Number(probe.user_version) === CURRENT_SCHEMA_VERSION &&
+    Number(probe.schema_version) === CURRENT_SCHEMA_VERSION &&
+    Number(probe.meta_keys) === META_DEFAULTS.length &&
+    Number(probe.objects) === REQUIRED_SCHEMA_OBJECTS.length &&
+    probe.fts5 === '1';
   return current ? { archiveTop: Number(probe.archive_top ?? 0), hasMemories: probe.has_memories !== null } : null;
 }
 
@@ -126,8 +127,8 @@ export function settledStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
     has_memories: number | null;
   };
   assertMinBinary(row.min_binary);
-  const current = Number(row.user_version) === CURRENT_SCHEMA_VERSION
-    && Number(row.schema_version) === CURRENT_SCHEMA_VERSION;
+  const current =
+    Number(row.user_version) === CURRENT_SCHEMA_VERSION && Number(row.schema_version) === CURRENT_SCHEMA_VERSION;
   return current ? { archiveTop: Number(row.archive_top ?? 0), hasMemories: row.has_memories !== null } : null;
 }
 
@@ -165,17 +166,22 @@ function applyMigration(
   hippoRoot: string | undefined,
   busyWaitMs: number | undefined,
 ): number {
-  return withWriteScope(db, 'apply_migration', () => {
-    // A newer binary may have migrated and raised the minimum while we waited for the lock.
-    assertBinaryCompatible(db);
-    // Re-read under the write lock: another process may have applied this
-    // migration while we waited, and re-running one is not idempotent.
-    const applied = getSchemaVersion(db);
-    if (applied >= migration.version) return applied;
-    migration.up(db, { hippoRoot });
-    setSchemaVersion(db, migration.version);
-    return migration.version;
-  }, { busyWaitMs });
+  return withWriteScope(
+    db,
+    'apply_migration',
+    () => {
+      // A newer binary may have migrated and raised the minimum while we waited for the lock.
+      assertBinaryCompatible(db);
+      // Re-read under the write lock: another process may have applied this
+      // migration while we waited, and re-running one is not idempotent.
+      const applied = getSchemaVersion(db);
+      if (applied >= migration.version) return applied;
+      migration.up(db, { hippoRoot });
+      setSchemaVersion(db, migration.version);
+      return migration.version;
+    },
+    { busyWaitMs },
+  );
 }
 
 // The fast path requires user_version as well, and a store stamped only in meta would otherwise never reach it.
@@ -205,10 +211,11 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
   // SAFETY: the statement selects only the `key` column of `meta`, which is TEXT NOT NULL, so each row is { key: string
   // }.
   const present = new Set(
-    (db
-      .prepare(`SELECT key FROM meta WHERE key IN (${placeholders(keys.length)})`)
-      .all(...keys) as Array<{ key: string }>)
-      .map((r) => r.key),
+    (
+      db.prepare(`SELECT key FROM meta WHERE key IN (${placeholders(keys.length)})`).all(...keys) as Array<{
+        key: string;
+      }>
+    ).map((r) => r.key),
   );
   if (present.size === META_DEFAULTS.length) return;
 

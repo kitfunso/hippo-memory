@@ -48,6 +48,8 @@ jobs:
       # Hit counts per rule may fall but never rise; see scripts/check-lint-ratchet.mjs.
       - name: Lint ratchet
         run: node scripts/check-lint-ratchet.mjs
+      - name: Format check
+        run: npm run fmt:check
       # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
       - name: Comment history ratchet
         run: node scripts/check-comment-history.mjs

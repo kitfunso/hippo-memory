@@ -151,9 +151,24 @@ const GRAPH_SOURCES: ReadonlyArray<(objects: Objects, tenantId: string) => Promi
     (r) => r.decisionText,
     (r) => [r.decisionText, r.context].filter(Boolean).join(' '),
   ),
-  source('policy', loadPolicies, (r) => r.policyName, (r) => [r.policyName, r.policyText].filter(Boolean).join(' ')),
-  source('customer', loadCustomerNotes, (r) => r.customer, (r) => [r.customer, r.note].filter(Boolean).join(' ')),
-  source('project', loadProjectBriefs, (r) => r.repo, (r) => [r.repo, r.summary].filter(Boolean).join(' ')),
+  source(
+    'policy',
+    loadPolicies,
+    (r) => r.policyName,
+    (r) => [r.policyName, r.policyText].filter(Boolean).join(' '),
+  ),
+  source(
+    'customer',
+    loadCustomerNotes,
+    (r) => r.customer,
+    (r) => [r.customer, r.note].filter(Boolean).join(' '),
+  ),
+  source(
+    'project',
+    loadProjectBriefs,
+    (r) => r.repo,
+    (r) => [r.repo, r.summary].filter(Boolean).join(' '),
+  ),
 ];
 
 /** Every source type's rows; callers load before any write lock is taken. */
@@ -376,5 +391,3 @@ export async function extractGraphChunked(
   }
   return resultOf(derived, skipped);
 }
-
-

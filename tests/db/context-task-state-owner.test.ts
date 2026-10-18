@@ -25,7 +25,8 @@ const KEY_B: ContinuityKey = { owner: 'bob', project: ['p'] };
 let home: string;
 let handle: ServerHandle | undefined;
 
-const ctx = (owner: string): FullContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
+const ctx = (owner: string): FullContext =>
+  apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner });
 
 function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };
@@ -60,13 +61,13 @@ afterEach(async () => {
 });
 
 describe('task state on a shared store', () => {
-  it('B saves its own snapshot first, A saves a newer one; B\'s context returns B\'s row id and never A\'s', async () => {
+  it("B saves its own snapshot first, A saves a newer one; B's context returns B's row id and never A's", async () => {
     const { a, b } = seedTwoOwners();
     expect((await getContext(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).activeSnapshot?.id).toBe(b);
     expect((await getContext(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' })).activeSnapshot?.id).toBe(a);
   });
 
-  it('A\'s next session gets A\'s unfinished handoff', async () => {
+  it("A's next session gets A's unfinished handoff", async () => {
     saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa1'), KEY_A);
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa1', summary: 'alice left off here' }, KEY_A);
     closeTaskSnapshotsForSession(home, 'default', 'sa1', 'session-ended', KEY_A);
@@ -74,13 +75,17 @@ describe('task state on a shared store', () => {
     const forA = await getContext(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' });
     expect(forA.activeSnapshot).toBeUndefined();
     expect(forA.sessionHandoff?.summary).toBe('alice left off here');
-    expect((await getContext(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).sessionHandoff?.summary).toBe('bob left off here');
+    expect((await getContext(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).sessionHandoff?.summary).toBe(
+      'bob left off here',
+    );
   });
 
   it('no project gives no task state', async () => {
     const { a } = seedTwoOwners();
     expect((await getContext(ctx('alice'), { currentProject: P })).activeSnapshot?.id).toBe(a);
-    await expect(getContext(ctx('alice'), { currentProject: { name: '', legacyName: '' } })).rejects.toBeInstanceOf(BadRequestError);
+    await expect(getContext(ctx('alice'), { currentProject: { name: '', legacyName: '' } })).rejects.toBeInstanceOf(
+      BadRequestError,
+    );
   });
 
   it('prompt hook context keyed the same way', async () => {
@@ -92,7 +97,7 @@ describe('task state on a shared store', () => {
     expect((await promptHookContext(ctx('alice'), { sessionId: 'sa2', project: P })).stdout).toContain('alice task');
   });
 
-  it('REST GET /v1/context with owned keys: A sees A\'s snapshot by id, B sees B\'s own by id, never A\'s', async () => {
+  it("REST GET /v1/context with owned keys: A sees A's snapshot by id, B sees B's own by id, never A's", async () => {
     const { a, b } = seedTwoOwners();
     const keys = { alice: mintOwned('alice'), bob: mintOwned('bob') };
     handle = await serve({ hippoRoot: home, host: '127.0.0.1', port: 0 });

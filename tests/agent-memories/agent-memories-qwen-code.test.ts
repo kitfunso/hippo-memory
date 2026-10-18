@@ -22,7 +22,11 @@ function write(file: string, content: string | Buffer = 'a note about the build'
   return file;
 }
 
-function ctxOf(env: Record<string, string>, projectRoot?: string, platform: NodeJS.Platform = process.platform): AdapterContext {
+function ctxOf(
+  env: Record<string, string>,
+  projectRoot?: string,
+  platform: NodeJS.Platform = process.platform,
+): AdapterContext {
   return { home: tmp, env, platform, projectRoot };
 }
 
@@ -77,7 +81,8 @@ describe('qwen-code base folder', () => {
 
 describe('qwen-code project container', () => {
   const base = (): string => path.join(tmp, '.qwen');
-  const projectDirFor = (key: string): string => path.join(base(), 'projects', sanitizeCwd(key, process.platform), 'memory');
+  const projectDirFor = (key: string): string =>
+    path.join(base(), 'projects', sanitizeCwd(key, process.platform), 'memory');
 
   it('is not listed without a project root, and the user scope never lists it', () => {
     write(path.join(projectDirFor(path.join(tmp, 'proj')), 'n.md'));

@@ -74,7 +74,9 @@ function flag(name, fallback) {
 }
 
 const CHECKPOINTS = flag('--checkpoints', '1x,10x,100x')
-  .split(',').map((s) => s.trim()).filter(Boolean);
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const NUM_SEEDS = parseInt(flag('--seeds', '20'), 10);
 const NUM_FACTS = parseInt(flag('--facts', '6'), 10);
 const DUPES = parseInt(flag('--dupes', '3'), 10);
@@ -217,7 +219,10 @@ function scoreAssembled(assembled, labels) {
 // naive-append: newest-first fill to B (pure function over the stream).
 function naiveAssemble(entries, createdOrder, B) {
   const byId = new Map(entries.map((e) => [e.id, e]));
-  const newestFirst = [...createdOrder].reverse().map((id) => byId.get(id)).filter(Boolean);
+  const newestFirst = [...createdOrder]
+    .reverse()
+    .map((id) => byId.get(id))
+    .filter(Boolean);
   const ctx = [];
   let used = 0;
   for (const e of newestFirst) {
@@ -249,9 +254,7 @@ function strengthSortedAssemble(entries, B) {
   // real tiers (1.0 vs 0.3) while the deterministic content key breaks within-tier
   // ties, making the strength-sorted columns byte-identical across runs.
   const sKey = (e) => Math.round((e.strength || 0) * 1000);
-  const sorted = [...entries].sort(
-    (a, b) => (sKey(b) - sKey(a)) || cmp(a.content || '', b.content || ''),
-  );
+  const sorted = [...entries].sort((a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''));
   const ctx = [];
   let used = 0;
   for (const e of sorted) {
@@ -267,7 +270,10 @@ function strengthSortedAssemble(entries, B) {
 // first), then physicsSearch within that window, once per fact, union the tops.
 async function recencyWindowAssemble(entries, createdOrder, B, labels, root) {
   const byId = new Map(entries.map((e) => [e.id, e]));
-  const newestFirst = [...createdOrder].reverse().map((id) => byId.get(id)).filter(Boolean);
+  const newestFirst = [...createdOrder]
+    .reverse()
+    .map((id) => byId.get(id))
+    .filter(Boolean);
   const window = [];
   let used = 0;
   for (const e of newestFirst) {
@@ -284,7 +290,10 @@ async function unionPerFact(entries, B, labels, root) {
   const seen = new Map(); // id -> {entry, bestRank}
   for (const lab of labels) {
     const res = await physicsSearch(lab.topic, entries, {
-      hippoRoot: root, physicsConfig: PC, budget: B, minResults: 1,
+      hippoRoot: root,
+      physicsConfig: PC,
+      budget: B,
+      minResults: 1,
     });
     for (let i = 0; i < res.length; i++) {
       const id = res[i].entry.id;
@@ -320,9 +329,16 @@ async function unionPerFact(entries, B, labels, root) {
 async function runCell(seed, checkpoint) {
   const scaleMemories = CHECKPOINT_COUNTS[checkpoint];
   const { memories, labels } = injectStream({
-    seed, scaleMemories, numFacts: NUM_FACTS, dupesPerFact: DUPES,
+    seed,
+    scaleMemories,
+    numFacts: NUM_FACTS,
+    dupesPerFact: DUPES,
   });
-  writeLabelSidecar(path.join(OUT_DIR, 'labels'), { seed, scaleMemories, numFacts: NUM_FACTS, dupesPerFact: DUPES }, labels);
+  writeLabelSidecar(
+    path.join(OUT_DIR, 'labels'),
+    { seed, scaleMemories, numFacts: NUM_FACTS, dupesPerFact: DUPES },
+    labels,
+  );
 
   // Store A: no-lifecycle (also serves naive + recency, which are read-only).
   const A = await buildStore(memories);
@@ -353,8 +369,12 @@ async function runCell(seed, checkpoint) {
 
   const m = NUM_FACTS;
   return {
-    seed, checkpoint, scaleMemories, facts: m,
-    merged: cons.merged, semanticCreated: cons.semanticCreated,
+    seed,
+    checkpoint,
+    scaleMemories,
+    facts: m,
+    merged: cons.merged,
+    semanticCreated: cons.semanticCreated,
     fitFraction,
     qa: {
       'naive-append': naive.answered / m,
@@ -379,11 +399,24 @@ async function runCell(seed, checkpoint) {
 // Aggregation + reporting.
 // ---------------------------------------------------------------------------
 
-const CONDITIONS = ['naive-append', 'recency-window', 'hippo-no-lifecycle', 'hippo-full', 'hippo-no-lifecycle-strength', 'hippo-full-strength'];
+const CONDITIONS = [
+  'naive-append',
+  'recency-window',
+  'hippo-no-lifecycle',
+  'hippo-full',
+  'hippo-no-lifecycle-strength',
+  'hippo-full-strength',
+];
 
-function mean(xs) { return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; }
-function fmtPct(x) { return (100 * x).toFixed(1) + '%'; }
-function sign(x) { return x >= 0 ? '+' : ''; }
+function mean(xs) {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+}
+function fmtPct(x) {
+  return (100 * x).toFixed(1) + '%';
+}
+function sign(x) {
+  return x >= 0 ? '+' : '';
+}
 
 function aggregate(cells) {
   // group by checkpoint
@@ -394,7 +427,8 @@ function aggregate(cells) {
   }
   const perCheckpoint = {};
   for (const [cp, rows] of byCp) {
-    const qa = {}, tokens = {};
+    const qa = {},
+      tokens = {};
     for (const cond of CONDITIONS) {
       qa[cond] = mean(rows.map((r) => r.qa[cond]));
       tokens[cond] = mean(rows.map((r) => r.tokens[cond]));
@@ -409,7 +443,8 @@ function aggregate(cells) {
       meanMerged: mean(rows.map((r) => r.merged)),
       meanSemanticCreated: mean(rows.map((r) => r.semanticCreated)),
       meanFitFraction: mean(rows.map((r) => r.fitFraction)),
-      qa, tokens,
+      qa,
+      tokens,
       deltas: {
         'hippo-full_vs_hippo-no-lifecycle': pairedBootstrapCI(dFullVsNoLife),
         'hippo-full_vs_naive-append': pairedBootstrapCI(dFullVsNaive),
@@ -425,7 +460,9 @@ function printMarkdown(agg, meta) {
   lines.push('# Lifecycle Stress Eval (first slice) — smoke results');
   lines.push('');
   lines.push(`Generated: ${new Date().toISOString()}`);
-  lines.push(`Budget B: ${meta.budget} tokens | facts: ${meta.facts} | dupes/fact: ${meta.dupes} | seeds: ${meta.seeds} | checkpoints: ${meta.checkpoints.join(', ')}`);
+  lines.push(
+    `Budget B: ${meta.budget} tokens | facts: ${meta.facts} | dupes/fact: ${meta.dupes} | seeds: ${meta.seeds} | checkpoints: ${meta.checkpoints.join(', ')}`,
+  );
   lines.push('');
   lines.push('HONEST-NULL eval: measures whatever the numbers are; no tuning toward a positive result.');
   lines.push('');
@@ -434,7 +471,9 @@ function printMarkdown(agg, meta) {
     if (!a) continue;
     lines.push(`## Checkpoint ${cp} (${CHECKPOINT_COUNTS[cp]} memories, ${a.seeds} seeds)`);
     lines.push('');
-    lines.push(`Merge fired: mean ${a.meanMerged.toFixed(1)} episodics merged, ${a.meanSemanticCreated.toFixed(1)} summaries created. Budget-binding fit fraction (naive): ${fmtPct(a.meanFitFraction)}.`);
+    lines.push(
+      `Merge fired: mean ${a.meanMerged.toFixed(1)} episodics merged, ${a.meanSemanticCreated.toFixed(1)} summaries created. Budget-binding fit fraction (naive): ${fmtPct(a.meanFitFraction)}.`,
+    );
     lines.push('');
     lines.push('| Condition | QA accuracy | Mean active-context tokens |');
     lines.push('|---|---|---|');
@@ -445,10 +484,16 @@ function printMarkdown(agg, meta) {
     const d1 = a.deltas['hippo-full_vs_hippo-no-lifecycle'];
     const d2 = a.deltas['hippo-full_vs_naive-append'];
     lines.push('Paired QA deltas (95% bootstrap CI):');
-    lines.push(`- hippo-full vs hippo-no-lifecycle: ${sign(d1.meanDiff)}${(100 * d1.meanDiff).toFixed(1)} pp [${(100 * d1.low).toFixed(1)}, ${(100 * d1.high).toFixed(1)}] pp`);
-    lines.push(`- hippo-full vs naive-append: ${sign(d2.meanDiff)}${(100 * d2.meanDiff).toFixed(1)} pp [${(100 * d2.low).toFixed(1)}, ${(100 * d2.high).toFixed(1)}] pp`);
+    lines.push(
+      `- hippo-full vs hippo-no-lifecycle: ${sign(d1.meanDiff)}${(100 * d1.meanDiff).toFixed(1)} pp [${(100 * d1.low).toFixed(1)}, ${(100 * d1.high).toFixed(1)}] pp`,
+    );
+    lines.push(
+      `- hippo-full vs naive-append: ${sign(d2.meanDiff)}${(100 * d2.meanDiff).toFixed(1)} pp [${(100 * d2.low).toFixed(1)}, ${(100 * d2.high).toFixed(1)}] pp`,
+    );
     const d3 = a.deltas['hippo-full-strength_vs_hippo-no-lifecycle-strength'];
-    lines.push(`- hippo-full vs hippo-no-lifecycle (strength-sorted ambient assembly): ${sign(d3.meanDiff)}${(100 * d3.meanDiff).toFixed(1)} pp [${(100 * d3.low).toFixed(1)}, ${(100 * d3.high).toFixed(1)}] pp`);
+    lines.push(
+      `- hippo-full vs hippo-no-lifecycle (strength-sorted ambient assembly): ${sign(d3.meanDiff)}${(100 * d3.meanDiff).toFixed(1)} pp [${(100 * d3.low).toFixed(1)}, ${(100 * d3.high).toFixed(1)}] pp`,
+    );
     lines.push('');
   }
   return lines.join('\n');
@@ -470,8 +515,11 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const meta = {
-    budget: BUDGET, facts: NUM_FACTS, dupes: DUPES,
-    seeds: NUM_SEEDS, checkpoints: CHECKPOINTS,
+    budget: BUDGET,
+    facts: NUM_FACTS,
+    dupes: DUPES,
+    seeds: NUM_SEEDS,
+    checkpoints: CHECKPOINTS,
   };
   console.error(`Lifecycle stress eval | ${JSON.stringify(meta)}`);
 
@@ -483,9 +531,11 @@ async function main() {
       const cell = await runCell(seed, cp);
       cells.push(cell);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
-      console.error(`  [${cp} seed ${seed}] merged=${cell.merged} sem=${cell.semanticCreated} ` +
-        `qa full=${fmtPct(cell.qa['hippo-full'])} noLife=${fmtPct(cell.qa['hippo-no-lifecycle'])} ` +
-        `naive=${fmtPct(cell.qa['naive-append'])} (${elapsed}s)`);
+      console.error(
+        `  [${cp} seed ${seed}] merged=${cell.merged} sem=${cell.semanticCreated} ` +
+          `qa full=${fmtPct(cell.qa['hippo-full'])} noLife=${fmtPct(cell.qa['hippo-no-lifecycle'])} ` +
+          `naive=${fmtPct(cell.qa['naive-append'])} (${elapsed}s)`,
+      );
     }
   }
 
@@ -506,4 +556,7 @@ async function main() {
   console.error(`\nResults JSON: ${jsonPath}`);
 }
 
-main().catch((err) => { console.error('FATAL', err); process.exit(1); });
+main().catch((err) => {
+  console.error('FATAL', err);
+  process.exit(1);
+});

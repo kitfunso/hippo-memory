@@ -14,7 +14,9 @@ function fail(message) {
 }
 
 const fragments = existsSync(DIR)
-  ? readdirSync(DIR).filter((f) => f.endsWith('.md') && f !== 'README.md').sort()
+  ? readdirSync(DIR)
+      .filter((f) => f.endsWith('.md') && f !== 'README.md')
+      .sort()
   : [];
 
 function check() {

@@ -19,12 +19,18 @@ import { computeIdempotencyKey, computeDeletionKey } from '../../src/connectors/
 import { makeRoot } from '../_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 describe('deletion key namespace separates ingest from deletion', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('v132-deletion-key'); });
+  beforeEach(() => {
+    home = makeRoot('v132-deletion-key');
+  });
   afterEach(() => safeRmSync(home));
 
   it('deletion key DIFFERS from ingest key for the same artifact + updated_at', () => {
@@ -48,9 +54,7 @@ describe('deletion key namespace separates ingest from deletion', () => {
   it('two retries of the same deletion delivery produce the same deletion key (dedupe still works)', () => {
     const artifactRef = 'github://acme/demo/issue/42/comment/123';
     const updatedAt = '2026-05-04T10:00:00Z';
-    expect(computeDeletionKey(artifactRef, updatedAt)).toBe(
-      computeDeletionKey(artifactRef, updatedAt),
-    );
+    expect(computeDeletionKey(artifactRef, updatedAt)).toBe(computeDeletionKey(artifactRef, updatedAt));
   });
 
   it('deletion of different artifacts produces different deletion keys', () => {

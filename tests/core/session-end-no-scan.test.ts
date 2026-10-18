@@ -15,12 +15,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 const MARKER = 'zebrafish-ledger';
 const WORKER_DONE = 'skip: no session_id in SessionEnd payload';
 
-function runHippo(
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-  input?: string,
-): SpawnSyncReturns<string> {
+function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
   return hippoRun(args, { cwd, env, input });
 }
 
@@ -45,29 +40,40 @@ describe('session-end with no payload never scans other projects', () => {
     }
   });
 
-  it('skips capture and stores nothing from another project\'s newest transcript', async () => {
+  it("skips capture and stores nothing from another project's newest transcript", async () => {
     const other = path.join(dir, '.claude', 'projects', 'other-proj');
     fs.mkdirSync(other, { recursive: true });
     fs.writeFileSync(
       path.join(other, 'x.jsonl'),
       [
         { type: 'user', message: { role: 'user', content: `we decided to adopt the ${MARKER} cache` } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Adopted; the migration is next.' }] } },
-      ].map((e) => JSON.stringify(e)).join('\n') + '\n',
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Adopted; the migration is next.' }] },
+        },
+      ]
+        .map((e) => JSON.stringify(e))
+        .join('\n') + '\n',
     );
 
     const logFile = path.join(dir, 'session-end-no-payload.log');
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, '').status).toBe(0);
 
-    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(WORKER_DONE), { ...WORKER_WAIT, what: 'the worker skip line in the log' });
+    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(WORKER_DONE), {
+      ...WORKER_WAIT,
+      what: 'the worker skip line in the log',
+    });
     const logText = fs.readFileSync(logFile, 'utf8');
     expect(logText).toContain('skip capture: no transcript for this session');
 
     let contents: string[] = [];
-    await waitFor(() => {
-      contents = loadAllEntries(getHippoRoot(dir), 'default').map((e) => e.content);
-      return true;
-    }, { ...WORKER_WAIT, what: 'the store readable' });
+    await waitFor(
+      () => {
+        contents = loadAllEntries(getHippoRoot(dir), 'default').map((e) => e.content);
+        return true;
+      },
+      { ...WORKER_WAIT, what: 'the store readable' },
+    );
     expect(contents.filter((c) => c.includes(MARKER))).toEqual([]);
   });
 });

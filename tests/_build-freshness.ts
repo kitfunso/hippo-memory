@@ -18,7 +18,9 @@ export function staleDependencies(repo: string): string[] {
   for (const name of Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })) {
     const want = locked[`node_modules/${name}`]?.version;
     const installedManifest = join(repo, 'node_modules', name, 'package.json');
-    const installed = existsSync(installedManifest) ? readJson<{ version?: string }>(installedManifest).version : 'missing';
+    const installed = existsSync(installedManifest)
+      ? readJson<{ version?: string }>(installedManifest).version
+      : 'missing';
     if (want !== undefined && installed !== want) stale.push(`${name} ${installed}, locked ${want}`);
   }
   return stale.sort();
@@ -40,10 +42,14 @@ export function staleSources(srcDir: string, distDir: string): string[] {
 export function setup(): void {
   const drift = staleDependencies(REPO);
   if (drift.length > 0) {
-    throw new Error(`node_modules does not match package-lock.json (${drift.join('; ')}). Run \`npm ci\`, or link node_modules to an install of this lockfile.`);
+    throw new Error(
+      `node_modules does not match package-lock.json (${drift.join('; ')}). Run \`npm ci\`, or link node_modules to an install of this lockfile.`,
+    );
   }
   const stale = staleSources(join(REPO, 'src'), join(REPO, 'dist'));
   if (stale.length === 0) return;
   const more = stale.length > 1 ? ` and ${stale.length - 1} more` : '';
-  throw new Error(`dist is older than src/${stale[0]}${more}. Run \`npm run build\`, or \`npm test\`, which builds first.`);
+  throw new Error(
+    `dist is older than src/${stale[0]}${more}. Run \`npm run build\`, or \`npm test\`, which builds first.`,
+  );
 }

@@ -7,7 +7,8 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
+const NO_OWNER_TEXT =
+  'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
 const NOTE = 'quartzlamp: my own shell alias for the deploy script';
 
 interface RpcReply {
@@ -42,7 +43,9 @@ async function callTool(key: string, name: string, args: Record<string, string |
 }
 
 beforeEach(async () => {
-  root = makeRoot('mcp-personal-remember', { config: { embeddings: { enabled: false }, autoSleep: { enabled: false } } });
+  root = makeRoot('mcp-personal-remember', {
+    config: { embeddings: { enabled: false }, autoSleep: { enabled: false } },
+  });
   keyA = mint('member', 'oid-a');
   keyB = mint('member', 'oid-b');
   keyAdmin = mint('admin');
@@ -55,7 +58,7 @@ afterEach(async () => {
 });
 
 describe('hippo_remember personal over HTTP MCP', () => {
-  it('an owned key stores the row in its owner\'s scope with origin \'\'', async () => {
+  it("an owned key stores the row in its owner's scope with origin ''", async () => {
     const reply = await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
     expect(reply.error).toBeUndefined();
     expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
@@ -78,7 +81,7 @@ describe('hippo_remember personal over HTTP MCP', () => {
   });
 
   // Needs lane A's read sites (the owner's own scope admitted on recall); red on lane B alone.
-  it('hippo_recall by the same key finds it, and another owner\'s key finds only the team row', async () => {
+  it("hippo_recall by the same key finds it, and another owner's key finds only the team row", async () => {
     await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
     await callTool(keyB, 'hippo_remember', { text: 'quartzlamp: the team deploy script lives in ops' });
     const own = await callTool(keyA, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });

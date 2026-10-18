@@ -21,11 +21,12 @@ function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string
 export function sqliteQuarantine(on: OnHandle): Sync<Quarantine> {
   return {
     listQuarantined: (tenantId, query) => on((db) => listQuarantinedAt(db, tenantId, query)),
-    approveQuarantined: (tenantId, id, actor) => on((db, files) => {
-      const result = approveQuarantinedAt(db, tenantId, id, actor);
-      if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
-      return result;
-    }, openStore),
+    approveQuarantined: (tenantId, id, actor) =>
+      on((db, files) => {
+        const result = approveQuarantinedAt(db, tenantId, id, actor);
+        if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
+        return result;
+      }, openStore),
     rejectQuarantined: (tenantId, id, actor) => on((db) => rejectQuarantinedAt(db, tenantId, id, actor)),
   };
 }

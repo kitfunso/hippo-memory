@@ -3,7 +3,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
@@ -20,7 +20,7 @@ function newRoot(): string {
 }
 
 const ctxFor = (hippoRoot: string): FullContext =>
-  (apiCtx(hippoRoot, 'default', { subject: 'superseded-window-test', role: 'admin' }));
+  apiCtx(hippoRoot, 'default', { subject: 'superseded-window-test', role: 'admin' });
 
 afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
@@ -29,17 +29,35 @@ afterEach(() => {
 function seedVersions(root: string, oldCreatedFirst: boolean) {
   const [early, late] = ['2026-01-01T00:00:00.000Z', '2026-01-02T00:00:00.000Z'];
   const current = { ...createMemory('deploy on friday'), created: oldCreatedFirst ? late : early };
-  const old = { ...createMemory('deploy deploy deploy on monday'), created: oldCreatedFirst ? early : late, superseded_by: current.id };
+  const old = {
+    ...createMemory('deploy deploy deploy on monday'),
+    created: oldCreatedFirst ? early : late,
+    superseded_by: current.id,
+  };
   writeEntry(root, current);
   writeEntry(root, old);
   return { current, old };
 }
 
-function summaryWithChildren(root: string, childText: string, leafOptions: Parameters<typeof createMemory>[1]): MemoryEntry {
-  const summary = createMemory('a rollup of three older rows', { layer: Layer.Semantic, confidence: 'inferred', dagLevel: 2, tags: ['dag-summary'] });
+function summaryWithChildren(
+  root: string,
+  childText: string,
+  leafOptions: Parameters<typeof createMemory>[1],
+): MemoryEntry {
+  const summary = createMemory('a rollup of three older rows', {
+    layer: Layer.Semantic,
+    confidence: 'inferred',
+    dagLevel: 2,
+    tags: ['dag-summary'],
+  });
   writeEntry(root, summary);
   for (let i = 0; i < 3; i++) {
-    const leaf = createMemory(`${childText} ${i}`, { ...leafOptions, layer: Layer.Buffer, dagLevel: 1, dagParentId: summary.id });
+    const leaf = createMemory(`${childText} ${i}`, {
+      ...leafOptions,
+      layer: Layer.Buffer,
+      dagLevel: 1,
+      dagParentId: summary.id,
+    });
     writeEntry(root, { ...leaf, created: `2026-01-1${i}T00:00:00.000Z` });
   }
   return summary;
@@ -67,7 +85,11 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     const root = newRoot();
     const { current } = seedVersions(root, false);
 
-    expect((await retrieve(ctxFor(root), { query: 'deploy', window: { limit: 1, scorerWindow: 1 } })).results.map((r) => r.id)).toEqual([current.id]);
+    expect(
+      (await retrieve(ctxFor(root), { query: 'deploy', window: { limit: 1, scorerWindow: 1 } })).results.map(
+        (r) => r.id,
+      ),
+    ).toEqual([current.id]);
   });
 });
 
@@ -76,7 +98,9 @@ describe('a superseded summary never stands in for its children', () => {
     const root = newRoot();
     const summary = summaryWithChildren(root, 'invoice detail', {});
     const summaryIds = async (): Promise<string[]> =>
-      (await retrieve(ctxFor(root), { query: 'invoice detail', window: { limit: 1 } })).results.filter((r) => r.isSummary).map((r) => r.id);
+      (await retrieve(ctxFor(root), { query: 'invoice detail', window: { limit: 1 } })).results
+        .filter((r) => r.isSummary)
+        .map((r) => r.id);
 
     expect(await summaryIds()).toEqual([summary.id]);
     await supersede(ctxFor(root), summary.id, 'billing rollup, revised');
@@ -87,7 +111,9 @@ describe('a superseded summary never stands in for its children', () => {
     const root = newRoot();
     const summary = summaryWithChildren(root, 'older detail', { kind: 'raw', sourceSessionId: 'sess-s' });
     const summaryIds = async (): Promise<string[]> =>
-      (await assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 })).items.filter((it) => it.isSummary).map((it) => it.id);
+      (await assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 })).items
+        .filter((it) => it.isSummary)
+        .map((it) => it.id);
 
     expect(await summaryIds()).toEqual([summary.id]);
     await supersede(ctxFor(root), summary.id, 'session rollup, revised');

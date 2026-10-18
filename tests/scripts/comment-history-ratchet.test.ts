@@ -68,21 +68,25 @@ describe('check-comment-history.mjs', () => {
   });
 
   it('--update lowers the baseline and drops files with no matches; a lower count passes before that', () => {
-    withFixture({ 'src/a.ts': '// DF1 only\n', 'src/b.ts': 'export const b = 1;\n' }, { 'src/a.ts': 3, 'src/b.ts': 1 }, ({ run, baseline }) => {
-      const before = run();
-      expect(before.status).toBe(0);
-      expect(before.stdout).toContain('2 files fell below the baseline');
-      expect(run('--update').status).toBe(0);
-      expect(baseline()).toEqual({ 'src/a.ts': 1 });
-      expect(run().stdout).not.toContain('fell below');
-    });
+    withFixture(
+      { 'src/a.ts': '// DF1 only\n', 'src/b.ts': 'export const b = 1;\n' },
+      { 'src/a.ts': 3, 'src/b.ts': 1 },
+      ({ run, baseline }) => {
+        const before = run();
+        expect(before.status).toBe(0);
+        expect(before.stdout).toContain('2 files fell below the baseline');
+        expect(run('--update').status).toBe(0);
+        expect(baseline()).toEqual({ 'src/a.ts': 1 });
+        expect(run().stdout).not.toContain('fell below');
+      },
+    );
   });
 
   it('counts comment lines only, not strings, templates or regex literals', () => {
     const code = [
       "const url = 'http://x.test/v1.2.3'; // AT1 trailing",
       'const tpl = `// C5 ${1 + 1} v1.9.9\n// E2 inside a template`;',
-      "const re = /['\"]v1.2.3\\/\\//;",
+      'const re = /[\'"]v1.2.3\\/\\//;',
       'const half = 4 / 2; /* DF1 block */',
       'export {};',
       '',
@@ -108,7 +112,11 @@ describe('check-comment-history.mjs', () => {
   });
 
   it('counts a real leap day and scans .mts and .cts files', () => {
-    const files = { 'src/a.ts': '// Released 2028-02-29\n', 'src/b.mts': '// v2.0.0 fix\n', 'src/c.cts': '// DF1 note\n' };
+    const files = {
+      'src/a.ts': '// Released 2028-02-29\n',
+      'src/b.mts': '// v2.0.0 fix\n',
+      'src/c.cts': '// DF1 note\n',
+    };
     withFixture(files, {}, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);

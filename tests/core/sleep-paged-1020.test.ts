@@ -72,19 +72,23 @@ async function sleepWithPages(pageSize: number, dryRun: boolean): Promise<SleepR
   const root = seeded();
   const pairs: DedupPair[] = [];
   const issues: AuditIssue[] = [];
-  const result = await runSleep(ctxFor(root), { noShare: true, dryRun }, {
-    pageSize,
-    deduplicateStore: (store, options) => {
-      const out = deduplicateStore(store, options);
-      pairs.push(...out.pairs);
-      return out;
+  const result = await runSleep(
+    ctxFor(root),
+    { noShare: true, dryRun },
+    {
+      pageSize,
+      deduplicateStore: (store, options) => {
+        const out = deduplicateStore(store, options);
+        pairs.push(...out.pairs);
+        return out;
+      },
+      auditMemories: (entries, backing) => {
+        const out = auditMemories(entries, backing);
+        issues.push(...out.issues);
+        return out;
+      },
     },
-    auditMemories: (entries, backing) => {
-      const out = auditMemories(entries, backing);
-      issues.push(...out.issues);
-      return out;
-    },
-  });
+  );
   return { result, pairs, issues, left: loadEveryTenantEntries(root).map((e) => e.id) };
 }
 
@@ -106,9 +110,18 @@ describe('sleep in keyset pages', () => {
     expect(paged.left).toEqual(whole.left);
     // A sorted whole-store pass gives these: survivors by rank within each tenant, the beaten pinned p-08 kept.
     expect(paged.pairs.map((p) => [p.kept, p.removed])).toEqual([
-      ['p-10', 'p-06'], ['p-10', 'p-02'], ['p-04', 'p-03'], ['p-18', 'p-17'], ['p-13', 'p-07'],
+      ['p-10', 'p-06'],
+      ['p-10', 'p-02'],
+      ['p-04', 'p-03'],
+      ['p-18', 'p-17'],
+      ['p-13', 'p-07'],
     ]);
-    expect(paged.issues.filter((i) => i.severity === 'error').map((i) => i.memoryId).sort()).toEqual(['p-05', 'p-11']);
+    expect(
+      paged.issues
+        .filter((i) => i.severity === 'error')
+        .map((i) => i.memoryId)
+        .sort(),
+    ).toEqual(['p-05', 'p-11']);
   });
 
   it('audits the caller tenant page by page with the same result as one page', async () => {

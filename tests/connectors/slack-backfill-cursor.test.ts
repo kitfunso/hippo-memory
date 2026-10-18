@@ -9,7 +9,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('backfillChannel cursor / oldest semantics', () => {
   let root: string;
@@ -21,9 +21,12 @@ describe('backfillChannel cursor / oldest semantics', () => {
     // Seed slack_cursors with a prior latest_ts.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)`,
-      ).run('default', 'C1', '1700000000.000100', new Date().toISOString());
+      db.prepare(`INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)`).run(
+        'default',
+        'C1',
+        '1700000000.000100',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -53,17 +56,13 @@ describe('backfillChannel cursor / oldest semantics', () => {
       calls.push({ cursor, oldest });
       if (!cursor) {
         return {
-          messages: [
-            { type: 'message', channel: 'C1', user: 'U1', text: 'pageone msg', ts: '1.1' },
-          ],
+          messages: [{ type: 'message', channel: 'C1', user: 'U1', text: 'pageone msg', ts: '1.1' }],
           next_cursor: 'OPAQUE_PAGE2_TOKEN',
         };
       }
       if (cursor === 'OPAQUE_PAGE2_TOKEN') {
         return {
-          messages: [
-            { type: 'message', channel: 'C1', user: 'U1', text: 'pagetwo msg', ts: '2.2' },
-          ],
+          messages: [{ type: 'message', channel: 'C1', user: 'U1', text: 'pagetwo msg', ts: '2.2' }],
           next_cursor: null,
         };
       }

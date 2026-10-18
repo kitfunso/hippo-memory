@@ -14,11 +14,7 @@ export interface KeysetClause {
 }
 
 /** An ` AND ...` WHERE fragment and its params selecting rows strictly after `after`; empty when `after` is unset. */
-export function keysetAfter(
-  sortCol: string,
-  idCol: string,
-  after: KeysetPosition | undefined,
-): KeysetClause {
+export function keysetAfter(sortCol: string, idCol: string, after: KeysetPosition | undefined): KeysetClause {
   if (!after) return { sql: '', params: [] };
   return { sql: ` AND (${sortCol}, ${idCol}) < (?, ?)`, params: [after.key, after.id] };
 }

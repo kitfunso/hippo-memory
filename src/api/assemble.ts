@@ -70,11 +70,7 @@ export interface AssembleResult {
 /** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh
  *  tail is never evicted).
  * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
-export async function assemble(
-  ctx: Context,
-  sessionId: string,
-  opts: AssembleOptions = {},
-): Promise<AssembleResult> {
+export async function assemble(ctx: Context, sessionId: string, opts: AssembleOptions = {}): Promise<AssembleResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
   const freshTailCount = opts.freshTailCount ?? DEFAULT_FRESH_TAIL_COUNT;
@@ -96,9 +92,10 @@ export async function assemble(
   const tailRows = scoped.slice(tailStartIdx);
 
   // Substitute parent summaries for older rows that share one.
-  const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
-    ? await substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
-    : { olderItems: olderRows.map(rawItem), summarized: 0 };
+  const { olderItems, summarized } =
+    summarizeOlder && olderRows.length > 0
+      ? await substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
+      : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems = tailRows.map(freshTailItem);
 
@@ -133,9 +130,7 @@ async function loadScopedRaws(
   const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
-  const scoped = rows.filter((r) =>
-    passesScopeFilterForRecall(r.scope ?? null, opts.scope, own),
-  );
+  const scoped = rows.filter((r) => passesScopeFilterForRecall(r.scope ?? null, opts.scope, own));
   let totalRaw: number;
   if (truncated) {
     // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
@@ -197,9 +192,10 @@ async function substituteSummaries(
   const eligibleParentIds = Array.from(olderByParent.keys()).filter(
     (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
   );
-  const parents = eligibleParentIds.length > 0
-    ? eligibleSummaryParents(await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId), scope, own, project)
-    : [];
+  const parents =
+    eligibleParentIds.length > 0
+      ? eligibleSummaryParents(await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId), scope, own, project)
+      : [];
   const claimedRawIds = new Set<string>();
   for (const parent of parents) {
     const claimed = (olderByParent.get(parent.id) ?? []).map((r) => r.id);

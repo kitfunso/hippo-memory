@@ -21,12 +21,18 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction, computePredictionBaserate } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 describe('computePredictionBaserate (baserate detector)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('j3'); });
+  beforeEach(() => {
+    home = makeRoot('j3');
+  });
   afterEach(() => safeRmSync(home));
 
   it('empty class returns nClosed=0 + null stats + empty summary', () => {
@@ -67,7 +73,11 @@ describe('computePredictionBaserate (baserate detector)', () => {
     // Ratios: 2.0, 1.5, 1.0; mean=1.5, median=1.5
     // MAE: |4-2| + |6-4| + |6-6| / 3 = 4/3
     const ids: number[] = [];
-    const estimateVsActual: Array<[number, number]> = [[2, 4], [4, 6], [6, 6]];
+    const estimateVsActual: Array<[number, number]> = [
+      [2, 4],
+      [4, 6],
+      [6, 6],
+    ];
     for (const [est, act] of estimateVsActual) {
       const p = savePrediction(home, 'default', {
         classTag: 'multi-test',
@@ -127,7 +137,11 @@ describe('computePredictionBaserate (baserate detector)', () => {
   });
 
   it('cross-tenant scoping: tenant-b request on tenant-a class returns empty', () => {
-    const p = savePrediction(home, 'tenant-a', { classTag: 'scope-test', claimText: 'tenant a only', estimateValue: 1 });
+    const p = savePrediction(home, 'tenant-a', {
+      classTag: 'scope-test',
+      claimText: 'tenant a only',
+      estimateValue: 1,
+    });
     closePrediction(home, 'tenant-a', p.id, { closureState: 'closed', actualValue: 2 });
 
     const aResult = computePredictionBaserate(home, 'tenant-a', 'scope-test');
@@ -151,9 +165,9 @@ describe('computePredictionBaserate (baserate detector)', () => {
     try {
       // SAFETY: literal SELECT of the known audit_log columns for this
       // test's own predict_baserate rows.
-      const auditRows = db.prepare(
-        `SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_baserate' ORDER BY id`
-      ).all() as Array<{ op: string; target_id: string; metadata_json: string }>;
+      const auditRows = db
+        .prepare(`SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_baserate' ORDER BY id`)
+        .all() as Array<{ op: string; target_id: string; metadata_json: string }>;
       expect(auditRows.length).toBe(2);
       expect(auditRows[0].target_id).toBe('audit-test');
       // SAFETY: metadata_json is this test's own audit row, written by

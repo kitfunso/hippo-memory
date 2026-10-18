@@ -7,7 +7,14 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryFailureLogStore } from '../_helpers/in-memory-failure-log-store.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const TAG = 'auto-captured';
@@ -16,8 +23,16 @@ type Value = number | FailureOutcome | null | void | string[];
 
 let fixture: TwoTenantFixture;
 
-const event = (over: Partial<FailureEvent> = {}): FailureEvent =>
-  ({ tenantId: TENANT_A, sessionId: 's-1', tool: 'Bash', outcome: 'stored', rule: null, sigHash: null, detailHash: null, ...over });
+const event = (over: Partial<FailureEvent> = {}): FailureEvent => ({
+  tenantId: TENANT_A,
+  sessionId: 's-1',
+  tool: 'Bash',
+  outcome: 'stored',
+  rule: null,
+  sigHash: null,
+  detailHash: null,
+  ...over,
+});
 
 function seed(dir: string): void {
   const log = sqliteSyncStore(dir).failureLog;
@@ -25,7 +40,11 @@ function seed(dir: string): void {
   log.record(event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }));
   log.record(event({ tenantId: TENANT_B, sessionId: 's-b', requestId: 'req-1', now: '2026-02-28T00:00:00.000Z' }));
   const lesson = (content: string, over: Parameters<typeof createMemory>[1], origin: string | null): void =>
-    writeEntry(dir, { ...createMemory(content, { tenantId: TENANT_A, tags: ['error', TAG], ...over }), origin_project: origin }, { actor: 'cli' });
+    writeEntry(
+      dir,
+      { ...createMemory(content, { tenantId: TENANT_A, tags: ['error', TAG], ...over }), origin_project: origin },
+      { actor: 'cli' },
+    );
   lesson('lesson in proj', {}, 'proj');
   lesson('lesson for every project', {}, '');
   lesson('lesson in another project', {}, 'other');
@@ -64,7 +83,9 @@ describe('FailureLog.requestOutcome', () => {
       (g) => g.requestOutcome(TENANT_A, 'req-1', 's-other'),
     ]);
     expect(outcomes).toEqual([
-      { value: 'store-failed' }, { value: 'stored' }, { value: null },
+      { value: 'store-failed' },
+      { value: 'stored' },
+      { value: null },
       { error: 'ConflictError: request id belongs to another session' },
     ]);
   });

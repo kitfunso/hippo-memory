@@ -10,7 +10,11 @@ export interface VectorPack {
 
 /** A pack on the thread that built it, so the reply that carries it knows which buffer to move. */
 export class PackedVectors implements VectorPack {
-  constructor(readonly ids: readonly string[], readonly dims: readonly number[], readonly buffer: ArrayBuffer) {}
+  constructor(
+    readonly ids: readonly string[],
+    readonly dims: readonly number[],
+    readonly buffer: ArrayBuffer,
+  ) {}
 }
 
 export function packVectors(vectors: ReadonlyMap<string, Float32Array>): PackedVectors {

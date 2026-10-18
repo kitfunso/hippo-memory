@@ -6,12 +6,13 @@ import { envReadLines } from '../../scripts/check-env-reads.mjs';
 import { processExitLines } from '../../scripts/check-process-exit.mjs';
 import { readFacts, runtimeSpecifiers } from '../../scripts/lib/ts-facts.mjs';
 
-const imports = (text: string) => readFacts(text).imports.map((i) => [i.kind, i.spec, i.line, i.typeOnly, i.names.join(',')]);
+const imports = (text: string) =>
+  readFacts(text).imports.map((i) => [i.kind, i.spec, i.line, i.typeOnly, i.names.join(',')]);
 
 describe('ts-facts imports', () => {
   it('ignores an import inside a string, a template or a comment', () => {
     const text = [
-      "const s = \"import { a } from './a.js'\";",
+      'const s = "import { a } from \'./a.js\'";',
       "const t = `import { b } from './b.js'`;",
       "// import { c } from './c.js';",
       "/* import './d.js'; */",
@@ -33,7 +34,11 @@ describe('ts-facts imports', () => {
       "import type * as G from './e.js';",
     ].join('\n');
     expect(imports(text).map(([, spec, , typeOnly]) => [spec, typeOnly])).toEqual([
-      ['./a.js', true], ['./b.js', true], ['./c.js', false], ['./d.js', false], ['./e.js', true],
+      ['./a.js', true],
+      ['./b.js', true],
+      ['./c.js', false],
+      ['./d.js', false],
+      ['./e.js', true],
     ]);
     expect(runtimeSpecifiers(text)).toEqual(['./c.js', './d.js']);
   });
@@ -57,7 +62,11 @@ describe('ts-facts imports', () => {
   });
 
   it('counts a side-effect import and a literal dynamic import, and skips a template-literal one', () => {
-    const text = ["import './setup.js';", "const a = await import('./lazy.js');", 'const b = await import(`./dir/${name}.js`);'].join('\n');
+    const text = [
+      "import './setup.js';",
+      "const a = await import('./lazy.js');",
+      'const b = await import(`./dir/${name}.js`);',
+    ].join('\n');
     expect(imports(text)).toEqual([
       ['side-effect', './setup.js', 1, false, '*'],
       ['dynamic', './lazy.js', 2, false, '*'],
@@ -77,7 +86,10 @@ describe('ts-facts calls, env reads and functions', () => {
       'cfg.loadConfig(root);',
     ].join('\n');
     expect(readFacts(text).calls.map((c) => [c.callee, c.line])).toEqual([
-      ['loadConfig', 1], ['process.exit', 2], ['process.exit', 3], ['cfg.loadConfig', 6],
+      ['loadConfig', 1],
+      ['process.exit', 2],
+      ['process.exit', 3],
+      ['cfg.loadConfig', 6],
     ]);
   });
 
@@ -113,23 +125,52 @@ describe('ts-facts calls, env reads and functions', () => {
 
 describe('gates read code, not text that looks like code', () => {
   it('process.exit and process.env gates skip strings, template text and comments', () => {
-    const text = ["const s = 'process.exit(1) and process.env';", 'const t = `process.exit(2)`;', '// process.env', 'process.exit(3);', 'const e = process.env.X;'].join('\n');
+    const text = [
+      "const s = 'process.exit(1) and process.env';",
+      'const t = `process.exit(2)`;',
+      '// process.env',
+      'process.exit(3);',
+      'const e = process.env.X;',
+    ].join('\n');
     expect(processExitLines(text)).toEqual([4]);
     expect(envReadLines(text)).toEqual([5]);
   });
 
   it('the flag gate flags String(flags.x), a template span and an as-string cast, and not a list cast or a string', () => {
-    const text = ["const a = String(flags.x ?? '');", 'const b = `${flags.y}`;', 'const c = flags.z as string;', 'const d = flags.w as string[];', "const e = 'String(flags.q)';"].join('\n');
+    const text = [
+      "const a = String(flags.x ?? '');",
+      'const b = `${flags.y}`;',
+      'const c = flags.z as string;',
+      'const d = flags.w as string[];',
+      "const e = 'String(flags.q)';",
+    ].join('\n');
     expect(handFlagLines(text)).toEqual([1, 2, 3]);
   });
 
   it('the fail gate pairs printError with the next statement only, inside a multi-line call too', () => {
-    const text = ['printError(', "  `bad ${x}`,", ');', 'throw new CliExit(1);', 'if (c) printError(y);', 'throw new CliExit(1);', "printError('z');", 'throw new CliExit(2);'].join('\n');
+    const text = [
+      'printError(',
+      '  `bad ${x}`,',
+      ');',
+      'throw new CliExit(1);',
+      'if (c) printError(y);',
+      'throw new CliExit(1);',
+      "printError('z');",
+      'throw new CliExit(2);',
+    ].join('\n');
     expect(failPairLines(text)).toEqual([1]);
   });
 
   it('the recall gate matches identifiers, imports included, and not the same word in a string', () => {
-    const text = ["import { writeEntry } from './w.js';", "const msg = 'writeEntry failed';", '// writeEntry', 'writeEntry(x);'].join('\n');
-    expect(namedOnLines(text, ['writeEntry'])).toEqual([{ line: 1, name: 'writeEntry' }, { line: 4, name: 'writeEntry' }]);
+    const text = [
+      "import { writeEntry } from './w.js';",
+      "const msg = 'writeEntry failed';",
+      '// writeEntry',
+      'writeEntry(x);',
+    ].join('\n');
+    expect(namedOnLines(text, ['writeEntry'])).toEqual([
+      { line: 1, name: 'writeEntry' },
+      { line: 4, name: 'writeEntry' },
+    ]);
   });
 });

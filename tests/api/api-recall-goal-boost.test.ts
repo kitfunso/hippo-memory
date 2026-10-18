@@ -88,11 +88,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     // No goal_recall_log row written (boost suppressed).
     const db = openHippoDb(hippoRoot);
     try {
-      const count = countRows(
-        db,
-        `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ?`,
-        goal.id,
-      );
+      const count = countRows(db, `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ?`, goal.id);
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);

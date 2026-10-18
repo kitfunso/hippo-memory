@@ -25,7 +25,7 @@ function newRoot(): string {
 }
 
 const ctxFor = (hippoRoot: string): FullContext =>
-  (apiCtx(hippoRoot, 'default', { subject: 'one-copy-test', role: 'admin' }));
+  apiCtx(hippoRoot, 'default', { subject: 'one-copy-test', role: 'admin' });
 
 afterEach(() => {
   vi.unstubAllEnvs();

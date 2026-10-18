@@ -1,9 +1,9 @@
 import type { Migration } from './types.js';
 
 export const v02: Migration = {
-    version: 2,
-    up: (db) => {
-      db.exec(`
+  version: 2,
+  up: (db) => {
+    db.exec(`
         CREATE TABLE IF NOT EXISTS task_snapshots (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           task TEXT NOT NULL,
@@ -18,5 +18,5 @@ export const v02: Migration = {
         CREATE INDEX IF NOT EXISTS idx_task_snapshots_status_updated
         ON task_snapshots(status, updated_at DESC, id DESC);
       `);
-    },
+  },
 };

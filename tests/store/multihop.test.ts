@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { multihopSearch } from '../../src/search/multihop.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -14,18 +14,34 @@ describe('multihopSearch', () => {
   });
 
   it('chains retrieval to answer multi-hop questions', () => {
-    writeEntry(hippoRoot, createMemory('John scored 30 points in the January 2024 game', {
-      layer: Layer.Semantic, tags: ['extracted', 'speaker:John', 'topic:basketball'],
-    }));
-    writeEntry(hippoRoot, createMemory('John achieved a career-high score in the January 2024 game', {
-      layer: Layer.Semantic, tags: ['extracted', 'speaker:John', 'topic:basketball'],
-    }));
-    writeEntry(hippoRoot, createMemory('Nike offered John an endorsement deal in February 2024', {
-      layer: Layer.Semantic, tags: ['extracted', 'speaker:John', 'topic:endorsement'],
-    }));
-    writeEntry(hippoRoot, createMemory('Tim likes reading sci-fi novels', {
-      layer: Layer.Semantic, tags: ['extracted', 'speaker:Tim'],
-    }));
+    writeEntry(
+      hippoRoot,
+      createMemory('John scored 30 points in the January 2024 game', {
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:John', 'topic:basketball'],
+      }),
+    );
+    writeEntry(
+      hippoRoot,
+      createMemory('John achieved a career-high score in the January 2024 game', {
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:John', 'topic:basketball'],
+      }),
+    );
+    writeEntry(
+      hippoRoot,
+      createMemory('Nike offered John an endorsement deal in February 2024', {
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:John', 'topic:endorsement'],
+      }),
+    );
+    writeEntry(
+      hippoRoot,
+      createMemory('Tim likes reading sci-fi novels', {
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:Tim'],
+      }),
+    );
 
     const entries = loadAllEntries(hippoRoot, 'default');
     const results = multihopSearch(
@@ -40,9 +56,13 @@ describe('multihopSearch', () => {
   });
 
   it('returns pass1 results when no new entities discovered', () => {
-    writeEntry(hippoRoot, createMemory('Alice enjoys hiking in mountains', {
-      layer: Layer.Semantic, tags: ['extracted', 'speaker:Alice'],
-    }));
+    writeEntry(
+      hippoRoot,
+      createMemory('Alice enjoys hiking in mountains', {
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:Alice'],
+      }),
+    );
 
     const entries = loadAllEntries(hippoRoot, 'default');
     const results = multihopSearch('Alice hiking', entries, { budget: 4000 });
@@ -54,15 +74,23 @@ describe('multihopSearch', () => {
   // Pass 1 runs at twice the budget, so each return path must fit its list to the caller's budget.
   describe.each([
     { path: 'merged union of both passes', tag: 'speaker:Maya', query: 'deploy failure pipeline' },
-    { path: 'early return when pass 1 finds no new entity', tag: 'speaker:Alice', query: 'Alice deploy failure pipeline' },
+    {
+      path: 'early return when pass 1 finds no new entity',
+      tag: 'speaker:Alice',
+      query: 'Alice deploy failure pipeline',
+    },
   ])('budget on the $path', ({ tag, query }) => {
     const flat = (): number => 100;
 
     beforeEach(() => {
       for (let i = 0; i < 6; i++) {
-        writeEntry(hippoRoot, createMemory(`Deploy failure ${i}: the release pipeline timed out on step ${i}`, {
-          layer: Layer.Semantic, tags: ['extracted', tag],
-        }));
+        writeEntry(
+          hippoRoot,
+          createMemory(`Deploy failure ${i}: the release pipeline timed out on step ${i}`, {
+            layer: Layer.Semantic,
+            tags: ['extracted', tag],
+          }),
+        );
       }
     });
 
@@ -72,12 +100,20 @@ describe('multihopSearch', () => {
     });
 
     it('keeps the minResults floor whatever it costs', () => {
-      const results = multihopSearch(query, loadAllEntries(hippoRoot, 'default'), { budget: 50, cost: flat, minResults: 3 });
+      const results = multihopSearch(query, loadAllEntries(hippoRoot, 'default'), {
+        budget: 50,
+        cost: flat,
+        minResults: 3,
+      });
       expect(results).toHaveLength(3);
     });
 
     it('returns nothing that misses the budget when minResults is 0', () => {
-      const results = multihopSearch(query, loadAllEntries(hippoRoot, 'default'), { budget: 50, cost: flat, minResults: 0 });
+      const results = multihopSearch(query, loadAllEntries(hippoRoot, 'default'), {
+        budget: 50,
+        cost: flat,
+        minResults: 0,
+      });
       expect(results).toHaveLength(0);
     });
 

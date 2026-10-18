@@ -1,6 +1,9 @@
 // The handwritten HNSW graph against an exact scan of the same vectors.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createVectorGraph, insertNode, searchGraph, type VectorGraph } from '../../src/db/vector-graph.js';
+
+// Some cases build two 3000-node graphs, which can pass the unit budget on a busy runner.
+vi.setConfig({ testTimeout: 20_000 });
 
 const DIM = 64;
 const N = 3000;
@@ -21,10 +24,12 @@ function gauss(r: () => number): number {
 
 function clustered(n: number, seed: number): Float32Array[] {
   const r = rng(seed);
-  const centres = Array.from({ length: n / 100 }, () => Float32Array.from({ length: DIM }, () => gauss(r) / Math.sqrt(DIM)));
+  const centres = Array.from({ length: n / 100 }, () =>
+    Float32Array.from({ length: DIM }, () => gauss(r) / Math.sqrt(DIM)),
+  );
   return Array.from({ length: n }, (_, i) => {
     const c = centres[i % centres.length];
-    return Float32Array.from(c, (x) => x + (gauss(r) * 0.15) / Math.sqrt(DIM) * 1.0);
+    return Float32Array.from(c, (x) => x + ((gauss(r) * 0.15) / Math.sqrt(DIM)) * 1.0);
   });
 }
 
@@ -63,7 +68,11 @@ const queries = Array.from({ length: 40 }, (_, i) => {
 const graph = build(vectors, 42);
 const vectorOf = (n: number) => vectors[n];
 
-function ids(g: VectorGraph, q: Float32Array, opts: { k: number; ef: number; admit?: (n: number) => boolean }): number[] {
+function ids(
+  g: VectorGraph,
+  q: Float32Array,
+  opts: { k: number; ef: number; admit?: (n: number) => boolean },
+): number[] {
   const res = searchGraph(g, q, { ...opts, vectorOf });
   if (res.aborted) throw new Error('unexpected abort');
   return res.hits.map((h) => h.node);

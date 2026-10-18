@@ -47,8 +47,7 @@ export function strengthBucket(strength: number | null | undefined): number {
 
 // finiteCount hardens the retrieval leg like strengthBucket: a NaN would break the total order.
 // Unreachable via the schema (non-nullable INTEGER column); kept for symmetry.
-const finiteCount = (n: number | null | undefined): number =>
-  Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
+const finiteCount = (n: number | null | undefined): number => (Number.isFinite(n ?? 0) ? (n ?? 0) : 0);
 
 /** What the survivor order and a pair read of a row: a scan holds these, never the row itself. */
 interface DedupRow {
@@ -145,7 +144,7 @@ export function deduplicateStore(
     actor?: string;
     pages?: Iterable<readonly MemoryEntry[]>;
     backing?: ReadonlySet<string>;
-  } = {}
+  } = {},
 ): DedupResult {
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history.

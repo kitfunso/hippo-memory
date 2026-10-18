@@ -32,10 +32,18 @@ afterAll(() => {
 const TENANT = 'default';
 const SESSION = 'two-repo-session';
 const ACME = { name: 'acme', legacyName: 'acme' } as const;
-const SUMMARY: Partial<CreateMemoryOptions> = { layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'] };
+const SUMMARY: Partial<CreateMemoryOptions> = {
+  layer: Layer.Semantic,
+  dagLevel: 2,
+  confidence: 'inferred',
+  tags: ['dag-summary'],
+};
 
 type Repo = 'acme' | 'beta';
-interface Reply { readonly text: string; readonly isError: boolean }
+interface Reply {
+  readonly text: string;
+  readonly isError: boolean;
+}
 
 let tmp: string;
 let store: string;
@@ -45,9 +53,25 @@ const realFetch = globalThis.fetch;
 const BASE_CONFIG = { sharedStore: true, embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
 
 const ids = {
-  acme: '', beta: '', global: '', none: '', other: '', alice: '', bob: '', betaNear: '',
-  acmeSum: '', betaSum: '', acmeRaw1: '', acmeRaw2: '', betaRaw1: '', betaRaw2: '', acmeOdd1: '', acmeOdd2: '', nullRaw: '',
-  acmeSumO: '', betaSumO: '',
+  acme: '',
+  beta: '',
+  global: '',
+  none: '',
+  other: '',
+  alice: '',
+  bob: '',
+  betaNear: '',
+  acmeSum: '',
+  betaSum: '',
+  acmeRaw1: '',
+  acmeRaw2: '',
+  betaRaw1: '',
+  betaRaw2: '',
+  acmeOdd1: '',
+  acmeOdd2: '',
+  nullRaw: '',
+  acmeSumO: '',
+  betaSumO: '',
 };
 const pairs = { acme: 0, beta: 0, slack: 0, none: 0 };
 
@@ -58,30 +82,57 @@ function seed(content: string, origin: string | null, opts: Partial<CreateMemory
 }
 
 function raw(content: string, origin: string | null, parent?: string): string {
-  return seed(content, origin, { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', sourceSessionId: SESSION, dagLevel: parent ? 1 : 0, dagParentId: parent });
+  return seed(content, origin, {
+    layer: Layer.Episodic,
+    kind: 'raw',
+    confidence: 'observed',
+    sourceSessionId: SESSION,
+    dagLevel: parent ? 1 : 0,
+    dagParentId: parent,
+  });
 }
 
 async function tool(repo: Repo, name: string, args: Record<string, JsonValue> = {}): Promise<Reply> {
   const res = await realFetch(`${handle!.url}/mcp`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${aliceKey}`, 'x-hippo-project': repo },
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      authorization: `Bearer ${aliceKey}`,
+      'x-hippo-project': repo,
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
   });
   expect(res.status).toBe(200);
   // SAFETY: a tools/call reply is a result with text content or a JSON-RPC error; only those fields are read.
-  const body = (await res.json()) as { result?: { content: Array<{ text: string }>; isError?: boolean }; error?: { message: string } };
-  return { text: body.result?.content[0]?.text ?? body.error?.message ?? '', isError: body.result?.isError === true || body.error !== undefined };
+  const body = (await res.json()) as {
+    result?: { content: Array<{ text: string }>; isError?: boolean };
+    error?: { message: string };
+  };
+  return {
+    text: body.result?.content[0]?.text ?? body.error?.message ?? '',
+    isError: body.result?.isError === true || body.error !== undefined,
+  };
 }
 
 /** The ids hippo_recall or hippo_context listed, read from the outcome map both fill. */
-async function shown(repo: Repo, name: 'hippo_recall' | 'hippo_context', args: Record<string, JsonValue> = {}): Promise<string[]> {
+async function shown(
+  repo: Repo,
+  name: 'hippo_recall' | 'hippo_context',
+  args: Record<string, JsonValue> = {},
+): Promise<string[]> {
   lastRecalledIds.clear();
   const r = await tool(repo, name, args);
   expect(r.isError, r.text).toBe(false);
   return [...lastRecalledIds.values()].flat();
 }
 
-function expectOnly(seen: readonly string[], present: readonly string[], absent: readonly string[], label: string): void {
+function expectOnly(
+  seen: readonly string[],
+  present: readonly string[],
+  absent: readonly string[],
+  label: string,
+): void {
   for (const id of present) expect(seen, `${label} should show ${id}`).toContain(id);
   for (const id of absent) expect(seen, `${label} should hide ${id}`).not.toContain(id);
 }
@@ -105,13 +156,16 @@ beforeAll(async () => {
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   // The server shares this process, so its own requests pass through and only the embedding call is faked.
-  vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-    const url = input instanceof Request ? input.url : String(input);
-    if (handle && url.startsWith(handle.url)) return realFetch(input, init);
-    // SAFETY: body is the OpenAI embeddings request the provider just serialised.
-    const body = JSON.parse(String(init?.body)) as { input: string[] };
-    return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (handle && url.startsWith(handle.url)) return realFetch(input, init);
+      // SAFETY: body is the OpenAI embeddings request the provider just serialised.
+      const body = JSON.parse(String(init?.body)) as { input: string[] };
+      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
+    }),
+  );
 
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
@@ -119,7 +173,12 @@ beforeAll(async () => {
   writeConfig();
   const db = openHippoDb(store);
   try {
-    aliceKey = createApiKey(db, { tenantId: TENANT, label: 'two-repo-alice', role: 'member', ownerSubject: 'alice' }).plaintext;
+    aliceKey = createApiKey(db, {
+      tenantId: TENANT,
+      label: 'two-repo-alice',
+      role: 'member',
+      ownerSubject: 'alice',
+    }).plaintext;
   } finally {
     closeHippoDb(db);
   }
@@ -134,7 +193,9 @@ beforeAll(async () => {
   // Shares no word with the query, so only the vector arm can bring it in.
   ids.betaNear = seed('zebrafinch quokka marmalade', 'beta');
   const vectors: Record<string, number[]> = {};
-  for (const id of [ids.acme, ids.beta, ids.global, ids.none, ids.other, ids.alice, ids.bob]) vectors[id] = [0.6, 0.8, 0];
+  for (const id of [ids.acme, ids.beta, ids.global, ids.none, ids.other, ids.alice, ids.bob]) {
+    vectors[id] = [0.6, 0.8, 0];
+  }
   vectors[ids.betaNear] = [1, 0, 0];
   saveEmbeddingIndex(store, vectors);
   saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
@@ -159,20 +220,55 @@ beforeAll(async () => {
 
   const pair = (a: string, b: string, reason: string) => ({ memory_a_id: a, memory_b_id: b, reason, score: 0.9 });
   const conflictRows = {
-    acme: [seed('the acme cache must stay on during deploys', 'acme'), seed('the acme cache must stay off during deploys', 'acme')],
-    beta: [seed('the beta cache must stay on during deploys', 'beta'), seed('the beta cache must stay off during deploys', 'beta')],
-    slack: [seed('the slack cache must stay on during deploys', 'acme', { scope: 'slack:private:c1' }), seed('the slack cache must stay off during deploys', 'acme')],
-    none: [seed('the null cache must stay on during deploys', null), seed('the null cache must stay off during deploys', null)],
+    acme: [
+      seed('the acme cache must stay on during deploys', 'acme'),
+      seed('the acme cache must stay off during deploys', 'acme'),
+    ],
+    beta: [
+      seed('the beta cache must stay on during deploys', 'beta'),
+      seed('the beta cache must stay off during deploys', 'beta'),
+    ],
+    slack: [
+      seed('the slack cache must stay on during deploys', 'acme', { scope: 'slack:private:c1' }),
+      seed('the slack cache must stay off during deploys', 'acme'),
+    ],
+    none: [
+      seed('the null cache must stay on during deploys', null),
+      seed('the null cache must stay off during deploys', null),
+    ],
   };
-  replaceDetectedConflicts(store, Object.entries(conflictRows).map(([k, [a, b]]) => pair(a!, b!, `two-repo ${k}`)));
+  replaceDetectedConflicts(
+    store,
+    Object.entries(conflictRows).map(([k, [a, b]]) => pair(a!, b!, `two-repo ${k}`)),
+  );
   const open = listMemoryConflicts(store, 'open', TENANT);
   const idOf = (k: string): number => open.find((c) => c.reason === `two-repo ${k}`)!.id;
   Object.assign(pairs, { acme: idOf('acme'), beta: idOf('beta'), slack: idOf('slack'), none: idOf('none') });
 
-  saveActiveTaskSnapshot(store, TENANT, { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' }, { owner: 'alice', project: ['acme'] });
-  saveActiveTaskSnapshot(store, TENANT, { task: 'betatask fix the build', summary: 'beta summary', next_step: 'beta next', session_id: 'beta-s' }, { owner: 'alice', project: ['beta'] });
-  saveSessionHandoff(store, TENANT, { version: 1, sessionId: 'acme-s', summary: 'acmehandoff tagged the release' }, { owner: 'alice', project: ['acme'] });
-  saveSessionHandoff(store, TENANT, { version: 1, sessionId: 'beta-s', summary: 'betahandoff pinned the compiler' }, { owner: 'alice', project: ['beta'] });
+  saveActiveTaskSnapshot(
+    store,
+    TENANT,
+    { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' },
+    { owner: 'alice', project: ['acme'] },
+  );
+  saveActiveTaskSnapshot(
+    store,
+    TENANT,
+    { task: 'betatask fix the build', summary: 'beta summary', next_step: 'beta next', session_id: 'beta-s' },
+    { owner: 'alice', project: ['beta'] },
+  );
+  saveSessionHandoff(
+    store,
+    TENANT,
+    { version: 1, sessionId: 'acme-s', summary: 'acmehandoff tagged the release' },
+    { owner: 'alice', project: ['acme'] },
+  );
+  saveSessionHandoff(
+    store,
+    TENANT,
+    { version: 1, sessionId: 'beta-s', summary: 'betahandoff pinned the compiler' },
+    { owner: 'alice', project: ['beta'] },
+  );
 
   handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0 });
 });
@@ -185,16 +281,36 @@ afterAll(async () => {
 });
 
 describe('MCP on a shared store with two repos', () => {
-  it('hippo_recall shows each repo its rows, user-global rows and the caller\'s personal row, with embeddings on', async () => {
-    expectOnly(await shown('acme', 'hippo_recall', { query: 'lighthouse' }), [ids.acme, ids.global, ids.alice], HIDDEN_FROM_ACME(), 'acme recall');
-    expectOnly(await shown('beta', 'hippo_recall', { query: 'lighthouse' }), [ids.beta, ids.global, ids.alice, ids.betaNear], HIDDEN_FROM_BETA(), 'beta recall');
+  it("hippo_recall shows each repo its rows, user-global rows and the caller's personal row, with embeddings on", async () => {
+    expectOnly(
+      await shown('acme', 'hippo_recall', { query: 'lighthouse' }),
+      [ids.acme, ids.global, ids.alice],
+      HIDDEN_FROM_ACME(),
+      'acme recall',
+    );
+    expectOnly(
+      await shown('beta', 'hippo_recall', { query: 'lighthouse' }),
+      [ids.beta, ids.global, ids.alice, ids.betaNear],
+      HIDDEN_FROM_BETA(),
+      'beta recall',
+    );
   });
 
-  it('hippo_recall in physics mode keeps beta\'s nearest row out of acme', async () => {
+  it("hippo_recall in physics mode keeps beta's nearest row out of acme", async () => {
     writeConfig({ physics: { enabled: true } });
     try {
-      expectOnly(await shown('acme', 'hippo_recall', { query: 'lighthouse' }), [ids.acme], HIDDEN_FROM_ACME(), 'acme physics recall');
-      expectOnly(await shown('beta', 'hippo_recall', { query: 'lighthouse' }), [ids.beta, ids.betaNear], HIDDEN_FROM_BETA(), 'beta physics recall');
+      expectOnly(
+        await shown('acme', 'hippo_recall', { query: 'lighthouse' }),
+        [ids.acme],
+        HIDDEN_FROM_ACME(),
+        'acme physics recall',
+      );
+      expectOnly(
+        await shown('beta', 'hippo_recall', { query: 'lighthouse' }),
+        [ids.beta, ids.betaNear],
+        HIDDEN_FROM_BETA(),
+        'beta physics recall',
+      );
     } finally {
       writeConfig();
     }
@@ -209,11 +325,15 @@ describe('MCP on a shared store with two repos', () => {
     expect(beta.text).not.toContain('acmetask');
   });
 
-  it('hippo_assemble keeps one session\'s rows and summaries to the caller\'s repo', async () => {
+  it("hippo_assemble keeps one session's rows and summaries to the caller's repo", async () => {
     const acme = await tool('acme', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
     expect(acme.isError, acme.text).toBe(false);
-    for (const id of [ids.acmeSum, ids.acmeOdd1, ids.acmeOdd2]) expect(acme.text, `acme assemble should show ${id}`).toContain(id);
-    for (const id of [ids.betaSum, ids.betaRaw1, ids.betaRaw2, ids.nullRaw]) expect(acme.text, `acme assemble should hide ${id}`).not.toContain(id);
+    for (const id of [ids.acmeSum, ids.acmeOdd1, ids.acmeOdd2]) {
+      expect(acme.text, `acme assemble should show ${id}`).toContain(id);
+    }
+    for (const id of [ids.betaSum, ids.betaRaw1, ids.betaRaw2, ids.nullRaw]) {
+      expect(acme.text, `acme assemble should hide ${id}`).not.toContain(id);
+    }
 
     const beta = await tool('beta', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
     expect(beta.isError, beta.text).toBe(false);
@@ -223,31 +343,37 @@ describe('MCP on a shared store with two repos', () => {
     }
   });
 
-  it('assemble cut short by its row cap counts only the caller\'s repo rows, not beta\'s or the NULL-origin one', async () => {
+  it("assemble cut short by its row cap counts only the caller's repo rows, not beta's or the NULL-origin one", async () => {
     const r = await assemble(acmeCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(4);
   });
 
-  it('hippo_drill answers not found for the other repo\'s summary and drops its children', async () => {
+  it("hippo_drill answers not found for the other repo's summary and drops its children", async () => {
     const own = await tool('acme', 'hippo_drill', { summary_id: ids.acmeSum });
     expect(own.isError, own.text).toBe(false);
     expect(own.text).toContain(ids.acmeRaw1);
-    expect((await tool('acme', 'hippo_drill', { summary_id: ids.betaSum })).text).toBe(`No drillable summary at id=${ids.betaSum}.`);
+    expect((await tool('acme', 'hippo_drill', { summary_id: ids.betaSum })).text).toBe(
+      `No drillable summary at id=${ids.betaSum}.`,
+    );
 
     const beta = await tool('beta', 'hippo_drill', { summary_id: ids.betaSum });
     expect(beta.isError, beta.text).toBe(false);
     expect(beta.text).toContain(ids.betaRaw1);
     expect(beta.text).not.toContain(ids.acmeOdd1);
-    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeSum })).text).toBe(`No drillable summary at id=${ids.acmeSum}.`);
+    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeSum })).text).toBe(
+      `No drillable summary at id=${ids.acmeSum}.`,
+    );
   });
 
-  it('hippo_drill on the other repo\'s leaf answers not found, and only the owning repo hears it is a leaf', async () => {
-    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toBe(`No drillable summary at id=${ids.acmeRaw1}.`);
+  it("hippo_drill on the other repo's leaf answers not found, and only the owning repo hears it is a leaf", async () => {
+    expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toBe(
+      `No drillable summary at id=${ids.acmeRaw1}.`,
+    );
     expect((await tool('acme', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toContain('is a leaf row');
   });
 
-  it('hippo_context returns the caller\'s repo and user-global rows only', async () => {
+  it("hippo_context returns the caller's repo and user-global rows only", async () => {
     expectOnly(await shown('acme', 'hippo_context'), [ids.acme, ids.global], HIDDEN_FROM_ACME(), 'acme context');
     expectOnly(await shown('beta', 'hippo_context'), [ids.beta, ids.global], HIDDEN_FROM_BETA(), 'beta context');
   });
@@ -259,11 +385,16 @@ describe('MCP on a shared store with two repos', () => {
       return ['acmetask', 'acmehandoff', 'betatask', 'betahandoff'].filter((word) => r.text.includes(word));
     };
     expect(await taskState('acme')).toEqual(['acmetask', 'acmehandoff']);
-    saveActiveTaskSnapshot(store, TENANT, { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' }, { owner: 'alice', project: ['acme'] });
+    saveActiveTaskSnapshot(
+      store,
+      TENANT,
+      { task: 'acmetask ship the release', summary: 'acme summary', next_step: 'acme next', session_id: 'acme-s' },
+      { owner: 'alice', project: ['acme'] },
+    );
     expect(await taskState('beta')).toEqual(['betatask', 'betahandoff']);
   });
 
-  it('hippo_conflicts lists the caller\'s repo pairs and hides NULL-origin and private-scope pairs', async () => {
+  it("hippo_conflicts lists the caller's repo pairs and hides NULL-origin and private-scope pairs", async () => {
     const acme = await tool('acme', 'hippo_conflicts');
     expect(acme.isError, acme.text).toBe(false);
     expect(acme.text).toContain(`conflict_${pairs.acme}:`);
@@ -273,13 +404,17 @@ describe('MCP on a shared store with two repos', () => {
     for (const id of [pairs.acme, pairs.slack, pairs.none]) expect(beta.text).not.toContain(`conflict_${id}:`);
   });
 
-  it('overflow substitution never brings in another repo\'s parent summary', async () => {
-    const summaries = (await retrieve(acmeCtx(), { query: 'harbourline', window: { limit: 4 }, filter: { project: ACME } })).results.filter((r) => r.isSummary).map((r) => r.id);
+  it("overflow substitution never brings in another repo's parent summary", async () => {
+    const summaries = (
+      await retrieve(acmeCtx(), { query: 'harbourline', window: { limit: 4 }, filter: { project: ACME } })
+    ).results
+      .filter((r) => r.isSummary)
+      .map((r) => r.id);
     expect(summaries).toContain(ids.acmeSumO);
     expect(summaries).not.toContain(ids.betaSumO);
   });
 
-  it('hippo_remember stamps the caller\'s repo, and hippo_outcome touches only what that repo recalled', async () => {
+  it("hippo_remember stamps the caller's repo, and hippo_outcome touches only what that repo recalled", async () => {
     const remembered = await tool('acme', 'hippo_remember', { text: 'the acme repo pins node twenty two' });
     const newId = /Remembered \[([^\]]+)\]/.exec(remembered.text)?.[1] ?? '';
     expect(readEntry(store, newId)?.origin_project, remembered.text).toBe('acme');
@@ -289,7 +424,9 @@ describe('MCP on a shared store with two repos', () => {
     const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcome_positive]));
     const applied = await tool('acme', 'hippo_outcome', { good: true });
     expect(applied.text).toMatch(/Applied positive outcome to [1-9]\d* memories/);
-    const touched = loadAllEntries(store, 'default').filter((e) => e.outcome_positive !== before.get(e.id)).map((e) => e.id);
+    const touched = loadAllEntries(store, 'default')
+      .filter((e) => e.outcome_positive !== before.get(e.id))
+      .map((e) => e.id);
     expectOnly(touched, [ids.acme], HIDDEN_FROM_ACME(), 'acme outcome');
   });
 });

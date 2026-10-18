@@ -37,15 +37,21 @@ describe('numeric CLI flags', () => {
   it('hippo eval --min-mrr abc exits 1 with the message', async () => {
     const corpus = join(root, 'corpus.json');
     writeFileSync(corpus, JSON.stringify({ cases: [{ id: 'a', query: 'deploy', expectedIds: ['x'] }] }));
-    const bad = await runInProcess(() => handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags: { 'min-mrr': 'abc' } }));
+    const bad = await runInProcess(() =>
+      handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags: { 'min-mrr': 'abc' } }),
+    );
     expect(bad.status).toBe(1);
     expect(bad.stderr).toContain('Invalid --min-mrr: "abc". Must be a number.');
-    const ok = await runInProcess(() => handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags: { 'min-mrr': '0' } }));
+    const ok = await runInProcess(() =>
+      handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags: { 'min-mrr': '0' } }),
+    );
     expect(ok.status).toBe(0);
   });
 
   it('hippo share --auto --min-score abc exits 1 with the message', async () => {
-    const bad = await runInProcess(() => handleShare({ hippoRoot: store, tenantId: 'default', args: [], flags: { auto: true, 'min-score': 'abc' } }));
+    const bad = await runInProcess(() =>
+      handleShare({ hippoRoot: store, tenantId: 'default', args: [], flags: { auto: true, 'min-score': 'abc' } }),
+    );
     expect(bad.status).toBe(1);
     expect(bad.stderr).toContain('Invalid --min-score: "abc". Must be a number.');
   });

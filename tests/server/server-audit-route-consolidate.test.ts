@@ -59,7 +59,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     // auditList returns AuditEvent[] directly (not {events: [...]}).
     // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
     // from src/store/audit.ts, checked immediately by the assertions below.
-    const body = await res.json() as Array<{ op: string; actor: string }>;
+    const body = (await res.json()) as Array<{ op: string; actor: string }>;
     expect(body.length).toBeGreaterThanOrEqual(1);
     expect(body.every((e) => e.op === 'consolidate')).toBe(true);
   });
@@ -81,7 +81,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(res.status).toBe(200);
     // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
     // from src/store/audit.ts, checked immediately by the assertion below.
-    const body = await res.json() as Array<{ op: string }>;
+    const body = (await res.json()) as Array<{ op: string }>;
     expect(body.length).toBeGreaterThanOrEqual(1);
     expect(body.every((e) => e.op === 'outcome')).toBe(true);
   });

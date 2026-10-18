@@ -31,13 +31,18 @@ describe('MCP auto-sleep', () => {
     // A sleep sends each new episodic memory to fact extraction, so holding that reply keeps the sleep running.
     const sent: string[] = [];
     let release = (): void => undefined;
-    const held = new Promise<void>((resolve) => { release = resolve; });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
-      sent.push(String(init?.body));
-      await held;
-      return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        sent.push(String(init?.body));
+        await held;
+        return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+      }),
+    );
 
     await remember(root, 'the deploy moved to friday');
     await vi.waitFor(() => expect(sent).toHaveLength(1));
@@ -56,18 +61,24 @@ describe('MCP auto-sleep', () => {
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
     const seen: { scope: RequestStores | undefined; open: boolean }[] = [];
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
-    vi.stubGlobal('fetch', vi.fn(async () => {
-      const scope = currentRequestStores();
-      seen.push({ scope, open: scope !== undefined && !scope.closed });
-      return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const scope = currentRequestStores();
+        seen.push({ scope, open: scope !== undefined && !scope.closed });
+        return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+      }),
+    );
 
     // HTTP POST /mcp wraps the call in a 250 ms scope; the tool call joins it.
     let callScope: RequestStores | undefined;
-    await runWithRequestStores(async () => {
-      callScope = currentRequestStores();
-      await remember(root, 'the deploy moved to friday');
-    }, { busyWaitMs: 250 });
+    await runWithRequestStores(
+      async () => {
+        callScope = currentRequestStores();
+        await remember(root, 'the deploy moved to friday');
+      },
+      { busyWaitMs: 250 },
+    );
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
     // One episodic memory is one extraction call; no later LLM pass has the facts or summaries it needs.
     expect(seen).toHaveLength(1);

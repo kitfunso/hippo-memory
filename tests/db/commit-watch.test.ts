@@ -21,7 +21,9 @@ function watched(): Watched {
   opened.push(db);
   db.exec('CREATE TABLE t (v INTEGER)');
   let count = 0;
-  watchCommits(db, () => { count++; });
+  watchCommits(db, () => {
+    count++;
+  });
   return { db, marks: () => count };
 }
 

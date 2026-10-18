@@ -1,7 +1,11 @@
 // The memory-quality audit rules: pure functions of a row, so any store can be audited by them.
 import { canAutoDelete, isKeptForGood, type MemoryEntry } from './memory.js';
 import {
-  automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
+  automaticDefect,
+  hasNoSpecificity,
+  isFragment,
+  isReleaseCommitNoise,
+  substantiveWordCount,
 } from './memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';

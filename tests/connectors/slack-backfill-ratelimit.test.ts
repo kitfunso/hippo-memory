@@ -6,7 +6,7 @@ import { slackHistoryFetcher } from '../../src/connectors/slack/web-client.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 /**
  * Integration test for rate-limit handling THROUGH the full backfill loop.

@@ -8,15 +8,35 @@ import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_proce
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-expiring-keys-floor.mjs');
 const roots: string[] = [];
 
-interface Floors { expiring: string; owner: string }
+interface Floors {
+  expiring: string;
+  owner: string;
+}
 
 function git(cwd: string, ...args: string[]): void {
-  execFileSync('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args], { cwd, stdio: 'ignore' });
+  execFileSync(
+    'git',
+    [
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'user.name=Test',
+      '-c',
+      'commit.gpgsign=false',
+      '-c',
+      'tag.gpgsign=false',
+      ...args,
+    ],
+    { cwd, stdio: 'ignore' },
+  );
 }
 
 function writeTree(root: string, version: string, floors: Floors, schema: number): void {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version }));
-  writeFileSync(join(root, 'src', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\n`);
+  writeFileSync(
+    join(root, 'src', 'util', 'version.ts'),
+    `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\n`,
+  );
   const list = Array.from({ length: schema - 50 }, (_, i) => `v${51 + i}`).join(', ');
   writeFileSync(join(root, 'src', 'db', 'migrations', 'index.ts'), `export const MIGRATIONS = [${list}];\n`);
 }
@@ -73,7 +93,9 @@ describe('check-expiring-keys-floor.mjs', () => {
   it('fails when a floor names an untagged version that is not the package version', () => {
     const r = runGate(makeRepo('1.2.0', { expiring: '1.1.5', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }));
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain('EXPIRING_KEYS_MIN_BINARY 1.1.5 names no release tag and is not the package version 1.2.0');
+    expect(r.stderr).toContain(
+      'EXPIRING_KEYS_MIN_BINARY 1.1.5 names no release tag and is not the package version 1.2.0',
+    );
   });
 
   it('TASK_OWNER_MIN_BINARY above the package fails', () => {

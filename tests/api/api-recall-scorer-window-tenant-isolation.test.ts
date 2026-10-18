@@ -18,7 +18,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string, tenantId: string): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:tenant-iso', role: 'admin' });
@@ -35,7 +39,9 @@ function makeRaw(text: string, tenantId: string): MemoryEntry {
 
 describe('scorerWindow tenant isolation', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('f3-tenant'); });
+  beforeEach(() => {
+    root = makeRoot('f3-tenant');
+  });
   afterEach(() => safeRmSync(root));
 
   // The scope+tenant SQL clauses are appended to FOUR paths in loadSearchRows

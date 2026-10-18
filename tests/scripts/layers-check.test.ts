@@ -10,11 +10,28 @@ const MAP = {
   folders: { sub: 'high' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
-const ROUTE_CALLS = ["import { requireGroup } from '../../x.js';", "export const r = (s) => requireGroup(s, 'g');", ''].join('\n');
-const ROUTE_CLEAN = ['// not requireGroup', "import { graphRows } from '../../api/graph.js';", 'export const r = graphRows;', ''].join('\n');
-const ROUTE_MAP = { order: ['low', 'high'], folders: { sub: 'high', server: 'high' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
+const ROUTE_CALLS = [
+  "import { requireGroup } from '../../x.js';",
+  "export const r = (s) => requireGroup(s, 'g');",
+  '',
+].join('\n');
+const ROUTE_CLEAN = [
+  '// not requireGroup',
+  "import { graphRows } from '../../api/graph.js';",
+  'export const r = graphRows;',
+  '',
+].join('\n');
+const ROUTE_MAP = {
+  order: ['low', 'high'],
+  folders: { sub: 'high', server: 'high' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+};
 const ROOT_CAP = { rootFiles: 2 };
-const CLI_MAP = { order: ['low', 'high'], folders: { sub: 'high', cli: 'high', store: 'low' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
+const CLI_MAP = {
+  order: ['low', 'high'],
+  folders: { sub: 'high', cli: 'high', store: 'low' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+};
 const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
 type DbAllowed = Record<string, { names: string[]; why: string }>;
 const dbMap = (allowed: DbAllowed) => ({
@@ -23,7 +40,11 @@ const dbMap = (allowed: DbAllowed) => ({
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
   dbReach: { layer: 'db', from: ['api'], allowed },
 });
-const DB_FILES = { 'src/a.ts': '', 'src/b.ts': '', 'src/db/x.ts': 'export const open = 1;\nexport const scope = 2;\nexport type Handle = 3;\n' };
+const DB_FILES = {
+  'src/a.ts': '',
+  'src/b.ts': '',
+  'src/db/x.ts': 'export const open = 1;\nexport const scope = 2;\nexport type Handle = 3;\n',
+};
 const SCOPE_ONLY = { 'api/y.ts': { names: ['scope'], why: 'the request scope stays in db' } };
 const SQLITE_MAP = {
   order: ['low', 'high'],
@@ -38,7 +59,7 @@ const SQLITE_BASE = {
   'src/mcp/keep.ts': '',
   'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
 };
-const SQLITE_IMPORT ="export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
+const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 
 type Row = {
   name: string;
@@ -64,7 +85,11 @@ const rows: Row[] = [
   },
   {
     name: 'a dynamic upward import counts as runtime',
-    files: { 'src/a.ts': "export const load = () => import('./sub/x.js');\n", 'src/b.ts': '', 'src/sub/x.ts': 'export const x = 1;\n' },
+    files: {
+      'src/a.ts': "export const load = () => import('./sub/x.js');\n",
+      'src/b.ts': '',
+      'src/sub/x.ts': 'export const x = 1;\n',
+    },
     status: 1,
     output: ['a.ts:1 -> sub/x.ts (low -> high, runtime)'],
   },
@@ -125,7 +150,10 @@ const rows: Row[] = [
   },
   {
     name: 'a type-only or namespace import of the db layer fails too',
-    files: { ...DB_FILES, 'src/api/y.ts': "import type { Handle } from '../db/x.js';\nimport * as db from '../db/x.js';\n" },
+    files: {
+      ...DB_FILES,
+      'src/api/y.ts': "import type { Handle } from '../db/x.js';\nimport * as db from '../db/x.js';\n",
+    },
     map: dbMap({}),
     status: 1,
     output: ['api/y.ts:1 imports Handle from db/x.ts', 'api/y.ts:2 imports * from db/x.ts'],
@@ -146,7 +174,11 @@ const rows: Row[] = [
   },
   {
     name: 'an allowlisted CLI store import with a reason passes',
-    files: { ...CLI_BASE, 'src/cli/v.ts': "import { s } from '../store/s.js';\n", '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: 'a constant' }]) },
+    files: {
+      ...CLI_BASE,
+      'src/cli/v.ts': "import { s } from '../store/s.js';\n",
+      '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: 'a constant' }]),
+    },
     map: CLI_MAP,
     status: 0,
     output: ['Layer order OK'],
@@ -156,7 +188,10 @@ const rows: Row[] = [
     files: {
       ...CLI_BASE,
       'src/cli/v.ts': "import { s } from '../store/s.js';\n",
-      '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: ' ' }, { file: 'cli/w.ts', target: 'store/s.ts', why: 'gone' }]),
+      '.cli-store-allowlist.json': JSON.stringify([
+        { file: 'cli/v.ts', target: 'store/s.ts', why: ' ' },
+        { file: 'cli/w.ts', target: 'store/s.ts', why: 'gone' },
+      ]),
     },
     map: CLI_MAP,
     status: 1,
@@ -188,11 +223,17 @@ const rows: Row[] = [
     files: { ...SQLITE_BASE, 'src/connectors/c.ts': SQLITE_IMPORT, 'src/mcp/m.ts': SQLITE_IMPORT },
     map: SQLITE_MAP,
     status: 1,
-    output: ['src/connectors/c.ts:2 imports src/store/sqlite/store.ts', 'src/mcp/m.ts:2 imports src/store/sqlite/store.ts'],
+    output: [
+      'src/connectors/c.ts:2 imports src/store/sqlite/store.ts',
+      'src/mcp/m.ts:2 imports src/store/sqlite/store.ts',
+    ],
   },
   {
     name: 'an api type-only import of the SQLite adapter passes',
-    files: { ...SQLITE_BASE, 'src/api/y.ts': "import type { S } from '../store/sqlite/store.js';\nexport type Y = S;\n" },
+    files: {
+      ...SQLITE_BASE,
+      'src/api/y.ts': "import type { S } from '../store/sqlite/store.js';\nexport type Y = S;\n",
+    },
     map: SQLITE_MAP,
     status: 0,
     output: ['Layer order OK'],

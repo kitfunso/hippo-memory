@@ -67,7 +67,7 @@ async function loadByIdsChunked(store: GraphStore, tenantId: string, ids: string
   if (ids.length === 0) return [];
   const out: MemoryEntry[] = [];
   for (let i = 0; i < ids.length; i += LOAD_CHUNK) {
-    out.push(...await store.entriesByIds(ids.slice(i, i + LOAD_CHUNK), tenantId));
+    out.push(...(await store.entriesByIds(ids.slice(i, i + LOAD_CHUNK), tenantId)));
   }
   return out;
 }
@@ -114,9 +114,15 @@ async function walkRelations(
       let neighborId: number;
       let reacherId: number;
       let direction: 'from' | 'to';
-      if (fromIn && !toIn) { neighborId = rel.toEntityId; reacherId = rel.fromEntityId; direction = 'to'; }
-      else if (toIn && !fromIn) { neighborId = rel.fromEntityId; reacherId = rel.toEntityId; direction = 'from'; }
-      else continue;
+      if (fromIn && !toIn) {
+        neighborId = rel.toEntityId;
+        reacherId = rel.fromEntityId;
+        direction = 'to';
+      } else if (toIn && !fromIn) {
+        neighborId = rel.fromEntityId;
+        reacherId = rel.toEntityId;
+        direction = 'from';
+      } else continue;
       if (visitedEntityIds.has(neighborId)) continue;
       visitedEntityIds.add(neighborId);
       reached.set(neighborId, { hops: depth, relType: rel.relType, direction });
@@ -143,14 +149,14 @@ function passesRecallFilters(
   // Drop it unless --include-superseded; the newer `from` endpoint is always kept.
   const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
   if (asOfDate) {
-    if (new Date(mem.valid_from) > asOfDate) return false;        // not yet valid at asOf
+    if (new Date(mem.valid_from) > asOfDate) return false; // not yet valid at asOf
     if (mem.superseded_by) {
       const succVf = successorValidFrom.get(mem.superseded_by);
       // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
       if (succVf && new Date(succVf) <= asOfDate) return false;
     }
   } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
-    return false;                                                 // default recall drops superseded
+    return false; // default recall drops superseded
   }
   return recallScope.additive
     ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested) ||
@@ -177,7 +183,10 @@ async function produceHitsForStore(
   const { hops, maxNeighbors, tenantId, asOfDate } = opts;
 
   // Seeds = graph entities (in THIS store) whose source memory is a base result.
-  const seedEntities = await store.graphReads.entitiesForMemories(tenantId, baseResults.map((r) => r.entry.id));
+  const seedEntities = await store.graphReads.entitiesForMemories(
+    tenantId,
+    baseResults.map((r) => r.entry.id),
+  );
   if (seedEntities.length === 0) return;
 
   const { reached, originMemByEntityId } = await walkRelations(store, tenantId, seedEntities, hops, maxNeighbors);
@@ -188,10 +197,10 @@ async function produceHitsForStore(
   const successorValidFrom = await loadSuccessorValidFrom(store, tenantId, loadedById, asOfDate);
 
   for (const ent of reachedEntities) {
-    if (ent.memoryId === null) continue;      // mirror-less node: not recall-surfaced
+    if (ent.memoryId === null) continue; // mirror-less node: not recall-surfaced
     const mem = loadedById.get(ent.memoryId);
-    if (!mem) continue;                       // not found / wrong tenant / already in base
-    if (seenMemoryIds.has(mem.id)) continue;  // another reached entity already added it
+    if (!mem) continue; // not found / wrong tenant / already in base
+    if (seenMemoryIds.has(mem.id)) continue; // another reached entity already added it
     if (seenContent.has(mem.content)) continue; // share/promote copy: same text, another id
     const via = reached.get(ent.id)!;
     if (!passesRecallFilters(mem, via, successorValidFrom, opts)) continue;
@@ -209,7 +218,8 @@ function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number, isG
   return {
     entry: mem,
     score: originScore * (1 - HOP_DISCOUNT * via.hops),
-    bm25: 0, cosine: 0,
+    bm25: 0,
+    cosine: 0,
     tokens: estimateTokens(mem.content),
     graphVia: via,
     isGlobal,
@@ -225,11 +235,11 @@ async function loadReachedMemories(
   reachedEntities: readonly Entity[],
   seenMemoryIds: Set<string>,
 ): Promise<Map<string, MemoryEntry>> {
-  const needLoad = [...new Set(
-    reachedEntities
-      .map((e) => e.memoryId)
-      .filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
-  )];
+  const needLoad = [
+    ...new Set(
+      reachedEntities.map((e) => e.memoryId).filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
+    ),
+  ];
   return new Map((await loadByIdsChunked(store, tenantId, needLoad)).map((m) => [m.id, m]));
 }
 
@@ -252,10 +262,7 @@ async function loadSuccessorValidFrom(
  * Returns `baseResults` unchanged when `hops <= 0`, there are no base results, or nothing new survives the filters and
  * the token budget.
  */
-export async function graphExpandRecall(
-  baseResults: SearchResult[],
-  opts: GraphExpandOpts,
-): Promise<SearchResult[]> {
+export async function graphExpandRecall(baseResults: SearchResult[], opts: GraphExpandOpts): Promise<SearchResult[]> {
   const { hops, store, global, tenantId } = opts;
   if (hops <= 0 || baseResults.length === 0) return baseResults;
   const maxNeighbors = opts.maxNeighbors ?? DEFAULT_MAX_NEIGHBORS;
@@ -271,9 +278,20 @@ export async function graphExpandRecall(
   // Expand against each distinct store the seeds may live in (local + global).
   const stores = global && global !== store ? [store, global] : [store];
   for (const each of stores) {
-    await produceHitsForStore(each, baseResults, { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin }, {
-      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope, global: each !== store,
-    });
+    await produceHitsForStore(
+      each,
+      baseResults,
+      { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin },
+      {
+        hops,
+        maxNeighbors,
+        tenantId,
+        includeSuperseded,
+        asOfDate,
+        recallScope,
+        global: each !== store,
+      },
+    );
   }
 
   if (hitsByOrigin.size === 0) return baseResults;
@@ -337,7 +355,10 @@ function mergeKeptHits(
     if (!keep.has(r)) continue;
     merged.push(r);
     for (const hit of hitsByOrigin.get(r.entry.id) ?? []) {
-      if (keep.has(hit)) { merged.push(hit); emittedHit = true; }
+      if (keep.has(hit)) {
+        merged.push(hit);
+        emittedHit = true;
+      }
     }
   }
   return emittedHit ? merged : baseResults; // nothing new survived budget -> original base

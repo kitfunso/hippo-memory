@@ -22,7 +22,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:legacy', role: 'admin' });
@@ -40,7 +44,9 @@ function makeWithScope(text: string, scope: string | null): MemoryEntry {
 
 describe('recall: default-deny on unknown:legacy', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('unknown-legacy'); });
+  beforeEach(() => {
+    root = makeRoot('unknown-legacy');
+  });
   afterEach(() => safeRmSync(root));
 
   it('unscoped recall does NOT surface scope=unknown:legacy rows (also excludes private:*)', async () => {

@@ -35,7 +35,9 @@ beforeEach(async () => {
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-brief', role: 'admin' });
-  } finally { closeHippoDb(db); }
+  } finally {
+    closeHippoDb(db);
+  }
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {
@@ -47,7 +49,11 @@ function authHeaders(key: CreateApiKeyResult = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
 async function createBrief(body: { repo: string; summary: string }, key: CreateApiKeyResult = apiKey) {
-  return fetch(`${handle.url}/v1/project-briefs`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
+  return fetch(`${handle.url}/v1/project-briefs`, {
+    method: 'POST',
+    headers: authHeaders(key),
+    body: JSON.stringify(body),
+  });
 }
 
 describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
@@ -55,15 +61,25 @@ describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
     const v1 = (await jsonAs<BriefResponse>(await createBrief({ repo: 'r', summary: 'a' }))).brief;
     await createBrief({ repo: 'other', summary: 'x' });
     await fetch(`${handle.url}/v1/project-briefs/${v1.id}/supersede`, {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ summary: 'b', changeSummary: 'c' }),
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ summary: 'b', changeSummary: 'c' }),
     });
-    const all = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs`, { headers: authHeaders() }));
+    const all = await jsonAs<BriefListResponse>(
+      await fetch(`${handle.url}/v1/project-briefs`, { headers: authHeaders() }),
+    );
     expect(all.briefs.length).toBe(3);
-    const repoR = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=r`, { headers: authHeaders() }));
+    const repoR = await jsonAs<BriefListResponse>(
+      await fetch(`${handle.url}/v1/project-briefs?repo=r`, { headers: authHeaders() }),
+    );
     expect(repoR.briefs.length).toBe(2);
-    const padded = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=%20r%20`, { headers: authHeaders() }));
+    const padded = await jsonAs<BriefListResponse>(
+      await fetch(`${handle.url}/v1/project-briefs?repo=%20r%20`, { headers: authHeaders() }),
+    );
     expect(padded.briefs.length).toBe(2); // the filter is trimmed before the lookup
-    const active = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders() }));
+    const active = await jsonAs<BriefListResponse>(
+      await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders() }),
+    );
     expect(active.briefs.length).toBe(1);
     expect(active.briefs[0].version).toBe(2);
   });
@@ -71,24 +87,32 @@ describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
   it('POST /v1/project-briefs/refresh writes a brief; dryRun returns markdown without writing', async () => {
     // dry-run on an empty repo: returns a valid digest, writes nothing
     const dry = await fetch(`${handle.url}/v1/project-briefs/refresh`, {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ repo: 'hippo', dryRun: true }),
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ repo: 'hippo', dryRun: true }),
     });
     expect(dry.status).toBe(200);
     const dryBody = await jsonAs<RefreshDryRunResponse>(dry);
     expect(dryBody.receiptCount).toBe(0);
     expect(dryBody.markdown).toContain('# Project Brief: hippo');
-    const afterDry = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() }));
+    const afterDry = await jsonAs<BriefListResponse>(
+      await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() }),
+    );
     expect(afterDry.briefs.length).toBe(0);
 
     // real refresh writes v1
     const res = await fetch(`${handle.url}/v1/project-briefs/refresh`, {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ repo: 'hippo' }),
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ repo: 'hippo' }),
     });
     expect(res.status).toBe(200);
     const body = await jsonAs<BriefResponse>(res);
     expect(body.brief.version).toBe(1);
     expect(body.brief.repo).toBe('hippo');
-    const after = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() }));
+    const after = await jsonAs<BriefListResponse>(
+      await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() }),
+    );
     expect(after.briefs.length).toBe(1);
   });
 });

@@ -19,7 +19,12 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-const issue = (memoryId: string, severity: AuditIssue['severity'], reason: string): AuditIssue => ({ memoryId, content: '', severity, reason });
+const issue = (memoryId: string, severity: AuditIssue['severity'], reason: string): AuditIssue => ({
+  memoryId,
+  content: '',
+  severity,
+  reason,
+});
 
 describe('removeAuditErrors', () => {
   it('deletes each unpinned error once, in issue order, with its own forget reason', async () => {
@@ -42,14 +47,20 @@ describe('removeAuditErrors', () => {
     ]);
 
     expect(gone).toEqual([second.id, first.id]);
-    expect(loadAllEntries(root, 'default').map((e) => e.id).sort()).toEqual([pinned.id, warned.id].sort());
+    expect(
+      loadAllEntries(root, 'default')
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual([pinned.id, warned.id].sort());
     const db = openHippoDb(root);
     try {
       const forgets = queryAuditEvents(db, { tenantId: 'default', op: 'forget' });
-      expect(forgets.map((e) => [e.targetId, e.actor, e.metadata]).sort()).toEqual([
-        [first.id, 'audit-test', { reason: 'audit --fix: vague' }],
-        [second.id, 'audit-test', { reason: 'audit --fix: too short' }],
-      ].sort());
+      expect(forgets.map((e) => [e.targetId, e.actor, e.metadata]).sort()).toEqual(
+        [
+          [first.id, 'audit-test', { reason: 'audit --fix: vague' }],
+          [second.id, 'audit-test', { reason: 'audit --fix: too short' }],
+        ].sort(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -69,7 +80,10 @@ describe('schemaFitSourceOf', () => {
       createMemory('equal weight beats optimisation', { tags: ['quant'] }),
     ];
     const source = schemaFitSourceOf(rows);
-    for (const [content, tags] of [['deploy failed again on staging', ['error']], ['new topic entirely', ['misc']]] as const) {
+    for (const [content, tags] of [
+      ['deploy failed again on staging', ['error']],
+      ['new topic entirely', ['misc']],
+    ] as const) {
       expect(schemaFitFrom(content, tags, source)).toBe(computeSchemaFit(content, [...tags], rows));
     }
   });

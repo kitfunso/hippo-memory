@@ -12,9 +12,9 @@ function resolveClassFromTokens(
 ): ClassResolution {
   if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
   // SAFETY: rows' shape matches the single `class_tag` column named in the SELECT above.
-  const rows = db.prepare(
-    `SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`,
-  ).all(tenantId) as Array<{ class_tag: string }>;
+  const rows = db.prepare(`SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`).all(tenantId) as Array<{
+    class_tag: string;
+  }>;
 
   const querySet = new Set(queryTokens);
   let bestScore = 0;

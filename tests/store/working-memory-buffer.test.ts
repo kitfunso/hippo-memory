@@ -236,9 +236,11 @@ describe('wmClear', () => {
 });
 
 describe('tenant scoping', () => {
-  it('keeps one tenant from reading, clearing or evicting another tenant\'s rows', () => {
+  it("keeps one tenant from reading, clearing or evicting another tenant's rows", () => {
     wmPush(tmpDir, { scope: 'shared', content: 'acme note', tenantId: 'acme' });
-    for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
+    for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) {
+      wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
+    }
 
     expect(wmRead(tmpDir, { tenantId: 'acme' }).map((i) => i.content)).toEqual(['acme note']);
     expect(wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toHaveLength(WM_MAX_ENTRIES);
@@ -250,7 +252,9 @@ describe('tenant scoping', () => {
   it('still lists a row written before the tenant column was filled in, for the default tenant', () => {
     const db = openHippoDb(tmpDir);
     try {
-      db.prepare(`INSERT INTO working_memory(scope, importance, content, metadata_json, created_at, updated_at) VALUES ('old', 1, 'pre-change row', '{}', 't', 't')`).run();
+      db.prepare(
+        `INSERT INTO working_memory(scope, importance, content, metadata_json, created_at, updated_at) VALUES ('old', 1, 'pre-change row', '{}', 't', 't')`,
+      ).run();
     } finally {
       closeHippoDb(db);
     }

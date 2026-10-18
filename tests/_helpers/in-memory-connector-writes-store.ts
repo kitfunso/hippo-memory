@@ -33,7 +33,8 @@ export interface ConnectorSide extends StoreSide {
   readonly records: () => readonly HeldRecord[];
 }
 
-export interface InMemoryConnectorWritesStore extends ConnectorSide, Pick<InMemoryEntryWritesStore, 'rawIdsFor' | 'archiveAllWith'> {
+export interface InMemoryConnectorWritesStore
+  extends ConnectorSide, Pick<InMemoryEntryWritesStore, 'rawIdsFor' | 'archiveAllWith'> {
   readonly store: HippoStore & { readonly entryWrites: EntryWrites; readonly connectorWrites: ConnectorWrites };
   readonly forgotten: () => number;
   /** The log row under the event's key, if one is there. */
@@ -78,26 +79,35 @@ export function sqliteConnectorSide(hippoRoot: string): ConnectorSide {
 /** Drops a staged write whose event key is already logged. */
 class AlreadyLogged extends Error {}
 
-const eventKeyOf = (event: ConnectorEvent): string => (event.connector === 'slack' ? event.eventId : event.idempotencyKey);
+const eventKeyOf = (event: ConnectorEvent): string =>
+  event.connector === 'slack' ? event.eventId : event.idempotencyKey;
 /** One key space per connector, as hippo.db keeps one log table for each. */
 const slotOf = (connector: string, eventKey: string): string => `${connector}\u0000${eventKey}`;
 
 function logRow(event: ConnectorEvent, memoryId: string | null): LoggedEvent {
   const github = event.connector === 'github' ? event : null;
   return {
-    connector: event.connector, eventKey: eventKeyOf(event), memoryId,
-    deliveryId: github?.deliveryId ?? null, eventName: github?.eventName ?? null, loggedAt: new Date().toISOString(),
+    connector: event.connector,
+    eventKey: eventKeyOf(event),
+    memoryId,
+    deliveryId: github?.deliveryId ?? null,
+    eventName: github?.eventName ?? null,
+    loggedAt: new Date().toISOString(),
   };
 }
 
 /** Byte order, as hippo.db compares text. */
 const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-const slackFirst = (a: LoggedEvent, b: LoggedEvent): number => (a.connector === b.connector ? byBytes(a.eventKey, b.eventKey) : a.connector === 'slack' ? -1 : 1);
-const oldestFirst = (a: HeldRecord, b: HeldRecord): number => byBytes(a.quarantinedAt, b.quarantinedAt) || byBytes(a.memoryId, b.memoryId);
+const slackFirst = (a: LoggedEvent, b: LoggedEvent): number =>
+  a.connector === b.connector ? byBytes(a.eventKey, b.eventKey) : a.connector === 'slack' ? -1 : 1;
+const oldestFirst = (a: HeldRecord, b: HeldRecord): number =>
+  byBytes(a.quarantinedAt, b.quarantinedAt) || byBytes(a.memoryId, b.memoryId);
 
 export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnectorWritesStore {
   const base = inMemoryEntryWritesStore(hippoRoot);
-  const events = new Map(eventsAt(hippoRoot).map((row): [string, LoggedEvent] => [slotOf(row.connector, row.eventKey), row]));
+  const events = new Map(
+    eventsAt(hippoRoot).map((row): [string, LoggedEvent] => [slotOf(row.connector, row.eventKey), row]),
+  );
   const records = recordsAt(hippoRoot);
   const slot = (event: ConnectorEvent): string => slotOf(event.connector, eventKeyOf(event));
   const logOnce = (event: ConnectorEvent, memoryId: string | null): void => {
@@ -112,8 +122,21 @@ export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnect
           // Nothing below throws, so the record and the log row land exactly when the staged entry does.
           if (quarantine) {
             const { originalScope, reason } = quarantine;
-            tx.audit.splice(rememberAt, 0, { tenantId: entry.tenant_id, actor, op: 'quarantine', targetId: entry.id, metadata: { reason, originalScope } });
-            records.push({ tenantId: entry.tenant_id, memoryId: entry.id, originalScope, reason, status: 'pending', quarantinedAt: new Date().toISOString() });
+            tx.audit.splice(rememberAt, 0, {
+              tenantId: entry.tenant_id,
+              actor,
+              op: 'quarantine',
+              targetId: entry.id,
+              metadata: { reason, originalScope },
+            });
+            records.push({
+              tenantId: entry.tenant_id,
+              memoryId: entry.id,
+              originalScope,
+              reason,
+              status: 'pending',
+              quarantinedAt: new Date().toISOString(),
+            });
           }
           if (event) events.set(slot(event), logRow(event, entry.id));
         });

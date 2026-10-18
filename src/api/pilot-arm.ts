@@ -14,7 +14,10 @@ export interface SessionArmOptions {
 /** The session's arm, or null at rate 0, with no session id, or with no store.
  *  `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash. */
 export function sessionPilotArm(
-  tenantId: string, sessionId: string | undefined, write: boolean, opts: SessionArmOptions,
+  tenantId: string,
+  sessionId: string | undefined,
+  write: boolean,
+  opts: SessionArmOptions,
 ): PilotArm | null {
   if (sessionId === undefined || sessionId.trim() === '') return null;
   const home = ledgerFiles(opts.reach);

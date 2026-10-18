@@ -11,11 +11,7 @@ import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
-import {
-  classifyOriginProject,
-  projectId,
-  projectNames,
-} from '../core/project-identity.js';
+import { classifyOriginProject, projectId, projectNames } from '../core/project-identity.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
@@ -101,17 +97,18 @@ async function loadAmbientEntries(
   const { pinnedOnly, recent, admit, recheck, admission, window, recall, onRefused } = options;
   const ownTenant = (e: MemoryEntry): boolean => e.tenant_id === tenantId;
   if (!pinnedOnly) {
-    const rows = 'query' in window
-      ? await source.store.searchRecallEntries(window.query, {
-          limit: DEFAULT_SEARCH_CANDIDATE_LIMIT,
-          tenantId,
-          requestedScope: window.exactScope,
-          explicitScopeMode: 'exact',
-          includeSuperseded: false,
-          originProjects: window.project,
-          ownScope: window.ownScope,
-        })
-      : await source.reads.contextCandidates(tenantId, window);
+    const rows =
+      'query' in window
+        ? await source.store.searchRecallEntries(window.query, {
+            limit: DEFAULT_SEARCH_CANDIDATE_LIMIT,
+            tenantId,
+            requestedScope: window.exactScope,
+            explicitScopeMode: 'exact',
+            includeSuperseded: false,
+            originProjects: window.project,
+            ownScope: window.ownScope,
+          })
+        : await source.reads.contextCandidates(tenantId, window);
     return { entries: rows.filter((e) => ownTenant(e) && admit(e)) };
   }
   // The store applies the quality floor too, or its recent-N load stops short of a store whose newest rows are junk.
@@ -140,10 +137,7 @@ interface TaskSections {
 /** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit
  * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
  * events. CLI rendering stays in `cli.ts`. */
-export async function getContext(
-  ctx: Context,
-  opts: ContextOptions,
-): Promise<ContextResult> {
+export async function getContext(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
   if (budget <= 0) {
@@ -214,8 +208,7 @@ function warnIsolationIgnored(hippoRoot: string): void {
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOptions) {
   // No reach means an integrator's own store: one project, no global store beside it.
-  const reach: StoreReach =
-    ctx.reach ?? { hasLocal: true, isGlobal: false, shared: ctx.config.sharedStore };
+  const reach: StoreReach = ctx.reach ?? { hasLocal: true, isGlobal: false, shared: ctx.config.sharedStore };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
   // A store serving many people is not its operator's, so the operator's own global store stays out; the root sets
@@ -303,9 +296,8 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
 /** The prompt-recall candidate request the ambient loads carry, when the prompt has any terms. */
 function promptRecallRequest(opts: ContextOptions, plan: ContextPlan): AmbientRecallRequest | undefined {
   const { pinnedInject } = plan.config;
-  const promptRecallTerms = plan.promptRecallPending && pinnedInject.enabled
-    ? Array.from(promptTokens(opts.prompt ?? ''))
-    : [];
+  const promptRecallTerms =
+    plan.promptRecallPending && pinnedInject.enabled ? Array.from(promptTokens(opts.prompt ?? '')) : [];
   return promptRecallTerms.length > 0
     ? {
         terms: promptRecallTerms,
@@ -327,11 +319,15 @@ function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget: number
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   if (!pinnedOnly) obs?.queried(plan.query);
   return cost
-    ? Math.max(0, blockBudget - cost.fixed(blockBudget, {
-        cross: plan.includeCrossProject,
-        promptRecall: promptRecallPending,
-        ambient: !pinnedOnly && config.ambient.enabled,
-      }))
+    ? Math.max(
+        0,
+        blockBudget -
+          cost.fixed(blockBudget, {
+            cross: plan.includeCrossProject,
+            promptRecall: promptRecallPending,
+            ambient: !pinnedOnly && config.ambient.enabled,
+          }),
+      )
     : blockBudget;
 }
 
@@ -437,7 +433,8 @@ async function loadPools(
   const loadAdmit = obs ? obs.watchAdmit(poolAdmit) : poolAdmit;
   // With prompt recall on, eligibility reports a row the quality floor drops.
   const refusedBy = (isGlobal: boolean): ((refusal: AmbientRefusal) => void) | undefined =>
-    obs && ((r) => {
+    obs &&
+    ((r) => {
       if (r.reason === 'admission') obs.filtered(r.id);
       else if (!plan.promptRecallPending) obs.qualityDropped(r.id, isGlobal);
     });
@@ -483,18 +480,36 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   // Ranking reports nothing itself, so its results are offered here and the cuts below can name what they drop.
   if (!plan.pinnedOnly && obs) {
     const pool = plan.query === NO_QUERY ? 'strength' : 'search';
-    obs.offer(picked.filter((r) => r.isGlobal !== true).map((r) => r.entry), false, pool);
-    obs.offer(picked.filter((r) => r.isGlobal === true).map((r) => r.entry), true, pool);
+    obs.offer(
+      picked.filter((r) => r.isGlobal !== true).map((r) => r.entry),
+      false,
+      pool,
+    );
+    obs.offer(
+      picked.filter((r) => r.isGlobal === true).map((r) => r.entry),
+      true,
+      pool,
+    );
   }
   let selected = picked;
   if (plan.limit < selected.length) {
     const cut = selected.slice(0, plan.limit);
-    obs?.dropMissing(selected.map((r) => r.entry), cut.map((r) => r.entry), 'limit', 'limit');
+    obs?.dropMissing(
+      selected.map((r) => r.entry),
+      cut.map((r) => r.entry),
+      'limit',
+      'limit',
+    );
     selected = cut;
   }
   // After the last cut, so a merged row that was cut hides nothing.
   const heldDropped = dropHeldCopies(selected, (r) => r.entry);
-  obs?.dropMissing(selected.map((r) => r.entry), heldDropped.map((r) => r.entry), 'limit', 'duplicate');
+  obs?.dropMissing(
+    selected.map((r) => r.entry),
+    heldDropped.map((r) => r.entry),
+    'limit',
+    'duplicate',
+  );
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
@@ -593,4 +608,3 @@ async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<Ambien
   const total = tallies.length > 0 ? tallies.reduce(addAmbientTallies) : undefined;
   return total && total.total > 0 ? ambientStateFromTallies(total) : undefined;
 }
-

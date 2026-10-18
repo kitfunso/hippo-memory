@@ -35,20 +35,14 @@ import {
 import { requireInit } from './shared.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
-import {
-  hostSessionId,
-  hookStoreRoot,
-  hookRuntime,
-  payloadCwdRoot,
-  inPilotHoldout,
-} from './hook-runtime.js';
+import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, inPilotHoldout } from './hook-runtime.js';
 
 async function cmdContext(
   hippoRoot: string,
   tenantId: string,
   args: string[],
   flags: CliFlags,
-  stdinText?: string
+  stdinText?: string,
 ): Promise<void> {
   const rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
     stdinText,
@@ -261,13 +255,22 @@ function renderContextJson(view: ContextView, query: string): void {
   });
   console.log(jsonText);
   rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-  bookLedgerTurn({
-    uses: [{
-      tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
-    }],
-    delivery: (write) => flushDeliveryRecorder(rec, write),
-  }, view.reach);
+  bookLedgerTurn(
+    {
+      uses: [
+        {
+          tenantId: view.tenantId,
+          sessionId: view.ledgerSessionId,
+          surface: view.pinnedOnly ? 'hook' : 'context',
+          event: 'inject',
+          items: output.length,
+          tokens: estimateTokens(jsonText),
+        },
+      ],
+      delivery: (write) => flushDeliveryRecorder(rec, write),
+    },
+    view.reach,
+  );
 }
 
 /** The default format; the header figure counts the whole block, sections included, as the ledger does. */
@@ -276,31 +279,42 @@ function renderContextMarkdown(view: ContextView): void {
   // Cross-project inclusions get their own section so they never masquerade as project memory.
   const renderItems = toRenderItems(result.entries.filter((r) => r.category !== 'cross-project'));
   const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
-  const text = settleTokens((t) => captureConsole(() => {
-    if (result.activeSnapshot) {
-      printActiveTaskSnapshot(result.activeSnapshot);
-    }
-    if (result.sessionHandoff) {
-      printHandoff(result.sessionHandoff);
-    }
-    if (result.recentEvents && result.recentEvents.length > 0) {
-      printSessionEvents(result.recentEvents);
-    }
-    if (renderItems.length > 0) for (const line of contextBlockLines(renderItems, t, framing)) console.log(line);
-    printCrossProjectSection(crossEntries);
-    if (result.ambientState) {
-      console.log(`\n${renderAmbientSummary(result.ambientState)}`);
-    }
-  }));
+  const text = settleTokens((t) =>
+    captureConsole(() => {
+      if (result.activeSnapshot) {
+        printActiveTaskSnapshot(result.activeSnapshot);
+      }
+      if (result.sessionHandoff) {
+        printHandoff(result.sessionHandoff);
+      }
+      if (result.recentEvents && result.recentEvents.length > 0) {
+        printSessionEvents(result.recentEvents);
+      }
+      if (renderItems.length > 0) for (const line of contextBlockLines(renderItems, t, framing)) console.log(line);
+      printCrossProjectSection(crossEntries);
+      if (result.ambientState) {
+        console.log(`\n${renderAmbientSummary(result.ambientState)}`);
+      }
+    }),
+  );
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-  bookLedgerTurn({
-    uses: [{
-      tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
-      event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
-    }],
-    delivery: (write) => flushDeliveryRecorder(rec, write),
-  }, view.reach);
+  bookLedgerTurn(
+    {
+      uses: [
+        {
+          tenantId: view.tenantId,
+          sessionId: view.ledgerSessionId,
+          surface: view.pinnedOnly ? 'hook' : 'context',
+          event: 'inject',
+          items: renderItems.length,
+          tokens: estimateTokens(text),
+        },
+      ],
+      delivery: (write) => flushDeliveryRecorder(rec, write),
+    },
+    view.reach,
+  );
 }
 
 function printCrossProjectSection(items: api.ContextResultEntry[]): void {

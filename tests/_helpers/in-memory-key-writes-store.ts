@@ -5,7 +5,15 @@ import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { createApiKey, grantScope, readApiKeyRecord, revokeApiKey } from '../../src/store/auth.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import type {
-  ApiKeyListRow, ApiKeyRecord, AppendAuditOpts, AuditEvent, HippoStore, KeyListQuery, KeyMint, KeyWrites, NewApiKey,
+  ApiKeyListRow,
+  ApiKeyRecord,
+  AppendAuditOpts,
+  AuditEvent,
+  HippoStore,
+  KeyListQuery,
+  KeyMint,
+  KeyWrites,
+  NewApiKey,
 } from '../../src/entry/store-kit.js';
 import { FIXTURE_REVOKED_AT, TENANT_A, TENANT_B, type StoreSide, type TwoTenantFixture } from './store-conformance.js';
 import { portOnlyStore } from './port-only-store.js';
@@ -23,8 +31,16 @@ interface KeyRow extends Omit<NewApiKey, 'role'> {
 }
 
 interface SqlKeyRow {
-  id: number; key_id: string; key_hash: string; tenant_id: string; label: string | null; created_at: string;
-  revoked_at: string | null; role: string; expires_at: string | null; owner_subject: string | null;
+  id: number;
+  key_id: string;
+  key_hash: string;
+  tenant_id: string;
+  label: string | null;
+  created_at: string;
+  revoked_at: string | null;
+  role: string;
+  expires_at: string | null;
+  owner_subject: string | null;
 }
 
 interface CopiedRows {
@@ -36,13 +52,28 @@ interface CopiedRows {
 function copyRows(hippoRoot: string): CopiedRows {
   const db = openHippoDb(hippoRoot);
   try {
-    const sql = 'SELECT id, key_id, key_hash, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys ORDER BY id';
+    const sql =
+      'SELECT id, key_id, key_hash, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys ORDER BY id';
     // SAFETY: the SELECT names exactly SqlKeyRow's columns.
     const rows = db.prepare(sql).all() as SqlKeyRow[];
-    const keys = new Map(rows.map((r): [string, KeyRow] => [r.key_id, {
-      id: r.id, keyId: r.key_id, keyHash: r.key_hash, tenantId: r.tenant_id, label: r.label, createdAt: r.created_at, revokedAt: r.revoked_at,
-      role: r.role, expiresAt: r.expires_at, ownerSubject: r.owner_subject, scopes: (readApiKeyRecord(db, r.key_id)?.scopes ?? []),
-    }]));
+    const keys = new Map(
+      rows.map((r): [string, KeyRow] => [
+        r.key_id,
+        {
+          id: r.id,
+          keyId: r.key_id,
+          keyHash: r.key_hash,
+          tenantId: r.tenant_id,
+          label: r.label,
+          createdAt: r.created_at,
+          revokedAt: r.revoked_at,
+          role: r.role,
+          expiresAt: r.expires_at,
+          ownerSubject: r.owner_subject,
+          scopes: readApiKeyRecord(db, r.key_id)?.scopes ?? [],
+        },
+      ]),
+    );
     return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighIdAt(db) };
   } finally {
     closeHippoDb(db);
@@ -67,15 +98,45 @@ function listed(row: KeyRow, query: KeyListQuery, nowIso: string): boolean {
   return row.id < key || (row.id === key && row.id < Number(query.after.id));
 }
 
-function listRow({ id, keyId, tenantId, label, createdAt, revokedAt, role, scopes, expiresAt, ownerSubject }: KeyRow): ApiKeyListRow {
-  return { rowId: id, key: { keyId, tenantId, label, createdAt, revokedAt, role: role === 'admin' ? 'admin' : 'member', scopes: [...scopes], expiresAt, ownerSubject } };
+function listRow({
+  id,
+  keyId,
+  tenantId,
+  label,
+  createdAt,
+  revokedAt,
+  role,
+  scopes,
+  expiresAt,
+  ownerSubject,
+}: KeyRow): ApiKeyListRow {
+  return {
+    rowId: id,
+    key: {
+      keyId,
+      tenantId,
+      label,
+      createdAt,
+      revokedAt,
+      role: role === 'admin' ? 'admin' : 'member',
+      scopes: [...scopes],
+      expiresAt,
+      ownerSubject,
+    },
+  };
 }
 
 function recordOf({ keyHash, tenantId, revokedAt, role, scopes, expiresAt, ownerSubject }: KeyRow): ApiKeyRecord {
   return { keyHash, tenantId, revokedAt, role, scopes: [...scopes], expiresAt, ownerSubject };
 }
 
-const createAudit = ({ key, actor, metadata }: KeyMint): AppendAuditOpts => ({ tenantId: key.tenantId, actor, op: 'auth_create', targetId: key.keyId, metadata });
+const createAudit = ({ key, actor, metadata }: KeyMint): AppendAuditOpts => ({
+  tenantId: key.tenantId,
+  actor,
+  op: 'auth_create',
+  targetId: key.keyId,
+  metadata,
+});
 
 export function inMemoryKeyWritesStore(hippoRoot: string): InMemoryKeyWritesStore {
   const { keys, audit, highId } = copyRows(hippoRoot);
@@ -84,7 +145,15 @@ export function inMemoryKeyWritesStore(hippoRoot: string): InMemoryKeyWritesStor
   const append = (event: AppendAuditOpts): void => {
     lastAuditId += 1;
     const metadata: AuditEvent['metadata'] = JSON.parse(JSON.stringify(event.metadata ?? {}));
-    audit.push({ id: lastAuditId, ts: new Date().toISOString(), tenantId: event.tenantId, actor: event.actor, op: event.op, targetId: event.targetId ?? null, metadata });
+    audit.push({
+      id: lastAuditId,
+      ts: new Date().toISOString(),
+      tenantId: event.tenantId,
+      actor: event.actor,
+      op: event.op,
+      targetId: event.targetId ?? null,
+      metadata,
+    });
   };
   // Checked before any change, so a refused insert leaves the store as it was, as a rolled-back transaction does.
   const insert = (key: NewApiKey): void => {
@@ -100,19 +169,34 @@ export function inMemoryKeyWritesStore(hippoRoot: string): InMemoryKeyWritesStor
     async createSelfApiKey(mint) {
       const { key, actor, perSubject } = mint;
       const now = Date.parse(key.createdAt);
-      const live = [...keys.values()].filter((k) => k.tenantId === key.tenantId && k.ownerSubject === key.ownerSubject && k.revokedAt === null && now < expiryMs(k.expiresAt));
+      const live = [...keys.values()].filter(
+        (k) =>
+          k.tenantId === key.tenantId &&
+          k.ownerSubject === key.ownerSubject &&
+          k.revokedAt === null &&
+          now < expiryMs(k.expiresAt),
+      );
       const replaced = live.slice(0, Math.max(0, live.length - perSubject + 1));
       insert(key);
       for (const row of replaced) {
         keys.set(row.keyId, { ...row, revokedAt: key.createdAt });
-        append({ tenantId: key.tenantId, actor, op: 'auth_revoke', targetId: row.keyId, metadata: { replacedBy: key.keyId } });
+        append({
+          tenantId: key.tenantId,
+          actor,
+          op: 'auth_revoke',
+          targetId: row.keyId,
+          metadata: { replacedBy: key.keyId },
+        });
       }
       append(createAudit(mint));
       return replaced.map((row) => row.keyId);
     },
     async listApiKeys(query) {
       const nowIso = new Date().toISOString();
-      const rows = [...keys.values()].filter((k) => listed(k, query, nowIso)).reverse().map(listRow);
+      const rows = [...keys.values()]
+        .filter((k) => listed(k, query, nowIso))
+        .reverse()
+        .map(listRow);
       return query.limit === undefined ? rows : rows.slice(0, query.limit);
     },
   };

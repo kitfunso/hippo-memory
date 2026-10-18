@@ -16,7 +16,10 @@ import { loadConfig } from '../../src/core/config.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 
 const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
-const NEW_INDEXES = [...OBJECT_TABLES.map((t) => `idx_${t}_tenant_status_created`), 'idx_memories_source_tenant_created'];
+const NEW_INDEXES = [
+  ...OBJECT_TABLES.map((t) => `idx_${t}_tenant_status_created`),
+  'idx_memories_source_tenant_created',
+];
 
 const roots: string[] = [];
 
@@ -38,7 +41,9 @@ function plan(db: DatabaseSyncLike, sql: string, ...params: Array<string | numbe
 
 function indexNames(db: DatabaseSyncLike): string[] {
   // SAFETY: one `name` TEXT column.
-  return (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name`).all() as Array<{ name: string }>).map((r) => r.name);
+  return (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name`).all() as Array<{ name: string }>
+  ).map((r) => r.name);
 }
 
 function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
@@ -52,7 +57,9 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 
 /** The SQL the store really prepares for one call, picked out by a fragment only that statement holds. */
 async function preparedSql(fn: () => void | Promise<void>, fragment: string): Promise<string> {
-  const { statements } = await recordStatementsAsync(async () => { await fn(); });
+  const { statements } = await recordStatementsAsync(async () => {
+    await fn();
+  });
   const sql = statements.find((s) => s.includes(fragment));
   if (sql === undefined) throw new Error(`no statement holding ${fragment}`);
   return sql;
@@ -61,15 +68,27 @@ async function preparedSql(fn: () => void | Promise<void>, fragment: string): Pr
 describe('object list query plan', () => {
   it('lists by status off the new index, with or without a cursor', async () => {
     const root = newRoot();
-    for (const text of ['one', 'two', 'three']) await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: `decide ${text}` });
+    for (const text of ['one', 'two', 'three']) {
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: `decide ${text}`,
+      });
+    }
     const first = (await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 1 }))[0]!;
-    const listSql = await preparedSql(async () => { await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 2 }); }, 'ORDER BY created_at DESC, id DESC');
-    const pageSql = await preparedSql(
-      async () => { await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 2, after: { key: first.createdAt, id: first.id } }); },
-      '(created_at, id) < (?, ?)',
-    );
+    const listSql = await preparedSql(async () => {
+      await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 2 });
+    }, 'ORDER BY created_at DESC, id DESC');
+    const pageSql = await preparedSql(async () => {
+      await loadDecisions(objectsAt(root), 'default', {
+        status: 'active',
+        limit: 2,
+        after: { key: first.createdAt, id: first.id },
+      });
+    }, '(created_at, id) < (?, ?)');
     withDb(root, (db) => {
-      for (const detail of [plan(db, listSql, 'default', 'active', 2), plan(db, pageSql, 'default', 'active', first.createdAt, first.id, 2)]) {
+      for (const detail of [
+        plan(db, listSql, 'default', 'active', 2),
+        plan(db, pageSql, 'default', 'active', first.createdAt, first.id, 2),
+      ]) {
         expect(detail).toMatch(/USING (COVERING )?INDEX idx_decisions_tenant_status_created/);
         expect(detail).not.toContain('TEMP B-TREE');
         expect(detail).not.toMatch(/\bSCAN\b/);
@@ -81,7 +100,13 @@ describe('object list query plan', () => {
     const root = newRoot();
     withDb(root, (db) => {
       for (const table of OBJECT_TABLES) {
-        const detail = plan(db, `SELECT * FROM ${table} WHERE tenant_id = ? AND status = ? ORDER BY created_at DESC, id DESC LIMIT ?`, 'default', 'active', 5);
+        const detail = plan(
+          db,
+          `SELECT * FROM ${table} WHERE tenant_id = ? AND status = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+          'default',
+          'active',
+          5,
+        );
         expect(detail).toMatch(new RegExp(`USING (COVERING )?INDEX idx_${table}_tenant_status_created`));
         expect(detail).not.toContain('TEMP B-TREE');
       }
@@ -90,13 +115,25 @@ describe('object list query plan', () => {
 
   it('pages in created_at then id order, ties included, at every page size', async () => {
     const root = newRoot();
-    const saved = await Promise.all(['a', 'b', 'c', 'd', 'e'].map((t) => saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: `tie ${t}` })));
-    await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'other', { decisionText: 'another tenant' });
+    const saved = await Promise.all(
+      ['a', 'b', 'c', 'd', 'e'].map((t) =>
+        saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: `tie ${t}` }),
+      ),
+    );
+    await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'other', {
+      decisionText: 'another tenant',
+    });
     withDb(root, (db) => {
-      db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE id IN (?, ?, ?)`).run(saved[0]!.id, saved[2]!.id, saved[4]!.id);
+      db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE id IN (?, ?, ?)`).run(
+        saved[0]!.id,
+        saved[2]!.id,
+        saved[4]!.id,
+      );
     });
     const all = await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 50 });
-    const expected = [...all].sort((x, y) => (x.createdAt === y.createdAt ? y.id - x.id : x.createdAt < y.createdAt ? 1 : -1));
+    const expected = [...all].sort((x, y) =>
+      x.createdAt === y.createdAt ? y.id - x.id : x.createdAt < y.createdAt ? 1 : -1,
+    );
     expect(all.map((d) => d.id)).toEqual(expected.map((d) => d.id));
     expect(all).toHaveLength(5);
     for (const size of [1, 2, 4, 5]) {
@@ -117,7 +154,14 @@ describe('object list query plan', () => {
 describe('session digest read plan', () => {
   it('reads the digest rows through idx_memories_source_tenant_created, not the tenant walk', async () => {
     const root = newRoot();
-    const sql = await preparedSql(() => { sqliteSyncStore(root).contextReads.liveContentsBySourceAndTag('default', 'session-digest', 'session-digest', 's1'); }, 'instr(tags_json, ?)');
+    const sql = await preparedSql(() => {
+      sqliteSyncStore(root).contextReads.liveContentsBySourceAndTag(
+        'default',
+        'session-digest',
+        'session-digest',
+        's1',
+      );
+    }, 'instr(tags_json, ?)');
     withDb(root, (db) => {
       const detail = plan(db, sql, 'default', 'session-digest', '"session-digest"', 's1');
       expect(detail).toContain('USING INDEX idx_memories_source_tenant_created (source=? AND tenant_id=?)');
@@ -127,8 +171,11 @@ describe('session digest read plan', () => {
 
   it('returns the same digests, in store order, as a filter over every row', () => {
     const root = newRoot();
-    const digest = (content: string, extra: Partial<CreateMemoryOptions> = {}, tags = ['session-digest']): MemoryEntry =>
-      createMemory(content, { source: 'session-digest', tags, sourceSessionId: 's2', ...extra });
+    const digest = (
+      content: string,
+      extra: Partial<CreateMemoryOptions> = {},
+      tags = ['session-digest'],
+    ): MemoryEntry => createMemory(content, { source: 'session-digest', tags, sourceSessionId: 's2', ...extra });
     const entries = [
       digest('digest from another session'),
       digest('digest from this session', { sourceSessionId: 's1' }),
@@ -140,12 +187,28 @@ describe('session digest read plan', () => {
       digest('second digest from another session'),
     ];
     for (const e of entries) writeEntry(root, e);
-    withDb(root, (db) => db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(entries[0]!.id, entries[7]!.id));
+    withDb(root, (db) =>
+      db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(entries[0]!.id, entries[7]!.id),
+    );
     const expected = loadAllEntries(root, 'default')
-      .filter((e) => e.source === 'session-digest' && e.tags.includes('session-digest') && !e.extracted_from && !e.superseded_by && e.source_session_id !== 's1')
+      .filter(
+        (e) =>
+          e.source === 'session-digest' &&
+          e.tags.includes('session-digest') &&
+          !e.extracted_from &&
+          !e.superseded_by &&
+          e.source_session_id !== 's1',
+      )
       .map((e) => e.content);
     expect([...expected].sort()).toEqual(['digest from another session', 'digest with no session']);
-    expect(sqliteSyncStore(root).contextReads.liveContentsBySourceAndTag('default', 'session-digest', 'session-digest', 's1')).toEqual(expected);
+    expect(
+      sqliteSyncStore(root).contextReads.liveContentsBySourceAndTag(
+        'default',
+        'session-digest',
+        'session-digest',
+        's1',
+      ),
+    ).toEqual(expected);
   });
 });
 
@@ -158,7 +221,9 @@ describe('v56 migration', () => {
     });
     const first = withDb(root, (db) => {
       // SAFETY: meta.value is TEXT; one row by primary key.
-      expect((db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value: string }).value).toBe(LATEST_SCHEMA_VERSION_STR);
+      expect((db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value: string }).value).toBe(
+        LATEST_SCHEMA_VERSION_STR,
+      );
       return indexNames(db);
     });
     for (const name of NEW_INDEXES) expect(first).toContain(name);

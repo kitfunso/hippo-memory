@@ -38,7 +38,12 @@ beforeEach(async () => {
   home = makeRoot('http-recall-mode');
   // The better BM25 match has decayed for years; hybrid scoring must see that.
   const old = '2020-01-01T00:00:00.000Z';
-  const weak = { ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created: old, last_retrieved: old, half_life_days: 1 };
+  const weak = {
+    ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    created: old,
+    last_retrieved: old,
+    half_life_days: 1,
+  };
   const strong = createMemory('alpha gamma delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(home, weak);
   writeEntry(home, strong);

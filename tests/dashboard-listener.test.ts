@@ -65,23 +65,27 @@ function watch(child: ChildProcessWithoutNullStreams): Watched {
     stdout += chunk.toString('utf8');
     for (const check of waiting) check();
   });
-  child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
   const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
   // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
   const exited = new Promise<Exit>((done) => child.once('close', (code, signal) => done({ code, signal })));
-  const printed = (pattern: RegExp): Promise<RegExpExecArray> => new Promise((done, fail) => {
-    const giveUp = (why: string): void => fail(new Error(`${why} before the dashboard printed ${pattern}\n${output()}`));
-    const timer = setTimeout(() => giveUp(`${REACH_MS} ms passed`), REACH_MS);
-    void exited.then(({ code, signal }) => giveUp(`the child ended (code ${code}, signal ${signal})`));
-    const check = (): void => {
-      const match = pattern.exec(stdout);
-      if (match === null) return;
-      clearTimeout(timer);
-      done(match);
-    };
-    waiting.push(check);
-    check();
-  });
+  const printed = (pattern: RegExp): Promise<RegExpExecArray> =>
+    new Promise((done, fail) => {
+      const giveUp = (why: string): void =>
+        fail(new Error(`${why} before the dashboard printed ${pattern}\n${output()}`));
+      const timer = setTimeout(() => giveUp(`${REACH_MS} ms passed`), REACH_MS);
+      void exited.then(({ code, signal }) => giveUp(`the child ended (code ${code}, signal ${signal})`));
+      const check = (): void => {
+        const match = pattern.exec(stdout);
+        if (match === null) return;
+        clearTimeout(timer);
+        done(match);
+      };
+      waiting.push(check);
+      check();
+    });
   return { stderr: () => stderr, output, printed, exited };
 }
 
@@ -126,14 +130,21 @@ describe('hippo dashboard listener', () => {
   it('closes the listener and the snapshot store, then exits 0, on the stop signal this platform can deliver', async () => {
     const s = project();
     const reportFile = join(s.dir, 'connections.json');
-    const child = spawn(process.execPath, [CONNECTIONS_CLI, reportFile, 'dashboard', '--port', '0'], { cwd: s.proj, env: s.env });
+    const child = spawn(process.execPath, [CONNECTIONS_CLI, reportFile, 'dashboard', '--port', '0'], {
+      cwd: s.proj,
+      env: s.env,
+    });
     children.push(child);
     const watched = watch(child);
     // stdout is a pipe here, so the token is in the URL file the banner names rather than on stdout.
-    const [, port, urlFile] = await watched.printed(/Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/);
+    const [, port, urlFile] = await watched.printed(
+      /Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/,
+    );
     const token = /\?token=(\S+)/.exec(readFileSync(urlFile!.trim(), 'utf8'))?.[1];
     // The snapshot store opens its connection on the first read, and the reply's kept-alive socket is one the stop has to close.
-    const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: sessionCookie(Number(port), token ?? '') } });
+    const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, {
+      headers: { cookie: sessionCookie(Number(port), token ?? '') },
+    });
     expect(overview.status, await overview.text()).toBe(200);
 
     deliverStop(child);

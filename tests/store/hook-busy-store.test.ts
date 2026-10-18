@@ -7,7 +7,13 @@ import { spawnSync, type ChildProcess } from 'node:child_process';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../../src/core/memory.js';
-import { closeHippoDb, getHippoDbPath, openHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getHippoDbPath,
+  openHippoDb,
+  withSharedStoreHandles,
+  HOOK_DB_WAIT_MS,
+} from '../../src/db/index.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -22,13 +28,21 @@ let holder: ChildProcess | null = null;
 function runHook(args: string[], input: string) {
   const traceDir = path.join(tmp, 'lock-waits');
   const res = spawnSync(process.execPath, ['--no-warnings', HIPPO_JS, ...args], {
-    env: tracingLockWaits({ ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: path.join(tmp, 'global'), HIPPO_LOG: 'warn' }, traceDir),
+    env: tracingLockWaits(
+      { ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: path.join(tmp, 'global'), HIPPO_LOG: 'warn' },
+      traceDir,
+    ),
     cwd: projectDir,
     input,
     encoding: 'utf8',
     timeout: 60000,
   });
-  return { status: res.status, stdout: res.stdout, stderr: res.stderr, lockWaitAskedMs: lockWaitAskedMs(traceDir, res.pid) };
+  return {
+    status: res.status,
+    stdout: res.stdout,
+    stderr: res.stderr,
+    lockWaitAskedMs: lockWaitAskedMs(traceDir, res.pid),
+  };
 }
 
 beforeEach(() => {
@@ -37,8 +51,14 @@ beforeEach(() => {
   localRoot = path.join(projectDir, '.hippo');
   fs.mkdirSync(projectDir, { recursive: true });
   initStore(localRoot);
-  writeEntry(localRoot, { ...createMemory('PINNED: always check the rollback plan before deploy', { baseHalfLifeDays: 30 }), pinned: true });
-  writeEntry(localRoot, createMemory('the postgres migration needs a rollback plan and a dry run', { baseHalfLifeDays: 30 }));
+  writeEntry(localRoot, {
+    ...createMemory('PINNED: always check the rollback plan before deploy', { baseHalfLifeDays: 30 }),
+    pinned: true,
+  });
+  writeEntry(
+    localRoot,
+    createMemory('the postgres migration needs a rollback plan and a dry run', { baseHalfLifeDays: 30 }),
+  );
 });
 
 afterEach(async () => {
@@ -51,7 +71,10 @@ describe('context hook while another process holds the store write lock', () => 
     holder = await holdStoreWriteLock(getHippoDbPath(localRoot));
     const payload = JSON.stringify({ session_id: 'sess-busy-1', prompt: 'postgres migration rollback plan' });
 
-    const run = runHook(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
+    const run = runHook(
+      ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
+      payload,
+    );
 
     expect(run.status).toBe(0);
     expect(run.lockWaitAskedMs).toBe(HOOK_DB_WAIT_MS);
@@ -63,7 +86,10 @@ describe('context hook while another process holds the store write lock', () => 
 
   it('injects as usual once the lock is gone', () => {
     const payload = JSON.stringify({ session_id: 'sess-busy-2', prompt: 'postgres migration rollback plan' });
-    const run = runHook(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
+    const run = runHook(
+      ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
+      payload,
+    );
     expect(run.status).toBe(0);
     expect(run.stdout).toContain('rollback plan');
     expect(run.stderr).not.toContain('store busy');
@@ -76,12 +102,15 @@ describe('lock wait per command kind', () => {
     Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout);
 
   it('a hook scope opens with the short hook wait', async () => {
-    const wait = await withSharedStoreHandles(() => {
-      const db = openHippoDb(localRoot);
-      const ms = busyTimeout(db);
-      closeHippoDb(db);
-      return ms;
-    }, { busyWaitMs: HOOK_DB_WAIT_MS });
+    const wait = await withSharedStoreHandles(
+      () => {
+        const db = openHippoDb(localRoot);
+        const ms = busyTimeout(db);
+        closeHippoDb(db);
+        return ms;
+      },
+      { busyWaitMs: HOOK_DB_WAIT_MS },
+    );
     expect(wait).toBe(HOOK_DB_WAIT_MS);
   });
 

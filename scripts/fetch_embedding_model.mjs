@@ -42,7 +42,17 @@
  * contains a non-empty `onnx/model.onnx`. Run with `--force` to re-fetch.
  */
 import { createHash } from 'node:crypto';
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { spawnSync } from 'node:child_process';
@@ -74,21 +84,16 @@ const MODELS = {
     md5Base64: 'qfG9AF6uyVOG9RgHd1XpLA==',
     tarPrefix: 'fast-multilingual-e5-large',
     onnxFileInTarball: 'model.onnx',
-    onnxExternalData: 'model.onnx_data',  // ONNX external-data sidecar, must live next to model.onnx
+    onnxExternalData: 'model.onnx_data', // ONNX external-data sidecar, must live next to model.onnx
   },
 };
 
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 // Required files (must be present in the tarball)
-const FILES_REQUIRED = [
-  'config.json',
-  'tokenizer.json',
-  'tokenizer_config.json',
-  'special_tokens_map.json',
-];
+const FILES_REQUIRED = ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json'];
 // Optional files (copied if present; absent files do NOT fail extraction)
 const FILES_OPTIONAL = [
-  'vocab.txt',  // WordPiece-tokenized models (BERT family); absent for SentencePiece (XLM-R)
+  'vocab.txt', // WordPiece-tokenized models (BERT family); absent for SentencePiece (XLM-R)
 ];
 
 function parseArgs(args) {
@@ -107,8 +112,7 @@ Supported --model values:
     }
   }
   if (!out.dest) {
-    out.dest = process.env.HIPPO_MODEL_CACHE
-      || resolve('benchmarks/longmemeval/data/model-cache');
+    out.dest = process.env.HIPPO_MODEL_CACHE || resolve('benchmarks/longmemeval/data/model-cache');
   }
   if (!MODELS[out.model]) {
     console.error(`[fetch_embedding_model] unknown --model ${out.model}; supported: ${Object.keys(MODELS).join(', ')}`);
@@ -137,7 +141,9 @@ function extractTarball(tarPath, destDir) {
   mkdirSync(destDir, { recursive: true });
   // --exclude='._*' drops macOS resource-fork files that fastembed tarballs
   // produced on darwin sometimes ship (e.g. multilingual-e5-large).
-  const res = spawnSync('tar', ['-xzf', tarPath, '-C', destDir, '--exclude=._*'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const res = spawnSync('tar', ['-xzf', tarPath, '-C', destDir, '--exclude=._*'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   if (res.status !== 0) {
     throw new Error(`tar extraction failed (exit ${res.status}): ${res.stderr?.toString() || ''}`);
   }

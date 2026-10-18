@@ -10,11 +10,7 @@ export const REFINED_TAG = 'llm-refined';
  * Store a model's rewrite of a merged memory: the new text replaces the old one, and the row gains the refined tag
  * once.
  */
-export async function storeRefinement(
-  ctx: Context,
-  entry: MemoryEntry,
-  refined: string,
-): Promise<void> {
+export async function storeRefinement(ctx: Context, entry: MemoryEntry, refined: string): Promise<void> {
   const tags = entry.tags.includes(REFINED_TAG) ? entry.tags : [...entry.tags, REFINED_TAG];
   await ctx.store.entryWrites.writeEntry({ entry: { ...entry, content: refined, tags }, actor: ctx.actor.subject });
 }

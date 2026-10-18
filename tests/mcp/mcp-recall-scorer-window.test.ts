@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
@@ -52,11 +52,14 @@ describe('MCP hippo_recall scorer_window', () => {
   beforeEach(() => {
     home = makeRoot('mcp-sw');
     for (let i = 0; i < 30; i++) {
-      writeEntry(home, createMemory(`alpha ${i}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-        tenantId: 'default',
-      }));
+      writeEntry(
+        home,
+        createMemory(`alpha ${i}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          tenantId: 'default',
+        }),
+      );
     }
   });
 
@@ -86,9 +89,14 @@ describe('MCP hippo_recall scorer_window', () => {
     // query 'alpha'. BM25 / physics only score alpha rows. Beta rows in
     // fresh-tail dedup-survive into the appendix.
     for (let i = 0; i < 5; i++) {
-      writeEntry(home, createMemory(`beta ${i}`, {
-        layer: Layer.Buffer, kind: 'raw', tenantId: 'default',
-      }));
+      writeEntry(
+        home,
+        createMemory(`beta ${i}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          tenantId: 'default',
+        }),
+      );
     }
     const result = await callTool(
       'hippo_recall',

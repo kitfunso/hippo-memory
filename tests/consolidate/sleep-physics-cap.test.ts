@@ -27,7 +27,15 @@ const STORED = 25;
 function particle(memoryId: string, i: number): PhysicsParticle {
   const raw = [Math.cos(i), Math.sin(i), Math.cos(i * 0.7), Math.sin(i * 1.3)];
   const norm = Math.hypot(...raw);
-  return { memoryId, position: raw.map((v) => v / norm), velocity: [0, 0, 0, 0], mass: 1, charge: 0, temperature: 1, lastSimulation: STALE_SIM };
+  return {
+    memoryId,
+    position: raw.map((v) => v / norm),
+    velocity: [0, 0, 0, 0],
+    mass: 1,
+    charge: 0,
+    temperature: 1,
+    lastSimulation: STALE_SIM,
+  };
 }
 
 function storedParticles(root: string): Map<string, PhysicsParticle> {
@@ -42,13 +50,31 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   const { learning, consolidation: store } = sqliteSyncStore(root).localFiles;
-  const rows = new SleepRows(store, entries.map((e) => e.id), new Map(), SLEEP_PAGE_ROWS);
+  const rows = new SleepRows(
+    store,
+    entries.map((e) => e.id),
+    new Map(),
+    SLEEP_PAGE_ROWS,
+  );
   const survivors = new Survivors(rows);
   for (const e of entries) survivors.keep(e.id, e.strength);
   return {
-    learning, store, now: new Date('2026-01-03T00:00:00.000Z'), dryRun: false, config: loadConfig(root), decayOpts: {},
-    result: newConsolidationResult(false), rows, retirable: () => false, tombstones: store.tombstoneChecks(false),
-    survivors, pendingRefreshes: [], pendingWrites: [], pendingDeletes: [], pendingDormant: [], parentOf: new Map(),
+    learning,
+    store,
+    now: new Date('2026-01-03T00:00:00.000Z'),
+    dryRun: false,
+    config: loadConfig(root),
+    decayOpts: {},
+    result: newConsolidationResult(false),
+    rows,
+    retirable: () => false,
+    tombstones: store.tombstoneChecks(false),
+    survivors,
+    pendingRefreshes: [],
+    pendingWrites: [],
+    pendingDeletes: [],
+    pendingDormant: [],
+    parentOf: new Map(),
     units: [],
   };
 }
@@ -67,7 +93,10 @@ describe('sleep physics cap', () => {
     writeEntriesTogether(root, entries);
     const db = openHippoDb(root);
     try {
-      savePhysicsState(db, entries.map((e, i) => particle(e.id, i)));
+      savePhysicsState(
+        db,
+        entries.map((e, i) => particle(e.id, i)),
+      );
     } finally {
       closeHippoDb(db);
     }

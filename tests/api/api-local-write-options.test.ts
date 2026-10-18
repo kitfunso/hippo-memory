@@ -47,37 +47,77 @@ function row(id: string | null | undefined): MemoryEntry {
 
 /** The fields the local group and the supersede overrides can set. */
 function settable(entry: MemoryEntry) {
-  const { layer, pinned, confidence, source, schema_fit, trace_outcome, source_session_id, half_life_days, tags } = entry;
-  return { layer, pinned, confidence, source, schema_fit, trace_outcome, source_session_id, half_life_days, tags, strength: Number(entry.strength.toFixed(6)) };
+  const { layer, pinned, confidence, source, schema_fit, trace_outcome, source_session_id, half_life_days, tags } =
+    entry;
+  return {
+    layer,
+    pinned,
+    confidence,
+    source,
+    schema_fit,
+    trace_outcome,
+    source_session_id,
+    half_life_days,
+    tags,
+    strength: Number(entry.strength.toFixed(6)),
+  };
 }
 
 describe('in process', () => {
   it('api.remember stores each field of the local group', async () => {
     const { id } = await remember(ctx, {
       content: NOTE,
-      local: { layer: Layer.Semantic, pinned: true, confidence: 'inferred', source: 'import', schemaFit: 0.9, traceOutcome: 'success', sourceSessionId: 'sess-9' },
+      local: {
+        layer: Layer.Semantic,
+        pinned: true,
+        confidence: 'inferred',
+        source: 'import',
+        schemaFit: 0.9,
+        traceOutcome: 'success',
+        sourceSessionId: 'sess-9',
+      },
     });
     expect(id).toMatch(/^sem_/);
     expect(row(id)).toMatchObject({
-      layer: 'semantic', pinned: true, confidence: 'inferred', source: 'import', schema_fit: 0.9, trace_outcome: 'success', source_session_id: 'sess-9',
+      layer: 'semantic',
+      pinned: true,
+      confidence: 'inferred',
+      source: 'import',
+      schema_fit: 0.9,
+      trace_outcome: 'success',
+      source_session_id: 'sess-9',
     });
   });
 
   it('weaken starts the row at its strength and multiplies the half-life, never below one day', async () => {
     const plain = row((await remember(ctx, { content: NOTE })).id);
-    const weak = row((await remember(ctx, { content: NEWER, local: { weaken: { strength: 0.3, halfLifeFactor: 0.5 } } })).id);
-    const floored = row((await remember(ctx, { content: `${NEWER} again`, local: { weaken: { strength: 0.3, halfLifeFactor: 0.0001 } } })).id);
+    const weak = row(
+      (await remember(ctx, { content: NEWER, local: { weaken: { strength: 0.3, halfLifeFactor: 0.5 } } })).id,
+    );
+    const floored = row(
+      (await remember(ctx, { content: `${NEWER} again`, local: { weaken: { strength: 0.3, halfLifeFactor: 0.0001 } } }))
+        .id,
+    );
     expect(weak.strength).toBe(0.3);
     expect(weak.half_life_days).toBe(plain.half_life_days * 0.5);
     expect(floored.half_life_days).toBe(1);
   });
 
-  it('api.supersede overrides replace the old row\'s layer, tags and pin, and without them the successor keeps all three', async () => {
-    const seed = async (content: string) => (await remember(ctx, { content, tags: ['billing'], local: { pinned: true } })).id;
+  it("api.supersede overrides replace the old row's layer, tags and pin, and without them the successor keeps all three", async () => {
+    const seed = async (content: string) =>
+      (await remember(ctx, { content, tags: ['billing'], local: { pinned: true } })).id;
     const kept = row((await supersede(ctx, await seed(NOTE), NEWER)).newId);
     expect(settable(kept)).toMatchObject({ layer: 'episodic', tags: ['billing'], pinned: true });
 
-    const changed = row((await supersede(ctx, await seed(`${NOTE} a day`), `${NEWER} a day`, { layer: Layer.Semantic, tags: ['paging'], pinned: false })).newId);
+    const changed = row(
+      (
+        await supersede(ctx, await seed(`${NOTE} a day`), `${NEWER} a day`, {
+          layer: Layer.Semantic,
+          tags: ['paging'],
+          pinned: false,
+        })
+      ).newId,
+    );
     expect(settable(changed)).toMatchObject({ layer: 'semantic', tags: ['paging'], pinned: false });
   });
 });
@@ -120,16 +160,29 @@ describe('from a client', () => {
 
   it('POST /v1/memories/:id/supersede ignores layer, tags and pinned in the body', async () => {
     const old = await post('/v1/memories', { content: NOTE, tags: ['billing'] });
-    const body = { content: NEWER, layer: 'semantic', tags: ['paging'], pinned: true, overrides: { layer: 'semantic', tags: ['paging'], pinned: true } };
+    const body = {
+      content: NEWER,
+      layer: 'semantic',
+      tags: ['paging'],
+      pinned: true,
+      overrides: { layer: 'semantic', tags: ['paging'], pinned: true },
+    };
     const done = await post(`/v1/memories/${String(old['id'])}/supersede`, body);
     expect(settable(row(String(done['newId'])))).toMatchObject({ layer: 'episodic', tags: ['billing'], pinned: false });
   });
 
   it('hippo_remember stores the same row with a local group in its arguments as without one', async () => {
-    const call = (args: Record<string, JsonValue>) => post('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: args } });
+    const call = (args: Record<string, JsonValue>) =>
+      post('/mcp', {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_remember', arguments: args },
+      });
     await call({ text: NOTE });
     await call({ text: NEWER, local: LOCAL });
-    const stored = (content: string) => settable(loadAllEntries(root, 'default').find((entry) => entry.content === content) ?? row(null));
+    const stored = (content: string) =>
+      settable(loadAllEntries(root, 'default').find((entry) => entry.content === content) ?? row(null));
     expect(stored(NEWER)).toEqual(stored(NOTE));
     expect(stored(NEWER).pinned).toBe(false);
   });

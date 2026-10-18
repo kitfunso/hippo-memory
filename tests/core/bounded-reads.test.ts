@@ -54,11 +54,16 @@ describe('invalidateMatching without onlyId', () => {
   it('weakens the same rows a pass over every row would, in the same order', () => {
     const { root, hits } = seeded(50);
     const expected = new Set([hits.half.id, hits.tagOnly.id]);
-    const order = loadAllEntries(root, 'default').map((e) => e.id).filter((id) => expected.has(id));
+    const order = loadAllEntries(root, 'default')
+      .map((e) => e.id)
+      .filter((id) => expected.has(id));
     const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default');
     expect(result.targets).toEqual(order);
     expect(result.skippedPinned).toEqual([hits.pinned.id]);
-    const after = loadAllEntries(root, 'default').filter((e) => e.tags.includes('invalidated')).map((e) => e.id).sort();
+    const after = loadAllEntries(root, 'default')
+      .filter((e) => e.tags.includes('invalidated'))
+      .map((e) => e.id)
+      .sort();
     expect(after).toEqual([...expected].sort());
   });
 
@@ -66,13 +71,22 @@ describe('invalidateMatching without onlyId', () => {
     const root = newRoot('bounded-invalidate-fold');
     const kelvin = memory('Kappa value drifted');
     writeEntriesTogether(root, [...padding(5), kelvin]);
-    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, { from: 'kappa', to: null, type: 'removal' }, 'default', { dryRun: true }).targets).toEqual([kelvin.id]);
+    expect(
+      invalidateMatching(
+        sqliteSyncStore(root).localFiles.learning,
+        { from: 'kappa', to: null, type: 'removal' },
+        'default',
+        { dryRun: true },
+      ).targets,
+    ).toEqual([kelvin.id]);
   });
 
   it('reads the same rows however many rows cannot match', () => {
     const read = [10, 200].map((n) => {
       const { root } = seeded(n);
-      return recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { dryRun: true })).rowsRead;
+      return recordStatements(() =>
+        invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { dryRun: true }),
+      ).rowsRead;
     });
     expect(read[1]).toBe(read[0]);
   });
@@ -82,7 +96,12 @@ describe('rebuildDirtySummaries', () => {
   function seededDirty(n: number): string {
     const root = newRoot('bounded-dirty');
     const summaries = Array.from({ length: n }, (_, i) => ({
-      ...createMemory(`summary ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, tags: ['dag-summary'], dagLevel: 2 }),
+      ...createMemory(`summary ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Semantic,
+        tags: ['dag-summary'],
+        dagLevel: 2,
+      }),
       latest_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
     }));
     writeEntriesTogether(root, summaries);
@@ -100,9 +119,13 @@ describe('rebuildDirtySummaries', () => {
     const read: number[] = [];
     for (const n of [10, 60]) {
       const root = seededDirty(n);
-      const newest = loadAllDirtySummaries(root).slice(0, 3).map((e) => e.id);
+      const newest = loadAllDirtySummaries(root)
+        .slice(0, 3)
+        .map((e) => e.id);
       expect(loadAllDirtySummaries(root, 3).map((e) => e.id)).toEqual(newest);
-      const { result, rowsRead } = await recordStatementsAsync(() => rebuildDirtySummaries(sqliteConsolidation(handlesOf(root)), { apiKey: 'k', fetcher, cap: 2 }));
+      const { result, rowsRead } = await recordStatementsAsync(() =>
+        rebuildDirtySummaries(sqliteConsolidation(handlesOf(root)), { apiKey: 'k', fetcher, cap: 2 }),
+      );
       expect(result).toMatchObject({ attempted: 2, capped: true });
       read.push(rowsRead);
     }
@@ -111,12 +134,18 @@ describe('rebuildDirtySummaries', () => {
 });
 
 describe('countAllMemories', () => {
-  it('counts every tenant\'s rows without reading them', async () => {
+  it("counts every tenant's rows without reading them", async () => {
     const read: number[] = [];
     for (const n of [10, 200]) {
       const root = newRoot('bounded-count');
       writeEntriesTogether(root, [...padding(n), memory('acme row', { tenant_id: 'acme' })]);
-      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count'), store: sqliteStore(root), config: loadConfig(root) };
+      const ctx = {
+        hippoRoot: root,
+        tenantId: 'default',
+        actor: adminActor('test:count'),
+        store: sqliteStore(root),
+        config: loadConfig(root),
+      };
       const { result, rowsRead } = await recordStatementsAsync(() => countAllMemories(ctx));
       expect(result).toBe(n + 1);
       read.push(rowsRead);

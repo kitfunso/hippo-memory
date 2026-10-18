@@ -17,7 +17,13 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadSessionRawMemories } from '../_helpers/root-forms.js';
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:assemble', role: 'admin' });
 }
@@ -55,7 +61,9 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
 
 describe('loadSessionRawMemories', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('assemble-load'); });
+  beforeEach(() => {
+    root = makeRoot('assemble-load');
+  });
   afterEach(() => safeRmSync(root));
 
   it('empty session id returns []', () => {
@@ -86,7 +94,9 @@ describe('loadSessionRawMemories', () => {
 
 describe('api.assemble', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('assemble'); });
+  beforeEach(() => {
+    root = makeRoot('assemble');
+  });
   afterEach(() => safeRmSync(root));
 
   it('1. empty session id returns clean empty result', async () => {

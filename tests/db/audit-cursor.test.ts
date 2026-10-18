@@ -59,9 +59,7 @@ describe('listAuditEventsAfter', () => {
     expect(seen).toHaveLength(1);
     // SAFETY: EXPLAIN QUERY PLAN returns rows with a `detail` text column.
     const planRows = db.prepare(`EXPLAIN QUERY PLAN ${seen[0]!}`).all(0, 'tenant-a', 10) as Array<{ detail: string }>;
-    const plan = planRows
-      .map((r) => String(r.detail))
-      .join(' | ');
+    const plan = planRows.map((r) => String(r.detail)).join(' | ');
     expect(plan).toContain('INTEGER PRIMARY KEY');
     expect(plan).not.toContain('TEMP B-TREE');
   });

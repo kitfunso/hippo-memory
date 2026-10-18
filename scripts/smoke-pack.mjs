@@ -42,9 +42,10 @@ try {
   run('npm init -y', installDir);
   run(`npm install ${quote(tarballPath)}`, installDir);
 
-  const hippoBin = process.platform === 'win32'
-    ? path.join(installDir, 'node_modules', '.bin', 'hippo.cmd')
-    : path.join(installDir, 'node_modules', '.bin', 'hippo');
+  const hippoBin =
+    process.platform === 'win32'
+      ? path.join(installDir, 'node_modules', '.bin', 'hippo.cmd')
+      : path.join(installDir, 'node_modules', '.bin', 'hippo');
 
   const initOutput = run(`${quote(hippoBin)} init --no-schedule --no-hooks`, workspaceDir);
   if (!/Initialized Hippo/i.test(initOutput)) {
@@ -73,7 +74,10 @@ try {
     throw new Error(`Pack smoke test expected outcome confirmation, got:\n${outcomeOutput}`);
   }
 
-  const snapshotSaveOutput = run(`${quote(hippoBin)} snapshot save --task "Pack smoke task" --summary "Pack smoke summary" --next-step "Clear the snapshot"`, workspaceDir);
+  const snapshotSaveOutput = run(
+    `${quote(hippoBin)} snapshot save --task "Pack smoke task" --summary "Pack smoke summary" --next-step "Clear the snapshot"`,
+    workspaceDir,
+  );
   if (!/Saved active task snapshot/i.test(snapshotSaveOutput)) {
     throw new Error(`Pack smoke test expected snapshot save confirmation, got:\n${snapshotSaveOutput}`);
   }

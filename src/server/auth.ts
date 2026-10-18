@@ -75,10 +75,7 @@ const KEY_REQUIRED_MESSAGE =
 
 /** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' },
  * { kind: 'malformed' } (set but not 'Bearer <token>'), or { kind: 'bearer', token } for a non-empty token. */
-type AuthHeader =
-  | { kind: 'absent' }
-  | { kind: 'malformed' }
-  | { kind: 'bearer'; token: string };
+type AuthHeader = { kind: 'absent' } | { kind: 'malformed' } | { kind: 'bearer'; token: string };
 
 export function readAuthHeader(req: IncomingMessage): AuthHeader {
   const raw = req.headers['authorization'];
@@ -106,7 +103,16 @@ type ContextOptions = AuthOptions & Pick<ResolvedServeOptions, 'configAt'>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
-  'api_key', 'localhost', 'cli', 'system', 'mcp', 'connector', 'sleep', 'post-compact', 'recall', 'agent-memories',
+  'api_key',
+  'localhost',
+  'cli',
+  'system',
+  'mcp',
+  'connector',
+  'sleep',
+  'post-compact',
+  'recall',
+  'agent-memories',
 ] as const;
 
 /** Add-ons call this to refuse a subject that would collide with a built-in actor. */

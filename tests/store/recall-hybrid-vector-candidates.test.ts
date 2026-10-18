@@ -46,7 +46,11 @@ function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemo
 function seed(): Seeded {
   const home = makeRoot('vec-cand', { init: false });
   const global = makeRoot('vec-cand-global');
-  writeFileSync(join(home, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
+  writeFileSync(
+    join(home, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),
+    'utf8',
+  );
   initStore(home);
   const s: Seeded = { home, global, labelById: new Map(), idByLabel: new Map() };
   add(s, 'L1', 'deploy pipeline uses blue green rollout');
@@ -72,18 +76,24 @@ function withEmbeddings(s: Seeded): void {
   }
   saveEmbeddingIndex(s.home, index);
   saveStoredEmbeddingModel(handlesOf(s.home).on, resolveEmbeddingProvider(loadConfig(s.home).embeddings).id);
-  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
-    // SAFETY: body is the OpenAI embeddings request this provider just serialised.
-    const body = JSON.parse(init.body) as { input: string[] };
-    return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: { body: string }) => {
+      // SAFETY: body is the OpenAI embeddings request this provider just serialised.
+      const body = JSON.parse(init.body) as { input: string[] };
+      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
+    }),
+  );
 }
 
 const labels = (s: Seeded, ids: readonly string[]): string[] => ids.map((id) => s.labelById.get(id) ?? id);
 
 describe('hybrid recall candidates with stored vectors', () => {
   const dirs: string[] = [];
-  const track = (s: Seeded): Seeded => { dirs.push(s.home, s.global); return s; };
+  const track = (s: Seeded): Seeded => {
+    dirs.push(s.home, s.global);
+    return s;
+  };
 
   beforeEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
@@ -102,35 +112,68 @@ describe('hybrid recall candidates with stored vectors', () => {
   it('searchBothHybrid default recall', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), { budget: 100000, tenantId: TENANT, recallScope: {}, scope: null });
-    expect(labels(s, res.map((r) => r.entry.id))).toEqual(EXPECTED.sharedDefault);
+    const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
+      budget: 100000,
+      tenantId: TENANT,
+      recallScope: {},
+      scope: null,
+    });
+    expect(
+      labels(
+        s,
+        res.map((r) => r.entry.id),
+      ),
+    ).toEqual(EXPECTED.sharedDefault);
   });
 
   it('searchBothHybrid with an explicit additive scope', async () => {
     const s = track(seed());
     withEmbeddings(s);
     const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
-      budget: 100000, tenantId: TENANT, recallScope: { requested: 'team:alpha', additive: true }, scope: null,
+      budget: 100000,
+      tenantId: TENANT,
+      recallScope: { requested: 'team:alpha', additive: true },
+      scope: null,
     });
-    expect(labels(s, res.map((r) => r.entry.id))).toEqual(EXPECTED.sharedAdditive);
+    expect(
+      labels(
+        s,
+        res.map((r) => r.entry.id),
+      ),
+    ).toEqual(EXPECTED.sharedAdditive);
   });
 
   it('api.retrieve in hybrid mode', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const res = await retrieve(
-      apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }),
-      { query: QUERY, mode: 'hybrid', window: { limit: 20 } },
-    );
-    expect(labels(s, res.results.map((r) => r.id))).toEqual(EXPECTED.retrieveHybrid);
+    const res = await retrieve(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), {
+      query: QUERY,
+      mode: 'hybrid',
+      window: { limit: 20 },
+    });
+    expect(
+      labels(
+        s,
+        res.results.map((r) => r.id),
+      ),
+    ).toEqual(EXPECTED.retrieveHybrid);
   });
 
   it('getContext with a query and no global store', async () => {
     const s = track(seed());
     withEmbeddings(s);
     vi.stubEnv('HIPPO_HOME', join(s.global, 'absent'));
-    const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), { currentProject: cwdProject(), q: QUERY, budget: 100000 });
-    expect(labels(s, res.entries.map((e) => e.entry.id))).toEqual(EXPECTED.contextLocal);
+    const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), {
+      currentProject: cwdProject(),
+      q: QUERY,
+      budget: 100000,
+    });
+    expect(
+      labels(
+        s,
+        res.entries.map((e) => e.entry.id),
+      ),
+    ).toEqual(EXPECTED.contextLocal);
   });
 
   it('without a vector spec, hybridSearch ranks only the pool it was given', async () => {
@@ -138,7 +181,12 @@ describe('hybrid recall candidates with stored vectors', () => {
     withEmbeddings(s);
     const pool = loadRecallSearchEntries(s.home, QUERY, undefined, TENANT, undefined, 'additive', false);
     const res = await hybridSearch(QUERY, pool, { budget: 100000, hippoRoot: s.home, scope: null });
-    expect(labels(s, res.map((r) => r.entry.id))).toEqual(EXPECTED.plainPool);
+    expect(
+      labels(
+        s,
+        res.map((r) => r.entry.id),
+      ),
+    ).toEqual(EXPECTED.plainPool);
   });
 });
 

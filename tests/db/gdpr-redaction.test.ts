@@ -46,9 +46,9 @@ function parseJson<T>(text: string): T {
 function fetchPayloadJson(db: DatabaseSyncLike, memoryId: string): string | undefined {
   // SAFETY: raw_archive rows written by this codebase always have a
   // payload_json TEXT column; SELECT payload_json projects only that column.
-  const row = db
-    .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
-    .get(memoryId) as { payload_json: string } | undefined;
+  const row = db.prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`).get(memoryId) as
+    | { payload_json: string }
+    | undefined;
   return row?.payload_json;
 }
 
@@ -175,13 +175,7 @@ describe('GDPR Path A redaction + migration v20', () => {
         .prepare(
           `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
         )
-        .run(
-          'm-malformed-1',
-          '2026-04-02T00:00:00.000Z',
-          'corrupted legacy',
-          'user:99',
-          'not-json',
-        );
+        .run('m-malformed-1', '2026-04-02T00:00:00.000Z', 'corrupted legacy', 'user:99', 'not-json');
       db1
         .prepare(
           `INSERT INTO meta(key, value) VALUES('schema_version', '19') ON CONFLICT(key) DO UPDATE SET value=excluded.value`,

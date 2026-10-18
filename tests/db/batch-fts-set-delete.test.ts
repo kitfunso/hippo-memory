@@ -76,10 +76,18 @@ describe('batchWriteAndDelete full-text upkeep', () => {
   it('clears every replaced full-text row with at most one delete', () => {
     const rows = seedRows(60);
     const inserts = Array.from({ length: 10 }, (_, i) => createMemory(`new batch row ${i} omega${i}`));
-    const moves = rows.slice(50, 60).map((entry) => ({ entry, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() }));
+    const moves = rows
+      .slice(50, 60)
+      .map((entry) => ({ entry, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() }));
 
     const { statements } = recordStatements(() =>
-      batchWriteAndDelete(root, [...rows.slice(0, 30).map(edited), ...inserts], rows.slice(30, 40).map((e) => e.id), { dormant: moves }));
+      batchWriteAndDelete(
+        root,
+        [...rows.slice(0, 30).map(edited), ...inserts],
+        rows.slice(30, 40).map((e) => e.id),
+        { dormant: moves },
+      ),
+    );
 
     expect(countMatching(statements, FTS_DELETE)).toBeLessThanOrEqual(1);
     expect(idsOf('SELECT id FROM memories_fts')).toEqual(idsOf('SELECT id FROM memories'));

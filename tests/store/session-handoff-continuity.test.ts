@@ -2,17 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { initStore } from '../../src/store/open.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import {
-  openHippoDb,
-  closeHippoDb,
-  getSchemaVersion,
-  getCurrentSchemaVersion,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { rowToSessionHandoff } from '../../src/core/handoff.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  listSessionEvents, loadActiveTaskSnapshot, loadLatestHandoff, loadHandoffById,
+  listSessionEvents,
+  loadActiveTaskSnapshot,
+  loadLatestHandoff,
+  loadHandoffById,
 } from '../_helpers/root-forms.js';
 
 let tmpDir: string;
@@ -39,9 +37,9 @@ describe('schema v5+v6 migration', () => {
     try {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
       // is NOT NULL for every table row.
-      const tables = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_handoffs'`
-      ).all() as Array<{ name: string }>;
+      const tables = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_handoffs'`)
+        .all() as Array<{ name: string }>;
       expect(tables).toHaveLength(1);
       expect(tables[0]!.name).toBe('session_handoffs');
     } finally {
@@ -55,9 +53,9 @@ describe('schema v5+v6 migration', () => {
     try {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
       // is NOT NULL for every index row.
-      const indexes = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_handoffs_session'`
-      ).all() as Array<{ name: string }>;
+      const indexes = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_handoffs_session'`)
+        .all() as Array<{ name: string }>;
       expect(indexes).toHaveLength(1);
     } finally {
       closeHippoDb(db);
@@ -185,9 +183,9 @@ describe('loadHandoffById', () => {
     try {
       // SAFETY: literal SELECT of the id column for the handoff row this
       // test just wrote via saveSessionHandoff above.
-      const row = db.prepare(
-        `SELECT id FROM session_handoffs WHERE session_id = 'sess-byid' ORDER BY id DESC LIMIT 1`
-      ).get() as { id: number } | undefined;
+      const row = db
+        .prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-byid' ORDER BY id DESC LIMIT 1`)
+        .get() as { id: number } | undefined;
 
       expect(row).toBeTruthy();
       const loaded = loadHandoffById(tmpDir, 'default', row!.id);

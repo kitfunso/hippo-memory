@@ -9,7 +9,10 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { JsonValue } from '../../src/util/json.js';
 
-interface Reply { status: number; body: JsonValue }
+interface Reply {
+  status: number;
+  body: JsonValue;
+}
 
 const SECRET = 'replay-window-secret';
 // Not an event envelope, so each accepted copy parks one DLQ row under the default tenant.

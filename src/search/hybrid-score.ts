@@ -65,7 +65,7 @@ function scoreEntry(i: number, input: HybridScoreInput): EntryScore {
   let mode: HybridMode;
   if (input.useEmbeddings) {
     base = input.rrfScores
-      ? input.rrfScores.get(i) ?? 0
+      ? (input.rrfScores.get(i) ?? 0)
       : input.bm25Weight * normBm25 + input.embeddingWeight * input.dense.cosine[i];
     mode = input.dense.hadVec[i] ? 'hybrid' : 'hybrid-no-vec';
   } else {

@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { detectServer, writePidfile, removePidfileIfOwned, ServerUnresponsiveError } from '../../src/server/server-detect.js';
+import {
+  detectServer,
+  writePidfile,
+  removePidfileIfOwned,
+  ServerUnresponsiveError,
+} from '../../src/server/server-detect.js';
 import { serve } from '../../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
@@ -28,10 +33,16 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: 99_999_999, port: 6789,
-        url: 'http://127.0.0.1:6789', started_at: new Date().toISOString(),
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: 99_999_999,
+          port: 6789,
+          url: 'http://127.0.0.1:6789',
+          started_at: new Date().toISOString(),
+        }),
+      );
       expect(await detectServer(home)).toBeNull();
       // Stale pidfile should have been deleted.
       expect(existsSync(pidfile)).toBe(false);
@@ -94,10 +105,16 @@ describe('server-detect', () => {
     try {
       // pid is alive (this very test process) but nothing listens on the url,
       // so the probe gets connection-refused — the pidfile is stale.
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid, port: 59_999,
-        url: 'http://127.0.0.1:59999', started_at: new Date().toISOString(),
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port: 59_999,
+          url: 'http://127.0.0.1:59999',
+          started_at: new Date().toISOString(),
+        }),
+      );
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(false);
     } finally {
@@ -109,12 +126,23 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) }); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('fetch failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) });
+      }),
+    );
     try {
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid, port: 59_998,
-        url: 'http://127.0.0.1:59998', started_at: new Date().toISOString(),
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port: 59_998,
+          url: 'http://127.0.0.1:59998',
+          started_at: new Date().toISOString(),
+        }),
+      );
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(true);
       expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('kept: the /health probe failed');
@@ -130,7 +158,9 @@ describe('server-detect', () => {
     const pidfile = join(home, 'server.pid');
     // A stub server that accepts the connection but never answers, so the
     // AbortSignal.timeout inside detectServer fires.
-    const stub: Server = createServer(() => { /* deliberately never responds */ });
+    const stub: Server = createServer(() => {
+      /* deliberately never responds */
+    });
     try {
       const port = await new Promise<number>((resolve) => {
         stub.listen(0, '127.0.0.1', () => {
@@ -142,14 +172,22 @@ describe('server-detect', () => {
           resolve((addr as AddressInfo | null)?.port ?? 0);
         });
       });
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid, port,
-        url: `http://127.0.0.1:${port}`, started_at: new Date().toISOString(),
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port,
+          url: `http://127.0.0.1:${port}`,
+          started_at: new Date().toISOString(),
+        }),
+      );
       // A busy server misses the probe too, so a timeout must stop the caller from opening the store as a second writer.
       await expect(detectServer(home)).rejects.toThrow(ServerUnresponsiveError);
       expect(existsSync(pidfile)).toBe(true);
-      await expect(serve({ hippoRoot: home, port: 0 })).rejects.toThrow(/did not answer \/health within \d+ ms; it may be busy/);
+      await expect(serve({ hippoRoot: home, port: 0 })).rejects.toThrow(
+        /did not answer \/health within \d+ ms; it may be busy/,
+      );
       expect(existsSync(pidfile)).toBe(true);
     } finally {
       stub.closeAllConnections?.();
@@ -202,11 +240,16 @@ describe('server-detect', () => {
       // pid is alive (this test process), but the url points off-box. A real
       // hippo server only binds loopback, so detectServer must treat this as a
       // forged or malformed pidfile and never probe the off-box host.
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid, port: 6789,
-        url: 'http://malicious.example.com:6789',
-        started_at: new Date().toISOString(),
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port: 6789,
+          url: 'http://malicious.example.com:6789',
+          started_at: new Date().toISOString(),
+        }),
+      );
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(false);
     } finally {
@@ -219,10 +262,16 @@ describe('server-detect', () => {
     const pidfile = join(home, 'server.pid');
     try {
       const startedAt = new Date().toISOString();
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid, port: 6789,
-        url: 'http://127.0.0.1:6789', started_at: startedAt,
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port: 6789,
+          url: 'http://127.0.0.1:6789',
+          started_at: startedAt,
+        }),
+      );
       expect(removePidfileIfOwned(home, { pid: process.pid, startedAt })).toBe(true);
       expect(existsSync(pidfile)).toBe(false);
     } finally {
@@ -236,13 +285,22 @@ describe('server-detect', () => {
     try {
       // Same pid (a second server could share this process), different
       // started_at. The (pid, started_at) tuple must treat this as not-ours.
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid, port: 6790,
-        url: 'http://127.0.0.1:6790', started_at: '2099-01-01T00:00:00.000Z',
-      }));
-      expect(removePidfileIfOwned(home, {
-        pid: process.pid, startedAt: '2026-01-01T00:00:00.000Z',
-      })).toBe(false);
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port: 6790,
+          url: 'http://127.0.0.1:6790',
+          started_at: '2099-01-01T00:00:00.000Z',
+        }),
+      );
+      expect(
+        removePidfileIfOwned(home, {
+          pid: process.pid,
+          startedAt: '2026-01-01T00:00:00.000Z',
+        }),
+      ).toBe(false);
       expect(existsSync(pidfile)).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -256,10 +314,16 @@ describe('server-detect', () => {
       const startedAt = new Date().toISOString();
       // started_at matches but the pid is a different process. The pid value
       // is arbitrary — removePidfileIfOwned compares it, never probes it.
-      writeFileSync(pidfile, JSON.stringify({
-        schema: 1, pid: process.pid + 1, port: 6789,
-        url: 'http://127.0.0.1:6789', started_at: startedAt,
-      }));
+      writeFileSync(
+        pidfile,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid + 1,
+          port: 6789,
+          url: 'http://127.0.0.1:6789',
+          started_at: startedAt,
+        }),
+      );
       expect(removePidfileIfOwned(home, { pid: process.pid, startedAt })).toBe(false);
       expect(existsSync(pidfile)).toBe(true);
     } finally {
@@ -270,9 +334,12 @@ describe('server-detect', () => {
   it('removePidfileIfOwned returns false without throwing when no pidfile exists', () => {
     const home = makeRoot();
     try {
-      expect(removePidfileIfOwned(home, {
-        pid: process.pid, startedAt: new Date().toISOString(),
-      })).toBe(false);
+      expect(
+        removePidfileIfOwned(home, {
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+        }),
+      ).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -283,9 +350,12 @@ describe('server-detect', () => {
     const pidfile = join(home, 'server.pid');
     try {
       writeFileSync(pidfile, 'not json at all');
-      expect(removePidfileIfOwned(home, {
-        pid: process.pid, startedAt: new Date().toISOString(),
-      })).toBe(false);
+      expect(
+        removePidfileIfOwned(home, {
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+        }),
+      ).toBe(false);
       // Not provably ours, so left alone; detectServer unlinks malformed
       // pidfiles on its next probe.
       expect(existsSync(pidfile)).toBe(true);
@@ -301,9 +371,12 @@ describe('server-detect', () => {
       // Parses as JSON but carries no pid/started_at — info.pid is undefined,
       // so the identity check fails closed and the file is left in place.
       writeFileSync(pidfile, JSON.stringify({ schema: 1, port: 6789 }));
-      expect(removePidfileIfOwned(home, {
-        pid: process.pid, startedAt: new Date().toISOString(),
-      })).toBe(false);
+      expect(
+        removePidfileIfOwned(home, {
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+        }),
+      ).toBe(false);
       expect(existsSync(pidfile)).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -317,9 +390,12 @@ describe('server-detect', () => {
       // `null` parses cleanly but is not an object — property access on it
       // throws. removePidfileIfOwned must absorb that, not propagate it.
       writeFileSync(pidfile, 'null');
-      expect(removePidfileIfOwned(home, {
-        pid: process.pid, startedAt: new Date().toISOString(),
-      })).toBe(false);
+      expect(
+        removePidfileIfOwned(home, {
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+        }),
+      ).toBe(false);
       expect(existsSync(pidfile)).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });

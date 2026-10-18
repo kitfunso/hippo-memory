@@ -3,7 +3,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../../src/capture/compaction-record.js';
-import { importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../../src/capture/compaction-spool.js';
+import {
+  importSpool,
+  spool,
+  spoolCounts,
+  type SpoolFs,
+  type SpoolImporter,
+} from '../../src/capture/compaction-spool.js';
 
 let root: string;
 let logs: string[];
@@ -28,12 +34,30 @@ const realFs: SpoolFs = fs;
 const withFs = (over: Partial<SpoolFs>): SpoolFs => ({ ...realFs, ...over });
 const fsError = (code: string): Error => Object.assign(new Error(`${code}: simulated`), { code });
 const leftToAnother = (): string[] => logs.filter((l) => l.startsWith('spool left to another replayer'));
-const payload = (sessionId: string): PostCompactPayload => ({ sessionId, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null });
+const payload = (sessionId: string): PostCompactPayload => ({
+  sessionId,
+  trigger: 'auto',
+  cwd: null,
+  transcriptPath: null,
+  compactSummary: null,
+});
 
 function put(name: string, sessionId: string): string {
   fs.mkdirSync(spoolDir(), { recursive: true });
   const file = path.join(spoolDir(), name);
-  fs.writeFileSync(file, JSON.stringify({ tenantId: 'default', sessionId, trigger: 'auto', cwd: null, transcriptPath: null, at: new Date().toISOString(), summary: `summary of ${sessionId}`, items: [] }));
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      tenantId: 'default',
+      sessionId,
+      trigger: 'auto',
+      cwd: null,
+      transcriptPath: null,
+      at: new Date().toISOString(),
+      summary: `summary of ${sessionId}`,
+      items: [],
+    }),
+  );
   return file;
 }
 
@@ -45,10 +69,17 @@ interface Collector {
 /** An importer that notes each session id it is handed and finishes the file. */
 function collector(): Collector {
   const seen: string[] = [];
-  return { seen, importer: (spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); } };
+  return {
+    seen,
+    importer: (spooled, recorded) => {
+      seen.push(spooled.payload.sessionId);
+      recorded();
+    },
+  };
 }
 
-const replay = (importer: SpoolImporter, fsx?: SpoolFs): number => importSpool(root, 'default', log, Number.POSITIVE_INFINITY, importer, fsx);
+const replay = (importer: SpoolImporter, fsx?: SpoolFs): number =>
+  importSpool(root, 'default', log, Number.POSITIVE_INFINITY, importer, fsx);
 
 describe('spool names and order', () => {
   it('imports oldest first across sessions and legacy names', () => {
@@ -69,7 +100,12 @@ describe('spool names and order', () => {
     vi.restoreAllMocks();
     expect(fs.readdirSync(spoolDir())).toHaveLength(2);
     const summaries: string[] = [];
-    expect(replay((spooled, recorded) => { summaries.push(spooled.text.summary); recorded(); })).toBe(2);
+    expect(
+      replay((spooled, recorded) => {
+        summaries.push(spooled.text.summary);
+        recorded();
+      }),
+    ).toBe(2);
     expect(summaries.sort()).toEqual(['first', 'second']);
   });
 });
@@ -238,7 +274,12 @@ describe('one replayer at a time', () => {
         return fs.readFileSync(file, encoding);
       },
     });
-    expect(replay((spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); }, faulty)).toBe(1);
+    expect(
+      replay((spooled, recorded) => {
+        seen.push(spooled.payload.sessionId);
+        recorded();
+      }, faulty),
+    ).toBe(1);
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual(['spool lock could not be read, stopping']);
     expect(fs.readdirSync(spoolDir())).toEqual([`${B}.a0.json`]);
@@ -288,10 +329,12 @@ describe('failures are counted and set aside', () => {
     put(`${A}.a0.json`, 's1');
     put(`${B}.a0.json`, 's2');
     const seen: string[] = [];
-    expect(replay((spooled) => {
-      seen.push(spooled.payload.sessionId);
-      throw busyError();
-    })).toBe(0);
+    expect(
+      replay((spooled) => {
+        seen.push(spooled.payload.sessionId);
+        throw busyError();
+      }),
+    ).toBe(0);
     expect(seen).toEqual(['s1']);
     expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a0.json`, `${B}.a0.json`]);
     expect(logs).toEqual([`spool file ${A}.a0.json waits for the next run: the store is busy`]);
@@ -303,7 +346,9 @@ describe('failures are counted and set aside', () => {
     expect(importSpool(root, 'default', log, 0, collector().importer)).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.interrupted.bad`]);
     expect(fs.readFileSync(path.join(spoolDir(), `${A}.interrupted.bad`), 'utf8')).toBe(body);
-    expect(logs).toEqual([`spool file ${stale} was claimed by a replayer that never finished 3 times, set aside as .bad`]);
+    expect(logs).toEqual([
+      `spool file ${stale} was claimed by a replayer that never finished 3 times, set aside as .bad`,
+    ]);
   });
 
   it('a stale claim whose .bad already landed is removed, not set aside a second time', () => {
@@ -328,7 +373,9 @@ describe('failures are counted and set aside', () => {
       expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
       return logs;
     };
-    expect(claimFails('EPERM')).toEqual([`spool file ${A}.a0.json is locked by another program, left for the next run`]);
+    expect(claimFails('EPERM')).toEqual([
+      `spool file ${A}.a0.json is locked by another program, left for the next run`,
+    ]);
     expect(claimFails('EIO')).toEqual([`spool problem: spool file ${A}.a0.json not claimed: EIO: simulated`]);
   });
 
@@ -379,7 +426,9 @@ describe('failures are counted and set aside', () => {
     const { seen, importer } = collector();
     expect(replay(importer, faulty)).toBe(1);
     expect(seen).toEqual(['s1']);
-    expect(logs).toEqual([`spool file ${A}.a0.json saved; its claim could not be removed (EPERM); it will be imported again`]);
+    expect(logs).toEqual([
+      `spool file ${A}.a0.json saved; its claim could not be removed (EPERM); it will be imported again`,
+    ]);
   });
 });
 
@@ -443,12 +492,19 @@ describe('temp files a spool left', () => {
         fs.renameSync(from, to);
       },
     });
-    expect(() => spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date(), faulty)).not.toThrow();
+    expect(() =>
+      spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date(), faulty),
+    ).not.toThrow();
     const [name] = fs.readdirSync(spoolDir());
     expect(name).toMatch(/^\d{13}-[0-9a-f]{8}\.a0\.json\.tmp$/);
     age(path.join(spoolDir(), name));
     const summaries: string[] = [];
-    expect(replay((spooled, recorded) => { summaries.push(spooled.text.summary); recorded(); })).toBe(1);
+    expect(
+      replay((spooled, recorded) => {
+        summaries.push(spooled.text.summary);
+        recorded();
+      }),
+    ).toBe(1);
     expect(summaries).toEqual(['kept']);
   });
 });

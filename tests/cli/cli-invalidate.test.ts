@@ -53,7 +53,10 @@ describe('hippo invalidate CLI contract', () => {
   });
 
   it('--dry-run before the pattern previews without writing (parser allowlist end-to-end)', async () => {
-    const mem = createMemory('REST API uses Bearer tokens everywhere', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['api'] });
+    const mem = createMemory('REST API uses Bearer tokens everywhere', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['api'],
+    });
     writeEntry(hippoRoot, mem);
 
     const { stdout } = await runCli(['invalidate', '--dry-run', 'REST API']);
@@ -65,8 +68,14 @@ describe('hippo invalidate CLI contract', () => {
   });
 
   it('--id invalidates exactly one memory end-to-end', async () => {
-    const target = createMemory('Unrelated gardening notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['garden'] });
-    const other = createMemory('Unrelated cooking notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['cooking'] });
+    const target = createMemory('Unrelated gardening notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['garden'],
+    });
+    const other = createMemory('Unrelated cooking notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['cooking'],
+    });
     writeEntry(hippoRoot, target);
     writeEntry(hippoRoot, other);
 
@@ -77,7 +86,10 @@ describe('hippo invalidate CLI contract', () => {
   });
 
   it('a pattern merely CONTAINING a tag word does not hit that tag (incident shape)', async () => {
-    const bystander = createMemory('Weekly grocery budget tracking notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['hippo'] });
+    const bystander = createMemory('Weekly grocery budget tracking notes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: ['hippo'],
+    });
     writeEntry(hippoRoot, bystander);
 
     const { stdout } = await runCli(['invalidate', 'hippo salience gate experiment']);

@@ -18,30 +18,53 @@ interface KindRow {
 
 const KINDS: readonly KindRow[] = [
   {
-    cmd: 'brief', create: ['new', 'acme/web', '--summary', 'Storefront app'], bare: ['acme/api', '--summary', 'Orders service'],
-    body: ['--summary', 'Storefront and admin app'], bodyless: ['new', 'acme/ops'],
+    cmd: 'brief',
+    create: ['new', 'acme/web', '--summary', 'Storefront app'],
+    bare: ['acme/api', '--summary', 'Orders service'],
+    body: ['--summary', 'Storefront and admin app'],
+    bodyless: ['new', 'acme/ops'],
   },
   {
-    cmd: 'note', create: ['new', 'Acme Ltd', '--text', 'Prefers email'], bare: ['Globex', '--text', 'Pays monthly'],
-    body: ['--text', 'Prefers a call'], bodyless: ['new', 'Initech'],
+    cmd: 'note',
+    create: ['new', 'Acme Ltd', '--text', 'Prefers email'],
+    bare: ['Globex', '--text', 'Pays monthly'],
+    body: ['--text', 'Prefers a call'],
+    bodyless: ['new', 'Initech'],
   },
   {
-    cmd: 'policy', create: ['new', 'Retention', '--text', 'Delete logs after 90 days', '--from', '2026-01-01T00:00:00.000Z', '--to', '2027-01-01T00:00:00.000Z'],
-    bare: ['Access', '--text', 'Two reviewers'], body: ['--text', 'Delete logs after 30 days', '--from', '2026-02-01T00:00:00.000Z'], bodyless: ['new', 'Backups'],
+    cmd: 'policy',
+    create: [
+      'new',
+      'Retention',
+      '--text',
+      'Delete logs after 90 days',
+      '--from',
+      '2026-01-01T00:00:00.000Z',
+      '--to',
+      '2027-01-01T00:00:00.000Z',
+    ],
+    bare: ['Access', '--text', 'Two reviewers'],
+    body: ['--text', 'Delete logs after 30 days', '--from', '2026-02-01T00:00:00.000Z'],
+    bodyless: ['new', 'Backups'],
   },
   {
-    cmd: 'process', create: ['new', 'Release', '--step', 'run the tests', '--step', 'publish', '--description', 'ship it'],
-    bare: ['Deploy', '--step', 'push'], body: ['--step', 'sign the build', '--description', 'signed'], bodyless: ['new', 'Onboard'],
+    cmd: 'process',
+    create: ['new', 'Release', '--step', 'run the tests', '--step', 'publish', '--description', 'ship it'],
+    bare: ['Deploy', '--step', 'push'],
+    body: ['--step', 'sign the build', '--description', 'signed'],
+    bodyless: ['new', 'Onboard'],
   },
   {
-    cmd: 'skill', create: ['new', 'Review', '--instructions', 'Check the down path', '--trigger', 'on PR'],
-    bare: ['Triage', '--instructions', 'Sort by impact'], body: ['--instructions', 'Check both paths', '--trigger', 'on merge'], bodyless: ['new', 'Plan'],
+    cmd: 'skill',
+    create: ['new', 'Review', '--instructions', 'Check the down path', '--trigger', 'on PR'],
+    bare: ['Triage', '--instructions', 'Sort by impact'],
+    body: ['--instructions', 'Check both paths', '--trigger', 'on merge'],
+    bodyless: ['new', 'Plan'],
   },
 ];
 
-const mask = (text: string): string => text
-  .replace(/\b[a-z]{3}_[0-9a-f]{12}\b/g, '<mem>')
-  .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
+const mask = (text: string): string =>
+  text.replace(/\b[a-z]{3}_[0-9a-f]{12}\b/g, '<mem>').replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
 
 const savedCwd = process.cwd();
 let root = '';
@@ -69,7 +92,9 @@ describe('versioned object CLI verbs', () => {
     const transcript: string[] = [];
     const step = async (...args: string[]): Promise<void> => {
       const r = await hippo(k.cmd, ...args);
-      transcript.push(`$ ${k.cmd} ${args.join(' ')} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
+      transcript.push(
+        `$ ${k.cmd} ${args.join(' ')} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`,
+      );
     };
     await step('list');
     await step('new');
@@ -94,6 +119,10 @@ describe('versioned object CLI verbs', () => {
     ['supersede', '1', '--step', '   '],
   ])('a failing process save (%s) exits 1 and prints the store error alone', async (...args) => {
     expect((await hippo('process', 'new', 'Release', '--step', 'run the tests')).status).toBe(0);
-    expect(await hippo('process', ...args)).toEqual({ stdout: '', stderr: 'saveProcess: step 1 is empty\n', status: 1 });
+    expect(await hippo('process', ...args)).toEqual({
+      stdout: '',
+      stderr: 'saveProcess: step 1 is empty\n',
+      status: 1,
+    });
   });
 });

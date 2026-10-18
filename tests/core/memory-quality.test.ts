@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { assessAutomaticMemory, certainDefect, isAutomaticEntry, isContentWorthStoring, isReusable, isWorthSurfacing } from '../../src/core/memory-quality.js';
+import {
+  assessAutomaticMemory,
+  certainDefect,
+  isAutomaticEntry,
+  isContentWorthStoring,
+  isReusable,
+  isWorthSurfacing,
+} from '../../src/core/memory-quality.js';
 import { auditMemory } from '../../src/core/memory-audit.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../../src/core/memory.js';
 import { mergedText } from '../../src/util/same-text.js';
 
-const make = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });
+const make = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
+  createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });
 const captured = (content: string) => make(content, { source: 'capture', confidence: 'observed' });
 
 describe('automatic assertion quality', () => {
@@ -118,7 +126,9 @@ describe('automatic provenance', () => {
     }
     expect(isAutomaticEntry({ ...base, extracted_from: 'm_1' })).toBe(true);
     expect(isAutomaticEntry({ ...base, dag_level: 1 })).toBe(true);
-    expect(isAutomaticEntry({ ...base, content: '[Consolidated from 2 related memories]\n\nNever push from the VM' })).toBe(true);
+    expect(
+      isAutomaticEntry({ ...base, content: '[Consolidated from 2 related memories]\n\nNever push from the VM' }),
+    ).toBe(true);
   });
 
   it('leaves watch failures, tool failures and vouched rows to the person floor', () => {
@@ -133,7 +143,12 @@ describe('automatic provenance', () => {
   it('reads a writer tag as provenance only on a promoted or shared copy', () => {
     // A "## Captured" heading in an imported MEMORY.md becomes the tag "captured" on a person's note.
     for (const source of ['import:markdown', 'cli', 'mcp']) {
-      expect(isAutomaticEntry(make('Found local migration files to be', { source, confidence: 'observed', tags: ['imported', 'captured'] })), source).toBe(false);
+      expect(
+        isAutomaticEntry(
+          make('Found local migration files to be', { source, confidence: 'observed', tags: ['imported', 'captured'] }),
+        ),
+        source,
+      ).toBe(false);
     }
   });
 
@@ -149,8 +164,15 @@ describe('automatic provenance', () => {
   });
 
   it('judges a bundle by its parts, so only a bundle of nothing but certain defects is held back', () => {
-    const bundle = (parts: string[]) => make(mergedText('[Consolidated from 2 related memories, newest first]', parts), { source: 'consolidation', confidence: 'observed' });
-    const lastPartCut = bundle(['Never push from the VM to main', 'Rebase the feature branch onto main before you merge, because']);
+    const bundle = (parts: string[]) =>
+      make(mergedText('[Consolidated from 2 related memories, newest first]', parts), {
+        source: 'consolidation',
+        confidence: 'observed',
+      });
+    const lastPartCut = bundle([
+      'Never push from the VM to main',
+      'Rebase the feature branch onto main before you merge, because',
+    ]);
     expect(isReusable(lastPartCut)).toBe(true);
     expect(isWorthSurfacing(lastPartCut)).toBe(true);
     const allCut = bundle(['Found local migration files to be', 'Retry the API request because']);

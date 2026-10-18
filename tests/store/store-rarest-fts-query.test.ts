@@ -77,7 +77,15 @@ describe('loadRecallSearchEntriesFromDb', () => {
     writeEntry(root, createMemory('the postgres migration rollback plan for deploy'));
     writeEntry(root, createMemory('unrelated gardening tips for tomatoes'));
 
-    const viaPublic = loadRecallSearchEntries(root, 'postgres migration rollback', 10, undefined, undefined, 'exact', true);
+    const viaPublic = loadRecallSearchEntries(
+      root,
+      'postgres migration rollback',
+      10,
+      undefined,
+      undefined,
+      'exact',
+      true,
+    );
 
     const db = openHippoDb(root);
     let viaDb;

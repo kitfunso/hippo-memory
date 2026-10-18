@@ -13,7 +13,8 @@ import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-const TAUGHT = 'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
+const TAUGHT =
+  'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
 const USER_DECISION = "Let's go with SQLite for the cache because the app must work offline.";
 const AGENT_RULE = 'The deploy script must run from the repository root because it reads relative paths.';
 const LATER_PROMPT = 'Fix formatCents in src/money.js so it rounds half up';
@@ -23,9 +24,12 @@ describe('capture pins the rules a person states', () => {
   let root: string;
   let ctx: FullContext;
 
-  const capture = (turns: SessionTurn[]) => cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
-  const injected = async () => (await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT }))
-    .entries.map(({ entry }) => entry.content);
+  const capture = (turns: SessionTurn[]) =>
+    cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
+  const injected = async () =>
+    (
+      await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT })
+    ).entries.map(({ entry }) => entry.content);
 
   beforeEach(() => {
     scratch = makeRoot('pin-user-rules', { init: false });
@@ -42,9 +46,14 @@ describe('capture pins the rules a person states', () => {
   });
 
   it("pins the person's rule and leaves their decision and the agent's rule unpinned", () => {
-    capture([{ role: 'user', text: `${TAUGHT} ${USER_DECISION}` }, { role: 'assistant', text: AGENT_RULE }]);
+    capture([
+      { role: 'user', text: `${TAUGHT} ${USER_DECISION}` },
+      { role: 'assistant', text: AGENT_RULE },
+    ]);
     const rows = loadAllEntries(root, 'default');
-    expect(rows.filter((e) => e.pinned).map((e) => e.content)).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
+    expect(rows.filter((e) => e.pinned).map((e) => e.content)).toEqual([
+      expect.stringContaining('never edit CHANGELOG.md'),
+    ]);
     expect(rows.find((e) => e.content.startsWith("Let's go with SQLite"))?.pinned).toBe(false);
     expect(rows.find((e) => e.content.startsWith('The deploy script'))?.pinned).toBe(false);
   });
@@ -54,9 +63,11 @@ describe('capture pins the rules a person states', () => {
     expect(await injected()).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
   });
 
-  it("the same rule from the agent stays behind the prompt gate", async () => {
+  it('the same rule from the agent stays behind the prompt gate', async () => {
     capture([{ role: 'assistant', text: TAUGHT }]);
-    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([
+      expect.stringContaining('never edit CHANGELOG.md'),
+    ]);
     expect(await injected()).toEqual([]);
   });
 
@@ -64,11 +75,17 @@ describe('capture pins the rules a person states', () => {
     const file = join(scratch, 'notes.md');
     writeFileSync(file, TAUGHT);
     cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false });
-    expect(loadAllEntries(root, 'default').map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false]]);
+    expect(loadAllEntries(root, 'default').map((e) => [e.content, e.pinned])).toEqual([
+      [expect.stringContaining('never edit CHANGELOG.md'), false],
+    ]);
   });
 
   it('drops the context Codex stores as user messages, so none of it counts as the person speaking', () => {
-    const line = (text: string) => JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } });
+    const line = (text: string) =>
+      JSON.stringify({
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
+      });
     const jsonl = [
       line('# AGENTS.md instructions for C:/repo\n\n<INSTRUCTIONS>\nNever push to main.\n</INSTRUCTIONS>'),
       line('<environment_context>\n  <cwd>C:/repo</cwd>\n</environment_context>'),

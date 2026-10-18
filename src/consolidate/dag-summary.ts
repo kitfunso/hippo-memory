@@ -11,7 +11,8 @@ export interface DagSummaryOptions {
   onError?: (msg: string) => void;
 }
 
-const DAG_SUMMARY_PROMPT = `You are summarizing a cluster of facts about a specific topic/entity for a memory system.
+const DAG_SUMMARY_PROMPT =
+  `You are summarizing a cluster of facts about a specific topic/entity for a memory system.
 
 Topic: {label}
 Facts:
@@ -32,9 +33,7 @@ export async function generateDagSummary(
   opts: DagSummaryOptions,
 ): Promise<string | null> {
   const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecretsStrict(f)}`).join('\n');
-  const prompt = DAG_SUMMARY_PROMPT
-    .replace('{label}', redactSecretsStrict(label))
-    .replace('{facts}', factsBlock);
+  const prompt = DAG_SUMMARY_PROMPT.replace('{label}', redactSecretsStrict(label)).replace('{facts}', factsBlock);
 
   const reply = await sendAnthropicMessage({
     apiKey: opts.apiKey,

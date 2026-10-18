@@ -41,15 +41,17 @@ export function writePromotedEntry(
   opts: { readonly actor?: string; readonly sourceId: string; readonly auditAs?: { tenantId: string; actor: string } },
 ): void {
   const { auditAs, sourceId } = opts;
-  const afterWrite = auditAs && ((db: DatabaseSyncLike, globalId: string) => {
-    appendAuditEvent(db, {
-      tenantId: auditAs.tenantId,
-      actor: auditAs.actor,
-      op: 'promote',
-      targetId: globalId,
-      metadata: { sourceId },
+  const afterWrite =
+    auditAs &&
+    ((db: DatabaseSyncLike, globalId: string) => {
+      appendAuditEvent(db, {
+        tenantId: auditAs.tenantId,
+        actor: auditAs.actor,
+        op: 'promote',
+        targetId: globalId,
+        metadata: { sourceId },
+      });
     });
-  });
   onHandle(hippoRoot, (db) => writeEntryAt(db, { hippoRoot }, entry, { actor: opts.actor, afterWrite }), openStore);
 }
 
@@ -255,8 +257,11 @@ export function strengthenRetrievedOn(
 
 /** Rewrites a live row's tags and its full-text row on the caller's transaction, with no audit row. */
 export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
-  db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`)
-    .run(JSON.stringify(entry.tags), entry.id, entry.tenant_id);
+  db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`).run(
+    JSON.stringify(entry.tags),
+    entry.id,
+    entry.tenant_id,
+  );
   syncFtsRow(db, entry);
 }
 
@@ -309,13 +314,16 @@ export function renameEntrySourceAt(
 
 /** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the row is gone or moved. */
 export function renameEntrySourceAndOriginAt(
-  db: DatabaseSyncLike, tenantId: string, id: string, options: RenameSourceOptions,
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  options: RenameSourceOptions,
 ): number {
   const { from, to, origin } = options;
   const done = db
     .prepare(
       `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
-      `AND source = ?`,
+        `AND source = ?`,
     )
     .run(to, origin, id, tenantId, from);
   return Number(done.changes ?? 0);

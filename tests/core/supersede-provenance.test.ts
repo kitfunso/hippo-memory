@@ -4,7 +4,13 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  createSuccessor,
+  DEFAULT_HALF_LIFE_DAYS,
+  Layer,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
@@ -17,7 +23,7 @@ let projectStore: string;
 let globalStore: string;
 
 const ctxFor = (hippoRoot: string): FullContext =>
-  (apiCtx(hippoRoot, 'default', { subject: 'supersede-provenance-test', role: 'admin' }));
+  apiCtx(hippoRoot, 'default', { subject: 'supersede-provenance-test', role: 'admin' });
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
@@ -47,7 +53,11 @@ describe('supersede keeps provenance', () => {
       source_session_id: 'sess-old',
     });
 
-    const { newId } = await supersede(ctxFor(globalStore), old.id, 'the billing service retries a failed charge five times before it pages');
+    const { newId } = await supersede(
+      ctxFor(globalStore),
+      old.id,
+      'the billing service retries a failed charge five times before it pages',
+    );
 
     const next = readEntry(globalStore, newId);
     expect(next?.origin_project).toBe('proj-a');
@@ -60,7 +70,11 @@ describe('supersede keeps provenance', () => {
       origin_project: '',
     });
 
-    const { newId } = await supersede(ctxFor(projectStore), old.id, 'the release checklist lives in the wiki under the delivery section');
+    const { newId } = await supersede(
+      ctxFor(projectStore),
+      old.id,
+      'the release checklist lives in the wiki under the delivery section',
+    );
 
     const next = readEntry(projectStore, newId);
     expect(next?.origin_project).toBe('');
@@ -73,7 +87,11 @@ describe('supersede keeps provenance', () => {
     });
     expect(readEntry(projectStore, old.id)?.origin_project).toBeNull();
 
-    const { newId } = await supersede(ctxFor(projectStore), old.id, 'the nightly export job writes its files to the cold archive bucket');
+    const { newId } = await supersede(
+      ctxFor(projectStore),
+      old.id,
+      'the nightly export job writes its files to the cold archive bucket',
+    );
 
     expect(readEntry(projectStore, newId)?.origin_project).toBe('proj');
   });
@@ -115,12 +133,19 @@ describe('createSuccessor', () => {
   });
 
   it('keeps a user-global origin', () => {
-    expect(createSuccessor(oldRow({ origin_project: '' }), 'the deploy pipeline now signs twice', opts).origin_project).toBe('');
+    expect(
+      createSuccessor(oldRow({ origin_project: '' }), 'the deploy pipeline now signs twice', opts).origin_project,
+    ).toBe('');
   });
 
   it('leaves a legacy null or unset origin unset so the store stamps it', () => {
-    expect(createSuccessor(oldRow({ origin_project: null }), 'the deploy pipeline now signs twice', opts).origin_project).toBeUndefined();
-    expect(createSuccessor(oldRow({ origin_project: undefined }), 'the deploy pipeline now signs twice', opts).origin_project).toBeUndefined();
+    expect(
+      createSuccessor(oldRow({ origin_project: null }), 'the deploy pipeline now signs twice', opts).origin_project,
+    ).toBeUndefined();
+    expect(
+      createSuccessor(oldRow({ origin_project: undefined }), 'the deploy pipeline now signs twice', opts)
+        .origin_project,
+    ).toBeUndefined();
   });
 
   it('lets layer, tags and pinned overrides win, including an empty tag list and pinned false', () => {
@@ -139,6 +164,8 @@ describe('createSuccessor', () => {
   });
 
   it('takes the tenant from the options', () => {
-    expect(createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenant_id).toBe('tenant-b');
+    expect(
+      createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenant_id,
+    ).toBe('tenant-b');
   });
 });

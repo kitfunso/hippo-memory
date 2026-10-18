@@ -1,8 +1,17 @@
 // simulate() accumulates forces in place; this keeps the allocating implementation it replaced and holds the two together.
 import { describe, expect, it } from 'vitest';
 import {
-  attractionForce, repulsionForce, dragForce, simulate, vecAdd, vecScale, vecNormalize, vecClampMagnitude, vecZero,
-  type ForceContext, type PhysicsParticle,
+  attractionForce,
+  repulsionForce,
+  dragForce,
+  simulate,
+  vecAdd,
+  vecScale,
+  vecNormalize,
+  vecClampMagnitude,
+  vecZero,
+  type ForceContext,
+  type PhysicsParticle,
 } from '../../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { FALLBACK_HALF_LIFE_DAYS } from '../../src/core/memory.js';
@@ -14,12 +23,15 @@ function netForce(i: number, particles: PhysicsParticle[], ctx: ForceContext): n
   for (let j = 0; j < particles.length; j++) {
     if (i === j) continue;
     net = vecAdd(net, attractionForce(pi, particles[j], ctx.config.G_memory));
-    if (conflicts?.has(particles[j].memoryId)) net = vecAdd(net, repulsionForce(pi, particles[j], ctx.config.K_repulsion));
+    if (conflicts?.has(particles[j].memoryId)) {
+      net = vecAdd(net, repulsionForce(pi, particles[j], ctx.config.K_repulsion));
+    }
   }
   return vecAdd(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));
 }
 
-const accelOf = (i: number, ps: PhysicsParticle[], ctx: ForceContext): number[] => vecScale(netForce(i, ps, ctx), 1 / Math.max(0.01, ps[i].mass));
+const accelOf = (i: number, ps: PhysicsParticle[], ctx: ForceContext): number[] =>
+  vecScale(netForce(i, ps, ctx), 1 / Math.max(0.01, ps[i].mass));
 
 function simulateAllocating(particles: PhysicsParticle[], ctx: ForceContext): void {
   const { dt, max_velocity: maxVel } = ctx.config;
@@ -32,7 +44,10 @@ function simulateAllocating(particles: PhysicsParticle[], ctx: ForceContext): vo
     const next = particles.map((_, i) => accelOf(i, particles, ctx));
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      p.velocity = vecClampMagnitude(vecAdd(p.velocity, vecScale(vecScale(vecAdd(accelerations[i], next[i]), 0.5), dt)), maxVel);
+      p.velocity = vecClampMagnitude(
+        vecAdd(p.velocity, vecScale(vecScale(vecAdd(accelerations[i], next[i]), 0.5), dt)),
+        maxVel,
+      );
       p.position = vecNormalize(p.position);
     }
     accelerations = next;
@@ -68,8 +83,16 @@ function fixture(): Fixture {
   particles[11].position = particles[10].position.slice();
   particles[4].position = particles[3].position.map((v) => -v);
   const ctx: ForceContext = {
-    conflictPairs: new Map([['m0', new Set(['m1', 'm2'])], ['m1', new Set(['m0'])], ['m5', new Set(['m6'])], ['m10', new Set(['m11'])]]),
-    halfLives: new Map([['m0', 3], ['m7', 90]]),
+    conflictPairs: new Map([
+      ['m0', new Set(['m1', 'm2'])],
+      ['m1', new Set(['m0'])],
+      ['m5', new Set(['m6'])],
+      ['m10', new Set(['m11'])],
+    ]),
+    halfLives: new Map([
+      ['m0', 3],
+      ['m7', 90],
+    ]),
     config: { ...DEFAULT_PHYSICS_CONFIG, substeps: 5 },
   };
   return { particles, ctx };

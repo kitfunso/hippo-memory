@@ -54,7 +54,7 @@ function assertPromotable(id: string, entry: MemoryEntry): void {
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(
       `Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ` +
-      `${id}'.`,
+        `${id}'.`,
     );
   }
   if (isPersonalScope(entry.scope ?? null)) {
@@ -69,7 +69,7 @@ function assertPromotable(id: string, entry: MemoryEntry): void {
   if (promoteSecret.flagged) {
     throw new BadRequestError(
       `Refusing to promote ${id} to the global store: content matches secret material (${promoteSecret.reason}). ` +
-      `Secrets stay in their owning project's store.`,
+        `Secrets stay in their owning project's store.`,
     );
   }
 }

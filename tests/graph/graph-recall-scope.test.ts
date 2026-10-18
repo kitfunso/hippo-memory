@@ -25,7 +25,11 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 /** Write a distilled memory (createMemory's default kind — the only kind graph writers
  *  accept per the E3.3 consolidated-source guard) and return the full entry. */
@@ -33,8 +37,12 @@ function mem(home: string, tenant: string, text: string, opts: { scope?: string 
   const content = text.length < 3 ? text.repeat(3) : text;
   const m = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test',
-    tenantId: tenant, scope: opts.scope ?? null,
+    tags: [],
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'test',
+    tenantId: tenant,
+    scope: opts.scope ?? null,
   });
   writeEntry(home, m, { actor: 'test' });
   return m;
@@ -61,31 +69,45 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
 describe('graph-recall scope parity', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot('graphrecall-scope'); });
+  beforeEach(() => {
+    home = makeRoot('graphrecall-scope');
+  });
   afterEach(() => safeRmSync(home));
 
   it('core: a graph-reached private-scoped memory is default-denied (no recallScope = fail-closed)', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
-    const priv = mem(home, T, 'wholly unrelated private wording xyzzy plugh frobnicate', { scope: 'slack:private:dm1' });
+    const priv = mem(home, T, 'wholly unrelated private wording xyzzy plugh frobnicate', {
+      scope: 'slack:private:dm1',
+    });
     const eSeed = ent(home, T, seed, 'SEED');
     const ePriv = ent(home, T, priv, 'PRIV');
     // priv is the `from` endpoint (reached direction 'from'), so it is not treated as a
     // superseded endpoint and would surface by default absent the scope fix.
     insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
-    const out = await graphExpandRecall([sr(seed, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
+      hops: 1,
+      store: sqliteStore(home),
+      tenantId: T,
+      budget: 4000,
+    });
     expect(out.map((r) => r.entry.id)).not.toContain(priv.id);
   });
 
   it('CLI unlock: recallScope { requested: dm1, additive: true } surfaces the private row (parity with base-recall unlock)', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
-    const priv = mem(home, T, 'wholly unrelated private wording xyzzy plugh frobnicate', { scope: 'slack:private:dm1' });
+    const priv = mem(home, T, 'wholly unrelated private wording xyzzy plugh frobnicate', {
+      scope: 'slack:private:dm1',
+    });
     const eSeed = ent(home, T, seed, 'SEED');
     const ePriv = ent(home, T, priv, 'PRIV');
     insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
-      hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000,
+      hops: 1,
+      store: sqliteStore(home),
+      tenantId: T,
+      budget: 4000,
       recallScope: { requested: 'slack:private:dm1', additive: true },
     });
     expect(out.map((r) => r.entry.id)).toContain(priv.id);
@@ -94,15 +116,30 @@ describe('graph-recall scope parity', () => {
   it('exact/api narrowing: requested without additive keeps only exact-scope rows (drops the NULL-scope neighbour too)', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
     const nullNeighbor = mem(home, T, 'wholly unrelated public wording xyzzy plugh');
-    const privNeighbor = mem(home, T, 'wholly unrelated private wording frobnicate zapzap', { scope: 'slack:private:dm1' });
+    const privNeighbor = mem(home, T, 'wholly unrelated private wording frobnicate zapzap', {
+      scope: 'slack:private:dm1',
+    });
     const eSeed = ent(home, T, seed, 'SEED');
     const eNull = ent(home, T, nullNeighbor, 'NULLN');
     const ePriv = ent(home, T, privNeighbor, 'PRIVN');
-    insertRelationAt(home, T, { fromEntityId: eNull, toEntityId: eSeed, relType: 'supersedes', memoryId: nullNeighbor.id });
-    insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: privNeighbor.id });
+    insertRelationAt(home, T, {
+      fromEntityId: eNull,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: nullNeighbor.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: ePriv,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: privNeighbor.id,
+    });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
-      hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000,
+      hops: 1,
+      store: sqliteStore(home),
+      tenantId: T,
+      budget: 4000,
       recallScope: { requested: 'slack:private:dm1' }, // additive absent -> exact-narrowing (api semantics)
     });
     const ids = out.map((r) => r.entry.id);
@@ -117,7 +154,12 @@ describe('graph-recall scope parity', () => {
     const eLegacy = ent(home, T, legacy, 'LEGACY');
     insertRelationAt(home, T, { fromEntityId: eLegacy, toEntityId: eSeed, relType: 'supersedes', memoryId: legacy.id });
 
-    const out = await graphExpandRecall([sr(seed, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
+      hops: 1,
+      store: sqliteStore(home),
+      tenantId: T,
+      budget: 4000,
+    });
     expect(out.map((r) => r.entry.id)).not.toContain(legacy.id);
   });
 
@@ -132,7 +174,11 @@ describe('graph-recall scope parity', () => {
       insertRelationAt(glob, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
       const out = await graphExpandRecall([sr(seed, 1.0)], {
-        hops: 1, store: sqliteStore(home), global: sqliteStore(glob), tenantId: T, budget: 4000,
+        hops: 1,
+        store: sqliteStore(home),
+        global: sqliteStore(glob),
+        tenantId: T,
+        budget: 4000,
       });
       expect(out.map((r) => r.entry.id)).not.toContain(priv.id);
     } finally {
@@ -144,17 +190,27 @@ describe('graph-recall scope parity', () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
     const nullNeighbor = mem(home, T, 'wholly unrelated public wording xyzzy plugh');
     const dm1 = mem(home, T, 'wholly unrelated dm1 private wording frobnicate zapzap', { scope: 'slack:private:dm1' });
-    const dm2 = mem(home, T, 'wholly unrelated dm2 private wording quuxquux blorpblorp', { scope: 'slack:private:dm2' });
+    const dm2 = mem(home, T, 'wholly unrelated dm2 private wording quuxquux blorpblorp', {
+      scope: 'slack:private:dm2',
+    });
     const eSeed = ent(home, T, seed, 'SEED');
     const eNull = ent(home, T, nullNeighbor, 'NULLN');
     const eDm1 = ent(home, T, dm1, 'DM1');
     const eDm2 = ent(home, T, dm2, 'DM2');
-    insertRelationAt(home, T, { fromEntityId: eNull, toEntityId: eSeed, relType: 'supersedes', memoryId: nullNeighbor.id });
+    insertRelationAt(home, T, {
+      fromEntityId: eNull,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: nullNeighbor.id,
+    });
     insertRelationAt(home, T, { fromEntityId: eDm1, toEntityId: eSeed, relType: 'supersedes', memoryId: dm1.id });
     insertRelationAt(home, T, { fromEntityId: eDm2, toEntityId: eSeed, relType: 'supersedes', memoryId: dm2.id });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
-      hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000,
+      hops: 1,
+      store: sqliteStore(home),
+      tenantId: T,
+      budget: 4000,
       recallScope: { requested: 'slack:private:dm1', additive: true },
     });
     const ids = out.map((r) => r.entry.id);
@@ -191,7 +247,17 @@ describe('graph-recall scope parity: CLI e2e', () => {
     expect(denied).toContain('decision alpha');
     expect(denied).not.toContain('frobnicate');
 
-    const unlocked = await hippo(cliHome, 'recall', 'graphhopscope', '--hops', '1', '--scope', 'slack:private:dm1', '--limit', '10');
+    const unlocked = await hippo(
+      cliHome,
+      'recall',
+      'graphhopscope',
+      '--hops',
+      '1',
+      '--scope',
+      'slack:private:dm1',
+      '--limit',
+      '10',
+    );
     expect(unlocked).toContain('frobnicate');
   });
 });

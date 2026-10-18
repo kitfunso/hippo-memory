@@ -31,20 +31,46 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
     async savePrediction(tenantId, input, actor) {
       const { mirror } = input;
       const held = mirrors.get(mirror.id);
-      if (held && held.tenant_id !== mirror.tenant_id) throw new ConflictError(`Memory ${mirror.id} belongs to another tenant`);
+      if (held && held.tenant_id !== mirror.tenant_id) {
+        throw new ConflictError(`Memory ${mirror.id} belongs to another tenant`);
+      }
       const id = lastId + 1;
       const row: Prediction = {
-        id, memoryId: mirror.id, tenantId, classTag: input.classTag, claimText: input.claimText,
-        estimateValue: input.estimateValue ?? null, estimateUnit: input.estimateUnit ?? null, targetDate: input.targetDate ?? null,
-        actualValue: null, closureState: 'open', closedAt: null, closureNote: null, createdAt: new Date().toISOString(),
+        id,
+        memoryId: mirror.id,
+        tenantId,
+        classTag: input.classTag,
+        claimText: input.claimText,
+        estimateValue: input.estimateValue ?? null,
+        estimateUnit: input.estimateUnit ?? null,
+        targetDate: input.targetDate ?? null,
+        actualValue: null,
+        closureState: 'open',
+        closedAt: null,
+        closureNote: null,
+        createdAt: new Date().toISOString(),
       };
       // The rows are kept only once both audit rows are in, as one transaction would have it.
       await base.store.appendAuditEvents([
         {
-          tenantId, actor, op: 'predict_create', targetId: String(id),
-          metadata: { prediction_id: id, class_tag: input.classTag, has_estimate: input.estimateValue !== undefined, target_date: input.targetDate ?? null },
+          tenantId,
+          actor,
+          op: 'predict_create',
+          targetId: String(id),
+          metadata: {
+            prediction_id: id,
+            class_tag: input.classTag,
+            has_estimate: input.estimateValue !== undefined,
+            target_date: input.targetDate ?? null,
+          },
         },
-        { tenantId: mirror.tenant_id, actor, op: 'remember', targetId: mirror.id, metadata: { kind: mirror.kind ?? 'distilled', scope: mirror.scope ?? null } },
+        {
+          tenantId: mirror.tenant_id,
+          actor,
+          op: 'remember',
+          targetId: mirror.id,
+          metadata: { kind: mirror.kind ?? 'distilled', scope: mirror.scope ?? null },
+        },
       ]);
       lastId = id;
       rows.set(id, row);
@@ -55,15 +81,30 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
       const row = owned(tenantId, id);
       if (!row) throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
       if (row.closureState !== 'open') {
-        throw new BadRequestError(`closePrediction: prediction ${id} is already closed (state='${row.closureState}'); cannot re-close. Open predictions only.`);
+        throw new BadRequestError(
+          `closePrediction: prediction ${id} is already closed (state='${row.closureState}'); cannot re-close. Open predictions only.`,
+        );
       }
       const closed: Prediction = {
-        ...row, actualValue: close.actualValue ?? null, closureState: close.closureState, closedAt: new Date().toISOString(), closureNote: close.closureNote ?? null,
+        ...row,
+        actualValue: close.actualValue ?? null,
+        closureState: close.closureState,
+        closedAt: new Date().toISOString(),
+        closureNote: close.closureNote ?? null,
       };
-      await base.store.appendAuditEvents([{
-        tenantId, actor, op: 'predict_close', targetId: String(id),
-        metadata: { prediction_id: id, closure_state: close.closureState, has_actual: close.actualValue !== undefined },
-      }]);
+      await base.store.appendAuditEvents([
+        {
+          tenantId,
+          actor,
+          op: 'predict_close',
+          targetId: String(id),
+          metadata: {
+            prediction_id: id,
+            closure_state: close.closureState,
+            has_actual: close.actualValue !== undefined,
+          },
+        },
+      ]);
       rows.set(id, closed);
       return structuredClone(closed);
     },
@@ -76,18 +117,37 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
         const byKey = byBytes(row.createdAt, String(after.key));
         return byKey < 0 || (byKey === 0 && row.id < Number(after.id));
       };
-      const hits = [...rows.values()].filter((row) => row.tenantId === tenantId && (classTag === undefined || row.classTag === classTag)
-        && (closureState === undefined || row.closureState === closureState) && below(row));
+      const hits = [...rows.values()].filter(
+        (row) =>
+          row.tenantId === tenantId &&
+          (classTag === undefined || row.classTag === classTag) &&
+          (closureState === undefined || row.closureState === closureState) &&
+          below(row),
+      );
       return structuredClone(hits.sort(newestFirst).slice(0, limit));
     },
     async predictionBaserate(tenantId, classTag, actor) {
-      const closed = [...rows.values()].sort((a, b) => a.id - b.id).flatMap((row) => (
-        row.tenantId === tenantId && row.classTag === classTag && row.closureState === 'closed' && row.estimateValue !== null && row.actualValue !== null
-          ? [{ estimate_value: row.estimateValue, actual_value: row.actualValue }]
-          : []
-      ));
+      const closed = [...rows.values()]
+        .sort((a, b) => a.id - b.id)
+        .flatMap((row) =>
+          row.tenantId === tenantId &&
+          row.classTag === classTag &&
+          row.closureState === 'closed' &&
+          row.estimateValue !== null &&
+          row.actualValue !== null
+            ? [{ estimate_value: row.estimateValue, actual_value: row.actualValue }]
+            : [],
+        );
       const baserate = predictionBaserateOf(classTag, closed);
-      await base.store.appendAuditEvents([{ tenantId, actor, op: 'predict_baserate', targetId: classTag, metadata: { class_tag: classTag, n_closed: baserate.nClosed } }]);
+      await base.store.appendAuditEvents([
+        {
+          tenantId,
+          actor,
+          op: 'predict_baserate',
+          targetId: classTag,
+          metadata: { class_tag: classTag, n_closed: baserate.nClosed },
+        },
+      ]);
       return baserate;
     },
   };
@@ -96,8 +156,12 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
     ...base.store,
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
-      const found = [...mirrors.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId));
-      return structuredClone(found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)));
+      const found = [...mirrors.values()].filter(
+        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+      );
+      return structuredClone(
+        found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),
+      );
     },
     predictions,
   };

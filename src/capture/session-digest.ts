@@ -281,7 +281,13 @@ function visitRecord(record: TranscriptRecord, state: ScanState): void {
  */
 export function scanSessionTranscript(jsonl: string): SessionScan {
   const state: ScanState = {
-    cwd: null, firstCwd: null, pending: [], landed: new Set(), claudeFinal: '', codexFinal: '', codexUnphased: '',
+    cwd: null,
+    firstCwd: null,
+    pending: [],
+    landed: new Set(),
+    claudeFinal: '',
+    codexFinal: '',
+    codexUnphased: '',
   };
   const turns = collectSessionTurns(jsonl, (record) => visitRecord(record, state));
   return {
@@ -289,9 +295,7 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
     cwd: state.firstCwd,
     // An unanswered call may never have run, so an edit counts only once its result says it applied.
-    edits: state.pending
-      .filter((e) => state.landed.has(e.callId))
-      .map(({ filePath, base }) => ({ filePath, base })),
+    edits: state.pending.filter((e) => state.landed.has(e.callId)).map(({ filePath, base }) => ({ filePath, base })),
   };
 }
 
@@ -395,8 +399,26 @@ function rewriteRepoPaths(sentence: string, repoRoot: string): string {
 
 /** Each opener points back to something named before the sentence; There, I, We and You do not. */
 const OPENERS = new Set([
-  'this', 'that', 'these', 'those', 'it', 'its', 'they', 'them', 'their', 'he', 'she', 'his', 'her', 'here',
-  'both', 'each', 'either', 'neither', 'such', 'which',
+  'this',
+  'that',
+  'these',
+  'those',
+  'it',
+  'its',
+  'they',
+  'them',
+  'their',
+  'he',
+  'she',
+  'his',
+  'her',
+  'here',
+  'both',
+  'each',
+  'either',
+  'neither',
+  'such',
+  'which',
 ]);
 const COUNTED_OPENER = /^(?:all|the|these|those|both)\s+\d/i;
 
@@ -446,13 +468,20 @@ function proseText(text: string): string {
 export function digestSentences(text: string): string[] {
   const held: string[] = [];
   const masked = proseText(text).replace(PROTECTED, (m) => `\uE000${held.push(m) - 1}\uE001`);
-  return masked.split(/(?<=[.!?])\s+|\n/).filter((s) => s.trim().length > 5)
+  return masked
+    .split(/(?<=[.!?])\s+|\n/)
+    .filter((s) => s.trim().length > 5)
     .map((s) => s.replace(/\uE000(\d+)\uE001/g, (_m, i: string) => held[Number(i)]).trim())
     .filter(Boolean);
 }
 
 function echoTokens(text: string): string[] {
-  return text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [];
+  return (
+    text
+      .normalize('NFKC')
+      .toLowerCase()
+      .match(/[\p{L}\p{N}_]+/gu) ?? []
+  );
 }
 
 function echoWindows(texts: readonly string[]): Set<string> {
@@ -576,12 +605,17 @@ function injectedTexts(store: DigestStore, opts: SessionDigestOptions): string[]
     SESSION_DIGEST_TAG,
     opts.key,
   );
-  const handoff = store.sessions.latestHandoff(opts.tenantId, null, {
-    unfinishedOnly: true,
-    maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
-    scopeFilter: 'default-deny',
-    excludeSessionId: opts.key,
-  }, null);
+  const handoff = store.sessions.latestHandoff(
+    opts.tenantId,
+    null,
+    {
+      unfinishedOnly: true,
+      maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
+      scopeFilter: 'default-deny',
+      excludeSessionId: opts.key,
+    },
+    null,
+  );
   if (!handoff) return digests;
   return [...digests, [handoff.taskId, handoff.summary, handoff.nextAction].filter(Boolean).join('\n')];
 }
@@ -655,9 +689,11 @@ export function recordSessionDigest(
   }
   try {
     const outcome = writeSessionDigest(hippoRoot, store, scan, opts);
-    opts.log(outcome.written
-      ? `digest: wrote ${outcome.sentences} sentence(s), ${outcome.files} file(s) for ${opts.key}`
-      : `digest: skip: ${outcome.reason}`);
+    opts.log(
+      outcome.written
+        ? `digest: wrote ${outcome.sentences} sentence(s), ${outcome.files} file(s) for ${opts.key}`
+        : `digest: skip: ${outcome.reason}`,
+    );
   } catch (err) {
     opts.log(`digest failed: ${errorMessage(err)}`);
   }

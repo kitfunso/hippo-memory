@@ -8,10 +8,7 @@ import { getGlobalRoot } from './sharing/global-store.js';
 import type { StoreHealth } from './store/diagnostics.js';
 import type { Diagnostics } from './store/port/diagnostics.js';
 import { loadConfig } from './core/config.js';
-import {
-  getCurrentSchemaVersion,
-  IncompatibleBinaryError,
-} from './db/index.js';
+import { getCurrentSchemaVersion, IncompatibleBinaryError } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './capture/compaction-spool.js';
 import { isEmbeddingAvailable } from './embeddings/local.js';
@@ -95,7 +92,7 @@ function codexCheck(home: string): DoctorCheck {
       id: 'codex',
       status: 'warn',
       detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it",
-      fix: 'repair hooks.json, then run: hippo hook install codex'
+      fix: 'repair hooks.json, then run: hippo hook install codex',
     };
   }
   const text = JSON.stringify(parsed ?? '');
@@ -110,9 +107,10 @@ function codexCheck(home: string): DoctorCheck {
   return {
     id: 'codex',
     status: 'warn',
-    detail: missing.length === codexHooks.length
-      ? "Codex found, but hippo's memory hooks are not installed"
-      : `Codex: hippo hooks missing for ${missing.join(', ')}`,
+    detail:
+      missing.length === codexHooks.length
+        ? "Codex found, but hippo's memory hooks are not installed"
+        : `Codex: hippo hooks missing for ${missing.join(', ')}`,
     fix: 'hippo hook install codex   (then trust the hooks once in /hooks)',
   };
 }
@@ -151,7 +149,7 @@ function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck
       id: 'sleep',
       status: 'warn',
       detail: 'hippo has never slept (consolidated) in this store',
-      fix: 'hippo sleep   (the session-end hook runs it automatically)'
+      fix: 'hippo sleep   (the session-end hook runs it automatically)',
     };
   }
   const days = Math.floor((now.getTime() - when) / DAY_MS);
@@ -248,11 +246,11 @@ function projectsCheck(global: Diagnostics, globalRoot: string): DoctorCheck {
     return found.length === 0
       ? { id: 'projects', status: 'pass', detail: 'no duplicate or out-of-date project tags in the global store' }
       : {
-        id: 'projects',
-        status: 'warn',
-        detail: `global store: ${found.join('; ')}`,
-        fix: 'hippo projects repair --global   (dry run; add --apply to write)'
-      };
+          id: 'projects',
+          status: 'warn',
+          detail: `global store: ${found.join('; ')}`,
+          fix: 'hippo projects repair --global   (dry run; add --apply to write)',
+        };
   } catch (err) {
     return { id: 'projects', status: 'info', detail: `project tags not checked (${errorMessage(err)})` };
   }
@@ -294,8 +292,8 @@ function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean
         id: 'store',
         status: 'fail',
         detail: `${local} has no hippo.db, so hippo commands run here stop at it`,
-        fix: `run hippo init in ${path.dirname(local)}, or remove that .hippo folder`
-      }
+        fix: `run hippo init in ${path.dirname(local)}, or remove that .hippo folder`,
+      },
     };
   }
   if (hasGlobal) {
@@ -305,8 +303,8 @@ function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean
         id: 'store',
         status: 'warn',
         detail: `no project store here; using the global store at ${globalRoot}`,
-        fix: 'hippo init   (in the project root)'
-      }
+        fix: 'hippo init   (in the project root)',
+      },
     };
   }
   return {
@@ -315,8 +313,8 @@ function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean
       id: 'store',
       status: 'fail',
       detail: 'no hippo store found (project or global)',
-      fix: 'hippo init   (in the project root), or hippo init --global'
-    }
+      fix: 'hippo init   (in the project root), or hippo init --global',
+    },
   };
 }
 
@@ -366,7 +364,8 @@ function ftsCheck(fts: StoreHealth['fts']): DoctorCheck {
   return {
     id: 'fts',
     status: 'warn',
-    detail: `full-text index out of sync: ${counts.fts} indexed rows for ${counts.memories} memories, so search can ` +
+    detail:
+      `full-text index out of sync: ${counts.fts} indexed rows for ${counts.memories} memories, so search can ` +
       `miss memories or match removed ones`,
     fix: 'hippo sleep   (re-syncs the index)',
   };
@@ -381,7 +380,8 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
   return {
     id: 'tokens',
     status: 'info',
-    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent ` +
+    detail:
+      `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent ` +
       `and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
   };
 }
@@ -468,7 +468,7 @@ function claudeCodeCheck(home: string): DoctorCheck {
     id: 'claude-code',
     status: 'warn',
     detail: `Claude Code: hippo hooks missing for ${missing.join(', ')}`,
-    fix: 'hippo hook install claude-code   (adds only what is missing)'
+    fix: 'hippo hook install claude-code   (adds only what is missing)',
   };
 }
 
@@ -495,7 +495,8 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
     checks.push({
       id: 'pilot',
       status: 'info',
-      detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo ` +
+      detail:
+        `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo ` +
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }

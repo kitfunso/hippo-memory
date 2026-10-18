@@ -42,7 +42,7 @@ describe('verified API key cache', () => {
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
 
-  const adminCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }));
+  const adminCtx = (): FullContext => apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
 
   beforeEach(() => {
     home = makeRoot('key-cache');
@@ -94,11 +94,18 @@ describe('verified API key cache', () => {
     await verify(key.plaintext);
     await verify(other.plaintext);
     onDb(home, (db) => {
-      db.prepare(`INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)`).run(key.keyId, 'slack:private:C9', new Date().toISOString());
+      db.prepare(`INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)`).run(
+        key.keyId,
+        'slack:private:C9',
+        new Date().toISOString(),
+      );
       db.prepare(`UPDATE api_keys SET role = 'admin' WHERE key_id = ?`).run(key.keyId);
       db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), other.keyId);
     });
-    expect(await counted(() => verify(key.plaintext))).toMatchObject({ value: { role: 'admin', scopes: ['slack:private:C9'] }, scrypt: 0 });
+    expect(await counted(() => verify(key.plaintext))).toMatchObject({
+      value: { role: 'admin', scopes: ['slack:private:C9'] },
+      scrypt: 0,
+    });
     expect(await counted(() => verify(other.plaintext))).toMatchObject({ value: null, scrypt: 0 });
   });
 
@@ -107,7 +114,9 @@ describe('verified API key cache', () => {
     const other = mint();
     expect(await verify(key.plaintext)).not.toBeNull();
     onDb(home, (db) => {
-      db.prepare(`UPDATE api_keys SET key_hash = (SELECT key_hash FROM api_keys WHERE key_id = ?) WHERE key_id = ?`).run(other.keyId, key.keyId);
+      db.prepare(
+        `UPDATE api_keys SET key_hash = (SELECT key_hash FROM api_keys WHERE key_id = ?) WHERE key_id = ?`,
+      ).run(other.keyId, key.keyId);
     });
     expect(await counted(() => verify(key.plaintext))).toMatchObject({ value: null, scrypt: 1 });
   });
@@ -141,14 +150,24 @@ describe('verified API key cache', () => {
     expect(await boundedBy(key.plaintext)).toEqual([key.keyId]);
     expect(await boundedBy(key.plaintext)).toEqual([]);
     expect(await boundedBy(`${key.keyId}.${'a'.repeat(32)}`)).toEqual([key.keyId]);
-    for (const token of ['hk_junk', revoked.plaintext, `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`]) expect(await boundedBy(token), token).toEqual([]);
+    for (const token of ['hk_junk', revoked.plaintext, `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`]) {
+      expect(await boundedBy(token), token).toEqual([]);
+    }
   });
 
   it('a throw from the bound refuses before scrypt runs, and the next check derives as if it never happened', async () => {
     const key = mint();
     const before = _readApiKeyVerifyStatsForTests().scryptRuns;
-    await expect(verifyApiKeyCached(key.plaintext, sqliteStore(home), () => { throw new Error('gate shut'); })).rejects.toThrow('gate shut');
-    await expect(verifyApiKeyCached(key.plaintext, sqliteStore(home), async () => { throw new Error('queue full'); })).rejects.toThrow('queue full');
+    await expect(
+      verifyApiKeyCached(key.plaintext, sqliteStore(home), () => {
+        throw new Error('gate shut');
+      }),
+    ).rejects.toThrow('gate shut');
+    await expect(
+      verifyApiKeyCached(key.plaintext, sqliteStore(home), async () => {
+        throw new Error('queue full');
+      }),
+    ).rejects.toThrow('queue full');
     expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(before);
     expect(await counted(() => verify(key.plaintext))).toMatchObject({ scrypt: 1 });
   });
@@ -170,7 +189,12 @@ describe('verified API key cache', () => {
   });
 
   it('rejects malformed tokens and unknown key ids without any scrypt work', async () => {
-    const malformed = ['no-dot-here', 'hk_forged.secret', `hk_${'a'.repeat(24)}.short`, `HK_${'a'.repeat(24)}.${'b'.repeat(32)}`];
+    const malformed = [
+      'no-dot-here',
+      'hk_forged.secret',
+      `hk_${'a'.repeat(24)}.short`,
+      `HK_${'a'.repeat(24)}.${'b'.repeat(32)}`,
+    ];
     for (const token of malformed) {
       const res = await counted(() => verify(token));
       expect(res.value).toBeNull();
@@ -196,11 +220,14 @@ describe('verified API key cache', () => {
   it('a check whose row was read before a revoke passes that once, and the next verify reads the revoke', async () => {
     const key = mint();
     const inner = sqliteStore(home);
-    const racing = { ...inner, findApiKey: async (keyId: string) => {
-      const record = await inner.findApiKey(keyId);
-      await authRevoke(adminCtx(), keyId);
-      return record;
-    } };
+    const racing = {
+      ...inner,
+      findApiKey: async (keyId: string) => {
+        const record = await inner.findApiKey(keyId);
+        await authRevoke(adminCtx(), keyId);
+        return record;
+      },
+    };
     expect(await verifyApiKeyCached(key.plaintext, racing)).not.toBeNull();
     expect(await verify(key.plaintext)).toBeNull();
   });
@@ -215,7 +242,11 @@ describe('VerifiedKeyCache', () => {
     expect(cache.has('hash-a', 'hk_a.s')).toBe(true);
     cache.add('hash-c', 'hk_c.s');
     expect(cache.size).toBe(2);
-    expect([cache.has('hash-b', 'hk_b.s'), cache.has('hash-a', 'hk_a.s'), cache.has('hash-c', 'hk_c.s')]).toEqual([false, true, true]);
+    expect([cache.has('hash-b', 'hk_b.s'), cache.has('hash-a', 'hk_a.s'), cache.has('hash-c', 'hk_c.s')]).toEqual([
+      false,
+      true,
+      true,
+    ]);
   });
 
   it('a wrong secret misses without evicting the proved one', async () => {
@@ -271,7 +302,9 @@ describe('bearer requests through the server', () => {
   it('a revoke written by another process is a 401 on the very next request', async () => {
     const key = mint('member');
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
-    onDb(home, (db) => db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), key.keyId));
+    onDb(home, (db) =>
+      db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), key.keyId),
+    );
     expect(await get('/v1/memories?q=x', key)).toEqual({ status: 401, body: { error: 'invalid api key' } });
   });
 
@@ -282,7 +315,10 @@ describe('bearer requests through the server', () => {
     };
     expect((await get('/v1/quarantine', key)).status).toBe(200);
     setRole('member');
-    expect(await get('/v1/quarantine', key)).toEqual({ status: 403, body: { error: '/v1/quarantine requires admin role' } });
+    expect(await get('/v1/quarantine', key)).toEqual({
+      status: 403,
+      body: { error: '/v1/quarantine requires admin role' },
+    });
     setRole('admin');
     expect((await get('/v1/quarantine', key)).status).toBe(200);
   });
@@ -290,7 +326,9 @@ describe('bearer requests through the server', () => {
   it('an expiry written by another process is a 401 on the very next request', async () => {
     const key = mint('member');
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
-    onDb(home, (db) => db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run('2020-01-01T00:00:00.000Z', key.keyId));
+    onDb(home, (db) =>
+      db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run('2020-01-01T00:00:00.000Z', key.keyId),
+    );
     expect((await get('/v1/memories?q=x', key)).status).toBe(401);
   });
 });

@@ -25,10 +25,20 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function mem(home: string, tenant: string, text: string): MemoryEntry {
-  const m = createMemory(text, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
+  const m = createMemory(text, {
+    tags: [],
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'test',
+    tenantId: tenant,
+  });
   writeEntry(home, m, { actor: 'test' });
   return m;
 }
@@ -42,11 +52,7 @@ const DENSE_W = 0.6;
 
 /** Fused ranking (entries[] indices, best first) from N ranked lists — the exact rrfFuse
  *  call the wiring makes, with the explicit absentRank=entries.length+1. */
-function fusedOrder(
-  poolSize: number,
-  lists: number[][],
-  weights: number[],
-): number[] {
+function fusedOrder(poolSize: number, lists: number[][], weights: number[]): number[] {
   const scores = rrfFuse(lists, weights, { absentRank: poolSize + 1 });
   return [...scores.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([i]) => i);
 }
@@ -54,7 +60,9 @@ function fusedOrder(
 describe('graph stream x RRF fusion (real SQLite)', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot('gstream-rrf'); });
+  beforeEach(() => {
+    home = makeRoot('gstream-rrf');
+  });
   afterEach(() => safeRmSync(home));
 
   it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', async () => {
@@ -88,7 +96,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // 3-list fusion lifts weak into top-5.
     const order3 = fusedOrder(entries.length, [bm25Ranked, cosineRanked, graphRanked], [BM25_W, DENSE_W, 0.5]);
     const rank3 = order3.indexOf(7);
-    expect(rank3).toBeLessThan(5);     // now in top-5
+    expect(rank3).toBeLessThan(5); // now in top-5
     expect(rank3).toBeLessThan(rank2); // strictly improved
   });
 
@@ -102,10 +110,10 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
 
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
     const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
-    expect(graphRanked).toEqual([]);   // no graph -> empty -> wiring skips the 3rd list
+    expect(graphRanked).toEqual([]); // no graph -> empty -> wiring skips the 3rd list
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
-    expect(order2[0]).toBe(0);         // strong control answer stays rank 1
+    expect(order2[0]).toBe(0); // strong control answer stays rank 1
   });
 
   it('noise control: a POPULATED graph that boosts a non-answer distractor does NOT displace a strong lexical answer from the top', async () => {
@@ -122,16 +130,16 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const eAdj = ent(home, T, adjacent, 'ADJ');
     insertRelationAt(home, T, { fromEntityId: eSeed, toEntityId: eAdj, relType: 'supersedes', memoryId: mids[0].id });
 
-    const bm25Ranked = [0, 1, 2, 3, 4, 5];   // answer rank1, adjacent rank6 (tail)
+    const bm25Ranked = [0, 1, 2, 3, 4, 5]; // answer rank1, adjacent rank6 (tail)
     const cosineRanked = [0, 1, 2, 3, 4, 5];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3); // top-3: 0,1,2 ; adjacent(5) NOT a seed
     const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
-    expect(graphRanked).toEqual([5]);        // the graph IS populated and boosts the distractor, its only reach
+    expect(graphRanked).toEqual([5]); // the graph IS populated and boosts the distractor, its only reach
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
     const order3 = fusedOrder(entries.length, [bm25Ranked, cosineRanked, graphRanked], [BM25_W, DENSE_W, 0.5]);
-    expect(order2[0]).toBe(0);               // answer is rank 1 under 2-stream
-    expect(order3[0]).toBe(0);               // ...and STILL rank 1 under 3-stream (no displacement)
+    expect(order2[0]).toBe(0); // answer is rank 1 under 2-stream
+    expect(order3[0]).toBe(0); // ...and STILL rank 1 under 3-stream (no displacement)
     expect(order3).toEqual([0, 1, 5, 2, 3, 4]); // boosted distractor rose from 6th to 3rd, not to the top
   });
 

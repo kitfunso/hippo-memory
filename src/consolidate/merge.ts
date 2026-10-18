@@ -47,9 +47,7 @@ function retireHeldText(run: SleepRun, index: number, row: MemoryEntry, sources:
   const rejected = (text: string): boolean => run.tombstones.find(row.tenant_id, rejectionDigest(text)) !== null;
   const successor = successorAfterRetirement(row, sources, rejected);
   if (successor === undefined) return;
-  run.result.details.push(
-    `  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`,
-  );
+  run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
   if (run.dryRun) return;
   run.pendingDeletes.push(row.id);
   run.units.push(successor ? [row.id, successor.id] : [row.id]);
@@ -81,9 +79,13 @@ function partitionMergeCandidates(run: SleepRun): Map<string, MergeBucket> {
   // Map keeps insertion order, so a single-tenant store gets one partition in the original order.
   const buckets = new Map<string, MergeBucket>();
   for (const e of run.survivors.rows()) {
-    const candidate = e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
-      && !e.pinned // a pin merged with a look-alike would read as one of two values
-      && isReusable(e);
+    const candidate =
+      e.layer === Layer.Episodic &&
+      !e.superseded_by &&
+      !keptAsWritten(e) &&
+      !alreadyMergedIds.has(e.id) &&
+      !e.pinned && // a pin merged with a look-alike would read as one of two values
+      isReusable(e);
     const tokens = candidate ? tokenize(e.content) : [];
     // Two empty token sets overlap 1, so tokenless text would merge with any other.
     if (tokens.length === 0) continue;
@@ -155,7 +157,7 @@ function mergeCluster(
   result.merged += cluster.length;
 
   result.details.push(
-    `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+    `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`,
   );
 
   if (!dryRun && semantic) {
@@ -256,15 +258,16 @@ function mergeContents(entries: MemoryEntry[]): string {
   for (const e of sorted) {
     if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content);
   }
-  const header = entries.length === 2
-    ? '[Consolidated from 2 related memories, newest first]'
-    : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
+  const header =
+    entries.length === 2
+      ? '[Consolidated from 2 related memories, newest first]'
+      : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
   return mergedText(header, [...texts.values()]);
 }
 
 function legacyMergeContents(entries: MemoryEntry[]): string {
   // The old format dropped text, so it is only ever digested to match rejections recorded against it, never written.
-  const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
+  const sorted = [...entries].sort((a, b) => b.content.length - a.content.length || compareEntryIdentity(a, b));
   if (entries.length === 2) return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
   const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;

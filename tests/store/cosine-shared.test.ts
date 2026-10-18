@@ -3,7 +3,15 @@ import { cosineOf } from '../../src/core/cosine.js';
 import { queryGravityMagnitude, type PhysicsParticle } from '../../src/core/physics.js';
 
 function particleAt(position: number[]): PhysicsParticle {
-  return { memoryId: 'm', position, velocity: [], mass: 1, charge: 0, temperature: 1, lastSimulation: '2026-01-01T00:00:00.000Z' };
+  return {
+    memoryId: 'm',
+    position,
+    velocity: [],
+    mass: 1,
+    charge: 0,
+    temperature: 1,
+    lastSimulation: '2026-01-01T00:00:00.000Z',
+  };
 }
 
 describe('one cosine for embeddings and physics', () => {

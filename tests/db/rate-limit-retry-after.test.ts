@@ -18,10 +18,17 @@ afterEach(() => {
 });
 
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const limiter = (ratePerSec: number, burst = 1) => createRateLimiter({ ratePerSec, burst, idleEvictMs: 60000, maxKeys: 10 });
+const limiter = (ratePerSec: number, burst = 1) =>
+  createRateLimiter({ ratePerSec, burst, idleEvictMs: 60000, maxKeys: 10 });
 
 describe('createRateLimiter', () => {
-  it.each([[20, 1], [1, 1], [0.5, 2], [0.3, 4], [0.1, 10]])('at %s a second sends Retry-After %s', (ratePerSec, seconds) => {
+  it.each([
+    [20, 1],
+    [1, 1],
+    [0.5, 2],
+    [0.3, 4],
+    [0.1, 10],
+  ])('at %s a second sends Retry-After %s', (ratePerSec, seconds) => {
     expect(limiter(ratePerSec).retryAfterSec).toBe(seconds);
   });
 
@@ -52,7 +59,10 @@ function callArgs(text: string, open: number): string[] | null {
     if (top === '`' || top === "'" || top === '"') {
       if (c === '\\') i++;
       else if (c === top) stack.pop();
-      else if (top === '`' && c === '$' && text[i + 1] === '{') { stack.push('}'); i++; }
+      else if (top === '`' && c === '$' && text[i + 1] === '{') {
+        stack.push('}');
+        i++;
+      }
       continue;
     }
     if (c === '`' || c === "'" || c === '"') stack.push(c);
@@ -89,7 +99,9 @@ function unexplained429s(file: string, text: string): string[] {
 describe('every 429 in core src', () => {
   it('is an HttpError with a Retry-After value, a status comparison, or a comment', () => {
     // A lint-style scan: no request reaches an unwritten 429, so the source text is the only place to check it.
-    const files = readdirSync(join(repoRoot, 'src'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts'));
+    const files = readdirSync(join(repoRoot, 'src'), { recursive: true, encoding: 'utf8' }).filter((f) =>
+      f.endsWith('.ts'),
+    );
     const texts = files.map((file) => ({ file, text: readFileSync(join(repoRoot, 'src', file), 'utf8') }));
     expect(texts.some(({ text }) => /HttpError\(\s*429\b/.test(text))).toBe(true);
     expect(texts.flatMap(({ file, text }) => unexplained429s(file, text))).toEqual([]);

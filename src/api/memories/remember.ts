@@ -149,11 +149,7 @@ function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken'
   };
 }
 
-function rememberResult(
-  ctx: Context,
-  prepared: PreparedRemember,
-  written?: ConnectorWriteOutcome,
-): RememberResult {
+function rememberResult(ctx: Context, prepared: PreparedRemember, written?: ConnectorWriteOutcome): RememberResult {
   const { entry, detection, warnings } = prepared;
   const result: RememberResult = {
     id: entry.id,

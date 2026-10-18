@@ -152,10 +152,7 @@ describe('server Bearer lockdown', () => {
   });
 
   it('only the two documented webhooks are public', () => {
-    expect([...PUBLIC].sort()).toEqual([
-      'POST /v1/connectors/github/events',
-      'POST /v1/connectors/slack/events',
-    ]);
+    expect([...PUBLIC].sort()).toEqual(['POST /v1/connectors/github/events', 'POST /v1/connectors/slack/events']);
   });
 
   it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus the GET /health and GET /ready probes', () => {
@@ -175,7 +172,10 @@ describe('server Bearer lockdown', () => {
     await handle.stop();
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson: { '/v1/x-public': { ok: true } } });
     const publicUrl = `http://127.0.0.1:${handle.port}/v1/x-public`;
-    for (const res of [await fetch(publicUrl), await fetch(publicUrl, { headers: { authorization: 'Bearer hk_invalid.deadbeef' } })]) {
+    for (const res of [
+      await fetch(publicUrl),
+      await fetch(publicUrl, { headers: { authorization: 'Bearer hk_invalid.deadbeef' } }),
+    ]) {
       expect({ status: res.status, body: await res.text() }).toEqual({ status: 200, body: '{"ok":true}' });
     }
     for (const r of AUTHED_ROUTES.filter((route) => route.method === 'GET')) {

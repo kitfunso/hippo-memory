@@ -22,7 +22,7 @@ async function runRecall(query: string, sessionId: string): Promise<void> {
   expect(res.status, res.stderr).toBe(0);
 }
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 describe('goal_recall_log captured from CLI recall', () => {
   let env: TestEnv;
@@ -59,9 +59,10 @@ describe('goal_recall_log captured from CLI recall', () => {
     try {
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT goal_id, memory_id` projection above.
-      const rows = db
-        .prepare(`SELECT goal_id, memory_id FROM goal_recall_log WHERE goal_id = ?`)
-        .all(g.id) as Array<{ goal_id: string; memory_id: string }>;
+      const rows = db.prepare(`SELECT goal_id, memory_id FROM goal_recall_log WHERE goal_id = ?`).all(g.id) as Array<{
+        goal_id: string;
+        memory_id: string;
+      }>;
       expect(rows.some((r) => r.memory_id === m1.id)).toBe(true);
     } finally {
       closeHippoDb(db);
@@ -82,9 +83,7 @@ describe('goal_recall_log captured from CLI recall', () => {
     try {
       // SAFETY: the db driver's .get() returns `unknown`; `SELECT COUNT(*) AS c` always
       // yields exactly one row with a numeric `c` column.
-      const rows = db
-        .prepare(`SELECT COUNT(*) AS c FROM goal_recall_log`)
-        .get() as { c: number };
+      const rows = db.prepare(`SELECT COUNT(*) AS c FROM goal_recall_log`).get() as { c: number };
       expect(rows.c).toBe(0);
     } finally {
       closeHippoDb(db);

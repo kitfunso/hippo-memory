@@ -22,8 +22,14 @@ describe('api key scrypt parameters', () => {
 
   function seed(keyHash: string, keyId: string): void {
     insertApiKey(db, {
-      keyId, keyHash, tenantId: 'default', label: null, role: 'member', createdAt: new Date().toISOString(),
-      ownerSubject: null, expiresAt: null,
+      keyId,
+      keyHash,
+      tenantId: 'default',
+      label: null,
+      role: 'member',
+      createdAt: new Date().toISOString(),
+      ownerSubject: null,
+      expiresAt: null,
     });
   }
 

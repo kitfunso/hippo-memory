@@ -4,15 +4,34 @@ import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
 import type { ConflictPair, DashboardText } from '../store/port/dashboard-reads.js';
 import {
-  BANDS, DAY_MS, LAYERS, isLiveMemory, memoryFacts, projectIdentity,
-  type Chip, type Fact, type FilteredSet, type ProjectAgg, type Snapshot,
+  BANDS,
+  DAY_MS,
+  LAYERS,
+  isLiveMemory,
+  memoryFacts,
+  projectIdentity,
+  type Chip,
+  type Fact,
+  type FilteredSet,
+  type ProjectAgg,
+  type Snapshot,
 } from './dashboard-snapshot.js';
 import { chunked } from '../util/chunked.js';
 import { pct, round1 } from '../util/format.js';
 import type { MemoryQuery, SortDir, SortKey } from './dashboard-params.js';
 import type {
-  ChipCounts, DecayOutlook, Kpi, MemoryConflictDetail, MemoryDetail, MemoryPage, MemoryRow, Overview,
-  ProjectDetail, ScatterGrid, ScatterPoints, SearchResult,
+  ChipCounts,
+  DecayOutlook,
+  Kpi,
+  MemoryConflictDetail,
+  MemoryDetail,
+  MemoryPage,
+  MemoryRow,
+  Overview,
+  ProjectDetail,
+  ScatterGrid,
+  ScatterPoints,
+  SearchResult,
 } from './dashboard-types.js';
 
 const SERIES_DAYS = 90;
@@ -56,36 +75,63 @@ function orderedProjects(snap: Snapshot): ProjectAgg[] {
   );
 }
 
-function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
-  const total = snap.facts.length;
-  const named = projects.filter((p) => p.summary.kind === 'project');
-  const totalSeries = cumulativeSeries(snap.facts.map((f) => f.createdMs), snap.nowMs);
-  const projectSeries = cumulativeSeries(named.map((p) => p.firstCreatedMs), snap.nowMs);
-  const atRisk = projects.reduce((sum, p) => sum + p.summary.atRisk, 0);
-  const weakNow = snap.facts.reduce((sum, f) => sum + (f.strength < 0.2 ? 1 : 0), 0);
-  const withConflicts = projects.filter((p) => p.summary.openConflicts > 0).length;
+function healthKpis(snap: Snapshot, total: number, withConflicts: number): Kpi[] {
   const embedded = snap.embeddingCoverage === null ? 0 : Math.round(snap.embeddingCoverage * total);
   return [
     {
-      id: 'total', label: 'Total memories', value: total, series: totalSeries,
-      delta: `+${addedWithin(totalSeries)} created in the last ${DELTA_DAYS}d`,
-    },
-    {
-      id: 'projects', label: 'Projects', value: named.length, series: projectSeries,
-      delta: `+${addedWithin(projectSeries)} new in ${DELTA_DAYS}d`,
-    },
-    {
-      id: 'atRiskShare', label: 'At-risk share, 30d', value: total > 0 ? atRisk / total : 0, series: null,
-      delta: `${pct(total > 0 ? weakNow / total : 0)} now at strength under 0.2`,
-    },
-    {
-      id: 'openConflicts', label: 'Open conflicts', value: snap.openConflicts, series: null,
+      id: 'openConflicts',
+      label: 'Open conflicts',
+      value: snap.openConflicts,
+      series: null,
       delta: `in ${plural(withConflicts, 'project', 'projects')}`,
     },
     {
-      id: 'embeddingCoverage', label: 'Embedding coverage', value: snap.embeddingCoverage ?? 0, series: null,
+      id: 'embeddingCoverage',
+      label: 'Embedding coverage',
+      value: snap.embeddingCoverage ?? 0,
+      series: null,
       delta: snap.embeddingCoverage === null ? 'no vector table yet' : `${total - embedded} not embedded`,
     },
+  ];
+}
+
+function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
+  const total = snap.facts.length;
+  const named = projects.filter((p) => p.summary.kind === 'project');
+  const totalSeries = cumulativeSeries(
+    snap.facts.map((f) => f.createdMs),
+    snap.nowMs,
+  );
+  const projectSeries = cumulativeSeries(
+    named.map((p) => p.firstCreatedMs),
+    snap.nowMs,
+  );
+  const atRisk = projects.reduce((sum, p) => sum + p.summary.atRisk, 0);
+  const weakNow = snap.facts.reduce((sum, f) => sum + (f.strength < 0.2 ? 1 : 0), 0);
+  const withConflicts = projects.filter((p) => p.summary.openConflicts > 0).length;
+  return [
+    {
+      id: 'total',
+      label: 'Total memories',
+      value: total,
+      series: totalSeries,
+      delta: `+${addedWithin(totalSeries)} created in the last ${DELTA_DAYS}d`,
+    },
+    {
+      id: 'projects',
+      label: 'Projects',
+      value: named.length,
+      series: projectSeries,
+      delta: `+${addedWithin(projectSeries)} new in ${DELTA_DAYS}d`,
+    },
+    {
+      id: 'atRiskShare',
+      label: 'At-risk share, 30d',
+      value: total > 0 ? atRisk / total : 0,
+      series: null,
+      delta: `${pct(total > 0 ? weakNow / total : 0)} now at strength under 0.2`,
+    },
+    ...healthKpis(snap, total, withConflicts),
   ];
 }
 
@@ -157,14 +203,21 @@ export function buildProjectDetail(snap: Snapshot, key: string): ProjectDetail |
 
 function numericSort(sort: SortKey): ((f: Fact) => number) | null {
   switch (sort) {
-    case 'layer': return (f) => f.layer;
-    case 'strength': return (f) => f.strength;
-    case 'retrievals': return (f) => f.retrievals;
-    case 'last': return (f) => f.lastRetrievedDays;
-    case 'age': return (f) => f.ageDays;
-    case 'confidence': return (f) => f.confidenceRank;
+    case 'layer':
+      return (f) => f.layer;
+    case 'strength':
+      return (f) => f.strength;
+    case 'retrievals':
+      return (f) => f.retrievals;
+    case 'last':
+      return (f) => f.lastRetrievedDays;
+    case 'age':
+      return (f) => f.ageDays;
+    case 'confidence':
+      return (f) => f.confidenceRank;
     case 'content':
-    case 'scope': return null;
+    case 'scope':
+      return null;
   }
 }
 
@@ -203,8 +256,10 @@ function bucket(value: number): 0 | 1 | 2 {
 }
 
 function holdsText(row: DashboardText, needle: string): boolean {
-  return row.content.toLowerCase().includes(needle)
-    || (row.tags.length > 0 && row.tags.join('\n').toLowerCase().includes(needle));
+  return (
+    row.content.toLowerCase().includes(needle) ||
+    (row.tags.length > 0 && row.tags.join('\n').toLowerCase().includes(needle))
+  );
 }
 
 /** A 1 at each fact whose whole text or tags hold `needle`, from one paged read of the tenant's text per needle. */
@@ -234,13 +289,18 @@ function filterMembers(snap: Snapshot, sorted: Int32Array, query: MemoryQuery): 
   for (const i of sorted) {
     const f = snap.facts[i];
     if (!layerOn[f.layer]) continue;
-    if (f.ageDays < brush.amin || f.ageDays > brush.amax || f.strength < brush.smin || f.strength > brush.smax) continue;
+    if (f.ageDays < brush.amin || f.ageDays > brush.amax || f.strength < brush.smin || f.strength > brush.smax) {
+      continue;
+    }
     if (matches !== null && matches[i] === 0) continue;
     kept[n++] = i;
     decay.now[bucket(f.strength)]++;
     decay.in7d[bucket(f.strength7d)]++;
     decay.in30d[bucket(f.strength30d)]++;
-    if (f.pinned) { decay.pinned++; counts.pinned++; }
+    if (f.pinned) {
+      decay.pinned++;
+      counts.pinned++;
+    }
     if (f.band === 3) counts.risk++;
     if (f.inConflict) counts.conflict++;
     counts.all++;
@@ -251,8 +311,15 @@ function filterMembers(snap: Snapshot, sorted: Int32Array, query: MemoryQuery): 
 function filteredSet(snap: Snapshot, project: ProjectAgg, query: MemoryQuery): FilteredSet {
   const { brush } = query;
   const key = [
-    project.summary.key, query.sort, query.dir, query.layers.join(''),
-    brush.amin, brush.amax, brush.smin, brush.smax, query.q ?? '',
+    project.summary.key,
+    query.sort,
+    query.dir,
+    query.layers.join(''),
+    brush.amin,
+    brush.amax,
+    brush.smin,
+    brush.smax,
+    query.q ?? '',
   ].join('|');
   const hit = snap.memo.filtered.get(key);
   if (hit) return hit;
@@ -301,7 +368,15 @@ export function buildMemoryPage(snap: Snapshot, key: string, query: MemoryQuery)
     rows.push(toRow(snap.facts[shown[k]]));
   }
   const decay: DecayOutlook = set.decay;
-  return { snapshotId: snap.id, total: shown.length, offset: query.offset, limit: query.limit, counts: set.counts, decay, rows };
+  return {
+    snapshotId: snap.id,
+    total: shown.length,
+    offset: query.offset,
+    limit: query.limit,
+    counts: set.counts,
+    decay,
+    rows,
+  };
 }
 
 /** Substring search over content and tags across every project; it reads the snapshot and never touches recall. */

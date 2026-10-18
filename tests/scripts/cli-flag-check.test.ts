@@ -6,8 +6,12 @@ import { findHandFlagReads, handFlagLines } from '../../scripts/check-cli-flags.
 
 describe('check-cli-flags', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cli-flags-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cli-flags-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);
@@ -23,7 +27,7 @@ describe('check-cli-flags', () => {
       "const d = flags['task'] as string;",
       'const e = flags.task as string;',
       "// const f = String(flags['in-a-comment']);",
-      "(flags[key] as string[]).push(value);",
+      '(flags[key] as string[]).push(value);',
       "const g = `x${flags['global'] ? ' --global' : ''}`;",
       "const h = stringFlagOrExit(flags, 'task') ?? '';",
     ].join('\n');

@@ -27,7 +27,7 @@ export {
   type ConfidenceFacets,
   applyOutcome,
   generateId,
-  computeSchemaFit
+  computeSchemaFit,
 } from './core/memory.js';
 
 /** Published signature, so `baseHalfLifeDays` stays optional
@@ -116,17 +116,7 @@ export {
 } from './eval/eval-suite.js';
 
 // Pineal gland: salience gate
-export {
-  computeSalience,
-  SalienceDecision,
-  SalienceResult,
-  SalienceOptions,
-} from './core/salience.js';
+export { computeSalience, SalienceDecision, SalienceResult, SalienceOptions } from './core/salience.js';
 
 // Pineal gland: ambient state vector
-export {
-  computeAmbientState,
-  renderAmbientSummary,
-  formatAmbientVector,
-  AmbientState,
-} from './core/ambient.js';
+export { computeAmbientState, renderAmbientSummary, formatAmbientVector, AmbientState } from './core/ambient.js';

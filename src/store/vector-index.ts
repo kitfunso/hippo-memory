@@ -3,7 +3,10 @@
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle, type OnHandle } from './open.js';
 import {
-  embeddingIndexIdentity, indexedModel, indexNeedsRebuild, replacesIndex,
+  embeddingIndexIdentity,
+  indexedModel,
+  indexNeedsRebuild,
+  replacesIndex,
 } from '../embeddings/index-identity.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
@@ -63,7 +66,9 @@ function loadStoredEmbeddingModel(on: OnHandle): string | null {
 
 /** Saves the index identity of provider `model`, versioned by `embeddingIndexIdentity` as the compare side is. */
 export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
-  on((db) => { saveIndexIdentityAt(db, embeddingIndexIdentity(model)); });
+  on((db) => {
+    saveIndexIdentityAt(db, embeddingIndexIdentity(model));
+  });
 }
 
 function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, number[]>): string | null {
@@ -153,11 +158,13 @@ export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfi
   const tenantClause = query.tenantId === undefined ? '' : ' AND tenant_id = ?';
   const tenantArgs = query.tenantId === undefined ? [] : [query.tenantId];
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db.prepare(
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenantClause}
+  const rows = db
+    .prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenantClause}
        AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id AND v.model = ?)
      ORDER BY id LIMIT ?`,
-  ).all(query.afterId ?? '', ...tenantArgs, query.model, limit) as MemoryRow[];
+    )
+    .all(query.afterId ?? '', ...tenantArgs, query.model, limit) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -199,7 +206,11 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
   return withWriteScope(db, 'write_vectors', () => {
     const replaces = replacesIndex(embeddingIndexStateOn(db), write.model);
     if (replaces && !write.replaceIndex) return { written: 0, modelMismatch: true };
-    const owned = ownedIds(db, write.rows.map((r) => r.memoryId), write.tenantId);
+    const owned = ownedIds(
+      db,
+      write.rows.map((r) => r.memoryId),
+      write.tenantId,
+    );
     const rows = write.rows.filter(
       (r) => owned.has(r.memoryId) && r.vector.length > 0 && r.vector.every(Number.isFinite),
     );
@@ -267,4 +278,3 @@ export function resetStoredParticlesAt(
 export function seedStoredParticleAt(db: DatabaseSyncLike, entry: MemoryEntry, vector: number[]): void {
   if (!loadPhysicsState(db, [entry.id]).has(entry.id)) savePhysicsState(db, [initializeParticle(entry, vector)]);
 }
-

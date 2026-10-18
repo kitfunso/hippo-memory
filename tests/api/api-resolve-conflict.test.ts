@@ -33,11 +33,19 @@ interface Pair {
 }
 
 function seedPair(): Pair {
-  const a = createMemory('deploys run from the main branch', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
-  const b = createMemory('deploys never run from the main branch', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
+  const a = createMemory('deploys run from the main branch', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tenantId: TENANT,
+  });
+  const b = createMemory('deploys never run from the main branch', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tenantId: TENANT,
+  });
   writeEntry(root, a);
   writeEntry(root, b);
-  replaceDetectedConflicts(root, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradictory deploy advice', score: 0.9 }]);
+  replaceDetectedConflicts(root, [
+    { memory_a_id: a.id, memory_b_id: b.id, reason: 'contradictory deploy advice', score: 0.9 },
+  ]);
   const [conflict] = listMemoryConflicts(root, 'open', TENANT);
   if (!conflict) throw new Error('seeded conflict not found');
   return { a, b, conflictId: conflict.id };
@@ -45,13 +53,27 @@ function seedPair(): Pair {
 
 /** `b` superseded by a fresh row, so the pair no longer holds two live memories. */
 function supersedeB({ b }: Pair): void {
-  const successor = createMemory('deploys run from a release branch', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
+  const successor = createMemory('deploys run from a release branch', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tenantId: TENANT,
+  });
   writeEntry(root, successor);
   writeEntry(root, { ...b, superseded_by: successor.id, kind: 'superseded' });
 }
 
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) });
+  return handleMcpRequest(
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } },
+    {
+      hippoRoot: root,
+      tenantId: TENANT,
+      actor: 'tester',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(root),
+      config: loadConfig(root),
+    },
+  );
 }
 
 function replyText(res: McpResponse | null): string {
@@ -77,14 +99,18 @@ describe('MCP hippo_resolve', () => {
   it('refuses a pair whose member is superseded, as the dashboard does', async () => {
     const pair = seedPair();
     supersedeB(pair);
-    expect(replyText(await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id, forget: true }))).toBe(NOT_RESOLVED);
+    expect(replyText(await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id, forget: true }))).toBe(
+      NOT_RESOLVED,
+    );
     expect(openIds()).toEqual([pair.conflictId]);
     expect(readEntry(root, pair.b.id, TENANT)?.half_life_days).toBe(pair.b.half_life_days);
   });
 
   it('refuses a keep id outside the pair with a message naming the pair', async () => {
     const pair = seedPair();
-    await expect(mcpResolve({ conflict_id: pair.conflictId, keep: 'mem_elsewhere' })).rejects.toThrow(`keep must be one of the two memories in conflict ${pair.conflictId}`);
+    await expect(mcpResolve({ conflict_id: pair.conflictId, keep: 'mem_elsewhere' })).rejects.toThrow(
+      `keep must be one of the two memories in conflict ${pair.conflictId}`,
+    );
     expect(openIds()).toEqual([pair.conflictId]);
   });
 });
@@ -93,7 +119,9 @@ describe('CLI hippo resolve', () => {
   it('keeps its output for a valid resolve', async () => {
     const pair = seedPair();
     const run = await cliResolve(pair.conflictId, { keep: pair.a.id });
-    expect(run.stdout).toBe(`Resolved conflict ${pair.conflictId}: kept ${pair.a.id}, weakened (half-life halved) ${pair.b.id}\n`);
+    expect(run.stdout).toBe(
+      `Resolved conflict ${pair.conflictId}: kept ${pair.a.id}, weakened (half-life halved) ${pair.b.id}\n`,
+    );
     expect(openIds()).toEqual([]);
   });
 
@@ -107,18 +135,34 @@ describe('CLI hippo resolve', () => {
 
   it('refuses a keep id outside the pair, as the dashboard does', async () => {
     const pair = seedPair();
-    await expect(cliResolve(pair.conflictId, { keep: 'mem_elsewhere' })).rejects.toThrow(`keep must be one of the two memories in conflict ${pair.conflictId}`);
+    await expect(cliResolve(pair.conflictId, { keep: 'mem_elsewhere' })).rejects.toThrow(
+      `keep must be one of the two memories in conflict ${pair.conflictId}`,
+    );
     expect(openIds()).toEqual([pair.conflictId]);
   });
 });
 
 describe('resolveMemoryConflict', () => {
-  const ctxIn = (tenantId: string) => ({ hippoRoot: root, tenantId, actor: adminActor('test'), store: sqliteStore(root), config: loadConfig(root) });
+  const ctxIn = (tenantId: string) => ({
+    hippoRoot: root,
+    tenantId,
+    actor: adminActor('test'),
+    store: sqliteStore(root),
+    config: loadConfig(root),
+  });
 
-  it('answers a resolved conflict with 409 and another tenant\'s with 404', async () => {
+  it("answers a resolved conflict with 409 and another tenant's with 404", async () => {
     const pair = seedPair();
-    await expect(resolveMemoryConflict(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(NotFoundError);
-    expect(await resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({ conflictId: pair.conflictId, keptId: pair.a.id, loserId: pair.b.id });
-    await expect(resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(ConflictError);
+    await expect(resolveMemoryConflict(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({
+      conflictId: pair.conflictId,
+      keptId: pair.a.id,
+      loserId: pair.b.id,
+    });
+    await expect(resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(
+      ConflictError,
+    );
   });
 });

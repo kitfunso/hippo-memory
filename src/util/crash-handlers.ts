@@ -52,10 +52,13 @@ function exitAfterShutdown(name: string, cause: string, shutdown: Shutdown, code
   }, shutdown.boundMs);
   void Promise.resolve()
     .then(shutdown.run)
-    .then(() => code, <E>(err: E) => {
-      log.error(`${name} shutdown after ${cause} failed: ${errorMessage(err)}`, errorFields(err));
-      return 1;
-    })
+    .then(
+      () => code,
+      <E>(err: E) => {
+        log.error(`${name} shutdown after ${cause} failed: ${errorMessage(err)}`, errorFields(err));
+        return 1;
+      },
+    )
     .then((exitCode) => {
       clearTimeout(bound);
       if (!ended) exitAfterFlush(exitCode);

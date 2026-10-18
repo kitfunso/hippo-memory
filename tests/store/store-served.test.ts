@@ -19,15 +19,21 @@ interface SyncProbe {
 describe('served', () => {
   const group: SyncProbe = {
     label: 'plain',
-    boom() { throw new Error('nope'); },
+    boom() {
+      throw new Error('nope');
+    },
     twice: (n) => n * 2,
-    self() { return this; },
+    self() {
+      return this;
+    },
   };
   const wrapped = served<Probe>(group);
 
   it('rejects instead of throwing when the sync method throws', async () => {
     let result: Promise<void> | undefined;
-    expect(() => { result = wrapped.boom(); }).not.toThrow();
+    expect(() => {
+      result = wrapped.boom();
+    }).not.toThrow();
     await expect(result).rejects.toThrow('nope');
   });
 

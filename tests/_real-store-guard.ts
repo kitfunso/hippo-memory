@@ -91,9 +91,7 @@ export function setup(): void {
 
 export function teardown(): void {
   // (1) compute the leak verdict and (2) capture the leaked store paths.
-  const leaked = baseline
-    .filter(([dir, snap]) => snapshot(dir) !== snap)
-    .map(([dir]) => dir);
+  const leaked = baseline.filter(([dir, snap]) => snapshot(dir) !== snap).map(([dir]) => dir);
 
   // (3) on a clean run, remove the per-run temp dirs vitest.config.ts created.
   // The removal is swallowed on failure: vitest turns a globalSetup teardown
@@ -105,12 +103,18 @@ export function teardown(): void {
     // the rmSync is safe by construction, not merely by the variable's name.
     const realTmp = process.env.HIPPO_TEST_REAL_TMP?.trim() || tmpdir();
     const env = process.env;
-    for (const dir of [env.HIPPO_TEST_TMP_HOME?.trim(), env.HIPPO_TEST_TMP_USERHOME?.trim(), env.HIPPO_TEST_TMP_RUN?.trim()]) {
+    for (const dir of [
+      env.HIPPO_TEST_TMP_HOME?.trim(),
+      env.HIPPO_TEST_TMP_USERHOME?.trim(),
+      env.HIPPO_TEST_TMP_RUN?.trim(),
+    ]) {
       if (dir && dir.startsWith(realTmp) && /[\\/]hippo-test-(home|userhome|tmp)-[^\\/]+$/.test(dir)) {
         try {
           rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
         } catch (err) {
-          console.warn(`[real-store-guard] could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}`);
+          console.warn(
+            `[real-store-guard] could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
     }

@@ -28,15 +28,9 @@ interface ExecError extends Error {
   stderr?: string | Buffer;
 }
 
-function runCli(
-  cwd: string,
-  args: string[],
-  extraEnv: Record<string, string> = {},
-) {
+function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
   if (!existsSync(CLI)) {
-    throw new Error(
-      `bin/hippo.js not found at ${CLI} - run \`npm run build\` first`,
-    );
+    throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
   }
   try {
     const stdout = execFileSync('node', [CLI, ...args], {
@@ -61,8 +55,13 @@ function runCli(
 
 /** Every GitHub list call answers one 200 page with no next link: `issues` on the issues stream, empty elsewhere. */
 function stubGitHubIssues(issues: readonly JsonValue[]): void {
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL) =>
-    new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), { status: 200 })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url: string | URL) =>
+        new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), { status: 200 }),
+    ),
+  );
 }
 
 describe('hippo github CLI', () => {
@@ -169,7 +168,12 @@ describe('hippo github CLI', () => {
 
   it('dlq list reads the HIPPO_TENANT tenant, not default', async () => {
     for (const tenantId of ['default', 'acme']) {
-      await parkInDlq(githubDlq, sqliteStore(hippoRoot), { tenantId, rawPayload: '{}', error: `err-${tenantId}`, bucket: 'unhandled' });
+      await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
+        tenantId,
+        rawPayload: '{}',
+        error: `err-${tenantId}`,
+        bucket: 'unhandled',
+      });
     }
     const r = runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
     expect(r.status).toBe(0);
@@ -231,7 +235,9 @@ describe('hippo github CLI', () => {
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
   const retryCountOf = (id: number) =>
-    sqliteSyncStore(hippoRoot).connectorEvents.deadLetters('github', 'default', 100).find((row) => row.id === id)?.retryCount;
+    sqliteSyncStore(hippoRoot)
+      .connectorEvents.deadLetters('github', 'default', 100)
+      .find((row) => row.id === id)?.retryCount;
 
   it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
     const id = await parkDelivery('issues', issueOpenedBody);
@@ -302,13 +308,15 @@ describe('hippo github CLI', () => {
 
   /** Backfills one page of three issues in-process and returns how many the command reports ingested. */
   async function ingestedOfThreeIssues(repo: string, max: string | boolean): Promise<number> {
-    stubGitHubIssues([1, 2, 3].map((number) => ({
-      number,
-      title: `issue ${number}`,
-      body: 'body text',
-      user: { login: 'alice', id: 1 },
-      updated_at: `2026-01-0${number}T00:00:00Z`,
-    })));
+    stubGitHubIssues(
+      [1, 2, 3].map((number) => ({
+        number,
+        title: `issue ${number}`,
+        body: 'body text',
+        user: { login: 'alice', id: 1 },
+        updated_at: `2026-01-0${number}T00:00:00Z`,
+      })),
+    );
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
@@ -329,7 +337,9 @@ describe('hippo github CLI', () => {
     [true, 3],
   ] as const)('backfill --max %s ingests %i of three issues', async (max, expected) => {
     expect(await ingestedOfThreeIssues('acme/widgets', max)).toBe(expected);
-    const stored = loadAllEntries(hippoRoot, 'default').filter((e) => e.artifact_ref?.startsWith('github://acme/widgets/issue/'));
+    const stored = loadAllEntries(hippoRoot, 'default').filter((e) =>
+      e.artifact_ref?.startsWith('github://acme/widgets/issue/'),
+    );
     expect(stored).toHaveLength(expected);
   });
 });

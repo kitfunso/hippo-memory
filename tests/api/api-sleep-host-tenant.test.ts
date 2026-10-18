@@ -43,14 +43,8 @@ describe('api.sleep audit row tenant tag', () => {
   });
 
   it('multiple sleeps from different tenants all tag __host__ (host-wide is honest)', async () => {
-    await sleep(
-      apiCtx(root, 'acme', adminActor('cli:alice')),
-      { dryRun: true },
-    );
-    await sleep(
-      apiCtx(root, 'globex', adminActor('cli:bob')),
-      { dryRun: true },
-    );
+    await sleep(apiCtx(root, 'acme', adminActor('cli:alice')), { dryRun: true });
+    await sleep(apiCtx(root, 'globex', adminActor('cli:bob')), { dryRun: true });
 
     const db = openHippoDb(root);
     try {
@@ -72,5 +66,4 @@ describe('api.sleep audit row tenant tag', () => {
       closeHippoDb(db);
     }
   });
-
 });

@@ -25,7 +25,10 @@ function at(entry: MemoryEntry, iso: string): MemoryEntry {
 }
 
 function seed(): void {
-  const raw = at(createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifactRef: 'slack://a/1' }), '2026-04-01T10:00:00.000Z');
+  const raw = at(
+    createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifactRef: 'slack://a/1' }),
+    '2026-04-01T10:00:00.000Z',
+  );
   const rawGap = at(createMemory('slack: owner and ref missing', { kind: 'raw' }), '2026-04-01T11:00:00.000Z');
   const oldFact = at(createMemory('belief: tier is 100'), '2026-03-15T00:00:00.000Z');
   const newFact = at(createMemory('belief: tier is 120', { extractedFrom: raw.id }), '2026-04-01T10:30:00.000Z');
@@ -61,9 +64,16 @@ describe('status report reads', () => {
 });
 
 describe('physicsEnergyText', () => {
-  const particles = (n: number): PhysicsParticle[] => Array.from({ length: n }, (_, i) => ({
-    memoryId: `m${i}`, position: [1, 0], velocity: [0, 0], mass: 1, charge: 0, temperature: 1, lastSimulation: '2026-01-01T00:00:00.000Z',
-  }));
+  const particles = (n: number): PhysicsParticle[] =>
+    Array.from({ length: n }, (_, i) => ({
+      memoryId: `m${i}`,
+      position: [1, 0],
+      velocity: [0, 0],
+      mass: 1,
+      charge: 0,
+      temperature: 1,
+      lastSimulation: '2026-01-01T00:00:00.000Z',
+    }));
 
   it('computes the energy at 2000 particles', () => {
     expect(physicsEnergyText(particles(2000), 1)).toMatch(/^energy: -?\d.*\(KE: .*, PE: .*\)$/);

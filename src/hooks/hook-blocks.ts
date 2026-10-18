@@ -86,7 +86,7 @@ The installed hooks store failed tool calls and capture the session when it
 ends, so there is nothing to run before you finish.
 `.trim(),
   },
-  'codex': {
+  codex: {
     file: 'AGENTS.md',
     description: 'OpenAI Codex',
     content: `
@@ -118,10 +118,10 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 \`\`\`
 `.trim(),
   },
-  'cursor': { file: 'AGENTS.md', description: 'Cursor', content: agentsBlock('task') },
-  'openclaw': { file: 'AGENTS.md', description: 'OpenClaw', content: agentsBlock('session') },
-  'opencode': { file: 'AGENTS.md', description: 'OpenCode', content: agentsBlock('task', { recall: true }) },
-  'pi': { file: 'AGENTS.md', description: 'Pi', content: agentsBlock('session', { footer: PI_FOOTER }) },
+  cursor: { file: 'AGENTS.md', description: 'Cursor', content: agentsBlock('task') },
+  openclaw: { file: 'AGENTS.md', description: 'OpenClaw', content: agentsBlock('session') },
+  opencode: { file: 'AGENTS.md', description: 'OpenCode', content: agentsBlock('task', { recall: true }) },
+  pi: { file: 'AGENTS.md', description: 'Pi', content: agentsBlock('session', { footer: PI_FOOTER }) },
 };
 
 // sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash
@@ -171,9 +171,9 @@ export function hippoBlock(
 
 /** `text` with every hippo block and its markers removed, trimmed. */
 export function withoutHookBlock(text: string): string {
-  const re = new RegExp(
-    `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
-    'g'
-  );
-  return text.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const re = new RegExp(`\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`, 'g');
+  return text
+    .replace(re, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

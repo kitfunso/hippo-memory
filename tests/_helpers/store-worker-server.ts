@@ -8,12 +8,19 @@ import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from
 import type { JsonValue } from '../../src/util/json.js';
 import { serve, type ServeOpts, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
-import { type CallOptions, createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from '../../src/store/sqlite/executor.js';
+import {
+  type CallOptions,
+  createSqliteExecutor,
+  type ExecutorOptions,
+  type SqliteExecutor,
+} from '../../src/store/sqlite/executor.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from './make-root.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: new (path: string) => DatabaseSyncLike };
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: new (path: string) => DatabaseSyncLike;
+};
 
 // Far past any test's own timeout, so a write behind a held lock can only end when the test releases the lock or stops the thread.
 const LONG_WAIT_MS = 60_000;
@@ -74,18 +81,25 @@ export function execOn(root: string, sql: string): void {
   onDb(root, (db) => db.exec(sql));
 }
 
-export function keyFor(root: string, tenantId: string, opts: { readonly role?: 'admin' | 'member'; readonly expiresAt?: string } = {}): { keyId: string; plaintext: string } {
+export function keyFor(
+  root: string,
+  tenantId: string,
+  opts: { readonly role?: 'admin' | 'member'; readonly expiresAt?: string } = {},
+): { keyId: string; plaintext: string } {
   return onDb(root, (db) => createApiKey(db, { tenantId, label: `executor-${tenantId}`, role: 'admin', ...opts }));
 }
 
 export const jsonHeaders = (token?: string): Record<string, string> =>
-  token === undefined ? { 'content-type': 'application/json' } : { 'content-type': 'application/json', authorization: `Bearer ${token}` };
+  token === undefined
+    ? { 'content-type': 'application/json' }
+    : { 'content-type': 'application/json', authorization: `Bearer ${token}` };
 
 export function postText(server: ServerHandle, path: string, body: string, token?: string): Promise<Response> {
   return fetch(`${server.url}${path}`, { method: 'POST', headers: jsonHeaders(token), body });
 }
 
-export const post = (server: ServerHandle, path: string, body: JsonValue, token?: string): Promise<Response> => postText(server, path, JSON.stringify(body), token);
+export const post = (server: ServerHandle, path: string, body: JsonValue, token?: string): Promise<Response> =>
+  postText(server, path, JSON.stringify(body), token);
 
 export function get(server: ServerHandle, path: string, token?: string): Promise<Response> {
   return fetch(`${server.url}${path}`, { headers: jsonHeaders(token) });
@@ -155,12 +169,16 @@ export async function seen(label: string, res: Response, keyIds: readonly string
 }
 
 export function auditRows(root: string, keyIds: readonly string[]): string[] {
-  const rows = onDb(root, (db) => db.prepare('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id').all());
+  const rows = onDb(root, (db) =>
+    db.prepare('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id').all(),
+  );
   return rows.map((row) => scrub(JSON.stringify(row), keyIds));
 }
 
 /** Every markdown mirror and the stats mirror under `root`, as path and text. */
 export function mirrorFiles(root: string): string[] {
-  const names = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((name) => name.endsWith('.md') || name.endsWith('stats.json'));
+  const names = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter(
+    (name) => name.endsWith('.md') || name.endsWith('stats.json'),
+  );
   return names.map((name) => scrub(`${name}\n${readFileSync(join(root, name), 'utf8')}`)).sort();
 }

@@ -45,14 +45,11 @@ function noteScopeHidden(
 }
 
 /** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned after the await. */
-interface InspectedSlot { rank?: RankRecallResult }
+interface InspectedSlot {
+  rank?: RankRecallResult;
+}
 
-async function cmdExplain(
-  hippoRoot: string,
-  tenantId: string,
-  query: string,
-  flags: CliFlags
-): Promise<void> {
+async function cmdExplain(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
@@ -73,26 +70,29 @@ async function cmdExplain(
   const config = cliConfig(hippoRoot);
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
-  const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, origin.isGlobal(r)));
+  const cost = (r: SearchResult): number => printedTokens(recallEntryText(r, query, false, origin.isGlobal(r)));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};
-  await api.retrieve(
-    ctx,
-    {
-      query,
-      cliCore: {
-        rank: {
-          budget: entryBudget, cost, window: { limit }, includeSuperseded, asOf,
-          explicitScope, activeScope,
-          search: { ...engine, multihop: false, explain: true },
-        },
-        sources: explainGlobalOn ? cliSecondStore(globalRoot) : undefined,
-        inspect: (ranking) => { slot.rank = ranking; },
+  await api.retrieve(ctx, {
+    query,
+    cliCore: {
+      rank: {
+        budget: entryBudget,
+        cost,
+        window: { limit },
+        includeSuperseded,
+        asOf,
+        explicitScope,
+        activeScope,
+        search: { ...engine, multihop: false, explain: true },
+      },
+      sources: explainGlobalOn ? cliSecondStore(globalRoot) : undefined,
+      inspect: (ranking) => {
+        slot.rank = ranking;
       },
     },
-  );
+  });
   const rank = slot.rank;
   if (!rank) throw new Error('explain ranked but inspected nothing');
   printExplainResults(rank, engine.usePhysics, query, asJson);
@@ -100,9 +100,8 @@ async function cmdExplain(
 
 function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query: string, asJson: boolean): void {
   const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = usePhysics && !hasGlobal
-    ? 'physics'
-    : hasGlobal ? 'searchBothHybrid' : 'hybrid';
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
+    usePhysics && !hasGlobal ? 'physics' : hasGlobal ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);
 
   const candidates = rank.localEntries.length + rank.globalEntries.length;
@@ -136,13 +135,15 @@ function printExplainJson(results: SearchResult[], query: string, modeUsed: stri
     content: r.entry.content,
     breakdown: r.breakdown,
   }));
-  console.log(JSON.stringify({
-    query,
-    mode: modeUsed,
-    candidates,
-    returned: output.length,
-    results: output,
-  }));
+  console.log(
+    JSON.stringify({
+      query,
+      mode: modeUsed,
+      candidates,
+      returned: output.length,
+      results: output,
+    }),
+  );
 }
 
 function printExplainTable(results: SearchResult[], query: string, modeUsed: string, candidates: number): void {
@@ -197,8 +198,10 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
     if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
     if (b.outcomeBoost !== 1) {
-      console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
-        `(user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
+      console.log(
+        `    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
+          `(user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`,
+      );
     }
     if (b.churnStaleMultiplier !== 1) {
       console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);

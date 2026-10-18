@@ -45,7 +45,12 @@ export interface MovedReadsSeed {
 /** Vectors and particles for five rows, one of them 8 numbers long, and a vector whose memory row is gone. */
 function seedVectors(root: string): void {
   const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
-  const index = Object.fromEntries(entries.map((e): [string, number[]] => [e.id, e.id === 'mem_p_noise' ? [1, 0, 0, 0, 0, 0, 0, 0] : hashedVector(e.content)]));
+  const index = Object.fromEntries(
+    entries.map((e): [string, number[]] => [
+      e.id,
+      e.id === 'mem_p_noise' ? [1, 0, 0, 0, 0, 0, 0, 0] : hashedVector(e.content),
+    ]),
+  );
   onDb(root, (db) => {
     upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
@@ -54,16 +59,28 @@ function seedVectors(root: string): void {
 }
 
 async function seedGraph(root: string): Promise<void> {
-  await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
-  await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: 'We adopt RetryPolicy across all services' });
+  await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, {
+    policyName: 'RetryPolicy',
+    policyText: 'retry up to 3x',
+  });
+  await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, {
+    decisionText: 'We adopt RetryPolicy across all services',
+  });
   await extractGraph(sqliteStore(root), TENANT);
-  await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, OTHER_TENANT, { policyName: 'AcmePolicy', policyText: 'page the owner first' });
+  await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, OTHER_TENANT, {
+    policyName: 'AcmePolicy',
+    policyText: 'page the owner first',
+  });
   await extractGraph(sqliteStore(root), OTHER_TENANT);
 }
 
 /** A connector's flagged text, which lands under a quarantine scope with a pending record; returns the memory id. */
 async function hold(root: string, tenantId: string, ending: string): Promise<string> {
-  const saved = await remember(apiCtx(root, tenantId, adminActor('seed')), { content: `${STANDING_ORDER} ${ending}.`, untrusted: true, scope: HELD_SCOPE });
+  const saved = await remember(apiCtx(root, tenantId, adminActor('seed')), {
+    content: `${STANDING_ORDER} ${ending}.`,
+    untrusted: true,
+    scope: HELD_SCOPE,
+  });
   if (saved.quarantined === undefined) throw new Error(`the seed text was not quarantined: ${ending}`);
   return saved.id;
 }
@@ -95,7 +112,8 @@ export async function seedMovedReads(): Promise<MovedReadsSeed> {
 
 const LEFT = {
   audit: 'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id',
-  memories: 'SELECT id, tenant_id, scope, retrieval_count, strength, half_life_days, last_retrieved FROM memories ORDER BY id',
+  memories:
+    'SELECT id, tenant_id, scope, retrieval_count, strength, half_life_days, last_retrieved FROM memories ORDER BY id',
   held: 'SELECT memory_id, tenant_id, status, original_scope, decided_by, decided_at IS NOT NULL AS decided FROM memory_quarantine ORDER BY memory_id',
   vectors: 'SELECT memory_id, model, dim, hex(vector) AS vector FROM memory_vectors ORDER BY memory_id',
   particles: 'SELECT memory_id FROM memory_physics ORDER BY memory_id',
@@ -104,7 +122,16 @@ const LEFT = {
 
 /** Every row a moved write can change, one line each. Two copies of the seed differ only by the clock readings a write makes, so only those are taken out. */
 export function leftBehind(root: string): string[] {
-  const own = onDb(root, (db) => Object.entries(LEFT).flatMap(([table, sql]) => db.prepare(sql).all().map((row) => `${table} ${JSON.stringify(row)}`)));
-  const recall = Object.entries(rowsOf(root)).flatMap(([table, rows]) => rows.map((row) => `${table} ${JSON.stringify(row)}`));
+  const own = onDb(root, (db) =>
+    Object.entries(LEFT).flatMap(([table, sql]) =>
+      db
+        .prepare(sql)
+        .all()
+        .map((row) => `${table} ${JSON.stringify(row)}`),
+    ),
+  );
+  const recall = Object.entries(rowsOf(root)).flatMap(([table, rows]) =>
+    rows.map((row) => `${table} ${JSON.stringify(row)}`),
+  );
   return [...own, ...recall].map((line) => line.replace(/\d{4}-\d\d-\d\d[T ][\d:.]+Z?/g, '<time>'));
 }

@@ -50,10 +50,7 @@ const PHYSICS_ID_CHUNK = 500;
 /**
  * Load physics state for specific memory IDs (or all if no IDs given).
  */
-export function loadPhysicsState(
-  db: DatabaseSyncLike,
-  memoryIds?: string[],
-): Map<string, PhysicsParticle> {
+export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Map<string, PhysicsParticle> {
   const map = new Map<string, PhysicsParticle>();
 
   let rows: PhysicsRow[] = [];
@@ -63,18 +60,24 @@ export function loadPhysicsState(
       const chunk = memoryIds.slice(i, i + PHYSICS_ID_CHUNK);
       const marks = placeholders(chunk.length);
       // SAFETY: the SELECT projects exactly the PhysicsRow columns, in order.
-      rows.push(...db.prepare(
-        `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
-         FROM memory_physics WHERE memory_id IN (${marks})`
-      ).all(...chunk) as PhysicsRow[]);
+      rows.push(
+        ...(db
+          .prepare(
+            `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
+         FROM memory_physics WHERE memory_id IN (${marks})`,
+          )
+          .all(...chunk) as PhysicsRow[]),
+      );
     }
   } else {
     // SAFETY: same PhysicsRow column projection as the branch above, just
     // without the memory_id filter.
-    rows = db.prepare(
-      `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
-       FROM memory_physics`
-    ).all() as PhysicsRow[];
+    rows = db
+      .prepare(
+        `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
+       FROM memory_physics`,
+      )
+      .all() as PhysicsRow[];
   }
 
   for (const row of rows) {
@@ -95,10 +98,7 @@ export function loadPhysicsState(
 /**
  * Save physics state for multiple particles (batch upsert).
  */
-export function savePhysicsState(
-  db: DatabaseSyncLike,
-  particles: PhysicsParticle[],
-): void {
+export function savePhysicsState(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
   if (particles.length === 0) return;
 
   const stmt = db.prepare(`

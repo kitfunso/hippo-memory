@@ -34,6 +34,8 @@ if (rose.length > 0) {
   process.exit(1);
 }
 if (fell.length > 0) {
-  console.log(`${fell.length} rules fell below the baseline; run \`node scripts/check-lint-ratchet.mjs --update\` to lock that in.`);
+  console.log(
+    `${fell.length} rules fell below the baseline; run \`node scripts/check-lint-ratchet.mjs --update\` to lock that in.`,
+  );
 }
 console.log(`Lint ratchet OK: ${report.diagnostics.length} hits, none above ${BASELINE}.`);

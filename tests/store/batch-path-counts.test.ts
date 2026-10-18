@@ -21,7 +21,8 @@ import { writeEntriesTogether, loadEveryTenantEntries } from '../_helpers/root-f
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
-const WHOLE_STORE_READ = /FROM memories\s+(WHERE COALESCE\(kind, 'distilled'\) = 'distilled' AND COALESCE\(superseded_by, ''\) = ''\s+)?ORDER BY created ASC, id ASC$/;
+const WHOLE_STORE_READ =
+  /FROM memories\s+(WHERE COALESCE\(kind, 'distilled'\) = 'distilled' AND COALESCE\(superseded_by, ''\) = ''\s+)?ORDER BY created ASC, id ASC$/;
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -33,7 +34,7 @@ const wholeStoreReads = (statements: readonly string[]): number =>
 
 describe('sleep after consolidation', () => {
   const ctxFor = (hippoRoot: string): FullContext =>
-    (apiCtx(hippoRoot, 'default', { subject: 'batch-test', role: 'admin' }));
+    apiCtx(hippoRoot, 'default', { subject: 'batch-test', role: 'admin' });
 
   function seeded(): string {
     const home = makeRoot('batch-home', { init: false });
@@ -46,7 +47,11 @@ describe('sleep after consolidation', () => {
     const put = (text: string, options: { tags?: string[]; tenantId: string }): void =>
       writeEntry(root, { ...createMemory(text, options), id: `batch-${String(seq++).padStart(2, '0')}` });
     for (const tenantId of ['default', 'acme']) {
-      for (const text of ['the deploy runs on friday at noon', 'billing is owned by alice in finance', 'staging restarts every sunday night']) {
+      for (const text of [
+        'the deploy runs on friday at noon',
+        'billing is owned by alice in finance',
+        'staging restarts every sunday night',
+      ]) {
         put(text, { tags: ['ops'], tenantId });
       }
       put('the deploy  runs on friday at noon', { tags: ['ops'], tenantId });
@@ -70,9 +75,14 @@ describe('sleep after consolidation', () => {
     expect(result.audit).toEqual({ errorsRemoved: 2, warningCount: 10 });
     const kept = [
       '[Consolidated from 2 related memories, newest first]\n\n- the deploy  runs on friday at noon',
-      'billing is owned by alice in finance', 'staging restarts every sunday night', 'the deploy  runs on friday at noon', 'vague thing',
+      'billing is owned by alice in finance',
+      'staging restarts every sunday night',
+      'the deploy  runs on friday at noon',
+      'vague thing',
     ];
-    const keptDefault = kept.map((c) => (c === 'the deploy  runs on friday at noon' ? 'the deploy runs on friday at noon' : c));
+    const keptDefault = kept.map((c) =>
+      c === 'the deploy  runs on friday at noon' ? 'the deploy runs on friday at noon' : c,
+    );
     expect(contentsByTenant(root)).toEqual({ default: keptDefault, acme: kept });
     expect(result.ambient).toEqual(computeAmbientState(loadEveryTenantEntries(root).filter((e) => !e.superseded_by)));
   });
@@ -90,7 +100,8 @@ describe('sleep after consolidation', () => {
     const root = seeded();
     const { statements } = await recordStatementsAsync(() => runSleep(ctxFor(root), { noShare: true }));
     expect(wholeStoreReads(statements)).toBe(0);
-    const isPageRead = (sql: string): boolean => sql.startsWith(FULL_ROW) && sql.endsWith('created ASC, id ASC LIMIT ?');
+    const isPageRead = (sql: string): boolean =>
+      sql.startsWith(FULL_ROW) && sql.endsWith('created ASC, id ASC LIMIT ?');
     const pageReads = statements.filter(isPageRead);
     expect(pageReads).toHaveLength(3);
   });
@@ -108,36 +119,66 @@ describe('invalidateMatching with onlyId', () => {
 
   it('weakens only the named row, as a pattern match over the tenant would', () => {
     const { root, rows } = seeded(5);
-    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: rows[2]!.id });
+    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
+      onlyId: rows[2]!.id,
+    });
     expect(result).toEqual({
-      invalidated: 1, targets: [rows[2]!.id], skippedPinned: [], dryRun: false,
+      invalidated: 1,
+      targets: [rows[2]!.id],
+      skippedPinned: [],
+      dryRun: false,
       preview: [{ id: rows[2]!.id, headline: 'row 2 about the zephyrine cache' }],
     });
     const after = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e]));
-    expect(after.get(rows[2]!.id)).toMatchObject({ confidence: 'stale', half_life_days: Math.max(1, Math.floor(rows[2]!.half_life_days / 2)) });
+    expect(after.get(rows[2]!.id)).toMatchObject({
+      confidence: 'stale',
+      half_life_days: Math.max(1, Math.floor(rows[2]!.half_life_days / 2)),
+    });
     expect(after.get(rows[2]!.id)!.tags).toContain('invalidated');
     expect(after.get(rows[1]!.id)!.confidence).toBe(rows[1]!.confidence);
   });
 
-  it('cannot see another tenant\'s id, reports a pinned id and writes nothing on a dry run', () => {
+  it("cannot see another tenant's id, reports a pinned id and writes nothing on a dry run", () => {
     const root = makeRoot('batch-invalidate-edges');
     const other = createMemory('acme row about the zephyrine cache', { tenantId: 'acme' });
     const pinned = createMemory('pinned row about the zephyrine cache', { pinned: true });
     const plain = createMemory('plain row about the zephyrine cache');
     for (const row of [other, pinned, plain]) writeEntry(root, row);
-    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: other.id }).targets).toEqual([]);
-    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { onlyId: other.id }).targets).toEqual([other.id]);
-    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: pinned.id }).skippedPinned).toEqual([pinned.id]);
-    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: 'no-such-id' }).invalidated).toBe(0);
-    expect(invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: plain.id, dryRun: true }).targets).toEqual([plain.id]);
+    expect(
+      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: other.id }).targets,
+    ).toEqual([]);
+    expect(
+      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { onlyId: other.id }).targets,
+    ).toEqual([other.id]);
+    expect(
+      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: pinned.id })
+        .skippedPinned,
+    ).toEqual([pinned.id]);
+    expect(
+      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: 'no-such-id' })
+        .invalidated,
+    ).toBe(0);
+    expect(
+      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
+        onlyId: plain.id,
+        dryRun: true,
+      }).targets,
+    ).toEqual([plain.id]);
     expect(loadEveryTenantEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(plain.confidence);
   });
 
   it('reads one memory row however many the tenant holds', () => {
     const read = [10, 200].map((n) => {
       const { root, rows } = seeded(n);
-      const { rowsRead, statements } = recordStatements(() => invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: rows[0]!.id, dryRun: true }));
-      expect(statements.filter((sql) => sql.startsWith(FULL_ROW))).toEqual([`${FULL_ROW} WHERE id = ? AND tenant_id = ?`]);
+      const { rowsRead, statements } = recordStatements(() =>
+        invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
+          onlyId: rows[0]!.id,
+          dryRun: true,
+        }),
+      );
+      expect(statements.filter((sql) => sql.startsWith(FULL_ROW))).toEqual([
+        `${FULL_ROW} WHERE id = ? AND tenant_id = ?`,
+      ]);
       return rowsRead;
     });
     expect(read[1]).toBe(read[0]);
@@ -170,8 +211,12 @@ describe('syncGlobalToLocal', () => {
     const db = openHippoDb(localRoot);
     try {
       insertRejectedValue(db, {
-        tenantId: 'default', digest: rejectionDigest(rejected.content), reason: 'test', rejectedBy: 'test',
-        rejectedAt: '2026-06-01T00:00:00.000Z', normalizedChars: rejected.content.length,
+        tenantId: 'default',
+        digest: rejectionDigest(rejected.content),
+        reason: 'test',
+        rejectedBy: 'test',
+        rejectedAt: '2026-06-01T00:00:00.000Z',
+        normalizedChars: rejected.content.length,
       });
     } finally {
       closeHippoDb(db);

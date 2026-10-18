@@ -11,7 +11,9 @@ afterAll(() => {
 });
 
 type Json = string | number | boolean | null | Json[] | JsonObject;
-interface JsonObject { [key: string]: Json }
+interface JsonObject {
+  [key: string]: Json;
+}
 
 interface Reply {
   status: number;
@@ -96,44 +98,99 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['GET', '/v1/predictions', [401, 'invalid api key'], [200]],
   ['GET', '/v1/predictions/stats', [401, 'invalid api key'], [400, 'class param is required']],
   ['GET', '/v1/predictions/:n', [401, 'invalid api key'], [404, 'prediction 999999 not found']],
-  ['POST', '/v1/predictions/:n/close', [401, 'invalid api key'], [400, 'state is required and must be one of: closed | closed-unknown']],
+  [
+    'POST',
+    '/v1/predictions/:n/close',
+    [401, 'invalid api key'],
+    [400, 'state is required and must be one of: closed | closed-unknown'],
+  ],
   ['POST', '/v1/decisions', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
   ['GET', '/v1/decisions', [401, 'invalid api key'], [200]],
   ['POST', '/v1/decisions/:n/supersede', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
-  ['POST', '/v1/decisions/:n/close', [401, 'invalid api key'], [404, 'closeDecision: decision 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/decisions/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closeDecision: decision 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/decisions/:n', [401, 'invalid api key'], [404, 'decision 999999 not found']],
   ['POST', '/v1/incidents', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
   ['GET', '/v1/incidents', [401, 'invalid api key'], [200]],
-  ['POST', '/v1/incidents/:n/resolve', [401, 'invalid api key'], [400, 'resolutionText is required (non-empty string)']],
-  ['POST', '/v1/incidents/:n/close', [401, 'invalid api key'], [404, 'closeIncident: incident 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/incidents/:n/resolve',
+    [401, 'invalid api key'],
+    [400, 'resolutionText is required (non-empty string)'],
+  ],
+  [
+    'POST',
+    '/v1/incidents/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closeIncident: incident 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/incidents/:n', [401, 'invalid api key'], [404, 'incident 999999 not found']],
   ['POST', '/v1/processes', [401, 'invalid api key'], [400, 'processName is required (non-empty string)']],
   ['GET', '/v1/processes', [401, 'invalid api key'], [200]],
-  ['POST', '/v1/processes/:n/supersede', [401, 'invalid api key'], [400, 'steps is required (at least one step) for a supersession']],
-  ['POST', '/v1/processes/:n/close', [401, 'invalid api key'], [404, 'closeProcess: process 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/processes/:n/supersede',
+    [401, 'invalid api key'],
+    [400, 'steps is required (at least one step) for a supersession'],
+  ],
+  [
+    'POST',
+    '/v1/processes/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closeProcess: process 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/processes/:n', [401, 'invalid api key'], [404, 'process 999999 not found']],
   ['POST', '/v1/policies', [401, 'invalid api key'], [400, 'policyName is required (non-empty string)']],
   ['GET', '/v1/policies', [401, 'invalid api key'], [200]],
   ['GET', '/v1/policies/asof', [401, 'invalid api key'], [400, 'date is required (ISO-8601 valid-time)']],
   ['POST', '/v1/policies/:n/supersede', [401, 'invalid api key'], [400, 'policyText is required (non-empty string)']],
-  ['POST', '/v1/policies/:n/close', [401, 'invalid api key'], [404, 'closePolicy: policy 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/policies/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closePolicy: policy 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/policies/:n', [401, 'invalid api key'], [404, 'policy 999999 not found']],
   ['POST', '/v1/skills', [401, 'invalid api key'], [400, 'skillName is required (non-empty string)']],
   ['GET', '/v1/skills', [401, 'invalid api key'], [200]],
   ['GET', '/v1/skills/export', [401, 'invalid api key'], [200]],
   ['POST', '/v1/skills/:n/supersede', [401, 'invalid api key'], [400, 'instructions are required (non-empty string)']],
-  ['POST', '/v1/skills/:n/close', [401, 'invalid api key'], [404, 'closeSkill: skill 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/skills/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closeSkill: skill 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/skills/:n', [401, 'invalid api key'], [404, 'skill 999999 not found']],
   ['POST', '/v1/project-briefs', [401, 'invalid api key'], [400, 'repo is required (non-empty string)']],
   ['GET', '/v1/project-briefs', [401, 'invalid api key'], [200]],
   ['POST', '/v1/project-briefs/refresh', [401, 'invalid api key'], [400, 'repo is required (non-empty string)']],
-  ['POST', '/v1/project-briefs/:n/supersede', [401, 'invalid api key'], [400, 'summary is required (non-empty string)']],
-  ['POST', '/v1/project-briefs/:n/close', [401, 'invalid api key'], [404, 'closeProjectBrief: brief 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/project-briefs/:n/supersede',
+    [401, 'invalid api key'],
+    [400, 'summary is required (non-empty string)'],
+  ],
+  [
+    'POST',
+    '/v1/project-briefs/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closeProjectBrief: brief 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/project-briefs/:n', [401, 'invalid api key'], [404, 'project brief 999999 not found']],
   ['POST', '/v1/customer-notes', [401, 'invalid api key'], [400, 'customer is required (non-empty string)']],
   ['GET', '/v1/customer-notes', [401, 'invalid api key'], [200]],
   ['POST', '/v1/customer-notes/:n/supersede', [401, 'invalid api key'], [400, 'note is required (non-empty string)']],
-  ['POST', '/v1/customer-notes/:n/close', [401, 'invalid api key'], [404, 'closeCustomerNote: note 999999 not found for tenant default']],
+  [
+    'POST',
+    '/v1/customer-notes/:n/close',
+    [401, 'invalid api key'],
+    [404, 'closeCustomerNote: note 999999 not found for tenant default'],
+  ],
   ['GET', '/v1/customer-notes/:n', [401, 'invalid api key'], [404, 'customer note 999999 not found']],
 ];
 
@@ -154,7 +211,14 @@ const NON_ROUTES: ReadonlyArray<Case> = [
   ['encodedSlashUnknown', 'GET', '/nope%2f', undefined, 400, SLASH],
   ['malformedPercentWrongMethod', 'GET', '/v1/memories/%E0%A4%A', undefined, 400, 'URI malformed'],
   ['malformedPercentDeep', 'PUT', '/v1/sessions/%E0%A4%A/assemble', undefined, 400, 'URI malformed'],
-  ['badId', 'DELETE', '/v1/memories/bad!id', undefined, 400, 'memory id contains invalid characters; allowed: A-Z a-z 0-9 _ : . -'],
+  [
+    'badId',
+    'DELETE',
+    '/v1/memories/bad!id',
+    undefined,
+    400,
+    'memory id contains invalid characters; allowed: A-Z a-z 0-9 _ : . -',
+  ],
   ['slackNoSecret', 'POST', '/v1/connectors/slack/events', '{}', 404, NOT_FOUND],
   ['githubNoSecret', 'POST', '/v1/connectors/github/events', '{}', 404, NOT_FOUND],
   ['slackWrongMethod', 'GET', '/v1/connectors/slack/events', undefined, 404, NOT_FOUND],
@@ -183,7 +247,8 @@ async function runCases(base: string, cases: ReadonlyArray<Case>): Promise<unkno
   return got;
 }
 
-const expected = (cases: ReadonlyArray<Case>): unknown[] => cases.map(([name, , , , status, error]) => [name, status, error]);
+const expected = (cases: ReadonlyArray<Case>): unknown[] =>
+  cases.map(([name, , , , status, error]) => [name, status, error]);
 
 describe('HTTP route status table: status and error text per route', () => {
   let home: string;
@@ -233,14 +298,22 @@ describe('HTTP route status table: status and error text per route', () => {
   for (const [method, path, [status, error]] of ROUTES) {
     it(`${method} ${path} with a bad bearer and an empty body`, async () => {
       const r = await call({ method, path: fill(path), headers: BAD_BEARER });
-      expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({ status, error, contentType: 'application/json' });
+      expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({
+        status,
+        error,
+        contentType: 'application/json',
+      });
     });
   }
 
   for (const [method, path, , [status, error]] of ROUTES) {
     it(`${method} ${path} with no body on loopback`, async () => {
       const r = await call({ method, path: fill(path) });
-      expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({ status, error, contentType: 'application/json' });
+      expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({
+        status,
+        error,
+        contentType: 'application/json',
+      });
     });
   }
 
@@ -304,7 +377,12 @@ describe('HTTP route status table: status and error text per route', () => {
 
   it('prediction and decision routes with valid input', async () => {
     const out = {
-      predict: await create('prediction', '/v1/predictions', { claim: 'ship by friday', classTag: 'ship', estimate: 3, unit: 'days' }),
+      predict: await create('prediction', '/v1/predictions', {
+        claim: 'ship by friday',
+        classTag: 'ship',
+        estimate: 3,
+        unit: 'days',
+      }),
       predictions: await get('/v1/predictions?class=ship'),
       stats: await get('/v1/predictions/stats?class=ship'),
       prediction: await get(`/v1/predictions/${created.prediction}`),
@@ -324,7 +402,9 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.decisions, 200, { decisions: [{ context: 'parity' }] });
     shows(out.decision, 200, { decision: { status: 'active' } });
     shows(out.supersedeDecision, 201, { decision: { decisionText: 'use postgres' } });
-    shows(out.closeDecision, 409, { error: "closeDecision: decision 1 is not active (status='superseded'); only active decisions can be closed." });
+    shows(out.closeDecision, 409, {
+      error: "closeDecision: decision 1 is not active (status='superseded'); only active decisions can be closed.",
+    });
   });
 
   it('incident and process routes with valid input', async () => {
@@ -334,10 +414,17 @@ describe('HTTP route status table: status and error text per route', () => {
       incident: await get(`/v1/incidents/${created.incident}`),
       resolve: await post(`/v1/incidents/${created.incident}/resolve`, { resolutionText: 'restarted' }),
       closeIncident: await post(`/v1/incidents/${created.incident}/close`),
-      process: await create('process', '/v1/processes', { processName: 'deploy', steps: ['build', 'ship'], description: 'parity' }),
+      process: await create('process', '/v1/processes', {
+        processName: 'deploy',
+        steps: ['build', 'ship'],
+        description: 'parity',
+      }),
       processes: await get('/v1/processes?status=active'),
       processById: await get(`/v1/processes/${created.process}`),
-      supersedeProcess: await post(`/v1/processes/${created.process}/supersede`, { steps: ['build', 'test', 'ship'], changeSummary: 'add test' }),
+      supersedeProcess: await post(`/v1/processes/${created.process}/supersede`, {
+        steps: ['build', 'test', 'ship'],
+        changeSummary: 'add test',
+      }),
       closeProcess: await post(`/v1/processes/${created.process}/close`),
     };
     shows(out.open, 201, { incident: { incidentText: 'db down' } });
@@ -349,18 +436,28 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.processes, 200, { processes: [{ steps: ['build', 'ship'] }] });
     shows(out.processById, 200, { process: { description: 'parity' } });
     shows(out.supersedeProcess, 200, { process: { version: 2 } });
-    shows(out.closeProcess, 409, { error: "closeProcess: process 1 is not active (status='superseded'); only active processes can be closed." });
+    shows(out.closeProcess, 409, {
+      error: "closeProcess: process 1 is not active (status='superseded'); only active processes can be closed.",
+    });
   });
 
   it('policy and skill routes with valid input', async () => {
     const out = {
-      policy: await create('policy', '/v1/policies', { policyName: 'retention', policyText: 'keep 30 days', validFrom: '2026-01-01' }),
+      policy: await create('policy', '/v1/policies', {
+        policyName: 'retention',
+        policyText: 'keep 30 days',
+        validFrom: '2026-01-01',
+      }),
       policies: await get('/v1/policies?status=active'),
       asof: await get('/v1/policies/asof?date=2026-06-01'),
       policyById: await get(`/v1/policies/${created.policy}`),
       supersedePolicy: await post(`/v1/policies/${created.policy}/supersede`, { policyText: 'keep 60 days' }),
       closePolicy: await post(`/v1/policies/${created.policy}/close`),
-      skill: await create('skill', '/v1/skills', { skillName: 'triage', instructions: 'read logs first', trigger: 'on page' }),
+      skill: await create('skill', '/v1/skills', {
+        skillName: 'triage',
+        instructions: 'read logs first',
+        trigger: 'on page',
+      }),
       skills: await get('/v1/skills?status=active'),
       exportSkills: await get('/v1/skills/export'),
       skillById: await get(`/v1/skills/${created.skill}`),
@@ -372,13 +469,17 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.asof, 200, { policies: [{ validFrom: '2026-01-01T00:00:00.000Z' }] });
     shows(out.policyById, 200, { policy: { version: 1 } });
     shows(out.supersedePolicy, 200, { policy: { policyText: 'keep 60 days' } });
-    shows(out.closePolicy, 409, { error: "closePolicy: policy 1 is not active (status='superseded'); only active policies can be closed." });
+    shows(out.closePolicy, 409, {
+      error: "closePolicy: policy 1 is not active (status='superseded'); only active policies can be closed.",
+    });
     shows(out.skill, 201, { skill: { skillName: 'triage' } });
     shows(out.skills, 200, { skills: [{ trigger: 'on page' }] });
     shows(out.exportSkills, 200, { markdown: '## triage\n\n**When:** on page\n\nread logs first' });
     shows(out.skillById, 200, { skill: { instructions: 'read logs first' } });
     shows(out.supersedeSkill, 200, { skill: { instructions: 'read logs, then metrics' } });
-    shows(out.closeSkill, 409, { error: "closeSkill: skill 1 is not active (status='superseded'); only active skills can be closed." });
+    shows(out.closeSkill, 409, {
+      error: "closeSkill: skill 1 is not active (status='superseded'); only active skills can be closed.",
+    });
   });
 
   it('project brief and customer note routes with valid input', async () => {
@@ -400,12 +501,16 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.refresh, 200, { receiptCount: 0 });
     shows(out.briefById, 200, { brief: { version: 1 } });
     shows(out.supersedeBrief, 200, { brief: { summary: 'parity brief v2' } });
-    shows(out.closeBrief, 409, { error: "closeProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be closed." });
+    shows(out.closeBrief, 409, {
+      error: "closeProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be closed.",
+    });
     shows(out.note, 201, { note: { note: 'likes sqlite' } });
     shows(out.notes, 200, { notes: [{ customer: 'acme' }] });
     shows(out.noteById, 200, { note: { status: 'active' } });
     shows(out.supersedeNote, 200, { note: { note: 'likes postgres' } });
-    shows(out.closeNote, 409, { error: "closeCustomerNote: note 1 is not active (status='superseded'); only active notes can be closed." });
+    shows(out.closeNote, 409, {
+      error: "closeCustomerNote: note 1 is not active (status='superseded'); only active notes can be closed.",
+    });
   });
 
   it('a literal path segment wins over the parameterised route next to it', async () => {
@@ -429,7 +534,15 @@ describe('HTTP route status table: status and error text per route', () => {
     expect(await runCases(handle.url, NON_ROUTES)).toEqual(expected(NON_ROUTES));
     const health = await get('/health');
     expect(Object.keys(isJsonObject(health.json) ? health.json : {}).sort()).toEqual([
-      'audit_write_failures', 'handler_deadlines', 'ok', 'pid', 'started_at', 'store_jobs_expired', 'store_queue_refusals', 'store_workers_replaced', 'version',
+      'audit_write_failures',
+      'handler_deadlines',
+      'ok',
+      'pid',
+      'started_at',
+      'store_jobs_expired',
+      'store_queue_refusals',
+      'store_workers_replaced',
+      'version',
     ]);
   });
 });

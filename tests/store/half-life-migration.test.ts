@@ -13,7 +13,11 @@ import { initStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '..
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
 import {
-  createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, LEGACY_TYPED_HALF_LIFE, type CreateMemoryOptions,
+  createMemory,
+  deriveHalfLife,
+  DEFAULT_HALF_LIFE_DAYS,
+  LEGACY_TYPED_HALF_LIFE,
+  type CreateMemoryOptions,
 } from '../../src/core/memory.js';
 import { migrateDefaultHalfLife } from '../../src/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -65,7 +69,9 @@ function bulkLegacyStore(n: number): string {
   const db = openHippoDb(root);
   try {
     // SAFETY: pragma_table_info yields one row per column with its name.
-    const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]).map((c) => c.name);
+    const columns = (
+      db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]
+    ).map((c) => c.name);
     db.prepare(`
       WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
       INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
@@ -75,7 +81,8 @@ function bulkLegacyStore(n: number): string {
   }
   return root;
 }
-const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 function byContent(root: string): Map<string, number> {
   return new Map(loadAllEntries(root, 'default').map((e) => [e.content, e.half_life_days]));
 }
@@ -111,7 +118,9 @@ describe('default half-life migration', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: SELECT of one TEXT column.
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).all() as { metadata_json: string }[];
+      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).all() as {
+        metadata_json: string;
+      }[];
       expect(rows).toHaveLength(1);
       expect(JSON.parse(rows[0]!.metadata_json)).toMatchObject({ from: 7, to: 365 });
       expect(JSON.parse(rows[0]!.metadata_json).ids.sort()).toEqual([plain.id, error.id].sort());
@@ -139,7 +148,9 @@ describe('default half-life migration', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: SELECT of one TEXT column.
-      const row = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).get() as { metadata_json: string };
+      const row = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).get() as {
+        metadata_json: string;
+      };
       expect(JSON.parse(row.metadata_json).oldHalfLives).toEqual({ [recalled.id]: 13 });
     } finally {
       closeHippoDb(db);
@@ -224,7 +235,11 @@ describe('default half-life migration', () => {
 
 /** Rewrites memory `id` as a typed writer pinned it before it took the default: 90 days plus 2 per recall. */
 function pinTo90(root: string, id: string, recalls = 0): void {
-  writeEntry(root, { ...readEntry(root, id, 'default')!, retrieval_count: recalls, half_life_days: LEGACY_TYPED_HALF_LIFE + 2 * recalls });
+  writeEntry(root, {
+    ...readEntry(root, id, 'default')!,
+    retrieval_count: recalls,
+    half_life_days: LEGACY_TYPED_HALF_LIFE + 2 * recalls,
+  });
 }
 function halfLifeOf(root: string, id: string): number {
   return readEntry(root, id, 'default')!.half_life_days;
@@ -243,7 +258,9 @@ function migrateAudits(root: string): unknown[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: SELECT of one TEXT column.
-    const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).all() as { metadata_json: string }[];
+    const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).all() as {
+      metadata_json: string;
+    }[];
     return rows.map((r) => JSON.parse(r.metadata_json));
   } finally {
     closeHippoDb(db);
@@ -253,15 +270,32 @@ function migrateAudits(root: string): unknown[] {
 describe('memories of decisions, incidents and other objects pinned to 90 days', () => {
   it('move to the default with their recall bonus, once, and log their old half-lives', async () => {
     const root = store();
-    const decision = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })).memoryId!;
-    const note = (await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'renewal is due in March' })).memoryId!;
+    const decision = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Tuesdays after the staging soak',
+      })
+    ).memoryId!;
+    const note = (
+      await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        customer: 'Acme',
+        note: 'renewal is due in March',
+      })
+    ).memoryId!;
     pinTo90(root, decision);
     pinTo90(root, note, 3);
-    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(root, ordinary);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
-    expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({ from: 365, to: 365, rescaled: 0, typed: 2, kept: 1 });
+    expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({
+      from: 365,
+      to: 365,
+      rescaled: 0,
+      typed: 2,
+      kept: 1,
+    });
     expect(halfLifeOf(root, decision)).toBe(365);
     expect(halfLifeOf(root, note)).toBe(365 + 6);
     expect(halfLifeOf(root, ordinary.id)).toBe(365);
@@ -274,8 +308,16 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it('keep a half-life hippo shortened or a user set by hand', async () => {
     const root = store();
-    const superseded = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use REST for all public APIs' })).memoryId!;
-    const handSet = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use Postgres for all new services' })).memoryId!;
+    const superseded = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use REST for all public APIs',
+      })
+    ).memoryId!;
+    const handSet = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use Postgres for all new services',
+      })
+    ).memoryId!;
     const old = readEntry(root, superseded, 'default')!;
     writeEntry(root, { ...old, half_life_days: 45, confidence: 'stale', tags: [...old.tags, 'superseded'] });
     writeEntry(root, { ...readEntry(root, handSet, 'default')!, half_life_days: 200 });
@@ -288,11 +330,24 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it('keep the memory of a superseded or closed object, but move a resolved incident', async () => {
     const root = store();
-    const old = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use REST for all public APIs' });
-    await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use gRPC for internal APIs', supersedesDecisionId: old.id });
-    const closed = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'freeze deploys on Fridays' });
+    const old = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+      decisionText: 'use REST for all public APIs',
+    });
+    await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+      decisionText: 'use gRPC for internal APIs',
+      supersedesDecisionId: old.id,
+    });
+    const closed = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+      decisionText: 'freeze deploys on Fridays',
+    });
     await closeDecision(objectsAt(root), 'default', closed.id);
-    const incident = await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli');
+    const incident = await openIncident(
+      objectsAt(root),
+      loadConfig(root).defaultHalfLifeDays,
+      'default',
+      { incidentText: 'the billing cron charged twice on the 1st' },
+      'cli',
+    );
     await resolveOpenIncident(objectsAt(root), 'default', incident.id, 'made the charge idempotent', 'cli');
     for (const id of [old.memoryId!, closed.memoryId!, incident.memoryId!]) pinTo90(root, id);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
@@ -305,16 +360,24 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it('sleep moves them to a configured default along with ordinary memories', async () => {
     const root = store();
-    const decision = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })).memoryId!;
+    const decision = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Tuesdays after the staging soak',
+      })
+    ).memoryId!;
     pinTo90(root, decision);
-    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(root, ordinary);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 730 }));
 
     const details = (await consolidate(root)).details.join('\n');
     expect(details).toMatch(/moved 1 memories from the 365-day to the 730-day half-life/);
-    expect(details).toMatch(/moved 1 memories of decisions, incidents and other objects from the 90-day to the 730-day half-life/);
+    expect(details).toMatch(
+      /moved 1 memories of decisions, incidents and other objects from the 90-day to the 730-day half-life/,
+    );
     // Sleep's replay pass may lengthen them further (+2 days per replay).
     expect(halfLifeOf(root, decision)).toBeGreaterThanOrEqual(730);
     expect(halfLifeOf(root, ordinary.id)).toBeGreaterThanOrEqual(730);
@@ -329,7 +392,13 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     pinTo90(root, pinned.id);
     unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
 
-    expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({ from: 7, to: 365, rescaled: 1, typed: 1, kept: 0 });
+    expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({
+      from: 7,
+      to: 365,
+      rescaled: 1,
+      typed: 1,
+      kept: 0,
+    });
     expect(halfLifeOf(root, copy.id)).toBe(365);
     expect(halfLifeOf(root, pinned.id)).toBe(365);
   });
@@ -338,8 +407,13 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const root = store();
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
     migrateDefaultHalfLife(local(root), 30);
-    const decision = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Mondays' })).memoryId!;
-    const copy = (await supersede(apiCtx(root, 'default', adminActor('test')), decision, 'we release on Tuesdays now')).newId;
+    const decision = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Mondays',
+      })
+    ).memoryId!;
+    const copy = (await supersede(apiCtx(root, 'default', adminActor('test')), decision, 'we release on Tuesdays now'))
+      .newId;
     writeEntry(root, { ...readEntry(root, copy, 'default')!, retrieval_count: 40, half_life_days: 30 + 2 * 40 });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
@@ -349,9 +423,17 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it("keep an object's memory hippo shortened, even when its recalls read as base-written", async () => {
     const root = store();
-    const decision = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use Postgres for all new services' })).memoryId!;
+    const decision = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use Postgres for all new services',
+      })
+    ).memoryId!;
     // A conflict loser: resolveConflict halved 90 + 2 * 38 and left no tag.
-    writeEntry(root, { ...readEntry(root, decision, 'default')!, retrieval_count: 38, half_life_days: (90 + 2 * 38) / 2 });
+    writeEntry(root, {
+      ...readEntry(root, decision, 'default')!,
+      retrieval_count: 38,
+      half_life_days: (90 + 2 * 38) / 2,
+    });
     unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
 
     expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({ from: 7, rescaled: 0, typed: 0 });
@@ -372,7 +454,11 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it('a new store never moves one, even one set to 90 days by hand', async () => {
     const root = store();
-    const decision = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })).memoryId!;
+    const decision = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Tuesdays after the staging soak',
+      })
+    ).memoryId!;
     pinTo90(root, decision);
     expect(migrateDefaultHalfLife(local(root), 365)).toMatchObject({ rescaled: 0, typed: 0 });
     expect(halfLifeOf(root, decision)).toBe(90);
@@ -380,8 +466,16 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it('keep the memory that lost a conflict, even when an odd recall count halves it onto the pinned shape, and move the winner', async () => {
     const root = store();
-    const loser = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use Postgres for all new services' })).memoryId!;
-    const winner = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use MySQL for all new services' })).memoryId!;
+    const loser = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use Postgres for all new services',
+      })
+    ).memoryId!;
+    const winner = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use MySQL for all new services',
+      })
+    ).memoryId!;
     pinTo90(root, loser, 47);
     pinTo90(root, winner);
     replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
@@ -396,13 +490,23 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
 
   it('keep both memories of a conflict resolved before the audit log named a winner', async () => {
     const root = store();
-    const a = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use Postgres for all new services' })).memoryId!;
-    const b = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use MySQL for all new services' })).memoryId!;
+    const a = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use Postgres for all new services',
+      })
+    ).memoryId!;
+    const b = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use MySQL for all new services',
+      })
+    ).memoryId!;
     pinTo90(root, a, 1);
     pinTo90(root, b);
     const db = openHippoDb(root);
     try {
-      db.prepare(`INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at) VALUES (?, ?, 'contradiction', 0.9, 'resolved', datetime('now'), datetime('now'))`).run(a, b);
+      db.prepare(
+        `INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at) VALUES (?, ?, 'contradiction', 0.9, 'resolved', datetime('now'), datetime('now'))`,
+      ).run(a, b);
     } finally {
       closeHippoDb(db);
     }
@@ -420,8 +524,16 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     const plain = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: 30 });
     writeEntry(root, plain);
-    const decision = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use Postgres for all new services' })).memoryId!;
-    const recalled = (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use gRPC for internal APIs' })).memoryId!;
+    const decision = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use Postgres for all new services',
+      })
+    ).memoryId!;
+    const recalled = (
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'use gRPC for internal APIs',
+      })
+    ).memoryId!;
     expect(halfLifeOf(root, decision)).toBe(90);
     pinTo90(root, recalled, 40);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 60 }));
@@ -430,7 +542,16 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     expect(halfLifeOf(root, decision)).toBe(60);
     expect(halfLifeOf(root, recalled)).toBe(60 + 80);
     expect(halfLifeOf(root, plain.id)).toBe(60);
-    expect(halfLifeOf(root, (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'freeze deploys on Fridays' })).memoryId!)).toBe(60);
+    expect(
+      halfLifeOf(
+        root,
+        (
+          await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+            decisionText: 'freeze deploys on Fridays',
+          })
+        ).memoryId!,
+      ),
+    ).toBe(60);
   });
 
   it('written to a store with no memories yet, take the configured default at once', async () => {
@@ -438,6 +559,15 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     dirs.push(path.dirname(root));
     fs.mkdirSync(root);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
-    expect(halfLifeOf(root, (await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'use Postgres for all new services' })).memoryId!)).toBe(30);
+    expect(
+      halfLifeOf(
+        root,
+        (
+          await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+            decisionText: 'use Postgres for all new services',
+          })
+        ).memoryId!,
+      ),
+    ).toBe(30);
   });
 });

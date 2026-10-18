@@ -6,8 +6,27 @@ import { blockHash, estimateTokens } from '../../src/util/token-text.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/store/delivery-recorder.js';
 import { copilotPayload } from '../_helpers/copilot-hooks.js';
 import {
-  PROMPT_HOOK, SNAPSHOT_TASK, dispose, eventCount, eventsN, hippo, hippoAsync, hippoIn, hippoInNoWorker, hippoNoWorker, installCopilotHooksFile, preCompactPayload,
-  project, promptPayload, resumePayload, saveSnapshot, sessionEndPayload, tableRows, writeConfig, writeTranscript, writeVscodeTranscript,
+  PROMPT_HOOK,
+  SNAPSHOT_TASK,
+  dispose,
+  eventCount,
+  eventsN,
+  hippo,
+  hippoAsync,
+  hippoIn,
+  hippoInNoWorker,
+  hippoNoWorker,
+  installCopilotHooksFile,
+  preCompactPayload,
+  project,
+  promptPayload,
+  resumePayload,
+  saveSnapshot,
+  sessionEndPayload,
+  tableRows,
+  writeConfig,
+  writeTranscript,
+  writeVscodeTranscript,
   type Project,
 } from '../_helpers/delivery-boundary.js';
 
@@ -28,8 +47,15 @@ describe('what one boundary hook call records', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).not.toBe('');
     const [e] = eventsN(p, 'b1', 1);
-    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['pre-compact', 'claude-code', 'hook', 'payload', 1, 'sent', DELIVERY_LEDGER_VERSION]);
+    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version]).toEqual([
+      'pre-compact',
+      'claude-code',
+      'hook',
+      'payload',
+      1,
+      'sent',
+      DELIVERY_LEDGER_VERSION,
+    ]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     expect([e.candidates, e.considered_count, e.emitted_count, e.rejected_count]).toEqual([[], 0, 0, 0]);
   });
@@ -40,9 +66,16 @@ describe('what one boundary hook call records', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain(SNAPSHOT_TASK);
     const [e] = eventsN(p, 'b3', 1);
-    expect([e.event_type, e.session_state, e.turn_seq, e.block_state]).toEqual(['compact-resume', 'payload', 1, 'sent']);
+    expect([e.event_type, e.session_state, e.turn_seq, e.block_state]).toEqual([
+      'compact-resume',
+      'payload',
+      1,
+      'sent',
+    ]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
-    expect(tableRows(p, `SELECT event FROM token_ledger WHERE surface = 'compact_resume' AND session_id = 'b3'`)).toHaveLength(1);
+    expect(
+      tableRows(p, `SELECT event FROM token_ledger WHERE surface = 'compact_resume' AND session_id = 'b3'`),
+    ).toHaveLength(1);
   });
 
   it('B2: pre-compact --runtime copilot leaves one empty row with runtime copilot and prints nothing', async () => {
@@ -50,7 +83,13 @@ describe('what one boundary hook call records', () => {
     const r = await hippoIn(p, ['pre-compact', '--runtime', 'copilot'], { input: payload });
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'copilot-sess-1', 1);
-    expect([e.event_type, e.runtime, e.block_state, e.emitted_hash, e.injected_tokens]).toEqual(['pre-compact', 'copilot', 'empty', null, 0]);
+    expect([e.event_type, e.runtime, e.block_state, e.emitted_hash, e.injected_tokens]).toEqual([
+      'pre-compact',
+      'copilot',
+      'empty',
+      null,
+      0,
+    ]);
   });
 
   it('B4: compact-resume records empty without a snapshot, empty for another session, disabled in the holdout arm', async () => {
@@ -61,7 +100,9 @@ describe('what one boundary hook call records', () => {
     saveSnapshot(p, 'b4-holdout');
     expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-holdout') })).stdout).toBe('');
     expect([
-      eventsN(p, 'b4-none', 1)[0].block_state, eventsN(p, 'b4-mismatch', 1)[0].block_state, eventsN(p, 'b4-holdout', 1)[0].block_state,
+      eventsN(p, 'b4-none', 1)[0].block_state,
+      eventsN(p, 'b4-mismatch', 1)[0].block_state,
+      eventsN(p, 'b4-holdout', 1)[0].block_state,
     ]).toEqual(['empty', 'empty', 'disabled']);
   });
 
@@ -101,8 +142,18 @@ describe('what one boundary hook call records', () => {
     expect(bare.stdout).toContain(SNAPSHOT_TASK);
     expect((await hippoIn(p, ['pre-compact'])).status).toBe(0);
     const [resume, pre] = eventsN(p, null, 2);
-    expect([resume.event_type, resume.block_state, resume.session_state, resume.turn_seq]).toEqual(['compact-resume', 'sent', 'missing', null]);
-    expect([pre.event_type, pre.block_state, pre.session_state, pre.turn_seq]).toEqual(['pre-compact', 'empty', 'missing', null]);
+    expect([resume.event_type, resume.block_state, resume.session_state, resume.turn_seq]).toEqual([
+      'compact-resume',
+      'sent',
+      'missing',
+      null,
+    ]);
+    expect([pre.event_type, pre.block_state, pre.session_state, pre.turn_seq]).toEqual([
+      'pre-compact',
+      'empty',
+      'missing',
+      null,
+    ]);
     const env = { HIPPO_SESSION_ID: 'b12-env' };
     await hippoIn(p, ['compact-resume'], { env });
     await hippoIn(p, ['pre-compact'], { env });
@@ -123,7 +174,9 @@ describe('what one boundary hook call records', () => {
     ];
     for (const [args, input] of steps) expect((await hippoIn(p, args, { input })).status).toBe(0);
     // An agent's own `hippo context` run takes the session from the environment Claude Code gives its shell.
-    expect((await hippoIn(p, ['context', 'rollback', 'plan'], { env: { CLAUDE_CODE_SESSION_ID: 'b7' } })).status).toBe(0);
+    expect((await hippoIn(p, ['context', 'rollback', 'plan'], { env: { CLAUDE_CODE_SESSION_ID: 'b7' } })).status).toBe(
+      0,
+    );
     expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('b7') })).status).toBe(0);
     const rows = eventsN(p, 'b7', 7);
     expect(rows.map((e) => [e.event_type, e.block_state, e.turn_seq])).toEqual([
@@ -165,30 +218,64 @@ describe('what one session-end hook call records', () => {
     const r = hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e1') });
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'e1', 1);
-    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['session-end', 'claude-code', 'hook', 'payload', 1, 'empty', DELIVERY_LEDGER_VERSION]);
-    expect([e.emitted_hash, e.injected_tokens, e.prompt_hash, e.query_hash, e.recall_trace_id, e.candidates])
-      .toEqual([null, 0, null, null, null, []]);
+    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version]).toEqual([
+      'session-end',
+      'claude-code',
+      'hook',
+      'payload',
+      1,
+      'empty',
+      DELIVERY_LEDGER_VERSION,
+    ]);
+    expect([e.emitted_hash, e.injected_tokens, e.prompt_hash, e.query_hash, e.recall_trace_id, e.candidates]).toEqual([
+      null,
+      0,
+      null,
+      null,
+      null,
+      [],
+    ]);
   });
 
   it('E2: a second fire inside the window is a duplicate of the first', async () => {
-    for (let i = 0; i < 2; i++) expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e2') })).status).toBe(0);
+    for (let i = 0; i < 2; i++) {
+      expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e2') })).status).toBe(0);
+    }
     const [first, second] = eventsN(p, 'e2', 2);
-    expect([first.turn_seq, first.duplicate_of, second.turn_seq, second.duplicate_of]).toEqual([1, null, null, first.id]);
+    expect([first.turn_seq, first.duplicate_of, second.turn_seq, second.duplicate_of]).toEqual([
+      1,
+      null,
+      null,
+      first.id,
+    ]);
   });
 
   it('E3: a Copilot sessionEnd run from another folder records runtime copilot in the payload folder store', async () => {
-    const r = await hippoInNoWorker(p, ['session-end', '--runtime', 'copilot'], { input: copilotPayload('sessionEnd', p.cwd), cwd: p.dir });
+    const r = await hippoInNoWorker(p, ['session-end', '--runtime', 'copilot'], {
+      input: copilotPayload('sessionEnd', p.cwd),
+      cwd: p.dir,
+    });
     expect(r.status, r.stderr).toBe(0);
     const [e] = eventsN(p, 'copilot-sess-1', 1);
-    expect([e.event_type, e.runtime, e.session_state, e.block_state]).toEqual(['session-end', 'copilot', 'payload', 'empty']);
+    expect([e.event_type, e.runtime, e.session_state, e.block_state]).toEqual([
+      'session-end',
+      'copilot',
+      'payload',
+      'empty',
+    ]);
   });
 
   it('E4: a manual run, a malformed payload, a turn end and a ledger switched off leave no row', async () => {
     expect((await hippoInNoWorker(p, ['session-end'])).status).toBe(0);
     expect((await hippoInNoWorker(p, ['session-end'], { input: 'not json' })).status).toBe(0);
     // A VS Code Stop payload, the one turn mode accepts, so the call reaches the recorder's turn check.
-    expect((await hippoInNoWorker(p, ['session-end', '--turn'], { input: sessionEndPayload('e4-turn', { hook_event_name: 'Stop' }) })).status).toBe(0);
+    expect(
+      (
+        await hippoInNoWorker(p, ['session-end', '--turn'], {
+          input: sessionEndPayload('e4-turn', { hook_event_name: 'Stop' }),
+        })
+      ).status,
+    ).toBe(0);
     writeConfig(p, { ledger: false });
     expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e4-off') })).status).toBe(0);
     expect(eventCount(p)).toBe(0);

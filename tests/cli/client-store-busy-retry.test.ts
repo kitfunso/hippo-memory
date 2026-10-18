@@ -20,7 +20,11 @@ async function startFake(busyCount: number): Promise<{ url: string; hits: () => 
       hits++;
       if (hits <= busyCount) return sendBusy(res);
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(req.method === 'DELETE' ? { ok: true, id: 'm1' } : { id: 'm1', kind: 'distilled', tenantId: 'default' }));
+      res.end(
+        JSON.stringify(
+          req.method === 'DELETE' ? { ok: true, id: 'm1' } : { id: 'm1', kind: 'distilled', tenantId: 'default' },
+        ),
+      );
     });
   });
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

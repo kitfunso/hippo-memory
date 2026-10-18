@@ -26,7 +26,11 @@ function runCli(cwd: string, args: string[], opts: RunOptions = {}): CliRunResul
     throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
   }
   try {
-    const stdout = hippoOut(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...opts.env }, exe: 'node' });
+    const stdout = hippoOut(args, {
+      cwd,
+      env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...opts.env },
+      exe: 'node',
+    });
     return { stdout, stderr: '' };
   } catch (err) {
     // SAFETY: execFileSync on failure throws an Error augmented with
@@ -102,7 +106,15 @@ describe('hippo audit prune CLI', () => {
     expect(stdout).toMatch(/deleted 4 rows for tenant "tenant-a"/);
 
     // tenant-b should be untouched
-    const { stdout: stdout2 } = runCli(root, ['audit', 'prune', '--older-than', '30d', '--tenant', 'tenant-b', '--dry-run']);
+    const { stdout: stdout2 } = runCli(root, [
+      'audit',
+      'prune',
+      '--older-than',
+      '30d',
+      '--tenant',
+      'tenant-b',
+      '--dry-run',
+    ]);
     expect(stdout2).toMatch(/would delete 6 rows/);
   });
 

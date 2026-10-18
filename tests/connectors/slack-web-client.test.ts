@@ -31,8 +31,8 @@ describe('slackHistoryFetcher', () => {
   });
 
   it('throws when ok=false', async () => {
-    const fakeFetch: FetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: false, error: 'not_in_channel' }), { status: 200 }),
+    const fakeFetch: FetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false, error: 'not_in_channel' }), { status: 200 }),
     );
     const fetcher = slackHistoryFetcher('t', fakeFetch);
     await expect(fetcher({ channelId: 'C1', cursor: null })).rejects.toThrow(/not_in_channel/);
@@ -46,8 +46,13 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
   /** The rejection of one page fetch whose reply is `reply`; a page that came back fails the test. */
   async function failure(reply: Response): Promise<Error> {
     const fetcher = slackHistoryFetcher(SECRET, async () => reply);
-    const outcome = await fetcher({ channelId: 'C0CHANNEL', cursor: 'CURSOR1' }).then((page) => page, (err: Error) => err);
-    if (!(outcome instanceof Error)) throw new Error(`expected a rejection, got a page of ${outcome.messages.length} messages`);
+    const outcome = await fetcher({ channelId: 'C0CHANNEL', cursor: 'CURSOR1' }).then(
+      (page) => page,
+      (err: Error) => err,
+    );
+    if (!(outcome instanceof Error)) {
+      throw new Error(`expected a rejection, got a page of ${outcome.messages.length} messages`);
+    }
     return outcome;
   }
 
@@ -81,7 +86,16 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
   });
 
   it('still reads a well-formed page: other entries dropped, the channel stamped, a missing cursor null', async () => {
-    const body = { ok: true, messages: [{ type: 'message', text: 'hi', ts: '1.1' }, null, 'x', { type: 'reaction', ts: '1.2' }, { type: 'message' }] };
+    const body = {
+      ok: true,
+      messages: [
+        { type: 'message', text: 'hi', ts: '1.1' },
+        null,
+        'x',
+        { type: 'reaction', ts: '1.2' },
+        { type: 'message' },
+      ],
+    };
     const fetcher = slackHistoryFetcher(SECRET, async () => new Response(JSON.stringify(body), { status: 200 }));
     const page = await fetcher({ channelId: 'C0CHANNEL', cursor: null });
     expect(page.messages).toEqual([{ type: 'message', text: 'hi', ts: '1.1', channel: 'C0CHANNEL' }]);

@@ -3,12 +3,30 @@
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  applyOutcome, calculateStrength, consolidate, createMemory, estimateTokens, generateId, hybridSearch, search, sleep,
-  textOverlap, tokenize, type MemoryEntry, type SearchResult, type SleepOpts, type SleepResult,
+  applyOutcome,
+  calculateStrength,
+  consolidate,
+  createMemory,
+  estimateTokens,
+  generateId,
+  hybridSearch,
+  search,
+  sleep,
+  textOverlap,
+  tokenize,
+  type MemoryEntry,
+  type SearchResult,
+  type SleepOpts,
+  type SleepResult,
 } from '../../src/index.js';
 import type { Context } from '../../src/api/types.js';
 import type {
-  RecallBoostOptions, RecallFilterOptions, RecallHintOptions, RecallOptions, RecallTraceOptions, RecallWindowOptions,
+  RecallBoostOptions,
+  RecallFilterOptions,
+  RecallHintOptions,
+  RecallOptions,
+  RecallTraceOptions,
+  RecallWindowOptions,
 } from '../../src/api/index.js';
 import type { ConsolidationResult } from '../../src/consolidate/run.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';

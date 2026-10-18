@@ -35,20 +35,21 @@ async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]:
   return body;
 }
 
-export function slackHistoryFetcher(
-  token: string,
-  fetchImpl?: typeof fetch,
-): SlackHistoryFetcher {
+export function slackHistoryFetcher(token: string, fetchImpl?: typeof fetch): SlackHistoryFetcher {
   return async ({ channelId, cursor, oldest }) => {
     const url = new URL('https://slack.com/api/conversations.history');
     url.searchParams.set('channel', channelId);
     url.searchParams.set('limit', '200');
     if (cursor) url.searchParams.set('cursor', cursor);
     if (oldest) url.searchParams.set('oldest', oldest);
-    const r = await fetchWithRetry(url, { method: 'GET', headers: { authorization: `Bearer ${token}` } }, {
-      timeoutMs: SLACK_TIMEOUT_MS,
-      fetchFn: fetchImpl,
-    });
+    const r = await fetchWithRetry(
+      url,
+      { method: 'GET', headers: { authorization: `Bearer ${token}` } },
+      {
+        timeoutMs: SLACK_TIMEOUT_MS,
+        fetchFn: fetchImpl,
+      },
+    );
     if (isRetryableStatus(r.status)) throw new Error(`slack: still rate-limited or unavailable (HTTP ${r.status})`);
     const body = await readHistoryReply(r, url);
     if (body.ok !== true) throw new Error(`slack: ${isJsonString(body.error) ? body.error : 'unknown error'}`);

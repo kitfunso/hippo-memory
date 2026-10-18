@@ -230,8 +230,8 @@ export function compareSummaries(baseline: EvalSummary, current: EvalSummary): E
 
   return {
     aggregate,
-    improved: improved.sort((a, b) => (b.ndcgAfter - b.ndcgBefore) - (a.ndcgAfter - a.ndcgBefore)),
-    regressed: regressed.sort((a, b) => (a.ndcgAfter - a.ndcgBefore) - (b.ndcgAfter - b.ndcgBefore)),
+    improved: improved.sort((a, b) => b.ndcgAfter - b.ndcgBefore - (a.ndcgAfter - a.ndcgBefore)),
+    regressed: regressed.sort((a, b) => a.ndcgAfter - a.ndcgBefore - (b.ndcgAfter - b.ndcgBefore)),
     unchanged,
     onlyInBaseline: [...baseById.keys()].filter((id) => !curById.has(id)),
     onlyInCurrent: [...curById.keys()].filter((id) => !baseById.has(id)),
@@ -246,7 +246,10 @@ export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase
   const cases: EvalCase[] = [];
   for (const e of entries) {
     if (cases.length >= maxCases) break;
-    const words = e.content.trim().split(/\s+/).filter((w) => w.length > 2);
+    const words = e.content
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
     if (words.length < 3) continue;
     const query = words.slice(0, QUERY_WORDS).join(' ');
     cases.push({

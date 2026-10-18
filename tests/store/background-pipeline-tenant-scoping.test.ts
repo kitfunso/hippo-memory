@@ -94,7 +94,10 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
   it('case 2: refineStore(..., tenantId: tenant-a) does NOT scan tenant-b consolidated entries', async () => {
     // Seed a consolidated entry in tenant-b (would be refine candidate per CONSOLIDATED_MARKERS = '[Consolidated from' or '[Consolidated pattern from')
-    seedFor(hippoRoot, 'tenant-b', '[Consolidated from 5 episodic memories] Common pattern for X', { tags: ['llm-consolidated'], layer: Layer.Semantic });
+    seedFor(hippoRoot, 'tenant-b', '[Consolidated from 5 episodic memories] Common pattern for X', {
+      tags: ['llm-consolidated'],
+      layer: Layer.Semantic,
+    });
     // Seed plain entry in tenant-a (not a refine candidate, but proves the scope filter ran)
     seedFor(hippoRoot, 'tenant-a', 'unrelated content', {});
 
@@ -143,10 +146,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};
       const userMsg = body.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
       refineCallSources = (userMsg.match(/Source \d/g) ?? []).length;
-      return new Response(
-        JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }), { status: 200 });
     };
 
     const result = await refineStore(hippoRoot, {
@@ -228,12 +228,12 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     seedFor(hippoRoot, 'tenant-b', content, { tags: ['auth'] });
 
     // dryRun: false so the write path is exercised (symmetric to case 5).
-    const result = importEntries(
-      [content],
-      'import:test',
-      ['imported'],
-      { hippoRoot, dryRun: false, tenantId: 'tenant-a', global: false },
-    );
+    const result = importEntries([content], 'import:test', ['imported'], {
+      hippoRoot,
+      dryRun: false,
+      tenantId: 'tenant-a',
+      global: false,
+    });
     // ASSERTION 1 (READ-side L9): tenant-a's import dedup misses tenant-b
     expect(result.entries.length).toBe(1);
     expect(result.imported).toBe(1);
@@ -251,12 +251,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
     // ASSERTION 4 (host-wide negative control): a host-wide import (no
     // tenantId) of the same content would skip-as-duplicate.
-    const result2 = importEntries(
-      [content],
-      'import:test',
-      ['imported'],
-      { hippoRoot, dryRun: false, global: false },
-    );
+    const result2 = importEntries([content], 'import:test', ['imported'], { hippoRoot, dryRun: false, global: false });
     expect(result2.imported).toBe(0);
     expect(loadEveryTenantEntries(hippoRoot).length).toBe(2); // tenant-a:1, tenant-b:1
   });
@@ -264,7 +259,9 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
   it('case 7: autoShare({ tenantId: tenant-a }) only considers tenant-a local memories', () => {
     isolateGlobalHome('l9-autoshare-global');
     // Seed both tenants with high-transfer-score content (with the 'lesson' tag boost)
-    seedFor(hippoRoot, 'tenant-a', 'a-lesson: prefer explicit imports over wildcards', { tags: ['lesson', 'global-relevant'] });
+    seedFor(hippoRoot, 'tenant-a', 'a-lesson: prefer explicit imports over wildcards', {
+      tags: ['lesson', 'global-relevant'],
+    });
     seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', { tags: ['lesson', 'global-relevant'] });
 
     // dryRun returns the candidate list without writing
@@ -292,13 +289,23 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     // No tenantId arg → host-wide behaviour (current/pre-1.12.1)
-    const result = invalidateMatching(syncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(syncStore(hippoRoot).localFiles.learning, {
+      from: 'REST',
+      to: 'GraphQL',
+      type: 'migration',
+    });
     expect(result.invalidated).toBe(2);
   });
 
   it('case 9: refineStore({}) without tenantId scans all tenants consolidated entries', async () => {
-    seedFor(hippoRoot, 'tenant-a', '[Consolidated from 3 episodic memories] pattern X', { tags: ['llm-consolidated'], layer: Layer.Semantic });
-    seedFor(hippoRoot, 'tenant-b', '[Consolidated from 4 episodic memories] pattern Y', { tags: ['llm-consolidated'], layer: Layer.Semantic });
+    seedFor(hippoRoot, 'tenant-a', '[Consolidated from 3 episodic memories] pattern X', {
+      tags: ['llm-consolidated'],
+      layer: Layer.Semantic,
+    });
+    seedFor(hippoRoot, 'tenant-b', '[Consolidated from 4 episodic memories] pattern Y', {
+      tags: ['llm-consolidated'],
+      layer: Layer.Semantic,
+    });
 
     // Sanity: confirm both entries are visible to host-wide loadAllEntries
     const allHostWide = loadEveryTenantEntries(hippoRoot);

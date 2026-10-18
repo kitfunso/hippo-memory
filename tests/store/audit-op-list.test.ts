@@ -32,7 +32,11 @@ describe('audit op filter', () => {
 
   function runAuditList(op: string) {
     if (!existsSync(CLI)) throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
-    const r = hippoRun(['audit', 'list', '--op', op, '--json'], { cwd: home, env: { ...process.env, HIPPO_HOME: hippoRoot }, exe: 'node' });
+    const r = hippoRun(['audit', 'list', '--op', op, '--json'], {
+      cwd: home,
+      env: { ...process.env, HIPPO_HOME: hippoRoot },
+      exe: 'node',
+    });
     return { status: r.status, stdout: r.stdout, stderr: r.stderr };
   }
 
@@ -79,7 +83,7 @@ describe('audit op filter', () => {
       const res = await fetch(`${handle.url}/v1/audit?op=remember`, { headers: { authorization: `Bearer ${bearer}` } });
       expect(res.status).toBe(200);
       // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[], checked by the assertions below.
-      const body = await res.json() as Array<{ op: string }>;
+      const body = (await res.json()) as Array<{ op: string }>;
       expect(body.length).toBeGreaterThanOrEqual(1);
       expect(body.every((e) => e.op === 'remember')).toBe(true);
     });

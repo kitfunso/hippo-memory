@@ -39,10 +39,9 @@ function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[],
 /** `inProcess` with each method the op table places on a worker answered from one, so a new method of a group needs its
  * tag and no body here. */
 function onWorkers<G>(executor: SqliteExecutor, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
-  const moved = Object.entries<OpPlace>(places).flatMap(([method, place]) => (place === 'server' ? [] : [[
-    method,
-    (...args: unknown[]) => send(executor, `${group}.${method}`, args, place),
-  ]]));
+  const moved = Object.entries<OpPlace>(places).flatMap(([method, place]) =>
+    place === 'server' ? [] : [[method, (...args: unknown[]) => send(executor, `${group}.${method}`, args, place)]],
+  );
   return { ...inProcess, ...Object.fromEntries(moved) };
 }
 
@@ -79,8 +78,20 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
 
 type RecallAndWriteGroups = Pick<
   StoreGroups,
-  | 'keyAudit' | 'keyWrites' | 'keyGrants' | 'vectorWrites' | 'entryWrites' | 'contextReads' | 'predictions'
-  | 'dagReads' | 'auditLog' | 'quarantine' | 'graphReads' | 'objects' | 'lastRecall' | 'connectorWrites'
+  | 'keyAudit'
+  | 'keyWrites'
+  | 'keyGrants'
+  | 'vectorWrites'
+  | 'entryWrites'
+  | 'contextReads'
+  | 'predictions'
+  | 'dagReads'
+  | 'auditLog'
+  | 'quarantine'
+  | 'graphReads'
+  | 'objects'
+  | 'lastRecall'
+  | 'connectorWrites'
   | 'connectorEvents'
 >;
 
@@ -107,8 +118,17 @@ function recallAndWriteGroups(executor: SqliteExecutor, inProcess: StoreGroups):
 
 type SessionAndAdminGroups = Pick<
   StoreGroups,
-  | 'auditMaintenance' | 'lessonWrites' | 'sessions' | 'cards' | 'goals' | 'conflicts' | 'dormant' | 'reports'
-  | 'rejections' | 'failureLog' | 'compactions'
+  | 'auditMaintenance'
+  | 'lessonWrites'
+  | 'sessions'
+  | 'cards'
+  | 'goals'
+  | 'conflicts'
+  | 'dormant'
+  | 'reports'
+  | 'rejections'
+  | 'failureLog'
+  | 'compactions'
 >;
 
 function sessionAndAdminGroups(executor: SqliteExecutor, inProcess: StoreGroups): SessionAndAdminGroups {

@@ -78,7 +78,10 @@ describe('secret redaction before memory text leaves the box', () => {
   });
 
   it('dag summaries and fact extraction scrub their input', async () => {
-    await generateDagSummary(TEXT, [TEXT], { apiKey: 'k', fetcher: capture({ content: [{ text: 'a summary line' }] }) });
+    await generateDagSummary(TEXT, [TEXT], {
+      apiKey: 'k',
+      fetcher: capture({ content: [{ text: 'a summary line' }] }),
+    });
     await extractFacts(TEXT, { apiKey: 'k', fetcher: capture({ content: [{ text: '[]' }] }) });
     expectScrubbed(2);
   });

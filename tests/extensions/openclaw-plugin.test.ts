@@ -67,9 +67,7 @@ type HippoPluginConfig = {
 
 /** Distinguishes a registered ToolDef factory from an already-built ToolDef: only the
  *  factory form is callable, and only the built form carries `execute` directly. */
-function isToolFactory(
-  registration: ToolDef | ((ctx: ToolCtx) => ToolDef),
-): registration is (ctx: ToolCtx) => ToolDef {
+function isToolFactory(registration: ToolDef | ((ctx: ToolCtx) => ToolDef)): registration is (ctx: ToolCtx) => ToolDef {
   return !('execute' in registration);
 }
 
@@ -86,9 +84,7 @@ function makeApi(config: HippoPluginConfig) {
         error: vi.fn(),
         debug: vi.fn(),
       },
-      registerTool: vi.fn(
-        (tool: ToolDef | ((ctx: ToolCtx) => ToolDef)) => toolRegistrations.push(tool),
-      ),
+      registerTool: vi.fn((tool: ToolDef | ((ctx: ToolCtx) => ToolDef)) => toolRegistrations.push(tool)),
       on: vi.fn((event: string, handler: HookHandler | VoidHookHandler) => hooks.set(event, handler)),
     },
     getTool(name: string, ctx: ToolCtx = {}) {

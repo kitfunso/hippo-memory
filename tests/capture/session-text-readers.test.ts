@@ -4,11 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import {
-  WORKING_STATE_CAPS,
-  transcriptWorkingState,
-  truncateKeepNewest,
-} from '../../src/capture/working-state.js';
+import { WORKING_STATE_CAPS, transcriptWorkingState, truncateKeepNewest } from '../../src/capture/working-state.js';
 import { collectHandoffEvidence } from '../../src/capture/handoff-evidence.js';
 
 const made: string[] = [];
@@ -25,7 +21,11 @@ afterEach(() => {
 });
 
 function git(cwd: string, ...args: string[]): void {
-  execFileSync('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args], { cwd, stdio: 'ignore' });
+  execFileSync(
+    'git',
+    ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args],
+    { cwd, stdio: 'ignore' },
+  );
 }
 
 describe('WORKING_STATE_CAPS', () => {
@@ -38,7 +38,10 @@ describe('WORKING_STATE_CAPS', () => {
     const file = path.join(tmp(), 't.jsonl');
     const turns = Array.from({ length: 40 }, (_, i) => [
       { type: 'user', message: { role: 'user', content: `turn ${i} ${'u'.repeat(400)}` } },
-      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: `reply ${i} ${'a'.repeat(900)}` }] } },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: `reply ${i} ${'a'.repeat(900)}` }] },
+      },
     ]).flat();
     fs.writeFileSync(file, turns.map((t) => JSON.stringify(t)).join('\n') + '\n');
     const state = transcriptWorkingState(file, () => {});

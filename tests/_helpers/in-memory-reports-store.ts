@@ -29,15 +29,22 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function copyState(hippoRoot: string): CopiedState {
   const db = openHippoDb(hippoRoot);
   try {
-    const meta = (key: Counter): number => Number(db.prepare('SELECT value FROM meta WHERE key = ?').get<{ value: string } | undefined>(key)?.value ?? '0');
+    const meta = (key: Counter): number =>
+      Number(db.prepare('SELECT value FROM meta WHERE key = ?').get<{ value: string } | undefined>(key)?.value ?? '0');
     // SAFETY: the SELECT names SleepRun's four fields.
-    const runs = db.prepare('SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp, id').all() as SleepRun[];
+    const runs = db
+      .prepare('SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp, id')
+      .all() as SleepRun[];
     // SAFETY: one column per row, aliased to the field read below.
     const statuses = db.prepare('SELECT status FROM memory_conflicts').all() as { status: string }[];
     // SAFETY: one column per row, aliased to the field read below.
     const vectors = db.prepare('SELECT memory_id AS id FROM memory_vectors').all() as { id: string }[];
     return {
-      counters: { total_remembered: meta('total_remembered'), total_recalled: meta('total_recalled'), total_forgotten: meta('total_forgotten') },
+      counters: {
+        total_remembered: meta('total_remembered'),
+        total_recalled: meta('total_recalled'),
+        total_forgotten: meta('total_forgotten'),
+      },
       runs: runs.map((r) => ({ ...r })),
       conflictStatuses: statuses.map((s) => s.status),
       vectorIds: new Set(vectors.map((v) => v.id)),
@@ -50,7 +57,12 @@ function copyState(hippoRoot: string): CopiedState {
 const cmp = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
 const superseded = (e: MemoryEntry): boolean => e.superseded_by != null && e.superseded_by !== '';
 
-function statusCountsOf(rows: readonly MemoryEntry[], state: CopiedState, now: Date, atRiskBelow: number): StatusCounts {
+function statusCountsOf(
+  rows: readonly MemoryEntry[],
+  state: CopiedState,
+  now: Date,
+  atRiskBelow: number,
+): StatusCounts {
   const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
   const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
   let strengthSum = 0;
@@ -76,7 +88,9 @@ function statusCountsOf(rows: readonly MemoryEntry[], state: CopiedState, now: D
 
 function correctionRows(rows: readonly MemoryEntry[]): MemoryEntry[] {
   const successors = new Set(rows.filter(superseded).map((e) => e.superseded_by));
-  const sources = new Set(rows.filter((e) => successors.has(e.id) && e.extracted_from != null).map((e) => e.extracted_from));
+  const sources = new Set(
+    rows.filter((e) => successors.has(e.id) && e.extracted_from != null).map((e) => e.extracted_from),
+  );
   return rows.filter((e) => superseded(e) || successors.has(e.id) || sources.has(e.id));
 }
 

@@ -30,7 +30,13 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { consolidate } from '../../src/index.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { loadConfig } from '../../src/core/config.js';
-import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  Layer,
+  calculateStrength,
+  DEFAULT_HALF_LIFE_DAYS,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { rejectionDigest, insertRejectedValue } from '../../src/store/rejection.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import * as api from '../../src/api/index.js';
@@ -48,7 +54,12 @@ const DORMANT_OFF = { replay: { count: 0 }, dormant: { enabled: false } };
 /** `entry` aged `days`, on the pre-1.46 7-day base so it fades within the test's horizon. */
 function aged(entry: MemoryEntry, days: number): MemoryEntry {
   const then = new Date(Date.now() - days * DAY_MS).toISOString();
-  return { ...entry, half_life_days: (entry.half_life_days * 7) / DEFAULT_HALF_LIFE_DAYS, created: then, last_retrieved: then };
+  return {
+    ...entry,
+    half_life_days: (entry.half_life_days * 7) / DEFAULT_HALF_LIFE_DAYS,
+    created: then,
+    last_retrieved: then,
+  };
 }
 
 function ctxFor(home: string, tenantId = 'default'): FullContext {
@@ -88,7 +99,12 @@ describe('dormant memories are on by default, with an opt-out', () => {
 
   it('with no dormant setting a faded memory goes dormant, and retention defaults to 180 days', async () => {
     const home = makeRoot('dormant-default', { config: { replay: { count: 0 } } });
-    const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const faded = aged(
+      createMemory('the old staging hostname was build-07 before the move', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      90,
+    );
     writeEntry(home, faded);
 
     const result = await consolidate(home, { now: new Date() });
@@ -101,7 +117,12 @@ describe('dormant memories are on by default, with an opt-out', () => {
 
   it('opting out deletes a faded memory as before', async () => {
     const home = makeRoot('dormant-off', { config: DORMANT_OFF });
-    const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const faded = aged(
+      createMemory('the old staging hostname was build-07 before the move', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      90,
+    );
     writeEntry(home, faded);
 
     const result = await consolidate(home, { now: new Date() });
@@ -116,21 +137,33 @@ describe('dormant memories are on by default, with an opt-out', () => {
     for (const bad of [{ dormant: true }, { dormant: { enabled: 'false' } }]) {
       const home = makeRoot('dormant-badcfg', { config: bad });
       let enabled: boolean | undefined;
-      const warnings = captureWarnings(() => { enabled = loadConfig(home).dormant.enabled; });
+      const warnings = captureWarnings(() => {
+        enabled = loadConfig(home).dormant.enabled;
+      });
       expect(enabled).toBe(true);
       expect(warnings.some((w) => w.includes('"dormant'))).toBe(true);
     }
     const home = makeRoot('dormant-badretention', { config: { dormant: { retentionDays: -5 } } });
     let days: number | undefined;
-    const warnings = captureWarnings(() => { days = loadConfig(home).dormant.retentionDays; });
+    const warnings = captureWarnings(() => {
+      days = loadConfig(home).dormant.retentionDays;
+    });
     expect(days).toBe(180);
     expect(warnings.some((w) => w.includes('retentionDays'))).toBe(true);
   });
 
   it('a faded memory holding a secret is deleted, never kept dormant', async () => {
     const home = makeRoot('dormant-secret', { config: DORMANT_ON });
-    const secret = aged(createMemory('billing sandbox uses api_key=Zx81Qa92Lm37Pt45Rk for the nightly job', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
-    const plain = aged(createMemory('the billing sandbox nightly job runs at 02:00 UTC', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const secret = aged(
+      createMemory('billing sandbox uses api_key=Zx81Qa92Lm37Pt45Rk for the nightly job', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      90,
+    );
+    const plain = aged(
+      createMemory('the billing sandbox nightly job runs at 02:00 UTC', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      90,
+    );
     writeEntry(home, secret);
     writeEntry(home, plain);
 
@@ -146,7 +179,13 @@ describe('dormant memories are on by default, with an opt-out', () => {
 describe('a faded credential-tagged memory', () => {
   it('is removed rather than made dormant, and the report says so', async () => {
     const home = makeRoot('dormant-credtag', { config: DORMANT_ON });
-    const tagged = aged(createMemory('an old note about rotating the staging deploy key', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['credential'] }), 90);
+    const tagged = aged(
+      createMemory('an old note about rotating the staging deploy key', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: ['credential'],
+      }),
+      90,
+    );
     writeEntry(home, tagged);
 
     const result = await consolidate(home, { now: new Date() });
@@ -161,9 +200,15 @@ describe('a faded credential-tagged memory', () => {
 });
 
 describe('dormant retention', () => {
-  function storeWithOldDormant(label: string, config: { dormant: { retentionDays?: number; enabled?: boolean } }, daysAgo: number) {
+  function storeWithOldDormant(
+    label: string,
+    config: { dormant: { retentionDays?: number; enabled?: boolean } },
+    daysAgo: number,
+  ) {
     const home = makeRoot(label, { config });
-    const entry = createMemory('the retired cron host was called nightly-02', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('the retired cron host was called nightly-02', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const db = openHippoDb(home);
     try {
       insertDormantRow(db, {
@@ -204,8 +249,15 @@ describe('dormant retention', () => {
     const db = openHippoDb(home);
     try {
       for (let i = 0; i < 5; i++) {
-        const entry = createMemory(`retired cron host number ${i} was called nightly-0${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-        insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date(Date.now() - 45 * DAY_MS).toISOString() });
+        const entry = createMemory(`retired cron host number ${i} was called nightly-0${i}`, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        });
+        insertDormantRow(db, {
+          entry,
+          strength: 0.01,
+          reason: 'decay',
+          dormantAt: new Date(Date.now() - 45 * DAY_MS).toISOString(),
+        });
         ids.push(entry.id);
       }
     } finally {
@@ -241,8 +293,16 @@ describe('dormant retention', () => {
 describe('with dormant memories enabled', () => {
   it('sleep moves a faded memory out of active memory instead of deleting it', async () => {
     const home = makeRoot('dormant-move', { config: DORMANT_ON });
-    const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['infra'] }), 90);
-    const fresh = createMemory('the release checklist lives in docs/release-policy.md', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const faded = aged(
+      createMemory('the old staging hostname was build-07 before the move', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: ['infra'],
+      }),
+      90,
+    );
+    const fresh = createMemory('the release checklist lives in docs/release-policy.md', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(home, faded);
     writeEntry(home, fresh);
 
@@ -267,7 +327,10 @@ describe('with dormant memories enabled', () => {
 
   it('a dormant memory never reaches recall or context', async () => {
     const home = makeRoot('dormant-recall', { config: DORMANT_ON });
-    const faded = aged(createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const faded = aged(
+      createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      90,
+    );
     writeEntry(home, faded);
     await consolidate(home, { now: new Date() });
 
@@ -277,7 +340,12 @@ describe('with dormant memories enabled', () => {
 
   it('a dormant memory sits out every later sleep untouched', async () => {
     const home = makeRoot('dormant-idle', { config: DORMANT_ON });
-    const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const faded = aged(
+      createMemory('the old staging hostname was build-07 before the move', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      90,
+    );
     writeEntry(home, faded);
     await consolidate(home, { now: new Date() });
     const before = await api.listDormant(ctxFor(home));
@@ -291,21 +359,40 @@ describe('with dormant memories enabled', () => {
 
   it('pinned memories and raw receipts never go dormant', async () => {
     const home = makeRoot('dormant-exempt', { config: DORMANT_ON });
-    const pinned = aged(createMemory('never force-push to master', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), 400);
-    const receipt = aged(createMemory('slack receipt: the prod deploy failed on the stale cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, kind: 'raw' }), 90);
+    const pinned = aged(
+      createMemory('never force-push to master', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
+      400,
+    );
+    const receipt = aged(
+      createMemory('slack receipt: the prod deploy failed on the stale cache', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+        kind: 'raw',
+      }),
+      90,
+    );
     writeEntry(home, pinned);
     writeEntry(home, receipt);
 
     const result = await consolidate(home, { now: new Date() });
 
     expect(result.dormant).toBe(0);
-    expect(loadAllEntries(home, 'default').map((e) => e.id).sort()).toEqual([pinned.id, receipt.id].sort());
+    expect(
+      loadAllEntries(home, 'default')
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual([pinned.id, receipt.id].sort());
     expect(await api.listDormant(ctxFor(home))).toEqual([]);
   });
 
   it('a dry run reports the move but changes nothing', async () => {
     const home = makeRoot('dormant-dry', { config: DORMANT_ON });
-    const faded = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const faded = aged(
+      createMemory('the old staging hostname was build-07 before the move', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      90,
+    );
     writeEntry(home, faded);
 
     const result = await consolidate(home, { now: new Date(), dryRun: true });
@@ -318,7 +405,15 @@ describe('with dormant memories enabled', () => {
 
   it('api.sleep reports how many memories went dormant', async () => {
     const home = makeRoot('dormant-sleep', { config: DORMANT_ON });
-    writeEntry(home, aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
+    writeEntry(
+      home,
+      aged(
+        createMemory('the old staging hostname was build-07 before the move', {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        }),
+        90,
+      ),
+    );
 
     const result = await api.sleep(ctxFor(home), { noShare: true });
 
@@ -370,7 +465,9 @@ describe('listing, restoring and forgetting dormant memories', () => {
     expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
     expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
     expect(await api.listDormant(ctxFor(home))).toEqual([]);
-    expect((await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map((r) => r.id)).toContain(ids[0]);
+    expect(
+      (await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map((r) => r.id),
+    ).toContain(ids[0]);
 
     const next = await consolidate(home, { now: new Date() });
     expect(next.dormant).toBe(0);
@@ -380,7 +477,9 @@ describe('listing, restoring and forgetting dormant memories', () => {
     const db = openHippoDb(home);
     try {
       // SAFETY: rows' shape matches the two columns named in the SELECT.
-      const rows = db.prepare(`SELECT target_id, metadata_json FROM audit_log WHERE op = 'dormant_restore'`).all() as Array<{ target_id: string; metadata_json: string }>;
+      const rows = db
+        .prepare(`SELECT target_id, metadata_json FROM audit_log WHERE op = 'dormant_restore'`)
+        .all() as Array<{ target_id: string; metadata_json: string }>;
       expect(rows.map((r) => r.target_id)).toEqual([ids[0]]);
       // SAFETY: metadata_json is written by appendAuditEvent from a JSON object.
       const meta = JSON.parse(rows[0].metadata_json) as { reason: string; daysDormant: number };
@@ -391,17 +490,18 @@ describe('listing, restoring and forgetting dormant memories', () => {
     }
   });
 
-  it('restore refuses an unknown id, another tenant\'s memory, and an id that is already active', async () => {
-    const { home, ids } = await storeWithDormant('dormant-guard', [
-      'zanzibar gateway requires the legacy auth header',
-    ]);
+  it("restore refuses an unknown id, another tenant's memory, and an id that is already active", async () => {
+    const { home, ids } = await storeWithDormant('dormant-guard', ['zanzibar gateway requires the legacy auth header']);
     await expect(api.restoreDormant(ctxFor(home), 'mem_doesnotexist')).rejects.toThrow(/dormant memory not found/);
     await expect(api.restoreDormant(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
     expect(await api.listDormant(ctxFor(home, 'tenant-b'))).toEqual([]);
 
     // Same id written back as active (e.g. by an old binary): restore must
     // not overwrite the live row with the older snapshot.
-    const live = { ...createMemory('live copy under the same id', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), id: ids[0] };
+    const live = {
+      ...createMemory('live copy under the same id', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      id: ids[0],
+    };
     writeEntry(home, live);
     await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/already active/);
     expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
@@ -411,7 +511,10 @@ describe('listing, restoring and forgetting dormant memories', () => {
     const { home, ids } = await storeWithDormant('dormant-rejected', [
       'the staging api key lives in the shared vault entry',
     ]);
-    await api.reject(ctxFor(home), { value: 'the staging api key lives in the shared vault entry', reason: 'stale secret pointer' });
+    await api.reject(ctxFor(home), {
+      value: 'the staging api key lives in the shared vault entry',
+      reason: 'stale secret pointer',
+    });
     // A rejected value may not linger in dormant storage either.
     expect(await api.listDormant(ctxFor(home))).toEqual([]);
     await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
@@ -442,10 +545,19 @@ describe('listing, restoring and forgetting dormant memories', () => {
     expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
   });
 
-  it('another person\'s dormant personal row reads as missing to every call, and its owner keeps it', async () => {
+  it("another person's dormant personal row reads as missing to every call, and its owner keeps it", async () => {
     const home = makeRoot('dormant-personal', { config: DORMANT_ON });
-    const mine = aged(createMemory('the quillfen alias is mine alone', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'personal:private:oid-a' }), 90);
-    const team = aged(createMemory('the quillfen gateway serves the whole team', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const mine = aged(
+      createMemory('the quillfen alias is mine alone', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        scope: 'personal:private:oid-a',
+      }),
+      90,
+    );
+    const team = aged(
+      createMemory('the quillfen gateway serves the whole team', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      90,
+    );
     writeEntry(home, mine);
     writeEntry(home, team);
     await consolidate(home, { now: new Date() });
@@ -472,7 +584,9 @@ describe('listing, restoring and forgetting dormant memories', () => {
     await api.forgetDormant(ctxFor(home), ids[0]);
     expect(await api.listDormant(ctxFor(home))).toEqual([]);
     await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
-    expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([[ids[0], 'test', { dormant: true }]]);
+    expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([
+      [ids[0], 'test', { dormant: true }],
+    ]);
     // Counted like forget and archiveRaw (review finding on PR #227).
     expect(Number(sqliteSyncStore(home).reports.stats().total_forgotten)).toBe(1);
   });
@@ -491,35 +605,107 @@ function linkedRows(home: string, table: string, memoryId: string): number {
 }
 
 const objectSavers: [string, string, (home: string) => Promise<{ memoryId: string | null }>][] = [
-  ['decision', 'decisions', async (home) => await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', 'incidents', async (home) => await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
-  ['process', 'processes', async (home) => await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
-  ['policy', 'policies', async (home) => await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
-  ['skill', 'skills', async (home) => await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
-  ['project brief', 'project_briefs', async (home) => await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
-  ['customer note', 'customer_notes', async (home) => await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
-  ['prediction', 'predictions', async (home) => savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
+  [
+    'decision',
+    'decisions',
+    async (home) =>
+      await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Tuesdays after the staging soak',
+      }),
+  ],
+  [
+    'incident',
+    'incidents',
+    async (home) =>
+      await openIncident(
+        objectsAt(home),
+        loadConfig(home).defaultHalfLifeDays,
+        'default',
+        { incidentText: 'the billing cron charged twice on the 1st' },
+        'cli',
+      ),
+  ],
+  [
+    'process',
+    'processes',
+    async (home) =>
+      await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        processName: 'Release',
+        steps: ['tag', 'publish'],
+      }),
+  ],
+  [
+    'policy',
+    'policies',
+    async (home) =>
+      await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        policyName: 'RetryPolicy',
+        policyText: 'retry up to 3x',
+      }),
+  ],
+  [
+    'skill',
+    'skills',
+    async (home) =>
+      await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        skillName: 'Run tests',
+        instructions: 'npm test before commit',
+      }),
+  ],
+  [
+    'project brief',
+    'project_briefs',
+    async (home) =>
+      await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        repo: 'acme/billing',
+        summary: 'billing service for Acme',
+      }),
+  ],
+  [
+    'customer note',
+    'customer_notes',
+    async (home) =>
+      await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        customer: 'Acme',
+        note: 'renewal is due in March',
+      }),
+  ],
+  [
+    'prediction',
+    'predictions',
+    async (home) =>
+      savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' }),
+  ],
 ];
 
 describe('memories that back a first-class object', () => {
-  it.each(objectSavers)('sleep keeps a faded %s memory active, so the object keeps its link', async (_kind, table, save) => {
-    const home = makeRoot('dormant-linked', { config: {} });
-    const memoryId = (await save(home)).memoryId!;
-    // Fade it far below the threshold, as years without recall would.
-    const faded = aged(loadAllEntries(home, 'default').find((e) => e.id === memoryId)!, 3000);
-    writeEntry(home, faded);
-    expect(calculateStrength(faded)).toBeLessThan(0.05);
+  it.each(objectSavers)(
+    'sleep keeps a faded %s memory active, so the object keeps its link',
+    async (_kind, table, save) => {
+      const home = makeRoot('dormant-linked', { config: {} });
+      const memoryId = (await save(home)).memoryId!;
+      // Fade it far below the threshold, as years without recall would.
+      const faded = aged(
+        loadAllEntries(home, 'default').find((e) => e.id === memoryId)!,
+        3000,
+      );
+      writeEntry(home, faded);
+      expect(calculateStrength(faded)).toBeLessThan(0.05);
 
-    const result = await consolidate(home);
-    expect(result.dormant).toBe(0);
-    expect(result.removed).toBe(0);
-    expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(memoryId);
-    expect(linkedRows(home, table, memoryId)).toBe(1);
-  });
+      const result = await consolidate(home);
+      expect(result.dormant).toBe(0);
+      expect(result.removed).toBe(0);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(memoryId);
+      expect(linkedRows(home, table, memoryId)).toBe(1);
+    },
+  );
 
   it('sleep stops, retiring nothing, when it cannot read an object table', async () => {
     const home = makeRoot('dormant-unreadable', { config: {} });
-    const faded = aged(createMemory('the old staging hostname was build-02', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 3000);
+    const faded = aged(
+      createMemory('the old staging hostname was build-02', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      3000,
+    );
     writeEntry(home, faded);
     const db = openHippoDb(home);
     try {
@@ -537,8 +723,10 @@ describe('memories that back a first-class object', () => {
     const db = openHippoDb(home);
     try {
       // SAFETY: each row is the single aliased TEXT column in the SELECT.
-      const rows = db.prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
-        WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
+      const rows = db
+        .prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+        WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`)
+        .all() as { name: string }[];
       // Graph rows drop their memory pointer by design (src/db/index.ts, the entities and relations schema).
       const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
@@ -557,8 +745,16 @@ describe('hippo dormant CLI', () => {
 
   it('lists, restores and forgets dormant memories', async () => {
     const { base: workspace, root: hippoRoot } = makeStore('dormant-cli', { config: DORMANT_ON });
-    const keep = aged(createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
-    const drop = aged(createMemory('the old staging hostname was build-07 before the move', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+    const keep = aged(
+      createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      90,
+    );
+    const drop = aged(
+      createMemory('the old staging hostname was build-07 before the move', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      90,
+    );
     writeEntry(hippoRoot, keep);
     writeEntry(hippoRoot, drop);
     await consolidate(hippoRoot, { now: new Date() });
@@ -587,7 +783,13 @@ describe('hippo dormant CLI', () => {
 
     // `hippo forget` on a dormant id points at the dormant command instead
     // of a bare "not found".
-    writeEntry(hippoRoot, aged(createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90));
+    writeEntry(
+      hippoRoot,
+      aged(
+        createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        90,
+      ),
+    );
     await consolidate(hippoRoot, { now: new Date() });
     const [third] = await api.listDormant(ctxFor(hippoRoot));
     const hint = await runCli(workspace, 'forget', third.id);

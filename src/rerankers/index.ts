@@ -24,9 +24,7 @@ function isRegisteredRerankerName(name: string): name is RegisteredRerankerName 
 export function getReranker(name: string | null | undefined): RerankerFn | null {
   if (!name) return null;
   if (!isRegisteredRerankerName(name)) {
-    throw new Error(
-      `Unknown reranker: ${name}. Available: ${Object.keys(REGISTRY).join(', ')}`,
-    );
+    throw new Error(`Unknown reranker: ${name}. Available: ${Object.keys(REGISTRY).join(', ')}`);
   }
   return REGISTRY[name];
 }

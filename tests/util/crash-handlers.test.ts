@@ -51,7 +51,12 @@ describe('installSignalHandlers', () => {
   });
 
   it('exits 1 and logs the cause when the shutdown throws', async () => {
-    installSignalHandlers('hippo test', { run: () => { throw new Error('close failed'); }, boundMs: 5_000 });
+    installSignalHandlers('hippo test', {
+      run: () => {
+        throw new Error('close failed');
+      },
+      boundMs: 5_000,
+    });
     fire(listeners, 'SIGINT');
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
     expect(logged()).toContain('hippo test shutdown after SIGINT failed: close failed');
@@ -63,7 +68,9 @@ describe('installSignalHandlers', () => {
     await vi.waitFor(() => expect(kill).toHaveBeenCalledWith(process.pid, 'SIGKILL'));
     expect(process.exitCode).toBe(1);
     expect(exit).not.toHaveBeenCalled();
-    expect(logged()).toContain('hippo test shutdown after SIGTERM did not finish within 10 ms; ending the process without it');
+    expect(logged()).toContain(
+      'hippo test shutdown after SIGTERM did not finish within 10 ms; ending the process without it',
+    );
   });
 });
 

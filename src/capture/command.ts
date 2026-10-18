@@ -45,10 +45,7 @@ export interface CaptureTarget {
   readonly store: { readonly localFiles: LocalFiles; readonly rejections: Sync<Rejections> };
 }
 
-export function cmdCapture(
-  target: CaptureTarget,
-  options: CaptureOptions
-): void {
+export function cmdCapture(target: CaptureTarget, options: CaptureOptions): void {
   // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already
   // wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
@@ -74,11 +71,7 @@ function beginLogTee(logFile: string): () => void {
 function writeLogBanner(logFile: string): boolean {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    fs.appendFileSync(
-      logFile,
-      `[hippo] ${new Date().toISOString()} capturing session...\n`,
-      'utf8'
-    );
+    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} capturing session...\n`, 'utf8');
   } catch (err) {
     log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));
     return false;
@@ -87,10 +80,7 @@ function writeLogBanner(logFile: string): boolean {
 }
 
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
-function cmdCaptureCore(
-  target: CaptureTarget,
-  options: CaptureOptions
-): void {
+function cmdCaptureCore(target: CaptureTarget, options: CaptureOptions): void {
   if (options.global) {
     target.store.localFiles.ensureFiles();
   } else if (!isInitialized(target.root)) {
@@ -114,7 +104,10 @@ function cmdCaptureCore(
 
   // Scrub once here, as the snapshot fields are: every source can
   // carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts);
+  const extracted = extractFromTexts(
+    texts.map((text) => maskEmails(redactSecretsStrict(text))),
+    userTexts,
+  );
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -156,9 +149,11 @@ function storedKeysInView(
     { everyScope: true },
   );
   const origin = options.originProject;
-  return storedTextKeys(origin === undefined
-    ? stored
-    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'));
+  return storedTextKeys(
+    origin === undefined
+      ? stored
+      : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'),
+  );
 }
 
 function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {
@@ -167,7 +162,7 @@ function printCaptureTally(options: CaptureOptions, { captured, skipped, rejecte
   console.log(
     `\n${prefix}${globalPrefix}Captured ${captured} items (${skipped} skipped as duplicates` +
       (rejected > 0 ? `, ${rejected} rejected` : '') +
-      ')'
+      ')',
   );
 }
 
@@ -201,11 +196,9 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
     case 'last-session': {
       let turns = options.sessionTurns;
       if (!turns) {
-        const resolved = resolveLastSessionTranscript(
-          options.transcriptPath,
-          options.stdinText,
-          { mayScan: !options.stdinTimedOut },
-        );
+        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, {
+          mayScan: !options.stdinTimedOut,
+        });
         if (!resolved) {
           console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
           return null;
@@ -257,15 +250,11 @@ export function captureExtractedItems(
     makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
   }));
   const index = { hippoRoot: root, embeddingIndex: files.embeddingIndex, embeddings: config.embeddings };
-  const outcomes = files.captures.write(
-    items,
-    keys,
-    {
-      actor: options.actor,
-      lean: options.lean,
-      onCaptured: options.lean ? undefined : (entry) => void embedMemory(index, entry),
-    },
-  );
+  const outcomes = files.captures.write(items, keys, {
+    actor: options.actor,
+    lean: options.lean,
+    onCaptured: options.lean ? undefined : (entry) => void embedMemory(index, entry),
+  });
   for (const outcome of outcomes) tally[outcome]++;
   return tally;
 }
@@ -281,10 +270,12 @@ function previewCapture(
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const fresh = extracted.filter((item) => !keys.has(duplicateKey(item.content)));
-  const refused = rejections.refusedAmong(fresh.map((item) => {
-    const entry = captureEntry(item, options, baseHalfLifeDays);
-    return { tenantId: entry.tenant_id ?? 'default', entryId: entry.id, content: entry.content };
-  }));
+  const refused = rejections.refusedAmong(
+    fresh.map((item) => {
+      const entry = captureEntry(item, options, baseHalfLifeDays);
+      return { tenantId: entry.tenant_id ?? 'default', entryId: entry.id, content: entry.content };
+    }),
+  );
   let next = 0;
   for (const item of extracted) {
     if (keys.has(duplicateKey(item.content))) {

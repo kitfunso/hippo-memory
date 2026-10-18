@@ -31,7 +31,8 @@ describe('rule capture keeps its lead', () => {
 
   it('keeps a long subject and its whole object in one sentence', () => {
     const lead = 'When the weekly release train leaves the shared build machine for the storage team we ';
-    const object = 'copy the nightly artifacts from the staging bucket into the release bucket after checking the manifest checksum against the signed list the build step publishes for auditors';
+    const object =
+      'copy the nightly artifacts from the staging bucket into the release bucket after checking the manifest checksum against the signed list the build step publishes for auditors';
     expect((lead + object).length).toBeGreaterThan(200);
     const [item] = rules(`${lead}must ${object}.`);
     expect(item.content).toBe(`${lead}must ${object}`);

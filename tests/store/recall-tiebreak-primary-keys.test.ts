@@ -18,7 +18,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve } from '../../src/api/index.js';
 import { estimateTokens } from '../../src/util/token-text.js';
@@ -31,7 +31,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +68,9 @@ describe('api.ts:833 DAG substitution ordering', () => {
   }
 
   let root: string;
-  beforeEach(() => { root = makeRoot('dag-tiebreak'); });
+  beforeEach(() => {
+    root = makeRoot('dag-tiebreak');
+  });
   afterEach(() => safeRmSync(root));
 
   it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
@@ -81,19 +87,25 @@ describe('api.ts:833 DAG substitution ordering', () => {
     const summaryA = makeSummary('topic A summary', { tags: ['dag-summary', 'topic:a'] });
     writeEntry(root, summaryA);
     for (let i = 0; i < 3; i++) {
-      writeEntry(root, makeLeaf(`alpha zulu topic event a-${i}`, {
-        dag_level: 1,
-        dag_parent_id: summaryA.id,
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`alpha zulu topic event a-${i}`, {
+          dag_level: 1,
+          dag_parent_id: summaryA.id,
+        }),
+      );
     }
 
     const summaryB = makeSummary('topic B summary', { tags: ['dag-summary', 'topic:b'] });
     writeEntry(root, summaryB);
     for (let i = 0; i < 6; i++) {
-      writeEntry(root, makeLeaf(`alpha zulu topic event b-${i}`, {
-        dag_level: 1,
-        dag_parent_id: summaryB.id,
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`alpha zulu topic event b-${i}`, {
+          dag_level: 1,
+          dag_parent_id: summaryB.id,
+        }),
+      );
     }
 
     // maxSub = max(1, ceil(limit * 0.3)) = 1 at limit=1, so only the WINNING
@@ -155,8 +167,14 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
   }
 
   it('primary wins: recency desc decides regardless of score or content', () => {
-    const older: OnTopicRow = { entry: { created: '2020-01-01T00:00:00.000Z', content: 'zzz older but higher score', id: 'id-older' }, score: 9 };
-    const newer: OnTopicRow = { entry: { created: '2026-01-01T00:00:00.000Z', content: 'aaa newer but lower score', id: 'id-newer' }, score: 1 };
+    const older: OnTopicRow = {
+      entry: { created: '2020-01-01T00:00:00.000Z', content: 'zzz older but higher score', id: 'id-older' },
+      score: 9,
+    };
+    const newer: OnTopicRow = {
+      entry: { created: '2026-01-01T00:00:00.000Z', content: 'aaa newer but lower score', id: 'id-newer' },
+      score: 1,
+    };
     // Shuffle input order so the result isn't an accidental array-order no-op.
     expect(sortOnTopic([older, newer]).map((r) => r.entry.id)).toEqual([newer.entry.id, older.entry.id]);
     expect(sortOnTopic([newer, older]).map((r) => r.entry.id)).toEqual([newer.entry.id, older.entry.id]);
@@ -164,11 +182,20 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
 
   it('tail decides: entries created at the exact same timestamp fall back to compareEntryIdentity (content ascending)', () => {
     const tiedTimestamp = '2026-03-01T00:00:00.000Z';
-    const higherScore: OnTopicRow = { entry: { created: tiedTimestamp, content: 'zebra higher pre-evc score', id: 'id-z' }, score: 9 };
-    const lowerScore: OnTopicRow = { entry: { created: tiedTimestamp, content: 'apple lower pre-evc score', id: 'id-a' }, score: 1 };
+    const higherScore: OnTopicRow = {
+      entry: { created: tiedTimestamp, content: 'zebra higher pre-evc score', id: 'id-z' },
+      score: 9,
+    };
+    const lowerScore: OnTopicRow = {
+      entry: { created: tiedTimestamp, content: 'apple lower pre-evc score', id: 'id-a' },
+      score: 1,
+    };
     // Recency ties -> content ascending decides ('apple...' < 'zebra...'),
     // NOT score (which would have put higherScore first) and not input order.
-    expect(sortOnTopic([higherScore, lowerScore]).map((r) => r.entry.id)).toEqual([lowerScore.entry.id, higherScore.entry.id]);
+    expect(sortOnTopic([higherScore, lowerScore]).map((r) => r.entry.id)).toEqual([
+      lowerScore.entry.id,
+      higherScore.entry.id,
+    ]);
   });
 });
 
@@ -179,7 +206,13 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
 
 describe('graph-recall.ts:248 graph-hop ordering', () => {
   function mem(home: string, tenant: string, text: string): MemoryEntry {
-    const m = createMemory(text, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
+    const m = createMemory(text, {
+      tags: [],
+      layer: Layer.Semantic,
+      confidence: 'verified',
+      source: 'test',
+      tenantId: tenant,
+    });
     writeEntry(home, m, { actor: 'test' });
     return m;
   }
@@ -192,7 +225,9 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
 
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot('hop-tiebreak'); });
+  beforeEach(() => {
+    home = makeRoot('hop-tiebreak');
+  });
   afterEach(() => safeRmSync(home));
 
   it('primary wins (hop distance) and the tail decides same-hop ties', async () => {
@@ -218,7 +253,11 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
 
     const base = [sr(a, 1.0)];
     const out = await graphExpandRecall(base, {
-      hops: 2, store: sqliteStore(home), tenantId: T, budget: 40_000, includeSuperseded: true,
+      hops: 2,
+      store: sqliteStore(home),
+      tenantId: T,
+      budget: 40_000,
+      includeSuperseded: true,
     });
 
     const ids = out.map((r) => r.entry.id);

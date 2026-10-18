@@ -12,7 +12,13 @@ import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { EMBEDDING_MODEL, HELD_SCOPE, leftBehind, type MovedReadsSeed, seedMovedReads } from '../_helpers/moved-reads-seed.js';
+import {
+  EMBEDDING_MODEL,
+  HELD_SCOPE,
+  leftBehind,
+  type MovedReadsSeed,
+  seedMovedReads,
+} from '../_helpers/moved-reads-seed.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, SESSION } from '../_helpers/recall-golden-seed.js';
 import { auditRows, get, holdWriteLock, mirrorFiles, post, seen, undoAll } from '../_helpers/store-worker-server.js';
 
@@ -31,11 +37,26 @@ const WITH_SESSION = `session_id=${SESSION}`;
 const FRESH_TAIL = `q=deploy&fresh_tail_count=1&fresh_tail_session_id=${SESSION}&${WITH_SESSION}`;
 const FORWARD_CLAIM = `q=${encodeURIComponent('the deploy will take 3 days')}`;
 
-const graph = (query: string, as: keyof MovedReadsSeed['keys'] = 'main'): Send => (r) => get(r.server, `/v1/graph${query}`, r.seed.keys[as]);
-const held = (query: string, as: keyof MovedReadsSeed['keys'] = 'main'): Send => (r) => get(r.server, `/v1/quarantine${query}`, r.seed.keys[as]);
-const recall = (query: string, as: keyof MovedReadsSeed['keys'] = 'main'): Send => (r) => get(r.server, `/v1/memories?${query}`, r.seed.keys[as]);
-const decide = (verb: 'approve' | 'reject', id: (seed: MovedReadsSeed) => string | undefined, as: keyof MovedReadsSeed['keys'] = 'main'): Send =>
-  (r) => post(r.server, `/v1/quarantine/${id(r.seed) ?? MISSING}/${verb}`, {}, r.seed.keys[as]);
+const graph =
+  (query: string, as: keyof MovedReadsSeed['keys'] = 'main'): Send =>
+  (r) =>
+    get(r.server, `/v1/graph${query}`, r.seed.keys[as]);
+const held =
+  (query: string, as: keyof MovedReadsSeed['keys'] = 'main'): Send =>
+  (r) =>
+    get(r.server, `/v1/quarantine${query}`, r.seed.keys[as]);
+const recall =
+  (query: string, as: keyof MovedReadsSeed['keys'] = 'main'): Send =>
+  (r) =>
+    get(r.server, `/v1/memories?${query}`, r.seed.keys[as]);
+const decide =
+  (
+    verb: 'approve' | 'reject',
+    id: (seed: MovedReadsSeed) => string | undefined,
+    as: keyof MovedReadsSeed['keys'] = 'main',
+  ): Send =>
+  (r) =>
+    post(r.server, `/v1/quarantine/${id(r.seed) ?? MISSING}/${verb}`, {}, r.seed.keys[as]);
 
 const GRAPH_STEPS: readonly Step[] = [
   ['graph', graph(''), 200],
@@ -104,7 +125,11 @@ function resetRecallState(): void {
 }
 
 /** `use` against a server on `root`, on the worker-backed store when `store` is absent; the server has stopped when it resolves, so every row it writes is in. */
-async function onServer<T>(root: string, store: HippoStore | undefined, use: (server: ServerHandle) => Promise<T>): Promise<T> {
+async function onServer<T>(
+  root: string,
+  store: HippoStore | undefined,
+  use: (server: ServerHandle) => Promise<T>,
+): Promise<T> {
   resetRecallState();
   const server = await serve(store ? { hippoRoot: root, port: 0, store } : { hippoRoot: root, port: 0 });
   try {
@@ -115,7 +140,11 @@ async function onServer<T>(root: string, store: HippoStore | undefined, use: (se
   }
 }
 
-const left = (root: string) => ({ audit: auditRows(root, seed.keyIds), stored: leftBehind(root), mirrors: mirrorFiles(root) });
+const left = (root: string) => ({
+  audit: auditRows(root, seed.keyIds),
+  stored: leftBehind(root),
+  mirrors: mirrorFiles(root),
+});
 
 async function runSteps(steps: readonly Step[], inProcess: boolean) {
   const root = copy();
@@ -135,7 +164,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await embeddings.close();
-  for (const dir of [seed.templates.dir, ...homes]) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const dir of [seed.templates.dir, ...homes]) {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 });
 
 beforeEach(() => {
@@ -159,7 +190,9 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
     expect(onWorkers.audit).toEqual(inProcess.audit);
     expect(onWorkers.stored).toEqual(inProcess.stored);
     expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
-    expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(STEPS.map(([label, , status]) => [label, status]));
+    expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
+      STEPS.map(([label, , status]) => [label, status]),
+    );
     const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
     expect(bodyOf['graph from an entity']).toContain('RetryPolicy');
     expect(bodyOf['graph as the other tenant']).toContain('AcmePolicy');
@@ -195,43 +228,102 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
     const onWorkers = await behindLock(false);
 
     expect(onWorkers).toEqual(inProcess);
-    expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(busy.map(([label, , status]) => [label, status]));
+    expect(onWorkers.map((reply) => [reply.label, reply.status])).toEqual(
+      busy.map(([label, , status]) => [label, status]),
+    );
     expect(onWorkers[2]?.headers).toContainEqual(['retry-after', '1']);
   });
 });
 
 describe("the server-thread block of a `loop: 'off'` route this file covers", () => {
   // The last column is false where the route has written before it reaches the swapped method.
-  const ROUTES: ReadonlyArray<readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, writesNothing: boolean]> = [
+  const ROUTES: ReadonlyArray<
+    readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, writesNothing: boolean]
+  > = [
     ['GET /v1/graph', (p) => ({ graphReads: p.graphReads }), graph(''), true],
     ['GET /v1/quarantine', (p) => ({ quarantine: p.quarantine }), held(''), true],
-    ['POST /v1/quarantine/:id/approve', (p) => ({ quarantine: p.quarantine }), decide('approve', (made) => made.held[0]), true],
-    ['POST /v1/quarantine/:id/reject', (p) => ({ quarantine: p.quarantine }), decide('reject', (made) => made.held[1]), true],
-    ['GET /v1/memories, by its candidate read', (p) => ({ searchRecallEntries: p.searchRecallEntries }), recall('q=deploy'), true],
-    ['GET /v1/memories, by its goal read', (p) => ({ activeGoals: p.activeGoals }), recall(`q=deploy&${WITH_SESSION}`), true],
+    [
+      'POST /v1/quarantine/:id/approve',
+      (p) => ({ quarantine: p.quarantine }),
+      decide('approve', (made) => made.held[0]),
+      true,
+    ],
+    [
+      'POST /v1/quarantine/:id/reject',
+      (p) => ({ quarantine: p.quarantine }),
+      decide('reject', (made) => made.held[1]),
+      true,
+    ],
+    [
+      'GET /v1/memories, by its candidate read',
+      (p) => ({ searchRecallEntries: p.searchRecallEntries }),
+      recall('q=deploy'),
+      true,
+    ],
+    [
+      'GET /v1/memories, by its goal read',
+      (p) => ({ activeGoals: p.activeGoals }),
+      recall(`q=deploy&${WITH_SESSION}`),
+      true,
+    ],
     ['GET /v1/memories, by its fresh tail', (p) => ({ freshRawEntries: p.freshRawEntries }), recall(FRESH_TAIL), true],
-    ['GET /v1/memories, by its continuity block', (p) => ({ continuity: p.continuity }), recall('q=deploy&include_continuity=true'), true],
-    ['GET /v1/memories, by its forward-claim evidence', (p) => ({ planningFallacyEvidence: p.planningFallacyEvidence }), recall(FORWARD_CLAIM), true],
-    ['GET /v1/memories, by its overflow summaries', (p) => ({ entriesByIds: p.entriesByIds }), recall('q=deploy&limit=2&summarize_overflow=true'), true],
+    [
+      'GET /v1/memories, by its continuity block',
+      (p) => ({ continuity: p.continuity }),
+      recall('q=deploy&include_continuity=true'),
+      true,
+    ],
+    [
+      'GET /v1/memories, by its forward-claim evidence',
+      (p) => ({ planningFallacyEvidence: p.planningFallacyEvidence }),
+      recall(FORWARD_CLAIM),
+      true,
+    ],
+    [
+      'GET /v1/memories, by its overflow summaries',
+      (p) => ({ entriesByIds: p.entriesByIds }),
+      recall('q=deploy&limit=2&summarize_overflow=true'),
+      true,
+    ],
     ['GET /v1/memories, by its closing write', (p) => ({ finishRecall: p.finishRecall }), recall('q=deploy'), true],
-    ['GET /v1/memories, by its recall counter', (p) => ({ bumpRecallStats: p.bumpRecallStats }), recall('q=deploy'), false],
+    [
+      'GET /v1/memories, by its recall counter',
+      (p) => ({ bumpRecallStats: p.bumpRecallStats }),
+      recall('q=deploy'),
+      false,
+    ],
     ['GET /v1/memories, by its vector reads', (p) => ({ vectors: p.vectors }), recall('q=deploy&mode=hybrid'), true],
-    ['GET /v1/memories, by its vector views', (p) => ({ vectorViews: p.vectorViews }), recall('q=deploy&mode=hybrid'), true],
+    [
+      'GET /v1/memories, by its vector views',
+      (p) => ({ vectorViews: p.vectorViews }),
+      recall('q=deploy&mode=hybrid'),
+      true,
+    ],
   ];
 
-  it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, swapped, send, writesNothing) => {
-    const root = copy();
-    writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: EMBEDDING_MODEL, apiBaseUrl: embeddings.url } }));
-    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-    const before = left(root);
-    const info = vi.spyOn(log, 'info');
-    // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
+  it.each(ROUTES)(
+    '%s fails when its handler opens hippo.db on the server thread',
+    async (_route, swapped, send, writesNothing) => {
+      const root = copy();
+      writeFileSync(
+        join(root, 'config.json'),
+        JSON.stringify({ embeddings: { provider: 'openai', model: EMBEDDING_MODEL, apiBaseUrl: embeddings.url } }),
+      );
+      vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+      const before = left(root);
+      const info = vi.spyOn(log, 'info');
+      // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
+      const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
 
-    const res = await onServer(root, store, (server) => send({ server, seed }));
+      const res = await onServer(root, store, (server) => send({ server, seed }));
 
-    expect(res.status).toBe(501);
-    expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('opened on the server thread by a route'))).toHaveLength(1);
-    if (writesNothing) expect(left(root)).toEqual(before);
-  });
+      expect(res.status).toBe(501);
+      expect(
+        info.mock.calls
+          .map((call) => String(call[0]))
+          .filter((line) => line.includes('opened on the server thread by a route')),
+      ).toHaveLength(1);
+      if (writesNothing) expect(left(root)).toEqual(before);
+    },
+  );
 });

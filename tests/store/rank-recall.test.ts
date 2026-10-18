@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -14,7 +14,12 @@ import { pushGoal } from '../_helpers/root-forms.js';
 
 let hippoRoot: string;
 
-function seeded(content: string, id: string, extra: Partial<MemoryEntry> = {}, opts: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
+function seeded(
+  content: string,
+  id: string,
+  extra: Partial<MemoryEntry> = {},
+  opts: Parameters<typeof createMemory>[1] = {},
+): MemoryEntry {
   return { ...createMemory(content, opts), id, strength: 1, ...extra };
 }
 
@@ -28,12 +33,22 @@ function opts(extra: Partial<RankRecallOptions> = {}): RankRecallOptions {
     includeSuperseded: false,
     explicitScope: null,
     activeScope: null,
-    search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
+    search: {
+      usePhysics: false,
+      physicsConfig: config.physics,
+      multihop: false,
+      mmr: false,
+      mmrLambda: 0.7,
+      localBump: 1.2,
+      explain: false,
+    },
     ...extra,
   };
 }
 
-interface CountRow { n: number }
+interface CountRow {
+  n: number;
+}
 
 function goalLogCount(): number {
   const db = openHippoDb(hippoRoot);
@@ -47,16 +62,34 @@ function goalLogCount(): number {
 }
 
 const ids = (results: { entry: MemoryEntry }[]): string[] => results.map((r) => r.entry.id);
-const ctx = (): RankRecallCtx => ({ store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot), tenantId: 'default' });
+const ctx = (): RankRecallCtx => ({
+  store: sqliteStore(hippoRoot),
+  config: loadConfig(hippoRoot),
+  tenantId: 'default',
+});
 
 describe('rankRecall', () => {
   beforeEach(() => {
     ({ root: hippoRoot } = makeStore('rank-recall'));
     writeEntry(hippoRoot, seeded('deploy pipeline uses blue green rollout', 'mem_rank_plain'));
-    writeEntry(hippoRoot, seeded('private deploy token rotation', 'mem_rank_private', {}, { scope: 'slack:private:C1' }));
-    writeEntry(hippoRoot, seeded('deploy target was the old cluster', 'mem_rank_old', { superseded_by: 'mem_rank_plain' }));
+    writeEntry(
+      hippoRoot,
+      seeded('private deploy token rotation', 'mem_rank_private', {}, { scope: 'slack:private:C1' }),
+    );
+    writeEntry(
+      hippoRoot,
+      seeded('deploy target was the old cluster', 'mem_rank_old', { superseded_by: 'mem_rank_plain' }),
+    );
     writeEntry(hippoRoot, seeded('deploy goal work on the runner', 'mem_rank_goal', {}, { tags: ['goal-alpha'] }));
-    writeEntry(hippoRoot, seeded('deploy trace: promoted the canary', 'mem_rank_trace', {}, { layer: Layer.Trace, traceOutcome: 'success' }));
+    writeEntry(
+      hippoRoot,
+      seeded(
+        'deploy trace: promoted the canary',
+        'mem_rank_trace',
+        {},
+        { layer: Layer.Trace, traceOutcome: 'success' },
+      ),
+    );
   });
 
   // Private and superseded rows are excluded in SQL, so they are pre-candidate: neither counted nor dropped.
@@ -112,7 +145,9 @@ describe('rankRecall re-rank stages', () => {
 
   it('evcAdaptive leaves the order alone when the top hits are about different things', async () => {
     put('mem_a', 'deploy rollback needs the previous image tag', { created: '2024-01-01T00:00:00.000Z' });
-    put('mem_b', 'deploy windows close friday afternoon for the release train', { created: '2026-01-01T00:00:00.000Z' });
+    put('mem_b', 'deploy windows close friday afternoon for the release train', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
 
     const plain = ids((await rank()).results);
     expect(ids((await rank({ evcAdaptive: true })).results)).toEqual(plain);
@@ -125,12 +160,18 @@ describe('rankRecall re-rank stages', () => {
     const base = ids((await rank()).results);
 
     const reverse: RerankerFn = async (_q, results) =>
-      [...results].reverse().map((r, i) => ({ ...r, rerankScore: 10 - i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: 0 }));
+      [...results]
+        .reverse()
+        .map((r, i) => ({ ...r, rerankScore: 10 - i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: 0 }));
     const r = await rank({ reranker: { fn: reverse, topK: 2 }, why: true });
 
     expect(ids(r.results)).toEqual([base[1], base[0], base[2]]);
     expect(r.results.map((x) => x.score).slice(0, 2)).toEqual([10, 9]);
-    expect(r.results.map((x) => [x.preRerankRank, x.postRerankRank])).toEqual([[2, 1], [1, 2], [undefined, undefined]]);
+    expect(r.results.map((x) => [x.preRerankRank, x.postRerankRank])).toEqual([
+      [2, 1],
+      [1, 2],
+      [undefined, undefined],
+    ]);
     expect(r.results[0].rerankTrace?.at(-1)).toMatchObject({ stage: 'reranker', scoreAfter: 10 });
   });
 
@@ -183,7 +224,10 @@ describe('rankRecall re-rank stages', () => {
     const after = new Map(r.results.map((x) => [x.entry.id, x]));
     expect(after.get('mem_hot')!.rerankTrace).toBeUndefined();
     expect(after.get('mem_cold')!.score).toBeCloseTo(before.get('mem_cold')! * 0.5);
-    expect(after.get('mem_cold')!.rerankTrace?.at(-1)).toMatchObject({ stage: 'retrieval-count-downweight', multiplier: 0.5 });
+    expect(after.get('mem_cold')!.rerankTrace?.at(-1)).toMatchObject({
+      stage: 'retrieval-count-downweight',
+      multiplier: 0.5,
+    });
   });
 
   it('asOf returns the row that was true at that date, before or after its successor took over', async () => {

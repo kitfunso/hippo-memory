@@ -15,7 +15,13 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getHippoDbPath,
+  withSharedStoreHandles,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
 import { personalScopeOf } from '../../src/core/recall-scope.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -65,7 +71,9 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
         expect(traces).toHaveLength(1);
         // SAFETY: recall_trace_outcomes.outcome and .memory_ids_json are
         // NOT NULL text columns (src/db/index.ts schema), guaranteed on every row.
-        const outcomes = db.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traces[0]!.id) as RecallTraceOutcomeRow[];
+        const outcomes = db
+          .prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`)
+          .all(traces[0]!.id) as RecallTraceOutcomeRow[];
         expect(outcomes).toHaveLength(1);
         expect(outcomes[0]!.outcome).toBe('positive');
         const memoryIds = JSON.parse(outcomes[0]!.memory_ids_json);
@@ -138,7 +146,9 @@ describe('lastRecall.applyTracedOutcome explicit traceId (store linkage)', () =>
       try {
         // SAFETY: recall_trace_outcomes.outcome is a NOT NULL text column
         // (src/db/index.ts schema), guaranteed on every row.
-        const rows = db2.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traceId) as Array<{ outcome: string }>;
+        const rows = db2.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traceId) as Array<{
+          outcome: string;
+        }>;
         expect(rows).toHaveLength(1);
         expect(rows[0]!.outcome).toBe('positive');
       } finally {

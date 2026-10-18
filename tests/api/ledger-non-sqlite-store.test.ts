@@ -28,7 +28,11 @@ describe('promptHookContext on a store that is not SQLite', () => {
     fs.mkdirSync(root);
     const store = { ...sqliteStore(donor), localFiles: undefined };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
-    const out = await promptHookContext(ctx, { sessionId: 's1', project: { name: 'p', legacyName: 'p' }, payload: { prompt: 'hi' } });
+    const out = await promptHookContext(ctx, {
+      sessionId: 's1',
+      project: { name: 'p', legacyName: 'p' },
+      payload: { prompt: 'hi' },
+    });
     expect(out.stdout).toContain('rollback plan');
     expect(fs.existsSync(path.join(root, 'hippo.db'))).toBe(false);
     expect(fs.readdirSync(root)).toEqual([]);

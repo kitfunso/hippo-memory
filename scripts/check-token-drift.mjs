@@ -60,11 +60,7 @@ const LEGACY_HEX_PATTERNS = [
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 
-const SCAN_PATHS = [
-  'ui/index.html',
-  'ui/src',
-  'src/dashboard/dashboard.ts',
-];
+const SCAN_PATHS = ['ui/index.html', 'ui/src', 'src/dashboard/dashboard.ts'];
 
 const EXEMPT_FILES = new Set([
   // The canonical token sources — they SHOULD contain the new parchment
@@ -76,7 +72,12 @@ const EXEMPT_FILES = new Set([
 
 const EXEMPT_EXTENSIONS = new Set([
   '.md', // migration map + design docs cite legacy hex for reference
-  '.png', '.jpg', '.gif', '.svg', '.ico', '.woff2', // binaries
+  '.png',
+  '.jpg',
+  '.gif',
+  '.svg',
+  '.ico',
+  '.woff2', // binaries
   '.json', // package-lock noise
 ]);
 

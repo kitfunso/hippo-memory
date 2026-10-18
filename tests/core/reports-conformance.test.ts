@@ -8,9 +8,20 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { updateStats } from '../../src/store/index-and-stats.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryReportsStore } from '../_helpers/in-memory-reports-store.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import {
-  replaceDetectedConflicts, appendConsolidationRun, resolveConflictKeeping, saveStoredVectors,
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type Outcome,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
+import {
+  replaceDetectedConflicts,
+  appendConsolidationRun,
+  resolveConflictKeeping,
+  saveStoredVectors,
 } from '../_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
@@ -35,17 +46,32 @@ function seed(dir: string): void {
   const b = (content: string, iso: string): MemoryEntry => at(createMemory(content, { tenantId: TENANT_B }), iso);
   const recentB = b('tenant b: the invoice run is tuesday', ago(HOUR / 2));
   const olderB = b('tenant b: the old invoice run', ago(5 * HOUR));
-  for (const e of [raw, newFact, oldFact, dangling, pinned, aged, recentB, olderB]) writeEntry(dir, e, { actor: 'cli' });
-  replaceDetectedConflicts(dir, [
-    { memory_a_id: pinned.id, memory_b_id: aged.id, reason: 'open', score: 0.9 },
-    { memory_a_id: recentB.id, memory_b_id: olderB.id, reason: 'resolved below', score: 0.8 },
-  ], NOW);
+  for (const e of [raw, newFact, oldFact, dangling, pinned, aged, recentB, olderB]) {
+    writeEntry(dir, e, { actor: 'cli' });
+  }
+  replaceDetectedConflicts(
+    dir,
+    [
+      { memory_a_id: pinned.id, memory_b_id: aged.id, reason: 'open', score: 0.9 },
+      { memory_a_id: recentB.id, memory_b_id: olderB.id, reason: 'resolved below', score: 0.8 },
+    ],
+    NOW,
+  );
   const resolved = listMemoryConflicts(dir).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
   resolveConflictKeeping(dir, TENANT_B, resolved.id, recentB.id);
-  saveStoredVectors(dir, [[pinned.id, [1, 2, 3, 4]], ['orphan', [0, 1, 0, 1]]], 'm');
+  saveStoredVectors(
+    dir,
+    [
+      [pinned.id, [1, 2, 3, 4]],
+      ['orphan', [0, 1, 0, 1]],
+    ],
+    'm',
+  );
   updateStats(dir, { remembered: 5, recalled: 3, forgotten: 1 });
-  for (let i = 52; i >= 2; i--) appendConsolidationRun(dir, { timestamp: ago(i * HOUR), decayed: i, merged: 0, removed: 1 });
+  for (let i = 52; i >= 2; i--) {
+    appendConsolidationRun(dir, { timestamp: ago(i * HOUR), decayed: i, merged: 0, removed: 1 });
+  }
 }
 
 async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
@@ -54,7 +80,8 @@ async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
   return sides.sqlite.outcomes;
 }
 
-const contents = (outcome: Outcome<MemoryEntry[]>): string[] => ('value' in outcome ? outcome.value.map((e) => e.content) : []);
+const contents = (outcome: Outcome<MemoryEntry[]>): string[] =>
+  'value' in outcome ? outcome.value.map((e) => e.content) : [];
 
 beforeAll(() => {
   fixture = seedTwoTenants();
@@ -95,7 +122,10 @@ describe('Reports.correctionEntries and rawEntries', () => {
   it('return the superseded rows, their successors and sources, and the raw rows, by created then id', async () => {
     const [corrections, raw] = await conforms([(r) => r.correctionEntries(), (r) => r.rawEntries()]);
     expect(contents(corrections)).toEqual([
-      'belief: the tier is 100', 'slack: the tier moved to 120', 'belief: replaced by a deleted row', 'belief: the tier is 120',
+      'belief: the tier is 100',
+      'slack: the tier moved to 120',
+      'belief: replaced by a deleted row',
+      'belief: the tier is 120',
     ]);
     expect(contents(raw)).toEqual(['slack: the tier moved to 120']);
   });

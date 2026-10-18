@@ -16,7 +16,15 @@ import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { onDb } from '../_helpers/store-worker-server.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, SESSION, seedPortBranches, seedTemplates, TENANT, type Store, type Templates,
+  CLEARED_ENV,
+  FAKE_NOW,
+  freshStore,
+  SESSION,
+  seedPortBranches,
+  seedTemplates,
+  TENANT,
+  type Store,
+  type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -30,20 +38,38 @@ const NO_PARTICLE = new Set(['mem_p_fill0', 'mem_p_noise']);
 function seedVectors(root: string, url: string): void {
   seedPortBranches(root);
   // SAFETY: the SELECT names one column, id, so each row has it.
-  const ids = onDb(root, (db) => db.prepare('SELECT id FROM memories ORDER BY id').all().map((r) => String((r as { id: unknown }).id)));
+  const ids = onDb(root, (db) =>
+    db
+      .prepare('SELECT id FROM memories ORDER BY id')
+      .all()
+      .map((r) => String((r as { id: unknown }).id)),
+  );
   const entries = loadEntriesByIds(root, ids);
   const index = Object.fromEntries(entries.map((e): [string, number[]] => [e.id, hashedVector(e.content)]));
   const identity = embeddingIndexIdentity(`openai:${MODEL}`);
   onDb(root, (db) => {
     upsertVectors(db, Object.entries(index), identity);
     setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
-    resetAllPhysicsState(db, entries.filter((e) => !NO_PARTICLE.has(e.id)), index, new Date(FAKE_NOW));
+    resetAllPhysicsState(
+      db,
+      entries.filter((e) => !NO_PARTICLE.has(e.id)),
+      index,
+      new Date(FAKE_NOW),
+    );
   });
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: url }, physics: { enabled: true } }));
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: url }, physics: { enabled: true } }),
+  );
 }
 
 type BandCase = readonly [string, Omit<RecallOptions, 'cliCore' | 'showRanked'>];
-interface CoreSetup { rank?: Partial<RankRecallOptions>; physics?: boolean; global?: boolean; sessionId?: string }
+interface CoreSetup {
+  rank?: Partial<RankRecallOptions>;
+  physics?: boolean;
+  global?: boolean;
+  sessionId?: string;
+}
 type CoreCase = readonly [string, string, CoreSetup];
 
 const BAND: readonly BandCase[] = [
@@ -53,17 +79,26 @@ const BAND: readonly BandCase[] = [
   ['physics', { query: 'deploy', mode: 'physics' }],
   ['scope team-alpha', { query: 'deploy', filter: { scope: 'team-alpha' } }],
   ['session goal boost', { query: 'deploy', boost: { sessionId: SESSION } }],
-  ['goal tag beats the session', { query: 'deploy', boost: { sessionId: SESSION, goalTag: 'goal-alpha' }, mode: 'hybrid' }],
+  [
+    'goal tag beats the session',
+    { query: 'deploy', boost: { sessionId: SESSION, goalTag: 'goal-alpha' }, mode: 'hybrid' },
+  ],
   ['fresh tail', { query: 'deploy', window: { freshTailCount: 1, freshTailSessionId: SESSION } }],
   ['overflow summary', { query: 'deploy', window: { limit: 2 } }],
   ['hybrid rollout limit 5', { query: 'rollout', mode: 'hybrid', window: { limit: 5 } }],
   ['LIKE path', { query: 'caf' }],
-  ['physics with session', { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, trace: { explain: true } }],
+  [
+    'physics with session',
+    { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, trace: { explain: true } },
+  ],
 ];
 
 const WIDE: readonly BandCase[] = [
   ['wide hybrid', { query: 'deploy' }],
-  ['wide physics with session', { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, window: { limit: 5 } }],
+  [
+    'wide physics with session',
+    { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, window: { limit: 5 } },
+  ],
   ['wide scoped', { query: 'rollout cluster', filter: { scope: 'team-alpha' } }],
 ];
 
@@ -84,7 +119,7 @@ const stable = (id: string): string => (id.startsWith('sem_') ? '<claim>' : id);
 let templates: Templates;
 let embeddings: HashedEmbeddings;
 
-const ctxOf = (s: Store): FullContext => (apiCtx(s.root, TENANT, adminActor('golden')));
+const ctxOf = (s: Store): FullContext => apiCtx(s.root, TENANT, adminActor('golden'));
 
 async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
   const s = freshStore(templates, 'local');
@@ -97,10 +132,24 @@ async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
 
 function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'boost'> {
   const search = {
-    usePhysics: c.physics === true, physicsConfig: loadConfig(s.root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2,
+    usePhysics: c.physics === true,
+    physicsConfig: loadConfig(s.root).physics,
+    multihop: false,
+    mmr: false,
+    mmrLambda: 0.7,
+    localBump: 1.2,
     explain: c.rank?.why === true,
   };
-  return { budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null, ...c.rank, search };
+  return {
+    budget: 4000,
+    cost: (r) => r.tokens,
+    window: { limit: 10 },
+    includeSuperseded: false,
+    explicitScope: null,
+    activeScope: null,
+    ...c.rank,
+    search,
+  };
 }
 
 describe('recall ranker goldens', () => {
@@ -157,7 +206,9 @@ describe('recall ranker goldens', () => {
         boost: { sessionId: c.sessionId },
         cliCore: {
           rank: rankOpts(s, c),
-          sources: c.global ? { root: s.globalRoot, store: sqliteStore(s.globalRoot), config: loadConfig(s.globalRoot) } : undefined,
+          sources: c.global
+            ? { root: s.globalRoot, store: sqliteStore(s.globalRoot), config: loadConfig(s.globalRoot) }
+            : undefined,
           show: (ranking) => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
             return { results: ranking.results, audit: [], tokens: 0 };

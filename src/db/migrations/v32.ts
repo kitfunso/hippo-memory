@@ -76,19 +76,19 @@ const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
         `;
 
 export const v32: Migration = {
-    version: 32,
-    up: (db) => {
-      // Process first-class object (living process map): it evolves via the v30 supersede path, each version recording
-      // change_summary and full steps (JSON).
-      // Combines the v31 tenant-match trigger pair with the v30 superseded_by self-FK; version is server-derived
-      // (predecessor + 1); only an active head closes.
-      if (!tableExists(db, 'processes')) {
-        db.exec(PROCESSES_TABLE);
-        db.exec(IDX_PROCESSES_TENANT_STATUS);
-        db.exec(IDX_PROCESSES_MEMORY);
-        db.exec(TRG_PROCESSES_TENANT_MATCH_INSERT);
-        db.exec(TRG_PROCESSES_TENANT_MATCH_UPDATE);
-        db.exec(TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE);
-      }
-    },
+  version: 32,
+  up: (db) => {
+    // Process first-class object (living process map): it evolves via the v30 supersede path, each version recording
+    // change_summary and full steps (JSON).
+    // Combines the v31 tenant-match trigger pair with the v30 superseded_by self-FK; version is server-derived
+    // (predecessor + 1); only an active head closes.
+    if (!tableExists(db, 'processes')) {
+      db.exec(PROCESSES_TABLE);
+      db.exec(IDX_PROCESSES_TENANT_STATUS);
+      db.exec(IDX_PROCESSES_MEMORY);
+      db.exec(TRG_PROCESSES_TENANT_MATCH_INSERT);
+      db.exec(TRG_PROCESSES_TENANT_MATCH_UPDATE);
+      db.exec(TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE);
+    }
+  },
 };

@@ -44,8 +44,7 @@ const contents = (out: Array<{ entry: { content: string } }>) => out.map((r) => 
 describe('jev reranker', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   const inputs = () => [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
-  const many = (n: number): SearchResult[] =>
-    Array.from({ length: n }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
+  const many = (n: number): SearchResult[] => Array.from({ length: n }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -62,9 +61,7 @@ describe('jev reranker', () => {
   });
 
   it('orders candidates by the returned probabilities, in one batched request', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
     const out = await freshReranker()('which one', inputs());
 
     expect(contents(out)).toEqual(['beta', 'gamma', 'alpha']);
@@ -206,9 +203,7 @@ describe('jev reranker', () => {
 
   it('sends HIPPO_JEV_MODEL when it is set', async () => {
     vi.stubEnv('HIPPO_JEV_MODEL', 'jev-override-sentinel');
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
     await freshReranker()('q', inputs());
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.model).toBe('jev-override-sentinel');
@@ -243,7 +238,9 @@ describe('jev reranker reply size cap', () => {
         pulled++;
         controller.enqueue(new Uint8Array(64 * 1024).fill(0x20));
       },
-      cancel() { cancelled = true; },
+      cancel() {
+        cancelled = true;
+      },
     });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
     const items = [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];

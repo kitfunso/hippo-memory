@@ -7,12 +7,18 @@ import { join } from 'node:path';
 const SRC = join(import.meta.dirname, '..', '..', 'src');
 
 function tsFilesUnder(dir: string): string[] {
-  return readdirSync(join(SRC, dir), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts')).map((f) => `${dir}/${f.replaceAll('\\', '/')}`);
+  return readdirSync(join(SRC, dir), { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.ts'))
+    .map((f) => `${dir}/${f.replaceAll('\\', '/')}`);
 }
 
 /** `file:line` of each line in `files` that matches `re`. */
 function linesMatching(files: readonly string[], re: RegExp): string[] {
-  return files.flatMap((file) => readFileSync(join(SRC, file), 'utf8').split('\n').flatMap((line, i) => (re.test(line) ? [`${file}:${i + 1}`] : [])));
+  return files.flatMap((file) =>
+    readFileSync(join(SRC, file), 'utf8')
+      .split('\n')
+      .flatMap((line, i) => (re.test(line) ? [`${file}:${i + 1}`] : [])),
+  );
 }
 
 describe('surface reach into the store', () => {

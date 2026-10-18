@@ -28,7 +28,11 @@ function stderrText(): string {
   return stderr.mock.calls.map((c) => String(c[0])).join('');
 }
 
-async function callTool(name: string, args: Record<string, string>, requestId?: string): Promise<{ status: number; body: RpcReply }> {
+async function callTool(
+  name: string,
+  args: Record<string, string>,
+  requestId?: string,
+): Promise<{ status: number; body: RpcReply }> {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (requestId) headers.set('x-request-id', requestId);
   const res = await fetch(`${handle.url}/mcp`, {
@@ -67,7 +71,9 @@ describe('POST /mcp error replies', () => {
     expect(body.error?.message).toContain('internal server error');
     expect(body.error?.message).toContain('req-redact-1');
     expect(body.error?.data?.requestId).toBe('req-redact-1');
-    expect(stderrText()).toMatch(/\[hippo\] error: mcp request \(tools\/call [^)]*\) failed: .*memory_conflicts.* requestId=req-redact-1/);
+    expect(stderrText()).toMatch(
+      /\[hippo\] error: mcp request \(tools\/call [^)]*\) failed: .*memory_conflicts.* requestId=req-redact-1/,
+    );
     // The class and stack say where it was thrown, as the HTTP failure line does.
     expect(stderrText()).toMatch(/mcp request \(.*\) failed: .* errorClass=\w*Error stack=.*\s+at /);
   });

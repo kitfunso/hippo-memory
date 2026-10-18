@@ -231,7 +231,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
       String(row.timestamp ?? new Date().toISOString()),
       Number(row.decayed ?? 0),
       Number(row.merged ?? 0),
-      Number(row.removed ?? 0)
+      Number(row.removed ?? 0),
     );
   }
   // Same cap as every later sleep, so stats.json and the table agree from the first open.

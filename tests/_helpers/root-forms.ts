@@ -34,7 +34,11 @@ import {
   reviewCardAt,
 } from '../../src/store/cards.js';
 import { replaceDetectedConflictsAt } from '../../src/store/conflicts.js';
-import { commitInChunksAt, deleteEntriesOneByOneAt, memoriesBackingObjectsAt } from '../../src/store/delete-and-batch.js';
+import {
+  commitInChunksAt,
+  deleteEntriesOneByOneAt,
+  memoriesBackingObjectsAt,
+} from '../../src/store/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../src/store/dormant.js';
 import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
 import {
@@ -55,7 +59,11 @@ import {
   resumeGoalAt,
   suspendGoalAt,
 } from '../../src/store/goals.js';
-import { loadPendingExtractionTenantsAt, markGraphDirtyAt, markPendingProcessedUpToAt } from '../../src/store/graph-queue.js';
+import {
+  loadPendingExtractionTenantsAt,
+  markGraphDirtyAt,
+  markPendingProcessedUpToAt,
+} from '../../src/store/graph-queue.js';
 import {
   loadEntitiesByIdsAt,
   loadEntitiesByMemoryIdAt,
@@ -159,8 +167,12 @@ export function loadAmbientCandidates(
   recall?: AmbientRecallRequest,
   origins?: RecentOrigins,
 ): AmbientLoadResult {
-  const judge = (e: MemoryEntry) => (admit(e) ? null : 'admission' as const);
-  return onHandle(hippoRoot, (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, judge, recall, origins), openStore);
+  const judge = (e: MemoryEntry) => (admit(e) ? null : ('admission' as const));
+  return onHandle(
+    hippoRoot,
+    (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, judge, recall, origins),
+    openStore,
+  );
 }
 
 export function loadContextCandidates(
@@ -277,14 +289,26 @@ export function listMemoryConflicts(hippoRoot: string, status: string = 'open', 
 
 /** Keeps `keepId` and weakens the other member through the store port, as a plain `hippo resolve` does; for a
  * fixture that needs a resolved conflict and no api checks. */
-export function resolveConflictKeeping(hippoRoot: string, tenantId: string, conflictId: number, keepId: string): boolean {
+export function resolveConflictKeeping(
+  hippoRoot: string,
+  tenantId: string,
+  conflictId: number,
+  keepId: string,
+): boolean {
   const conflicts = sqliteSyncStore(hippoRoot).conflicts;
   const row = conflicts.get(tenantId, conflictId);
   if (!row) return false;
   const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };
   const b = { id: row.conflict.memory_b_id, scope: row.b?.scope ?? null };
   const [keep, loser] = keepId === a.id ? [a, b] : [b, a];
-  return conflicts.resolve(tenantId, { conflictId, keep, loser, fate: { kind: 'weaken' }, actor: CLI_ACTOR, reason: '' });
+  return conflicts.resolve(tenantId, {
+    conflictId,
+    keep,
+    loser,
+    fate: { kind: 'weaken' },
+    actor: CLI_ACTOR,
+    reason: '',
+  });
 }
 
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
@@ -297,7 +321,11 @@ export function deleteEntry(
   opts?: { actor?: string; reason?: string; automatic?: boolean },
 ): boolean {
   const targets = [{ id, reason: opts?.reason ?? '' }];
-  return onHandle(hippoRoot, (db) => deleteEntriesOneByOneAt(db, { hippoRoot }, targets, opts ?? {})[0] ?? false, openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => deleteEntriesOneByOneAt(db, { hippoRoot }, targets, opts ?? {})[0] ?? false,
+    openStore,
+  );
 }
 
 export function loadDormantMemories(
@@ -331,7 +359,11 @@ export function countSessionRawMemories(
   ownScope?: string,
   origins?: readonly string[],
 ): number {
-  return onHandle(hippoRoot, (db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins),
+    openStore,
+  );
 }
 
 export function loadFreshRawMemories(
@@ -428,7 +460,11 @@ export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retri
   return onHandle(hippoRoot, (db) => saveIndexAt(db, index), openStore);
 }
 
-export function updateStatsUnlessBusy(hippoRoot: string, delta: Parameters<typeof updateStatsUnlessBusyAt>[2], committed: string): void {
+export function updateStatsUnlessBusy(
+  hippoRoot: string,
+  delta: Parameters<typeof updateStatsUnlessBusyAt>[2],
+  committed: string,
+): void {
   onHandle(hippoRoot, (db) => updateStatsUnlessBusyAt(db, { hippoRoot }, delta, committed), openStore);
 }
 
@@ -500,11 +536,7 @@ export function loadRecallEntries(
   return onHandle(hippoRoot, (db) => loadRecallEntriesAt(db, query, options), openStore);
 }
 
-export function loadActiveTaskSnapshot(
-  hippoRoot: string,
-  tenantId: string,
-  key?: ContinuityKey,
-): TaskSnapshot | null {
+export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
   return onHandle(hippoRoot, (db) => loadActiveTaskSnapshotAt(db, { hippoRoot }, tenantId, key), openStore);
 }
 
@@ -611,14 +643,14 @@ export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector
 export function wmPush(
   hippoRoot: string,
   opts: {
-  scope: string;
-  content: string;
-  importance?: number;
-  sessionId?: string;
-  taskId?: string;
-  metadata?: JsonObject;
-  tenantId?: string;
-},
+    scope: string;
+    content: string;
+    importance?: number;
+    sessionId?: string;
+    taskId?: string;
+    metadata?: JsonObject;
+    tenantId?: string;
+  },
 ): number {
   return onHandle(hippoRoot, (db) => wmPushAt(db, opts), openStore);
 }
@@ -626,11 +658,11 @@ export function wmPush(
 export function wmRead(
   hippoRoot: string,
   opts?: {
-  scope?: string;
-  sessionId?: string;
-  limit?: number;
-  tenantId?: string;
-},
+    scope?: string;
+    sessionId?: string;
+    limit?: number;
+    tenantId?: string;
+  },
 ): WorkingMemoryItem[] {
   return onHandle(hippoRoot, (db) => wmReadAt(db, opts), openStore);
 }
@@ -638,10 +670,10 @@ export function wmRead(
 export function wmClear(
   hippoRoot: string,
   opts?: {
-  scope?: string;
-  sessionId?: string;
-  tenantId?: string;
-},
+    scope?: string;
+    sessionId?: string;
+    tenantId?: string;
+  },
 ): number {
   return onHandle(hippoRoot, (db) => wmClearAt(db, opts), openStore);
 }
@@ -655,7 +687,9 @@ export function githubEventRecord(hippoRoot: string, idempotencyKey: string): Co
 }
 
 export function markGitHubEventSeen(hippoRoot: string, entry: GitHubEventLogEntry): void {
-  onHandle(hippoRoot, (db) => { markGitHubEventSeenAt(db, entry); });
+  onHandle(hippoRoot, (db) => {
+    markGitHubEventSeenAt(db, entry);
+  });
 }
 
 export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
@@ -663,7 +697,9 @@ export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorE
 }
 
 export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId: string | null): void {
-  onHandle(hippoRoot, (db) => { markSlackEventSeenAt(db, eventId, memoryId); });
+  onHandle(hippoRoot, (db) => {
+    markSlackEventSeenAt(db, eventId, memoryId);
+  });
 }
 
 export function commitInChunks(

@@ -54,15 +54,33 @@ describe('mcp hippo_context scope filter', () => {
     const old = createMemory('the deploy runbook lives in the wiki');
     old.superseded_by = current.id;
     for (const e of [current, other, old]) writeEntry(home, e);
-    saveActiveTaskSnapshot(home, 'default', { task: 'Parity snapshot task', summary: 'snapshot summary', next_step: 'snapshot next step', session_id: 'sess-ctx-text', source: 'test' });
-    appendSessionEvent(home, 'default', { session_id: 'sess-ctx-text', event_type: 'note', content: 'parity trail event', source: 'test' });
-    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sess-ctx-text', summary: 'parity handoff summary', nextAction: 'parity handoff next action' });
+    saveActiveTaskSnapshot(home, 'default', {
+      task: 'Parity snapshot task',
+      summary: 'snapshot summary',
+      next_step: 'snapshot next step',
+      session_id: 'sess-ctx-text',
+      source: 'test',
+    });
+    appendSessionEvent(home, 'default', {
+      session_id: 'sess-ctx-text',
+      event_type: 'note',
+      content: 'parity trail event',
+      source: 'test',
+    });
+    saveSessionHandoff(home, 'default', {
+      version: 1,
+      sessionId: 'sess-ctx-text',
+      summary: 'parity handoff summary',
+      nextAction: 'parity handoff next action',
+    });
 
     // Outside git, so the auto query is empty and the text does not follow the host checkout.
     const cwd = process.cwd();
     process.chdir(home);
     try {
-      const text = extractText(await callTool(5, 'hippo_context', { budget: 4000 }, { hippoRoot: home, tenantId: 'default', actor: 'mcp' }));
+      const text = extractText(
+        await callTool(5, 'hippo_context', { budget: 4000 }, { hippoRoot: home, tenantId: 'default', actor: 'mcp' }),
+      );
       expect(text).toContain('## Active Task Snapshot');
       expect(text).toContain('## Session Handoff');
       expect(text).toContain('parity handoff summary');
@@ -85,11 +103,16 @@ describe('mcp hippo_context scope filter', () => {
       source: 'test',
     });
 
-    const res = await callTool(0, 'hippo_context', { budget: 0 }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      0,
+      'hippo_context',
+      { budget: 0 },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
 
     expect(extractText(res)).toBe('Done.');
     expect(readEntry(home, memory.id)?.retrieval_count).toBe(0);
@@ -107,11 +130,16 @@ describe('mcp hippo_context scope filter', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const res = await callTool(1, 'hippo_context', {}, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      1,
+      'hippo_context',
+      {},
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).not.toContain('private memory secret');
     expect(text).not.toContain('Private task that must not leak');
@@ -128,11 +156,16 @@ describe('mcp hippo_context scope filter', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const res = await callTool(2, 'hippo_context', { scope: 'slack:private:Csecret' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      2,
+      'hippo_context',
+      { scope: 'slack:private:Csecret' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('Private task');
   });
@@ -148,11 +181,16 @@ describe('mcp hippo_context scope filter', () => {
       origin_project: 'proj-b',
     });
 
-    const res = await callTool(3, 'hippo_context', {}, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      3,
+      'hippo_context',
+      {},
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).not.toContain('BRAVO deploykey fact from another project');
   });
@@ -169,11 +207,16 @@ describe('mcp hippo_context scope filter', () => {
       origin_project: '',
     });
 
-    const res = await callTool(4, 'hippo_context', {}, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      4,
+      'hippo_context',
+      {},
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).not.toContain('sk_vendor_deadbeef123456');
     expect(text).not.toContain('sk_vendor_feedface654321');

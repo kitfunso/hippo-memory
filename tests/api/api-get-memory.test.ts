@@ -5,7 +5,12 @@ import { rmSync } from 'node:fs';
 import { getMemory } from '../../src/api/memories/memories.js';
 import { archiveRaw } from '../../src/api/memories/promote.js';
 import { adminActor } from '../../src/api/types.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  DEFAULT_HALF_LIFE_DAYS,
+  type CreateMemoryOptions,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
@@ -31,8 +36,17 @@ function ctxAt(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, TENANT, adminActor('test'));
 }
 
-function seed(hippoRoot: string, id: string, options: Partial<CreateMemoryOptions> = {}, fields: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(`row ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT, ...options }), id, ...fields };
+function seed(
+  hippoRoot: string,
+  id: string,
+  options: Partial<CreateMemoryOptions> = {},
+  fields: Partial<MemoryEntry> = {},
+): MemoryEntry {
+  const entry = {
+    ...createMemory(`row ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT, ...options }),
+    id,
+    ...fields,
+  };
   writeEntry(hippoRoot, entry);
   return entry;
 }
@@ -82,7 +96,10 @@ describe('getMemory answers what readEntry answers', () => {
 
   it('a dormant row, which lives outside the memories table, reads as null', async () => {
     const r = root();
-    const entry = { ...createMemory('faded row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }), id: 'mem_dormant' };
+    const entry = {
+      ...createMemory('faded row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }),
+      id: 'mem_dormant',
+    };
     const db = openStore(r);
     try {
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: '2026-01-01T00:00:00.000Z' });

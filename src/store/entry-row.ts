@@ -1,7 +1,12 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import type { MemoryEntry } from '../core/memory.js';
 import {
-  type DatabaseSyncLike, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift, setFtsInSync,
+  type DatabaseSyncLike,
+  ftsRowCounts,
+  openHippoDb,
+  isFtsAvailable,
+  repairFtsDrift,
+  setFtsInSync,
 } from '../db/index.js';
 import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
@@ -33,18 +38,42 @@ export function upsertMemoryRow(db: ReturnType<typeof openHippoDb>, entry: Memor
 
 /** The columns a row write sets, in memoryRowValues' order; the upsert and the batch update share it. */
 const MEMORY_ROW_COLUMNS = [
-  'id', 'created', 'last_retrieved', 'retrieval_count', 'strength', 'half_life_days', 'layer',
-  'tags_json', 'emotional_valence', 'schema_fit', 'source', 'outcome_score',
-  'outcome_positive', 'outcome_negative',
-  'conflicts_with_json', 'pinned', 'confidence', 'content',
-  'parents_json', 'starred',
-  'trace_outcome', 'source_session_id',
-  'valid_from', 'superseded_by',
+  'id',
+  'created',
+  'last_retrieved',
+  'retrieval_count',
+  'strength',
+  'half_life_days',
+  'layer',
+  'tags_json',
+  'emotional_valence',
+  'schema_fit',
+  'source',
+  'outcome_score',
+  'outcome_positive',
+  'outcome_negative',
+  'conflicts_with_json',
+  'pinned',
+  'confidence',
+  'content',
+  'parents_json',
+  'starred',
+  'trace_outcome',
+  'source_session_id',
+  'valid_from',
+  'superseded_by',
   'extracted_from',
-  'dag_level', 'dag_parent_id',
-  'kind', 'scope', 'owner', 'artifact_ref',
-  'tenant_id', 'origin_project',
-  'descendant_count', 'earliest_at', 'latest_at',
+  'dag_level',
+  'dag_parent_id',
+  'kind',
+  'scope',
+  'owner',
+  'artifact_ref',
+  'tenant_id',
+  'origin_project',
+  'descendant_count',
+  'earliest_at',
+  'latest_at',
   'dag_level_3_built_at',
 ] as const;
 
@@ -63,7 +92,7 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
   for (const chunk of chunked(entries, rowsPerStatement(MEMORY_ROW_COLUMNS.length))) {
     db.prepare(
       `WITH v(${MEMORY_ROW_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, MEMORY_ROW_COLUMNS.length)}) ` +
-      `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
+        `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
     ).run(...chunk.flatMap(memoryRowValues));
   }
 }
@@ -127,7 +156,7 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
     db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
       entry.id,
       entry.content,
-      entry.tags.join(' ')
+      entry.tags.join(' '),
     );
   } catch (err) {
     markFtsDrifted(db);

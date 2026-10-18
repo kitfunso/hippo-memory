@@ -24,7 +24,12 @@ function globalContents(): string[] {
 }
 
 async function refusal(fn: () => Promise<MemoryEntry | null>): Promise<BadRequestError> {
-  try { await fn(); } catch (e) { if (e instanceof BadRequestError) return e; throw e; }
+  try {
+    await fn();
+  } catch (e) {
+    if (e instanceof BadRequestError) return e;
+    throw e;
+  }
   throw new Error('expected a BadRequestError, got no throw');
 }
 
@@ -56,7 +61,9 @@ describe('share and promote refuse personal rows', () => {
   it('promote refuses a personal row with a 400 and the exact text; a team row still promotes', async () => {
     const err = await refusal(() => copyToGlobal(hippoRoot, mine.id, { owner: 'alice' }));
     expect(err.status).toBe(400);
-    expect(err.message).toBe(`Refusing to promote ${mine.id}: it is a personal memory and stays with its owner on this server.`);
+    expect(err.message).toBe(
+      `Refusing to promote ${mine.id}: it is a personal memory and stays with its owner on this server.`,
+    );
     expect((await copyToGlobal(hippoRoot, team.id)).content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
@@ -64,7 +71,9 @@ describe('share and promote refuse personal rows', () => {
   it('share refuses a personal row with a 400 and the exact text; a team row still shares', async () => {
     const err = await refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id));
     expect(err.status).toBe(400);
-    expect(err.message).toBe(`Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`);
+    expect(err.message).toBe(
+      `Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`,
+    );
     expect((await shareMemory(...sharingStores(hippoRoot), team.id))?.content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });

@@ -60,7 +60,9 @@ describe('startStdioLoop, in process', () => {
       JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
       JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
       JSON.stringify({
-        jsonrpc: '2.0', id: 3, method: 'tools/call',
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
         params: { name: 'hippo_remember', arguments: { text: 'the staging queue drains at midnight' } },
       }),
     );
@@ -76,8 +78,9 @@ describe('startStdioLoop, in process', () => {
     const db = openHippoDb(join(dir, 'global'));
     try {
       expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get<{ n: number }>().n).toBe(1);
-      expect(db.prepare('SELECT content FROM memories').get<{ content: string }>().content)
-        .toBe('the staging queue drains at midnight');
+      expect(db.prepare('SELECT content FROM memories').get<{ content: string }>().content).toBe(
+        'the staging queue drains at midnight',
+      );
     } finally {
       closeHippoDb(db);
     }

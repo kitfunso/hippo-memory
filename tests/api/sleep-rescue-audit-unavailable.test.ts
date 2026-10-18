@@ -22,7 +22,12 @@ function condemned(content: string): MemoryEntry {
   const created = new Date(NOW.getTime() - 3650 * 86_400_000).toISOString();
   const entry: MemoryEntry = {
     ...createMemory(content, { layer: Layer.Semantic, tenantId: 'ta' }),
-    created, last_retrieved: created, valid_from: created, half_life_days: 1, retrieval_count: 0, pinned: false,
+    created,
+    last_retrieved: created,
+    valid_from: created,
+    half_life_days: 1,
+    retrieval_count: 0,
+    pinned: false,
   };
   return { ...entry, strength: calculateStrength(entry, NOW) };
 }
@@ -31,8 +36,14 @@ describe('sleep rescue audit', () => {
   it('warns with the error class when the audit store will not open, and still reports the unaudited rescues', async () => {
     const root = makeRoot('rescue-audit');
     roots.push(root);
-    writeFileSync(join(root, 'config.json'), JSON.stringify({ memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false } }));
-    writeEntriesTogether(root, [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemned('w'.repeat(len))));
+    writeFileSync(
+      join(root, 'config.json'),
+      JSON.stringify({ memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false } }),
+    );
+    writeEntriesTogether(
+      root,
+      [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemned('w'.repeat(len))),
+    );
     // The sleep-count write lands just before the rescue audit; stamping the store for a newer binary there makes the audit's open refuse.
     const db = openHippoDb(root);
     try {
@@ -48,7 +59,15 @@ describe('sleep rescue audit', () => {
     const result = await consolidate(root, { now: NOW });
 
     const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
-    expect(lines.some((l) => l.includes('warn: mv_rescue audit unavailable: hippo-memory: this database requires') && l.includes('errorClass=IncompatibleBinaryError'))).toBe(true);
-    expect(result.details).toContain('  ⚠️ memory-value: mv_rescue audit unavailable this cycle (3 rescues not audited)');
+    expect(
+      lines.some(
+        (l) =>
+          l.includes('warn: mv_rescue audit unavailable: hippo-memory: this database requires') &&
+          l.includes('errorClass=IncompatibleBinaryError'),
+      ),
+    ).toBe(true);
+    expect(result.details).toContain(
+      '  ⚠️ memory-value: mv_rescue audit unavailable this cycle (3 rescues not audited)',
+    );
   });
 });

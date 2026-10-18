@@ -4,8 +4,17 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { selectAllEntries } from '../../src/store/entry-reads.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.js';
 import {
-  entryAfterOutcome, ownScopeTouches, rejectionDigest, RejectedValueError, type AppendAuditOpts, type EntryTarget,
-  type EntryWrite, type EntryWrites, type HippoStore, type MemoryEntry, type RawArchive,
+  entryAfterOutcome,
+  ownScopeTouches,
+  rejectionDigest,
+  RejectedValueError,
+  type AppendAuditOpts,
+  type EntryTarget,
+  type EntryWrite,
+  type EntryWrites,
+  type HippoStore,
+  type MemoryEntry,
+  type RawArchive,
 } from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
@@ -33,7 +42,11 @@ export interface InMemoryEntryWritesStore extends StoreSide {
   /** The ids of the raw rows the tenant holds under the ref, in the order they were written. */
   readonly rawIdsFor: (artifactRef: string, tenantId: string) => string[];
   /** Archives every id in one staged write, with `companion` run before it commits: no reach check, and one failed id drops them all. */
-  readonly archiveAllWith: (ids: readonly string[], by: Pick<RawArchive, 'actor' | 'reason'>, companion: () => void) => Promise<void>;
+  readonly archiveAllWith: (
+    ids: readonly string[],
+    by: Pick<RawArchive, 'actor' | 'reason'>,
+    companion: () => void,
+  ) => Promise<void>;
   /** Runs `fn` on a staged copy of the rows and commits them with its audit rows only when it returns. */
   readonly stage: <T>(actor: string, fn: (tx: Tx) => T) => Promise<T>;
   /** The guard's tombstones by `tombstoneKey`, shared so a store built on this one adds and lifts them. */
@@ -61,9 +74,17 @@ function copyRows(hippoRoot: string): CopiedRows {
     const memories = new Map(selectAllEntries(db).map((entry): [string, MemoryEntry] => [entry.id, entry]));
     // SAFETY: the SELECT names these four columns.
     const rows = db.prepare('SELECT tenant_id, digest, reason, rejected_at FROM rejected_values').all() as {
-      tenant_id: string; digest: string; reason: string | null; rejected_at: string;
+      tenant_id: string;
+      digest: string;
+      reason: string | null;
+      rejected_at: string;
     }[];
-    const tombstones = new Map(rows.map((r): [string, Tombstone] => [tombstoneKey(r.tenant_id, r.digest), { reason: r.reason, rejectedAt: r.rejected_at }]));
+    const tombstones = new Map(
+      rows.map((r): [string, Tombstone] => [
+        tombstoneKey(r.tenant_id, r.digest),
+        { reason: r.reason, rejectedAt: r.rejected_at },
+      ]),
+    );
     return { memories, tombstones };
   } finally {
     closeHippoDb(db);
@@ -76,7 +97,13 @@ export function markParentDirty(tx: Tx, parentId: string, tenantId: string, acto
   if (!parent || parent.tenant_id !== tenantId || (parent.dag_level !== 2 && parent.dag_level !== 3)) return;
   if (parent.summary_dirty === true || parent.kind === 'archived') return;
   tx.rows.set(parentId, { ...parent, summary_dirty: true });
-  tx.audit.push({ tenantId, actor, op: 'summary_marked_dirty', targetId: parentId, metadata: { dag_level: parent.dag_level, source: 'E2' } });
+  tx.audit.push({
+    tenantId,
+    actor,
+    op: 'summary_marked_dirty',
+    targetId: parentId,
+    metadata: { dag_level: parent.dag_level, source: 'E2' },
+  });
 }
 
 function inReach(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
@@ -98,15 +125,33 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
   /** An id another tenant holds is refused; a same-id write that keeps its content passes a tombstone, one that brings it in is refused. */
   const put = (tx: Tx, entry: MemoryEntry, actor: string): void => {
     const stored = tx.rows.get(entry.id);
-    if (stored && stored.tenant_id !== entry.tenant_id) throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
+    if (stored && stored.tenant_id !== entry.tenant_id) {
+      throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
+    }
     const digest = rejectionDigest(entry.content);
     const tombstone = tombstones.get(tombstoneKey(entry.tenant_id, digest));
     const keepsContent = stored !== undefined && rejectionDigest(stored.content) === digest;
     if (tombstone && !keepsContent) {
-      throw new RejectedValueError({ digest, tenantId: entry.tenant_id, entryId: entry.id, reason: tombstone.reason, rejectedAt: tombstone.rejectedAt });
+      throw new RejectedValueError({
+        digest,
+        tenantId: entry.tenant_id,
+        entryId: entry.id,
+        reason: tombstone.reason,
+        rejectedAt: tombstone.rejectedAt,
+      });
     }
-    tx.rows.set(entry.id, { ...structuredClone(entry), origin_project: entry.origin_project ?? null, summary_dirty: stored?.summary_dirty ?? false });
-    tx.audit.push({ tenantId: entry.tenant_id, actor, op: 'remember', targetId: entry.id, metadata: { kind: entry.kind ?? 'distilled', scope: entry.scope ?? null } });
+    tx.rows.set(entry.id, {
+      ...structuredClone(entry),
+      origin_project: entry.origin_project ?? null,
+      summary_dirty: stored?.summary_dirty ?? false,
+    });
+    tx.audit.push({
+      tenantId: entry.tenant_id,
+      actor,
+      op: 'remember',
+      targetId: entry.id,
+      metadata: { kind: entry.kind ?? 'distilled', scope: entry.scope ?? null },
+    });
     if (entry.dag_parent_id) markParentDirty(tx, entry.dag_parent_id, entry.tenant_id, actor);
   };
 
@@ -118,9 +163,15 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
       result = fn(tx);
     } catch (err) {
       if (err instanceof RejectedValueError) {
-        await base.store.appendAuditEvents([{
-          tenantId: err.tenantId, actor, op: 'reject_refusal', targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason },
-        }]);
+        await base.store.appendAuditEvents([
+          {
+            tenantId: err.tenantId,
+            actor,
+            op: 'reject_refusal',
+            targetId: err.entryId,
+            metadata: { digest: err.digest, reason: err.reason },
+          },
+        ]);
       }
       throw err;
     }
@@ -137,7 +188,11 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     });
   };
 
-  const archiveRow = (tx: Tx, row: MemoryEntry, { actor, reason }: Pick<RawArchive, 'actor' | 'reason'>): ArchivedRow => {
+  const archiveRow = (
+    tx: Tx,
+    row: MemoryEntry,
+    { actor, reason }: Pick<RawArchive, 'actor' | 'reason'>,
+  ): ArchivedRow => {
     if (row.kind !== 'raw') throw new BadRequestError(`memory ${row.id} is not raw (kind=${row.kind})`);
     const archivedAt = new Date().toISOString();
     tx.rows.delete(row.id);
@@ -158,7 +213,9 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
   };
 
   const rawIdsFor: InMemoryEntryWritesStore['rawIdsFor'] = (artifactRef, tenantId) =>
-    [...memories.values()].filter((e) => e.artifact_ref === artifactRef && e.tenant_id === tenantId && e.kind === 'raw').map((e) => e.id);
+    [...memories.values()]
+      .filter((e) => e.artifact_ref === artifactRef && e.tenant_id === tenantId && e.kind === 'raw')
+      .map((e) => e.id);
 
   const archiveAllWith: InMemoryEntryWritesStore['archiveAllWith'] = async (ids, by, companion) => {
     const rows = await inTx(by.actor, (tx) => {
@@ -192,7 +249,13 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
       return inTx(pin.actor, (tx) => {
         const updated = { ...inReach(tx, pin, pin.id), pinned: pin.pinned };
         put(tx, updated, pin.actor);
-        tx.audit.push({ tenantId: pin.tenantId, actor: pin.actor, op: 'pin', targetId: pin.id, metadata: { pinned: pin.pinned } });
+        tx.audit.push({
+          tenantId: pin.tenantId,
+          actor: pin.actor,
+          op: 'pin',
+          targetId: pin.id,
+          metadata: { pinned: pin.pinned },
+        });
         return structuredClone(tx.rows.get(pin.id)!);
       });
     },
@@ -200,7 +263,9 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
       const { tenantId, actor, oldId, successor } = write;
       await inTx(actor, (tx) => {
         const old = inReach(tx, write, oldId);
-        if ((old.superseded_by ?? null) !== null) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
+        if ((old.superseded_by ?? null) !== null) {
+          throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
+        }
         tx.rows.set(oldId, { ...old, superseded_by: successor.id });
         if (old.dag_parent_id) markParentDirty(tx, old.dag_parent_id, tenantId, actor);
         put(tx, successor, actor);
@@ -225,14 +290,28 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     ...base.store,
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
-      const rows = [...memories.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId));
+      const rows = [...memories.values()].filter(
+        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+      );
       const cmp = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
-      return structuredClone(rows.sort((a, b) => cmp(a.created, b.created) || cmp(a.content, b.content) || cmp(a.id, b.id)));
+      return structuredClone(
+        rows.sort((a, b) => cmp(a.created, b.created) || cmp(a.content, b.content) || cmp(a.id, b.id)),
+      );
     },
     entryWrites,
   };
   return {
-    store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten, writeWith, archiveWith, rawIdsFor, archiveAllWith,
-    stage: inTx, tombstones, rowById: (id) => structuredClone(memories.get(id)), allRows: () => structuredClone([...memories.values()]),
+    store,
+    auditRows: base.auditRows,
+    archived: () => structuredClone(archived),
+    forgotten: () => forgotten,
+    writeWith,
+    archiveWith,
+    rawIdsFor,
+    archiveAllWith,
+    stage: inTx,
+    tombstones,
+    rowById: (id) => structuredClone(memories.get(id)),
+    allRows: () => structuredClone([...memories.values()]),
   };
 }

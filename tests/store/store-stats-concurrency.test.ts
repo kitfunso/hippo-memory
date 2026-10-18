@@ -34,8 +34,12 @@ function runWorkers(specs: ReadonlyArray<{ field: string; iterations: number }>)
       return new Promise<void>((resolve, reject) => {
         const child = spawn(process.execPath, [file], { stdio: ['ignore', 'ignore', 'pipe'] });
         let stderr = '';
-        child.stderr.on('data', (chunk) => { stderr += String(chunk); });
-        child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`worker ${i} exited ${code}: ${stderr}`))));
+        child.stderr.on('data', (chunk) => {
+          stderr += String(chunk);
+        });
+        child.on('exit', (code) =>
+          code === 0 ? resolve() : reject(new Error(`worker ${i} exited ${code}: ${stderr}`)),
+        );
       });
     }),
   );

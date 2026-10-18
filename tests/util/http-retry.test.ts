@@ -2,7 +2,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs, parseRetryAfterMs } from '../../src/util/http-retry.js';
+import {
+  fetchWithRetry,
+  isRetryableStatus,
+  llmTimeoutMs,
+  llmTotalMs,
+  parseRetryAfterMs,
+} from '../../src/util/http-retry.js';
 import { classifyTransportFailure } from '../../src/cli/client.js';
 
 afterEach(() => {
@@ -58,7 +64,12 @@ describe('fetchWithRetry against a local server', () => {
   it('ends a stalled write with a TimeoutError instead of hanging, and never sends it twice', async () => {
     const { url, hits } = await startServer([null]);
     const deadlines = vi.spyOn(AbortSignal, 'timeout');
-    const err = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 200 }).then(() => { throw new Error('the stalled write resolved'); }, (e: Error) => e);
+    const err = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 200 }).then(
+      () => {
+        throw new Error('the stalled write resolved');
+      },
+      (e: Error) => e,
+    );
     expect(err.name).toBe('TimeoutError');
     // The one attempt ran under the caller's limit, so the wait is that limit and no more.
     expect(deadlines.mock.calls).toEqual([[200]]);
@@ -70,7 +81,17 @@ describe('fetchWithRetry against a local server', () => {
   it('retries a GET whose connection the server dropped, and returns the answer that follows', async () => {
     const { url, hits } = await startServer(['reset', 'reset', { status: 200, body: 'ok' }]);
     const sleeps: number[] = [];
-    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, random: () => 0, sleep: async (ms) => { sleeps.push(ms); } });
+    const res = await fetchWithRetry(
+      url,
+      {},
+      {
+        timeoutMs: 2000,
+        random: () => 0,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    );
     expect(await res.text()).toBe('ok');
     expect(hits()).toBe(3);
     // The same backoff a 5xx gets.
@@ -86,14 +107,23 @@ describe('fetchWithRetry against a local server', () => {
 
   it('gives up on a dropped connection after the attempt cap and throws the transport error', async () => {
     const { url, hits } = await startServer(['reset']);
-    const err = await fetchWithRetry(url, { method: 'HEAD' }, { timeoutMs: 2000, ...noSleep }).then(() => { throw new Error('the dropped HEAD resolved'); }, (e: Error) => e);
+    const err = await fetchWithRetry(url, { method: 'HEAD' }, { timeoutMs: 2000, ...noSleep }).then(
+      () => {
+        throw new Error('the dropped HEAD resolved');
+      },
+      (e: Error) => e,
+    );
     expect(classifyTransportFailure(err)).toBe('delivery-unknown');
     expect(hits()).toBe(3);
   });
 
   it('replays a dropped POST for a caller that says a replay is safe', async () => {
     const { url, hits } = await startServer(['reset', { status: 200, body: 'ok' }]);
-    const res = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 2000, retryTransport: true, ...noSleep });
+    const res = await fetchWithRetry(
+      url,
+      { method: 'POST', body: '{}' },
+      { timeoutMs: 2000, retryTransport: true, ...noSleep },
+    );
     expect(await res.text()).toBe('ok');
     expect(hits()).toBe(2);
   });
@@ -103,7 +133,18 @@ describe('fetchWithRetry against a local server', () => {
     await new Promise<void>((resolve) => server?.close(() => resolve()));
     server = null;
     const sleeps: number[] = [];
-    await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, sleep: async (ms) => { sleeps.push(ms); } })).rejects.toThrow();
+    await expect(
+      fetchWithRetry(
+        url,
+        {},
+        {
+          timeoutMs: 2000,
+          sleep: async (ms) => {
+            sleeps.push(ms);
+          },
+        },
+      ),
+    ).rejects.toThrow();
     expect(sleeps).toEqual([]);
   });
 
@@ -118,7 +159,16 @@ describe('fetchWithRetry against a local server', () => {
   it('waits the Retry-After seconds on a 429, then retries', async () => {
     const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '2' } }, { status: 200 }]);
     const sleeps: number[] = [];
-    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, sleep: async (ms) => { sleeps.push(ms); } });
+    const res = await fetchWithRetry(
+      url,
+      {},
+      {
+        timeoutMs: 2000,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    );
     expect(res.status).toBe(200);
     expect(hits()).toBe(2);
     expect(sleeps).toEqual([2000]);
@@ -134,7 +184,17 @@ describe('fetchWithRetry against a local server', () => {
   it('stops after three attempts and hands back the last 5xx', async () => {
     const { url, hits } = await startServer([{ status: 502 }]);
     const sleeps: number[] = [];
-    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, random: () => 0, sleep: async (ms) => { sleeps.push(ms); } });
+    const res = await fetchWithRetry(
+      url,
+      {},
+      {
+        timeoutMs: 2000,
+        random: () => 0,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    );
     expect(res.status).toBe(502);
     expect(hits()).toBe(3);
     // random() = 0 gives the floor of each jitter window: half of 250, then half of 500.
@@ -147,7 +207,17 @@ describe('fetchWithRetry against a local server', () => {
     function fakeClock() {
       let clock = 0;
       const sleeps: number[] = [];
-      return { sleeps, policy: { random: () => 0, now: () => clock, sleep: async (ms: number) => { sleeps.push(ms); clock += ms; } } };
+      return {
+        sleeps,
+        policy: {
+          random: () => 0,
+          now: () => clock,
+          sleep: async (ms: number) => {
+            sleeps.push(ms);
+            clock += ms;
+          },
+        },
+      };
     }
 
     it('hands back the last 5xx once the next wait would pass totalMs, before the attempt cap', async () => {
@@ -163,7 +233,9 @@ describe('fetchWithRetry against a local server', () => {
     it('throws the transport error once the next wait would pass totalMs', async () => {
       const { url, hits } = await startServer(['reset']);
       const { sleeps, policy } = fakeClock();
-      await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 850, ...policy })).rejects.toThrow(/fetch failed|socket/i);
+      await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 850, ...policy })).rejects.toThrow(
+        /fetch failed|socket/i,
+      );
       // Waits of 125 and 250 end at 375; the next one, 500, would end at 875, past the budget.
       expect(sleeps).toEqual([125, 250]);
       expect(hits()).toBe(3);
@@ -187,7 +259,16 @@ describe('fetchWithRetry against a local server', () => {
     const { url } = await startServer([null]);
     const controller = new AbortController();
     const sleeps: number[] = [];
-    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, sleep: async (ms) => { sleeps.push(ms); } });
+    const pending = fetchWithRetry(
+      url,
+      { signal: controller.signal },
+      {
+        timeoutMs: 60_000,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    );
     setTimeout(() => controller.abort(), 50);
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     // The caller gave up, so no second attempt is queued.
@@ -200,7 +281,10 @@ describe('the wait between attempts under a caller signal', () => {
   /** `fetch`, counting the attempts that were started. */
   function countedFetch() {
     let calls = 0;
-    const fetchFn: typeof fetch = (input, init) => { calls++; return fetch(input, init); };
+    const fetchFn: typeof fetch = (input, init) => {
+      calls++;
+      return fetch(input, init);
+    };
     return { fetchFn, calls: () => calls };
   }
 
@@ -215,7 +299,10 @@ describe('the wait between attempts under a caller signal', () => {
     const waiting = new Promise<void>((resolve) => {
       vi.spyOn(globalThis, 'setTimeout').mockImplementation((fn, ms, ...rest) => {
         const timer = realSetTimeout(fn, ms, ...rest);
-        if (ms === 2000) { waitTimer = timer; resolve(); }
+        if (ms === 2000) {
+          waitTimer = timer;
+          resolve();
+        }
         return timer;
       });
     });
@@ -240,7 +327,11 @@ describe('the wait between attempts under a caller signal', () => {
       queueMicrotask(() => controller.abort(new Error('caller gave up')));
       return neverWakes();
     };
-    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn, sleep, random: () => 0 });
+    const pending = fetchWithRetry(
+      url,
+      { signal: controller.signal },
+      { timeoutMs: 60_000, fetchFn, sleep, random: () => 0 },
+    );
     await expect(pending).rejects.toThrow('caller gave up');
     expect(sleeps).toEqual([125]);
     expect([calls(), hits()]).toEqual([1, 1]);
@@ -255,7 +346,17 @@ describe('the wait between attempts under a caller signal', () => {
       controller.abort(new Error('caller gave up'));
       return res;
     };
-    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn, sleep: async (ms) => { sleeps.push(ms); } });
+    const pending = fetchWithRetry(
+      url,
+      { signal: controller.signal },
+      {
+        timeoutMs: 60_000,
+        fetchFn,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    );
     await expect(pending).rejects.toThrow('caller gave up');
     expect(sleeps).toEqual([]);
   });
@@ -264,8 +365,14 @@ describe('the wait between attempts under a caller signal', () => {
     for (const signal of [new AbortController().signal, undefined]) {
       const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
       const sleeps: number[] = [];
-      const sleep = async (ms: number): Promise<void> => { sleeps.push(ms); };
-      const res = await fetchWithRetry(url, { signal }, { timeoutMs: 60_000, baseDelayMs: 200, random: () => 1, sleep });
+      const sleep = async (ms: number): Promise<void> => {
+        sleeps.push(ms);
+      };
+      const res = await fetchWithRetry(
+        url,
+        { signal },
+        { timeoutMs: 60_000, baseDelayMs: 200, random: () => 1, sleep },
+      );
       expect(res.status).toBe(200);
       expect(hits()).toBe(2);
       // Attempt 1 waits ceiling/2 + random * ceiling/2 = 200 ms at random 1.
@@ -279,8 +386,15 @@ describe('the pooled-socket release between attempts', () => {
   it('still retries when cancelling the failed reply body rejects', async () => {
     const bad = new Response('x', { status: 503 });
     Object.defineProperty(bad, 'body', { value: { cancel: () => Promise.reject(new TypeError('cancel failed')) } });
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(bad).mockResolvedValueOnce(new Response('ok', { status: 200 }));
-    const res = await fetchWithRetry('http://127.0.0.1:1/', {}, { timeoutMs: 60_000, fetchFn, ...noSleep, random: () => 0 });
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(bad)
+      .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+    const res = await fetchWithRetry(
+      'http://127.0.0.1:1/',
+      {},
+      { timeoutMs: 60_000, fetchFn, ...noSleep, random: () => 0 },
+    );
     expect(res.status).toBe(200);
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });

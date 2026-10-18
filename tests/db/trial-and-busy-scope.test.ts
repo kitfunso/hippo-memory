@@ -3,13 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { closeHippoDb, openHippoDb, withReadSnapshot, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  openHippoDb,
+  withReadSnapshot,
+  withTrialScope,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { DEFAULT_BUSY_WAIT_MS, withWriteScopeOr } from '../../src/db/busy.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string;
 
-beforeEach(() => { root = makeRoot('trial-scope'); });
+beforeEach(() => {
+  root = makeRoot('trial-scope');
+});
 afterEach(async () => {
   await holder;
   holder = null;
@@ -26,13 +35,22 @@ function put(db: DatabaseSyncLike, key: string): void {
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
-  try { return fn(db); } finally { closeHippoDb(db); }
+  try {
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 describe('withTrialScope', () => {
   it('leaves no write behind after a normal return, and hands back the result', () => {
     withDb((db) => {
-      expect(withTrialScope(db, 'trial', () => { put(db, 'trial_key'); return 7; })).toBe(7);
+      expect(
+        withTrialScope(db, 'trial', () => {
+          put(db, 'trial_key');
+          return 7;
+        }),
+      ).toBe(7);
       expect(db.isTransaction).toBe(false);
       expect(metaCount(db, 'trial_key')).toBe(0);
     });
@@ -40,7 +58,12 @@ describe('withTrialScope', () => {
 
   it('leaves no write behind after a throw, and rethrows the original error', () => {
     withDb((db) => {
-      expect(() => withTrialScope(db, 'trial', () => { put(db, 'trial_key'); throw new Error('boom'); })).toThrow('boom');
+      expect(() =>
+        withTrialScope(db, 'trial', () => {
+          put(db, 'trial_key');
+          throw new Error('boom');
+        }),
+      ).toThrow('boom');
       expect(db.isTransaction).toBe(false);
       expect(metaCount(db, 'trial_key')).toBe(0);
     });
@@ -50,7 +73,9 @@ describe('withTrialScope', () => {
     withDb((db) => {
       withWriteScope(db, 'outer', () => {
         put(db, 'outer_key');
-        withTrialScope(db, 'trial', () => { put(db, 'trial_key'); });
+        withTrialScope(db, 'trial', () => {
+          put(db, 'trial_key');
+        });
       });
       expect(metaCount(db, 'outer_key')).toBe(1);
       expect(metaCount(db, 'trial_key')).toBe(0);
@@ -71,8 +96,12 @@ let holder: Promise<void> | null = null;
 async function holdWriteLock(holdMs: number): Promise<void> {
   const script = path.join(root, 'holder.cjs');
   fs.writeFileSync(script, HOLDER);
-  const child = spawn(process.execPath, [script, path.join(root, 'hippo.db'), String(holdMs)], { stdio: ['ignore', 'pipe', 'inherit'] });
-  holder = new Promise<void>((resolve) => { child.on('close', () => resolve()); });
+  const child = spawn(process.execPath, [script, path.join(root, 'hippo.db'), String(holdMs)], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  holder = new Promise<void>((resolve) => {
+    child.on('close', () => resolve());
+  });
   await new Promise<void>((resolve, reject) => {
     child.on('error', reject);
     child.stdout.once('data', () => resolve());
@@ -85,7 +114,14 @@ describe('withWriteScope busyWaitMs', () => {
     try {
       db.exec('PRAGMA busy_timeout = 0');
       await holdWriteLock(600);
-      withWriteScope(db, 'waits', () => { put(db, 'waited_key'); }, { busyWaitMs: 10000 });
+      withWriteScope(
+        db,
+        'waits',
+        () => {
+          put(db, 'waited_key');
+        },
+        { busyWaitMs: 10000 },
+      );
       expect(metaCount(db, 'waited_key')).toBe(1);
     } finally {
       closeHippoDb(db);
@@ -101,8 +137,21 @@ describe('withWriteScope busyWaitMs', () => {
       db.exec('PRAGMA busy_timeout = 0');
       await holdWriteLock(1500);
       vi.spyOn(Date, 'now').mockImplementation(() => clock);
-      vi.spyOn(Atomics, 'wait').mockImplementation(() => { waits += 1; clock += 100; return 'timed-out'; });
-      expect(() => withWriteScope(db, 'default_wait', () => { put(db, 'default_key'); }, {})).toThrow(/locked|busy/i);
+      vi.spyOn(Atomics, 'wait').mockImplementation(() => {
+        waits += 1;
+        clock += 100;
+        return 'timed-out';
+      });
+      expect(() =>
+        withWriteScope(
+          db,
+          'default_wait',
+          () => {
+            put(db, 'default_key');
+          },
+          {},
+        ),
+      ).toThrow(/locked|busy/i);
       expect(waits).toBe(DEFAULT_BUSY_WAIT_MS / 100);
     } finally {
       vi.restoreAllMocks();
@@ -115,7 +164,15 @@ describe('withWriteScope busyWaitMs', () => {
     try {
       db.exec('PRAGMA busy_timeout = 0');
       await holdWriteLock(600);
-      const attempt = (): void => withWriteScope(db, 'short', () => { put(db, 'short_key'); }, { busyWaitMs: 1 });
+      const attempt = (): void =>
+        withWriteScope(
+          db,
+          'short',
+          () => {
+            put(db, 'short_key');
+          },
+          { busyWaitMs: 1 },
+        );
       expect(attempt).toThrow(/locked|busy/i);
       expect(db.isTransaction).toBe(false);
     } finally {
@@ -128,14 +185,22 @@ describe('withReadSnapshot', () => {
   it('shows the caller fn error when the commit also fails', () => {
     withDb((db) => {
       const marked = new Error('marked read failure');
-      const attempt = (): void => withReadSnapshot(db, () => { db.exec('ROLLBACK'); throw marked; });
+      const attempt = (): void =>
+        withReadSnapshot(db, () => {
+          db.exec('ROLLBACK');
+          throw marked;
+        });
       expect(attempt).toThrow(marked);
     });
   });
 
   it('shows the commit error when fn returned and the commit fails', () => {
     withDb((db) => {
-      const attempt = (): number => withReadSnapshot(db, () => { db.exec('ROLLBACK'); return 1; });
+      const attempt = (): number =>
+        withReadSnapshot(db, () => {
+          db.exec('ROLLBACK');
+          return 1;
+        });
       expect(attempt).toThrow(/no transaction is active/i);
     });
   });

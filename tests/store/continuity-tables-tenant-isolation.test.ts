@@ -4,7 +4,10 @@ import { appendSessionEvent } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  listSessionEvents, findPromotableSessions, loadLatestHandoff, loadHandoffById,
+  listSessionEvents,
+  findPromotableSessions,
+  loadLatestHandoff,
+  loadHandoffById,
 } from '../_helpers/root-forms.js';
 
 let tmpDir: string;
@@ -147,11 +150,18 @@ describe('runtime guards', () => {
     // purpose, to reproduce the v0.40-caller misbinding the runtime guard defends against.
     expect(() => loadLatestHandoff(tmpDir, 'sess-abc' as never)).toThrow(/looks like a session id/i);
     // SAFETY: same deliberate misbinding as above, for listSessionEvents' tenantId param.
-    expect(() => listSessionEvents(tmpDir, 'sess_xyz' as never, { session_id: 'x' })).toThrow(/looks like a session id/i);
+    expect(() => listSessionEvents(tmpDir, 'sess_xyz' as never, { session_id: 'x' })).toThrow(
+      /looks like a session id/i,
+    );
     // SAFETY: same deliberate misbinding as above, for saveSessionHandoff's tenantId param.
-    expect(() => saveSessionHandoff(tmpDir, 'SESS-uppercase' as never, {
-      version: 1, sessionId: 's', summary: 'x', artifacts: [],
-    })).toThrow(/looks like a session id/i);
+    expect(() =>
+      saveSessionHandoff(tmpDir, 'SESS-uppercase' as never, {
+        version: 1,
+        sessionId: 's',
+        summary: 'x',
+        artifacts: [],
+      }),
+    ).toThrow(/looks like a session id/i);
   });
 
   it('rejects non-string tenantId values', () => {

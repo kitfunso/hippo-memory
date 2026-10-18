@@ -22,7 +22,10 @@ interface ToolReply {
 
 function reply(res: McpResponse | null): ToolReply {
   // SAFETY: a tools/call reply is either a JSON-RPC error or a result with text content blocks.
-  const r = res as { error?: { code: number; message: string }; result?: { isError?: boolean; content?: Array<{ text?: string }> } } | null;
+  const r = res as {
+    error?: { code: number; message: string };
+    result?: { isError?: boolean; content?: Array<{ text?: string }> };
+  } | null;
   return { error: r?.error, isError: r?.result?.isError === true, text: r?.result?.content?.[0]?.text ?? '' };
 }
 
@@ -37,7 +40,15 @@ describe('MCP tool argument validation', () => {
   async function call(name: string, args: Wire): Promise<ToolReply> {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     return reply(res);
   }
@@ -141,7 +152,9 @@ describe('validateToolArgs', () => {
   });
 
   it('rejects a value outside the enum', () => {
-    expect(validateToolArgs(schema, { mode: 'physics' })).toEqual(['mode must be one of "bm25", "hybrid" (got "physics")']);
+    expect(validateToolArgs(schema, { mode: 'physics' })).toEqual([
+      'mode must be one of "bm25", "hybrid" (got "physics")',
+    ]);
   });
 
   it('rejects a string over maxLength and reports every problem', () => {

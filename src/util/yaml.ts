@@ -6,7 +6,12 @@
 type YamlValue = string | number | boolean | null | string[] | number[];
 
 const SCALAR_LOOKALIKE = /^(null|true|false|-?\d+(\.\d+)?)$/;
-const UNESCAPES: ReadonlyMap<string, string> = new Map([['\\', '\\'], ['"', '"'], ['n', '\n'], ['r', '\r']]);
+const UNESCAPES: ReadonlyMap<string, string> = new Map([
+  ['\\', '\\'],
+  ['"', '"'],
+  ['n', '\n'],
+  ['r', '\r'],
+]);
 
 function escapeString(s: string): string {
   // A string that reads as null, a boolean or a number is quoted so it comes back a string.

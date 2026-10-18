@@ -28,7 +28,7 @@ const TYPED = `the ci token is ${GHP} for the nightly job`;
 const cli = path.resolve(__dirname, '..', '..', 'dist', 'cli.js');
 
 let root: string;
-const ctx = (): FullContext => (apiCtx(root, 'default', { subject: 'test', role: 'admin' }));
+const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
 
 beforeEach(() => {
   root = makeRoot('remember-warn');
@@ -55,8 +55,12 @@ describe('api.remember', () => {
 
 describe('HTTP POST /v1/memories', () => {
   let handle: ServerHandle;
-  beforeEach(async () => { handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 }); });
-  afterEach(async () => { await handle.stop(); });
+  beforeEach(async () => {
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+  });
+  afterEach(async () => {
+    await handle.stop();
+  });
 
   it('returns warnings beside the usual fields', async () => {
     const res = await fetch(`http://127.0.0.1:${handle.port}/v1/memories`, {
@@ -77,7 +81,15 @@ describe('MCP hippo_remember', () => {
   it('appends the warning to the tool result', async () => {
     const response = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: TYPED } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) },
+      {
+        hippoRoot: root,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(root),
+        config: loadConfig(root),
+      },
     );
     const text = JSON.stringify(response);
     expect(text).toContain('Remembered [');

@@ -26,7 +26,11 @@ beforeEach(() => {
 
 describe('capture-error repeat check does not read every memory', () => {
   it('a repeat is still caught, with no full-table read among the statements it runs', async () => {
-    const payload = { tool_name: 'Bash', tool_input: { command: 'npm run build' }, error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo' };
+    const payload = {
+      tool_name: 'Bash',
+      tool_input: { command: 'npm run build' },
+      error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
+    };
     expect(await captureToolFailure(failureTarget(root), payload)).toBe('stored');
 
     const statements: string[] = [];

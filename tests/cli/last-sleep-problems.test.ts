@@ -19,13 +19,23 @@ afterEach(() => {
   removeScratch(s);
 });
 
-const CLEAN = ['[hippo] 2026-10-06T09:00:00.000Z consolidating memory...', 'Consolidated 3 memories', '[hippo] sleep complete', 'closed 1 active snapshot(s) for session abc'];
+const CLEAN = [
+  '[hippo] 2026-10-06T09:00:00.000Z consolidating memory...',
+  'Consolidated 3 memories',
+  '[hippo] sleep complete',
+  'closed 1 active snapshot(s) for session abc',
+];
 const writeLog = (lines: string[]): void => fs.writeFileSync(logFile, `${lines.join('\n')}\n`);
 
 describe('sleepProblems', () => {
   it('sleepProblems returns null for a clean log and for skip lines', () => {
     expect(sleepProblems(CLEAN.join('\n'), 0)).toBeNull();
-    expect(sleepProblems('skip: no hippo store for this folder or globally\nskip sleep: this folder has no store of its own\n', 0)).toBeNull();
+    expect(
+      sleepProblems(
+        'skip: no hippo store for this folder or globally\nskip sleep: this folder has no store of its own\n',
+        0,
+      ),
+    ).toBeNull();
     expect(sleepProblems('', 0)).toBeNull();
   });
 
@@ -41,7 +51,9 @@ describe('sleepProblems', () => {
       '[hippo] compaction replay: spool left to another replayer (lock held by pid 4)',
       '[hippo] compaction replay: spool file e.a0.json saved; writing its memories failed: boom',
     ].join('\r\n');
-    expect(sleepProblems(log, 0)).toBe('Hippo: 2 errors while saving waiting compaction summaries. Run hippo doctor for details.');
+    expect(sleepProblems(log, 0)).toBe(
+      'Hippo: 2 errors while saving waiting compaction summaries. Run hippo doctor for details.',
+    );
   });
 
   it('names a failed sleep, the errors and the .bad count in one line, counting a set-aside file once', () => {
@@ -50,8 +62,12 @@ describe('sleepProblems', () => {
       '[hippo] compaction replay: spool problem: spool file b.a0.json not claimed: EIO: i/o error',
       '[hippo] sleep failed: store locked',
     ].join('\n');
-    expect(sleepProblems(log, 1)).toBe('Hippo: the last sleep failed (store locked); 1 error while saving waiting compaction summaries; 1 compaction summary set aside as .bad. Run hippo doctor for details.');
-    expect(sleepProblems(`[hippo] sleep failed: ${'x'.repeat(300)}`, 3)).toBe(`Hippo: the last sleep failed (${'x'.repeat(120)}); 3 compaction summaries set aside as .bad. Run hippo doctor for details.`);
+    expect(sleepProblems(log, 1)).toBe(
+      'Hippo: the last sleep failed (store locked); 1 error while saving waiting compaction summaries; 1 compaction summary set aside as .bad. Run hippo doctor for details.',
+    );
+    expect(sleepProblems(`[hippo] sleep failed: ${'x'.repeat(300)}`, 3)).toBe(
+      `Hippo: the last sleep failed (${'x'.repeat(120)}); 3 compaction summaries set aside as .bad. Run hippo doctor for details.`,
+    );
   });
 });
 
@@ -64,16 +80,23 @@ describe('cmdLastSleep output', () => {
   /** Captures stdout and every stderr route the command uses, so nothing reaches the test runner. */
   function capture(): Streams {
     const streams: Streams = { stdout: [], errors: [] };
-    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { streams.stdout.push(String(chunk)); return true; });
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      streams.stdout.push(String(chunk));
+      return true;
+    });
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { streams.errors.push(args.map(String).join(' ')); });
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      streams.errors.push(args.map(String).join(' '));
+    });
     return streams;
   }
 
   function withTty(isTTY: boolean): void {
     const was = process.stdout.isTTY;
     process.stdout.isTTY = isTTY;
-    onTestFinished(() => { process.stdout.isTTY = was; });
+    onTestFinished(() => {
+      process.stdout.isTTY = was;
+    });
   }
 
   it('a TTY with no mode gets terminal output', () => {
@@ -125,7 +148,9 @@ describe('hippo last-sleep', () => {
     writeLog(CLEAN);
     const r = runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
     expect(r.status, r.stderr).toBe(0);
-    expect(JSON.parse(oneLine(r.stdout))).toEqual({ systemMessage: 'Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.' });
+    expect(JSON.parse(oneLine(r.stdout))).toEqual({
+      systemMessage: 'Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.',
+    });
     for (const line of CLEAN) expect(r.stderr).toContain(line);
   });
 });

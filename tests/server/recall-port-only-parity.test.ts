@@ -12,7 +12,19 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, sendRecall, seedTemplates, TENANT, type Templates,
+  CLEARED_ENV,
+  FAKE_NOW,
+  freshStore,
+  normalize,
+  RECALL_BRANCHES,
+  RECALL_INPUTS,
+  rowsOf,
+  SESSION,
+  seedPortBranches,
+  sendRecall,
+  seedTemplates,
+  TENANT,
+  type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 
@@ -23,10 +35,18 @@ beforeEach(() => {
 type Args = Record<string, string | number | boolean>;
 type Call = { via: 'http'; args: Args } | { via: 'mcp'; args: Args };
 type Surface = Call['via'];
-interface Reply { status: number; body: unknown }
-interface Scenario { name: string; kind: 'local' | 'wide'; calls: readonly Call[]; reaches?: (replies: readonly Reply[]) => void }
+interface Reply {
+  status: number;
+  body: unknown;
+}
+interface Scenario {
+  name: string;
+  kind: 'local' | 'wide';
+  calls: readonly Call[];
+  reaches?: (replies: readonly Reply[]) => void;
+}
 
-const on =(via: Surface, query: string, args: Args = {}): Call => ({ via, args: { query, ...args } });
+const on = (via: Surface, query: string, args: Args = {}): Call => ({ via, args: { query, ...args } });
 const SURFACES: readonly Surface[] = ['http', 'mcp'];
 const KEYED_TASK = 'ship the eu cluster for the loopback caller';
 // The seeded rows sit in a temp folder outside any project, so they are user-global and any project's recall reaches them.
@@ -35,27 +55,41 @@ const PROJECT = 'golden';
 const SCENARIOS: readonly Scenario[] = [
   ...SURFACES.flatMap((via): Scenario[] => [
     { name: `${via}: plain recall, no session`, kind: 'local', calls: [on(via, 'deploy')] },
-    { name: `${via}: recall with a session that has an active goal`, kind: 'local', calls: [on(via, 'deploy', { session_id: SESSION })] },
+    {
+      name: `${via}: recall with a session that has an active goal`,
+      kind: 'local',
+      calls: [on(via, 'deploy', { session_id: SESSION })],
+    },
     {
       name: `${via}: anchoring hints over repeated recalls in one session`,
       kind: 'local',
       calls: ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map((q) => on(via, q, { session_id: SESSION })),
     },
   ]),
-  { name: 'candidate window', kind: 'wide', calls: [on('http', 'deploy'), on('http', 'deploy', { scorer_window: '50' }), on('mcp', 'deploy')] },
+  {
+    name: 'candidate window',
+    kind: 'wide',
+    calls: [on('http', 'deploy'), on('http', 'deploy', { scorer_window: '50' }), on('mcp', 'deploy')],
+  },
   { name: 'mcp budget 80', kind: 'local', calls: [on('mcp', 'deploy', { budget: 80 })] },
-  { name: 'http bm25, hybrid and physics modes', kind: 'local', calls: ['bm25', 'hybrid', 'physics'].map((mode) => on('http', 'deploy', { mode })) },
+  {
+    name: 'http bm25, hybrid and physics modes',
+    kind: 'local',
+    calls: ['bm25', 'hybrid', 'physics'].map((mode) => on('http', 'deploy', { mode })),
+  },
   {
     name: 'bad and edge inputs',
     kind: 'local',
     calls: RECALL_INPUTS.flatMap(([, args]) => SURFACES.map((via): Call => ({ via, args }))),
   },
-  ...RECALL_BRANCHES.flatMap((b) => SURFACES.map((via): Scenario => ({
-    name: `${via}: ${b.name}`,
-    kind: 'local',
-    calls: [on(via, b.query, b[via])],
-    reaches: branchReached(via, b),
-  }))),
+  ...RECALL_BRANCHES.flatMap((b) =>
+    SURFACES.map((via): Scenario => ({
+      name: `${via}: ${b.name}`,
+      kind: 'local',
+      calls: [on(via, b.query, b[via])],
+      reaches: branchReached(via, b),
+    })),
+  ),
 ];
 
 /** MCP replies with text, so only the HTTP body proves a branch ran, except continuity: REST names no project, so a shared store's block is empty. */
@@ -73,7 +107,10 @@ function branchReached(via: Surface, b: (typeof RECALL_BRANCHES)[number]): Scena
 
 const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
 
-interface Pass { replies: Reply[]; rows: { local: ReturnType<typeof rowsOf>; global: ReturnType<typeof rowsOf> } }
+interface Pass {
+  replies: Reply[];
+  rows: { local: ReturnType<typeof rowsOf>; global: ReturnType<typeof rowsOf> };
+}
 
 let templates: Templates;
 
@@ -107,7 +144,12 @@ beforeAll(async () => {
     seedPortBranches(root);
     // A shared store reads only the caller's keyed snapshot, and MCP's loopback caller owns by its subject.
     const key = { owner: 'localhost:cli', project: [PROJECT] };
-    saveActiveTaskSnapshot(root, TENANT, { task: KEYED_TASK, summary: 'cutover planned', next_step: 'run the canary', session_id: SESSION }, key);
+    saveActiveTaskSnapshot(
+      root,
+      TENANT,
+      { task: KEYED_TASK, summary: 'cutover planned', next_step: 'run the canary', session_id: SESSION },
+      key,
+    );
   });
 });
 

@@ -29,7 +29,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:v163', role: 'admin' });
 }
@@ -49,7 +55,9 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
 
 describe('assemble.totalRaw reports unbounded count when truncated', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v163-total'); });
+  beforeEach(() => {
+    root = makeRoot('v163-total');
+  });
   afterEach(() => safeRmSync(root));
 
   it('rowCap < session size: totalRaw reports the FULL session count', async () => {
@@ -134,7 +142,9 @@ describe('assemble.totalRaw reports unbounded count when truncated', () => {
 
 describe('countSessionRawMemories helper', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v163-count'); });
+  beforeEach(() => {
+    root = makeRoot('v163-count');
+  });
   afterEach(() => safeRmSync(root));
 
   it('counts only matching session, tenant scoped, excluding superseded', () => {
@@ -168,25 +178,36 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     // SAFETY: tools/list's MCP result envelope always carries result.tools
     // with each tool's JSON-schema inputSchema.properties; McpResponse.result
     // is typed unknown at the transport layer since it varies per method.
-    const tools = (res as {
-      result?: {
-        tools?: Array<{
-          name?: string;
-          inputSchema?: {
-            properties?: {
-              fresh_tail_session_id?: unknown;
-              fresh_tail_count?: unknown;
-              summarize_overflow?: unknown;
-            };
+    const tools =
+      (
+        res as {
+          result?: {
+            tools?: Array<{
+              name?: string;
+              inputSchema?: {
+                properties?: {
+                  fresh_tail_session_id?: unknown;
+                  fresh_tail_count?: unknown;
+                  summarize_overflow?: unknown;
+                };
+              };
+            }>;
           };
-        }>;
-      };
-    }).result?.tools ?? [];
+        }
+      ).result?.tools ?? [];
     const recall = tools.find((t) => t.name === 'hippo_recall');
     expect(recall).toBeDefined();
     const props = recall?.inputSchema?.properties ?? {};

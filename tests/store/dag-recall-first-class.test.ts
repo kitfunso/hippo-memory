@@ -171,7 +171,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     const queryVec = [1, 0, 0, 0];
     const particle: PhysicsParticle = {
       memoryId: summary.id,
-      position: [1, 0, 0, 0],  // perfect cosine match with query
+      position: [1, 0, 0, 0], // perfect cosine match with query
       velocity: [0, 0, 0, 0],
       mass: 1.0,
       charge: 0,
@@ -226,7 +226,12 @@ describe('first-class DAG recall (scoring layer)', () => {
 
     // Run twice: once with deboost ON (default), once disabled
     const withDeboost = await hybridSearch('mmr-test', entries, { explain: true, mmr: true, mmrLambda: 0.5 });
-    const withoutDeboost = await hybridSearch('mmr-test', entries, { explain: true, mmr: true, mmrLambda: 0.5, summaryDeboost: 1.0 });
+    const withoutDeboost = await hybridSearch('mmr-test', entries, {
+      explain: true,
+      mmr: true,
+      mmrLambda: 0.5,
+      summaryDeboost: 1.0,
+    });
 
     const sIdxWith = withDeboost.findIndex((r) => r.entry.id === summary.id);
     const sIdxWithout = withoutDeboost.findIndex((r) => r.entry.id === summary.id);
@@ -239,15 +244,18 @@ describe('first-class DAG recall (scoring layer)', () => {
     // post-deboost (the L2 summary in the input has score = pre-deboost * 0.85).
     // We do NOT assert reranker final order; reranker is free to reorder.
     let recordedInputs: SearchResult[] | null = null;
-    const recordingReranker = vi.fn(async (
-      _query: string,
-      results: SearchResult[],
-      _opts?: RerankerOptions,
-    ): Promise<RerankResult[]> => {
-      recordedInputs = JSON.parse(JSON.stringify(results)); // deep snapshot
-      // Reverse order (the "prerogative" branch — we don't assert this)
-      return [...results].reverse().map((r, i) => ({ ...r, rerankScore: r.score, preRerankRank: results.indexOf(r) + 1, postRerankRank: i + 1 }));
-    });
+    const recordingReranker = vi.fn(
+      async (_query: string, results: SearchResult[], _opts?: RerankerOptions): Promise<RerankResult[]> => {
+        recordedInputs = JSON.parse(JSON.stringify(results)); // deep snapshot
+        // Reverse order (the "prerogative" branch — we don't assert this)
+        return [...results].reverse().map((r, i) => ({
+          ...r,
+          rerankScore: r.score,
+          preRerankRank: results.indexOf(r) + 1,
+          postRerankRank: i + 1,
+        }));
+      },
+    );
 
     const summary = makeL2Summary('reranker-test summary alpha beta');
     const fact = makeL1Fact('reranker-test fact gamma');

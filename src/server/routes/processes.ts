@@ -5,13 +5,7 @@ import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { saveFor } from '../../api/objects/objects.js';
-import {
-  closeRoute,
-  getRoute,
-  listRoute,
-  supersedeRoute,
-  type VersionedRouteConfig,
-} from './object-routes.js';
+import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 // HTTP-boundary validation for an untrusted process `steps` body; saveProcess re-validates and trims, this is the
 // fail-fast 400 gate.

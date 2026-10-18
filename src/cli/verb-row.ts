@@ -41,5 +41,10 @@ export function verb<K extends string, M extends Readonly<Record<K, Handler>>>(
   handler: K,
   row: VerbRow,
 ): VerbSpec {
-  return { ...row, run: async (ctx) => { await (await load())[handler](ctx); } };
+  return {
+    ...row,
+    run: async (ctx) => {
+      await (await load())[handler](ctx);
+    },
+  };
 }

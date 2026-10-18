@@ -138,21 +138,17 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     parents: normalizeStringArray(data['parents']),
     starred: Boolean(data['starred'] ?? false),
     trace_outcome: (data['trace_outcome'] as MemoryEntry['trace_outcome']) ?? null,
-    source_session_id:
-      nullableString(data['source_session_id']),
+    source_session_id: nullableString(data['source_session_id']),
     valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? new Date().toISOString()),
-    superseded_by:
-      nullableString(data['superseded_by']),
+    superseded_by: nullableString(data['superseded_by']),
     extracted_from: (data['extracted_from'] as string) ?? null,
     dag_level: Number(data['dag_level'] ?? 0),
     dag_parent_id: (data['dag_parent_id'] as string) ?? null,
     kind: (data['kind'] as MemoryKind) ?? 'distilled',
     scope: nullableString(data['scope']),
     owner: nullableString(data['owner']),
-    artifact_ref:
-      nullableString(data['artifact_ref']),
-    tenant_id:
-      nullableString(data['tenant_id']) ?? DEFAULT_TENANT_ID,
+    artifact_ref: nullableString(data['artifact_ref']),
+    tenant_id: nullableString(data['tenant_id']) ?? DEFAULT_TENANT_ID,
     origin_project: originProjectOf(data),
   };
 }

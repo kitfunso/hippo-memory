@@ -27,7 +27,11 @@ afterEach(() => {
 });
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
@@ -35,7 +39,11 @@ function ctxFor(root: string, subject: string = 'cli'): FullContext {
 
 // Seed 3 closed predictions in class "migration-effort" with mean_ratio = 2.0
 function seedMigrationEffortBaserate(root: string): void {
-  const pairs: Array<[number, number]> = [[2, 4], [3, 6], [4, 8]];
+  const pairs: Array<[number, number]> = [
+    [2, 4],
+    [3, 6],
+    [4, 8],
+  ];
   for (const [est, act] of pairs) {
     const p = savePrediction(root, 'default', {
       classTag: 'migration-effort',
@@ -63,7 +71,9 @@ function lastAuditActor(root: string, op: string): string | null {
   try {
     // SAFETY: query selects only the `actor` text column, so the row (if
     // any — LIMIT 1 with no matching op yields undefined) is { actor: string }.
-    const row = db.prepare(`SELECT actor FROM audit_log WHERE op = ? ORDER BY id DESC LIMIT 1`).get(op) as { actor: string } | undefined;
+    const row = db.prepare(`SELECT actor FROM audit_log WHERE op = ? ORDER BY id DESC LIMIT 1`).get(op) as
+      | { actor: string }
+      | undefined;
     return row?.actor ?? null;
   } finally {
     closeHippoDb(db);
@@ -137,9 +147,17 @@ describe('api.recall planningFallacyHint', () => {
     // Seed two classes that BOTH overlap with "migration" token.
     const pairs: Array<[number, number]> = [[2, 4]];
     for (const [est, act] of pairs) {
-      const a = savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'first prediction', estimateValue: est });
+      const a = savePrediction(root, 'default', {
+        classTag: 'migration-effort',
+        claimText: 'first prediction',
+        estimateValue: est,
+      });
       closePrediction(root, 'default', a.id, { closureState: 'closed', actualValue: act });
-      const b = savePrediction(root, 'default', { classTag: 'migration-risk', claimText: 'second prediction', estimateValue: est });
+      const b = savePrediction(root, 'default', {
+        classTag: 'migration-risk',
+        claimText: 'second prediction',
+        estimateValue: est,
+      });
       closePrediction(root, 'default', b.id, { closureState: 'closed', actualValue: act });
     }
     // Query "migration will take 3 days" overlaps only on "migration" — tie.
@@ -191,7 +209,10 @@ describe('api.recall planningFallacyHint', () => {
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
     // Sanity: the same data with an explicit scope filter on recall still surfaces
     // the hint (the resolver doesn't consult opts.scope by design).
-    const scopedResult = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days', filter: { scope: 'channel:work' } });
+    const scopedResult = await retrieve(ctxFor(root), {
+      query: 'the migration effort will take 3 days',
+      filter: { scope: 'channel:work' },
+    });
     expect(scopedResult.planningFallacyHint).toBeDefined();
     expect(scopedResult.planningFallacyHint!.classTag).toBe('migration-effort');
   });
@@ -199,9 +220,16 @@ describe('api.recall planningFallacyHint', () => {
   it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', async () => {
     // Seed tenant-a only.
     const ctxA: FullContext = apiCtx(root, 'tenant-a', { subject: 'cli', role: 'admin' });
-    const pairs: Array<[number, number]> = [[2, 4], [3, 6]];
+    const pairs: Array<[number, number]> = [
+      [2, 4],
+      [3, 6],
+    ];
     for (const [est, act] of pairs) {
-      const p = savePrediction(root, 'tenant-a', { classTag: 'migration-effort', claimText: 'tenant a prediction', estimateValue: est });
+      const p = savePrediction(root, 'tenant-a', {
+        classTag: 'migration-effort',
+        claimText: 'tenant a prediction',
+        estimateValue: est,
+      });
       closePrediction(root, 'tenant-a', p.id, { closureState: 'closed', actualValue: act });
     }
     // Tenant-a query gets the hint.

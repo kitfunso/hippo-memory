@@ -17,7 +17,17 @@ import { estimateTokens } from '../../src/util/token-text.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seedTemplates, SESSION, statsMirror, TENANT, type Store, type Templates,
+  CLEARED_ENV,
+  FAKE_NOW,
+  freshStore,
+  normalize,
+  rowsOf,
+  seedTemplates,
+  SESSION,
+  statsMirror,
+  TENANT,
+  type Store,
+  type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../../src/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -30,12 +40,30 @@ type Surface = 'http' | 'cli';
 const SURFACES: readonly Surface[] = ['http', 'cli'];
 const HOST_SESSION = 'host-agent-session';
 
-interface RecallCall { query: string; session?: string; http?: Record<string, string>; cli?: CliFlags }
+interface RecallCall {
+  query: string;
+  session?: string;
+  http?: Record<string, string>;
+  cli?: CliFlags;
+}
 
 /** What the caller got back: the HTTP status, header and body, or the CLI exit status and streams; `hint` is the memory it anchored on. */
-interface Reply { status: number; cacheControl: string | null; body: unknown; stderr: string; hint: string | null }
+interface Reply {
+  status: number;
+  cacheControl: string | null;
+  body: unknown;
+  stderr: string;
+  hint: string | null;
+}
 
-interface LedgerRow { tenant_id: string; session_id: string | null; surface: string; event: string; items: number; tokens: number }
+interface LedgerRow {
+  tenant_id: string;
+  session_id: string | null;
+  surface: string;
+  event: string;
+  items: number;
+  tokens: number;
+}
 
 let templates: Templates;
 let launchFolder: string;
@@ -47,18 +75,35 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<Reply> {
   const res = await fetch(`${handle.url}/v1/memories?${params.toString()}`);
   // SAFETY: /v1/memories answers a serialised RecallResult on 200 and { error } otherwise, and only the optional hint is read here.
   const body = (await res.json()) as Partial<RecallResult>;
-  return { status: res.status, cacheControl: res.headers.get('cache-control'), body, stderr: '', hint: body.anchoringHint?.memoryId ?? null };
+  return {
+    status: res.status,
+    cacheControl: res.headers.get('cache-control'),
+    body,
+    stderr: '',
+    hint: body.anchoringHint?.memoryId ?? null,
+  };
 }
 
 async function viaCli(s: Store, c: RecallCall): Promise<Reply> {
   const flags: CliFlags = { ...c.cli };
   if (c.session) flags['session-id'] = c.session;
   const out = await runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags }));
-  return { status: out.status, cacheControl: null, body: out.stdout, stderr: out.stderr, hint: /\[anchored_on: ([^\]]+)\]/.exec(out.stdout)?.[1] ?? null };
+  return {
+    status: out.status,
+    cacheControl: null,
+    body: out.stdout,
+    stderr: out.stderr,
+    hint: /\[anchored_on: ([^\]]+)\]/.exec(out.stdout)?.[1] ?? null,
+  };
 }
 
 /** The calls in order on one surface; HTTP keeps one server up for all of them, as a long-lived client sees it. */
-async function recallOn(surface: Surface, s: Store, calls: readonly RecallCall[], between?: (done: number) => void): Promise<Reply[]> {
+async function recallOn(
+  surface: Surface,
+  s: Store,
+  calls: readonly RecallCall[],
+  between?: (done: number) => void,
+): Promise<Reply[]> {
   const handle = surface === 'http' ? await serve({ hippoRoot: s.root, port: 0 }) : null;
   try {
     const out: Reply[] = [];
@@ -91,9 +136,11 @@ function totalRecalled(s: Store): number {
 function refuseRecallAudit(root: string, on: boolean): void {
   const db = openHippoDb(root);
   try {
-    db.exec(on
-      ? "CREATE TRIGGER refuse_recall_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'recall' BEGIN SELECT RAISE(ABORT, 'recall audit refused'); END"
-      : 'DROP TRIGGER refuse_recall_audit');
+    db.exec(
+      on
+        ? "CREATE TRIGGER refuse_recall_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'recall' BEGIN SELECT RAISE(ABORT, 'recall audit refused'); END"
+        : 'DROP TRIGGER refuse_recall_audit',
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -101,8 +148,18 @@ function refuseRecallAudit(root: string, on: boolean): void {
 
 /** The continuity a recall can return: a live snapshot, its handoff and one session event. */
 function seedContinuity(root: string): void {
-  saveActiveTaskSnapshot(root, TENANT, { task: 'ship the eu cluster', summary: 'cutover planned', next_step: 'run the canary', session_id: SESSION });
-  saveSessionHandoff(root, TENANT, { version: 1, sessionId: SESSION, summary: 'handoff after the canary', nextAction: 'promote it' });
+  saveActiveTaskSnapshot(root, TENANT, {
+    task: 'ship the eu cluster',
+    summary: 'cutover planned',
+    next_step: 'run the canary',
+    session_id: SESSION,
+  });
+  saveSessionHandoff(root, TENANT, {
+    version: 1,
+    sessionId: SESSION,
+    summary: 'handoff after the canary',
+    nextAction: 'promote it',
+  });
   appendSessionEvent(root, TENANT, { session_id: SESSION, event_type: 'note', content: 'canary passed' });
 }
 
@@ -159,7 +216,12 @@ describe('what a recall records, HTTP and CLI', () => {
     });
     expect(got.reply!.status).toBe(surface === 'http' ? 200 : 0);
     expect(got.ledger).toHaveLength(1);
-    expect(got.ledger[0]).toMatchObject({ tenant_id: TENANT, session_id: null, surface: surface === 'http' ? 'http_recall' : 'recall', event: 'inject' });
+    expect(got.ledger[0]).toMatchObject({
+      tenant_id: TENANT,
+      session_id: null,
+      surface: surface === 'http' ? 'http_recall' : 'recall',
+      event: 'inject',
+    });
     expect(got.recalled).toBe(got.ledger[0]!.items);
     // 12 local deploy rows are neither superseded nor private; HTTP caps them at its limit of 10, the CLI adds the global row.
     expect(got.recalled).toBe(surface === 'http' ? 10 : 13);
@@ -189,13 +251,18 @@ describe('what a recall records, HTTP and CLI', () => {
     });
     expect(got.hints[0]).toBeNull();
     expect(got.hints[1]).not.toBeNull();
-    expect(got.ledger.map((row) => [row.surface, row.session_id])).toEqual([['recall', HOST_SESSION], ['recall', HOST_SESSION]]);
+    expect(got.ledger.map((row) => [row.surface, row.session_id])).toEqual([
+      ['recall', HOST_SESSION],
+      ['recall', HOST_SESSION],
+    ]);
     expect({ ...got, ledger: undefined }).toMatchSnapshot();
   });
 
   it.each(SURFACES)('%s: a recall with continuity', async (surface) => {
     const got = await onSeeded(async (s) => {
-      const [reply] = await recallOn(surface, s, [{ query: 'deploy', http: { include_continuity: 'true' }, cli: { continuity: true } }]);
+      const [reply] = await recallOn(surface, s, [
+        { query: 'deploy', http: { include_continuity: 'true' }, cli: { continuity: true } },
+      ]);
       // Priced before the times in the printed block are normalized; console.log adds the one newline the estimate leaves out.
       const printed = surface === 'cli' ? estimateTokens(String(reply!.body).replace(/\n$/, '')) : null;
       return { reply, printed, rows: recorded(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
@@ -207,7 +274,11 @@ describe('what a recall records, HTTP and CLI', () => {
       expect(got.reply!.cacheControl).toBe('no-store');
       // Snapshot 5 + 4 + 4, handoff 6 + 3, event 4, each at Math.ceil(len/4).
       expect(body.continuityTokens).toBe(26);
-      expect(got.ledger[0]).toMatchObject({ surface: 'http_recall', items: body.results.length, tokens: body.tokens + (body.continuityTokens ?? 0) });
+      expect(got.ledger[0]).toMatchObject({
+        surface: 'http_recall',
+        items: body.results.length,
+        tokens: body.tokens + (body.continuityTokens ?? 0),
+      });
     } else {
       // The CLI books the block it printed.
       expect(got.ledger[0]).toMatchObject({ surface: 'recall', tokens: got.printed });
@@ -217,7 +288,12 @@ describe('what a recall records, HTTP and CLI', () => {
   });
 
   it.each(SURFACES)('%s: a recall that fails validation records nothing and feeds no ring', async (surface) => {
-    const bad: RecallCall = { query: 'deploy', session: SESSION, http: { limit: '-5' }, cli: { layer: 'no-such-layer' } };
+    const bad: RecallCall = {
+      query: 'deploy',
+      session: SESSION,
+      http: { limit: '-5' },
+      cli: { layer: 'no-such-layer' },
+    };
     const good: RecallCall = { query: 'deploy', session: SESSION };
     const got = await onSeeded(async (s) => {
       const before = recorded(s);

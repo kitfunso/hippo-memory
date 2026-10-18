@@ -26,7 +26,11 @@ let local: string;
 let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
-  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
+  const entry = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    origin_project: PROJECT,
+    ...extra,
+  };
   writeEntry(root, entry);
   return entry;
 }
@@ -42,14 +46,17 @@ function writeConfig(root: string, json: string): void {
 }
 
 function enablePromptRecall(root: string, overrides: Partial<HippoConfig['pinnedInject']> = {}) {
-  writeConfig(root, JSON.stringify({
-    pinnedInject: {
-      promptRecall: true,
-      promptRecallThreshold: 0.1,
-      promptRecallMinShared: 1,
-      ...overrides,
-    },
-  }));
+  writeConfig(
+    root,
+    JSON.stringify({
+      pinnedInject: {
+        promptRecall: true,
+        promptRecallThreshold: 0.1,
+        promptRecallMinShared: 1,
+        ...overrides,
+      },
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -177,7 +184,10 @@ describe('getContext prompt recall (api-level)', () => {
 
     const withoutPrompt = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
     const withPromptFlagOff = await getContext(ctx, {
-      pinnedOnly: true, includeRecent: 5, currentProject: PROJECT, prompt: 'irrelevant text here',
+      pinnedOnly: true,
+      includeRecent: 5,
+      currentProject: PROJECT,
+      prompt: 'irrelevant text here',
     });
 
     expect(new Set(ids(withPromptFlagOff))).toEqual(new Set(rows.map((r) => r.id)));
@@ -203,7 +213,8 @@ describe('getContext prompt recall (api-level)', () => {
       superseded_by: 'some-newer-id',
     });
     const secret = seed(local, 'the migration database password is on the indexing plan doc', {
-      tags: ['secret'], origin_project: 'proj-b',
+      tags: ['secret'],
+      origin_project: 'proj-b',
     });
     const crossProject = seed(local, 'a different project migration database indexing plan note', {
       origin_project: 'proj-b',
@@ -261,10 +272,12 @@ describe('getContext prompt recall (api-level)', () => {
     // tokens), so both tie on score and the id tie-break puts `big` first.
     const shared = 'deploy rollback plan for service payments-api2026';
     const big = seed(local, (shared + ' ').repeat(50), {
-      id: 'aaa-big', created: '2026-01-01T00:00:00.000Z',
+      id: 'aaa-big',
+      created: '2026-01-01T00:00:00.000Z',
     });
     const small = seed(local, shared, {
-      id: 'bbb-small', created: '2026-01-02T00:00:00.000Z',
+      id: 'bbb-small',
+      created: '2026-01-02T00:00:00.000Z',
     });
 
     const result = await getContext(ctx, {
@@ -325,9 +338,11 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     const db = openHippoDb(hippoDir);
     try {
       // SAFETY: COUNT(*) AS n always yields one row with a numeric n.
-      const row = db.prepare(
-        `SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = ? AND surface = 'hook_recall' AND event = 'inject'`,
-      ).get(sessionId) as { n: number };
+      const row = db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = ? AND surface = 'hook_recall' AND event = 'inject'`,
+        )
+        .get(sessionId) as { n: number };
       expect(Number(row.n)).toBe(1);
     } finally {
       closeHippoDb(db);
@@ -340,10 +355,16 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
 
     const sessionId = 'sess-z1-cli-2';
     const payload = JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan' });
-    const first = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
+    const first = runHippo(
+      ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
+      payload,
+    );
     expect(JSON.parse(first).hookSpecificOutput.additionalContext).toContain('PINNED: always check the rollback plan');
 
-    const second = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
+    const second = runHippo(
+      ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
+      payload,
+    );
     const context: string = JSON.parse(second).hookSpecificOutput.additionalContext;
     expect(context).not.toContain('PINNED: always check the rollback plan');
     expect(context).toContain('## Prompt-Relevant Memory');
@@ -355,7 +376,15 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
     const payload = JSON.stringify({ session_id: 'sess-z1-cli-x', prompt: 'postgres migration rollback plan' });
-    const args = ['context', '--pinned-only', '--include-recent', '5', '--cross-project', '--format', 'additional-context'];
+    const args = [
+      'context',
+      '--pinned-only',
+      '--include-recent',
+      '5',
+      '--cross-project',
+      '--format',
+      'additional-context',
+    ];
     runHippo(args, payload);
     const context: string = JSON.parse(runHippo(args, payload)).hookSpecificOutput.additionalContext;
     expect(context).toContain('## Prompt-Relevant Memory');

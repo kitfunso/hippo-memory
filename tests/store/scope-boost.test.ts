@@ -12,7 +12,13 @@ let hippoDir: string;
 
 /** `hippo <args>` run in this process from tmpDir with `env` set, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function runHippo(args: string[], env: Record<string, string> = {}): Promise<string> {
-  const vars = { HIPPO_HOME: path.join(tmpDir, 'global'), HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '', ...env };
+  const vars = {
+    HIPPO_HOME: path.join(tmpDir, 'global'),
+    HIPPO_SCOPE: '',
+    GSTACK_SKILL: '',
+    OPENCLAW_SKILL: '',
+    ...env,
+  };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
   const saved = process.cwd();
   process.chdir(tmpDir);

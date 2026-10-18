@@ -153,8 +153,9 @@ async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags)
     );
   }
   for (const blocker of result.blockers) {
-    console.log(`  Blocked: ${blocker}. Repair never upgrades a store; ` +
-      'any other hippo command does, then run repair again.');
+    console.log(
+      `  Blocked: ${blocker}. Repair never upgrades a store; ` + 'any other hippo command does, then run repair again.',
+    );
   }
   const restore = `hippo dormant restore <id>${flags['global'] ? ' --global' : ''}`;
   if (result.backup) {

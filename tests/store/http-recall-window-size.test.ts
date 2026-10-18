@@ -29,12 +29,15 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   home = makeRoot('http-windowsize');
-  writeEntry(home, createMemory('alpha', {
-    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    layer: Layer.Buffer,
-    kind: 'raw',
-    tenantId: 'default',
-  }));
+  writeEntry(
+    home,
+    createMemory('alpha', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      kind: 'raw',
+      tenantId: 'default',
+    }),
+  );
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 

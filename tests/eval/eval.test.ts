@@ -56,7 +56,7 @@ describe('ndcgAtK', () => {
   it('penalises relevant items at lower positions', () => {
     // single relevant at position 3 (discount log2(5)) vs ideal at position 1 (log2(2))
     const result = ndcgAtK(['x', 'y', 'z', 'a'], ['a'], 10);
-    expect(result).toBeCloseTo((1 / Math.log2(5)) / (1 / Math.log2(2)), 6);
+    expect(result).toBeCloseTo(1 / Math.log2(5) / (1 / Math.log2(2)), 6);
     expect(result).toBeLessThan(1);
   });
 
@@ -77,9 +77,13 @@ describe('ndcgAtK', () => {
 
 describe('runEval', () => {
   it('scores per-case and aggregates summary metrics', async () => {
-    const m1 = createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m1 = createMemory('FRED cache silently dropped the TIPS series', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const m2 = createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const m3 = createMemory('backfill script skipped rows before 2023-01-01', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m3 = createMemory('backfill script skipped rows before 2023-01-01', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const entries = [m1, m2, m3];
 
     const cases = [
@@ -89,17 +93,17 @@ describe('runEval', () => {
 
     const summary = await runEval(cases, entries);
     expect(summary.cases).toHaveLength(2);
-    expect(summary.meanMrr).toBe(1);           // both cases hit at rank 1
+    expect(summary.meanMrr).toBe(1); // both cases hit at rank 1
     expect(summary.meanRecallAt5).toBe(1);
     expect(summary.meanNdcgAt10).toBeCloseTo(1, 6);
     expect(summary.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('reports zero metrics when no expected id is recalled', async () => {
-    const m1 = createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const cases = [
-      { id: 'c1', query: 'unrelated query that matches nothing', expectedIds: ['mem_nonexistent'] },
-    ];
+    const m1 = createMemory('FRED cache silently dropped the TIPS series', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
+    const cases = [{ id: 'c1', query: 'unrelated query that matches nothing', expectedIds: ['mem_nonexistent'] }];
     const summary = await runEval(cases, [m1]);
     expect(summary.meanMrr).toBe(0);
     expect(summary.meanRecallAt10).toBe(0);
@@ -113,8 +117,12 @@ describe('runEval', () => {
 
 describe('bootstrapCorpus', () => {
   it('produces one case per memory with opening-words query and its id expected', () => {
-    const m1 = createMemory('The FRED cache silently dropped the TIPS series after refresh', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const m2 = createMemory('Python dict ordering is guaranteed in Python 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m1 = createMemory('The FRED cache silently dropped the TIPS series after refresh', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
+    const m2 = createMemory('Python dict ordering is guaranteed in Python 3.7+', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const corpus = bootstrapCorpus([m1, m2]);
     expect(corpus).toHaveLength(2);
     expect(corpus[0].expectedIds).toEqual([m1.id]);
@@ -124,7 +132,9 @@ describe('bootstrapCorpus', () => {
   it('skips memories with fewer than 3 substantive words', () => {
     // "fix now" = 2 substantive words (>2 chars each), so filtered out
     const tiny = createMemory('fix now', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const full = createMemory('The cache reliably drops entries under load', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const full = createMemory('The cache reliably drops entries under load', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const corpus = bootstrapCorpus([tiny, full]);
     expect(corpus).toHaveLength(1);
     expect(corpus[0].expectedIds).toEqual([full.id]);
@@ -180,9 +190,9 @@ describe('compareSummaries', () => {
       { id: 'c', mrr: 1, r10: 1, ndcg: 0.5 },
     ]);
     const cur = mockSummary([
-      { id: 'a', mrr: 1, r10: 1, ndcg: 0.8 },   // improved
-      { id: 'b', mrr: 1, r10: 1, ndcg: 0.6 },   // regressed
-      { id: 'c', mrr: 1, r10: 1, ndcg: 0.5 },   // unchanged
+      { id: 'a', mrr: 1, r10: 1, ndcg: 0.8 }, // improved
+      { id: 'b', mrr: 1, r10: 1, ndcg: 0.6 }, // regressed
+      { id: 'c', mrr: 1, r10: 1, ndcg: 0.5 }, // unchanged
     ]);
     const cmp = compareSummaries(base, cur);
     expect(cmp.improved.map((d) => d.id)).toEqual(['a']);
@@ -207,14 +217,14 @@ describe('compareSummaries', () => {
   it('sorts improved cases by largest NDCG uplift first', () => {
     const base = mockSummary([
       { id: 'small', mrr: 1, r10: 1, ndcg: 0.5 },
-      { id: 'big',   mrr: 1, r10: 1, ndcg: 0.1 },
+      { id: 'big', mrr: 1, r10: 1, ndcg: 0.1 },
     ]);
     const cur = mockSummary([
       { id: 'small', mrr: 1, r10: 1, ndcg: 0.55 },
-      { id: 'big',   mrr: 1, r10: 1, ndcg: 0.9 },
+      { id: 'big', mrr: 1, r10: 1, ndcg: 0.9 },
     ]);
     const cmp = compareSummaries(base, cur);
-    expect(cmp.improved[0].id).toBe('big');     // +0.8 uplift first
-    expect(cmp.improved[1].id).toBe('small');   // +0.05 uplift second
+    expect(cmp.improved[0].id).toBe('big'); // +0.8 uplift first
+    expect(cmp.improved[1].id).toBe('small'); // +0.05 uplift second
   });
 });

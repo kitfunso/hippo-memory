@@ -25,10 +25,10 @@ export interface InvalidationTarget {
 
 export interface InvalidationResult {
   invalidated: number;
-  targets: string[];  // IDs of affected memories
-  skippedPinned: string[];  // matched but pinned — never touched
+  targets: string[]; // IDs of affected memories
+  skippedPinned: string[]; // matched but pinned — never touched
   dryRun: boolean;
-  preview: { id: string; headline: string }[];  // what was (or would be) hit
+  preview: { id: string; headline: string }[]; // what was (or would be) hit
 }
 
 export interface InvalidationOptions {
@@ -39,7 +39,15 @@ export interface InvalidationOptions {
 }
 
 const TRIVIAL_REMOVAL_WORDS = new Set([
-  'extra', 'unused', 'empty', 'old', 'whitespace', 'spaces', 'blank', 'dead', 'commented',
+  'extra',
+  'unused',
+  'empty',
+  'old',
+  'whitespace',
+  'spaces',
+  'blank',
+  'dead',
+  'commented',
 ]);
 
 /** Extract what was replaced/removed from a commit message.
@@ -50,7 +58,7 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
 
   // Pattern: "migrate/switch/move/convert/transition/upgrade from X to Y"
   const fromToMatch = body.match(
-    /(?:migrat\w+|switch\w*|mov\w+|convert\w*|transition\w*|upgrad\w+)\s+(?:from\s+)?(.+?)\s+to\s+(.+)/i
+    /(?:migrat\w+|switch\w*|mov\w+|convert\w*|transition\w*|upgrad\w+)\s+(?:from\s+)?(.+?)\s+to\s+(.+)/i,
   );
   if (fromToMatch) {
     return { from: fromToMatch[1].trim(), to: fromToMatch[2].trim(), type: 'migration' };
@@ -79,7 +87,7 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
   if (removeMatch) {
     const target = removeMatch[1].trim();
     const words = target.split(/\s+/);
-    const isTrivial = words.length <= 2 && words.some(w => TRIVIAL_REMOVAL_WORDS.has(w.toLowerCase()));
+    const isTrivial = words.length <= 2 && words.some((w) => TRIVIAL_REMOVAL_WORDS.has(w.toLowerCase()));
     if (isTrivial) return null;
     return { from: target, to: null, type: 'removal' };
   }
@@ -143,7 +151,10 @@ export async function invalidateMatchingAmong(
   for (const chunk of chunked(ids, 500)) {
     for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
   }
-  const { result, weakened } = weakenMatches(ids.flatMap((id) => fresh.get(id) ?? []), target);
+  const { result, weakened } = weakenMatches(
+    ids.flatMap((id) => fresh.get(id) ?? []),
+    target,
+  );
   if (weakened.length > 0) await store.lessonWrites.writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
@@ -158,7 +169,7 @@ export function invalidationMatcher(targets: readonly InvalidationTarget[]): (en
 
 function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: string): boolean {
   const contentTokens = invalidationTokenize(entry.content);
-  const tagTokens = entry.tags.map(t => t.toLowerCase());
+  const tagTokens = entry.tags.map((t) => t.toLowerCase());
   const tokenMatch = matchScore(fromTokens, contentTokens);
   const tagMatch = tagTokens.includes(exactTag);
   return tokenMatch >= 0.5 || tagMatch;
@@ -210,10 +221,46 @@ function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarg
 }
 
 const STOPWORDS = new Set([
-  'the', 'an', 'is', 'it', 'in', 'on', 'at', 'to', 'for', 'of', 'by',
-  'and', 'or', 'but', 'not', 'with', 'from', 'that', 'this', 'was', 'are',
-  'be', 'has', 'had', 'have', 'been', 'will', 'would', 'could', 'should',
-  'do', 'does', 'did', 'all', 'our', 'old', 'new', 'use', 'used', 'using',
+  'the',
+  'an',
+  'is',
+  'it',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'by',
+  'and',
+  'or',
+  'but',
+  'not',
+  'with',
+  'from',
+  'that',
+  'this',
+  'was',
+  'are',
+  'be',
+  'has',
+  'had',
+  'have',
+  'been',
+  'will',
+  'would',
+  'could',
+  'should',
+  'do',
+  'does',
+  'did',
+  'all',
+  'our',
+  'old',
+  'new',
+  'use',
+  'used',
+  'using',
 ]);
 
 function invalidationTokenize(text: string): string[] {
@@ -221,21 +268,37 @@ function invalidationTokenize(text: string): string[] {
     .toLowerCase()
     .replace(/[^a-z0-9\s_.-]/g, ' ')
     .split(/\s+/)
-    .filter(t => t.length >= 2 && !STOPWORDS.has(t));
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
 function matchScore(fromTokens: string[], contentTokens: string[]): number {
   if (fromTokens.length === 0) return 0;
   const contentSet = new Set(contentTokens);
-  const matches = fromTokens.filter(t => contentSet.has(t)).length;
+  const matches = fromTokens.filter((t) => contentSet.has(t)).length;
   return matches / fromTokens.length;
 }
 
 // FE2: staleness from code churn (opt-in, ROADMAP Part XIII).
 
 const CHURN_PATH_EXTENSIONS = [
-  'ts', 'tsx', 'js', 'mjs', 'cjs', 'py', 'md', 'json', 'sh', 'ps1',
-  'toml', 'yml', 'yaml', 'sql', 'rs', 'go', 'css', 'html',
+  'ts',
+  'tsx',
+  'js',
+  'mjs',
+  'cjs',
+  'py',
+  'md',
+  'json',
+  'sh',
+  'ps1',
+  'toml',
+  'yml',
+  'yaml',
+  'sql',
+  'rs',
+  'go',
+  'css',
+  'html',
 ];
 const CHURN_PATH_RE = new RegExp(
   // The lookahead stops `ts` winning over `tsx` and `js` over `json`.
@@ -319,7 +382,7 @@ function buildTrackedIndex(paths: Set<string>): TrackedIndex {
 // Returns git's spelling so later exact matches against the log agree on case-insensitive Windows.
 function trackedSpelling(index: TrackedIndex, candidate: string): string | null {
   if (index.exact.has(candidate)) return candidate;
-  return IS_WIN32 ? index.lower.get(candidate.toLowerCase()) ?? null : null;
+  return IS_WIN32 ? (index.lower.get(candidate.toLowerCase()) ?? null) : null;
 }
 
 function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
@@ -328,21 +391,14 @@ function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
 
 // Absolute-path relativization and the <repoName>/ strip both need the repo, so they
 // happen here rather than in the pure extractor.
-function resolveTrackedPath(
-  token: string,
-  repoRoot: string,
-  projectName: string,
-  index: TrackedIndex,
-): string | null {
+function resolveTrackedPath(token: string, repoRoot: string, projectName: string, index: TrackedIndex): string | null {
   let candidate = token;
   const isAbsUnix = candidate.startsWith('/');
   const isAbsWin = /^[A-Za-z]:\//.test(candidate);
   if (isAbsUnix || isAbsWin) {
     const rootPosix = repoRoot.replace(/\\/g, '/').replace(/\/$/, '');
     const prefix = `${rootPosix}/`;
-    const under = IS_WIN32
-      ? candidate.toLowerCase().startsWith(prefix.toLowerCase())
-      : candidate.startsWith(prefix);
+    const under = IS_WIN32 ? candidate.toLowerCase().startsWith(prefix.toLowerCase()) : candidate.startsWith(prefix);
     if (!under) return null;
     candidate = candidate.slice(prefix.length);
   }
@@ -501,8 +557,7 @@ function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: n
     } else {
       // --no-renames means a rename shows as a D + A pair, so this also fires for renames.
       const deleted = git.windowLog.some(
-        (c) => new Date(c.date).getTime() > anchorTime &&
-          c.files.some((f) => f.status === 'D' && f.path === resolved),
+        (c) => new Date(c.date).getTime() > anchorTime && c.files.some((f) => f.status === 'D' && f.path === resolved),
       );
       if (deleted) return `file-deleted: ${resolved}`;
     }
@@ -592,7 +647,9 @@ function recordChurnEvidence(
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
  * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export function detectChurnStale(
-  learning: Learning, repoRoot: string, opts: DetectChurnStaleOptions,
+  learning: Learning,
+  repoRoot: string,
+  opts: DetectChurnStaleOptions,
 ): ChurnStaleResult {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);

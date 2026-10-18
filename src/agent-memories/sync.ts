@@ -3,12 +3,18 @@
 import { processEnv } from '../util/env.js';
 import os from 'node:os';
 import path from 'node:path';
+import { plural } from '../util/format.js';
 import { errorMessage } from '../util/log.js';
 import type { HippoConfig } from '../core/config.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { namesFoldedInto } from './project-folds.js';
 import {
-  isGlobalStoreRoot, isInitialized, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity,
+  isGlobalStoreRoot,
+  isInitialized,
+  projectNames,
+  resolveGlobalRootDir,
+  resolveProjectIdentity,
+  type ProjectIdentity,
 } from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import type { AgentImport, ImportTarget } from '../store/port/agent-import.js';
@@ -134,10 +140,18 @@ export function importUserMemories(invokingRoot: string, opts: SyncOptions): Imp
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
-  const report = runPass({
-    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false,
-    ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
-  }, opts);
+  const report = runPass(
+    {
+      scope: 'project',
+      target: globalRoot,
+      invoking: globalRoot,
+      list: (a) => a.list(ctx, 'project'),
+      legacy: false,
+      ...projectOrigins(resolveProjectIdentity(cwd)),
+      handover: false,
+    },
+    opts,
+  );
   if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
   mergeReports(report, importUserMemories(globalRoot, opts));
   return report;
@@ -158,10 +172,18 @@ export function importSessionFolder(
   const own = isGlobalStoreRoot(hippoRoot) || project.name === resolveProjectIdentity(path.dirname(hippoRoot)).name;
   const target = own ? hippoRoot : resolveGlobalRootDir();
   const ctx = context(opts.machine, {});
-  return runPass({
-    scope: 'project', target, invoking: hippoRoot, legacy: false, ...projectOrigins(project), handover: false,
-    list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
-  }, opts);
+  return runPass(
+    {
+      scope: 'project',
+      target,
+      invoking: hippoRoot,
+      legacy: false,
+      ...projectOrigins(project),
+      handover: false,
+      list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
+    },
+    opts,
+  );
 }
 
 function projectOrigins(project: ProjectIdentity): Pick<Pass, 'originProject' | 'legacyOrigins'> {
@@ -176,7 +198,10 @@ function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): 
  * The variable when set (empty or `none` is off); else the tools both the invoking and the target store's config allow.
  */
 export function allowedTools(
-  opts: Pick<SyncOptions, 'machine' | 'configAt'>, invoking: string, target: string, warnings: string[],
+  opts: Pick<SyncOptions, 'machine' | 'configAt'>,
+  invoking: string,
+  target: string,
+  warnings: string[],
 ): Set<ToolId> {
   const env = opts.machine.env;
   const fromEnv = env[TOOLS_ENV];
@@ -188,7 +213,11 @@ export function allowedTools(
             .split(',')
             .map((t) => t.trim())
             .filter((t) => t !== '');
-    return knownTools(listed, TOOLS_ENV, warnings);
+    // The value is never echoed: a secret set in this variable by mistake would reach the log.
+    let unknown = 0;
+    const known = knownTools(listed, () => unknown++);
+    if (unknown > 0) warnings.push(unknownToolsIgnored(TOOLS_ENV, plural(unknown, 'unknown agent memory tool')));
+    return known;
   }
   const mine = configuredTools(opts, invoking, warnings);
   const theirs = configuredTools(opts, target, warnings);
@@ -199,24 +228,23 @@ export function allowedTools(
   );
 }
 
-function configuredTools(
-  opts: Pick<SyncOptions, 'configAt'>, root: string, warnings: string[],
-): Set<ToolId> | null {
+function configuredTools(opts: Pick<SyncOptions, 'configAt'>, root: string, warnings: string[]): Set<ToolId> | null {
   const tools = opts.configAt(root).agentMemories.tools;
-  return tools === null ? null : knownTools(tools, 'config agentMemories.tools', warnings);
+  if (tools === null) return null;
+  return knownTools(tools, (id) =>
+    warnings.push(unknownToolsIgnored('config agentMemories.tools', `unknown agent memory tool "${id}"`)),
+  );
 }
 
-function knownTools(ids: readonly string[], where: string, warnings: string[]): Set<ToolId> {
+function unknownToolsIgnored(where: string, what: string): string {
+  return `${where}: ${what} ignored (known: ${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`;
+}
+
+function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Set<ToolId> {
   const out = new Set<ToolId>();
   for (const id of ids) {
-    if (isToolId(id)) {
-      out.add(id);
-    } else {
-      warnings.push(
-        `${where}: unknown agent memory tool "${id}" ignored (known: ` +
-        `${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`,
-      );
-    }
+    if (isToolId(id)) out.add(id);
+    else onUnknown(id);
   }
   return out;
 }
@@ -288,22 +316,13 @@ function openTarget(ai: AgentImport, target: string, hasItems: boolean, opts: Sy
   return { ai, target: ai.open(target, { busyWaitMs: opts.busyWaitMs }), global };
 }
 
-function storeSession(
-  pass: Pass,
-  store: OpenStore,
-  opts: SyncOptions,
-  legacy: LegacyWork | null,
-): StoreSession {
+function storeSession(pass: Pass, store: OpenStore, opts: SyncOptions, legacy: LegacyWork | null): StoreSession {
   return {
     target: store.target,
     tenantId: store.target.tenantId,
     baseHalfLifeDays: opts.configAt(store.target.root).defaultHalfLifeDays,
     originProject: pass.originProject,
-    isDuplicate: duplicateCheck(
-      store,
-      [pass.originProject ?? '', ...pass.legacyOrigins],
-      legacy?.adopted ?? new Set(),
-    ),
+    isDuplicate: duplicateCheck(store, [pass.originProject ?? '', ...pass.legacyOrigins], legacy?.adopted ?? new Set()),
     dryRun: opts.dryRun === true,
   };
 }
@@ -360,9 +379,7 @@ function syncStore(
 /** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
 function earlierNames(target: ImportTarget, id: string, legacyOrigins: readonly string[]): string[] {
   const names = [id, ...legacyOrigins];
-  return [...legacyOrigins, ...namesFoldedInto(target.projectTagReads(), names)].filter(
-    (n) => n !== '' && n !== id,
-  );
+  return [...legacyOrigins, ...namesFoldedInto(target.projectTagReads(), names)].filter((n) => n !== '' && n !== id);
 }
 
 interface ContainerWorkOptions {
@@ -456,11 +473,7 @@ function duplicateCheck(
   };
 }
 
-function otherPathKeys(
-  store: OpenStore,
-  origins: readonly string[],
-  adopted: ReadonlySet<string>,
-): Set<string> {
+function otherPathKeys(store: OpenStore, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
   const rows = store.target.rowsOutsideSourcePrefix(AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
   return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
@@ -524,11 +537,7 @@ interface HandOverContainerOptions {
   readonly report: ImportReport;
 }
 
-function handOverContainer(
-  target: ImportTarget,
-  work: ContainerWork,
-  options: HandOverContainerOptions,
-): void {
+function handOverContainer(target: ImportTarget, work: ContainerWork, options: HandOverContainerOptions): void {
   const { origins, platform, report } = options;
   // A note the local pass could not read has no local row yet, so its global copy stays until it does.
   const unread = new Set(work.container.skipped);

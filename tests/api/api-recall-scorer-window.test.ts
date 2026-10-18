@@ -23,7 +23,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:f3', role: 'admin' });
@@ -40,7 +44,9 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
 
 describe('RecallOptions.scorerWindow', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('f3'); });
+  beforeEach(() => {
+    root = makeRoot('f3');
+  });
   afterEach(() => safeRmSync(root));
 
   it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
@@ -84,9 +90,7 @@ describe('RecallOptions.scorerWindow', () => {
       expect((thrown as { code?: string })?.code).toBe('invalid_scorer_window');
       // SAFETY: see above — RecallContractError is the only error type this
       // call path can throw.
-      expect(String((thrown as { message?: string })?.message)).toMatch(
-        /scorerWindow must be a positive integer/,
-      );
+      expect(String((thrown as { message?: string })?.message)).toMatch(/scorerWindow must be a positive integer/);
     },
   );
 

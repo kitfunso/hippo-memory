@@ -264,7 +264,10 @@ describe('EmbeddingProvider', () => {
       const key = 'sk-supersecret-DEADBEEF';
       vi.stubEnv('OPENAI_API_KEY', key);
       const root = mkRoot({ provider: 'openai', model: 'm' });
-      vi.stubGlobal('fetch', vi.fn(async () => errorResponse(401, `Invalid key ${key} for org`)));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => errorResponse(401, `Invalid key ${key} for org`)),
+      );
 
       const err: unknown = await resolveEmbeddingProvider(loadConfig(root).embeddings)
         .embed(['x'])
@@ -277,7 +280,10 @@ describe('EmbeddingProvider', () => {
     it('throws on a non-2xx response (so a reindex aborts atomically)', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'k');
       const root = mkRoot({ provider: 'openai', model: 'm' });
-      vi.stubGlobal('fetch', vi.fn(async () => errorResponse(500, 'server error')));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => errorResponse(500, 'server error')),
+      );
       await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['x'])).rejects.toThrow(/500/);
     });
 
@@ -285,7 +291,10 @@ describe('EmbeddingProvider', () => {
       vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'm' });
       // 200 OK but only one vector for two inputs.
-      vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ data: [{ embedding: [1, 0] }] })));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse({ data: [{ embedding: [1, 0] }] })),
+      );
       await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b'], 'passage')).rejects.toThrow(
         /vectors for/,
       );

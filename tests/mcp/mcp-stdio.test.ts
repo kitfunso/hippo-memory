@@ -40,9 +40,7 @@ describe('parseFrame', () => {
   });
 
   it('handles back-to-back NDJSON messages', () => {
-    const buf = Buffer.from(
-      '{"jsonrpc":"2.0","id":1,"method":"a"}\n{"jsonrpc":"2.0","id":2,"method":"b"}\n'
-    );
+    const buf = Buffer.from('{"jsonrpc":"2.0","id":1,"method":"a"}\n{"jsonrpc":"2.0","id":2,"method":"b"}\n');
     const first = parseFrame(buf);
     expect(first.kind).toBe('message');
     if (first.kind !== 'message') return;
@@ -87,7 +85,10 @@ describe('hippo mcp stdio', () => {
       const exited = new Promise<void>((resolve) => proc!.once('exit', () => resolve()));
       // Closing stdin lets the server exit itself and write its coverage; SIGKILL would lose it.
       proc.stdin.end();
-      const timedOut = await Promise.race([exited.then(() => false), new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 2000))]);
+      const timedOut = await Promise.race([
+        exited.then(() => false),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 2000)),
+      ]);
       if (timedOut) proc.kill('SIGKILL');
       await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
     }

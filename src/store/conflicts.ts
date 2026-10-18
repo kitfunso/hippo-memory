@@ -14,17 +14,21 @@ import { placeholders } from '../util/sql.js';
 import type { KeysetClause } from '../util/keyset.js';
 import type { DetectedConflict } from './port/consolidation.js';
 import type {
-  ConflictListQuery, ConflictMember, ConflictResolution, ConflictRow, ConflictRowPage,
+  ConflictListQuery,
+  ConflictMember,
+  ConflictResolution,
+  ConflictRow,
+  ConflictRowPage,
 } from './port/conflicts.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
-const CONFLICT_COLS_MC = CONFLICT_COLS.split(', ').map((c) => `mc.${c}`).join(', ');
+const CONFLICT_COLS_MC = CONFLICT_COLS.split(', ')
+  .map((c) => `mc.${c}`)
+  .join(', ');
 
 function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
-  return aId < bId
-    ? { memory_a_id: aId, memory_b_id: bId }
-    : { memory_a_id: bId, memory_b_id: aId };
+  return aId < bId ? { memory_a_id: aId, memory_b_id: bId } : { memory_a_id: bId, memory_b_id: aId };
 }
 
 // Each member's columns the api's conflict rules read, aliased per side so one JOIN carries both.
@@ -69,9 +73,10 @@ function toConflictRow(r: ConflictJoinRow): ConflictRow {
  * surfaces; with none, every conflict comes back with whichever members still exist. */
 function conflictSelect(tenantId: string | null, filters: readonly KeysetClause[]): KeysetClause {
   const join = tenantId === null ? 'LEFT JOIN' : 'JOIN';
-  const where: KeysetClause[] = tenantId === null
-    ? [...filters]
-    : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
+  const where: KeysetClause[] =
+    tenantId === null
+      ? [...filters]
+      : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
   return {
     sql:
       `SELECT ${CONFLICT_ROW_COLS} FROM memory_conflicts mc ${join} memories ma ON ma.id = mc.memory_a_id ` +
@@ -160,12 +165,14 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
   // SAFETY: rows' shape matches the three columns named in the SELECT.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, tenant_id, conflicts_with_json FROM memories
     WHERE conflicts_with_json != '[]'
       OR id IN (SELECT memory_a_id FROM memory_conflicts WHERE status = 'open')
       OR id IN (SELECT memory_b_id FROM memory_conflicts WHERE status = 'open')
-  `).all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>;
+  `)
+    .all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>;
   for (const r of rows) {
     tenantById.set(r.id, r.tenant_id);
     if (r.conflicts_with_json !== '[]') storedRefs.set(r.id, r.conflicts_with_json);
@@ -218,11 +225,13 @@ function resolveStaleOpenConflicts(
   const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
 
   // SAFETY: openRows' shape matches the columns named in CONFLICT_COLS.
-  const openRows = db.prepare(`
+  const openRows = db
+    .prepare(`
     SELECT ${CONFLICT_COLS}
     FROM memory_conflicts
     WHERE status = 'open'
-  `).all() as MemoryConflictRow[];
+  `)
+    .all() as MemoryConflictRow[];
 
   const resolve = db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ?`);
   for (const row of openRows) {
@@ -253,25 +262,20 @@ function upsertDetectedConflicts(
   for (const conflict of canonicalDetected) {
     // Skip cross-tenant pairs — never persist a conflict spanning tenants.
     if (!sameTenant(conflict.memory_a_id, conflict.memory_b_id)) continue;
-    upsert.run(
-      conflict.memory_a_id,
-      conflict.memory_b_id,
-      conflict.reason,
-      conflict.score,
-      detectedAt,
-      detectedAt,
-    );
+    upsert.run(conflict.memory_a_id, conflict.memory_b_id, conflict.reason, conflict.score, detectedAt, detectedAt);
   }
 }
 
 /** Rewrites only the rows whose conflicts_with_json changes, and returns their ids. */
 function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs }: ConflictRefreshReads): string[] {
   // SAFETY: openConflicts' shape matches the two columns named above.
-  const openConflicts = db.prepare(`
+  const openConflicts = db
+    .prepare(`
     SELECT memory_a_id, memory_b_id
     FROM memory_conflicts
     WHERE status = 'open'
-  `).all() as Array<{ memory_a_id: string; memory_b_id: string }>;
+  `)
+    .all() as Array<{ memory_a_id: string; memory_b_id: string }>;
 
   const refMap = new Map<string, Set<string>>();
   for (const row of openConflicts) {
@@ -292,7 +296,7 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
   );
   const changedIds: string[] = [];
   for (const id of new Set([...storedRefs.keys(), ...refMap.keys()])) {
-    const stored = storedRefs.has(id) ? storedRefs.get(id) ?? null : '[]';
+    const stored = storedRefs.has(id) ? (storedRefs.get(id) ?? null) : '[]';
     const refsJson = JSON.stringify(Array.from(refMap.get(id) ?? []).sort());
     if (stored === refsJson) continue;
     if (Number(update.run(refsJson, id, stored).changes ?? 0) > 0) changedIds.push(id);
@@ -321,11 +325,13 @@ function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: Confl
   const { conflictId, keep, loser } = resolution;
   const pair = [keep.id, loser.id, loser.id, keep.id];
   const sides = [keep.id, tenantId, keep.scope, loser.id, tenantId, loser.scope];
-  const claimed = db.prepare(
-    `UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ? AND status = 'open' ` +
-      `AND ((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) ` +
-      `AND ${SIDE_HOLDS} AND ${SIDE_HOLDS}`,
-  ).run(conflictId, ...pair, ...sides);
+  const claimed = db
+    .prepare(
+      `UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ? AND status = 'open' ` +
+        `AND ((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) ` +
+        `AND ${SIDE_HOLDS} AND ${SIDE_HOLDS}`,
+    )
+    .run(conflictId, ...pair, ...sides);
   return Number(claimed.changes ?? 0) > 0;
 }
 
@@ -339,9 +345,10 @@ export function resolveConflictAt(
 ): boolean {
   const removal = withWriteScope(db, 'resolve_conflict', () => {
     if (!claimConflict(db, tenantId, resolution)) return null;
-    const out = resolution.fate.kind === 'weaken'
-      ? weakenConflictLoser(db, tenantId, resolution)
-      : removeConflictLoser(db, tenantId, resolution);
+    const out =
+      resolution.fate.kind === 'weaken'
+        ? weakenConflictLoser(db, tenantId, resolution)
+        : removeConflictLoser(db, tenantId, resolution);
     stripConflictRefs(db, tenantId, resolution, out.loserRemoved);
     auditConflictResolve(db, tenantId, resolution, out);
     return out;
@@ -488,12 +495,14 @@ function tombstoneLoserValue(
 /** Drops `ref` from row `id`'s conflicts_with_json, when the row is in the tenant. */
 function dropConflictRef(db: DatabaseSyncLike, tenantId: string, id: string, ref: string): void {
   // SAFETY: the single `conflicts_with_json` column named in the SELECT.
-  const row = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`)
+  const row = db
+    .prepare(`SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`)
     .get(id, tenantId) as { conflicts_with_json: string } | undefined;
   if (!row) return;
   const refs = parseJsonArray(row.conflicts_with_json, { table: 'memories', id, column: 'conflicts_with_json' });
-  db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`)
-    .run(JSON.stringify(refs.filter((r: string) => r !== ref)), id, tenantId);
+  db.prepare(
+    `UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+  ).run(JSON.stringify(refs.filter((r: string) => r !== ref)), id, tenantId);
 }
 
 function stripConflictRefs(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution, loserRemoved: boolean): void {
@@ -560,7 +569,7 @@ export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictI
   return db
     .prepare(
       `SELECT json_extract(metadata_json, '$.conflictId') ` +
-      `AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
+        `AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
         `FROM audit_log WHERE op = 'conflict_resolve'`,
     )
     .all() as { conflictId: number; loserId: string }[];

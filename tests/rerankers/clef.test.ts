@@ -12,8 +12,12 @@ afterEach(() => {
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const FAKE_TOKEN = 'fake-cloudflare-token-for-tests';
 const ENV_KEYS = [
-  'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT',
-  'HIPPO_CLEF_ENDPOINT_TOKEN', 'HIPPO_CLEF_TIMEOUT_MS', 'TYPESAFE_API_KEY',
+  'CLOUDFLARE_ACCOUNT_ID',
+  'CLOUDFLARE_API_TOKEN',
+  'HIPPO_CLEF_ENDPOINT',
+  'HIPPO_CLEF_ENDPOINT_TOKEN',
+  'HIPPO_CLEF_TIMEOUT_MS',
+  'TYPESAFE_API_KEY',
 ];
 
 function asResult(content: string, score: number): SearchResult {
@@ -31,7 +35,9 @@ function json(body: JsonValue, status = 200): Response {
 function workersReply(nouls: number[], model = 'clef-flash'): Response {
   return json({
     result: { model, answers: answersFor(nouls), usage: { input_tokens: 812, output_tokens: 3 } },
-    success: true, errors: [], messages: [],
+    success: true,
+    errors: [],
+    messages: [],
   });
 }
 
@@ -63,7 +69,9 @@ describe('clef rerankers', () => {
     expect(out[0].preRerankRank).toBe(2);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/@cf/cloudflare/clef-flash`);
+    expect(String(url)).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/@cf/cloudflare/clef-flash`,
+    );
     expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${FAKE_TOKEN}`);
     const body = JSON.parse(String(init?.body));
     expect(Object.keys(body).sort()).toEqual(['model', 'questions', 'state']);
@@ -77,7 +85,11 @@ describe('clef rerankers', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.2, 0.4, 0.6], 'clef'));
     const out = await createClefReranker('clef')('q', inputs());
     expect(out[0].rerankProvenance).toEqual({
-      backend: 'cloudflare', requestedModel: 'clef', actualModel: 'clef', inputTokens: 812, outputTokens: 3,
+      backend: 'cloudflare',
+      requestedModel: 'clef',
+      actualModel: 'clef',
+      inputTokens: 812,
+      outputTokens: 3,
     });
   });
 
@@ -103,10 +115,21 @@ describe('clef rerankers', () => {
   });
 
   it.each([
-    ['a missing answer', { result: { model: 'clef-flash', answers: { c1: { type: 'noul', noul: 0.9 }, c3: { type: 'noul', noul: 0.1 } } } }],
+    [
+      'a missing answer',
+      {
+        result: { model: 'clef-flash', answers: { c1: { type: 'noul', noul: 0.9 }, c3: { type: 'noul', noul: 0.1 } } },
+      },
+    ],
     ['an out-of-range answer', { result: { model: 'clef-flash', answers: answersFor([0.2, 1.5, 0.1]) } }],
-    ['a non-numeric answer', { result: { model: 'clef-flash', answers: { ...answersFor([0.2, 0.3]), c3: { type: 'noul', noul: '0.9' } } } }],
-    ['a wrong answer type', { result: { model: 'clef-flash', answers: { ...answersFor([0.2, 0.3]), c3: { type: 'score', noul: 0.9 } } } }],
+    [
+      'a non-numeric answer',
+      { result: { model: 'clef-flash', answers: { ...answersFor([0.2, 0.3]), c3: { type: 'noul', noul: '0.9' } } } },
+    ],
+    [
+      'a wrong answer type',
+      { result: { model: 'clef-flash', answers: { ...answersFor([0.2, 0.3]), c3: { type: 'score', noul: 0.9 } } } },
+    ],
     ['an extra answer', { result: { model: 'clef-flash', answers: answersFor([0.2, 0.3, 0.4, 0.5]) } }],
     ['a different model', { result: { model: 'clef', answers: answersFor([0.2, 0.9, 0.1]) } }],
     ['no model name from Workers AI', { result: { answers: answersFor([0.2, 0.9, 0.1]) } }],
@@ -130,9 +153,10 @@ describe('clef rerankers', () => {
 
     vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', '5');
     vi.spyOn(globalThis, 'fetch').mockImplementation(
-      async (_url, init) => new Promise((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-      }),
+      async (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
     );
     const out = await rerank('q', inputs());
     expect(contents(out)).toEqual(NATIVE);
@@ -231,7 +255,11 @@ describe('clef rerankers', () => {
   it('redacts secrets from the query and the candidates before sending', async () => {
     const secret = `sk-${'a'.repeat(40)}`;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
-    await createClefReranker('clef-flash')(`q ${secret}`, [asResult(`key ${secret}`, 1), asResult('bravo', 0.9), asResult('charlie', 0.8)]);
+    await createClefReranker('clef-flash')(`q ${secret}`, [
+      asResult(`key ${secret}`, 1),
+      asResult('bravo', 0.9),
+      asResult('charlie', 0.8),
+    ]);
     expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain(secret);
   });
 
@@ -239,7 +267,11 @@ describe('clef rerankers', () => {
     const bearer = `Bearer ${'b'.repeat(24)}`;
     const jwt = `eyJ${'h'.repeat(12)}.eyJ${'p'.repeat(12)}.sig`;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
-    await createClefReranker('clef-flash')(`q ${bearer}`, [asResult(`tok ${jwt}`, 1), asResult('bravo', 0.9), asResult('charlie', 0.8)]);
+    await createClefReranker('clef-flash')(`q ${bearer}`, [
+      asResult(`tok ${jwt}`, 1),
+      asResult('bravo', 0.9),
+      asResult('charlie', 0.8),
+    ]);
     const sent = String(fetchMock.mock.calls[0][1]?.body);
     expect(sent).not.toContain('b'.repeat(24));
     expect(sent).not.toContain(jwt);
@@ -259,16 +291,22 @@ describe('clef rerankers', () => {
     expect(String(warnSpy.mock.calls[0][0])).not.toContain('secret-part');
   });
 
-  it.each(['15s', '-1', '1.5', '999999999999'])('uses the default timeout for HIPPO_CLEF_TIMEOUT_MS=%s', async (value) => {
-    vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', value);
-    // An answer 60 ms in beats the 15 s default; a misread value (15 ms, 1 ms, out of range) would lose to it and keep the native order.
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Promise((resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-      setTimeout(() => resolve(workersReply([0.1, 0.2, 0.3])), 60);
-    }));
-    const out = await createClefReranker('clef-flash')('q', inputs());
-    expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
-  });
+  it.each(['15s', '-1', '1.5', '999999999999'])(
+    'uses the default timeout for HIPPO_CLEF_TIMEOUT_MS=%s',
+    async (value) => {
+      vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', value);
+      // An answer 60 ms in beats the 15 s default; a misread value (15 ms, 1 ms, out of range) would lose to it and keep the native order.
+      vi.spyOn(globalThis, 'fetch').mockImplementation(
+        async (_url, init) =>
+          new Promise((resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+            setTimeout(() => resolve(workersReply([0.1, 0.2, 0.3])), 60);
+          }),
+      );
+      const out = await createClefReranker('clef-flash')('q', inputs());
+      expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
+    },
+  );
 
   it('keeps the native order when a reply runs past the byte cap', async () => {
     const huge = new Response(`{"pad":"${'x'.repeat(1024 * 1024 + 10)}"}`, { status: 200 });

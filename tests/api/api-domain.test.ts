@@ -38,19 +38,16 @@ describe('api domain — recall/forget/promote/supersede', () => {
   });
 
   it('recall returns BM25 candidates and audits with the supplied actor', async () => {
-    await remember(
-      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
-      { content: 'recall-canary alpha-token sentinel' },
-    );
-    await remember(
-      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
-      { content: 'unrelated content for noise' },
-    );
+    await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
+      content: 'recall-canary alpha-token sentinel',
+    });
+    await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
+      content: 'unrelated content for noise',
+    });
 
-    const result = await retrieve(
-      apiCtx(home, 'default', { subject: 'api_key:hk_recall', role: 'admin' }),
-      { query: 'alpha-token' },
-    );
+    const result = await retrieve(apiCtx(home, 'default', { subject: 'api_key:hk_recall', role: 'admin' }), {
+      query: 'alpha-token',
+    });
 
     // The noise row shares no term with the query, so only the canary is a candidate.
     expect(result.results).toHaveLength(1);
@@ -71,16 +68,12 @@ describe('api domain — recall/forget/promote/supersede', () => {
   });
 
   it('forget deletes the row and audits with the supplied actor', async () => {
-    const { id } = await remember(
-      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
-      { content: 'forget-me-please' },
-    );
+    const { id } = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
+      content: 'forget-me-please',
+    });
     expect(readEntry(home, id)?.id).toBe(id);
 
-    const result = await forget(
-      apiCtx(home, 'default', { subject: 'api_key:hk_forget', role: 'admin' }),
-      id,
-    );
+    const result = await forget(apiCtx(home, 'default', { subject: 'api_key:hk_forget', role: 'admin' }), id);
     expect(result).toEqual({ ok: true, id });
     expect(readEntry(home, id)).toBeNull();
 
@@ -97,10 +90,9 @@ describe('api domain — recall/forget/promote/supersede', () => {
   });
 
   it('promote copies a memory into the global store and audits with the supplied actor', async () => {
-    const { id } = await remember(
-      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
-      { content: 'promote-me-to-global' },
-    );
+    const { id } = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
+      content: 'promote-me-to-global',
+    });
 
     const result = await promote(apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' }), id);
     expect(result.ok).toBe(true);
@@ -125,36 +117,52 @@ describe('api domain — recall/forget/promote/supersede', () => {
   });
 
   it.each([
-    ['quarantined', { scope: 'quarantine:private:unscoped' }, 'promote-veto quarantined row',
-      (id: string) => `Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`],
-    ['personal', { scope: 'personal:private:alice' }, 'promote-veto personal row',
-      (id: string) => `Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`],
-    ['secret', {}, 'service api key sk_vendor_deadbeef123456 for the ingest worker',
-      (id: string) => `Refusing to promote ${id} to the global store: content matches secret material ` +
-        `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`],
-  ] as const)('promote refuses a %s row with a 400 and its text, writing no copy and no promote row', async (_kind, scope, content, text) => {
-    const row = createMemory(content, { tenantId: 'default', ...scope });
-    writeEntry(home, row);
-    const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin', owner: 'alice' });
+    [
+      'quarantined',
+      { scope: 'quarantine:private:unscoped' },
+      'promote-veto quarantined row',
+      (id: string) =>
+        `Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
+    ],
+    [
+      'personal',
+      { scope: 'personal:private:alice' },
+      'promote-veto personal row',
+      (id: string) => `Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`,
+    ],
+    [
+      'secret',
+      {},
+      'service api key sk_vendor_deadbeef123456 for the ingest worker',
+      (id: string) =>
+        `Refusing to promote ${id} to the global store: content matches secret material ` +
+        `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`,
+    ],
+  ] as const)(
+    'promote refuses a %s row with a 400 and its text, writing no copy and no promote row',
+    async (_kind, scope, content, text) => {
+      const row = createMemory(content, { tenantId: 'default', ...scope });
+      writeEntry(home, row);
+      const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin', owner: 'alice' });
 
-    const err = await promote(ctx, row.id).catch((e: Error) => e);
+      const err = await promote(ctx, row.id).catch((e: Error) => e);
 
-    expect(err).toBeInstanceOf(BadRequestError);
-    expect(err).toMatchObject({ status: 400, message: text(row.id) });
-    const db = openHippoDb(globalHome);
-    try {
-      expect(queryAuditEvents(db, { tenantId: 'default', op: 'promote' })).toEqual([]);
-      expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get()).toEqual({ n: 0 });
-    } finally {
-      closeHippoDb(db);
-    }
-  });
+      expect(err).toBeInstanceOf(BadRequestError);
+      expect(err).toMatchObject({ status: 400, message: text(row.id) });
+      const db = openHippoDb(globalHome);
+      try {
+        expect(queryAuditEvents(db, { tenantId: 'default', op: 'promote' })).toEqual([]);
+        expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get()).toEqual({ n: 0 });
+      } finally {
+        closeHippoDb(db);
+      }
+    },
+  );
 
   it('supersede chains old -> new and audits with the supplied actor', async () => {
-    const { id: oldId } = await remember(
-      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
-      { content: 'original-belief' },
-    );
+    const { id: oldId } = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
+      content: 'original-belief',
+    });
 
     const result = await supersede(
       apiCtx(home, 'default', { subject: 'api_key:hk_supersede', role: 'admin' }),
@@ -318,24 +326,15 @@ describe('api domain — archive_raw / auth / audit', () => {
       closeHippoDb(db);
     }
 
-    const aAll = await auditList(
-      apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }),
-      {},
-    );
+    const aAll = await auditList(apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }), {});
     expect(aAll.length).toBe(2);
     expect(aAll.every((e) => e.tenantId === 'tenant-a')).toBe(true);
 
-    const aRemember = await auditList(
-      apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }),
-      { op: 'remember' },
-    );
+    const aRemember = await auditList(apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }), { op: 'remember' });
     expect(aRemember.length).toBe(1);
     expect(aRemember[0]!.targetId).toBe('a1');
 
-    const bAll = await auditList(
-      apiCtx(home, 'tenant-b', { subject: 'cli', role: 'admin' }),
-      {},
-    );
+    const bAll = await auditList(apiCtx(home, 'tenant-b', { subject: 'cli', role: 'admin' }), {});
     expect(bAll.length).toBe(1);
     expect(bAll[0]!.targetId).toBe('b1');
   });

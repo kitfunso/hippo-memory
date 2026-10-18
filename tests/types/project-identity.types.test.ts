@@ -3,8 +3,11 @@
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER, resolveProjectIdentity,
-  type ProjectIdentity, type ResolveProjectIdentityOpts,
+  MAX_PROJECT_ALIASES,
+  MCP_PROJECT_SCOPED_HEADER,
+  resolveProjectIdentity,
+  type ProjectIdentity,
+  type ResolveProjectIdentityOpts,
 } from '../../src/entry/project-identity.js';
 
 describe('hippo-memory/project-identity entry types', () => {

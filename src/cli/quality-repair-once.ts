@@ -19,8 +19,10 @@ export async function repairQualityOnceAt(root: string, tenantId: string): Promi
     const scope = path.resolve(root) === path.resolve(getGlobalRoot()) ? ' --global' : '';
     const moved = result.appliedIds.length;
     if (moved > 0) {
-      console.log(`Set aside ${moved} automatic ${moved === 1 ? 'memory' : 'memories'} with a certain defect, ` +
-        `once after the upgrade (backup: ${result.backup}).`);
+      console.log(
+        `Set aside ${moved} automatic ${moved === 1 ? 'memory' : 'memories'} with a certain defect, ` +
+          `once after the upgrade (backup: ${result.backup}).`,
+      );
       console.log(`  List them: hippo dormant${scope}   Bring one back: hippo dormant restore <id>${scope}`);
     }
     const review = result.issues.filter((issue) => issue.disposition === 'review').length;
@@ -28,7 +30,7 @@ export async function repairQualityOnceAt(root: string, tenantId: string): Promi
       const lead = moved > 0 ? `  ${review} more` : `Checked old automatic memories once after the upgrade: ${review}`;
       console.log(
         `${lead} ${review === 1 ? 'looks' : 'look'} doubtful and ${review === 1 ? 'was' : 'were'} kept; hippo audit ` +
-        `repair${scope} lists them.`,
+          `repair${scope} lists them.`,
       );
     }
     for (const warning of result.warnings) log.warn(warning);

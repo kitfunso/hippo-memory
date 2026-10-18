@@ -38,7 +38,9 @@ export function verifyGitHubSignature(opts: VerifyOptions): boolean {
  * replays cannot bypass dedupe.
  */
 export function computeIdempotencyKey(artifactRef: string, updatedAt: string | null | undefined): string {
-  return createHash('sha256').update(`${artifactRef}:${updatedAt ?? ''}`).digest('hex');
+  return createHash('sha256')
+    .update(`${artifactRef}:${updatedAt ?? ''}`)
+    .digest('hex');
 }
 
 /** Deletion idempotency key: sha256('deleted:' + artifactRef + ':' + updatedAt).
@@ -46,5 +48,7 @@ export function computeIdempotencyKey(artifactRef: string, updatedAt: string | n
  * deletion still dedupe.
  */
 export function computeDeletionKey(artifactRef: string, updatedAt: string | null | undefined): string {
-  return createHash('sha256').update(`deleted:${artifactRef}:${updatedAt ?? ''}`).digest('hex');
+  return createHash('sha256')
+    .update(`deleted:${artifactRef}:${updatedAt ?? ''}`)
+    .digest('hex');
 }

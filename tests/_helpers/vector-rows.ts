@@ -31,14 +31,18 @@ function unit(v: number[]): number[] {
 export function clusteredVectors(n: number, dim: number, seed: number): number[][] {
   const r = seededRandom(seed);
   const gauss = (): number => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
-  const centres = Array.from({ length: Math.max(1, Math.floor(n / 20)) }, () => unit(Array.from({ length: dim }, gauss)));
-  return Array.from({ length: n }, (_, i) => unit(centres[i % centres.length].map((x) => x + gauss() * 0.5 / Math.sqrt(dim))));
+  const centres = Array.from({ length: Math.max(1, Math.floor(n / 20)) }, () =>
+    unit(Array.from({ length: dim }, gauss)),
+  );
+  return Array.from({ length: n }, (_, i) =>
+    unit(centres[i % centres.length].map((x) => x + (gauss() * 0.5) / Math.sqrt(dim))),
+  );
 }
 
 /** `v` moved a little, as a query near a stored row is. */
 export function near(v: readonly number[], seed: number): number[] {
   const r = seededRandom(seed);
-  return unit(v.map((x) => x + (r() - 0.5) * 0.2 / Math.sqrt(v.length)));
+  return unit(v.map((x) => x + ((r() - 0.5) * 0.2) / Math.sqrt(v.length)));
 }
 
 export function seedVectorRows(root: string, rows: readonly VectorRowSeed[], model = 'test:vectors'): void {
@@ -46,10 +50,17 @@ export function seedVectorRows(root: string, rows: readonly VectorRowSeed[], mod
   try {
     db.exec('BEGIN');
     for (const row of rows) {
-      const entry = { ...createMemory(`memory ${row.id}`, { tenantId: row.tenantId, scope: row.scope ?? null }), id: row.id };
+      const entry = {
+        ...createMemory(`memory ${row.id}`, { tenantId: row.tenantId, scope: row.scope ?? null }),
+        id: row.id,
+      };
       writeEntryDbOnly(db, entry);
     }
-    upsertVectors(db, rows.map((row): [string, readonly number[]] => [row.id, row.vector]), model);
+    upsertVectors(
+      db,
+      rows.map((row): [string, readonly number[]] => [row.id, row.vector]),
+      model,
+    );
     setMeta(db, EMBEDDING_MODEL_META_KEY, model);
     db.exec('COMMIT');
   } finally {

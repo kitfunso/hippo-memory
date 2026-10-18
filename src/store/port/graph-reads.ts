@@ -31,7 +31,9 @@ export interface GraphReads {
   entitiesForMemories(tenantId: string, memoryIds: readonly string[]): Promise<Entity[]>;
   entitiesByIds(tenantId: string, ids: readonly number[]): Promise<Entity[]>;
   neighborRelations(
-    tenantId: string, entityIds: readonly number[], opts: { readonly limit: number },
+    tenantId: string,
+    entityIds: readonly number[],
+    opts: { readonly limit: number },
   ): Promise<Relation[]>;
   /** The tenant's entities and relations, each id ascending, and the kind of each of `memoryIds` held in any tenant. */
   storedGraph(tenantId: string, memoryIds: readonly string[]): Promise<StoredGraph>;

@@ -11,8 +11,15 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  serve, authRevoke, ForbiddenError, isReservedActor,
-  type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
+  serve,
+  authRevoke,
+  ForbiddenError,
+  isReservedActor,
+  type ServerHandle,
+  type AuthResolver,
+  type ResolvedBearer,
+  type ServeOpts,
+  type Context,
 } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -34,7 +41,11 @@ let home: string;
 let handle: ServerHandle | undefined;
 let apiKey: CreateApiKeyResult;
 
-async function start(authResolver?: AuthResolver, hippoRoot = home, extra: Partial<ServeOpts> = {}): Promise<ServerHandle> {
+async function start(
+  authResolver?: AuthResolver,
+  hippoRoot = home,
+  extra: Partial<ServeOpts> = {},
+): Promise<ServerHandle> {
   handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, authResolver, ...extra });
   return handle;
 }
@@ -81,20 +92,26 @@ function holdHeartbeat(): void {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 }
 
-const tick = (count = 1): void => { vi.advanceTimersByTime(HEARTBEAT_MS * count); };
+const tick = (count = 1): void => {
+  vi.advanceTimersByTime(HEARTBEAT_MS * count);
+};
 
 /** Counts its calls and holds the answer to call number `held` until the test releases it. */
 function heldResolver(held: number) {
   let calls = 0;
   let release!: () => void;
-  const answer = new Promise<ResolvedBearer>((ok) => { release = () => ok(GOOD); });
+  const answer = new Promise<ResolvedBearer>((ok) => {
+    release = () => ok(GOOD);
+  });
   const resolver: AuthResolver = (t) => (t !== EXT ? null : ++calls === held ? answer : GOOD);
   return { resolver, calls: () => calls, release };
 }
 
 /** Settles once the server sees the next request's socket close; arm it before that request is sent. */
 function nextRequestClosed(): Promise<void> {
-  return new Promise((ok) => handle!.server!.once('request', (_req, res: ServerResponse) => res.once('close', () => ok())));
+  return new Promise((ok) =>
+    handle!.server!.once('request', (_req, res: ServerResponse) => res.once('close', () => ok())),
+  );
 }
 
 // Nothing between a resolver answer and the handler's next move waits on I/O or a timer, so one macrotask turn sees it done.
@@ -102,8 +119,10 @@ const settle = (): Promise<void> => new Promise((ok) => setImmediate(ok));
 
 type Loose = Partial<Record<keyof ResolvedBearer, string | Array<string | number | null>>>;
 // SAFETY: tests pass deliberately malformed fields to prove the core rejects or downgrades them.
-const tokenResolver = (over: Loose = {}): AuthResolver =>
-  (t) => (t === EXT ? ({ ...GOOD, ...over } as ResolvedBearer) : null);
+const tokenResolver =
+  (over: Loose = {}): AuthResolver =>
+  (t) =>
+    t === EXT ? ({ ...GOOD, ...over } as ResolvedBearer) : null;
 
 function get(path: string, token: string): Promise<Response> {
   return fetch(`${handle!.url}${path}`, { headers: { authorization: `Bearer ${token}` } });
@@ -292,10 +311,13 @@ describe('auth resolver sanitising', () => {
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
   });
 
-  it.each(['__host__', '__unroutable__', '__anything', 'a\nb', 'x'.repeat(257)])('rejects reserved or malformed tenant %s', async (tenantId) => {
-    await start(tokenResolver({ tenantId }));
-    expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
-  });
+  it.each(['__host__', '__unroutable__', '__anything', 'a\nb', 'x'.repeat(257)])(
+    'rejects reserved or malformed tenant %s',
+    async (tenantId) => {
+      await start(tokenResolver({ tenantId }));
+      expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
+    },
+  );
 
   it('trims surrounding whitespace from the tenant before use', async () => {
     await start(tokenResolver({ tenantId: ' acme ' }));
@@ -329,8 +351,21 @@ describe('auth resolver sanitising', () => {
   });
 
   it.each([
-    'api_key:x', 'API_KEY:x', 'localhost:cli', 'cli', 'CLI', 'cli:drill', 'system', 'mcp', 'mcp:bridge', 'connector:slack',
-    'sleep', 'sleep:x', 'post-compact', 'recall', 'agent-memories',
+    'api_key:x',
+    'API_KEY:x',
+    'localhost:cli',
+    'cli',
+    'CLI',
+    'cli:drill',
+    'system',
+    'mcp',
+    'mcp:bridge',
+    'connector:slack',
+    'sleep',
+    'sleep:x',
+    'post-compact',
+    'recall',
+    'agent-memories',
   ])('rejects reserved subject %s', async (subject) => {
     await start(tokenResolver({ subject }));
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
@@ -423,7 +458,8 @@ describe('auth resolver and key routes', () => {
 describe('exported authRevoke for add-ons', () => {
   const ctx = (tenantId: string): Context => ({
     hippoRoot: home,
-    store: sqliteStore(home), config: loadConfig(home),
+    store: sqliteStore(home),
+    config: loadConfig(home),
     tenantId,
     actor: { subject: 'system:addon:u1', role: 'admin', viaAuthResolver: true },
   });
@@ -505,7 +541,9 @@ describe('auth resolver stream', () => {
     while (Date.now() < deadline && !buf.includes('auth_revoked')) {
       const r = await Promise.race([
         reader.read(),
-        new Promise<{ value: undefined; done: true }>((ok) => setTimeout(() => ok({ value: undefined, done: true }), 500)),
+        new Promise<{ value: undefined; done: true }>((ok) =>
+          setTimeout(() => ok({ value: undefined, done: true }), 500),
+        ),
       ]);
       if (r.value) buf += decoder.decode(r.value);
     }
@@ -623,7 +661,10 @@ describe('auth resolver stream', () => {
     const pings: string[] = [];
     const realWrite = ServerResponse.prototype.write;
     // SAFETY: the spy forwards every argument unchanged; it only records ping writes.
-    vi.spyOn(ServerResponse.prototype, 'write').mockImplementation(function (this: ServerResponse, ...args: Parameters<typeof realWrite>) {
+    vi.spyOn(ServerResponse.prototype, 'write').mockImplementation(function (
+      this: ServerResponse,
+      ...args: Parameters<typeof realWrite>
+    ) {
       if (String(args[0]) === ': ping\n\n') pings.push('ping');
       return realWrite.apply(this, args);
     });
@@ -664,11 +705,20 @@ describe('package surface', () => {
       encoding: 'utf-8',
       timeout: 30_000,
     });
-    if (child.status !== 0) throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
+    if (child.status !== 0) {
+      throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
+    }
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
     const out = JSON.parse(lines[lines.length - 1]!) as {
-      url: string; serve: string; authRevoke: string; authCreateSelf: string; isReservedActor: string; forbidden: string; leaked: string[]; indexServe: boolean;
+      url: string;
+      serve: string;
+      authRevoke: string;
+      authCreateSelf: string;
+      isReservedActor: string;
+      forbidden: string;
+      leaked: string[];
+      indexServe: boolean;
     };
     expect(out.authRevoke).toBe('function');
     expect(out.authCreateSelf).toBe('function');
@@ -680,9 +730,12 @@ describe('package surface', () => {
     expect(out.indexServe).toBe(false);
   });
 
-  it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])('exports %s on the built server entry', (name) => {
-    // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
-    const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
-    expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
-  });
+  it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])(
+    'exports %s on the built server entry',
+    (name) => {
+      // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
+      const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
+      expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
+    },
+  );
 });

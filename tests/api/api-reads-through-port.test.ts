@@ -33,7 +33,10 @@ describe('reads through a served store', () => {
   it('reject by id looks the memory up in the served store', async () => {
     const served = root();
     const plain = root();
-    const onlyInFolder = createMemory('the folder holds this row, the served store does not', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
+    const onlyInFolder = createMemory('the folder holds this row, the served store does not', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: TENANT,
+    });
     writeEntry(plain, onlyInFolder);
     const ctx = { ...ctxAt(plain), store: portOnlyStore(served) };
     await expect(reject(ctx, { memoryId: onlyInFolder.id, reason: 'wrong' })).rejects.toThrow(NotFoundError);

@@ -25,8 +25,9 @@ import { isInitialized } from '../dist/core/project-identity.js';
 import { sqliteStore } from '../dist/store/index.js';
 import { loadConfig } from '../dist/core/config.js';
 
-const CORPUS_PATH = process.argv.find((a) => a.endsWith('.json') && !a.startsWith('--'))
-  ?? path.join(process.cwd(), 'evals', 'real-corpus.json');
+const CORPUS_PATH =
+  process.argv.find((a) => a.endsWith('.json') && !a.startsWith('--')) ??
+  path.join(process.cwd(), 'evals', 'real-corpus.json');
 const OUT_PATH = flagValue('--out', null);
 
 function flagValue(name, fallback) {
@@ -86,7 +87,9 @@ const defaultCombo = {
 console.error(`Sweeping ${combos.length} combinations on ${cases.length} cases...`);
 
 // Stream partial results to JSONL so a killed run still leaves useful data.
-const streamPath = OUT_PATH ? OUT_PATH.replace(/\.md$/, '.jsonl') : path.join(process.cwd(), 'evals', 'sweep-partial.jsonl');
+const streamPath = OUT_PATH
+  ? OUT_PATH.replace(/\.md$/, '.jsonl')
+  : path.join(process.cwd(), 'evals', 'sweep-partial.jsonl');
 fs.mkdirSync(path.dirname(streamPath), { recursive: true });
 fs.writeFileSync(streamPath, '');
 
@@ -122,18 +125,21 @@ for (let i = 0; i < combos.length; i++) {
     r5: summary.meanRecallAt5,
     r10: summary.meanRecallAt10,
     ndcg: summary.meanNdcgAt10,
-    isDefault: c.mmr === defaultCombo.mmr
-      && Math.abs(c.lambda - defaultCombo.lambda) < 1e-6
-      && Math.abs(c.emb - defaultCombo.emb) < 1e-6
-      && Math.abs(c.bump - defaultCombo.bump) < 1e-6,
+    isDefault:
+      c.mmr === defaultCombo.mmr &&
+      Math.abs(c.lambda - defaultCombo.lambda) < 1e-6 &&
+      Math.abs(c.emb - defaultCombo.emb) < 1e-6 &&
+      Math.abs(c.bump - defaultCombo.bump) < 1e-6,
   };
   rows.push(row);
   fs.appendFileSync(streamPath, JSON.stringify(row) + '\n');
-  console.error(`  ${i + 1}/${combos.length}  MRR=${summary.meanMrr.toFixed(3)} NDCG@10=${summary.meanNdcgAt10.toFixed(3)}`);
+  console.error(
+    `  ${i + 1}/${combos.length}  MRR=${summary.meanMrr.toFixed(3)} NDCG@10=${summary.meanNdcgAt10.toFixed(3)}`,
+  );
 }
 
 // Sort by NDCG desc, break ties by R@10 desc.
-rows.sort((a, b) => (b.ndcg - a.ndcg) || (b.r10 - a.r10));
+rows.sort((a, b) => b.ndcg - a.ndcg || b.r10 - a.r10);
 
 // Pareto frontier: row is Pareto-optimal if no other row has (>=) on all
 // four metrics AND (>) on at least one.
@@ -145,7 +151,9 @@ function dominates(x, y) {
 const pareto = rows.filter((r) => !rows.some((o) => o !== r && dominates(o, r)));
 
 // --- Output ---
-function pct(n) { return (n * 100).toFixed(1) + '%'; }
+function pct(n) {
+  return (n * 100).toFixed(1) + '%';
+}
 function line(r, flag = '') {
   const mmrLabel = r.mmr ? `MMR l=${r.lambda.toFixed(1)}` : 'no-MMR        ';
   const emb = `emb=${r.emb.toFixed(1)}`;
@@ -175,11 +183,13 @@ md.push('These are non-dominated across all four metrics. Any improvement on one
 md.push('');
 md.push('| Config | MRR | R@5 | R@10 | NDCG@10 |');
 md.push('|---|---|---|---|---|');
-pareto.sort((a, b) => b.ndcg - a.ndcg).forEach((r) => {
-  const cfg = r.mmr ? `lambda=${r.lambda} emb=${r.emb} bump=${r.bump}` : `no-MMR emb=${r.emb} bump=${r.bump}`;
-  const flag = r.isDefault ? ' **(default)**' : '';
-  md.push(`| ${cfg}${flag} | ${r.mrr.toFixed(3)} | ${pct(r.r5)} | ${pct(r.r10)} | ${r.ndcg.toFixed(3)} |`);
-});
+pareto
+  .sort((a, b) => b.ndcg - a.ndcg)
+  .forEach((r) => {
+    const cfg = r.mmr ? `lambda=${r.lambda} emb=${r.emb} bump=${r.bump}` : `no-MMR emb=${r.emb} bump=${r.bump}`;
+    const flag = r.isDefault ? ' **(default)**' : '';
+    md.push(`| ${cfg}${flag} | ${r.mrr.toFixed(3)} | ${pct(r.r5)} | ${pct(r.r10)} | ${r.ndcg.toFixed(3)} |`);
+  });
 md.push('');
 md.push(`## Default vs best`);
 md.push('');
@@ -190,9 +200,13 @@ if (defaultRow && best && defaultRow !== best) {
   md.push('');
   md.push('| | MRR | R@5 | R@10 | NDCG@10 |');
   md.push('|---|---|---|---|---|');
-  md.push(`| default | ${defaultRow.mrr.toFixed(3)} | ${pct(defaultRow.r5)} | ${pct(defaultRow.r10)} | ${defaultRow.ndcg.toFixed(3)} |`);
+  md.push(
+    `| default | ${defaultRow.mrr.toFixed(3)} | ${pct(defaultRow.r5)} | ${pct(defaultRow.r10)} | ${defaultRow.ndcg.toFixed(3)} |`,
+  );
   md.push(`| best    | ${best.mrr.toFixed(3)} | ${pct(best.r5)} | ${pct(best.r10)} | ${best.ndcg.toFixed(3)} |`);
-  md.push(`| delta   | ${(best.mrr - defaultRow.mrr >= 0 ? '+' : '') + (best.mrr - defaultRow.mrr).toFixed(3)} | ${(best.r5 - defaultRow.r5 >= 0 ? '+' : '') + ((best.r5 - defaultRow.r5) * 100).toFixed(1)}pp | ${(best.r10 - defaultRow.r10 >= 0 ? '+' : '') + ((best.r10 - defaultRow.r10) * 100).toFixed(1)}pp | ${(best.ndcg - defaultRow.ndcg >= 0 ? '+' : '') + (best.ndcg - defaultRow.ndcg).toFixed(3)} |`);
+  md.push(
+    `| delta   | ${(best.mrr - defaultRow.mrr >= 0 ? '+' : '') + (best.mrr - defaultRow.mrr).toFixed(3)} | ${(best.r5 - defaultRow.r5 >= 0 ? '+' : '') + ((best.r5 - defaultRow.r5) * 100).toFixed(1)}pp | ${(best.r10 - defaultRow.r10 >= 0 ? '+' : '') + ((best.r10 - defaultRow.r10) * 100).toFixed(1)}pp | ${(best.ndcg - defaultRow.ndcg >= 0 ? '+' : '') + (best.ndcg - defaultRow.ndcg).toFixed(3)} |`,
+  );
 } else if (defaultRow === best) {
   md.push('Defaults are the single best config on this corpus.');
 }

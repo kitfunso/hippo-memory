@@ -37,9 +37,15 @@ const dirs: string[] = [];
 function seedStore(): string {
   const root = makeRoot('query-embed-budget');
   dirs.push(root);
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }));
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }),
+  );
   const index: Record<string, number[]> = {};
-  for (const [content, vector] of [[LEXICAL, hashedVector(LEXICAL)], [VECTOR_ONLY, hashedVector(QUERY)]] as const) {
+  for (const [content, vector] of [
+    [LEXICAL, hashedVector(LEXICAL)],
+    [VECTOR_ONLY, hashedVector(QUERY)],
+  ] as const) {
     const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
     writeEntry(root, entry);
     index[entry.id] = vector;
@@ -50,11 +56,16 @@ function seedStore(): string {
 }
 
 async function recall(root: string): Promise<string[]> {
-  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), { query: QUERY, mode: 'hybrid', window: { limit: 20 } });
+  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), {
+    query: QUERY,
+    mode: 'hybrid',
+    window: { limit: 20 },
+  });
   return reply.results.map((r) => r.content);
 }
 
-const fallbackLines = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('fell back to BM25'));
+const fallbackLines = (): string[] =>
+  stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('fell back to BM25'));
 
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
@@ -103,7 +114,9 @@ describe("a recall's query embedding", () => {
     expect(shown).toEqual([LEXICAL]);
     expect(sent).toBe(1);
     expect(fallbackLines()).toHaveLength(1);
-    expect(fallbackLines()[0]).toMatch(new RegExp(`^\\[hippo\\] warn: .*the openai embedding provider gave no query vector within ${BUDGET_MS} ms`));
+    expect(fallbackLines()[0]).toMatch(
+      new RegExp(`^\\[hippo\\] warn: .*the openai embedding provider gave no query vector within ${BUDGET_MS} ms`),
+    );
     expect(fallbackLines()[0]).not.toContain(QUERY);
   });
 
@@ -168,7 +181,12 @@ describe("a recall's query embedding", () => {
     embeddings.setFault('stall');
     const before = embeddings.requests();
 
-    const ranked = await searchBothHybrid(QUERY, ...sharingStores(local, global), { budget: 1_000_000, tenantId: TENANT, recallScope: {}, scope: null });
+    const ranked = await searchBothHybrid(QUERY, ...sharingStores(local, global), {
+      budget: 1_000_000,
+      tenantId: TENANT,
+      recallScope: {},
+      scope: null,
+    });
 
     expect([...new Set(ranked.map((r) => r.entry.content))]).toEqual([LEXICAL]);
     expect(embeddings.requests() - before).toBe(1);
@@ -177,10 +195,18 @@ describe("a recall's query embedding", () => {
   it('hands an API provider the deadline as its abort signal, and reads the abort as no vector', async () => {
     const deadline = AbortSignal.timeout(20);
     const given: (AbortSignal | undefined)[] = [];
-    const untilAbort = new Promise<number[][]>((_resolve, reject) => deadline.addEventListener('abort', () => reject(deadline.reason)));
+    const untilAbort = new Promise<number[][]>((_resolve, reject) =>
+      deadline.addEventListener('abort', () => reject(deadline.reason)),
+    );
     const api: EmbeddingProvider = {
-      kind: 'openai', model: 'stub', id: 'openai:stub', isAvailable: () => true,
-      embed: (_texts, _role, call) => { given.push(call?.signal); return untilAbort; },
+      kind: 'openai',
+      model: 'stub',
+      id: 'openai:stub',
+      isAvailable: () => true,
+      embed: (_texts, _role, call) => {
+        given.push(call?.signal);
+        return untilAbort;
+      },
     };
 
     expect(await embedQueryBy(deadline, api, QUERY)).toBeNull();
@@ -188,7 +214,13 @@ describe("a recall's query embedding", () => {
   });
 
   it('keeps a vector that arrives after the deadline, as a loaded in-process model gives one', async () => {
-    const local: EmbeddingProvider = { kind: 'local', model: 'in-process', id: 'in-process', isAvailable: () => true, embed: async () => [[1, 0]] };
+    const local: EmbeddingProvider = {
+      kind: 'local',
+      model: 'in-process',
+      id: 'in-process',
+      isAvailable: () => true,
+      embed: async () => [[1, 0]],
+    };
 
     expect(await embedQueryBy(AbortSignal.abort(), local, QUERY)).toEqual([1, 0]);
   });
@@ -199,7 +231,10 @@ describe('the write-side embedding', () => {
     const root = seedStore();
     vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', '50');
     embeddings.setFault(250);
-    const entry: MemoryEntry = createMemory('the release train leaves on tuesdays', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
+    const entry: MemoryEntry = createMemory('the release train leaves on tuesdays', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: TENANT,
+    });
     writeEntry(root, entry);
 
     await embedMemory(localIndex(root), entry);

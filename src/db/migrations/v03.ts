@@ -1,9 +1,9 @@
 import type { Migration } from './types.js';
 
 export const v03: Migration = {
-    version: 3,
-    up: (db) => {
-      db.exec(`
+  version: 3,
+  up: (db) => {
+    db.exec(`
         CREATE TABLE IF NOT EXISTS memory_conflicts (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           memory_a_id TEXT NOT NULL,
@@ -19,5 +19,5 @@ export const v03: Migration = {
         CREATE INDEX IF NOT EXISTS idx_memory_conflicts_status_updated
         ON memory_conflicts(status, updated_at DESC, id DESC);
       `);
-    },
+  },
 };

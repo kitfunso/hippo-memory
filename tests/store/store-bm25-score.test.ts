@@ -28,7 +28,11 @@ afterEach(() => {
 });
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function makeRaw(text: string): MemoryEntry {
   return createMemory(text, {
@@ -41,7 +45,9 @@ function makeRaw(text: string): MemoryEntry {
 
 describe('loadSearchEntries bm25_score', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('f1'); });
+  beforeEach(() => {
+    root = makeRoot('f1');
+  });
   afterEach(() => safeRmSync(root));
 
   it('FTS path: every returned entry has finite numeric bm25_score, sorted ascending (best first)', () => {
@@ -170,7 +176,9 @@ describe('loadSearchEntries bm25_score', () => {
         for (let i = step * 3000; i < size; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
         db.exec('COMMIT');
         lowered = 0;
-        expect(loadRecallSearchEntriesFromDb(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' })).toHaveLength(200);
+        expect(
+          loadRecallSearchEntriesFromDb(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' }),
+        ).toHaveLength(200);
         // The LIKE predicate lowers content and tags once per term for each row it tests.
         return lowered / 2;
       });
@@ -190,12 +198,7 @@ describe('loadSearchEntries bm25_score', () => {
     // all tenant rows). Even if FTS returns a row, it'd score < 0 and
     // populate bm25_score; we explicitly assert undefined ONLY when no
     // FTS row was returned, then assert against the fallback.
-    const results = loadSearchEntries(
-      root,
-      'zzzznonexistenttokenxxxxxx qqqqqqq',
-      200,
-      'default',
-    );
+    const results = loadSearchEntries(root, 'zzzznonexistenttokenxxxxxx qqqqqqq', 200, 'default');
     expect(results.map((e) => e.content).sort()).toEqual(['another row', 'one row']);
     // None of the returned rows should carry bm25_score because we did
     // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
@@ -212,12 +215,7 @@ describe('loadSearchEntries bm25_score', () => {
     // would FAIL on pre-v1.7.0 store.ts (returned 30) and PASSES on the
     // fix (returns exactly 10).
     for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`content ${i}`));
-    const results = loadSearchEntries(
-      root,
-      'zzzznonexistenttokenxxxxxx qqqqqqq',
-      10,
-      'default',
-    );
+    const results = loadSearchEntries(root, 'zzzznonexistenttokenxxxxxx qqqqqqq', 10, 'default');
     expect(results.length).toBe(10);
     for (const e of results) {
       expect(e.bm25_score).toBeUndefined();

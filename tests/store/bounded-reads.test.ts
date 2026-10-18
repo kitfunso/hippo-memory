@@ -53,7 +53,9 @@ describe('the FTS check on a read', () => {
     seeded(root, 3);
     const db = openHippoDb(root);
     try {
-      const { statements } = recordStatements(() => loadEntriesMentioningAt(db, ['quuxlib'], 'ops', undefined, { limit: 100 }));
+      const { statements } = recordStatements(() =>
+        loadEntriesMentioningAt(db, ['quuxlib'], 'ops', undefined, { limit: 100 }),
+      );
       expect(countMatching(statements, /COUNT\(\*\)/i)).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -86,7 +88,9 @@ describe('vectors without an index entry', () => {
 describe('ambient tag tallies', () => {
   it('count tags in SQL as the row-by-row tally does, repeats and error tags included', () => {
     const root = makeRoot('bounded-ambient');
-    const rows = seeded(root, 6, (i) => ({ tags: i % 3 === 0 ? ['alpha', 'alpha', 'error:db'] : i % 3 === 1 ? ['beta', 'critical'] : ['alpha'] }));
+    const rows = seeded(root, 6, (i) => ({
+      tags: i % 3 === 0 ? ['alpha', 'alpha', 'error:db'] : i % 3 === 1 ? ['beta', 'critical'] : ['alpha'],
+    }));
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);
     try {

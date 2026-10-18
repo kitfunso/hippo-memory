@@ -43,18 +43,17 @@ function sign(ts: string, body: string): string {
 function registerWorkspace(root: string, teamId: string, tenantId: string): void {
   const db = openHippoDb(root);
   try {
-    db.prepare(
-      `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-    ).run(teamId, tenantId, new Date().toISOString());
+    db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+      teamId,
+      tenantId,
+      new Date().toISOString(),
+    );
   } finally {
     closeHippoDb(db);
   }
 }
 
-async function postEvent(
-  port: number,
-  body: string,
-): Promise<{ status: number; body: unknown }> {
+async function postEvent(port: number, body: string): Promise<{ status: number; body: unknown }> {
   const ts = String(Math.floor(Date.now() / 1000));
   const res = await fetch(`http://127.0.0.1:${port}/v1/connectors/slack/events`, {
     method: 'POST',

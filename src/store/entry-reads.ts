@@ -24,13 +24,12 @@ export const TENANT_IS = '+tenant_id = ?';
 export function readEntryAt(db: DatabaseSyncLike, id: string, tenantId?: string): MemoryEntry | null {
   // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const row = tenantId !== undefined
-    ? db.prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
-      ).get(id, tenantId) as MemoryRow | undefined
-    : db.prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
-      ).get(id) as MemoryRow | undefined;
+  const row =
+    tenantId !== undefined
+      ? (db
+          .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`)
+          .get(id, tenantId) as MemoryRow | undefined)
+      : (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined);
   return row ? rowToEntry(row) : null;
 }
 
@@ -129,7 +128,8 @@ export function loadSessionRawMemoriesAt(
 ): MemoryEntry[] {
   if (!sessionId) return [];
   const params: Array<string | number> = [];
-  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
+  let sql =
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
     `AND source_session_id = ? AND superseded_by IS NULL`;
   params.push(sessionId);
   if (tenantId !== undefined) {
@@ -165,8 +165,8 @@ export function countSessionRawMemoriesAt(
 ): number {
   if (!sessionId) return 0;
   const params: Array<string> = [];
-  let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` +
-    `AND source_session_id = ? AND superseded_by IS NULL`;
+  let sql =
+    `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` + `AND source_session_id = ? AND superseded_by IS NULL`;
   params.push(sessionId);
   if (tenantId !== undefined) {
     sql += ' AND tenant_id = ?';
@@ -309,10 +309,11 @@ export function loadEntriesMentioningAt(
   const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
   const ftsQuery = plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
-  const where = ftsQuery === null
-    ? clauses.join(' OR ')
-    : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
-      hasNonAscii('tags_json');
+  const where =
+    ftsQuery === null
+      ? clauses.join(' OR ')
+      : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
+        hasNonAscii('tags_json');
   const afterClause = page.after ? ' AND (created > ? OR (created = ? AND id > ?))' : '';
   const afterParams = page.after ? [page.after.created, page.after.created, page.after.id] : [];
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
@@ -337,9 +338,14 @@ function pageOf(rows: MemoryEntry[], limit: number): EntryPage {
 export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): EntryTextKey[] {
   const where = tenantId !== undefined ? 'WHERE tenant_id = ? ' : '';
   // SAFETY: rows' shape matches the four columns named in the SELECT.
-  const rows = db.prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
-    .all(...(tenantId !== undefined ? [tenantId] : [])) as
-    Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
+  const rows = db
+    .prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
+    .all(...(tenantId !== undefined ? [tenantId] : [])) as Array<{
+    id: string;
+    tenant_id: string | null;
+    content: string;
+    source: string;
+  }>;
   return rows.map((row) => ({
     id: row.id,
     tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
@@ -351,7 +357,8 @@ export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): En
 /** Every tenant's rows in loadAllEntries' order through one cursor, so the caller holds one row at a time. */
 export function* iterateEveryTenantEntriesAt(db: DatabaseSyncLike): Generator<MemoryEntry> {
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`)
+  const rows = db
+    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`)
     .iterate() as Iterable<MemoryRow>;
   for (const row of rows) yield rowToEntry(row);
 }
@@ -360,12 +367,10 @@ function selectAllRows(db: DatabaseSyncLike, tenantId?: string): MemoryRow[] {
   // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
   return tenantId !== undefined
-    ? db.prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
-      ).all(tenantId) as MemoryRow[]
-    : db.prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
-      ).all() as MemoryRow[];
+    ? (db
+        .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`)
+        .all(tenantId) as MemoryRow[])
+    : (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[]);
 }
 
 /** Up to `limit` rows in loadAllEntries' order, starting after `after`; omitting `tenantId` reads every tenant. */
@@ -498,7 +503,8 @@ export function entryRejectRowAt(
 ): { content: string; tenant_id: string; scope: string | null } | undefined {
   // SAFETY: row's shape matches the three columns named in the SELECT.
   return db.prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`).get(id) as
-    { content: string; tenant_id: string; scope: string | null } | undefined;
+    | { content: string; tenant_id: string; scope: string | null }
+    | undefined;
 }
 
 /** Memory ids held by each typed-object table, with the status of the object that holds them. */
@@ -529,15 +535,20 @@ export function objectMemoryRowsAt(db: DatabaseSyncLike): Array<{ memory_id: str
 /** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them
  * to user-global rows and those projects. */
 export function selectRowsOutsideSourcePrefixAt(
-  db: DatabaseSyncLike, tenantId: string, sourcePrefix: string, origins: readonly string[] | null,
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sourcePrefix: string,
+  origins: readonly string[] | null,
 ): Array<{ id: string; content: string; source: string }> {
   const visible = origins !== null ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
   const params = origins !== null ? [tenantId, sourcePrefix, ...origins] : [tenantId, sourcePrefix];
   // SAFETY: the SELECT names the three columns of the row type.
-  return db.prepare(
-    `SELECT id, content, source FROM memories
+  return db
+    .prepare(
+      `SELECT id, content, source FROM memories
       WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${sourcePrefix.length}) != ?${visible}`,
-  ).all(...params) as Array<{ id: string; content: string; source: string }>;
+    )
+    .all(...params) as Array<{ id: string; content: string; source: string }>;
 }
 
 /** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
@@ -566,11 +577,13 @@ export function liveContentsBySourceAndTagAt(
  * loadAllEntries' order: the rows that can be each other's duplicate. */
 export function loadCurrentDistilledEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db.prepare(
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+  const rows = db
+    .prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
      WHERE COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''
      ORDER BY created ASC, id ASC`,
-  ).all() as MemoryRow[];
+    )
+    .all() as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -584,8 +597,12 @@ export function loadEntriesWithSignalsAt(
   // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is
   // wider than startsWith.
   const anyOf = [
-    'pinned != 0', 'retrieval_count >= ?', `emotional_valence IN (${placeholders(signals.valences.length)})`,
-    "source LIKE ? ESCAPE '\\'", "instr(tags_json, '\\') > 0", ...signals.tags.map(() => 'instr(tags_json, ?) > 0'),
+    'pinned != 0',
+    'retrieval_count >= ?',
+    `emotional_valence IN (${placeholders(signals.valences.length)})`,
+    "source LIKE ? ESCAPE '\\'",
+    "instr(tags_json, '\\') > 0",
+    ...signals.tags.map(() => 'instr(tags_json, ?) > 0'),
   ];
   const params = [
     signals.minRetrievals,

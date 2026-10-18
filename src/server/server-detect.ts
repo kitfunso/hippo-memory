@@ -1,5 +1,13 @@
 import {
-  closeSync, existsSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync,
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { envHealthProbeMs } from '../util/env.js';
@@ -47,8 +55,8 @@ export class ServerUnresponsiveError extends Error {
   constructor(info: ServerInfo, probeMs: number, options?: ErrorOptions) {
     super(
       `a hippo server (pid ${info.pid}) is recorded at ${info.url} but did not answer /health within ${probeMs} ms; ` +
-      `it may be busy. ` +
-      'Retry shortly, raise HIPPO_HEALTH_PROBE_MS, or stop that server.',
+        `it may be busy. ` +
+        'Retry shortly, raise HIPPO_HEALTH_PROBE_MS, or stop that server.',
       options,
     );
     this.name = 'ServerUnresponsiveError';
@@ -60,7 +68,7 @@ export class ServerAlreadyRunningError extends Error {
   constructor(info: ServerInfo) {
     super(
       `hippo serve: already running ${info.port > 0 ? `on port ${info.port}` : 'on this store, still starting'} ` +
-      `(pid ${info.pid}). Stop that server before starting another on the same hippoRoot.`,
+        `(pid ${info.pid}). Stop that server before starting another on the same hippoRoot.`,
     );
     this.name = 'ServerAlreadyRunningError';
   }
@@ -270,10 +278,7 @@ export async function claimPidfile(hippoRoot: string, startedAt: string): Promis
  * Atomically writes the pidfile (process-scoped temp file, then rename; atomic on POSIX and NTFS). `startedAt` comes
  * from the caller (`serve()`) so the
  * pidfile and GET /health carry the same timestamp, which detectServer's liveness probe compares. */
-export function writePidfile(
-  hippoRoot: string,
-  opts: { port: number; url: string; startedAt: string },
-): void {
+export function writePidfile(hippoRoot: string, opts: { port: number; url: string; startedAt: string }): void {
   const path = join(hippoRoot, PIDFILE);
   const tmp = `${path}.tmp.${process.pid}`;
   const info: ServerInfo = {
@@ -293,7 +298,11 @@ export function writePidfile(
  * uses removePidfileIfOwned. */
 function removePidfile(hippoRoot: string): void {
   const path = join(hippoRoot, PIDFILE);
-  try { unlinkSync(path); } catch { /* already gone or undeletable; the next detectServer probe re-checks */ }
+  try {
+    unlinkSync(path);
+  } catch {
+    /* already gone or undeletable; the next detectServer probe re-checks */
+  }
 }
 
 /**
@@ -302,10 +311,7 @@ function removePidfile(hippoRoot: string): void {
  * Anything unreadable or malformed is "not provably mine" and left alone (detectServer unlinks it). Returns true iff
  * removed.
  */
-export function removePidfileIfOwned(
-  hippoRoot: string,
-  owner: { pid: number; startedAt: string },
-): boolean {
+export function removePidfileIfOwned(hippoRoot: string, owner: { pid: number; startedAt: string }): boolean {
   const path = join(hippoRoot, PIDFILE);
   try {
     const info: ServerInfo = JSON.parse(readFileSync(path, 'utf8'));

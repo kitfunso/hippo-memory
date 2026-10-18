@@ -26,26 +26,79 @@ const ranked = (results: readonly unknown[]): string => `ranked ${results.length
 type Row = readonly [string, RegExp, (root: string) => Promise<string>, string];
 
 const ROWS: readonly Row[] = [
-  ['api/tokens.ts recordTokens', /recordTokens/, async (root) => {
-    await recordTokens(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), 'http_recall', { items: 1, tokens: 1 });
-    return 'returned';
-  }, 'returned'],
-  ['mcp/request.ts recordMcpTokens', /recordMcpTokens/, async (root) => {
-    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) });
-    return 'returned';
-  }, 'returned'],
-  ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,
-    async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
-  ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(embeddingModelRequiresReindex(handlesOf(root).on, 'm', {})), 'false'],
-  ['search/vector.ts resolveVectorArm', /fillVectorArm/,
-    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`, 'embeddings false'],
-  ['search/physics-search.ts physicsQueryVector', /physicsQueryVector/,
-    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })), 'ranked 1'],
-  ['search/physics-search.ts withVectorCandidates', /withVectorCandidates/, async (root) => ranked(await physicsSearch('deploy', [entry], {
-    hippoRoot: root, queryEmbedding: [1, 0, 0], vectorCandidates: { includeSuperseded: false },
-  })), 'ranked 1'],
-  ['search/physics-search.ts loadCandidateParticles', /loadCandidateParticles/,
-    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root, queryEmbedding: [1, 0, 0] })), 'ranked 1'],
+  [
+    'api/tokens.ts recordTokens',
+    /recordTokens/,
+    async (root) => {
+      await recordTokens(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), 'http_recall', {
+        items: 1,
+        tokens: 1,
+      });
+      return 'returned';
+    },
+    'returned',
+  ],
+  [
+    'mcp/request.ts recordMcpTokens',
+    /recordMcpTokens/,
+    async (root) => {
+      await recordMcpTokens('hippo_context', 'memory text', {
+        hippoRoot: root,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(root),
+        config: loadConfig(root),
+      });
+      return 'returned';
+    },
+    'returned',
+  ],
+  [
+    'store/entry-writes.ts strengthenRetrieved',
+    /strengthenRetrieved/,
+    async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`,
+    'found 0',
+  ],
+  [
+    'embeddings.ts loadStoredEmbeddingModel',
+    /loadStoredEmbeddingModel/,
+    async (root) => String(embeddingModelRequiresReindex(handlesOf(root).on, 'm', {})),
+    'false',
+  ],
+  [
+    'search/vector.ts resolveVectorArm',
+    /fillVectorArm/,
+    async (root) =>
+      `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`,
+    'embeddings false',
+  ],
+  [
+    'search/physics-search.ts physicsQueryVector',
+    /physicsQueryVector/,
+    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })),
+    'ranked 1',
+  ],
+  [
+    'search/physics-search.ts withVectorCandidates',
+    /withVectorCandidates/,
+    async (root) =>
+      ranked(
+        await physicsSearch('deploy', [entry], {
+          hippoRoot: root,
+          queryEmbedding: [1, 0, 0],
+          vectorCandidates: { includeSuperseded: false },
+        }),
+      ),
+    'ranked 1',
+  ],
+  [
+    'search/physics-search.ts loadCandidateParticles',
+    /loadCandidateParticles/,
+    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root, queryEmbedding: [1, 0, 0] })),
+    'ranked 1',
+  ],
 ];
 
 let root: string;
@@ -54,9 +107,16 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hippo-blocked-catch-'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   // An API provider with a stubbed fetch, so the vector arm and physics reach their opens without a local model or the network.
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),
+    'utf8',
+  );
   vi.stubEnv('OPENAI_API_KEY', randomBytes(16).toString('hex'));
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }))));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }))),
+  );
 });
 
 afterEach(() => {
@@ -67,13 +127,19 @@ afterEach(() => {
 
 describe('best-effort catches around a hippo.db open', () => {
   it.each(ROWS)('%s rethrows SqliteBlockedError under another store', async (_site, reach, run) => {
-    const err = await withSqliteBlocked('stub', () => run(root)).then(() => null, <E>(e: E) => e);
+    const err = await withSqliteBlocked('stub', () => run(root)).then(
+      () => null,
+      <E>(e: E) => e,
+    );
     expect(err).toBeInstanceOf(SqliteBlockedError);
     expect(err instanceof Error ? err.stack : '').toMatch(reach);
   });
 
-  it.each(ROWS)('%s keeps its fallback when the open fails for another reason', async (_site, _reach, run, fallback) => {
-    mkdirSync(join(root, 'hippo.db'));
-    expect(await run(root)).toBe(fallback);
-  });
+  it.each(ROWS)(
+    '%s keeps its fallback when the open fails for another reason',
+    async (_site, _reach, run, fallback) => {
+      mkdirSync(join(root, 'hippo.db'));
+      expect(await run(root)).toBe(fallback);
+    },
+  );
 });

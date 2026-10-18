@@ -29,7 +29,10 @@ describe('readBody deadline', () => {
     vi.useFakeTimers();
     const body = trickle();
     try {
-      const outcome = readBody(asRequest(body), { deadlineMs: 50 }).then(() => 'read', (err: Error) => err);
+      const outcome = readBody(asRequest(body), { deadlineMs: 50 }).then(
+        () => 'read',
+        (err: Error) => err,
+      );
       await vi.advanceTimersByTimeAsync(49);
       expect(await Promise.race([outcome, 'still reading'])).toBe('still reading');
       await vi.advanceTimersByTimeAsync(1);
@@ -42,25 +45,35 @@ describe('readBody deadline', () => {
 
   it('returns a body that arrives in time and leaves no timer behind', async () => {
     const before = liveTimers();
-    expect(await readBody(asRequest(Readable.from([Buffer.from('{"a":'), Buffer.from('1}')])), { deadlineMs: 60_000 })).toBe('{"a":1}');
+    expect(
+      await readBody(asRequest(Readable.from([Buffer.from('{"a":'), Buffer.from('1}')])), { deadlineMs: 60_000 }),
+    ).toBe('{"a":1}');
     expect(liveTimers()).toBe(before);
   });
 
   it('leaves no timer behind when the read ends over its cap', async () => {
     const before = liveTimers();
-    await expect(readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4, deadlineMs: 60_000 })).rejects.toBeInstanceOf(BodyTooLargeError);
+    await expect(
+      readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4, deadlineMs: 60_000 }),
+    ).rejects.toBeInstanceOf(BodyTooLargeError);
     expect(liveTimers()).toBe(before);
   });
 
   it('leaves no timer behind when the stream errors', async () => {
     const before = liveTimers();
-    const broken = new Readable({ read() { this.destroy(new Error('socket reset')); } });
+    const broken = new Readable({
+      read() {
+        this.destroy(new Error('socket reset'));
+      },
+    });
     await expect(readBody(asRequest(broken), { deadlineMs: 60_000 })).rejects.toThrow('socket reset');
     expect(liveTimers()).toBe(before);
   });
 
   it('keeps the cap when no deadline is given', async () => {
-    await expect(readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4 })).rejects.toBeInstanceOf(BodyTooLargeError);
+    await expect(readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4 })).rejects.toBeInstanceOf(
+      BodyTooLargeError,
+    );
     expect(await readBody(asRequest(Readable.from([Buffer.from('abcd')])), { maxBytes: 4 })).toBe('abcd');
   });
 });

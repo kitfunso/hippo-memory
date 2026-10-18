@@ -18,7 +18,7 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number
   const inserted = db
     .prepare(
       `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, ` +
-      `owner_subject, origin_project, request_id)
+        `owner_subject, origin_project, request_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
@@ -83,12 +83,14 @@ export interface SessionFailures {
 /** Rated failures per session since `sinceIso`, the input for repeat-error rate per arm. */
 export function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
   // SAFETY: the SELECT names exactly these three TEXT columns.
-  const rows = db.prepare(
-    `SELECT ts, session_id, sig_hash FROM failure_log
+  const rows = db
+    .prepare(
+      `SELECT ts, session_id, sig_hash FROM failure_log
      WHERE tenant_id = ? AND session_id IS NOT NULL AND sig_hash IS NOT NULL
        AND outcome IN ('stored', 'duplicate', 'store-failed')
      ORDER BY id`,
-  ).all(tenantId) as Array<{ ts: string; session_id: string; sig_hash: string }>;
+    )
+    .all(tenantId) as Array<{ ts: string; session_id: string; sig_hash: string }>;
   const firstSession = new Map<string, string>();
   const bySession = new Map<string, SessionFailures>();
   for (const row of rows) {
@@ -118,16 +120,17 @@ export interface FailureSummary {
 export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
   // SAFETY: COUNT aggregate row.
   const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as
-    { n: number } | undefined;
+    | { n: number }
+    | undefined;
   return Number(row?.n ?? 0);
 }
 
 /** Sum the failure log for one tenant since `sinceIso`. */
 export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
   // SAFETY: the SELECT names exactly these two columns, TEXT and an aggregate.
-  const rows = db.prepare(
-    `SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`,
-  ).all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;
+  const rows = db
+    .prepare(`SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`)
+    .all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;
   const counts = new Map(rows.map((r) => [r.outcome, Number(r.n)] as const));
   const outcomes = {
     stored: counts.get('stored') ?? 0,

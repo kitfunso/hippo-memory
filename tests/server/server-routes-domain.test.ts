@@ -52,14 +52,12 @@ describe('server HTTP routes — memories', () => {
   });
 
   it('GET /v1/memories?q= returns matching results', async () => {
-    await apiRemember(
-      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
-      { content: 'recall-via-http alpha-token-http sentinel' },
-    );
-    await apiRemember(
-      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
-      { content: 'unrelated noise' },
-    );
+    await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'recall-via-http alpha-token-http sentinel',
+    });
+    await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'unrelated noise',
+    });
 
     const res = await fetch(`${handle.url}/v1/memories?q=alpha-token-http&limit=5`);
     expect(res.status).toBe(200);
@@ -76,10 +74,9 @@ describe('server HTTP routes — memories', () => {
   });
 
   it('DELETE /v1/memories/:id removes the row', async () => {
-    const { id } = await apiRemember(
-      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
-      { content: 'forget-canary-target' },
-    );
+    const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'forget-canary-target',
+    });
     const res = await fetch(`${handle.url}/v1/memories/${id}`, { method: 'DELETE' });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ ok: boolean; id: string }>(res);
@@ -97,10 +94,9 @@ describe('server HTTP routes — memories', () => {
   });
 
   it('POST /v1/memories/:id/promote copies to global store', async () => {
-    const { id } = await apiRemember(
-      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
-      { content: 'promote-canary-payload' },
-    );
+    const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'promote-canary-payload',
+    });
     const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST' });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ ok: boolean; sourceId: string; globalId: string }>(res);
@@ -111,10 +107,9 @@ describe('server HTTP routes — memories', () => {
   });
 
   it('POST /v1/memories/:id/supersede chains old to new', async () => {
-    const { id } = await apiRemember(
-      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
-      { content: 'supersede-old-content' },
-    );
+    const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'supersede-old-content',
+    });
     const res = await fetch(`${handle.url}/v1/memories/${id}/supersede`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -173,9 +168,9 @@ describe('server HTTP routes — memories', () => {
       // names exactly those two columns against the row the /archive route
       // just wrote for rawId; may be undefined only if archiving silently
       // failed (checked by the assertions below).
-      const archived = db2
-        .prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`)
-        .get(rawId) as { memory_id: string; reason: string } | undefined;
+      const archived = db2.prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`).get(rawId) as
+        | { memory_id: string; reason: string }
+        | undefined;
       expect(archived?.memory_id).toBe(rawId);
       expect(archived?.reason).toBe('gdpr-http');
     } finally {
@@ -278,10 +273,9 @@ describe('server HTTP routes — auth + audit', () => {
 
   it('GET /v1/audit returns events; filter by op works', async () => {
     // Generate at least one audit event by remembering through the API.
-    await apiRemember(
-      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
-      { content: 'audit-canary-row' },
-    );
+    await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'audit-canary-row',
+    });
 
     const allRes = await fetch(`${handle.url}/v1/audit`);
     expect(allRes.status).toBe(200);

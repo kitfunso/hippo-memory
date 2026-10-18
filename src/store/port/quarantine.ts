@@ -20,7 +20,9 @@ export type QuarantineRefusal =
 
 /** 'scope_moved': the memory row is gone from the tenant or no longer under the scope its quarantine gave it. */
 export type QuarantineApproval =
-  { readonly outcome: 'approved' } | QuarantineRefusal | { readonly outcome: 'scope_moved' };
+  | { readonly outcome: 'approved' }
+  | QuarantineRefusal
+  | { readonly outcome: 'scope_moved' };
 
 export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineRefusal;
 

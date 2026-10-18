@@ -138,7 +138,10 @@ function planItem(
 /** A single-file store keys items by text, so an edit reads as one key gone and one new under the same heading. */
 function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   const goneBy = groupBy([...gone.keys()], headingOf);
-  const freshBy = groupBy(fresh.map((w, i) => ({ w, i })), (f) => headingOf(f.w.key));
+  const freshBy = groupBy(
+    fresh.map((w, i) => ({ w, i })),
+    (f) => headingOf(f.w.key),
+  );
   for (const [heading, keys] of goneBy) {
     const news = freshBy.get(heading) ?? [];
     if (keys.length !== 1 || news.length !== 1) continue;
@@ -210,8 +213,14 @@ export function matchLegacy(rows: readonly LegacyRow[], targets: readonly Legacy
     if (ref !== undefined) adopt.set(row.id, ref);
   }
   const adoptedRefs = new Set(adopt.values());
-  const leftByFile = groupBy(rows.filter((r) => !adopt.has(r.id)), (r) => r.file);
-  const targetsByFile = groupBy(targets.filter((t) => !adoptedRefs.has(t.ref)), (t) => t.file);
+  const leftByFile = groupBy(
+    rows.filter((r) => !adopt.has(r.id)),
+    (r) => r.file,
+  );
+  const targetsByFile = groupBy(
+    targets.filter((t) => !adoptedRefs.has(t.ref)),
+    (t) => t.file,
+  );
   const replace = new Map<string, string>();
   for (const [file, left] of leftByFile) {
     const matches = targetsByFile.get(file) ?? [];

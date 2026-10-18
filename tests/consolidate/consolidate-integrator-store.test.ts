@@ -23,7 +23,10 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 
 /** One memory whose full-text row is gone, the drift a sleep repairs. */
 function seedDrift(root: string): void {
-  writeEntry(root, createMemory('the walrus build cache clears on tuesdays', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+  writeEntry(
+    root,
+    createMemory('the walrus build cache clears on tuesdays', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+  );
   withDb(root, (db) => db.prepare(`DELETE FROM memories_fts WHERE content LIKE '%walrus%'`).run());
 }
 

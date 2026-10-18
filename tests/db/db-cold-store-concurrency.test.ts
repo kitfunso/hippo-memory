@@ -51,19 +51,28 @@ async function waitForReady(count: number, timeoutMs: number): Promise<void> {
   await waitFor(() => missing().length === 0, { timeoutMs, what: `workers ${missing().join(', ')} at the barrier` });
 }
 
-function runWorkers(count: number, barrier: string): Promise<Array<{ code: number | null; stdout: string; stderr: string }>> {
+function runWorkers(
+  count: number,
+  barrier: string,
+): Promise<Array<{ code: number | null; stdout: string; stderr: string }>> {
   const children = [];
   for (let i = 0; i < count; i++) {
     const file = join(root, `open-worker-${i}.mjs`);
     writeFileSync(file, workerScript(root, barrier, readyFile(i)), 'utf8');
-    children.push(new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
-      const child = spawn(process.execPath, [file], { stdio: ['ignore', 'pipe', 'pipe'] });
-      let stdout = '';
-      let stderr = '';
-      child.stdout.on('data', (chunk) => { stdout += String(chunk); });
-      child.stderr.on('data', (chunk) => { stderr += String(chunk); });
-      child.on('exit', (code) => resolve({ code, stdout: stdout.trim(), stderr }));
-    }));
+    children.push(
+      new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
+        const child = spawn(process.execPath, [file], { stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk) => {
+          stdout += String(chunk);
+        });
+        child.stderr.on('data', (chunk) => {
+          stderr += String(chunk);
+        });
+        child.on('exit', (code) => resolve({ code, stdout: stdout.trim(), stderr }));
+      }),
+    );
   }
   return Promise.all(children);
 }

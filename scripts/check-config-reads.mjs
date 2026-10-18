@@ -35,7 +35,9 @@ function findReads(map) {
     if (ALLOWED.has(file) || layerOf(map, file) === 'surface') continue;
     const text = readFileSync(file, 'utf8');
     // A loadConfig call cannot exist without its text, so other files skip the parse.
-    const n = text.includes('loadConfig') ? readFacts(text, file, ['calls']).calls.filter((c) => c.callee.split('.').at(-1) === 'loadConfig').length : 0;
+    const n = text.includes('loadConfig')
+      ? readFacts(text, file, ['calls']).calls.filter((c) => c.callee.split('.').at(-1) === 'loadConfig').length
+      : 0;
     if (n > 0) counts[file] = n;
   }
   return counts;
@@ -65,6 +67,8 @@ if (rose.length > 0) {
   process.exit(1);
 }
 if (fell.length > 0) {
-  console.log(`${fell.length} files dropped config reads; run \`node scripts/check-config-reads.mjs --update\` to lock that in.`);
+  console.log(
+    `${fell.length} files dropped config reads; run \`node scripts/check-config-reads.mjs --update\` to lock that in.`,
+  );
 }
 console.log(`Config-read ratchet OK: ${total} reads outside the surface layer, none above ${BASELINE}.`);

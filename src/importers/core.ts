@@ -15,9 +15,9 @@ import { vetSecrets } from '../util/secret-detect.js';
 import { log } from '../util/log.js';
 
 export interface ImportResult {
-  total: number;     // entries found in source
-  imported: number;  // actually imported (after dedup)
-  skipped: number;   // skipped as duplicates or too short
+  total: number; // entries found in source
+  imported: number; // actually imported (after dedup)
+  skipped: number; // skipped as duplicates or too short
   /**
    * Entries refused by the rejection-value guard, kept apart from `skipped` (dedup) so a tombstoned value is
    * distinguishable in summaries.
@@ -69,12 +69,7 @@ export function importRoot(options: ImportOptions): string {
 
 /** Given an array of raw text chunks, deduplicate against existing memories,
  *  create MemoryEntry objects, write them (unless dry-run), and return a result. */
-export function importEntries(
-  chunks: string[],
-  source: string,
-  tags: string[],
-  options: TargetedImport
-): ImportResult {
+export function importEntries(chunks: string[], source: string, tags: string[], options: TargetedImport): ImportResult {
   const target = openImportTarget(options);
   const { keys } = target;
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
@@ -185,4 +180,3 @@ function writeOrProbeImport(target: OpenImport, entry: MemoryEntry, options: Imp
   }
   return true;
 }
-

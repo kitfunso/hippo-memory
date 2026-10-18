@@ -22,20 +22,17 @@ export function summaryDirtyAuditRow(
 
 /** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
  * audited. */
-export function markSummaryDirtyInTx(
-  db: DatabaseSyncLike,
-  summaryId: string,
-  tenantId: string,
-  actor: string,
-): void {
+export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, tenantId: string, actor: string): void {
   // SAFETY: result's shape matches the single `dag_level` column returned below.
-  const result = db.prepare(`
+  const result = db
+    .prepare(`
     UPDATE memories
        SET summary_dirty = 1
      WHERE id = ?
        AND ${MARK_DIRTY_WHERE}
     RETURNING dag_level
-  `).get(summaryId, tenantId) as { dag_level: number } | undefined;
+  `)
+    .get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (!result) return;
   try {
     appendAuditEvent(db, summaryDirtyAuditRow(summaryId, tenantId, actor, result.dag_level));
@@ -54,12 +51,14 @@ export function markSummariesDirtyInTx(
 ): Map<string, number> {
   if (summaryIds.length === 0) return new Map();
   // SAFETY: each row carries exactly the `id` and `dag_level` columns RETURNING names.
-  const flipped = db.prepare(`
+  const flipped = db
+    .prepare(`
     UPDATE memories
        SET summary_dirty = 1
      WHERE id IN (SELECT value FROM json_each(?))
        AND ${MARK_DIRTY_WHERE}
     RETURNING id, dag_level
-  `).all(JSON.stringify(summaryIds), tenantId) as Array<{ id: string; dag_level: number }>;
+  `)
+    .all(JSON.stringify(summaryIds), tenantId) as Array<{ id: string; dag_level: number }>;
   return new Map(flipped.map((row) => [row.id, row.dag_level]));
 }

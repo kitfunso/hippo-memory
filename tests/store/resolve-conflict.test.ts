@@ -16,7 +16,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
 
@@ -34,12 +35,14 @@ function seedConflict() {
   writeEntry(tmpDir, a);
   writeEntry(tmpDir, b);
 
-  replaceDetectedConflicts(tmpDir, [{
-    memory_a_id: a.id,
-    memory_b_id: b.id,
-    reason: 'Contradictory advice about PowerShell chaining operators',
-    score: 0.85,
-  }]);
+  replaceDetectedConflicts(tmpDir, [
+    {
+      memory_a_id: a.id,
+      memory_b_id: b.id,
+      reason: 'Contradictory advice about PowerShell chaining operators',
+      score: 0.85,
+    },
+  ]);
 
   const conflicts = listMemoryConflicts(tmpDir, 'open');
   expect(conflicts.length).toBe(1);
@@ -115,7 +118,9 @@ describe('resolveConflict', () => {
 
   it('answers not-found for an unknown conflict id from one read by id, with no list read', async () => {
     seedConflict();
-    const { result, statements } = await recordStatementsAsync(() => resolve(999, 'mem_doesnt_exist').catch((err: Error) => err));
+    const { result, statements } = await recordStatementsAsync(() =>
+      resolve(999, 'mem_doesnt_exist').catch((err: Error) => err),
+    );
     expect(result).toBeInstanceOf(NotFoundError);
     const reads = statements.filter((sql) => sql.includes('FROM memory_conflicts'));
     expect(reads).toHaveLength(1);
@@ -164,10 +169,21 @@ describe('resolveConflict', () => {
 
   it('a reject fate with no ownScope keeps every personal copy', () => {
     const { aId, bId, conflictId } = seedConflict();
-    const personal = { ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }), scope: 'personal:private:alice', owner: 'alice' };
+    const personal = {
+      ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }),
+      scope: 'personal:private:alice',
+      owner: 'alice',
+    };
     writeEntry(tmpDir, personal);
     const fate = { kind: 'reject', ownScope: null } as const;
-    const resolution = { conflictId, keep: { id: aId, scope: null }, loser: { id: bId, scope: null }, fate, actor: 'cli', reason: 'wrong' };
+    const resolution = {
+      conflictId,
+      keep: { id: aId, scope: null },
+      loser: { id: bId, scope: null },
+      fate,
+      actor: 'cli',
+      reason: 'wrong',
+    };
     expect(sqliteSyncStore(tmpDir).conflicts.resolve('default', resolution)).toBe(true);
     expect(readEntry(tmpDir, bId)).toBeNull();
     expect(readEntry(tmpDir, personal.id)).not.toBeNull();
@@ -202,12 +218,14 @@ describe('conflict tenant isolation', () => {
     const b = createMemory7(`chaining rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
-    replaceDetectedConflicts(tmpDir, [{
-      memory_a_id: a.id,
-      memory_b_id: b.id,
-      reason: `contradictory advice for ${tenant}`,
-      score: 0.8,
-    }]);
+    replaceDetectedConflicts(tmpDir, [
+      {
+        memory_a_id: a.id,
+        memory_b_id: b.id,
+        reason: `contradictory advice for ${tenant}`,
+        score: 0.8,
+      },
+    ]);
     const open = listMemoryConflicts(tmpDir, 'open', tenant);
     expect(open.length).toBe(1);
     return { aId: a.id, bId: b.id, conflictId: open[0].id };
@@ -263,7 +281,9 @@ describe('conflict tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(listMemoryConflicts(tmpDir, 'open').find((c) => c.memory_a_id === memA && c.memory_b_id === memB)).toBeDefined();
+    expect(
+      listMemoryConflicts(tmpDir, 'open').find((c) => c.memory_a_id === memA && c.memory_b_id === memB),
+    ).toBeDefined();
 
     // Simulate an unscoped detector re-detecting the cross-tenant pair. Before
     // the fix, the resolve-stale loop saw the key in detectedKeys and skipped
@@ -290,7 +310,9 @@ describe('conflict tenant isolation', () => {
   it('resolveConflict --forget with a foreign tenantId cannot delete the loser memory', async () => {
     const { aId, bId, conflictId } = seedTenantConflict('tenant-a');
 
-    await expect(resolve(conflictId, aId, { forget: true, tenantId: 'tenant-b' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(resolve(conflictId, aId, { forget: true, tenantId: 'tenant-b' })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
 
     // The cross-tenant DELETE never fires — both memories survive.
     expect(readEntry(tmpDir, aId)).not.toBeNull();

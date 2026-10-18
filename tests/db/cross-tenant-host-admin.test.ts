@@ -36,7 +36,11 @@ function headers(bearer?: string) {
 
 const audit = (qs: string, bearer?: string) => fetch(`${handle.url}/v1/audit${qs}`, { headers: headers(bearer) });
 const sleep = (bearer?: string) =>
-  fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: headers(bearer), body: JSON.stringify({ dry_run: true }) });
+  fetch(`${handle.url}/v1/sleep`, {
+    method: 'POST',
+    headers: headers(bearer),
+    body: JSON.stringify({ dry_run: true }),
+  });
 
 async function mcpCall(name: string, args: Record<string, string | number>, bearer: string): Promise<McpResponse> {
   const res = await fetch(`${handle.url}/mcp`, {
@@ -46,7 +50,7 @@ async function mcpCall(name: string, args: Record<string, string | number>, bear
   });
   expect(res.status).toBe(200);
   // SAFETY: POST /mcp always answers a tools/call with a JSON-RPC envelope.
-  return await res.json() as McpResponse;
+  return (await res.json()) as McpResponse;
 }
 
 function sleepRuns(): number {
@@ -79,7 +83,7 @@ describe('member keys stop at the audit route', () => {
       const refused = await audit(qs, member);
       expect(refused.status).toBe(403);
       // SAFETY: HttpError responses are always JSON shaped { error: string }.
-      expect((await refused.json() as { error: string }).error).toContain('requires admin role');
+      expect(((await refused.json()) as { error: string }).error).toContain('requires admin role');
     }
     expect((await audit('', key('acme', 'admin'))).status).toBe(200);
   });
@@ -90,14 +94,14 @@ describe('tenant admin stops at its own tenant', () => {
     const res = await audit('?tenant=default', key('acme', 'admin'));
     expect(res.status).toBe(403);
     // SAFETY: HttpError responses are always JSON shaped { error: string }.
-    expect((await res.json() as { error: string }).error).toContain('host admin');
+    expect(((await res.json()) as { error: string }).error).toContain('host admin');
   });
 
   it('refuses a tenant admin host-wide sleep', async () => {
     const res = await sleep(key('acme', 'admin'));
     expect(res.status).toBe(403);
     // SAFETY: HttpError responses are always JSON shaped { error: string }.
-    expect((await res.json() as { error: string }).error).toContain('host admin');
+    expect(((await res.json()) as { error: string }).error).toContain('host admin');
   });
 
   it('still serves a tenant admin its own audit log', async () => {
@@ -142,7 +146,15 @@ describe('hippo_learn needs a host admin', () => {
   it('runs for an in-process stdio caller', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_learn', arguments: { days: 1 } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     expect(res?.error).toBeUndefined();
   });
@@ -151,14 +163,22 @@ describe('hippo_learn needs a host admin', () => {
 describe('MCP auto-sleep stays with the host tenant', () => {
   it('does not let another tenant trigger host-wide consolidation', async () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    const res = await mcpCall('hippo_remember', { text: 'acme deploys on tuesdays after the freeze' }, key('acme', 'member'));
+    const res = await mcpCall(
+      'hippo_remember',
+      { text: 'acme deploys on tuesdays after the freeze' },
+      key('acme', 'member'),
+    );
     expect(res.error).toBeUndefined();
     // hippo_remember decides before it answers, so a run it started is in flight or has its row by now.
     expect(autoSleepInFlight.size).toBe(0);
     expect(sleepRuns()).toBe(0);
 
     // The host tenant's write on the same server does start one, so the zeros above come from the tenant gate.
-    await mcpCall('hippo_remember', { text: 'the host deploys on thursdays after the freeze' }, key('default', 'member'));
+    await mcpCall(
+      'hippo_remember',
+      { text: 'the host deploys on thursdays after the freeze' },
+      key('default', 'member'),
+    );
     await vi.waitFor(() => expect(autoSleepInFlight.size).toBe(0), { timeout: 20_000 });
     expect(sleepRuns()).toBe(1);
   });

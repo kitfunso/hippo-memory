@@ -50,11 +50,16 @@ describe('session goal boost trace parity (side-channel)', () => {
     const db1 = openHippoDb(hippoRoot);
     let without;
     try {
-      without = sessionGoalBoost(hippoRoot, db1, rows.map((r) => ({ ...r })), {
-        sessionId,
-        tenantId,
-        limit: 10,
-      }).results;
+      without = sessionGoalBoost(
+        hippoRoot,
+        db1,
+        rows.map((r) => ({ ...r })),
+        {
+          sessionId,
+          tenantId,
+          limit: 10,
+        },
+      ).results;
     } finally {
       closeHippoDb(db1);
     }
@@ -64,12 +69,17 @@ describe('session goal boost trace parity (side-channel)', () => {
     const db2 = openHippoDb(hippoRoot);
     let withTrace;
     try {
-      withTrace = sessionGoalBoost(hippoRoot, db2, rows.map((r) => ({ ...r })), {
-        sessionId,
-        tenantId,
-        limit: 10,
-        trace,
-      }).results;
+      withTrace = sessionGoalBoost(
+        hippoRoot,
+        db2,
+        rows.map((r) => ({ ...r })),
+        {
+          sessionId,
+          tenantId,
+          limit: 10,
+          trace,
+        },
+      ).results;
     } finally {
       closeHippoDb(db2);
     }

@@ -85,7 +85,7 @@ const KINDS: readonly JudgedKind[] = ['error', 'decision', 'convention', 'prefer
 const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive', 'neutral'];
 
 function oneOf<T extends string>(value: JsonValue | undefined, allowed: readonly T[]): T | null {
-  return isJsonString(value) ? allowed.find((option) => option === value) ?? null : null;
+  return isJsonString(value) ? (allowed.find((option) => option === value) ?? null) : null;
 }
 
 /** `verified` is unreachable: that tier means a human or a test confirmed it. */
@@ -100,28 +100,34 @@ const JUDGE_TIMEOUT_MS = 15_000;
 async function post(content: string, opts: JudgeOptions): Promise<Response | null> {
   let res: Response;
   try {
-    res = await fetchWithRetry(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${opts.apiKey}`,
+    res = await fetchWithRetry(
+      ENDPOINT,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${opts.apiKey}`,
+        },
+        body: JSON.stringify({
+          state: content,
+          model: opts.model ?? DEFAULT_MODEL,
+          questions: QUESTIONS,
+        }),
       },
-      body: JSON.stringify({
-        state: content,
-        model: opts.model ?? DEFAULT_MODEL,
-        questions: QUESTIONS,
-      }),
-    }, { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher });
+      { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher },
+    );
   } catch (err) {
     log.warn(`judge: request failed: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
   if (res.ok) return res;
   // The body is the server's reply, never the request, so it cannot hold the key.
-  const snippet = (await readCappedText(res, JUDGE_MAX_ERROR_BYTES).catch((err) => {
-    log.debug(`judge: error body unreadable: ${errorMessage(err)}`, errorFields(err));
-    return '';
-  })).slice(0, 200);
+  const snippet = (
+    await readCappedText(res, JUDGE_MAX_ERROR_BYTES).catch((err) => {
+      log.debug(`judge: error body unreadable: ${errorMessage(err)}`, errorFields(err));
+      return '';
+    })
+  ).slice(0, 200);
   log.warn('judge: non-2xx reply', { status: res.status, body: snippet });
   return null;
 }
@@ -154,10 +160,7 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
 }
 
 /** Judge many candidates under a bounded concurrency pool, order preserved. */
-export async function judgeAll(
-  contents: readonly string[],
-  opts: JudgeOptions,
-): Promise<(Judgment | null)[]> {
+export async function judgeAll(contents: readonly string[], opts: JudgeOptions): Promise<(Judgment | null)[]> {
   const out: (Judgment | null)[] = Array.from({ length: contents.length }, () => null);
   const limit = Math.max(1, opts.concurrency ?? MAX_CONCURRENCY);
   let cursor = 0;

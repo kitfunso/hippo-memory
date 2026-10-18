@@ -18,7 +18,11 @@ const { DatabaseSync } = require('node:sqlite') as {
 
 const FTS_COUNT = /COUNT\(\*\)[\s\S]*FROM memories_fts(?!_)/i;
 
-interface PlanStep { id: number; parent: number; detail: string }
+interface PlanStep {
+  id: number;
+  parent: number;
+  detail: string;
+}
 
 /** Plan steps that scan the full-text table once per row of an outer loop: a correlated subquery, or the inner side of a join. */
 function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
@@ -28,14 +32,21 @@ function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
     step !== undefined && (step.detail.startsWith('CORRELATED') || correlated(plan.find((p) => p.id === step.parent)));
   const innerLoop = (step: PlanStep): boolean =>
     plan.some((other) => other.parent === step.parent && other.id < step.id && /^(SCAN|SEARCH) /.test(other.detail));
-  return plan.filter((step) => step.detail.includes('VIRTUAL TABLE') && (correlated(step) || innerLoop(step))).map((step) => step.detail);
+  return plan
+    .filter((step) => step.detail.includes('VIRTUAL TABLE') && (correlated(step) || innerLoop(step)))
+    .map((step) => step.detail);
 }
 
 let root: string;
 
 beforeEach(() => {
   root = makeRoot('f2-fts-count');
-  writeEntry(root, createMemory('a distinctive gribblesnort memory row for the fts count test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+  writeEntry(
+    root,
+    createMemory('a distinctive gribblesnort memory row for the fts count test', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    }),
+  );
 });
 
 describe('FTS sync check does not count the virtual table itself', () => {
@@ -76,7 +87,9 @@ describe('FTS drift repair', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: pragma_table_info yields one row per column with its name.
-      const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>).map((c) => c.name);
+      const columns = (
+        db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>
+      ).map((c) => c.name);
       db.exec(`
         WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
         INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n;
@@ -89,7 +102,9 @@ describe('FTS drift repair', () => {
 
       expect(healed).toBe(true);
       // SAFETY: the SELECT returns one COUNT(*) AS c row.
-      const missing = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)`).get() as { c: number };
+      const missing = db
+        .prepare(`SELECT COUNT(*) AS c FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)`)
+        .get() as { c: number };
       expect(Number(missing.c)).toBe(0);
       // The work sits inside each statement, where no statement or row count sees it; the plan names the loop.
       // The insert of missing rows and the orphan delete; the drift count reads the docsize shadow table instead.

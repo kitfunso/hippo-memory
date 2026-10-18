@@ -25,12 +25,13 @@ afterEach(() => {
 /** Replaces each distinct card id with its first-seen order and every ISO timestamp with <ts>. */
 function masker(): (text: string) => string {
   const ids = new Map<string, string>();
-  return (text) => text
-    .replace(/card_[A-Za-z0-9]+/g, (id) => {
-      if (!ids.has(id)) ids.set(id, `card_#${ids.size + 1}`);
-      return ids.get(id)!;
-    })
-    .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
+  return (text) =>
+    text
+      .replace(/card_[A-Za-z0-9]+/g, (id) => {
+        if (!ids.has(id)) ids.set(id, `card_#${ids.size + 1}`);
+        return ids.get(id)!;
+      })
+      .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
 }
 
 type Flags = Record<string, string | boolean | string[]>;

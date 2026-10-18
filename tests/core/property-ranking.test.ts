@@ -13,18 +13,22 @@ const SOURCES = [null, null, 'cli', 'slack'];
 type Draft = Omit<ScoredEntryLike['entry'], 'id'>;
 
 /** A candidate that carries only the keys it drew: a missing layer, tag list or source is a tie key of its own. */
-const DRAFT: Gen<Draft> = map(both(both(pick(CONTENTS), pick(LAYERS)), both(pick(TAGS), pick(SOURCES))), ([[content, layer], [tags, source]]) => {
-  const draft: Draft = { content };
-  if (layer !== null) draft.layer = layer;
-  if (tags !== null) draft.tags = tags;
-  if (source !== null) draft.source = source;
-  return draft;
-});
+const DRAFT: Gen<Draft> = map(
+  both(both(pick(CONTENTS), pick(LAYERS)), both(pick(TAGS), pick(SOURCES))),
+  ([[content, layer], [tags, source]]) => {
+    const draft: Draft = { content };
+    if (layer !== null) draft.layer = layer;
+    if (tags !== null) draft.tags = tags;
+    if (source !== null) draft.source = source;
+    return draft;
+  },
+);
 
 /** Candidates with ids unique within the list, as rows of one store are, each paired with a number that places it in a second arrival order. */
 const ARRIVALS: Gen<{ scored: ScoredEntryLike; turn: number }[]> = map(
   arr(both(both(pick(SCORES), DRAFT), int(0, 99)), 0, 12),
-  (drawn) => drawn.map(([[score, draft], turn], index) => ({ scored: { score, entry: { ...draft, id: `m${index}` } }, turn })),
+  (drawn) =>
+    drawn.map(([[score, draft], turn], index) => ({ scored: { score, entry: { ...draft, id: `m${index}` } }, turn })),
 );
 
 interface Row {
@@ -52,12 +56,16 @@ describe('ranking properties', () => {
     await forAll(0x9415, 500, both(ARRIVALS, pick([true, false])), ([arrivals, byContent]) => {
       const compare = comparePhysicsResultsBy<Row>((row) => row.score, byContent ? (row) => row.content : undefined);
       const order = (rows: readonly Row[]): string[] => [...rows].sort(compare).map((row) => row.memoryId);
-      const first = arrivals.map(({ scored }) => ({ memoryId: scored.entry.id, score: scored.score, content: scored.entry.content }));
+      const first = arrivals.map(({ scored }) => ({
+        memoryId: scored.entry.id,
+        score: scored.score,
+        content: scored.entry.content,
+      }));
       expect(order([...first].reverse())).toEqual(order(first));
     });
   });
 
-  it('raising one candidate\'s score never moves it down the ranking', async () => {
+  it("raising one candidate's score never moves it down the ranking", async () => {
     const raise = both(ARRIVALS, both(int(0, 11), pick([1e-9, 0.2, 0.5, 2])));
     await forAll(0x4a15e, 500, raise, ([arrivals, [slot, by]]) => {
       const before = arrivals.map((a) => a.scored);

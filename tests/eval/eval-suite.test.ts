@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../../src/eval/eval-suite.js';
+import {
+  buildSyntheticCorpus,
+  runFeatureEval,
+  detectRegressions,
+  resultToBaseline,
+  formatResult,
+} from '../../src/eval/eval-suite.js';
 import { handleEval } from '../../src/cli/eval.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 
@@ -24,7 +30,10 @@ describe('eval-suite scoring', () => {
     const baseline = resultToBaseline(result);
     expect(detectRegressions(baseline, result)).toMatchObject({ verdict: 'PASS', regressions: [] });
 
-    const degraded = { ...result, features: result.features.map((f) => (f.category === 'temporal' ? { ...f, ndcgAt5: f.ndcgAt5 - 0.2 } : f)) };
+    const degraded = {
+      ...result,
+      features: result.features.map((f) => (f.category === 'temporal' ? { ...f, ndcgAt5: f.ndcgAt5 - 0.2 } : f)),
+    };
     const report = detectRegressions(baseline, degraded);
     expect(report.verdict).toBe('REGRESSION');
     expect(report.regressions.map((r) => `${r.category}.${r.metric}`)).toEqual(['temporal.ndcgAt5']);
@@ -44,7 +53,14 @@ describe('hippo eval --suite', () => {
   });
 
   const run = (extra: Record<string, boolean> = {}) =>
-    runInProcess(() => handleEval({ hippoRoot: join(dir, '.hippo'), tenantId: 'default', args: [], flags: { suite: true, baseline: join(dir, 'base.json'), ...extra } }));
+    runInProcess(() =>
+      handleEval({
+        hippoRoot: join(dir, '.hippo'),
+        tenantId: 'default',
+        args: [],
+        flags: { suite: true, baseline: join(dir, 'base.json'), ...extra },
+      }),
+    );
 
   it('writes a baseline file on --save-baseline and then passes against it', async () => {
     const saved = await run({ 'save-baseline': true });

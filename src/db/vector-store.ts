@@ -128,7 +128,8 @@ export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
 export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
   // SAFETY: the SELECT names exactly the one column read.
   const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
-    { bytes: number } | undefined;
+    | { bytes: number }
+    | undefined;
   return row === undefined ? undefined : Math.floor(row.bytes / 4);
 }
 
@@ -197,7 +198,9 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
 const VECTOR_SCAN_CHUNK = 256;
 
 function nextTurn(): Promise<void> {
-  return new Promise((resolve) => { setImmediate(resolve); });
+  return new Promise((resolve) => {
+    setImmediate(resolve);
+  });
 }
 
 /** Proposes a query's nearest rows from an index in memory; undefined when it cannot answer, so the caller scans. */
@@ -342,7 +345,7 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
     if (!moveAside(fp, aside)) return;
     log.error(
       `${LEGACY_EMBEDDINGS_FILE} could not be parsed; kept it as ${path.basename(aside)} and the next embed rebuilds ` +
-      `the index`,
+        `the index`,
       { hippoRoot },
     );
     db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
@@ -360,7 +363,7 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
   if (moveAside(fp, backup)) {
     log.info(
       `moved ${written} vectors from ${LEGACY_EMBEDDINGS_FILE} into the store; the file is kept as ` +
-      `${path.basename(backup)}`,
+        `${path.basename(backup)}`,
       { hippoRoot },
     );
   }

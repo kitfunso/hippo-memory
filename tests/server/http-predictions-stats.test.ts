@@ -39,7 +39,7 @@ afterEach(async () => {
 });
 
 function authHeaders() {
-  return { 'authorization': `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
+  return { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
 }
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -52,7 +52,10 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('HTTP /v1/predictions/stats', () => {
   it('returns baserate JSON for a class with closed predictions', async () => {
     // Seed: 2 closed predictions in class "http-test"
-    for (const [est, act] of [[3, 5], [4, 6]]) {
+    for (const [est, act] of [
+      [3, 5],
+      [4, 6],
+    ]) {
       const p = savePrediction(home, 'default', {
         classTag: 'http-test',
         claimText: `est=${est} act=${act}`,
@@ -91,9 +94,10 @@ describe('HTTP /v1/predictions/stats', () => {
     try {
       // SAFETY: the SELECT list above is exactly `op, target_id`, so each
       // row from .all() has exactly these two string columns.
-      const rows = db.prepare(
-        `SELECT op, target_id FROM audit_log WHERE op = 'predict_baserate'`
-      ).all() as Array<{ op: string; target_id: string }>;
+      const rows = db.prepare(`SELECT op, target_id FROM audit_log WHERE op = 'predict_baserate'`).all() as Array<{
+        op: string;
+        target_id: string;
+      }>;
       expect(rows.length).toBe(1);
       expect(rows[0].target_id).toBe('audit-http');
     } finally {

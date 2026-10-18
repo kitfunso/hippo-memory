@@ -3,7 +3,14 @@
 
 /** A host lifecycle moment hippo can capture from. */
 export type CaptureEvent =
-  'prompt' | 'tool-failure' | 'pre-compact' | 'post-compact' | 'session-start' | 'session-end' | 'turn-end' | 'reset';
+  | 'prompt'
+  | 'tool-failure'
+  | 'pre-compact'
+  | 'post-compact'
+  | 'session-start'
+  | 'session-end'
+  | 'turn-end'
+  | 'reset';
 
 /** What hippo read from one host payload, before anything is written. */
 export interface CaptureInput {

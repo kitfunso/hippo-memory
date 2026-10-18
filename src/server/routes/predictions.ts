@@ -26,9 +26,7 @@ import { isJsonString, isJsonNumber } from '../../util/json.js';
 // Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated
 // against VALID_CLOSURE_STATES.
 // DoS caps: claim MAX_SHORT_FIELD_LEN chars, closureNote 2048.
-export async function handleCreatePrediction(
-  { req, res, ctx }: AuthedRouteRequest
-): Promise<void> {
+export async function handleCreatePrediction({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const claim = requiredString(body, 'claim', { max: MAX_SHORT_FIELD_LEN, untrimmed: true });
   const classTag = requiredString(body, 'classTag', { max: MAX_ID_LEN, untrimmed: true });

@@ -17,7 +17,13 @@ describe('two replayers over one spool', () => {
   it('the second one never imports a file the first holds, and each file lands once', () => {
     const ids = Array.from({ length: FILES }, (_, i) => `s${String(i).padStart(4, '0')}`);
     for (const id of ids) {
-      spool(root, 'default', { sessionId: id, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null }, { summary: id, items: [] }, new Date());
+      spool(
+        root,
+        'default',
+        { sessionId: id, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
+        { summary: id, items: [] },
+        new Date(),
+      );
     }
     const logs: string[] = [];
     const log = (message: string): void => void logs.push(message);
@@ -27,10 +33,12 @@ describe('two replayers over one spool', () => {
     const first = importSpool(root, 'default', log, Number.POSITIVE_INFINITY, (spooled, recorded) => {
       imported.push(spooled.payload.sessionId);
       // The rival starts while the first still holds its claim and the lock.
-      nested.push(importSpool(root, 'default', log, Number.POSITIVE_INFINITY, (rival, done) => {
-        imported.push(rival.payload.sessionId);
-        done();
-      }));
+      nested.push(
+        importSpool(root, 'default', log, Number.POSITIVE_INFINITY, (rival, done) => {
+          imported.push(rival.payload.sessionId);
+          done();
+        }),
+      );
       recorded();
     });
 
@@ -43,7 +51,13 @@ describe('two replayers over one spool', () => {
   });
 
   it('a rival that starts after the first one is done finds nothing left', () => {
-    spool(root, 'default', { sessionId: 'only', trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null }, { summary: 'only', items: [] }, new Date());
+    spool(
+      root,
+      'default',
+      { sessionId: 'only', trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
+      { summary: 'only', items: [] },
+      new Date(),
+    );
     const seen: string[] = [];
     const record = (s: { payload: { sessionId: string } }, done: () => void): void => {
       seen.push(s.payload.sessionId);

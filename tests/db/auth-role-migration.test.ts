@@ -24,7 +24,12 @@ describe('migration v26: api_keys.role', () => {
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: PRAGMA table_info always returns rows with these four columns.
-      const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string; type: string; dflt_value: string | null; notnull: number }>;
+      const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{
+        name: string;
+        type: string;
+        dflt_value: string | null;
+        notnull: number;
+      }>;
       const role = cols.find((c) => c.name === 'role');
       expect(role).toBeDefined();
       expect(role!.type).toBe('TEXT');
@@ -76,9 +81,13 @@ describe('migration v26: api_keys.role', () => {
     try {
       // Simulate a legacy 5-column INSERT (what v1.11.x binaries would do).
       // The migration already ran so the column exists; DEFAULT 'admin' fills it.
-      db.prepare(
-        `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`,
-      ).run('hk_legacy_test', 'fake_hash_for_test', 'default', 'legacy', new Date().toISOString());
+      db.prepare(`INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`).run(
+        'hk_legacy_test',
+        'fake_hash_for_test',
+        'default',
+        'legacy',
+        new Date().toISOString(),
+      );
       // SAFETY: literal SELECT of the role column for the legacy row this
       // test just inserted; role is NOT NULL (DEFAULT 'admin').
       const row = db.prepare(`SELECT role FROM api_keys WHERE key_id = ?`).get('hk_legacy_test') as { role: string };

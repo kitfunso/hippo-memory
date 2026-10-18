@@ -30,7 +30,15 @@ function auditRows(tenantId: string, op: AuditOp): AuditEvent[] {
 }
 
 function rejection(tenantId: string, over: Partial<Rejection>): Rejection {
-  return { tenantId, actor: 'tester', reason: 'wrong', textOf: () => 'unused', inReach: () => true, successorOf: () => undefined, ...over };
+  return {
+    tenantId,
+    actor: 'tester',
+    reason: 'wrong',
+    textOf: () => 'unused',
+    inReach: () => true,
+    successorOf: () => undefined,
+    ...over,
+  };
 }
 
 function rejectText(tenantId: string, text: string): string {
@@ -43,15 +51,26 @@ describe('rejections.apply', () => {
     writeEntry(root, entry);
     const seen: Array<RejectionSource | undefined> = [];
 
-    const applied = rejections().apply(rejection('default', {
-      memoryId: entry.id,
-      textOf: (source) => { seen.push(source); return source?.content ?? ''; },
-    }));
+    const applied = rejections().apply(
+      rejection('default', {
+        memoryId: entry.id,
+        textOf: (source) => {
+          seen.push(source);
+          return source?.content ?? '';
+        },
+      }),
+    );
 
     expect(seen).toEqual([{ content: entry.content, tenant_id: 'default', scope: null }]);
-    expect(applied).toMatchObject({ digest: rejectionDigest(entry.content), content: entry.content, removedIds: [entry.id] });
+    expect(applied).toMatchObject({
+      digest: rejectionDigest(entry.content),
+      content: entry.content,
+      removedIds: [entry.id],
+    });
     expect(readEntry(root, entry.id)).toBeNull();
-    expect(rejections().list('default')).toMatchObject([{ digest: applied.digest, reason: 'wrong', rejectedBy: 'tester', sourceMemoryId: entry.id }]);
+    expect(rejections().list('default')).toMatchObject([
+      { digest: applied.digest, reason: 'wrong', rejectedBy: 'tester', sourceMemoryId: entry.id },
+    ]);
     expect(auditRows('default', 'reject_value')).toMatchObject([
       { actor: 'tester', targetId: entry.id, metadata: { digest: applied.digest, removedIds: [entry.id], count: 1 } },
     ]);
@@ -59,9 +78,14 @@ describe('rejections.apply', () => {
 
   it('writes nothing when textOf refuses, and tells it that no row holds the id', () => {
     const seen: Array<RejectionSource | undefined> = [];
-    const refuse = (source: RejectionSource | undefined): string => { seen.push(source); throw new Error('refused'); };
+    const refuse = (source: RejectionSource | undefined): string => {
+      seen.push(source);
+      throw new Error('refused');
+    };
 
-    expect(() => rejections().apply(rejection('default', { memoryId: 'mem_absent', textOf: refuse }))).toThrow('refused');
+    expect(() => rejections().apply(rejection('default', { memoryId: 'mem_absent', textOf: refuse }))).toThrow(
+      'refused',
+    );
 
     expect(seen).toEqual([undefined]);
     expect(rejections().list('default')).toEqual([]);
@@ -83,12 +107,20 @@ describe('rejections.lift', () => {
   it('deletes the one match and writes an unreject_value row naming its digest, reason and source memory', () => {
     const entry = createMemory('lifted later', { tags: [] });
     writeEntry(root, entry);
-    const { digest } = rejections().apply(rejection('default', { memoryId: entry.id, reason: 'stale', textOf: (source) => source?.content ?? '' }));
+    const { digest } = rejections().apply(
+      rejection('default', { memoryId: entry.id, reason: 'stale', textOf: (source) => source?.content ?? '' }),
+    );
 
-    expect(rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({ status: 'ok', digest, reason: 'stale' });
+    expect(rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({
+      status: 'ok',
+      digest,
+      reason: 'stale',
+    });
 
     expect(rejections().list('default')).toEqual([]);
-    expect(auditRows('default', 'unreject_value')).toMatchObject([{ actor: 'lifter', targetId: entry.id, metadata: { digest, reason: 'stale' } }]);
+    expect(auditRows('default', 'unreject_value')).toMatchObject([
+      { actor: 'lifter', targetId: entry.id, metadata: { digest, reason: 'stale' } },
+    ]);
   });
 
   it('deletes nothing and writes no audit row when the prefix matches two rejected values', () => {
@@ -97,7 +129,9 @@ describe('rejections.lift', () => {
     const outcome = rejections().lift('default', '', 'lifter');
 
     expect(outcome.status).toBe('ambiguous');
-    expect(outcome.status === 'ambiguous' ? outcome.candidates.map((c) => c.digest).sort() : []).toEqual([...digests].sort());
+    expect(outcome.status === 'ambiguous' ? outcome.candidates.map((c) => c.digest).sort() : []).toEqual(
+      [...digests].sort(),
+    );
     expect(rejections().list('default')).toHaveLength(2);
     expect(auditRows('default', 'unreject_value')).toEqual([]);
   });
@@ -107,7 +141,11 @@ describe('rejections.lift', () => {
 
     expect(rejections().list('tenant-b')).toEqual([]);
     expect(rejections().lift('tenant-b', digest, 'lifter')).toEqual({ status: 'not_found' });
-    expect(rejections().list('tenant-a').map((r) => r.digest)).toEqual([digest]);
+    expect(
+      rejections()
+        .list('tenant-a')
+        .map((r) => r.digest),
+    ).toEqual([digest]);
   });
 });
 
@@ -119,11 +157,13 @@ describe('rejections.refusedAmong', () => {
     rejectText('tenant-a', 'never store this again');
     const entry = createMemory('Never  store this AGAIN', { tags: [] });
 
-    expect(await sqliteStore(root).rejections.refusedAmong([
-      { tenantId: 'tenant-a', entryId: entry.id, content: entry.content },
-      { tenantId: 'tenant-b', entryId: entry.id, content: entry.content },
-      { tenantId: 'tenant-a', entryId: entry.id, content: 'some other text' },
-    ])).toEqual([true, false, false]);
+    expect(
+      await sqliteStore(root).rejections.refusedAmong([
+        { tenantId: 'tenant-a', entryId: entry.id, content: entry.content },
+        { tenantId: 'tenant-b', entryId: entry.id, content: entry.content },
+        { tenantId: 'tenant-a', entryId: entry.id, content: 'some other text' },
+      ]),
+    ).toEqual([true, false, false]);
 
     expect(readEntry(root, entry.id)).toBeNull();
     expect(auditRows('tenant-a', 'reject_refusal')).toEqual([]);

@@ -41,7 +41,13 @@ afterEach(async () => {
 
 /** An add-on route that records every call it gets and answers with `reply`. */
 function route(path: string, reply: () => Promise<JsonValue>): AddonRoute {
-  return { path, handler: async (call) => { calls.push(call); return reply(); } };
+  return {
+    path,
+    handler: async (call) => {
+      calls.push(call);
+      return reply();
+    },
+  };
 }
 
 const echo = (): AddonRoute => route(ECHO, async () => ({ ok: true }));
@@ -53,12 +59,19 @@ async function start(routes: readonly AddonRoute[]): Promise<void> {
 /** The error serve() throws for these routes, or null when it started; a started server is stopped so a case never leaks one. */
 async function bootError(routes: readonly AddonRoute[]): Promise<Error | null> {
   return serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes }).then(
-    async (h) => { await h.stop(); return null; },
+    async (h) => {
+      await h.stop();
+      return null;
+    },
     (err: Error) => err,
   );
 }
 
-async function post(path: string, body: string, key: string | null = apiKey): Promise<{ status: number; reply: unknown }> {
+async function post(
+  path: string,
+  body: string,
+  key: string | null = apiKey,
+): Promise<{ status: number; reply: unknown }> {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (key !== null) headers.set('authorization', `Bearer ${key}`);
   const res = await fetch(`${handle!.url}${path}`, { method: 'POST', headers, body });
@@ -90,23 +103,46 @@ describe('an add-on route behind serve()', () => {
   });
 
   it('maps an HttpError from the handler to its status with an {error} body', async () => {
-    await start([route(ECHO, async () => { throw new HttpError(404, 'no such thing'); })]);
+    await start([
+      route(ECHO, async () => {
+        throw new HttpError(404, 'no such thing');
+      }),
+    ]);
     expect(await post(ECHO, '{}')).toEqual({ status: 404, reply: { error: 'no such thing' } });
   });
 
   it('answers 500 for an HttpError status writeHead would refuse, and keeps serving', async () => {
     const statuses = [0, 99, 1000, 404.5, Number.NaN];
-    await start([...statuses.map((s, i) => route(`/v1/x-status-${i}`, async () => { throw new HttpError(s, 'upstream failed'); })), echo()]);
+    await start([
+      ...statuses.map((s, i) =>
+        route(`/v1/x-status-${i}`, async () => {
+          throw new HttpError(s, 'upstream failed');
+        }),
+      ),
+      echo(),
+    ]);
     for (const i of statuses.keys()) {
-      expect(await post(`/v1/x-status-${i}`, '{}')).toEqual({ status: 500, reply: { error: 'internal server error', requestId: expect.any(String) } });
+      expect(await post(`/v1/x-status-${i}`, '{}')).toEqual({
+        status: 500,
+        reply: { error: 'internal server error', requestId: expect.any(String) },
+      });
     }
     expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
   });
 
   it('closes the socket and keeps serving when building the failure reply throws', async () => {
     const unreadable = new HttpError(500, 'x');
-    Object.defineProperty(unreadable, 'message', { get: () => { throw new Error('unreadable message'); } });
-    await start([route('/v1/x-unreadable', async () => { throw unreadable; }), echo()]);
+    Object.defineProperty(unreadable, 'message', {
+      get: () => {
+        throw new Error('unreadable message');
+      },
+    });
+    await start([
+      route('/v1/x-unreadable', async () => {
+        throw unreadable;
+      }),
+      echo(),
+    ]);
     await expect(post('/v1/x-unreadable', '{}')).rejects.toThrow();
     expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
   });
@@ -118,7 +154,10 @@ describe('an add-on route behind serve()', () => {
     // SAFETY: both values break the JsonValue contract on purpose, the way an untyped add-on could.
     await start(bad.map((value, i) => route(`/v1/x-bad-${i}`, async () => value as JsonValue)));
     for (const i of [0, 1]) {
-      expect(await post(`/v1/x-bad-${i}`, '{}')).toEqual({ status: 500, reply: { error: 'internal server error', requestId: expect.any(String) } });
+      expect(await post(`/v1/x-bad-${i}`, '{}')).toEqual({
+        status: 500,
+        reply: { error: 'internal server error', requestId: expect.any(String) },
+      });
     }
   });
 
@@ -133,7 +172,7 @@ describe('an add-on route behind serve()', () => {
     expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
   });
 
-  it('serves POST only: a GET on the add-on path is core\'s 404', async () => {
+  it("serves POST only: a GET on the add-on path is core's 404", async () => {
     await start([echo()]);
     const res = await fetch(`${handle!.url}${ECHO}`, { headers: { authorization: `Bearer ${apiKey}` } });
     expect({ status: res.status, reply: await res.json() }).toEqual({ status: 404, reply: { error: 'not found' } });
@@ -147,12 +186,15 @@ describe("an add-on route with `loop: 'off'`", () => {
     const route: AddonRoute = {
       path: LABELS,
       storeReady: 'keyWrites',
-      handler: async ({ ctx }) => (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
+      handler: async ({ ctx }) =>
+        (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
     };
     return loop === undefined ? route : { ...route, loop };
   };
   const blockedLines = (info: { readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> } }): string[] =>
-    info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('opened on the server thread by a route'));
+    info.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes('opened on the server thread by a route'));
 
   /** One POST to the route on a server over `store`, stopped before it returns. */
   async function once(route: AddonRoute, store?: HippoStore): Promise<{ status: number; reply: unknown }> {

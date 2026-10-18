@@ -18,7 +18,14 @@ import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import {
-  CLAUDE_SESSION, claudeCodePayload, copilotEventsJsonl, copilotPayload, copilotScratch, writeClaudeTranscript, writeCopilotSessionLog, type CopilotScratch,
+  CLAUDE_SESSION,
+  claudeCodePayload,
+  copilotEventsJsonl,
+  copilotPayload,
+  copilotScratch,
+  writeClaudeTranscript,
+  writeCopilotSessionLog,
+  type CopilotScratch,
 } from '../_helpers/copilot-hooks.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
@@ -32,18 +39,23 @@ const RECORD_SPAWN = path.resolve(__dirname, '..', '_helpers', 'record-spawn.cjs
 const CURSOR_SAVE_FAULT = path.resolve(__dirname, '..', '_helpers', 'cursor-save-fault.cjs').split(path.sep).join('/');
 
 let s: CopilotScratch;
-const hippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) => runCliAs(args, { cwd, env, input });
+const hippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
+  runCliAs(args, { cwd, env, input });
 let holder: ChildProcess | null = null;
 
 // Seeding runs the CLI entry in process: remember is setup here, and only the hook runs need a real process.
 async function pin(text: string, global: boolean): Promise<void> {
   const { HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME } = s.env;
-  for (const [k, v] of Object.entries({ HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME })) vi.stubEnv(k, v);
+  for (const [k, v] of Object.entries({ HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME })) {
+    vi.stubEnv(k, v);
+  }
   for (const k of ['CLAUDE_CODE_SESSION_ID', 'HIPPO_SESSION_ID']) vi.stubEnv(k, undefined);
   const cwd = process.cwd();
   process.chdir(s.proj);
   try {
-    const r = await runInProcess(() => runCli(['node', 'hippo', 'remember', text, '--pin', ...(global ? ['--global'] : [])]));
+    const r = await runInProcess(() =>
+      runCli(['node', 'hippo', 'remember', text, '--pin', ...(global ? ['--global'] : [])]),
+    );
     expect(r.status, r.stderr).toBe(0);
   } finally {
     process.chdir(cwd);
@@ -71,8 +83,16 @@ function deliveryEvents(sessionId: string): DeliveryEventRow[] {
   }
 }
 
-interface LedgerRow { session_id: string | null; event: string }
-interface FailureRow { session_id: string | null; tool: string | null; outcome: string; skip_rule: string | null }
+interface LedgerRow {
+  session_id: string | null;
+  event: string;
+}
+interface FailureRow {
+  session_id: string | null;
+  tool: string | null;
+  outcome: string;
+  skip_rule: string | null;
+}
 
 function rows<T>(sql: string, hippoRoot = s.hippoRoot): T[] {
   const db = openHippoDb(hippoRoot);
@@ -143,7 +163,12 @@ describe('hippo context --format copilot', () => {
   });
 
   it('without the copilot format the same run from the home folder never sees the project store', async () => {
-    const r = await hippo([...CONTEXT_ARGS.slice(0, -1), 'additional-context'], s.dir, s.env, copilotPayload('sessionStart', s.proj));
+    const r = await hippo(
+      [...CONTEXT_ARGS.slice(0, -1), 'additional-context'],
+      s.dir,
+      s.env,
+      copilotPayload('sessionStart', s.proj),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain(GLOBAL_PIN);
     expect(r.stdout).not.toContain(PROJ_PIN);
@@ -164,10 +189,18 @@ describe('hippo context --format copilot', () => {
     for (const sessionId of [SESSION, 'vscode-sess-1']) {
       const events = deliveryEvents(sessionId);
       expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({ runtime: 'copilot', session_id: sessionId, session_state: 'payload', block_state: 'sent' });
+      expect(events[0]).toMatchObject({
+        runtime: 'copilot',
+        session_id: sessionId,
+        session_state: 'payload',
+        block_state: 'sent',
+      });
     }
     const ledger = rows<LedgerRow>(`SELECT session_id, event FROM token_ledger ORDER BY rowid`);
-    expect(ledger).toEqual([{ session_id: SESSION, event: 'inject' }, { session_id: 'vscode-sess-1', event: 'inject' }]);
+    expect(ledger).toEqual([
+      { session_id: SESSION, event: 'inject' },
+      { session_id: 'vscode-sess-1', event: 'inject' },
+    ]);
   });
 });
 
@@ -186,11 +219,18 @@ describe('hippo capture-error --runtime copilot (critic test 5)', () => {
   });
 
   it('stores a real failure in the payload cwd store', async () => {
-    const r = await hippo(['capture-error', '--runtime', 'copilot'], s.dir, s.env, copilotPayload('postToolUseFailureBuild', s.proj));
+    const r = await hippo(
+      ['capture-error', '--runtime', 'copilot'],
+      s.dir,
+      s.env,
+      copilotPayload('postToolUseFailureBuild', s.proj),
+    );
     expect(r.status, r.stderr).toBe(0);
-    expect(loadAllEntries(s.hippoRoot, 'default').filter((e) => e.tags.includes('error')).map((e) => e.content)).toEqual([
-      'bash: Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts',
-    ]);
+    expect(
+      loadAllEntries(s.hippoRoot, 'default')
+        .filter((e) => e.tags.includes('error'))
+        .map((e) => e.content),
+    ).toEqual(['bash: Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts']);
   });
 });
 
@@ -198,7 +238,12 @@ describe('hippo session-end --runtime copilot (critic test 6)', () => {
   // sessionEnd payload from the GH hooks reference: it names no transcript, so the CLI log is found by session id.
   it('with no transcript for the session still sleeps, skips capture and exits 0', async () => {
     const logFile = path.join(s.dir, 'session-end.log');
-    const r = await hippo(['session-end', '--runtime', 'copilot', '--log-file', logFile], s.dir, s.env, copilotPayload('sessionEnd', s.proj));
+    const r = await hippo(
+      ['session-end', '--runtime', 'copilot', '--log-file', logFile],
+      s.dir,
+      s.env,
+      copilotPayload('sessionEnd', s.proj),
+    );
     expect(r.status, r.stderr).toBe(0);
     const log = await waitForLog(logFile, WORKER_DONE);
     expect(log).toContain('consolidating memory...');
@@ -208,12 +253,19 @@ describe('hippo session-end --runtime copilot (critic test 6)', () => {
   it('captures the session from <COPILOT_HOME>/session-state/<id>/events.jsonl', async () => {
     writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
     const logFile = path.join(s.dir, 'session-end.log');
-    const r = await hippo(['session-end', '--runtime', 'copilot', '--log-file', logFile], s.dir, s.env, copilotPayload('sessionEnd', s.proj));
+    const r = await hippo(
+      ['session-end', '--runtime', 'copilot', '--log-file', logFile],
+      s.dir,
+      s.env,
+      copilotPayload('sessionEnd', s.proj),
+    );
     expect(r.status, r.stderr).toBe(0);
     const log = await waitForLog(logFile, WORKER_DONE);
     expect(log).toContain('capturing session...');
     expect(log).not.toContain('skip capture');
-    expect(loadAllEntries(s.hippoRoot, 'default').some((e) => e.content.includes('retry budget at three attempts'))).toBe(true);
+    expect(
+      loadAllEntries(s.hippoRoot, 'default').some((e) => e.content.includes('retry budget at three attempts')),
+    ).toBe(true);
   });
 
   it('with no --log-file logs to copilot-sleep.log under the hippo logs folder, the file the hooks table used to name', async () => {
@@ -229,13 +281,20 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
   it('saves a working-state snapshot, opens no compaction record and prints nothing', async () => {
     const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
     const logFile = path.join(s.dir, 'pre-compact.log');
-    const r = await hippo(['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.dir, s.env, copilotPayload('preCompact', s.proj, transcript));
+    const r = await hippo(
+      ['pre-compact', '--runtime', 'copilot', '--log-file', logFile],
+      s.dir,
+      s.env,
+      copilotPayload('preCompact', s.proj, transcript),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     expect(compactionRows(s.hippoRoot)).toEqual([]);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('snapshot saved');
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
-      task: 'fix the flaky login test in auth.spec.ts', session_id: SESSION, source: 'pre-compact',
+      task: 'fix the flaky login test in auth.spec.ts',
+      session_id: SESSION,
+      source: 'pre-compact',
     });
   });
 
@@ -243,7 +302,12 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
     const logFile = path.join(s.dir, 'pre-compact.log');
     for (let run = 0; run < 2; run++) {
-      const r = await hippo(['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.dir, s.env, copilotPayload('preCompact', s.proj, transcript));
+      const r = await hippo(
+        ['pre-compact', '--runtime', 'copilot', '--log-file', logFile],
+        s.dir,
+        s.env,
+        copilotPayload('preCompact', s.proj, transcript),
+      );
       expect(r.status, r.stderr).toBe(0);
     }
     const log = fs.readFileSync(logFile, 'utf8');
@@ -255,7 +319,10 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
   it('with no payload it never falls back to scanning Claude Code transcripts', async () => {
     const claudeLog = path.join(s.dir, '.claude', 'projects', 'other', 'claude-sess.jsonl');
     fs.mkdirSync(path.dirname(claudeLog), { recursive: true });
-    fs.writeFileSync(claudeLog, `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'a claude code task' } })}\n`);
+    fs.writeFileSync(
+      claudeLog,
+      `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'a claude code task' } })}\n`,
+    );
     const logFile = path.join(s.dir, 'pre-compact.log');
     const r = await hippo(['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.proj, s.env, '');
     expect(r.status, r.stderr).toBe(0);
@@ -265,7 +332,12 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
   it('the same payload without the flag opens a record, as Claude Code has a PostCompact hook to close it', async () => {
     const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
     const logFile = path.join(s.dir, 'pre-compact.log');
-    const r = await hippo(['pre-compact', '--log-file', logFile], s.proj, s.env, copilotPayload('preCompact', s.proj, transcript));
+    const r = await hippo(
+      ['pre-compact', '--log-file', logFile],
+      s.proj,
+      s.env,
+      copilotPayload('preCompact', s.proj, transcript),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).not.toBe('');
     expect(compactionRows(s.hippoRoot)).toHaveLength(1);
@@ -277,8 +349,10 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     const traceDir = path.join(s.dir, 'lock-waits');
     holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
     const r = runHippo(
-      ['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.dir,
-      tracingLockWaits({ ...s.env, HIPPO_LOG: 'warn' }, traceDir), copilotPayload('preCompact', s.proj, transcript),
+      ['pre-compact', '--runtime', 'copilot', '--log-file', logFile],
+      s.dir,
+      tracingLockWaits({ ...s.env, HIPPO_LOG: 'warn' }, traceDir),
+      copilotPayload('preCompact', s.proj, transcript),
     );
     await releaseStoreWriteLock(holder);
     expect(r.status, r.stderr).toBe(0);
@@ -295,15 +369,55 @@ const TURN_DONE = 'skip snapshot close: turn mode';
 const FIRST_LESSON = 'retry budget at three attempts';
 const SECOND_LESSON = 'every pull request in CI';
 const SECOND_TURN = [
-  { type: 'user.message', data: { content: 'now run the auth suite in CI on every pull request', attachments: [] }, id: 'e13', timestamp: '2026-10-07T12:01:00.000Z', parentId: 'e12' },
-  { type: 'assistant.turn_start', data: { turnId: '1.0' }, id: 'e14', timestamp: '2026-10-07T12:01:01.000Z', parentId: 'e13' },
-  { type: 'assistant.message', data: { messageId: 'm5', content: 'We decided to run the auth suite on every pull request in CI.', toolRequests: [] }, id: 'e15', timestamp: '2026-10-07T12:01:02.000Z', parentId: 'e14' },
-  { type: 'assistant.turn_end', data: { turnId: '1.0' }, id: 'e16', timestamp: '2026-10-07T12:01:03.000Z', parentId: 'e15' },
-].map((line) => `${JSON.stringify(line)}\n`).join('');
+  {
+    type: 'user.message',
+    data: { content: 'now run the auth suite in CI on every pull request', attachments: [] },
+    id: 'e13',
+    timestamp: '2026-10-07T12:01:00.000Z',
+    parentId: 'e12',
+  },
+  {
+    type: 'assistant.turn_start',
+    data: { turnId: '1.0' },
+    id: 'e14',
+    timestamp: '2026-10-07T12:01:01.000Z',
+    parentId: 'e13',
+  },
+  {
+    type: 'assistant.message',
+    data: {
+      messageId: 'm5',
+      content: 'We decided to run the auth suite on every pull request in CI.',
+      toolRequests: [],
+    },
+    id: 'e15',
+    timestamp: '2026-10-07T12:01:02.000Z',
+    parentId: 'e14',
+  },
+  {
+    type: 'assistant.turn_end',
+    data: { turnId: '1.0' },
+    id: 'e16',
+    timestamp: '2026-10-07T12:01:03.000Z',
+    parentId: 'e15',
+  },
+]
+  .map((line) => `${JSON.stringify(line)}\n`)
+  .join('');
 
 /** Writes the chat log where VS Code keeps it, `<User>/workspaceStorage/<id>/github.copilot-chat/transcripts/<session id>.jsonl`. */
 function writeVscodeTranscript(text: string, sessionId = VSCODE_SESSION): string {
-  const file = path.join(s.dir, 'vscode-data', 'Code', 'User', 'workspaceStorage', 'h1', 'github.copilot-chat', 'transcripts', `${sessionId}.jsonl`);
+  const file = path.join(
+    s.dir,
+    'vscode-data',
+    'Code',
+    'User',
+    'workspaceStorage',
+    'h1',
+    'github.copilot-chat',
+    'transcripts',
+    `${sessionId}.jsonl`,
+  );
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
   return file;
@@ -311,9 +425,11 @@ function writeVscodeTranscript(text: string, sessionId = VSCODE_SESSION): string
 
 describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', () => {
   const logFile = (): string => path.join(s.dir, 'turn.log');
-  const memoriesWith = (text: string, hippoRoot = s.hippoRoot): number => loadAllEntries(hippoRoot, 'default').filter((e) => e.content.includes(text)).length;
+  const memoriesWith = (text: string, hippoRoot = s.hippoRoot): number =>
+    loadAllEntries(hippoRoot, 'default').filter((e) => e.content.includes(text)).length;
   const stopArgs = (log: string): string[] => ['session-end', '--runtime', 'copilot', '--turn', '--log-file', log];
-  const sessionFile = (suffix: string, id = VSCODE_SESSION): string => path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
+  const sessionFile = (suffix: string, id = VSCODE_SESSION): string =>
+    path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
 
   function stopPayload(transcript: string, over: { cwd?: string; sessionId?: string } = {}): string {
     const payload = copilotPayload('Stop', over.cwd ?? s.proj, transcript);
@@ -328,7 +444,12 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     run: { cwd?: string; from?: string; waitMs?: number; env?: NodeJS.ProcessEnv } = {},
   ): Promise<string> {
     fs.rmSync(logFile(), { force: true });
-    const r = await hippo(stopArgs(logFile()), run.from ?? s.dir, run.env ?? s.env, stopPayload(transcript, { cwd: run.cwd }));
+    const r = await hippo(
+      stopArgs(logFile()),
+      run.from ?? s.dir,
+      run.env ?? s.env,
+      stopPayload(transcript, { cwd: run.cwd }),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     return waitForLog(logFile(), TURN_DONE, run.waitMs);
@@ -350,12 +471,19 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       env,
       async reached(): Promise<number> {
         // A poll can see the file created and still empty, which must never parse as pid 0.
-        await waitFor(() => marked().includes('\n'), { what: 'a worker reaching the progress cursor save', timeoutMs: 40_000 });
+        await waitFor(() => marked().includes('\n'), {
+          what: 'a worker reaching the progress cursor save',
+          timeoutMs: 40_000,
+        });
         const pid = Number(marked().split('\n')[0]);
         if (!Number.isInteger(pid) || pid <= 0) throw new Error(`bad pid in the cursor save mark: ${marked()}`);
         return pid;
       },
-      saves: (): number[] => marked().split('\n').filter((line) => line !== '').map(Number),
+      saves: (): number[] =>
+        marked()
+          .split('\n')
+          .filter((line) => line !== '')
+          .map(Number),
       release: (): void => fs.writeFileSync(releaseFile, ''),
     };
   }
@@ -372,7 +500,13 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
 
   it('captures each reply once, keeps one handoff for the chat, and leaves the snapshot open', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
-    saveActiveTaskSnapshot(s.hippoRoot, 'default', { task: 't', summary: 's', next_step: 'n', session_id: VSCODE_SESSION, source: 'pre-compact' });
+    saveActiveTaskSnapshot(s.hippoRoot, 'default', {
+      task: 't',
+      summary: 's',
+      next_step: 'n',
+      session_id: VSCODE_SESSION,
+      source: 'pre-compact',
+    });
     let log = await stop(transcript);
     expect(log).toContain('capturing session...');
     expect(memoriesWith('retry budget at three attempts')).toBe(1);
@@ -385,7 +519,10 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(log).toContain('capturing session...');
     expect(memoriesWith('every pull request in CI')).toBe(1);
     expect(memoriesWith('retry budget at three attempts')).toBe(1);
-    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({ session_id: VSCODE_SESSION, status: 'active' });
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
+      session_id: VSCODE_SESSION,
+      status: 'active',
+    });
   });
 
   it('rewrites the transcript handoff in place after each reply', async () => {
@@ -395,13 +532,27 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     const log = await stop(transcript);
     expect(log).toContain(`wrote handoff for session ${VSCODE_SESSION}`);
     const sql = `SELECT task_id FROM session_handoffs WHERE session_id = '${VSCODE_SESSION}'`;
-    expect(rows<{ task_id: string | null }>(sql)).toEqual([{ task_id: 'now run the auth suite in CI on every pull request' }]);
+    expect(rows<{ task_id: string | null }>(sql)).toEqual([
+      { task_id: 'now run the auth suite in CI on every pull request' },
+    ]);
   });
 
   it.each([
-    ['below the threshold it skips sleep', { enabled: true, threshold: 50 }, /turn close, session vscode-sess-1: skip sleep, \d+ new memories, threshold 50\n/],
-    ['with auto-sleep off it skips sleep', { enabled: false, threshold: 1 }, /turn close, session vscode-sess-1: skip sleep, auto-sleep is off\n/],
-    ['at the threshold it sleeps', { enabled: true, threshold: 1 }, /consolidating memory\.\.\.[\s\S]*turn close, session vscode-sess-1: ran sleep at \d+ new memories \(threshold 1\)\n/],
+    [
+      'below the threshold it skips sleep',
+      { enabled: true, threshold: 50 },
+      /turn close, session vscode-sess-1: skip sleep, \d+ new memories, threshold 50\n/,
+    ],
+    [
+      'with auto-sleep off it skips sleep',
+      { enabled: false, threshold: 1 },
+      /turn close, session vscode-sess-1: skip sleep, auto-sleep is off\n/,
+    ],
+    [
+      'at the threshold it sleeps',
+      { enabled: true, threshold: 1 },
+      /consolidating memory\.\.\.[\s\S]*turn close, session vscode-sess-1: ran sleep at \d+ new memories \(threshold 1\)\n/,
+    ],
   ])('%s', async (_name, autoSleep, line) => {
     await pin(PROJ_PIN, false);
     patchConfig(s.hippoRoot, { autoSleep });
@@ -414,7 +565,11 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   function workersStartedBy(payload: string): number {
     const record = path.join(s.dir, 'spawns.jsonl');
     fs.rmSync(record, { force: true });
-    const env = { ...s.env, RECORD_SPAWN_FILE: record, NODE_OPTIONS: `${s.env.NODE_OPTIONS ?? ''} --require "${RECORD_SPAWN}"` };
+    const env = {
+      ...s.env,
+      RECORD_SPAWN_FILE: record,
+      NODE_OPTIONS: `${s.env.NODE_OPTIONS ?? ''} --require "${RECORD_SPAWN}"`,
+    };
     const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, env, payload);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
@@ -468,12 +623,15 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(await stop(transcript)).toContain('Captured 0 items (1 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
-    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: WORKER_WAIT_MS });
+    await waitFor(() => !fs.existsSync(sessionFile('.lock')), {
+      what: 'session lock released',
+      timeoutMs: WORKER_WAIT_MS,
+    });
 
     expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
   });
 
-  it('saves a reply that ends while the last reply\'s worker still runs, in that same worker', async () => {
+  it("saves a reply that ends while the last reply's worker still runs, in that same worker", async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     const fault = cursorSaveFault('hold');
     fs.rmSync(logFile(), { force: true });
@@ -483,7 +641,10 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     fs.appendFileSync(transcript, SECOND_TURN);
     const second = await hippo(stopArgs(logFile()), s.dir, s.env, stopPayload(transcript));
     expect(second.status, second.stderr).toBe(0);
-    await waitFor(() => fs.existsSync(sessionFile('.queued')), { what: 'second reply queued', timeoutMs: WORKER_WAIT_MS });
+    await waitFor(() => fs.existsSync(sessionFile('.queued')), {
+      what: 'second reply queued',
+      timeoutMs: WORKER_WAIT_MS,
+    });
     fault.release();
     await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
@@ -495,11 +656,16 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
   });
 
-  it('keeps each lesson when a second chat ends a reply while the first chat\'s worker still runs', async () => {
+  it("keeps each lesson when a second chat ends a reply while the first chat's worker still runs", async () => {
     const second = 'vscode-sess-2';
     const secondLog = path.join(s.dir, 'turn-2.log');
     const fault = cursorSaveFault('hold');
-    const firstStop = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(writeVscodeTranscript(copilotEventsJsonl())));
+    const firstStop = runHippo(
+      stopArgs(logFile()),
+      s.dir,
+      fault.env,
+      stopPayload(writeVscodeTranscript(copilotEventsJsonl())),
+    );
     expect(firstStop.status, firstStop.stderr).toBe(0);
     // The first chat's worker is held at its cursor save before the second chat starts, so the whole second save falls inside that worker's life.
     const pid = await fault.reached();
@@ -539,14 +705,17 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
   });
 
-  it('saves nothing for a transcript that is not on disk, with other chats\' transcripts where a fallback could look', async () => {
+  it("saves nothing for a transcript that is not on disk, with other chats' transcripts where a fallback could look", async () => {
     const beside = writeVscodeTranscript(copilotEventsJsonl(), 'vscode-sess-2');
     writeCopilotSessionLog(s.copilotHome, 'vscode-sess-2', copilotEventsJsonl());
     const claudeProject = path.join(s.dir, 'claude', 'projects', 'proj');
     fs.mkdirSync(claudeProject, { recursive: true });
     writeClaudeTranscript(claudeProject);
     const missing = path.join(path.dirname(beside), `${VSCODE_SESSION}.jsonl`);
-    const log = await stop(missing, { env: { ...s.env, CLAUDE_CONFIG_DIR: path.join(s.dir, 'claude') }, waitMs: 50_000 });
+    const log = await stop(missing, {
+      env: { ...s.env, CLAUDE_CONFIG_DIR: path.join(s.dir, 'claude') },
+      waitMs: 50_000,
+    });
     expect(log).toContain('skip capture: no readable transcript for this session');
     for (const root of [s.hippoRoot, s.globalRoot]) {
       expect(rows<{ n: number }>('SELECT COUNT(*) AS n FROM memories', root)).toEqual([{ n: 0 }]);
@@ -576,11 +745,18 @@ describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => 
     fs.mkdirSync(path.join(s.copilotHome, 'hooks'), { recursive: true });
     fs.writeFileSync(path.join(s.copilotHome, 'hooks', 'hippo.json'), '{}');
     const logFile = path.join(s.dir, 'pre-compact.log');
-    const r = await hippo(['pre-compact', '--log-file', logFile], s.proj, s.env, copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())));
+    const r = await hippo(
+      ['pre-compact', '--log-file', logFile],
+      s.proj,
+      s.env,
+      copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     expect(compactionRows(s.hippoRoot)).toEqual([]);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain('skip: VS Code payload, hippo.json runs pre-compact for this chat');
+    expect(fs.readFileSync(logFile, 'utf8')).toContain(
+      'skip: VS Code payload, hippo.json runs pre-compact for this chat',
+    );
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toBeNull();
   });
 
@@ -590,19 +766,34 @@ describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => 
     fs.writeFileSync(path.join(elsewhere, 'hooks', 'hippo.json'), '{}');
     const logFile = path.join(s.dir, 'pre-compact.log');
     const env = { ...s.env, COPILOT_HOME: elsewhere };
-    const r = await hippo(['pre-compact', '--log-file', logFile], s.proj, env, copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())));
+    const r = await hippo(
+      ['pre-compact', '--log-file', logFile],
+      s.proj,
+      env,
+      copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())),
+    );
     expect(r.status, r.stderr).toBe(0);
-    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({ session_id: VSCODE_SESSION, source: 'pre-compact' });
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
+      session_id: VSCODE_SESSION,
+      source: 'pre-compact',
+    });
   });
 
   it('without hippo.json saves the snapshot alone and prints nothing, as no PostCompact will close a record', async () => {
     const logFile = path.join(s.dir, 'pre-compact.log');
-    const r = await hippo(['pre-compact', '--log-file', logFile], s.proj, s.env, copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())));
+    const r = await hippo(
+      ['pre-compact', '--log-file', logFile],
+      s.proj,
+      s.env,
+      copilotPayload('PreCompact', s.proj, writeVscodeTranscript(copilotEventsJsonl())),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     expect(compactionRows(s.hippoRoot)).toEqual([]);
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
-      task: 'fix the flaky login test in auth.spec.ts', session_id: VSCODE_SESSION, source: 'pre-compact',
+      task: 'fix the flaky login test in auth.spec.ts',
+      session_id: VSCODE_SESSION,
+      source: 'pre-compact',
     });
   });
 });
@@ -618,7 +809,12 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
   });
 
   it('capture-error logs the failure in the store of the folder it runs in', async () => {
-    const r = await hippo(['capture-error'], other, s.env, claudeCodePayload('PostToolUseFailure', s.proj, writeClaudeTranscript(s.dir)));
+    const r = await hippo(
+      ['capture-error'],
+      other,
+      s.env,
+      claudeCodePayload('PostToolUseFailure', s.proj, writeClaudeTranscript(s.dir)),
+    );
     expect(r.status, r.stderr).toBe(0);
     const sql = `SELECT session_id FROM failure_log`;
     expect(rows<{ session_id: string | null }>(sql, otherRoot)).toEqual([{ session_id: CLAUDE_SESSION }]);
@@ -627,7 +823,12 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
 
   it('pre-compact opens its record in the store of the folder it runs in', async () => {
     const logFile = path.join(s.dir, 'pre-compact.log');
-    const r = await hippo(['pre-compact', '--log-file', logFile], other, s.env, claudeCodePayload('PreCompact', s.proj, writeClaudeTranscript(s.dir)));
+    const r = await hippo(
+      ['pre-compact', '--log-file', logFile],
+      other,
+      s.env,
+      claudeCodePayload('PreCompact', s.proj, writeClaudeTranscript(s.dir)),
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(compactionRows(otherRoot)).toHaveLength(1);
     expect(compactionRows(s.hippoRoot)).toEqual([]);
@@ -635,13 +836,27 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
 
   it('session-end closes the snapshot in the store of the folder it runs in and leaves the payload cwd store alone', async () => {
     for (const root of [otherRoot, s.hippoRoot]) {
-      saveActiveTaskSnapshot(root, 'default', { task: 'fix the flaky login test', summary: 's', next_step: 'n', session_id: CLAUDE_SESSION, source: 'pre-compact' });
+      saveActiveTaskSnapshot(root, 'default', {
+        task: 'fix the flaky login test',
+        summary: 's',
+        next_step: 'n',
+        session_id: CLAUDE_SESSION,
+        source: 'pre-compact',
+      });
     }
     const logFile = path.join(s.dir, 'session-end.log');
-    const r = await hippo(['session-end', '--log-file', logFile], other, s.env, claudeCodePayload('SessionEnd', s.proj, writeClaudeTranscript(s.dir)));
+    const r = await hippo(
+      ['session-end', '--log-file', logFile],
+      other,
+      s.env,
+      claudeCodePayload('SessionEnd', s.proj, writeClaudeTranscript(s.dir)),
+    );
     expect(r.status, r.stderr).toBe(0);
     await waitForLog(logFile, `closed 1 active snapshot(s) for session ${CLAUDE_SESSION}`);
     expect(loadActiveTaskSnapshot(otherRoot, 'default')).toBeNull();
-    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({ session_id: CLAUDE_SESSION, status: 'active' });
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({
+      session_id: CLAUDE_SESSION,
+      status: 'active',
+    });
   });
 });

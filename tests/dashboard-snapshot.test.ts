@@ -9,7 +9,14 @@ import { storedVectorIds } from '../src/db/vector-store.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import {
-  asDashboardRow, embed, isoAgo, makeStore, NOW, seed, snapshotsOf, type TmpStore,
+  asDashboardRow,
+  embed,
+  isoAgo,
+  makeStore,
+  NOW,
+  seed,
+  snapshotsOf,
+  type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflictKeeping } from './_helpers/root-forms.js';
@@ -94,7 +101,9 @@ describe('dashboard snapshot', () => {
       { memory_a_id: a2.id, memory_b_id: q.id, reason: 'quarantined member', score: 0.7 },
       { memory_a_id: r1.id, memory_b_id: r2.id, reason: 'already settled', score: 0.6 },
     ]);
-    const settled = listMemoryConflicts(store.hippoRoot, 'open', 'default').find((c) => c.reason === 'already settled')!;
+    const settled = listMemoryConflicts(store.hippoRoot, 'open', 'default').find(
+      (c) => c.reason === 'already settled',
+    )!;
     expect(resolveConflictKeeping(store.hippoRoot, 'default', settled.id, r1.id)).toBe(true);
 
     const snap = snapshot();
@@ -126,7 +135,11 @@ describe('dashboard snapshot', () => {
   it('builds the same snapshot from its narrow read as from every whole row of the tenant', () => {
     const root = store.hippoRoot;
     const pinned = seed(root, 'pinned with tags', { pinned: true, tags: ['Deploy', 'error'], confidence: 'verified' });
-    const wrong = seed(root, 'marked wrong twice', { outcome_negative: 2, emotional_valence: 'negative', retrieval_count: 7 });
+    const wrong = seed(root, 'marked wrong twice', {
+      outcome_negative: 2,
+      emotional_valence: 'negative',
+      retrieval_count: 7,
+    });
     seed(root, 'raw global row', { kind: 'raw', origin_project: '', layer: Layer.Buffer, ...AT_RISK });
     seed(root, 'unassigned and long unused', { origin_project: null, ...FADING });
     // The prefix test is exact, so a scope that differs only in case stays live.
@@ -139,7 +152,9 @@ describe('dashboard snapshot', () => {
     seed(root, 'quarantined', { scope: quarantineScopeFor('team:eng') });
     seed(root, 'quarantined and archived', { scope: quarantineScopeFor(null), kind: 'archived' });
     seed(root, 'another tenant', { tenant_id: 'other' });
-    replaceDetectedConflicts(root, [{ memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 }]);
+    replaceDetectedConflicts(root, [
+      { memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 },
+    ]);
     embed(root, [pinned.id, wrong.id]);
 
     const snap = snapshot();
@@ -161,11 +176,13 @@ describe('dashboard snapshot', () => {
 
     expect(snap.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
     expect(snap.facts).toHaveLength(6);
-    expect(JSON.stringify({ ...snap, memo: null, byKey: [...snap.byKey] })).toBe(JSON.stringify({ ...fromWholeRows, memo: null, byKey: [...fromWholeRows.byKey] }));
+    expect(JSON.stringify({ ...snap, memo: null, byKey: [...snap.byKey] })).toBe(
+      JSON.stringify({ ...fromWholeRows, memo: null, byKey: [...fromWholeRows.byKey] }),
+    );
     expect(JSON.stringify(buildOverview(snap))).toBe(JSON.stringify(buildOverview(fromWholeRows)));
   });
 
-  it('reads vectors only for its own tenant\'s rows, never the whole vector table', () => {
+  it("reads vectors only for its own tenant's rows, never the whole vector table", () => {
     const root = store.hippoRoot;
     const one = seed(root, 'embedded one');
     seed(root, 'not embedded');

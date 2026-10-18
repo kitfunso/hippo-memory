@@ -39,7 +39,15 @@ export function openWorld(): World {
   const project = join(dir, 'proj');
   const local = join(project, '.hippo');
   initStore(local);
-  const world = { dir, home, project, local, global: join(dir, 'global'), machine: { home, env: {}, platform: process.platform }, savedHippoHome: process.env.HIPPO_HOME };
+  const world = {
+    dir,
+    home,
+    project,
+    local,
+    global: join(dir, 'global'),
+    machine: { home, env: {}, platform: process.platform },
+    savedHippoHome: process.env.HIPPO_HOME,
+  };
   process.env.HIPPO_HOME = world.global;
   return world;
 }
@@ -58,7 +66,8 @@ export function note(dir: string, file: string, body: string, yaml = 'type: feed
 }
 
 /** The folder Claude Code keeps a project's notes in, under the world's home. */
-export const projectNotes = (w: World, project = w.project): string => join(w.home, '.claude', 'projects', claudeFolderName(project), 'memory');
+export const projectNotes = (w: World, project = w.project): string =>
+  join(w.home, '.claude', 'projects', claudeFolderName(project), 'memory');
 
 /** Claude Code's user folder is whatever `autoMemoryDirectory` in its user settings names. */
 export function userNotes(w: World): string {
@@ -79,7 +88,11 @@ export function codexSummary(w: World, ...lines: string[]): string {
 /** A store config naming its agent memory tools (null is every tool), with embeddings off. */
 export function writeConfig(root: string, tools: readonly string[] | null): void {
   mkdirSync(root, { recursive: true });
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ agentMemories: { tools }, embeddings: { enabled: false } }), 'utf8');
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({ agentMemories: { tools }, embeddings: { enabled: false } }),
+    'utf8',
+  );
 }
 
 export const agentRows = (root: string): MemoryEntry[] =>
@@ -87,7 +100,10 @@ export const agentRows = (root: string): MemoryEntry[] =>
 
 export const liveRows = (root: string): MemoryEntry[] => agentRows(root).filter((e) => !e.superseded_by);
 
-export const liveTexts = (root: string): string[] => liveRows(root).map((e) => e.content).sort();
+export const liveTexts = (root: string): string[] =>
+  liveRows(root)
+    .map((e) => e.content)
+    .sort();
 
 export function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
@@ -110,11 +126,12 @@ export function auditTotal(root: string): number {
   return Number(row.n);
 }
 
-export const toolTally = (report: ImportReport, tool: ToolId): Tally => report.tools.find((t) => t.tool === tool)?.tally ?? emptyTally();
+export const toolTally = (report: ImportReport, tool: ToolId): Tally =>
+  report.tools.find((t) => t.tool === tool)?.tally ?? emptyTally();
 
 export const tally = (report: ImportReport): Tally => totalTally(report);
 
-export const ctxFor = (root: string): FullContext => (apiCtx(root, 'default', adminActor('test')));
+export const ctxFor = (root: string): FullContext => apiCtx(root, 'default', adminActor('test'));
 
 export const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 

@@ -62,12 +62,26 @@ describe('audit log', () => {
     const home = makeRoot('audit');
     const db = openHippoDb(home);
     try {
-      db.exec(`CREATE TRIGGER refuse_m2 BEFORE INSERT ON audit_log WHEN NEW.target_id = 'm2' BEGIN SELECT RAISE(ABORT, 'audit row refused'); END`);
+      db.exec(
+        `CREATE TRIGGER refuse_m2 BEFORE INSERT ON audit_log WHEN NEW.target_id = 'm2' BEGIN SELECT RAISE(ABORT, 'audit row refused'); END`,
+      );
 
-      const failed = recordAuditEventsRowByRow(home, ['m1', 'm2', 'm3'].map((targetId) => ({ tenantId: 'default', actor: 'sleep', op: 'mv_rescue' as const, targetId })));
+      const failed = recordAuditEventsRowByRow(
+        home,
+        ['m1', 'm2', 'm3'].map((targetId) => ({
+          tenantId: 'default',
+          actor: 'sleep',
+          op: 'mv_rescue' as const,
+          targetId,
+        })),
+      );
 
       expect(failed.map((f) => [f.event.targetId, String(f.error)])).toEqual([['m2', 'Error: audit row refused']]);
-      expect(queryAuditEvents(db, { tenantId: 'default' }).map((e) => e.targetId).sort()).toEqual(['m1', 'm3']);
+      expect(
+        queryAuditEvents(db, { tenantId: 'default' })
+          .map((e) => e.targetId)
+          .sort(),
+      ).toEqual(['m1', 'm3']);
     } finally {
       closeHippoDb(db);
     }
@@ -83,9 +97,11 @@ describe('audit log', () => {
       const db = openHippoDb(makeRoot('audit'));
       try {
         write(db);
-        return db.prepare(
-          'SELECT tenant_id, actor, op, target_id, typeof(target_id) AS t, metadata_json FROM audit_log ORDER BY id',
-        ).all();
+        return db
+          .prepare(
+            'SELECT tenant_id, actor, op, target_id, typeof(target_id) AS t, metadata_json FROM audit_log ORDER BY id',
+          )
+          .all();
       } finally {
         closeHippoDb(db);
       }
@@ -95,9 +111,11 @@ describe('audit log', () => {
       statements = recordStatements(() => appendAuditEventsAt(db, events)).statements;
     });
     expect(statements).toHaveLength(1);
-    expect(batched).toEqual(rowsAfter((db) => {
-      for (const event of events) appendAuditEvent(db, event);
-    }));
+    expect(batched).toEqual(
+      rowsAfter((db) => {
+        for (const event of events) appendAuditEvent(db, event);
+      }),
+    );
   });
 
   it('prepares each audit insert once per handle, however many calls', () => {

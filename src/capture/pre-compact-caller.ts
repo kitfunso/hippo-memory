@@ -45,7 +45,7 @@ export async function preCompactForCaller(ctx: Context, req: CallerPreCompactReq
   };
   const { compactions } = ctx.store;
   const recordId = await logged('compaction record not started', () => compactions.start(ctx.tenantId, start));
-  if (state !== null && await saveOwnerSnapshot(ctx, req.sessionId, key, state) && recordId !== null) {
+  if (state !== null && (await saveOwnerSnapshot(ctx, req.sessionId, key, state)) && recordId !== null) {
     // Marked under ctx.tenantId, which the environment's tenant may not be.
     await logged('compaction record not marked with its snapshot', () =>
       compactions.markSnapshotSaved(ctx.tenantId, recordId),
@@ -56,7 +56,10 @@ export async function preCompactForCaller(ctx: Context, req: CallerPreCompactReq
 
 /** True when the owner's snapshot was saved. */
 async function saveOwnerSnapshot(
-  ctx: Context, sessionId: string, key: ContinuityKey, state: WorkingState,
+  ctx: Context,
+  sessionId: string,
+  key: ContinuityKey,
+  state: WorkingState,
 ): Promise<boolean> {
   const { sessions } = ctx.store;
   const existing = await logged('snapshot not loaded', () => sessions.loadSnapshot(ctx.tenantId, key));

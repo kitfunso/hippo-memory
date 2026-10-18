@@ -55,9 +55,18 @@ beforeEach(() => {
   _resetProjectIdentityCacheForTests();
 
   writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
-  writeEntry(globalStore, { ...createMemory(GLOBAL_PREF, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: '' });
-  writeEntry(globalStore, { ...createMemory(BRAVO, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: 'proj-b' });
-  writeEntry(globalStore, { ...createMemory(LEGACY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: 'placeholder' });
+  writeEntry(globalStore, {
+    ...createMemory(GLOBAL_PREF, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
+    origin_project: '',
+  });
+  writeEntry(globalStore, {
+    ...createMemory(BRAVO, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
+    origin_project: 'proj-b',
+  });
+  writeEntry(globalStore, {
+    ...createMemory(LEGACY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
+    origin_project: 'placeholder',
+  });
   const db = openHippoDb(globalStore);
   try {
     db.prepare(`UPDATE memories SET origin_project = NULL WHERE content = ?`).run(LEGACY);
@@ -125,10 +134,7 @@ describe('getContext origin partition (project A session)', () => {
   });
 
   it('contextProjectIsolation: false restores legacy behavior wholesale', async () => {
-    fs.writeFileSync(
-      path.join(projA, 'config.json'),
-      JSON.stringify({ contextProjectIsolation: false }),
-    );
+    fs.writeFileSync(path.join(projA, 'config.json'), JSON.stringify({ contextProjectIsolation: false }));
     const result = await getContext({ ...ctx, config: loadConfig(projA) }, { ...base, pinnedOnly: true });
     const got = contents(result.entries);
     expect(got).toContain(BRAVO);
@@ -148,7 +154,9 @@ describe('getContext origin partition (project A session)', () => {
     // A large cross-project row that matches the query strongly; the small
     // in-scope rows must still fill the (tiny) budget after it is excluded.
     writeEntry(globalStore, {
-      ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40), {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
       origin_project: 'proj-b',
     });
     const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
@@ -160,15 +168,23 @@ describe('getContext origin partition (project A session)', () => {
 
   it('an excluded duplicate cannot shadow its admitted copy in query mode (admission runs before dedupe)', async () => {
     const DUP = 'deploykey duplicated fact shared to global';
-    writeEntry(projA, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'github:private:x' }) }); // excluded (private scope)
-    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: '' });      // admitted (user-global)
+    writeEntry(projA, {
+      ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'github:private:x' }),
+    }); // excluded (private scope)
+    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: '' }); // admitted (user-global)
     const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey duplicated' });
     expect(contents(result.entries)).toContain(DUP);
   });
 
   it('private-scope rows never ambient-inject even from the local store (S2 parity)', async () => {
     const secret = 'PRIVATE-SCOPED deploykey row that must not inject';
-    writeEntry(projA, { ...createMemory(secret, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, scope: 'github:private:repo-x' }) });
+    writeEntry(projA, {
+      ...createMemory(secret, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        pinned: true,
+        scope: 'github:private:repo-x',
+      }),
+    });
     const result = await getContext(ctx, { ...base, pinnedOnly: true });
     expect(contents(result.entries)).not.toContain(secret);
   });

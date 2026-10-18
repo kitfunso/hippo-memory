@@ -14,12 +14,7 @@ const MAX_LESSON_CHARS = 500;
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and
  * tags through remember. */
-export function captureError(
-  exitCode: number,
-  stderr: string,
-  command: string,
-  tenantId?: string,
-): MemoryEntry {
+export function captureError(exitCode: number, stderr: string, command: string, tenantId?: string): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
   const wasTruncated = clean.length > AUTOLEARN_TEXT_CHARS;
@@ -111,7 +106,10 @@ export const RUN_WATCHED_DEADLINE_MS = 30 * 60_000;
 
 /** The command passed its deadline and was killed. */
 export class RunWatchedTimeoutError extends Error {
-  constructor(readonly deadlineMs: number, readonly stderr: string) {
+  constructor(
+    readonly deadlineMs: number,
+    readonly stderr: string,
+  ) {
     super(`the command did not exit within ${deadlineMs} ms and was killed`);
     this.name = 'RunWatchedTimeoutError';
   }
@@ -191,9 +189,13 @@ export function isGitRepo(cwd: string): boolean {
  *  days: how many days of history to include. */
 export function fetchGitLog(cwd: string, days: number): string {
   try {
-    const raw = execFileSync('git', [
-      'log', `--since=${days} days ago`, '--pretty=format:%s',
-    ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    const raw = execFileSync('git', ['log', `--since=${days} days ago`, '--pretty=format:%s'], {
+      encoding: 'utf8',
+      cwd,
+      timeout: 10000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
     return raw;
   } catch (err) {
     log.warn(`autolearn: git log unavailable: ${errorMessage(err)}`, errorFields(err));

@@ -7,7 +7,16 @@ import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpRespon
 import { cliStdioHost } from '../../src/cli/api-context.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalize, seedPortBranches, seedTemplates, SESSION, TENANT, type Store, type Templates,
+  CLEARED_ENV,
+  FAKE_NOW,
+  freshStore,
+  normalize,
+  seedPortBranches,
+  seedTemplates,
+  SESSION,
+  TENANT,
+  type Store,
+  type Templates,
 } from '../_helpers/recall-golden-seed.js';
 
 type ToolArgs = Record<string, string | number | boolean>;

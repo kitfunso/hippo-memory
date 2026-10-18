@@ -32,14 +32,30 @@ const COMMIT_SUBJECTS = [
 function gitRepoWithCommits(dir: string): void {
   mkdirSync(dir, { recursive: true });
   const git = (...args: string[]): void => {
-    execFileSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', ...args], { cwd: dir, stdio: 'ignore' });
+    execFileSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', ...args], {
+      cwd: dir,
+      stdio: 'ignore',
+    });
   };
   git('init', '-q');
   for (const subject of [...COMMIT_SUBJECTS].reverse()) git('commit', '-q', '--allow-empty', '-m', subject);
 }
 
 const NOW = '2026-06-01T00:00:00.000Z';
-const WORDS = ['cache', 'deploy', 'kafka', 'redis', 'merge', 'lint', 'schema', 'queue', 'retry', 'backup', 'token', 'hook'];
+const WORDS = [
+  'cache',
+  'deploy',
+  'kafka',
+  'redis',
+  'merge',
+  'lint',
+  'schema',
+  'queue',
+  'retry',
+  'backup',
+  'token',
+  'hook',
+];
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -72,14 +88,18 @@ function localRow(i: number): MemoryEntry {
 }
 
 function globalRow(j: number): MemoryEntry {
-  const source = j % 3 === 0 ? `shared:proj${j % 4}:x` : j % 3 === 1 ? '/tmp/projB/.hippo' : j % 5 === 0 ? 'cli-global' : 'cli';
+  const source =
+    j % 3 === 0 ? `shared:proj${j % 4}:x` : j % 3 === 1 ? '/tmp/projB/.hippo' : j % 5 === 0 ? 'cli-global' : 'cli';
   // Pairs share a timestamp so peer order and rank ties fall to the id.
   const created = base - Math.floor(j / 2) * 13 * HOUR;
-  const entry = createMemory(`global note ${j} on ${WORDS[j % WORDS.length]} for the ${WORDS[(j * 5) % WORDS.length]} team`, {
-    source: source.startsWith('/') ? `promoted:${source}` : source,
-    pinned: j % 17 === 0,
-    tenantId: j % 7 === 6 ? 'acme' : 'default',
-  });
+  const entry = createMemory(
+    `global note ${j} on ${WORDS[j % WORDS.length]} for the ${WORDS[(j * 5) % WORDS.length]} team`,
+    {
+      source: source.startsWith('/') ? `promoted:${source}` : source,
+      pinned: j % 17 === 0,
+      tenantId: j % 7 === 6 ? 'acme' : 'default',
+    },
+  );
   return {
     ...entry,
     id: `glob-${String(j).padStart(3, '0')}`,
@@ -97,7 +117,13 @@ function merged(): MemoryEntry {
     source: 'consolidation',
     tenantId: 'default',
   });
-  return { ...entry, id: 'ctx-merged', created: iso(base - 2 * DAY), last_retrieved: iso(base - 2 * DAY), origin_project: 'proj' };
+  return {
+    ...entry,
+    id: 'ctx-merged',
+    created: iso(base - 2 * DAY),
+    last_retrieved: iso(base - 2 * DAY),
+    origin_project: 'proj',
+  };
 }
 
 function textOf(res: McpResponse | null): string {
@@ -142,16 +168,19 @@ describe('request-path output on a fixed store', () => {
   const mcpCtx = (): McpContext => {
     const store = sqliteStore(localRoot);
     return {
-      hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store,
-      reach: testReach(localRoot, store), config: loadConfig(localRoot),
+      hippoRoot: localRoot,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store,
+      reach: testReach(localRoot, store),
+      config: loadConfig(localRoot),
     };
   };
   type ToolArgs = { scope?: string };
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
-    handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      mcpCtx(),
-    );
+    handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, mcpCtx());
 
   const toolCases: Array<[string, ToolArgs]> = [
     ['hippo_context', {}],
@@ -169,7 +198,10 @@ describe('request-path output on a fixed store', () => {
     process.chdir(repo);
     const before = new Set(loadAllEntries(localRoot, 'default').map((e) => e.id));
     const out = textOf(await call('hippo_learn'));
-    const added = loadAllEntries(localRoot, 'default').filter((e) => !before.has(e.id)).map((e) => e.content).sort();
+    const added = loadAllEntries(localRoot, 'default')
+      .filter((e) => !before.has(e.id))
+      .map((e) => e.content)
+      .sort();
     expect({ out, added }).toMatchSnapshot();
   });
 });

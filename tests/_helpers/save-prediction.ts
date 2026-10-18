@@ -17,5 +17,8 @@ export function savePrediction(
   if (!opts.claimText) throw new BadRequestError('savePrediction: claimText is required');
 
   const mirror = predictionMirror(tenantId, opts, loadConfig(hippoRoot).defaultHalfLifeDays);
-  return handlesOf(hippoRoot).on((db, files) => writePredictionAt(db, files, tenantId, { ...opts, mirror }, actor), openStore);
+  return handlesOf(hippoRoot).on(
+    (db, files) => writePredictionAt(db, files, tenantId, { ...opts, mirror }, actor),
+    openStore,
+  );
 }

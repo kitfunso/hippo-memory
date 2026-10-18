@@ -1,9 +1,9 @@
 import type { Migration } from './types.js';
 
 export const v06: Migration = {
-    version: 6,
-    up: (db) => {
-      db.exec(`
+  version: 6,
+  up: (db) => {
+    db.exec(`
         CREATE TABLE IF NOT EXISTS working_memory (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           scope TEXT NOT NULL,
@@ -22,5 +22,5 @@ export const v06: Migration = {
         CREATE INDEX IF NOT EXISTS idx_working_memory_session
         ON working_memory(session_id, created_at DESC);
       `);
-    },
+  },
 };

@@ -35,7 +35,10 @@ function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
 describe('hippo correction-latency CLI', () => {
   it('reports the empty case when no supersessions exist', async () => {
     initStore(hippoDir);
-    writeEntry(hippoDir, createMemory('a single belief, never corrected', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('a single belief, never corrected', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
 
     const r = await runHippo(['correction-latency']);
     expect(r.status).toBe(0);

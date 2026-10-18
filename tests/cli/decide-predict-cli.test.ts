@@ -45,7 +45,9 @@ describe('hippo decide', () => {
     const first = await ok('decide', 'use sqlite for the local store', '--context', 'no server to run');
     const firstId = grab(first, /Decision recorded: #(\d+)/);
     const firstMem = grab(first, /memory: (\S+)/);
-    expect(await ok('decide', 'get', firstId)).toMatch(/status: active[\s\S]*text: use sqlite[\s\S]*context: no server to run/);
+    expect(await ok('decide', 'get', firstId)).toMatch(
+      /status: active[\s\S]*text: use sqlite[\s\S]*context: no server to run/,
+    );
 
     const second = await ok('decide', 'use postgres for the shared store', '--supersedes', firstMem);
     const secondId = grab(second, /Decision recorded: #(\d+)/);
@@ -76,14 +78,32 @@ describe('hippo decide', () => {
 
 describe('hippo predict', () => {
   it('records, shows, closes and scores a prediction against its class', async () => {
-    const made = await ok('predict', 'the migration lands this sprint', '--class', 'migration', '--estimate', '5', '--unit', 'days', '--target', '2026-11-01');
+    const made = await ok(
+      'predict',
+      'the migration lands this sprint',
+      '--class',
+      'migration',
+      '--estimate',
+      '5',
+      '--unit',
+      'days',
+      '--target',
+      '2026-11-01',
+    );
     const id = grab(made, /Prediction recorded: #(\d+) class=migration/);
-    expect(await ok('predict', 'list', '--status', 'open')).toContain(`#${id} [open] class=migration estimate=5 days target=2026-11-01`);
-    expect(await ok('predict', 'baserate', '--class', 'migration')).toContain('No closed predictions in class "migration" yet.');
+    expect(await ok('predict', 'list', '--status', 'open')).toContain(
+      `#${id} [open] class=migration estimate=5 days target=2026-11-01`,
+    );
+    expect(await ok('predict', 'baserate', '--class', 'migration')).toContain(
+      'No closed predictions in class "migration" yet.',
+    );
 
-    expect(await ok('predict', 'close', id, '--state', 'closed', '--actual', '8', '--note', 'schema review slipped'))
-      .toContain(`Prediction ${id} closed: state=closed actual=8`);
-    expect(await ok('predict', 'show', id)).toMatch(/state: closed[\s\S]*estimate: 5 days[\s\S]*actual: 8[\s\S]*note: schema review slipped/);
+    expect(
+      await ok('predict', 'close', id, '--state', 'closed', '--actual', '8', '--note', 'schema review slipped'),
+    ).toContain(`Prediction ${id} closed: state=closed actual=8`);
+    expect(await ok('predict', 'show', id)).toMatch(
+      /state: closed[\s\S]*estimate: 5 days[\s\S]*actual: 8[\s\S]*note: schema review slipped/,
+    );
     const closed = await ok('predict', 'list', '--status', 'closed', '--class', 'migration');
     expect(closed).toContain(`#${id} [closed] class=migration estimate=5 days actual=8`);
     expect(closed).toContain('note: schema review slipped');
@@ -94,8 +114,14 @@ describe('hippo predict', () => {
   });
 
   it('list with no --status and no --class shows closed predictions in every class', async () => {
-    const openId = grab(await ok('predict', 'the cache warms in an hour', '--class', 'ops'), /Prediction recorded: #(\d+)/);
-    const closedId = grab(await ok('predict', 'the port lands in a week', '--class', 'port', '--estimate', '7'), /Prediction recorded: #(\d+)/);
+    const openId = grab(
+      await ok('predict', 'the cache warms in an hour', '--class', 'ops'),
+      /Prediction recorded: #(\d+)/,
+    );
+    const closedId = grab(
+      await ok('predict', 'the port lands in a week', '--class', 'port', '--estimate', '7'),
+      /Prediction recorded: #(\d+)/,
+    );
     await ok('predict', 'close', closedId, '--state', 'closed', '--actual', '9');
     const all = await ok('predict', 'list');
     expect(all).toContain('Found 2 predictions');
@@ -103,7 +129,12 @@ describe('hippo predict', () => {
     expect(all).toContain(`#${closedId} [closed] class=port`);
   });
 
-  it.each([['decide', 'get', '12abc'], ['decide', 'close', '0x1'], ['predict', 'show', '12abc'], ['predict', 'close', '0x1']])(
+  it.each([
+    ['decide', 'get', '12abc'],
+    ['decide', 'close', '0x1'],
+    ['predict', 'show', '12abc'],
+    ['predict', 'close', '0x1'],
+  ])(
     'refuses the partly numeric id in `%s %s %s` that the lenient parser used to read as a number',
     async (verb, sub, id) => {
       const r = await hippo(verb, sub, id, ...(sub === 'close' && verb === 'predict' ? ['--state', 'closed'] : []));
@@ -113,9 +144,13 @@ describe('hippo predict', () => {
 
   it('refuses a missing class, bad numbers, a bad state and a closed filter without a class', async () => {
     expect((await hippo('predict', 'a claim')).stderr).toContain('--class is required');
-    expect((await hippo('predict', 'a claim', '--class', 'c', '--estimate', 'soon')).stderr).toContain('Invalid --estimate: "soon"');
+    expect((await hippo('predict', 'a claim', '--class', 'c', '--estimate', 'soon')).stderr).toContain(
+      'Invalid --estimate: "soon"',
+    );
     expect((await hippo('predict', 'close', '1', '--state', 'open')).stderr).toContain('Invalid --state: "open"');
-    expect((await hippo('predict', 'close', '1', '--state', 'closed', '--actual', 'x')).stderr).toContain('Invalid --actual: "x"');
+    expect((await hippo('predict', 'close', '1', '--state', 'closed', '--actual', 'x')).stderr).toContain(
+      'Invalid --actual: "x"',
+    );
     expect((await hippo('predict', 'close', 'zero', '--state', 'closed')).stderr).toContain('Invalid prediction id');
     expect((await hippo('predict', 'list', '--status', 'closed')).stderr).toContain('requires --class');
     expect((await hippo('predict', 'list', '--status', 'later')).stderr).toContain('Invalid --status: "later"');

@@ -23,10 +23,12 @@ function firstMatch(rows: readonly Route[], matches: RouteMatcher, method: strin
 /** First-match lookup: a literal path is one Map read, any other walks only the pattern and regex rows in table order.
  * A literal key holds the row the whole-table walk picks for it, so a pattern row above a literal one still wins. */
 export function routeLookup(rows: readonly Route[], matches: RouteMatcher): RouteLookup {
-  const literal: ReadonlyMap<string, Route> = new Map(rows.flatMap((row): [string, Route][] => {
-    if (!('path' in row)) return [];
-    return [[`${row.method} ${row.path}`, firstMatch(rows, matches, row.method, row.path)!.route]];
-  }));
+  const literal: ReadonlyMap<string, Route> = new Map(
+    rows.flatMap((row): [string, Route][] => {
+      if (!('path' in row)) return [];
+      return [[`${row.method} ${row.path}`, firstMatch(rows, matches, row.method, row.path)!.route]];
+    }),
+  );
   const walked = rows.filter((row) => !('path' in row));
   return (method, path) => {
     const route = literal.get(`${method} ${path}`);

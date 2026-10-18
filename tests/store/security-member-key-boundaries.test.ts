@@ -116,7 +116,10 @@ describe('member-key boundaries over HTTP', () => {
       expect(res.status).toBe(403);
       expect(await res.text()).not.toContain('payroll');
     }
-    const assemble = await get(`/v1/sessions/sess_1/assemble?scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
+    const assemble = await get(
+      `/v1/sessions/sess_1/assemble?scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
+      member.plaintext,
+    );
     expect(assemble.status).toBe(403);
   });
 
@@ -143,7 +146,11 @@ describe('member-key boundaries over HTTP', () => {
   it('MCP over HTTP runs a member key as a member, not as admin', async () => {
     const member = mintKey(home, 'member');
     const admin = mintKey(home, 'admin');
-    async function callTool(key: string, name: string, args: Record<string, string>): Promise<{ status: number; text: string }> {
+    async function callTool(
+      key: string,
+      name: string,
+      args: Record<string, string>,
+    ): Promise<{ status: number; text: string }> {
       const res = await fetch(`${handle.url}/mcp`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -176,8 +183,8 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     rmSync(home, { recursive: true, force: true });
   });
 
-  const memberCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' }));
-  const adminCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'cli', role: 'admin' }));
+  const memberCtx = (): FullContext => apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' });
+  const adminCtx = (): FullContext => apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
   it('key management refuses a member actor', async () => {
     await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(api.ForbiddenError);
@@ -186,14 +193,22 @@ describe('member-key boundaries in the api layer (every surface goes through it)
   });
 
   it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', async () => {
-    await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } })).rejects.toThrow(api.ScopeForbiddenError);
-    await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: 'unknown:legacy' } })).rejects.toThrow(api.ScopeForbiddenError);
-    await expect(api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).rejects.toThrow(api.ScopeForbiddenError);
+    await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } })).rejects.toThrow(
+      api.ScopeForbiddenError,
+    );
+    await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: 'unknown:legacy' } })).rejects.toThrow(
+      api.ScopeForbiddenError,
+    );
+    await expect(api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).rejects.toThrow(
+      api.ScopeForbiddenError,
+    );
 
     // The public row is the only one seeded in that scope.
-    const publicResults = (await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } })).results;
+    const publicResults = (await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } }))
+      .results;
     expect(publicResults.map((r) => r.content)).toEqual([PUBLIC_TEXT]);
-    const adminResults = (await api.retrieve(adminCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } })).results;
+    const adminResults = (await api.retrieve(adminCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } }))
+      .results;
     expect(adminResults.map((r) => r.content).join(' ')).toContain('payroll');
   });
 });

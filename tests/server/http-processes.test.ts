@@ -50,11 +50,7 @@ interface ProcessCreateExtra {
   description?: string;
 }
 
-async function createProcess(
-  processName: string,
-  extra: ProcessCreateExtra = {},
-  key: CreateApiKeyResult = apiKey,
-) {
+async function createProcess(processName: string, extra: ProcessCreateExtra = {}, key: CreateApiKeyResult = apiKey) {
   return fetch(`${handle.url}/v1/processes`, {
     method: 'POST',
     headers: authHeaders(key),

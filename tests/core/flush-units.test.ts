@@ -25,10 +25,26 @@ afterEach(() => {
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
 });
 
-const withId = (id: string, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`row ${id} text`), id, ...extra });
+const withId = (id: string, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
+  ...createMemory(`row ${id} text`),
+  id,
+  ...extra,
+});
 const idsOf = (c: FlushComponent): string[] =>
-  [...new Set([...c.refreshes.map((r) => r.id), ...c.writes.map((e) => e.id), ...c.deletes, ...c.dormant.map((m) => m.entry.id)])].sort();
-const moveOf = (entry: MemoryEntry) => ({ entry, strength: 0.01, reason: 'decay' as const, dormantAt: '2026-06-01T12:00:00.000Z' });
+  [
+    ...new Set([
+      ...c.refreshes.map((r) => r.id),
+      ...c.writes.map((e) => e.id),
+      ...c.deletes,
+      ...c.dormant.map((m) => m.entry.id),
+    ]),
+  ].sort();
+const moveOf = (entry: MemoryEntry) => ({
+  entry,
+  strength: 0.01,
+  reason: 'decay' as const,
+  dormantAt: '2026-06-01T12:00:00.000Z',
+});
 
 describe('groupFlush', () => {
   it('joins every op on a unit into one component and orders components by their first queued op', () => {
@@ -36,22 +52,46 @@ describe('groupFlush', () => {
     const demotedA = { ...decayA, half_life_days: 3 };
     const [R, S, M, B, D] = ['R', 'S', 'M', 'B', 'D'].map((id) => withId(id));
 
-    const ops = { refreshes: [{ id: 'E', strength: 0.5 }], writes: [decayA, S!, M!, demotedA, B!], deletes: [R!.id], dormant: [moveOf(D!)] };
-    const components = groupFlush(ops, [[R!.id, S!.id], [M!.id, S!.id, decayA.id, B!.id], ['E', 'D']]);
+    const ops = {
+      refreshes: [{ id: 'E', strength: 0.5 }],
+      writes: [decayA, S!, M!, demotedA, B!],
+      deletes: [R!.id],
+      dormant: [moveOf(D!)],
+    };
+    const components = groupFlush(ops, [
+      [R!.id, S!.id],
+      [M!.id, S!.id, decayA.id, B!.id],
+      ['E', 'D'],
+    ]);
 
-    expect(components.map(idsOf)).toEqual([['D', 'E'], ['A', 'B', 'M', 'R', 'S']]);
+    expect(components.map(idsOf)).toEqual([
+      ['D', 'E'],
+      ['A', 'B', 'M', 'R', 'S'],
+    ]);
     expect(components[1]!.writes.map((e) => e.id)).toEqual(['A', 'S', 'M', 'B']);
     expect(components[1]!.writes[0]).toBe(demotedA);
   });
 
-  it('puts a child in its DAG parent\'s unit when the run removes the parent', () => {
+  it("puts a child in its DAG parent's unit when the run removes the parent", () => {
     const parent = withId('P', { dag_level: 2 });
     const child = withId('C', { dag_parent_id: 'P' });
     const other = withId('O', { dag_parent_id: 'Q' });
-    const loadedParent = new Map([['C', 'P'], ['O', 'Q'], ['K', 'P']]);
-    const ops = { refreshes: [{ id: 'K', strength: 0.5 }], writes: [other], deletes: [child.id], dormant: [moveOf(parent)] };
+    const loadedParent = new Map([
+      ['C', 'P'],
+      ['O', 'Q'],
+      ['K', 'P'],
+    ]);
+    const ops = {
+      refreshes: [{ id: 'K', strength: 0.5 }],
+      writes: [other],
+      deletes: [child.id],
+      dormant: [moveOf(parent)],
+    };
 
-    expect(familyUnits(ops, (id) => loadedParent.get(id))).toEqual([['K', 'P'], ['C', 'P']]);
+    expect(familyUnits(ops, (id) => loadedParent.get(id))).toEqual([
+      ['K', 'P'],
+      ['C', 'P'],
+    ]);
   });
 });
 
@@ -69,21 +109,39 @@ describe('commitInChunks', () => {
       deletes: retired.map((e) => e.id),
       dormant: [],
     };
-    const singles = Array.from({ length: 4 }, (_, i): FlushComponent => ({ refreshes: [], writes: [createMemory(`single ${i} gamma${i}`)], deletes: [], dormant: [] }));
+    const singles = Array.from({ length: 4 }, (_, i): FlushComponent => ({
+      refreshes: [],
+      writes: [createMemory(`single ${i} gamma${i}`)],
+      deletes: [],
+      dormant: [],
+    }));
     // The flush reads the clock only at BEGIN and at each component boundary, so the test moves it per row op instead.
     let now = 0;
     const clock = () => now;
     const run = StatementSync.prototype.run;
-    vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (this: typeof StatementSync.prototype, ...params: unknown[]) {
+    vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (
+      this: typeof StatementSync.prototype,
+      ...params: unknown[]
+    ) {
       if (ROW_OP.test(this.sourceSQL.trim())) now += 10;
       return run.apply(this, params);
     });
 
     // A pause is the gap after a commit, so the clock at each one says where that transaction closed.
     const pausedAt: number[] = [];
-    const budget: WriteBudget = { holdMs: 25, clock, pause: async (committedAt) => { pausedAt.push(committedAt); } };
+    const budget: WriteBudget = {
+      holdMs: 25,
+      clock,
+      pause: async (committedAt) => {
+        pausedAt.push(committedAt);
+      },
+    };
 
-    const removed = await commitInChunks(root, [largest, ...singles], { snapshot: new Map(), budget, busyWaitMs: SLEEP_DB_WAIT_MS });
+    const removed = await commitInChunks(root, [largest, ...singles], {
+      snapshot: new Map(),
+      budget,
+      busyWaitMs: SLEEP_DB_WAIT_MS,
+    });
 
     // The 11 row ops of the largest component, then three singles before the 25 ms hold runs out, then the last.
     expect(pausedAt).toEqual([110, 140]);

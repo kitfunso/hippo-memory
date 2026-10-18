@@ -9,22 +9,39 @@ import ts from 'typescript';
 import { isTsSource, readFacts } from './lib/ts-facts.mjs';
 
 /** `flags.x` or `flags[k]`: the parsed-flags object read for one flag. */
-const isFlagRead = (n) => (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && ts.isIdentifier(n.expression) && n.expression.text === 'flags';
+const isFlagRead = (n) =>
+  (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) &&
+  ts.isIdentifier(n.expression) &&
+  n.expression.text === 'flags';
 
 /** True when the expression starts with a flag read, as in `flags.x ?? ''` or `flags.x.trim()`. */
 function startsWithFlag(e) {
-  for (let n = e; ; ) {
+  for (let n = e; ;) {
     if (isFlagRead(n)) return true;
     if (ts.isBinaryExpression(n)) n = n.left;
     else if (ts.isConditionalExpression(n)) n = n.condition;
-    else if (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n) || ts.isCallExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n)) n = n.expression;
-    else return false;
+    else if (
+      ts.isPropertyAccessExpression(n) ||
+      ts.isElementAccessExpression(n) ||
+      ts.isCallExpression(n) ||
+      ts.isAsExpression(n) ||
+      ts.isNonNullExpression(n)
+    ) {
+      n = n.expression;
+    } else return false;
   }
 }
 
 /** `String(flags.x)`, a `${flags.x}` template span, or `flags.x as string`; `as string[]` is a list cast, not a text read. */
 function isHandRead(n) {
-  if (ts.isCallExpression(n)) return ts.isIdentifier(n.expression) && n.expression.text === 'String' && n.arguments[0] !== undefined && startsWithFlag(n.arguments[0]);
+  if (ts.isCallExpression(n)) {
+    return (
+      ts.isIdentifier(n.expression) &&
+      n.expression.text === 'String' &&
+      n.arguments[0] !== undefined &&
+      startsWithFlag(n.arguments[0])
+    );
+  }
   if (ts.isTemplateSpan(n)) return isFlagRead(n.expression);
   return ts.isAsExpression(n) && n.type.kind === ts.SyntaxKind.StringKeyword && isFlagRead(n.expression);
 }
@@ -78,7 +95,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\n${hits.length} hand-rolled flag read(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}`);
-    console.error('\nFix: read the flag through stringFlagOrExit, nonEmptyStringFlag, stringListFlag or numberFlag in src/cli/flag-values.ts.\n');
+    console.error(
+      '\nFix: read the flag through stringFlagOrExit, nonEmptyStringFlag, stringListFlag or numberFlag in src/cli/flag-values.ts.\n',
+    );
     process.exit(1);
   }
   console.log('CLI flags are read only through src/cli/flag-values.ts. OK.');

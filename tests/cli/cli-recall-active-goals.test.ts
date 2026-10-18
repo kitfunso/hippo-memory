@@ -27,7 +27,9 @@ async function recallCli(
   vi.stubEnv('HIPPO_SESSION_ID', '');
   for (const [key, value] of Object.entries(extraEnv)) vi.stubEnv(key, value);
   resetSessionRings('cli');
-  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000', ...extraArgs]));
+  const res = await runInProcess(() =>
+    runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000', ...extraArgs]),
+  );
   expect(res.status, res.stderr).toBe(0);
   const raw = res.stdout;
   const start = raw.indexOf('{');
@@ -114,7 +116,10 @@ describe('cli recall + active goal stack', () => {
       goalName: 'auth-rewrite',
     });
 
-    const { results } = await recallCli('marker tagged', { HIPPO_SESSION_ID: 's-cli-override' }, ['--goal', 'other-tag']);
+    const { results } = await recallCli('marker tagged', { HIPPO_SESSION_ID: 's-cli-override' }, [
+      '--goal',
+      'other-tag',
+    ]);
     const top = results.slice(0, 2).map((r) => r.content);
     // The explicit --goal `other-tag` wins. Top entries should contain
     // other-tag markers, not auth-rewrite markers.
@@ -142,7 +147,9 @@ describe('cli recall + active goal stack', () => {
     completeGoal(env.hippoRoot, g.id, { outcomeScore: 1.0 });
 
     const baseline = (await recallCli('auth migration')).results.map((r) => r.content);
-    const withEmpty = (await recallCli('auth migration', { HIPPO_SESSION_ID: 's-empty' })).results.map((r) => r.content);
+    const withEmpty = (await recallCli('auth migration', { HIPPO_SESSION_ID: 's-empty' })).results.map(
+      (r) => r.content,
+    );
 
     // Same ordering: empty active-goal list must not perturb ranking.
     expect(withEmpty).toEqual(baseline);

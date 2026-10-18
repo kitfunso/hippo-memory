@@ -103,12 +103,7 @@ export interface Cards {
   detail(tenantId: string, id: string): Promise<CardDetail | null>;
   list(tenantId: string, opts: { readonly status?: CardStatus }): Promise<Card[]>;
   runs(tenantId: string, id: string): Promise<CardRun[]>;
-  claim(
-    tenantId: string,
-    id: string,
-    runtime: string,
-    sessionId?: string,
-  ): Promise<(Card & { runId: number }) | null>;
+  claim(tenantId: string, id: string, runtime: string, sessionId?: string): Promise<(Card & { runId: number }) | null>;
   heartbeat(tenantId: string, id: string, runId: number): Promise<Card | null>;
   block(tenantId: string, id: string, reason: string, runId?: number): Promise<Card | null>;
   review(tenantId: string, id: string, runId?: number): Promise<Card | null>;
@@ -167,11 +162,7 @@ export interface Reports {
   tokenUse(tenantId: string, sinceIso: string): Promise<TokenSummary>;
   failures(tenantId: string, sinceIso: string): Promise<FailureSummary>;
   /** Strength tallies and the open-conflict count, read on one snapshot. */
-  memoryStatus(
-    tenantId: string,
-    now: Date,
-    atRiskBelow: number,
-  ): Promise<StrengthTallies & { openConflicts: number }>;
+  memoryStatus(tenantId: string, now: Date, atRiskBelow: number): Promise<StrengthTallies & { openConflicts: number }>;
   /** `tenantId` null pages every tenant (host admin; the api checks). */
   entriesPage(
     tenantId: string | null,

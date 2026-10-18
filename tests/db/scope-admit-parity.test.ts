@@ -10,7 +10,15 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 const OWN_A = 'personal:private:a';
 const SCOPES: ReadonlyArray<string | null> = [
-  null, '', 'team', 'slack:private:C1', 'SLACK:PRIVATE:x', 'unknown:legacy', OWN_A, 'personal:private:b', 'Personal:private:a',
+  null,
+  '',
+  'team',
+  'slack:private:C1',
+  'SLACK:PRIVATE:x',
+  'unknown:legacy',
+  OWN_A,
+  'personal:private:b',
+  'Personal:private:a',
 ];
 
 describe('scopeAdmitSql parity on a real store', () => {
@@ -22,7 +30,9 @@ describe('scopeAdmitSql parity on a real store', () => {
     const db = openStore(root);
     try {
       // SAFETY: the SELECT names only the id column.
-      const rows = db.prepare(`SELECT id FROM memories m WHERE m.tenant_id = ? ${and}AND ${sql}`).all('default', ...params) as Array<{ id: string }>;
+      const rows = db
+        .prepare(`SELECT id FROM memories m WHERE m.tenant_id = ? ${and}AND ${sql}`)
+        .all('default', ...params) as Array<{ id: string }>;
       return rows.map((r) => r.id).sort();
     } finally {
       closeHippoDb(db);
@@ -31,7 +41,9 @@ describe('scopeAdmitSql parity on a real store', () => {
 
   beforeAll(() => {
     root = makeRoot('scope-parity');
-    SCOPES.forEach((scope, i) => writeEntry(root, createMemory(`parity row number ${i}`, { scope, tenantId: 'default' })));
+    SCOPES.forEach((scope, i) =>
+      writeEntry(root, createMemory(`parity row number ${i}`, { scope, tenantId: 'default' })),
+    );
     const db = openStore(root);
     try {
       // SAFETY: the SELECT names the id and scope columns.
@@ -46,9 +58,16 @@ describe('scopeAdmitSql parity on a real store', () => {
   });
 
   it.each([
-    ['', undefined], ['m.', undefined], ['', OWN_A], ['m.', OWN_A], ['m.', 'Personal:private:a'],
+    ['', undefined],
+    ['m.', undefined],
+    ['', OWN_A],
+    ['m.', OWN_A],
+    ['m.', 'Personal:private:a'],
   ] as const)('col %j, ownScope %s', (col, ownScope) => {
-    const expected = stored.filter((r) => passesScopeFilterForRecall(r.scope, undefined, ownScope)).map((r) => r.id).sort();
+    const expected = stored
+      .filter((r) => passesScopeFilterForRecall(r.scope, undefined, ownScope))
+      .map((r) => r.id)
+      .sort();
     expect(admittedBySql(col, ownScope)).toEqual(expected);
   });
 
@@ -66,7 +85,7 @@ describe('scopeAdmitSql parity on a real store', () => {
     expect(found).toEqual(admittedBySql('m.', undefined));
   });
 
-  it('admits the owner\'s row only when its own scope is passed', () => {
+  it("admits the owner's row only when its own scope is passed", () => {
     const own = stored.find((r) => r.scope === OWN_A)!.id;
     expect(admittedBySql('', OWN_A)).toContain(own);
     expect(admittedBySql('', undefined)).not.toContain(own);

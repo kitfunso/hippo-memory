@@ -13,7 +13,14 @@ import { serve } from '../../src/server.js';
 import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
 import { inMemoryAuditLogStore } from '../_helpers/in-memory-audit-log-store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
 
@@ -59,22 +66,27 @@ async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   });
 }
 
-const list = (query: Partial<QueryAuditOptions> = {}): Call<AuditEvent[]> => (g) => g.listAuditEvents({ tenantId: TENANT_A, ...query });
+const list =
+  (query: Partial<QueryAuditOptions> = {}): Call<AuditEvent[]> =>
+  (g) =>
+    g.listAuditEvents({ tenantId: TENANT_A, ...query });
 const ids = (rows: readonly AuditEvent[]): number[] => rows.map((row) => row.id);
 const below = (second: number, id: number): KeysetPosition => ({ key: at(second), id });
 
 /** Every page of `limit` rows, each resumed from the last row of the one before, until a page comes back empty. */
-const pages = (limit: number, tenantId = TENANT_A): Call<AuditEvent[][]> => async (g) => {
-  const read: AuditEvent[][] = [];
-  let after: KeysetPosition | undefined;
-  for (;;) {
-    const page = await g.listAuditEvents({ tenantId, limit, after });
-    const last = page[page.length - 1];
-    if (!last) return read;
-    read.push(page);
-    after = { key: last.ts, id: last.id };
-  }
-};
+const pages =
+  (limit: number, tenantId = TENANT_A): Call<AuditEvent[][]> =>
+  async (g) => {
+    const read: AuditEvent[][] = [];
+    let after: KeysetPosition | undefined;
+    for (;;) {
+      const page = await g.listAuditEvents({ tenantId, limit, after });
+      const last = page[page.length - 1];
+      if (!last) return read;
+      read.push(page);
+      after = { key: last.ts, id: last.id };
+    }
+  };
 
 function seedAuditRows(dir: string): void {
   const db = openHippoDb(dir);
@@ -85,8 +97,15 @@ function seedAuditRows(dir: string): void {
       appendAuditEvent(db, { tenantId, actor: 'cli', op, targetId, metadata: { second } });
     }
     vi.setSystemTime(new Date(at(30)));
-    for (let i = 0; i < BULK_ROWS; i++) appendAuditEvent(db, { tenantId: 'bulk', actor: 'cli', op: 'outcome', targetId: `b${i}` });
-    hostAdminToken = createApiKey(db, { tenantId: 'default', label: 'host-admin', role: 'admin', expiresAt: '2999-01-01T00:00:00.000Z' }).plaintext;
+    for (let i = 0; i < BULK_ROWS; i++) {
+      appendAuditEvent(db, { tenantId: 'bulk', actor: 'cli', op: 'outcome', targetId: `b${i}` });
+    }
+    hostAdminToken = createApiKey(db, {
+      tenantId: 'default',
+      label: 'host-admin',
+      role: 'admin',
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    }).plaintext;
     fixtureAudit = listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
   } finally {
     vi.useRealTimers();
@@ -107,7 +126,9 @@ describe('AuditLog.listAuditEvents', () => {
   it('reads nothing for a tenant with no row, and the whole row of a one-row tenant', async () => {
     const [none, one] = await conforms([list({ tenantId: 'nobody' }), list({ tenantId: 'solo' })]);
     expect(none).toEqual([]);
-    expect(one).toEqual([{ id: 21, ts: at(6), tenantId: 'solo', actor: 'cli', op: 'remember', targetId: 's1', metadata: { second: 6 } }]);
+    expect(one).toEqual([
+      { id: 21, ts: at(6), tenantId: 'solo', actor: 'cli', op: 'remember', targetId: 's1', metadata: { second: 6 } },
+    ]);
   });
 
   it("lists a tenant newest first, by id inside a shared timestamp, and never another tenant's rows", async () => {
@@ -117,26 +138,44 @@ describe('AuditLog.listAuditEvents', () => {
 
   it('keeps the newest rows at, under and over the limit, and one row for a limit below one', async () => {
     const n = A_IDS.length;
-    const got = await conforms([list({ limit: n }), list({ limit: n - 1 }), list({ limit: n + 1 }), list({ limit: 1 }), list({ limit: 0 }), list({ limit: -3 })]);
+    const got = await conforms([
+      list({ limit: n }),
+      list({ limit: n - 1 }),
+      list({ limit: n + 1 }),
+      list({ limit: 1 }),
+      list({ limit: 0 }),
+      list({ limit: -3 }),
+    ]);
     expect(got.map(ids)).toEqual([A_IDS, A_IDS.slice(0, n - 1), A_IDS, [9], [9], [9]]);
   });
 
   it('reads 100 rows with no limit given, and every row under a limit above the count', async () => {
-    const got = await conforms([list({ tenantId: 'bulk' }), list({ tenantId: 'bulk', limit: BULK_ROWS }), list({ tenantId: 'bulk', limit: 20_000 })]);
+    const got = await conforms([
+      list({ tenantId: 'bulk' }),
+      list({ tenantId: 'bulk', limit: BULK_ROWS }),
+      list({ tenantId: 'bulk', limit: 20_000 }),
+    ]);
     expect(got.map(ids)).toEqual([BULK_IDS.slice(0, 100), BULK_IDS, BULK_IDS]);
   });
 
   it('narrows by op alone and by since alone, a row at the since bound kept', async () => {
     const seeded = A_IDS.slice(0, 6);
     const got = await conforms([
-      list({ op: 'recall' }), list({ op: 'promote' }), list({ since: at(3) }), list({ since: '2020-01-01T00:00:03.001Z' }), list({ since: '2999-01-01T00:00:00.000Z' }),
+      list({ op: 'recall' }),
+      list({ op: 'promote' }),
+      list({ since: at(3) }),
+      list({ since: '2020-01-01T00:00:03.001Z' }),
+      list({ since: '2999-01-01T00:00:00.000Z' }),
     ]);
     expect(got.map(ids)).toEqual([[18, 16, 13, 12, 22], [], [...seeded, 18, 17, 16, 15], [...seeded, 18, 17], []]);
   });
 
   it('resumes below a position alone, between two rows sharing a timestamp and inside the asking tenant', async () => {
     const got = await conforms([
-      list({ after: below(3, 16) }), list({ after: below(3, 15) }), list({ after: below(3, 999) }), list({ after: below(0, 22) }),
+      list({ after: below(3, 16) }),
+      list({ after: below(3, 15) }),
+      list({ after: below(3, 999) }),
+      list({ after: below(0, 22) }),
       list({ tenantId: TENANT_B, after: below(3, 16) }),
     ]);
     expect(got.map(ids)).toEqual([[15, 13, 12, 22], [13, 12, 22], [16, 15, 13, 12, 22], [], [14]]);
@@ -163,7 +202,11 @@ describe('AuditLog.listAuditEvents', () => {
   });
 });
 
-interface Reply { readonly status: number; readonly body: unknown; readonly next: string | null }
+interface Reply {
+  readonly status: number;
+  readonly body: unknown;
+  readonly next: string | null;
+}
 type Asker = 'adminA' | 'memberA' | 'host';
 
 const SERVED: readonly (readonly [Asker, string, number])[] = [
@@ -192,12 +235,18 @@ async function runServed(makeStore?: (root: string) => HippoStore): Promise<Repl
     shareRoot(root);
     const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });
-    const tokens = { adminA: fixture.tokens.adminA, memberA: fixture.tokens.memberA, host: hostAdminToken } satisfies Record<Asker, string>;
+    const tokens = {
+      adminA: fixture.tokens.adminA,
+      memberA: fixture.tokens.memberA,
+      host: hostAdminToken,
+    } satisfies Record<Asker, string>;
     const replies: Reply[] = [];
     try {
       for (const [asker, query] of SERVED) {
         const cursor = query.endsWith('cursor=') ? encodeURIComponent(replies[replies.length - 1]?.next ?? '') : '';
-        const res = await fetch(`${handle.url}/v1/audit${query}${cursor}`, { headers: { authorization: `Bearer ${tokens[asker]}` } });
+        const res = await fetch(`${handle.url}/v1/audit${query}${cursor}`, {
+          headers: { authorization: `Bearer ${tokens[asker]}` },
+        });
         replies.push({ status: res.status, body: await res.json(), next: res.headers.get('x-next-cursor') });
       }
     } finally {
@@ -227,9 +276,29 @@ describe('GET /v1/audit over serve()', () => {
     expect(onHippoDb.map((r) => r.status)).toEqual(SERVED.map(([, , status]) => status));
     // SAFETY: each reply read here answered 200 above, and a 200 from this route is an array of audit rows.
     const idsAt = (i: number): number[] => ids(onHippoDb[i]?.body as AuditEvent[]);
-    expect([0, 1, 2, 3, 4, 5, 6].map(idsAt)).toEqual([A_IDS, [18, 16, 13, 12, 22], [17, 15], A_IDS.slice(0, 9), [15, 13, 12, 22], A_IDS.slice(0, 4), [20]]);
+    expect([0, 1, 2, 3, 4, 5, 6].map(idsAt)).toEqual([
+      A_IDS,
+      [18, 16, 13, 12, 22],
+      [17, 15],
+      A_IDS.slice(0, 9),
+      [15, 13, 12, 22],
+      A_IDS.slice(0, 4),
+      [20],
+    ]);
     expect(idsAt(7)).toEqual(BULK_IDS);
-    expect(onHippoDb.map((r) => r.next !== null)).toEqual([false, false, false, true, false, true, false, false, false, false, false]);
+    expect(onHippoDb.map((r) => r.next !== null)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
     expect(await runServed((root) => inMemoryAuditLogStore(root).store)).toEqual(onHippoDb);
   });
 });

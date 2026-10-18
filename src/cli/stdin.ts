@@ -8,7 +8,10 @@ const DEFAULT_STDIN_WAIT_MS = 1000;
  * `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not "none", and present
  * `text` may be truncated;
  * treating absence as a manual run is only safe when it is false. */
-export interface BoundedStdin { text?: string; timedOut: boolean; }
+export interface BoundedStdin {
+  text?: string;
+  timedOut: boolean;
+}
 
 function defaultWaitMs(): number {
   return envStdinWaitMs() ?? DEFAULT_STDIN_WAIT_MS;
@@ -30,19 +33,27 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     const finish = (timedOut: boolean): void => {
-      clearTimeout(timer); clearTimeout(hardCap);
-      stdin.off('data', onData); stdin.off('end', done); stdin.off('error', done);
+      clearTimeout(timer);
+      clearTimeout(hardCap);
+      stdin.off('data', onData);
+      stdin.off('end', done);
+      stdin.off('error', done);
       stdin.pause();
       stdin.unref?.();
       resolve({ text: chunks.length ? Buffer.concat(chunks).toString('utf8') : undefined, timedOut });
     };
     const done = (): void => finish(false);
-    const onData = (c: Buffer): void => { chunks.push(c); timer.refresh(); };
+    const onData = (c: Buffer): void => {
+      chunks.push(c);
+      timer.refresh();
+    };
     const timer = setTimeout(() => finish(true), waitMs);
     // The idle timer refreshes per chunk, so a host that dribbles bytes
     // forever without ending would never resolve without this ceiling.
     const hardCap = setTimeout(() => finish(true), waitMs * 10);
-    stdin.on('data', onData); stdin.once('end', done); stdin.once('error', done);
+    stdin.on('data', onData);
+    stdin.once('end', done);
+    stdin.once('error', done);
   });
 }
 

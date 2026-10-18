@@ -11,7 +11,14 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
-import { markSnapshotSaved, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../../src/store/compactions-record.js';
+import {
+  markSnapshotSaved,
+  recordSnapshotSaved,
+  recordSummary,
+  saveItems,
+  startCompaction,
+  type ItemContext,
+} from '../../src/store/compactions-record.js';
 import { captureToolFailure, storeLesson } from '../../src/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureHash, failureReport } from '../../src/capture/failure-reading.js';
@@ -81,39 +88,66 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-interface RecordRow { origin_project: string; status: string; snapshot_saved: number }
+interface RecordRow {
+  origin_project: string;
+  status: string;
+  snapshot_saved: number;
+}
 
 function recordRow(db: DatabaseSyncLike, id: string): RecordRow | undefined {
-  return db.prepare(`SELECT origin_project, status, snapshot_saved FROM compactions WHERE id = ?`).get<RecordRow | undefined>(id);
+  return db
+    .prepare(`SELECT origin_project, status, snapshot_saved FROM compactions WHERE id = ?`)
+    .get<RecordRow | undefined>(id);
 }
 
 function seed(content: string, origin: string, tags: string[] = []): void {
-  writeEntry(root, { ...createMemory(content, { tenantId: TENANT, tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: origin });
+  writeEntry(root, {
+    ...createMemory(content, { tenantId: TENANT, tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    origin_project: origin,
+  });
 }
 
-interface WrittenRow { content: string; origin_project: string | null; actor: string }
+interface WrittenRow {
+  content: string;
+  origin_project: string | null;
+  actor: string;
+}
 
 function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] {
   // SAFETY: the SELECT names exactly WrittenRow's three columns.
-  return db.prepare(
-    `SELECT m.content, m.origin_project, a.actor FROM memories m JOIN audit_log a ON a.target_id = m.id AND a.op = 'remember'
+  return db
+    .prepare(
+      `SELECT m.content, m.origin_project, a.actor FROM memories m JOIN audit_log a ON a.target_id = m.id AND a.op = 'remember'
      WHERE m.tenant_id = ? AND m.source = ? ORDER BY m.content`,
-  ).all(TENANT, source) as WrittenRow[];
+    )
+    .all(TENANT, source) as WrittenRow[];
 }
 
 function owned(owner: string): Context {
-  return { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner }, reach: SHARED_REACH };
+  return {
+    hippoRoot: root,
+    store: sqliteStore(root),
+    config: loadConfig(root),
+    tenantId: TENANT,
+    actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
+    reach: SHARED_REACH,
+  };
 }
 
 /** Every session lands in the holdout arm at 10000 basis points. */
 function holdout(): void {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ sharedStore: true, pilot: { holdoutRateBp: 10000 } }));
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ sharedStore: true, pilot: { holdoutRateBp: 10000 } }),
+  );
 }
 
 /** A statement on `table` that fails, so a step's error path runs on the real store; returns the undo. */
 function failOn(table: string, when: 'INSERT' | 'UPDATE', message: string): () => void {
   const name = `fail_${table}_${when.toLowerCase()}`;
-  withDb((db) => db.exec(`CREATE TRIGGER ${name} BEFORE ${when} ON ${table} BEGIN SELECT RAISE(ABORT, '${message}'); END`));
+  withDb((db) =>
+    db.exec(`CREATE TRIGGER ${name} BEFORE ${when} ON ${table} BEGIN SELECT RAISE(ABORT, '${message}'); END`),
+  );
   return () => withDb((db) => db.exec(`DROP TRIGGER ${name}`));
 }
 
@@ -139,28 +173,63 @@ function rowCounts(): Record<string, number> {
   return withDb((db) => Object.fromEntries(WRITTEN_TABLES.map((t) => [t, count(db, t)])));
 }
 
-interface SnapshotRow { id: number; status: string; owner_subject: string | null; origin_project: string | null }
-
-function snapshotRow(db: DatabaseSyncLike, id: number): SnapshotRow | undefined {
-  return db.prepare(`SELECT id, status, owner_subject, origin_project FROM task_snapshots WHERE id = ?`).get<SnapshotRow | undefined>(id);
+interface SnapshotRow {
+  id: number;
+  status: string;
+  owner_subject: string | null;
+  origin_project: string | null;
 }
 
-interface FailureRow { outcome: string; owner_subject: string | null; origin_project: string | null; request_id: string | null; sig_hash: string | null; detail_hash: string | null }
+function snapshotRow(db: DatabaseSyncLike, id: number): SnapshotRow | undefined {
+  return db
+    .prepare(`SELECT id, status, owner_subject, origin_project FROM task_snapshots WHERE id = ?`)
+    .get<SnapshotRow | undefined>(id);
+}
+
+interface FailureRow {
+  outcome: string;
+  owner_subject: string | null;
+  origin_project: string | null;
+  request_id: string | null;
+  sig_hash: string | null;
+  detail_hash: string | null;
+}
 
 function failureRows(db: DatabaseSyncLike): FailureRow[] {
   // SAFETY: the SELECT names exactly FailureRow's six columns.
-  return db.prepare(`SELECT outcome, owner_subject, origin_project, request_id, sig_hash, detail_hash FROM failure_log ORDER BY id`).all() as FailureRow[];
+  return db
+    .prepare(
+      `SELECT outcome, owner_subject, origin_project, request_id, sig_hash, detail_hash FROM failure_log ORDER BY id`,
+    )
+    .all() as FailureRow[];
 }
 
-interface HandoffRow { session_id: string; task_id: string | null; owner_subject: string | null; origin_project: string | null }
+interface HandoffRow {
+  session_id: string;
+  task_id: string | null;
+  owner_subject: string | null;
+  origin_project: string | null;
+}
 
 function handoffRows(db: DatabaseSyncLike): HandoffRow[] {
   // SAFETY: the SELECT names exactly HandoffRow's four columns.
-  return db.prepare(`SELECT session_id, task_id, owner_subject, origin_project FROM session_handoffs ORDER BY id`).all() as HandoffRow[];
+  return db
+    .prepare(`SELECT session_id, task_id, owner_subject, origin_project FROM session_handoffs ORDER BY id`)
+    .all() as HandoffRow[];
 }
 
 function failure(over: Partial<CallerFailureRequest> = {}): CallerFailureRequest {
-  return { sessionId: 'sA', project: PROJECT, tool: 'Bash', text: LESSON, skip: null, rule: null, detailHash: null, requestId: 'fail-1', ...over };
+  return {
+    sessionId: 'sA',
+    project: PROJECT,
+    tool: 'Bash',
+    text: LESSON,
+    skip: null,
+    rule: null,
+    detailHash: null,
+    requestId: 'fail-1',
+    ...over,
+  };
 }
 
 const preCompact = (ctx: Context, workingState: typeof STATE | null = STATE) =>
@@ -168,7 +237,12 @@ const preCompact = (ctx: Context, workingState: typeof STATE | null = STATE) =>
 const postCompact = (ctx: Context, requestId = 'cmp-1') =>
   saveCompactionItemsForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ITEMS, requestId });
 const sessionEnd = (ctx: Context) =>
-  sessionEndHandoffForCaller(ctx, { sessionId: 'sA', project: PROJECT, workingState: null, evidence: { gitRef: 'a'.repeat(40), dirtyTree: false, testStatus: 'unknown' } });
+  sessionEndHandoffForCaller(ctx, {
+    sessionId: 'sA',
+    project: PROJECT,
+    workingState: null,
+    evidence: { gitRef: 'a'.repeat(40), dirtyTree: false, testStatus: 'unknown' },
+  });
 
 async function caught(fn: () => object): Promise<Error | null> {
   try {
@@ -183,7 +257,12 @@ async function caught(fn: () => object): Promise<Error | null> {
 describe('recordSummary for a caller', () => {
   it("takes the caller's project with no request id, on a store that may predate the column", () => {
     withDb((db) => {
-      const rec = recordSummary(db, root, TENANT, { meta: META, text: { summary: '', items: [] }, at: new Date(), caller: { originProject: 'acme/app' } });
+      const rec = recordSummary(db, root, TENANT, {
+        meta: META,
+        text: { summary: '', items: [] },
+        at: new Date(),
+        caller: { originProject: 'acme/app' },
+      });
       expect(rec.originProject).toBe('acme/app');
     });
   });
@@ -192,9 +271,18 @@ describe('recordSummary for a caller', () => {
 describe('saveItems for a caller', () => {
   it('keeps the post-compact actor and folder fallback when no caller is set', () => {
     withDb((db) => {
-      const ctx: ItemContext = { tenantId: TENANT, recordId: null, sessionId: 's2', originProject: 'acme/app', cwd: null, items: [ITEMS[1]] };
+      const ctx: ItemContext = {
+        tenantId: TENANT,
+        recordId: null,
+        sessionId: 's2',
+        originProject: 'acme/app',
+        cwd: null,
+        items: [ITEMS[1]],
+      };
       expect(saveItems(db, root, ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
-      expect(writtenRows(db, 'compaction:s2')).toEqual([{ content: ITEMS[1], origin_project: null, actor: 'post-compact' }]);
+      expect(writtenRows(db, 'compaction:s2')).toEqual([
+        { content: ITEMS[1], origin_project: null, actor: 'post-compact' },
+      ]);
     });
   });
 });
@@ -215,7 +303,9 @@ describe('snapshot_saved under a tenant the environment does not name', () => {
       const a = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
       const b = startCompaction(db, TENANT, { ...META, sessionId: 's3', originProject: 'acme/app' });
       markSnapshotSaved(db, TENANT, a);
-      recordSnapshotSaved(handlesOf(root).on, TENANT, b, (m) => { throw new Error(m); });
+      recordSnapshotSaved(handlesOf(root).on, TENANT, b, (m) => {
+        throw new Error(m);
+      });
       expect([recordRow(db, a)?.snapshot_saved, recordRow(db, b)?.snapshot_saved]).toEqual([1, 1]);
     });
   });
@@ -223,19 +313,35 @@ describe('snapshot_saved under a tenant the environment does not name', () => {
 
 describe('preCompactForCaller', () => {
   it("saves the owner's snapshot and returns the instruction", async () => {
-    const bobs = saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sB' }, BOB);
+    const bobs = saveActiveTaskSnapshot(
+      root,
+      TENANT,
+      { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sB' },
+      BOB,
+    );
     expect(await preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     const mine = loadActiveTaskSnapshot(root, TENANT, ALICE);
     expect(mine).toMatchObject({ ...STATE, source: 'pre-compact', session_id: 'sA' });
-    withDb((db) => expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({ owner_subject: 'alice', origin_project: 'acme/app' }));
+    withDb((db) =>
+      expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({ owner_subject: 'alice', origin_project: 'acme/app' }),
+    );
     // The save superseded only Alice's rows: Bob's own row is still his active one.
     expect(loadActiveTaskSnapshot(root, TENANT, BOB)?.id).toBe(bobs.id);
   });
 
   it("keeps the owner's earlier field for the same session when a sent field is empty", async () => {
-    saveActiveTaskSnapshot(root, TENANT, { task: 'Earlier task', summary: 'old', next_step: 'Earlier step', session_id: 'sA' }, ALICE);
+    saveActiveTaskSnapshot(
+      root,
+      TENANT,
+      { task: 'Earlier task', summary: 'old', next_step: 'Earlier step', session_id: 'sA' },
+      ALICE,
+    );
     await preCompact(owned('alice'), { task: '', summary: 'New summary', next_step: '' });
-    expect(loadActiveTaskSnapshot(root, TENANT, ALICE)).toMatchObject({ task: 'Earlier task', summary: 'New summary', next_step: 'Earlier step' });
+    expect(loadActiveTaskSnapshot(root, TENANT, ALICE)).toMatchObject({
+      task: 'Earlier task',
+      summary: 'New summary',
+      next_step: 'Earlier step',
+    });
   });
 
   it("holdout gives '' and writes no snapshot", async () => {
@@ -248,14 +354,24 @@ describe('preCompactForCaller', () => {
     const summary = 'x'.repeat(WORKING_STATE_CAPS.summary + 1);
     const err = await caught(() => preCompact(owned('alice'), { ...STATE, summary }));
     expect(err).toBeInstanceOf(BadRequestError);
-    expect(err).toMatchObject({ status: 400, message: `working state summary: at most ${WORKING_STATE_CAPS.summary} characters` });
-    expect(await preCompact(owned('alice'), { ...STATE, summary: summary.slice(1) })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(err).toMatchObject({
+      status: 400,
+      message: `working state summary: at most ${WORKING_STATE_CAPS.summary} characters`,
+    });
+    expect(await preCompact(owned('alice'), { ...STATE, summary: summary.slice(1) })).toEqual({
+      stdout: PRE_COMPACT_INSTRUCTION,
+    });
   });
 
   it('cuts each field back to its cap after the scrub, the summary keeping its newest turns', async () => {
     // a@b.co masks to [email], one longer, so a field sent at its cap runs one over after the scrub.
-    const atCap = (cap: number, tail: string): string => `Mail a@b.co first. ${'Then run the build. '.repeat(120)}`.slice(0, cap - tail.length) + tail;
-    await preCompact(owned('alice'), { task: atCap(WORKING_STATE_CAPS.task, 'T'), summary: atCap(WORKING_STATE_CAPS.summary, 'NEWEST'), next_step: atCap(WORKING_STATE_CAPS.next_step, 'N') });
+    const atCap = (cap: number, tail: string): string =>
+      `Mail a@b.co first. ${'Then run the build. '.repeat(120)}`.slice(0, cap - tail.length) + tail;
+    await preCompact(owned('alice'), {
+      task: atCap(WORKING_STATE_CAPS.task, 'T'),
+      summary: atCap(WORKING_STATE_CAPS.summary, 'NEWEST'),
+      next_step: atCap(WORKING_STATE_CAPS.next_step, 'N'),
+    });
     const saved = loadActiveTaskSnapshot(root, TENANT, ALICE);
     expect(saved?.task).toHaveLength(WORKING_STATE_CAPS.task);
     expect(saved?.task.startsWith('Mail [email] first.')).toBe(true);
@@ -283,14 +399,22 @@ describe('preCompactForCaller', () => {
     vi.stubEnv('HIPPO_TENANT', 'env-tenant');
     await preCompact(owned('alice'));
     withDb((db) => {
-      expect(count(db, 'compactions', `tenant_id = ? AND snapshot_saved = 1 AND origin_project = 'acme/app' AND cwd IS NULL`, TENANT)).toBe(1);
+      expect(
+        count(
+          db,
+          'compactions',
+          `tenant_id = ? AND snapshot_saved = 1 AND origin_project = 'acme/app' AND cwd IS NULL`,
+          TENANT,
+        ),
+      ).toBe(1);
       expect(count(db, 'compactions', 'tenant_id = ?', 'env-tenant')).toBe(0);
     });
   });
 });
 
 describe('compactResumeForCaller', () => {
-  const resume = (ctx: Context, source = 'compact') => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
+  const resume = (ctx: Context, source = 'compact') =>
+    compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
 
   it("source not compact gives ''", async () => {
     saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
@@ -315,22 +439,52 @@ describe('compactResumeForCaller', () => {
     const { stdout } = await resume(owned('alice'));
     expect(stdout).toBe(compactResumeText(mine, []));
     expect(stdout).not.toContain('Bob task');
-    withDb((db) => expect(count(db, 'token_ledger', `tenant_id = ? AND session_id = 'sA' AND surface = 'compact_resume' AND event = 'inject'`, TENANT)).toBe(1));
+    withDb((db) =>
+      expect(
+        count(
+          db,
+          'token_ledger',
+          `tenant_id = ? AND session_id = 'sA' AND surface = 'compact_resume' AND event = 'inject'`,
+          TENANT,
+        ),
+      ).toBe(1),
+    );
   });
 });
 
 describe('saveCompactionItemsForCaller', () => {
   it('writes with ownerOrSubject as actor and the project as origin', async () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
-    const unowned: Context = { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' }, reach: SHARED_REACH };
-    await saveCompactionItemsForCaller(unowned, { sessionId: 'sC', project: { name: 'acme/web', legacyName: 'web' }, trigger: 'auto', items: [ITEMS[0]], requestId: 'cmp-c' });
+    const unowned: Context = {
+      hippoRoot: root,
+      store: sqliteStore(root),
+      config: loadConfig(root),
+      tenantId: TENANT,
+      actor: { subject: 'api_key:hk_carol', role: 'member' },
+      reach: SHARED_REACH,
+    };
+    await saveCompactionItemsForCaller(unowned, {
+      sessionId: 'sC',
+      project: { name: 'acme/web', legacyName: 'web' },
+      trigger: 'auto',
+      items: [ITEMS[0]],
+      requestId: 'cmp-c',
+    });
     withDb((db) => {
       expect(writtenRows(db, 'compaction:sA')).toEqual([
         { content: ITEMS[1], origin_project: 'acme/app', actor: 'alice' },
         { content: ITEMS[0], origin_project: 'acme/app', actor: 'alice' },
       ]);
-      expect(writtenRows(db, 'compaction:sC')).toEqual([{ content: ITEMS[0], origin_project: 'acme/web', actor: 'api_key:hk_carol' }]);
-      expect(count(db, 'compactions', `session_id = 'sA' AND status = 'done' AND request_id = 'cmp-1' AND origin_project = 'acme/app'`)).toBe(1);
+      expect(writtenRows(db, 'compaction:sC')).toEqual([
+        { content: ITEMS[0], origin_project: 'acme/web', actor: 'api_key:hk_carol' },
+      ]);
+      expect(
+        count(
+          db,
+          'compactions',
+          `session_id = 'sA' AND status = 'done' AND request_id = 'cmp-1' AND origin_project = 'acme/app'`,
+        ),
+      ).toBe(1);
     });
   });
 
@@ -338,7 +492,11 @@ describe('saveCompactionItemsForCaller', () => {
     seed(ITEMS[0], 'app');
     seed(ITEMS[1], 'other/project');
     expect(await postCompact(owned('alice'))).toEqual({ written: 1 });
-    withDb((db) => expect(writtenRows(db, 'compaction:sA')).toEqual([{ content: ITEMS[1], origin_project: 'acme/app', actor: 'alice' }]));
+    withDb((db) =>
+      expect(writtenRows(db, 'compaction:sA')).toEqual([
+        { content: ITEMS[1], origin_project: 'acme/app', actor: 'alice' },
+      ]),
+    );
   });
 
   it('holdout writes nothing', async () => {
@@ -368,7 +526,10 @@ describe('saveCompactionItemsForCaller', () => {
   });
 
   it('cuts an item back to its cap after the scrub, so one a mask runs past the cap still becomes a row', async () => {
-    const item = `Mail a@b.co before the deploy. ${ITEMS.join(' ')} ${ITEMS.join(' ')} ${ITEMS.join(' ')}`.slice(0, COMPACTION_ITEM_MAX_CHARS);
+    const item = `Mail a@b.co before the deploy. ${ITEMS.join(' ')} ${ITEMS.join(' ')} ${ITEMS.join(' ')}`.slice(
+      0,
+      COMPACTION_ITEM_MAX_CHARS,
+    );
     expect(item).toHaveLength(COMPACTION_ITEM_MAX_CHARS);
     const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: [item], requestId: 'cmp-1' };
     expect(await saveCompactionItemsForCaller(owned('alice'), req)).toEqual({ written: 1 });
@@ -377,7 +538,13 @@ describe('saveCompactionItemsForCaller', () => {
   });
 
   it('refuses an item past its cap before the scrub, naming the field, before it binds the session', async () => {
-    const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ['x'.repeat(COMPACTION_ITEM_MAX_CHARS + 1)], requestId: 'cmp-1' };
+    const req = {
+      sessionId: 'sA',
+      project: PROJECT,
+      trigger: 'auto',
+      items: ['x'.repeat(COMPACTION_ITEM_MAX_CHARS + 1)],
+      requestId: 'cmp-1',
+    };
     const err = await caught(() => saveCompactionItemsForCaller(owned('alice'), req));
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: expect.stringMatching(/^items:/) });
@@ -406,9 +573,18 @@ describe('captureFailureForCaller', () => {
   it('lesson carries owner as actor and project origin, and the log row both', async () => {
     expect(await captureFailureForCaller(owned('alice'), failure())).toEqual({ outcome: 'stored' });
     withDb((db) => {
-      expect(writtenRows(db, 'tool-failure')).toEqual([{ content: LESSON, origin_project: 'acme/app', actor: 'alice' }]);
+      expect(writtenRows(db, 'tool-failure')).toEqual([
+        { content: LESSON, origin_project: 'acme/app', actor: 'alice' },
+      ]);
       expect(failureRows(db)).toEqual([
-        { outcome: 'stored', owner_subject: 'alice', origin_project: 'acme/app', request_id: 'fail-1', sig_hash: failureHash(LESSON), detail_hash: null },
+        {
+          outcome: 'stored',
+          owner_subject: 'alice',
+          origin_project: 'acme/app',
+          request_id: 'fail-1',
+          sig_hash: failureHash(LESSON),
+          detail_hash: null,
+        },
       ]);
     });
   });
@@ -417,7 +593,10 @@ describe('captureFailureForCaller', () => {
     expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
     expect((await captureFailureForCaller(owned('alice'), failure({ requestId: 'fail-2' }))).outcome).toBe('duplicate');
     const web = { name: 'acme/web', legacyName: 'web' };
-    expect((await captureFailureForCaller(owned('bob'), failure({ sessionId: 'sB', project: web, requestId: 'fail-3' }))).outcome).toBe('stored');
+    expect(
+      (await captureFailureForCaller(owned('bob'), failure({ sessionId: 'sB', project: web, requestId: 'fail-3' })))
+        .outcome,
+    ).toBe('stored');
   });
 
   it('a repeat request_id writes nothing and returns the earlier result (F10)', async () => {
@@ -444,11 +623,24 @@ describe('captureFailureForCaller', () => {
     };
     await captureToolFailure(failureTarget(root, TENANT), payload);
     const report = failureReport(payload);
-    await captureFailureForCaller(owned('alice'), failure({ tool: report.tool, text: report.text, skip: report.skip, rule: report.rule, detailHash: report.detail_hash }));
+    await captureFailureForCaller(
+      owned('alice'),
+      failure({
+        tool: report.tool,
+        text: report.text,
+        skip: report.skip,
+        rule: report.rule,
+        detailHash: report.detail_hash,
+      }),
+    );
     withDb((db) => {
       const [local, caller] = failureRows(db);
       expect(local.detail_hash).toMatch(/^[0-9a-f]{16}$/);
-      expect(caller).toMatchObject({ sig_hash: local.sig_hash, detail_hash: local.detail_hash, owner_subject: 'alice' });
+      expect(caller).toMatchObject({
+        sig_hash: local.sig_hash,
+        detail_hash: local.detail_hash,
+        owner_subject: 'alice',
+      });
     });
   });
 
@@ -506,26 +698,44 @@ describe('sessionEndHandoffForCaller', () => {
   it("writes the owner's handoff and closes only the owner's snapshot", async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
     // Bob's row names the same session id, so only the key keeps the close off it.
-    const bobs = saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sA' }, BOB);
+    const bobs = saveActiveTaskSnapshot(
+      root,
+      TENANT,
+      { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sA' },
+      BOB,
+    );
     expect(await sessionEnd(owned('alice'))).toEqual({ handoffWritten: true, snapshotsClosed: 1 });
     withDb((db) => {
       expect(snapshotRow(db, mine.id)?.status).toBe('session-ended');
       expect(snapshotRow(db, bobs.id)?.status).toBe('active');
-      expect(handoffRows(db)).toEqual([{ session_id: 'sA', task_id: STATE.task, owner_subject: 'alice', origin_project: 'acme/app' }]);
+      expect(handoffRows(db)).toEqual([
+        { session_id: 'sA', task_id: STATE.task, owner_subject: 'alice', origin_project: 'acme/app' },
+      ]);
     });
   });
 
   it('writes the handoff from the working state when the owner has no snapshot for the session', async () => {
     const req = { sessionId: 'sA', project: PROJECT, workingState: STATE, evidence: null };
     expect(await sessionEndHandoffForCaller(owned('alice'), req)).toEqual({ handoffWritten: true, snapshotsClosed: 0 });
-    expect(await sessionEndHandoffForCaller(owned('alice'), req)).toEqual({ handoffWritten: false, snapshotsClosed: 0 });
-    withDb((db) => expect(handoffRows(db)).toEqual([{ session_id: 'sA', task_id: STATE.task, owner_subject: 'alice', origin_project: 'acme/app' }]));
+    expect(await sessionEndHandoffForCaller(owned('alice'), req)).toEqual({
+      handoffWritten: false,
+      snapshotsClosed: 0,
+    });
+    withDb((db) =>
+      expect(handoffRows(db)).toEqual([
+        { session_id: 'sA', task_id: STATE.task, owner_subject: 'alice', origin_project: 'acme/app' },
+      ]),
+    );
   });
 
   it('retry after a failed close writes no second handoff', async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
     // An earlier save time, so the handoff is strictly newer than the snapshot it covers.
-    withDb((db) => db.prepare(`UPDATE task_snapshots SET updated_at = ? WHERE id = ?`).run(new Date(Date.now() - 60_000).toISOString(), mine.id));
+    withDb((db) =>
+      db
+        .prepare(`UPDATE task_snapshots SET updated_at = ? WHERE id = ?`)
+        .run(new Date(Date.now() - 60_000).toISOString(), mine.id),
+    );
     const undo = failOn('task_snapshots', 'UPDATE', 'close boom');
     await expect(sessionEnd(owned('alice'))).rejects.toThrow('close boom');
     undo();
@@ -538,7 +748,9 @@ describe('sessionEndHandoffForCaller', () => {
 
   it('refuses a git ref that is not a commit id, naming the field', async () => {
     const evidence = { gitRef: 'main', dirtyTree: null, testStatus: null };
-    const err = await caught(() => sessionEndHandoffForCaller(owned('alice'), { sessionId: 'sA', project: PROJECT, workingState: null, evidence }));
+    const err = await caught(() =>
+      sessionEndHandoffForCaller(owned('alice'), { sessionId: 'sA', project: PROJECT, workingState: null, evidence }),
+    );
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: expect.stringMatching(/^evidence gitRef:/) });
   });
@@ -550,7 +762,11 @@ describe('a second owner on the same session', () => {
     ['compact-resume', (ctx) => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source: 'compact' })],
     ['post-compact', (ctx) => postCompact(ctx)],
     ['capture-error', (ctx) => captureFailureForCaller(ctx, failure())],
-    ['session end', (ctx) => sessionEndHandoffForCaller(ctx, { sessionId: 'sA', project: PROJECT, workingState: STATE, evidence: null })],
+    [
+      'session end',
+      (ctx) =>
+        sessionEndHandoffForCaller(ctx, { sessionId: 'sA', project: PROJECT, workingState: STATE, evidence: null }),
+    ],
   ];
 
   it.each(calls)('%s: a second owner on the same session gets a 409 ConflictError', async (_name, call) => {
@@ -558,7 +774,13 @@ describe('a second owner on the same session', () => {
     const err = await caught(() => call(owned('bob')));
     expect(err).toBeInstanceOf(ConflictError);
     expect(err).toMatchObject({ status: 409 });
-    expect(rowCounts()).toEqual({ compactions: 0, task_snapshots: 0, session_handoffs: 0, failure_log: 0, memories: 0 });
+    expect(rowCounts()).toEqual({
+      compactions: 0,
+      task_snapshots: 0,
+      session_handoffs: 0,
+      failure_log: 0,
+      memories: 0,
+    });
     // The session's own owner still gets through.
     expect(await caught(() => call(owned('alice')))).toBeNull();
   });
@@ -570,44 +792,65 @@ describe('a request id another session sent', () => {
     ['another owner', 'bob', 'sB'],
   ];
   const items = (owner: string, sessionId: string, list: readonly string[] = ITEMS) =>
-    saveCompactionItemsForCaller(owned(owner), { sessionId, project: PROJECT, trigger: 'auto', items: list, requestId: 'cmp-1' });
+    saveCompactionItemsForCaller(owned(owner), {
+      sessionId,
+      project: PROJECT,
+      trigger: 'auto',
+      items: list,
+      requestId: 'cmp-1',
+    });
 
   it('capture-error: the same id with a different body from the same session gets the first outcome and writes nothing', async () => {
     expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
-    const other = failure({ tool: 'Grep', text: 'Grep: no matches found', skip: 'skipped-routine', rule: 'search-tool' });
+    const other = failure({
+      tool: 'Grep',
+      text: 'Grep: no matches found',
+      skip: 'skipped-routine',
+      rule: 'search-tool',
+    });
     expect(await captureFailureForCaller(owned('alice'), other)).toEqual({ outcome: 'stored' });
     expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 1 });
   });
 
-  it.each(senders)('capture-error: the same id from %s is a 409 and leaves the first row alone', async (_who, owner, sessionId) => {
-    // A failed first store leaves a row a retry settles, which a foreign id would otherwise rewrite.
-    const undo = failOn('memories', 'INSERT', 'store boom');
-    await expect(captureFailureForCaller(owned('alice'), failure())).rejects.toThrow('store boom');
-    undo();
-    const err = await caught(() => captureFailureForCaller(owned(owner), failure({ sessionId })));
-    expect(err).toBeInstanceOf(ConflictError);
-    expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
-    withDb((db) => expect(failureRows(db)).toEqual([expect.objectContaining({ outcome: 'store-failed', owner_subject: 'alice' })]));
-    expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 0 });
-    expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
-  });
+  it.each(senders)(
+    'capture-error: the same id from %s is a 409 and leaves the first row alone',
+    async (_who, owner, sessionId) => {
+      // A failed first store leaves a row a retry settles, which a foreign id would otherwise rewrite.
+      const undo = failOn('memories', 'INSERT', 'store boom');
+      await expect(captureFailureForCaller(owned('alice'), failure())).rejects.toThrow('store boom');
+      undo();
+      const err = await caught(() => captureFailureForCaller(owned(owner), failure({ sessionId })));
+      expect(err).toBeInstanceOf(ConflictError);
+      expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
+      withDb((db) =>
+        expect(failureRows(db)).toEqual([expect.objectContaining({ outcome: 'store-failed', owner_subject: 'alice' })]),
+      );
+      expect(rowCounts()).toMatchObject({ failure_log: 1, memories: 0 });
+      expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
+    },
+  );
 
   it('post-compact: the same id with different items from the same session gets the first count and writes none of them', async () => {
     expect(await items('alice', 'sA')).toEqual({ written: 2 });
-    expect(await items('alice', 'sA', ['The staging deploy needs the VPN up first or the health check times out.'])).toEqual({ written: 2 });
+    expect(
+      await items('alice', 'sA', ['The staging deploy needs the VPN up first or the health check times out.']),
+    ).toEqual({ written: 2 });
     expect(rowCounts()).toMatchObject({ compactions: 1, memories: 2 });
   });
 
-  it.each(senders)('post-compact: the same id from %s is a 409 and never finishes the first record', async (_who, owner, sessionId) => {
-    // Items that failed leave the record summarized, which a foreign id would otherwise finish under its own session.
-    const undo = failOn('memories', 'INSERT', 'items boom');
-    await expect(items('alice', 'sA')).rejects.toThrow('items boom');
-    undo();
-    const err = await caught(() => items(owner, sessionId));
-    expect(err).toBeInstanceOf(ConflictError);
-    expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
-    withDb((db) => expect(count(db, 'compactions', `status = 'summarised' AND session_id = 'sA'`)).toBe(1));
-    expect(rowCounts()).toMatchObject({ compactions: 1, memories: 0 });
-    expect(await items('alice', 'sA')).toEqual({ written: 2 });
-  });
+  it.each(senders)(
+    'post-compact: the same id from %s is a 409 and never finishes the first record',
+    async (_who, owner, sessionId) => {
+      // Items that failed leave the record summarized, which a foreign id would otherwise finish under its own session.
+      const undo = failOn('memories', 'INSERT', 'items boom');
+      await expect(items('alice', 'sA')).rejects.toThrow('items boom');
+      undo();
+      const err = await caught(() => items(owner, sessionId));
+      expect(err).toBeInstanceOf(ConflictError);
+      expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
+      withDb((db) => expect(count(db, 'compactions', `status = 'summarised' AND session_id = 'sA'`)).toBe(1));
+      expect(rowCounts()).toMatchObject({ compactions: 1, memories: 0 });
+      expect(await items('alice', 'sA')).toEqual({ written: 2 });
+    },
+  );
 });

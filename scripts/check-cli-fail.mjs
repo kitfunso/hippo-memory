@@ -8,12 +8,24 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { isTsSource, readFacts } from './lib/ts-facts.mjs';
 
-const isCall = (stmt, name) => ts.isExpressionStatement(stmt) && ts.isCallExpression(stmt.expression) && ts.isIdentifier(stmt.expression.expression) && stmt.expression.expression.text === name;
+const isCall = (stmt, name) =>
+  ts.isExpressionStatement(stmt) &&
+  ts.isCallExpression(stmt.expression) &&
+  ts.isIdentifier(stmt.expression.expression) &&
+  stmt.expression.expression.text === name;
 
 /** `throw new CliExit(1)` as a statement. */
 const isThrowExit1 = (stmt) => {
   const e = ts.isThrowStatement(stmt) ? stmt.expression : null;
-  return e !== null && ts.isNewExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === 'CliExit' && e.arguments?.length === 1 && ts.isNumericLiteral(e.arguments[0]) && e.arguments[0].text === '1';
+  return (
+    e !== null &&
+    ts.isNewExpression(e) &&
+    ts.isIdentifier(e.expression) &&
+    e.expression.text === 'CliExit' &&
+    e.arguments?.length === 1 &&
+    ts.isNumericLiteral(e.arguments[0]) &&
+    e.arguments[0].text === '1'
+  );
 };
 
 /**
@@ -28,9 +40,12 @@ export function failPairLines(text) {
   const { sourceFile } = readFacts(text, 'file.ts', []);
   const lines = [];
   const visit = (n) => {
-    const list = ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseOrDefaultClause(n) ? n.statements : [];
+    const list =
+      ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseOrDefaultClause(n) ? n.statements : [];
     list.forEach((stmt, i) => {
-      if (isCall(stmt, 'printError') && list[i + 1] && isThrowExit1(list[i + 1])) lines.push(sourceFile.getLineAndCharacterOfPosition(stmt.getStart(sourceFile)).line + 1);
+      if (isCall(stmt, 'printError') && list[i + 1] && isThrowExit1(list[i + 1])) {
+        lines.push(sourceFile.getLineAndCharacterOfPosition(stmt.getStart(sourceFile)).line + 1);
+      }
     });
     ts.forEachChild(n, visit);
   };
@@ -55,12 +70,14 @@ function listSourceFiles(dir) {
  */
 export function findFailPairs(srcDir) {
   const root = resolve(srcDir);
-  return listSourceFiles(root)
-    .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
-    // exit.ts holds the one allowed pair: the body of fail().
-    .filter(([file]) => (file === 'cli.ts' || file.startsWith('cli/')) && file !== 'cli/exit.ts')
-    .flatMap(([file, p]) => failPairLines(readFileSync(p, 'utf8')).map((line) => ({ file, line })))
-    .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+  return (
+    listSourceFiles(root)
+      .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
+      // exit.ts holds the one allowed pair: the body of fail().
+      .filter(([file]) => (file === 'cli.ts' || file.startsWith('cli/')) && file !== 'cli/exit.ts')
+      .flatMap(([file, p]) => failPairLines(readFileSync(p, 'utf8')).map((line) => ({ file, line })))
+      .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
+  );
 }
 
 // Guarded so the test can import the functions without running the check.

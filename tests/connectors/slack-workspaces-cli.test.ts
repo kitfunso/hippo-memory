@@ -36,9 +36,7 @@ function runCli(cwd: string, args: string[], opts: RunOptions = {}): CliRunResul
     if (opts.ok === false) {
       return { stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
     }
-    throw new Error(
-      `CLI exit ${e.status}: ${e.stderr ?? ''}\nstdout: ${e.stdout ?? ''}`,
-    );
+    throw new Error(`CLI exit ${e.status}: ${e.stderr ?? ''}\nstdout: ${e.stdout ?? ''}`);
   }
 }
 

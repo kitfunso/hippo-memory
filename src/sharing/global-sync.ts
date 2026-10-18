@@ -44,8 +44,11 @@ function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCro
   const localIds = new Set(localKeys.map((k) => k.id));
   const localText = new Set(localKeys.map(textKey));
   // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
-  const candidates = from.sharing.textKeys().filter((k) =>
-    !localIds.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !localText.has(textKey(k)));
+  const candidates = from.sharing
+    .textKeys()
+    .filter(
+      (k) => !localIds.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !localText.has(textKey(k)),
+    );
   if (candidates.length === 0) return 0;
   const byId = new Map(
     chunked(candidates.map((k) => k.id))

@@ -30,7 +30,8 @@ function runSql(root: string, sql: string, ...params: Array<string | number>): v
   }
 }
 
-const damageLines = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('read as empty'));
+const damageLines = (): string[] =>
+  stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('read as empty'));
 
 beforeEach(() => {
   _resetLogOnceForTests();
@@ -50,7 +51,11 @@ afterAll(() => {
 describe('a memory row with a damaged JSON column', () => {
   it('reads with empty tags and is named once at warn, however often it is read', () => {
     const root = newRoot();
-    const entry = createMemory('row whose tags were cut short', { tags: ['kept'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
+    const entry = createMemory('row whose tags were cut short', {
+      tags: ['kept'],
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: TENANT,
+    });
     writeEntry(root, entry);
     runSql(root, 'UPDATE memories SET tags_json = ? WHERE id = ?', `["${PRIVATE_TEXT}`, entry.id);
 
@@ -58,7 +63,9 @@ describe('a memory row with a damaged JSON column', () => {
 
     expect(damageLines()).toHaveLength(1);
     expect(damageLines()[0]).toMatch(
-      new RegExp(`^\\[hippo\\] warn: store: memories\\.tags_json is not valid JSON; read as empty .*table=memories id=${entry.id} column=tags_json`),
+      new RegExp(
+        `^\\[hippo\\] warn: store: memories\\.tags_json is not valid JSON; read as empty .*table=memories id=${entry.id} column=tags_json`,
+      ),
     );
     expect(damageLines()[0]).not.toContain(PRIVATE_TEXT);
 
@@ -78,15 +85,23 @@ describe('a memory row with a damaged JSON column', () => {
 
     const read = loadAllEntries(root, 'default');
 
-    expect(read.map((e) => [e.conflicts_with, e.parents, e.tags])).toEqual([[[], [], []], [[], [], []]]);
-    expect(damageLines().map((line) => /id=(\S+) column=(\S+)/.exec(line)?.slice(1, 3).join(' ')).sort()).toEqual(
-      [`${first.id} conflicts_with_json`, `${first.id} parents_json`, `${second.id} tags_json`].sort(),
-    );
+    expect(read.map((e) => [e.conflicts_with, e.parents, e.tags])).toEqual([
+      [[], [], []],
+      [[], [], []],
+    ]);
+    expect(
+      damageLines()
+        .map((line) => /id=(\S+) column=(\S+)/.exec(line)?.slice(1, 3).join(' '))
+        .sort(),
+    ).toEqual([`${first.id} conflicts_with_json`, `${first.id} parents_json`, `${second.id} tags_json`].sort());
   });
 
   it('leaves a clean row silent', () => {
     const root = newRoot();
-    writeEntry(root, createMemory('clean row', { tags: ['a'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }));
+    writeEntry(
+      root,
+      createMemory('clean row', { tags: ['a'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }),
+    );
 
     expect(loadAllEntries(root, 'default').map((e) => e.tags)).toEqual([['a']]);
     expect(damageLines()).toEqual([]);
@@ -96,7 +111,13 @@ describe('a memory row with a damaged JSON column', () => {
 describe('a session event with damaged metadata', () => {
   it('reads with empty metadata and is named once at warn', () => {
     const root = newRoot();
-    const event = appendSessionEvent(root, TENANT, { session_id: 'sess-1', event_type: 'note', content: 'x', source: 'test', metadata: { a: 1 } });
+    const event = appendSessionEvent(root, TENANT, {
+      session_id: 'sess-1',
+      event_type: 'note',
+      content: 'x',
+      source: 'test',
+      metadata: { a: 1 },
+    });
     runSql(root, `UPDATE session_events SET metadata_json = '{"a":' WHERE id = ?`, event.id);
 
     expect(listSessionEvents(root, TENANT, { session_id: 'sess-1' }).map((e) => e.metadata)).toEqual([{}]);
@@ -104,7 +125,9 @@ describe('a session event with damaged metadata', () => {
 
     expect(damageLines()).toHaveLength(1);
     expect(damageLines()[0]).toMatch(
-      new RegExp(`warn: store: session_events\\.metadata_json is not valid JSON; read as empty .*table=session_events id=${event.id} column=metadata_json`),
+      new RegExp(
+        `warn: store: session_events\\.metadata_json is not valid JSON; read as empty .*table=session_events id=${event.id} column=metadata_json`,
+      ),
     );
   });
 });

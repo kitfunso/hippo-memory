@@ -78,12 +78,15 @@ export function migrateDefaultHalfLife(
     const { basePlan, typedPlan, count } = planMoves(rows, to);
     const plan = [...basePlan, ...typedPlan];
     return {
-      moves: [{ from: rows.from, to, entries: basePlan }, { from: LEGACY_TYPED_HALF_LIFE, to, entries: typedPlan }],
+      moves: [
+        { from: rows.from, to, entries: basePlan },
+        { from: LEGACY_TYPED_HALF_LIFE, to, entries: typedPlan },
+      ],
       outcome: {
         rescaled: basePlan.length,
         typed: typedPlan.length,
         kept: count - plan.length,
-        halfLives: new Map(plan.map((e) => [e.id, e.halfLifeDays]))
+        halfLives: new Map(plan.map((e) => [e.id, e.halfLifeDays])),
       },
     };
   });

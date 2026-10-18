@@ -133,9 +133,7 @@ async function drainStream(
     for (const item of page.items) {
       // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
       // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
-      const updatedAt = isJsonObject(item)
-        ? ((item.updated_at as string | undefined) ?? null)
-        : null;
+      const updatedAt = isJsonObject(item) ? ((item.updated_at as string | undefined) ?? null) : null;
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
         maxUpdatedAt = updatedAt;
       }
@@ -265,12 +263,8 @@ async function backfillStream(
   return { ingested: res.ingested, pages: res.pages };
 }
 
-export async function backfillRepo(
-  ctx: Context,
-  opts: BackfillOptions,
-): Promise<BackfillResult> {
-  const sleep =
-    opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+export async function backfillRepo(ctx: Context, opts: BackfillOptions): Promise<BackfillResult> {
+  const sleep = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const events = ctx.store.connectorEvents;
   if (opts.sinceIso) await events.seedGitHubCursors(ctx.tenantId, opts.repoFullName, opts.sinceIso);
   const cursors = await events.githubCursors(ctx.tenantId, opts.repoFullName);

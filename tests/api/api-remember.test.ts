@@ -29,10 +29,9 @@ describe('api.remember', () => {
 
   it('emits an audit event with the supplied actor', async () => {
     const home = makeRoot('api-rem');
-    await remember(
-      apiCtx(home, 'default', { subject: 'api_key:hk_test', role: 'admin' }),
-      { content: 'audit-trail-canary' },
-    );
+    await remember(apiCtx(home, 'default', { subject: 'api_key:hk_test', role: 'admin' }), {
+      content: 'audit-trail-canary',
+    });
     const { openHippoDb, closeHippoDb } = await import('../../src/db/index.js');
     const { queryAuditEvents } = await import('../../src/store/audit.js');
     const db = openHippoDb(home);
@@ -67,7 +66,8 @@ describe("api.remember stamps the caller's project", () => {
     return apiCtx(store, 'default', { subject: 'cli', role: 'admin' });
   }
 
-  const originOf = (ctx: FullContext, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
+  const originOf = (ctx: FullContext, id: string): string | null | undefined =>
+    readEntry(ctx.hippoRoot, id)?.origin_project;
 
   it('a shared store with no project stamps NULL', async () => {
     const ctx = storeCtx(true);
@@ -76,13 +76,21 @@ describe("api.remember stamps the caller's project", () => {
 
   it("a shared store stamps the project's name, never its aliases", async () => {
     const ctx = storeCtx(true);
-    const { id } = await remember(ctx, { content: 'release notes go out on tuesdays', project: { name: 'acme/app', aliases: ['app'] } });
+    const { id } = await remember(ctx, {
+      content: 'release notes go out on tuesdays',
+      project: { name: 'acme/app', aliases: ['app'] },
+    });
     expect(originOf(ctx, id)).toBe('acme/app');
   });
 
   it("a store that is not shared stamps the caller's project over the folder", async () => {
     const ctx = storeCtx(false);
-    expect(originOf(ctx, (await remember(ctx, { content: 'release notes go out on tuesdays', project: { name: 'acme/app' } })).id)).toBe('acme/app');
+    expect(
+      originOf(
+        ctx,
+        (await remember(ctx, { content: 'release notes go out on tuesdays', project: { name: 'acme/app' } })).id,
+      ),
+    ).toBe('acme/app');
   });
 
   it('a store that is not shared, with no project, keeps the folder stamp', async () => {
@@ -93,8 +101,15 @@ describe("api.remember stamps the caller's project", () => {
   it('refuses a blank name, eleven aliases and an overlong name, and writes nothing', async () => {
     const ctx = storeCtx(true);
     const eleven = Array.from({ length: 11 }, (_, i) => `a${i}`);
-    for (const project of [{ name: '' }, { name: '   ' }, { name: 'acme/app', aliases: eleven }, { name: 'x'.repeat(257) }]) {
-      await expect(remember(ctx, { content: 'release notes go out on tuesdays', project })).rejects.toThrow(BadRequestError);
+    for (const project of [
+      { name: '' },
+      { name: '   ' },
+      { name: 'acme/app', aliases: eleven },
+      { name: 'x'.repeat(257) },
+    ]) {
+      await expect(remember(ctx, { content: 'release notes go out on tuesdays', project })).rejects.toThrow(
+        BadRequestError,
+      );
     }
     expect(loadAllEntries(ctx.hippoRoot, 'default')).toHaveLength(0);
   });

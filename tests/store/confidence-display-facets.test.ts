@@ -7,7 +7,13 @@ import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import {
+  createMemory,
+  confidenceFacets,
+  resolveConfidence,
+  type MemoryEntry,
+  DEFAULT_HALF_LIFE_DAYS,
+} from '../../src/core/memory.js';
 import { serveDashboard } from '../../src/dashboard/dashboard.js';
 import { boundPort } from '../_helpers/listen.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
@@ -33,11 +39,7 @@ function ago(days: number): string {
   return new Date(NOW.getTime() - days * DAY).toISOString();
 }
 
-function seed(
-  root: string,
-  content: string,
-  over: Partial<MemoryEntry> = {},
-): MemoryEntry {
+function seed(root: string, content: string, over: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }), ...over };
   writeEntry(root, e);
   return e;
@@ -58,12 +60,17 @@ async function hippo(cwd: string, args: string[]): Promise<string> {
 
 function get(port: number, path: string): Promise<string> {
   return new Promise((res, rej) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: sessionCookie(port, DASHBOARD_TOKEN) } }, (r) => {
-      let body = '';
-      r.setEncoding('utf8');
-      r.on('data', (c) => { body += c; });
-      r.on('end', () => res(body));
-    });
+    const req = httpRequest(
+      { host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: sessionCookie(port, DASHBOARD_TOKEN) } },
+      (r) => {
+        let body = '';
+        r.setEncoding('utf8');
+        r.on('data', (c) => {
+          body += c;
+        });
+        r.on('end', () => res(body));
+      },
+    );
     req.on('error', rej);
     req.end();
   });
@@ -258,9 +265,7 @@ describe('confidence facets', () => {
 
     expect(await hippo(home, ['trace', e.id])).toContain('observed, aged');
 
-    const json: { confidence: string; aged_out: boolean } = JSON.parse(
-      await hippo(home, ['trace', e.id, '--json']),
-    );
+    const json: { confidence: string; aged_out: boolean } = JSON.parse(await hippo(home, ['trace', e.id, '--json']));
     expect(json.confidence).toBe('observed');
     expect(json.aged_out).toBe(true);
   });
@@ -275,8 +280,7 @@ describe('confidence facets', () => {
       last_retrieved: ago(1),
     });
 
-    const line = async (id: string): Promise<string> =>
-      /Confidence:.*/.exec(await hippo(home, ['trace', id]))![0];
+    const line = async (id: string): Promise<string> => /Confidence:.*/.exec(await hippo(home, ['trace', id]))![0];
     const agedLine = await line(aged.id);
 
     expect(agedLine).toContain('observed, aged');
@@ -311,7 +315,15 @@ describe('confidence facets', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) },
+      {
+        hippoRoot,
+        tenantId: 'default',
+        actor: 'test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(hippoRoot),
+        config: loadConfig(hippoRoot),
+      },
     );
     expect(JSON.stringify(res)).toContain('[stale]');
   });

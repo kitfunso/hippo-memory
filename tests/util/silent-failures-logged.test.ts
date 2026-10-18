@@ -46,7 +46,9 @@ afterEach(() => {
 
 /** Makes fs.readdirSync throw `code` for the rest of the test, mirrored into the ESM named exports. */
 function failReaddir(code: string): void {
-  vi.spyOn(fs, 'readdirSync').mockImplementation(() => { throw errno(code); });
+  vi.spyOn(fs, 'readdirSync').mockImplementation(() => {
+    throw errno(code);
+  });
   syncBuiltinESMExports();
 }
 
@@ -67,9 +69,16 @@ describe('http retry', () => {
     vi.stubEnv('HIPPO_LOG', 'debug');
     const replies = [new Response('', { status: 503 }), new Response('', { status: 429 }), new Response('ok')];
     const fetchFn = vi.fn(async () => replies.shift()!);
-    const res = await fetchWithRetry('https://api.example.test/v1/items?key=SECRET', { method: 'POST' }, {
-      timeoutMs: 1000, fetchFn, sleep: async () => {}, retryOn: (r) => r.status === 503 || r.status === 429,
-    });
+    const res = await fetchWithRetry(
+      'https://api.example.test/v1/items?key=SECRET',
+      { method: 'POST' },
+      {
+        timeoutMs: 1000,
+        fetchFn,
+        sleep: async () => {},
+        retryOn: (r) => r.status === 503 || r.status === 429,
+      },
+    );
     expect(await res.text()).toBe('ok');
     const lines = logged().filter((l) => l.includes('http retry'));
     expect(lines).toHaveLength(2);
@@ -97,11 +106,22 @@ describe('heartbeatVerdict', () => {
 describe('embedding provider', () => {
   it('logs at debug why an error body could not be read', async () => {
     initStore(root);
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
+    fs.writeFileSync(
+      path.join(root, 'config.json'),
+      JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
+      'utf8',
+    );
     vi.stubEnv('HIPPO_LOG', 'debug');
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
-    const body = new ReadableStream({ start(c) { c.error(new Error('socket reset mid-body')); } });
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 400 })));
+    const body = new ReadableStream({
+      start(c) {
+        c.error(new Error('socket reset mid-body'));
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body, { status: 400 })),
+    );
     const provider = resolveEmbeddingProvider(loadConfig(root).embeddings, {});
     await expect(provider.embed(['x'], 'passage')).rejects.toThrow(/HTTP 400/);
     expect(logged().some((l) => l.includes('debug:') && l.includes('socket reset mid-body'))).toBe(true);
@@ -145,8 +165,10 @@ describe('capture log append', () => {
     syncBuiltinESMExports();
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     // The test runner replaces console, so route its lines through the stream the tee wraps.
-    vi.spyOn(console, 'log').mockImplementation((line: string) => process.stdout.write(`${line}
-`));
+    vi.spyOn(console, 'log').mockImplementation((line: string) =>
+      process.stdout.write(`${line}
+`),
+    );
     cmdCapture(captureTarget(root), { source: 'file', filePath: blank, dryRun: true, global: false, logFile });
     expect(logged().filter((l) => l.includes('is no longer writable'))).toHaveLength(1);
   });
@@ -210,7 +232,7 @@ describe('dormant snapshot', () => {
 describe('graph page script', () => {
   it('reports a model that will not parse instead of swallowing it', () => {
     const html = renderGraphHtml({ nodes: [], edges: [], truncated: false });
-    expect(html).toContain('catch(e){console.error(');
-    expect(html).not.toContain('catch(_){}');
+    expect(html).toMatch(/catch\s*\(e\)\s*\{\s*console\.error\(/);
+    expect(html).not.toMatch(/catch\s*\(\w*\)\s*\{\s*\}/);
   });
 });

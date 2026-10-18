@@ -6,10 +6,12 @@ import { runDetachedSqliteRequest, runSqliteRequest } from '../../src/store/sqli
 import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
+});
 
 describe('runSqliteRequest presets', () => {
-  it('opens a scope at the root\'s lock wait', async () => {
+  it("opens a scope at the root's lock wait", async () => {
     expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'cli')).toBeUndefined();
     expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'server')).toBe(SERVER_DB_WAIT_MS);
     expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'hook')).toBe(HOOK_DB_WAIT_MS);
@@ -30,12 +32,15 @@ describe('runSqliteRequest presets', () => {
     expect(await waitAfterNoteBusy('server')).toBe(SERVER_DB_WAIT_MS);
   });
 
-  it('a detached scope is its own and keeps the caller\'s lock wait', async () => {
-    const seen = await runWithRequestStores(async () => {
-      const outer = currentRequestStores();
-      const inner = await runDetachedSqliteRequest(() => currentRequestStores());
-      return { outer, inner };
-    }, { busyWaitMs: 250 });
+  it("a detached scope is its own and keeps the caller's lock wait", async () => {
+    const seen = await runWithRequestStores(
+      async () => {
+        const outer = currentRequestStores();
+        const inner = await runDetachedSqliteRequest(() => currentRequestStores());
+        return { outer, inner };
+      },
+      { busyWaitMs: 250 },
+    );
     expect(seen.inner).not.toBe(seen.outer);
     expect(seen.inner?.busyWaitMs).toBe(250);
   });

@@ -9,7 +9,13 @@ import {
   type CreateApiKeyResult,
 } from '../../src/store/auth.js';
 import { ownerOrSubject, type Actor } from '../../src/api/index.js';
-import { ownerOrSubject as exportedOwnerOrSubject, serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
+import {
+  ownerOrSubject as exportedOwnerOrSubject,
+  serve,
+  type AuthResolver,
+  type ResolvedBearer,
+  type ServerHandle,
+} from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { ApiKeyRecord } from '../../src/store/port/types.js';
@@ -19,7 +25,11 @@ const WHOAMI = '/v1/x-whoami';
 let home: string;
 let handle: ServerHandle | undefined;
 
-interface Whoami { subject: string; owner: string | null; key: string }
+interface Whoami {
+  subject: string;
+  owner: string | null;
+  key: string;
+}
 
 async function start(opts: { authResolver?: AuthResolver; store?: HippoStore } = {}): Promise<ServerHandle> {
   handle = await serve({
@@ -27,7 +37,16 @@ async function start(opts: { authResolver?: AuthResolver; store?: HippoStore } =
     host: '127.0.0.1',
     port: 0,
     ...opts,
-    routes: [{ path: WHOAMI, handler: async ({ ctx }) => ({ subject: ctx.actor.subject, owner: ctx.actor.owner ?? null, key: ownerOrSubject(ctx.actor) }) }],
+    routes: [
+      {
+        path: WHOAMI,
+        handler: async ({ ctx }) => ({
+          subject: ctx.actor.subject,
+          owner: ctx.actor.owner ?? null,
+          key: ownerOrSubject(ctx.actor),
+        }),
+      },
+    ],
   });
   return handle;
 }
@@ -66,25 +85,48 @@ describe('Actor.owner', () => {
   it('owned key carries owner', async () => {
     await start();
     const key = mint('alice@corp.example');
-    expect(await whoami(key.plaintext)).toEqual({ subject: `api_key:${key.keyId}`, owner: 'alice@corp.example', key: 'alice@corp.example' });
+    expect(await whoami(key.plaintext)).toEqual({
+      subject: `api_key:${key.keyId}`,
+      owner: 'alice@corp.example',
+      key: 'alice@corp.example',
+    });
   });
 
   it('unowned key has no owner, so ownerOrSubject is the key id', async () => {
     await start();
     const key = mint();
-    expect(await whoami(key.plaintext)).toEqual({ subject: `api_key:${key.keyId}`, owner: null, key: `api_key:${key.keyId}` });
+    expect(await whoami(key.plaintext)).toEqual({
+      subject: `api_key:${key.keyId}`,
+      owner: null,
+      key: `api_key:${key.keyId}`,
+    });
   });
 
   it('resolver path owner is the subject', async () => {
-    await start({ authResolver: (t) => (t === 'tok.bob' ? { tenantId: 'ext', subject: 'bob@corp.example', role: 'member' } : null) });
-    expect(await whoami('tok.bob')).toEqual({ subject: 'bob@corp.example', owner: 'bob@corp.example', key: 'bob@corp.example' });
+    await start({
+      authResolver: (t) => (t === 'tok.bob' ? { tenantId: 'ext', subject: 'bob@corp.example', role: 'member' } : null),
+    });
+    expect(await whoami('tok.bob')).toEqual({
+      subject: 'bob@corp.example',
+      owner: 'bob@corp.example',
+      key: 'bob@corp.example',
+    });
   });
 
   it('a resolver cannot set owner: the sanitised identity keeps only the subject', async () => {
     // SAFETY: plugin code is untyped at runtime; the extra field is what a hostile resolver would add.
-    const forged = { tenantId: 'ext', subject: 'mallory@corp.example', role: 'member', owner: 'alice@corp.example' } as ResolvedBearer;
+    const forged = {
+      tenantId: 'ext',
+      subject: 'mallory@corp.example',
+      role: 'member',
+      owner: 'alice@corp.example',
+    } as ResolvedBearer;
     await start({ authResolver: () => forged });
-    expect(await whoami('tok.mallory')).toEqual({ subject: 'mallory@corp.example', owner: 'mallory@corp.example', key: 'mallory@corp.example' });
+    expect(await whoami('tok.mallory')).toEqual({
+      subject: 'mallory@corp.example',
+      owner: 'mallory@corp.example',
+      key: 'mallory@corp.example',
+    });
   });
 
   it('cache hit keeps owner', async () => {
@@ -100,14 +142,21 @@ describe('Actor.owner', () => {
     const key = mint('alice@corp.example');
     const inner = sqliteStore(home);
     // A store written before the field existed omits it; the key must fall back to its own id, not borrow anyone's.
-    const legacy: HippoStore = { ...inner, findApiKey: async (id: string): Promise<ApiKeyRecord | null> => {
-      const record = await inner.findApiKey(id);
-      if (!record) return null;
-      const { ownerSubject: _dropped, ...rest } = record;
-      return rest;
-    } };
+    const legacy: HippoStore = {
+      ...inner,
+      findApiKey: async (id: string): Promise<ApiKeyRecord | null> => {
+        const record = await inner.findApiKey(id);
+        if (!record) return null;
+        const { ownerSubject: _dropped, ...rest } = record;
+        return rest;
+      },
+    };
     await start({ store: legacy });
-    expect(await whoami(key.plaintext)).toEqual({ subject: `api_key:${key.keyId}`, owner: null, key: `api_key:${key.keyId}` });
+    expect(await whoami(key.plaintext)).toEqual({
+      subject: `api_key:${key.keyId}`,
+      owner: null,
+      key: `api_key:${key.keyId}`,
+    });
   });
 
   it('ownerOrSubject is published on the server subpath', () => {

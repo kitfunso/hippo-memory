@@ -29,7 +29,7 @@ export class CleartextBindError extends Error {
   constructor(readonly host: string) {
     super(
       `hippo serve: refusing to listen on ${host} without TLS, since API keys and memory text would travel in ` +
-      `cleartext. ` +
+        `cleartext. ` +
         'Pass --tls-cert and --tls-key (or set HIPPO_TLS_CERT and HIPPO_TLS_KEY) to serve HTTPS. If a ' +
         'TLS-terminating ' +
         'proxy sits in front, ' +
@@ -53,6 +53,6 @@ export function assertTlsOrCleartextAllowed(
   if (!allowCleartext) throw new CleartextBindError(host);
   log.warn(
     `serve: listening on ${host} without TLS, as allowed; API keys and memory text are cleartext until the proxy in ` +
-    `front adds TLS.`,
+      `front adds TLS.`,
   );
 }

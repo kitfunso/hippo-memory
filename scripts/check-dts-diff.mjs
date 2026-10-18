@@ -19,11 +19,17 @@ function exportedRows(text) {
   for (const m of src.matchAll(DECLARATION)) rows.push(`${m[2]} ${m[1].replace(/\s+/g, ' ')}`);
   for (const m of src.matchAll(NAMED_LIST)) {
     for (const item of m[1].split(',')) {
-      const name = item.trim().replace(/^type\s+/, '').split(/\s+as\s+/).pop();
+      const name = item
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)
+        .pop();
       if (name) rows.push(`${name} re-export`);
     }
   }
-  for (const m of src.matchAll(STAR)) rows.push(m[1] ? `${m[1]} namespace-re-export` : `* from '${m[2]}' star-re-export`);
+  for (const m of src.matchAll(STAR)) {
+    rows.push(m[1] ? `${m[1]} namespace-re-export` : `* from '${m[2]}' star-re-export`);
+  }
   if (DEFAULT.test(src)) rows.push('default default');
   return rows;
 }
@@ -47,7 +53,16 @@ function buildReport(root) {
 function diffReports(was, now) {
   const a = new Set(was.split('\n').filter(Boolean));
   const b = new Set(now.split('\n').filter(Boolean));
-  return [...[...a].filter((l) => !b.has(l)).sort().map((l) => `- ${l}`), ...[...b].filter((l) => !a.has(l)).sort().map((l) => `+ ${l}`)];
+  return [
+    ...[...a]
+      .filter((l) => !b.has(l))
+      .sort()
+      .map((l) => `- ${l}`),
+    ...[...b]
+      .filter((l) => !a.has(l))
+      .sort()
+      .map((l) => `+ ${l}`),
+  ];
 }
 
 function parseArgs(argv) {
@@ -88,7 +103,9 @@ function main() {
     return 0;
   }
   console.log(rows.join('\n'));
-  console.error(`check-dts-diff: the published API changed. Run node scripts/check-dts-diff.mjs --write and commit ${args.report}.`);
+  console.error(
+    `check-dts-diff: the published API changed. Run node scripts/check-dts-diff.mjs --write and commit ${args.report}.`,
+  );
   return 1;
 }
 

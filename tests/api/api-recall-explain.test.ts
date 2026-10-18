@@ -33,7 +33,12 @@ describe('api.recall explain', () => {
     await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId }, trace: { explain: true } });
+    const result = await retrieve(ctx, {
+      query: 'auth',
+      window: { limit: 10 },
+      boost: { sessionId },
+      trace: { explain: true },
+    });
 
     // Every item carries the api pipeline marker.
     for (const item of result.results) {

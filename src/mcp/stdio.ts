@@ -79,7 +79,9 @@ function track(method: string, call: Promise<void>): void {
 async function drainInFlight(): Promise<void> {
   if (inFlight.size > 0) {
     let bound: NodeJS.Timeout | undefined;
-    const timedOut = new Promise<void>((resolve) => { bound = setTimeout(resolve, STDIN_END_DRAIN_MS); });
+    const timedOut = new Promise<void>((resolve) => {
+      bound = setTimeout(resolve, STDIN_END_DRAIN_MS);
+    });
     await Promise.race([Promise.allSettled(inFlight.keys()), timedOut]);
     clearTimeout(bound);
   }
@@ -167,9 +169,15 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
     const stopWatching = watchDeadline(req, false, abort);
-    track(req.method, handleFrame(req, host).then(() => {}).catch((err) => {
-      log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
-    }).finally(stopWatching));
+    track(
+      req.method,
+      handleFrame(req, host)
+        .then(() => {})
+        .catch((err) => {
+          log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
+        })
+        .finally(stopWatching),
+    );
     return;
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
@@ -226,7 +234,9 @@ export function startStdioLoop(host: McpHost): void {
     pendingBytes = buffer.length;
   });
 
-  process.stdin.on('end', () => { void exitWhenDrained(); });
+  process.stdin.on('end', () => {
+    void exitWhenDrained();
+  });
 
   exitOnStreamError();
   // A crash waits for the calls in flight as stdin's end does, so a client is not left without its reply.

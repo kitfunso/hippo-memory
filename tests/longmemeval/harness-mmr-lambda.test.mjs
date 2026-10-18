@@ -27,17 +27,30 @@ test('harness reads --mmr-lambda and passes it to hybridSearch', () => {
     writeEntry(hippoRoot, createMemory(text, { baseHalfLifeDays: 7 }));
   }
   const out = path.join(scratch, 'retrieval.jsonl');
-  const result = spawnSync(process.execPath, [
-    'benchmarks/longmemeval/retrieve_inprocess.mjs',
-    '--data', FIXTURE,
-    '--store-dir', scratch,
-    '--output', out,
-    '--limit', '2',
-    '--mmr-lambda', '0.3',
-  ], { encoding: 'utf-8', env: { ...process.env, HIPPO_HOME: path.join(scratch, 'global') } });
+  const result = spawnSync(
+    process.execPath,
+    [
+      'benchmarks/longmemeval/retrieve_inprocess.mjs',
+      '--data',
+      FIXTURE,
+      '--store-dir',
+      scratch,
+      '--output',
+      out,
+      '--limit',
+      '2',
+      '--mmr-lambda',
+      '0.3',
+    ],
+    { encoding: 'utf-8', env: { ...process.env, HIPPO_HOME: path.join(scratch, 'global') } },
+  );
   expect(result.status, result.stderr).toBe(0);
   expect(result.stderr).toMatch(/mmrLambda.*0\.3/);
-  const records = fs.readFileSync(out, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  const records = fs
+    .readFileSync(out, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
   expect(records.map((r) => r.question_id)).toEqual(['syn_001', 'syn_002']);
   // Both stored rows share 'authentication flow' with the first question and fit the default budget.
   expect(records[0].num_retrieved).toBe(2);

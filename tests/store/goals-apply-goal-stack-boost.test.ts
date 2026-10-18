@@ -23,7 +23,10 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal } from '../_helpers/root-forms.js';
 
-interface ScoredRow { entry: MemoryEntry; score: number; }
+interface ScoredRow {
+  entry: MemoryEntry;
+  score: number;
+}
 
 /** Boosts, then writes the log rows the boost earned on the same handle. */
 function boostAndLog(root: string, db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoostOptions): ScoredRow[] {
@@ -114,9 +117,11 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
       boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
       boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
-      const count = (db.prepare(
-        `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ? AND memory_id = ?`,
-      ).get(goal.id, m.id) as { c: number }).c;
+      const count = (
+        db
+          .prepare(`SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ? AND memory_id = ?`)
+          .get(goal.id, m.id) as { c: number }
+      ).c;
       expect(count).toBe(1); // UNIQUE(memory_id, goal_id) idempotency
     } finally {
       closeHippoDb(db);
@@ -131,9 +136,9 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     try {
       boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
-      const count = (db.prepare(
-        `SELECT COUNT(*) AS c FROM goal_recall_log WHERE memory_id = 'm-global'`,
-      ).get() as { c: number }).c;
+      const count = (
+        db.prepare(`SELECT COUNT(*) AS c FROM goal_recall_log WHERE memory_id = 'm-global'`).get() as { c: number }
+      ).c;
       expect(count).toBe(0); // global-only id filtered before INSERT
     } finally {
       closeHippoDb(db);
@@ -160,8 +165,12 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
 
 describe('the session goal boost policy branches', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('goal-policy-branches'); });
-  afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  beforeEach(() => {
+    root = makeRoot('goal-policy-branches');
+  });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   function stored(content: string, tags: string[], schemaFit?: number): MemoryEntry {
     const e = createDefaultMemory(content, { tags, layer: Layer.Episodic });
@@ -173,10 +182,30 @@ describe('the session goal boost policy branches', () => {
   it('composes every policy type, caps at 3x, logs only local top-k rows', () => {
     const tenantId = 'default';
     const sessionId = 's-a';
-    pushGoal(root, { sessionId, tenantId, goalName: 'g-err', policy: { policyType: 'error-prioritized', errorPriority: 1.2 } });
-    pushGoal(root, { sessionId, tenantId, goalName: 'g-fit', policy: { policyType: 'schema-fit-biased', weightSchemaFit: 1.5 } });
-    pushGoal(root, { sessionId, tenantId, goalName: 'g-rec', policy: { policyType: 'recency-first', weightRecency: 1.1 } });
-    pushGoal(root, { sessionId: 's-b', tenantId, goalName: 'g-hyb', policy: { policyType: 'hybrid', weightOutcome: 1.3 } });
+    pushGoal(root, {
+      sessionId,
+      tenantId,
+      goalName: 'g-err',
+      policy: { policyType: 'error-prioritized', errorPriority: 1.2 },
+    });
+    pushGoal(root, {
+      sessionId,
+      tenantId,
+      goalName: 'g-fit',
+      policy: { policyType: 'schema-fit-biased', weightSchemaFit: 1.5 },
+    });
+    pushGoal(root, {
+      sessionId,
+      tenantId,
+      goalName: 'g-rec',
+      policy: { policyType: 'recency-first', weightRecency: 1.1 },
+    });
+    pushGoal(root, {
+      sessionId: 's-b',
+      tenantId,
+      goalName: 'g-hyb',
+      policy: { policyType: 'hybrid', weightOutcome: 1.3 },
+    });
 
     const errRow = stored('err row', ['g-err', 'error']);
     const fitRow = stored('fit row', ['g-fit'], 0.8);
@@ -185,7 +214,10 @@ describe('the session goal boost policy branches', () => {
     const plain = stored('plain row', ['other']);
     const capped = stored('capped row', ['g-err', 'g-fit', 'error']);
     const global = createDefaultMemory('global row', { tags: ['g-fit'], layer: Layer.Episodic });
-    const rows = [plain, errRow, fitRow, recRow, twoRow, global, capped].map((entry, i) => ({ entry, score: 1 + i / 10 }));
+    const rows = [plain, errRow, fitRow, recRow, twoRow, global, capped].map((entry, i) => ({
+      entry,
+      score: 1 + i / 10,
+    }));
 
     const trace = new Map<string, RerankStep>();
     const db = openHippoDb(root);
@@ -223,7 +255,22 @@ describe('the session goal boost policy branches', () => {
           ],
         ]
       `);
-      expect(a.log.map((l) => [l.memoryId === errRow.id ? 'err' : l.memoryId === fitRow.id ? 'fit' : l.memoryId === recRow.id ? 'rec' : l.memoryId === twoRow.id ? 'two' : l.memoryId === capped.id ? 'capped' : l.memoryId, l.score])).toMatchInlineSnapshot(`
+      expect(
+        a.log.map((l) => [
+          l.memoryId === errRow.id
+            ? 'err'
+            : l.memoryId === fitRow.id
+              ? 'fit'
+              : l.memoryId === recRow.id
+                ? 'rec'
+                : l.memoryId === twoRow.id
+                  ? 'two'
+                  : l.memoryId === capped.id
+                    ? 'capped'
+                    : l.memoryId,
+          l.score,
+        ]),
+      ).toMatchInlineSnapshot(`
         [
           [
             "capped",
@@ -276,7 +323,11 @@ describe('the session goal boost policy branches', () => {
         ]
       `);
 
-      const b = sessionGoalBoost(root, db, [{ entry: stored('hyb row', ['g-hyb']), score: 1 }], { sessionId: 's-b', tenantId, limit: 5 });
+      const b = sessionGoalBoost(root, db, [{ entry: stored('hyb row', ['g-hyb']), score: 1 }], {
+        sessionId: 's-b',
+        tenantId,
+        limit: 5,
+      });
       expect(b.results[0]!.score).toBeCloseTo(2.6, 10);
       expect(b.log).toHaveLength(1);
 

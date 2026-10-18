@@ -6,11 +6,27 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { buildSnapshot } from '../src/dashboard/dashboard-snapshot.js';
 import { buildOverview, buildProjectDetail } from '../src/dashboard/dashboard-queries.js';
 import type {
-  MemoryDetail, MemoryPage, Overview, ProjectDetail, ScatterGrid, ScatterPoints, SearchResult,
+  MemoryDetail,
+  MemoryPage,
+  Overview,
+  ProjectDetail,
+  ScatterGrid,
+  ScatterPoints,
+  SearchResult,
 } from '../src/dashboard/dashboard-types.js';
 import {
-  NOW, asDashboardRow, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard,
-  type RunningDashboard, type TmpStore,
+  NOW,
+  asDashboardRow,
+  call,
+  get,
+  isoAgo,
+  makeStore,
+  parse,
+  postJson,
+  seed,
+  startDashboard,
+  type RunningDashboard,
+  type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 
 const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
@@ -53,7 +69,13 @@ describe('overview and project', () => {
     expect(reply.status).toBe(200);
     expect(overview.total).toBe(8);
     expect(overview.projects.map((p) => p.key).sort()).toEqual(['p:alpha', 'p:beta']);
-    expect(overview.kpis.map((k) => k.id)).toEqual(['total', 'projects', 'atRiskShare', 'openConflicts', 'embeddingCoverage']);
+    expect(overview.kpis.map((k) => k.id)).toEqual([
+      'total',
+      'projects',
+      'atRiskShare',
+      'openConflicts',
+      'embeddingCoverage',
+    ]);
     expect(overview.kpis[0].value).toBe(8);
     expect(overview.kpis[0].series).toHaveLength(91);
     expect(overview.mostAtRisk[0]).toBe('p:alpha');
@@ -84,7 +106,14 @@ describe('overview and project', () => {
       last_retrieved: isoAgo(i % 300),
     }));
     const rows = entries.map((e) => asDashboardRow(e));
-    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries: rows, openConflicts: [], scanText: () => {} });
+    const snap = buildSnapshot({
+      id: 1,
+      tenantId: 'default',
+      nowMs: NOW,
+      entries: rows,
+      openConflicts: [],
+      scanText: () => {},
+    });
 
     // SAFETY: 4,001 members is over the cut-off, so the scatter is the grid shape.
     const grid = buildProjectDetail(snap, 'p:big')!.scatter as ScatterGrid;
@@ -99,7 +128,14 @@ describe('overview and project', () => {
 describe('KPI series', () => {
   const seriesOf = (id: 'total' | 'projects', entries: MemoryEntry[]): number[] => {
     const rows = entries.map((e) => asDashboardRow(e));
-    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries: rows, openConflicts: [], scanText: () => {} });
+    const snap = buildSnapshot({
+      id: 1,
+      tenantId: 'default',
+      nowMs: NOW,
+      entries: rows,
+      openConflicts: [],
+      scanText: () => {},
+    });
     return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
   };
   const aged = (days: number, project: string): MemoryEntry => ({
@@ -184,13 +220,19 @@ describe('memory page', () => {
     const offset = 'offset must be a whole number from 0 to 9007199254740991';
     const layers = 'layers must be a comma list of buffer, episodic, semantic, trace';
     const bad: Array<[string, string]> = [
-      ['limit=0', limit], ['limit=501', limit], ['limit=10abc', limit], ['limit=1.5', limit],
-      ['offset=-1', offset], ['offset=abc', offset],
+      ['limit=0', limit],
+      ['limit=501', limit],
+      ['limit=10abc', limit],
+      ['limit=1.5', limit],
+      ['offset=-1', offset],
+      ['offset=abc', offset],
       ['sort=nope', 'sort must be one of content, layer, strength, retrievals, last, age, confidence, scope'],
       ['dir=up', 'dir must be one of asc, desc'],
       ['chip=all,risk', 'chip must be one of all, risk, pinned, conflict'],
-      ['layers=', layers], ['layers=episodic,nope', layers],
-      ['amin=5&amax=1', 'amin must not exceed amax'], ['smin=x', 'smin must be a number'],
+      ['layers=', layers],
+      ['layers=episodic,nope', layers],
+      ['amin=5&amax=1', 'amin must not exceed amax'],
+      ['smin=x', 'smin must be a number'],
       [`q=${'a'.repeat(201)}`, 'q must be at most 200 characters'],
     ];
     for (const [query, message] of bad) {
@@ -226,7 +268,14 @@ describe('search and detail', () => {
 
 describe('removed endpoints', () => {
   it('answers the existing JSON 404 for every old route', async () => {
-    for (const path of ['/api/memories', '/api/embeddings', '/api/stats', '/api/conflicts', '/api/peers', '/api/config']) {
+    for (const path of [
+      '/api/memories',
+      '/api/embeddings',
+      '/api/stats',
+      '/api/conflicts',
+      '/api/peers',
+      '/api/config',
+    ]) {
       const reply = await get(dash.port, path);
       expect(reply.status, path).toBe(404);
       expect(reply.body).toBe('{"error":"Not found"}');

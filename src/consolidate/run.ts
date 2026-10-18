@@ -55,7 +55,7 @@ export function syncFtsIndex(store: Consolidation, dryRun: boolean, result: Cons
   if (counts === null) return;
   result.details.push(
     `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ` +
-    `${counts.memories} memories)`,
+      `${counts.memories} memories)`,
   );
 }
 

@@ -44,7 +44,13 @@ function writeClaudeTranscript(): string {
 function runSessionEnd(sessionId: string) {
   const logFile = path.join(dir, 'session-end.log');
   const result = worker([
-    '__session-end-worker', '--transcript', writeClaudeTranscript(), '--session-id', sessionId, '--log-file', logFile,
+    '__session-end-worker',
+    '--transcript',
+    writeClaudeTranscript(),
+    '--session-id',
+    sessionId,
+    '--log-file',
+    logFile,
   ]);
   return { logFile, status: result.status };
 }
@@ -90,7 +96,9 @@ describe('__session-end-worker with no store in the folder', () => {
 
     expect(runSessionEnd('sess-this-project').status).toBe(0);
 
-    const origins = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE)).map((e) => e.origin_project);
+    const origins = loadAllEntries(globalRoot, 'default')
+      .filter((e) => e.content.includes(RULE))
+      .map((e) => e.origin_project);
     expect(origins).toContain('other');
     expect(origins).toContain('work');
   });
@@ -156,18 +164,32 @@ describe('__codex-session-end-worker with no store in the folder', () => {
     const sessions = path.join(codexHome, 'sessions', '2026', '09', '29');
     fs.mkdirSync(sessions, { recursive: true });
     const message = (role: string, type: string, text: string) => ({
-      type: 'response_item', payload: { type: 'message', role, content: [{ type, text }] },
+      type: 'response_item',
+      payload: { type: 'message', role, content: [{ type, text }] },
     });
-    const lines = [message('user', 'input_text', USER_TEXT), message('assistant', 'output_text', 'Noted, I will use pnpm.')];
-    fs.writeFileSync(path.join(sessions, 'rollout-2026-09-29T10-00-00-codex-1.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const lines = [
+      message('user', 'input_text', USER_TEXT),
+      message('assistant', 'output_text', 'Noted, I will use pnpm.'),
+    ];
+    fs.writeFileSync(
+      path.join(sessions, 'rollout-2026-09-29T10-00-00-codex-1.jsonl'),
+      lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
+    );
     return codexHome;
   }
 
   function runCodexWorker(codexHome: string) {
     const logFile = path.join(dir, 'codex-session-end.log');
     const result = worker([
-      '__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl'),
-      '--started-at', '1', '--log-file', logFile,
+      '__codex-session-end-worker',
+      '--codex-home',
+      codexHome,
+      '--history-path',
+      path.join(codexHome, 'history.jsonl'),
+      '--started-at',
+      '1',
+      '--log-file',
+      logFile,
     ]);
     return { logFile, status: result.status };
   }

@@ -39,7 +39,9 @@ function hippoDbState(root: string, keyId: string): HippoDbState {
   const db = openHippoDb(root);
   try {
     // SAFETY: each SELECT names exactly the columns of the row type it is read as, and the fixture minted keyId.
-    const key = db.prepare('SELECT revoked_at FROM api_keys WHERE key_id = ?').get(keyId) as { revoked_at: string | null };
+    const key = db.prepare('SELECT revoked_at FROM api_keys WHERE key_id = ?').get(keyId) as {
+      revoked_at: string | null;
+    };
     // SAFETY: as above.
     const ids = db.prepare('SELECT id FROM audit_log ORDER BY id').all() as { id: number }[];
     return { revokedAt: key.revoked_at, auditIds: ids.map((r) => r.id) };
@@ -74,16 +76,32 @@ describe('authRevoke with ctx.store', () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryKeyAuditStore(copyOf());
     const { memberA } = fixture.keys;
-    expect(await authRevoke({ hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) }, memberA)).toEqual({ ok: true, revokedAt: NOW });
+    expect(
+      await authRevoke(
+        { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) },
+        memberA,
+      ),
+    ).toEqual({ ok: true, revokedAt: NOW });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect((await memory.store.findApiKey(memberA))?.revokedAt).toBe(NOW);
-    expect(memory.auditRows().at(-1)).toMatchObject({ tenantId: TENANT_A, actor: 'cli', op: 'auth_revoke', targetId: memberA });
+    expect(memory.auditRows().at(-1)).toMatchObject({
+      tenantId: TENANT_A,
+      actor: 'cli',
+      op: 'auth_revoke',
+      targetId: memberA,
+    });
   });
 
   it("keeps hippo.db's checks: a member key revokes only itself, a foreign key is unknown", async () => {
     const memory = inMemoryKeyAuditStore(copyOf());
     const { adminA, memberA, memberB } = fixture.keys;
-    const member = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: { subject: `api_key:${memberA}`, role: 'member' as const }, store: memory.store, config: DEFAULT_CONFIG };
+    const member = {
+      hippoRoot: markedFolder(),
+      tenantId: TENANT_A,
+      actor: { subject: `api_key:${memberA}`, role: 'member' as const },
+      store: memory.store,
+      config: DEFAULT_CONFIG,
+    };
     await expect(authRevoke(member, adminA)).rejects.toThrow(ForbiddenError);
     await expect(authRevoke({ ...member, actor: admin }, memberB)).rejects.toThrow(NotFoundError);
     expect(await authRevoke(member, memberA)).toEqual({ ok: true, revokedAt: NOW });
@@ -93,7 +111,8 @@ describe('authRevoke with ctx.store', () => {
 describe('DELETE /v1/auth/keys/:keyId under another store', () => {
   let handle: ServerHandle | undefined;
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
-  const revokeVia = (url: string, keyId: string, token: string): Promise<Response> => fetch(`${url}/v1/auth/keys/${keyId}`, { method: 'DELETE', headers: bearer(token) });
+  const revokeVia = (url: string, keyId: string, token: string): Promise<Response> =>
+    fetch(`${url}/v1/auth/keys/${keyId}`, { method: 'DELETE', headers: bearer(token) });
 
   beforeEach(() => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
@@ -112,13 +131,18 @@ describe('DELETE /v1/auth/keys/:keyId under another store', () => {
     handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
     // A route that needs local files still verifies the key first, which puts it in the verified-key cache.
     const { url } = handle;
-    const sleepAs = async (token: string): Promise<number> => (await fetch(`${url}/v1/sleep`, { method: 'POST', headers: bearer(token) })).status;
+    const sleepAs = async (token: string): Promise<number> =>
+      (await fetch(`${url}/v1/sleep`, { method: 'POST', headers: bearer(token) })).status;
     expect(await sleepAs(fixture.tokens.memberA)).toBe(501);
     const res = await revokeVia(handle.url, fixture.keys.memberA, fixture.tokens.adminA);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, revokedAt: expect.any(String) });
     expect(await sleepAs(fixture.tokens.memberA)).toBe(401);
-    expect(memory.auditRows().at(-1)).toMatchObject({ actor: `api_key:${fixture.keys.adminA}`, op: 'auth_revoke', targetId: fixture.keys.memberA });
+    expect(memory.auditRows().at(-1)).toMatchObject({
+      actor: `api_key:${fixture.keys.adminA}`,
+      op: 'auth_revoke',
+      targetId: fixture.keys.memberA,
+    });
     expect(hippoDbState(root, fixture.keys.memberA)).toEqual(before);
   });
 });

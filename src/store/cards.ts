@@ -54,7 +54,8 @@ function rowToCard(row: CardRow): Card {
 export function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
   // SAFETY: row's shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
   const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
-    CardRow | undefined;
+    | CardRow
+    | undefined;
   return row ? rowToCard(row) : null;
 }
 
@@ -241,9 +242,9 @@ function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: read
   if (dependsOn.length === 0) return true;
   const marks = placeholders(dependsOn.length);
   // SAFETY: rows' shape matches the two columns named in the SELECT below.
-  const rows = db.prepare(
-    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${marks})`,
-  ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
+  const rows = db
+    .prepare(`SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${marks})`)
+    .all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
   const found = new Map(rows.map((r) => [r.id, r.status]));
   // Pre-check before any write: a typo'd --depends-on can never commit a card row.
   for (const parentId of dependsOn) {
@@ -270,41 +271,49 @@ export function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { stat
     params.push(opts.status);
   }
   // SAFETY: rows' shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
-  `).all(...params) as CardRow[];
+  `)
+    .all(...params) as CardRow[];
   return rows.map(rowToCard);
 }
 
 export function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
   // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-  const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
-    tenantId,
-    id
-  ) as Array<{ parent: string }>).map((r) => r.parent);
+  const parents = (
+    db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{
+      parent: string;
+    }>
+  ).map((r) => r.parent);
   // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-  const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
-    tenantId,
-    id
-  ) as Array<{ child: string }>).map((r) => r.child);
+  const children = (
+    db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{
+      child: string;
+    }>
+  ).map((r) => r.child);
   return { parents, children };
 }
 
 export function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
   // SAFETY: rows' shape matches CardRunRow.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, card, runtime, session_id, started, ended, outcome
     FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC, id DESC
-  `).all(tenantId, id) as CardRunRow[];
+  `)
+    .all(tenantId, id) as CardRunRow[];
   return rows.map(rowToCardRun);
 }
 
 export function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
   // SAFETY: rows' shape matches CardCommentRow.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, card_id, author, body, created_at
     FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
-  `).all(tenantId, id) as CardCommentRow[];
+  `)
+    .all(tenantId, id) as CardCommentRow[];
   return rows.map(rowToCardComment);
 }
 
@@ -314,10 +323,12 @@ export function loadLatestHandoffForCardAt(
   cardId: string,
 ): SessionHandoff | null {
   // SAFETY: row's shape matches HANDOFF_COLUMNS.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
     WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
-  `).get(tenantId, cardId) as SessionHandoffRow | undefined;
+  `)
+    .get(tenantId, cardId) as SessionHandoffRow | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
 
@@ -376,8 +387,12 @@ export function heartbeatCardAt(db: DatabaseSyncLike, tenantId: string, id: stri
       return rollback(false);
     }
     const now = new Date().toISOString();
-    db.prepare(`UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`)
-      .run(leaseUntilFrom(now), now, id, tenantId);
+    db.prepare(`UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`).run(
+      leaseUntilFrom(now),
+      now,
+      id,
+      tenantId,
+    );
     return true;
   });
   return beat ? loadCardRow(db, tenantId, id) : null;
@@ -511,11 +526,15 @@ export function reclaimExpiredCardsAt(db: DatabaseSyncLike, tenantId: string): s
     // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
     const now = new Date().toISOString();
     // SAFETY: rows' shape matches the single `id` column named in the SELECT below.
-    const ids = (db.prepare(`
+    const ids = (
+      db
+        .prepare(`
       SELECT id FROM cards
       WHERE tenant_id = ? AND status = 'running' AND (lease_until IS NULL OR lease_until < ?)
       ORDER BY id
-    `).all(tenantId, now) as Array<{ id: string }>).map((r) => r.id);
+    `)
+        .all(tenantId, now) as Array<{ id: string }>
+    ).map((r) => r.id);
     for (const id of ids) {
       transitionCard(db, tenantId, id, {
         from: ['running'],
@@ -542,4 +561,3 @@ export function addCardCommentAt(
   }
   return insertCardComment(db, tenantId, cardId, author, body);
 }
-

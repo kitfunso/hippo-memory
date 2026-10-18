@@ -13,10 +13,7 @@ export function goalPush(ctx: Context, opts: GoalPushOptions): Promise<Goal> {
 }
 
 /** The caller's goals for `sessionId`: active ones, or every status when `all` is set. */
-export async function goalList(
-  ctx: Context,
-  opts: { sessionId: string; all: boolean },
-): Promise<Goal[]> {
+export async function goalList(ctx: Context, opts: { sessionId: string; all: boolean }): Promise<Goal[]> {
   if (opts.all) return ctx.store.goals.sessionGoals(ctx.tenantId, opts.sessionId);
   return (await ctx.store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId })).goals;
 }

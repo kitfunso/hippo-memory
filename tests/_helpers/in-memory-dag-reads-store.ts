@@ -2,7 +2,13 @@
 // from memory with the scope and admission rules hippo-memory/store-kit exports, so a conformance test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { descendantAdmits, passesScopeFilterForRecall, type AuditEvent, type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
+import {
+  descendantAdmits,
+  passesScopeFilterForRecall,
+  type AuditEvent,
+  type HippoStore,
+  type MemoryEntry,
+} from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import type { DagReads, SessionRawQuery } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
@@ -32,8 +38,16 @@ const oldestFirst = (a: MemoryRow, b: MemoryRow): number => bytes(a.created, b.c
 function sessionRaws(rows: readonly MemoryRow[], { tenantId, sessionId, origins }: SessionRawQuery): MemoryRow[] {
   if (!sessionId) return [];
   return rows
-    .filter((r) => r.tenant_id === tenantId && r.kind === 'raw' && r.source_session_id === sessionId && r.superseded_by === null)
-    .filter((r) => origins === undefined || r.origin_project === '' || (r.origin_project !== null && origins.includes(r.origin_project)))
+    .filter(
+      (r) =>
+        r.tenant_id === tenantId && r.kind === 'raw' && r.source_session_id === sessionId && r.superseded_by === null,
+    )
+    .filter(
+      (r) =>
+        origins === undefined ||
+        r.origin_project === '' ||
+        (r.origin_project !== null && origins.includes(r.origin_project)),
+    )
     .sort(oldestFirst);
 }
 
@@ -46,9 +60,9 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
     },
     async sessionRawCount(query) {
       const exact = query.scope !== undefined && query.scope !== '';
-      return sessionRaws(rows, query)
-        .filter((r) => (exact ? r.scope === query.scope : passesScopeFilterForRecall(r.scope, undefined, query.ownScope)))
-        .length;
+      return sessionRaws(rows, query).filter((r) =>
+        exact ? r.scope === query.scope : passesScopeFilterForRecall(r.scope, undefined, query.ownScope),
+      ).length;
     },
     async summaryWithDescendants(tenantId, id, { depth, admit, minSummaryLevel }) {
       const mine = rows.filter((r) => r.tenant_id === tenantId);
@@ -62,7 +76,10 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
       while (levels.length < depth && above.length > 0) {
         const level: MemoryEntry[] = [];
         for (const parentId of above) {
-          for (const child of mine.filter((r) => r.dag_parent_id === parentId).sort(oldestFirst).map(rowToEntry)) {
+          for (const child of mine
+            .filter((r) => r.dag_parent_id === parentId)
+            .sort(oldestFirst)
+            .map(rowToEntry)) {
             if (listed.has(child.id) || !descendantAdmits(child, admit)) continue;
             listed.add(child.id);
             level.push(child);
@@ -75,13 +92,14 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
       return { summary, levels };
     },
   };
-  const auditRows = (): readonly AuditEvent[] => withSqliteAllowed(() => {
-    const db = openHippoDb(hippoRoot);
-    try {
-      return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
-    } finally {
-      closeHippoDb(db);
-    }
-  });
+  const auditRows = (): readonly AuditEvent[] =>
+    withSqliteAllowed(() => {
+      const db = openHippoDb(hippoRoot);
+      try {
+        return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+      } finally {
+        closeHippoDb(db);
+      }
+    });
   return { store: { ...portOnlyStore(hippoRoot), kind: 'in-memory', dagReads }, auditRows };
 }

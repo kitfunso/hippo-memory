@@ -3,8 +3,17 @@
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  RejectedValueError, entryAfterOutcome, hasGroup, requireGroup, sqliteStore,
-  type HippoStore, type MemoryEntry, type OptionalGroup, type StoreGroup, type StoreGroups, type SupersedeWrite,
+  RejectedValueError,
+  entryAfterOutcome,
+  hasGroup,
+  requireGroup,
+  sqliteStore,
+  type HippoStore,
+  type MemoryEntry,
+  type OptionalGroup,
+  type StoreGroup,
+  type StoreGroups,
+  type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
 
 declare const store: HippoStore;

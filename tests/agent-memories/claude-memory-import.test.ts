@@ -11,7 +11,13 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
-  totalTally(importProjectMemories(hippoRoot, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } })).imported;
+  totalTally(
+    importProjectMemories(hippoRoot, {
+      configAt: loadConfig,
+      agentImport: sqliteAgentImport,
+      machine: { home, env: {}, platform: process.platform },
+    }),
+  ).imported;
 
 const tmp = () => {
   const dir = makeRoot('claude-memory', { init: false });
@@ -39,10 +45,17 @@ function store(dir: string): string {
 }
 
 function git(cwd: string, ...args: string[]): void {
-  execFileSync('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args], { cwd, stdio: 'ignore' });
+  execFileSync(
+    'git',
+    ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args],
+    { cwd, stdio: 'ignore' },
+  );
 }
 
-const contents = (hippoRoot: string) => loadEveryTenantEntries(hippoRoot).map((e) => e.content).join('\n');
+const contents = (hippoRoot: string) =>
+  loadEveryTenantEntries(hippoRoot)
+    .map((e) => e.content)
+    .join('\n');
 
 describe('the project pass reads only the Claude Code memory of the store project', () => {
   it('imports its own project folder and no other project', () => {
@@ -88,7 +101,12 @@ describe('the project pass reads only the Claude Code memory of the store projec
     git(seed, 'commit', '-q', '--allow-empty', '-m', 'init');
     git(parent, 'clone', '-q', '--bare', seed, 'proj.git');
     git(path.join(parent, 'proj.git'), 'worktree', 'add', '-q', path.join(parent, 'wt'));
-    writeLesson(home, path.join(parent, 'proj.git'), 'bare.md', 'This repository needs the fixture server before its tests run.');
+    writeLesson(
+      home,
+      path.join(parent, 'proj.git'),
+      'bare.md',
+      'This repository needs the fixture server before its tests run.',
+    );
     writeLesson(home, parent, 'parent.md', 'The parent folder keeps its invoices under the finance share.');
     const hippoRoot = store(path.join(parent, 'wt'));
 
@@ -102,7 +120,12 @@ describe('the project pass reads only the Claude Code memory of the store projec
     fs.mkdirSync(path.join(base, 'gitdirs'));
     git(base, 'init', '-q', `--separate-git-dir=${path.join(base, 'gitdirs', 'proj.git')}`, 'proj');
     writeLesson(home, path.join(base, 'proj'), 'own.md', 'Run the schema check before this project ships.');
-    writeLesson(home, path.join(base, 'gitdirs'), 'gitdirs.md', 'The gitdirs folder holds backups for a different client.');
+    writeLesson(
+      home,
+      path.join(base, 'gitdirs'),
+      'gitdirs.md',
+      'The gitdirs folder holds backups for a different client.',
+    );
     const hippoRoot = store(path.join(base, 'proj'));
 
     expect(learnFromClaude(hippoRoot, home)).toBe(1);
@@ -175,7 +198,12 @@ describe('the project pass reads only the Claude Code memory of the store projec
     git(path.join(parent, 'proj.git'), 'worktree', 'add', '-q', path.join(parent, 'wt'));
     fs.mkdirSync(path.join(parent, 'proj.git', '.git'));
     writeLesson(home, path.join(parent, 'wt'), 'own.md', 'This worktree runs the smoke tests against staging only.');
-    writeLesson(home, path.join(parent, 'proj.git'), 'bare.md', 'The bare repository mirrors the upstream every night.');
+    writeLesson(
+      home,
+      path.join(parent, 'proj.git'),
+      'bare.md',
+      'The bare repository mirrors the upstream every night.',
+    );
     const hippoRoot = store(path.join(parent, 'wt'));
 
     expect(learnFromClaude(hippoRoot, home)).toBe(1);

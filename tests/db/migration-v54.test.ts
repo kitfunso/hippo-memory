@@ -1,7 +1,13 @@
 // Schema v54 adds nullable owner and project columns, the session binding table and retry ids, and never raises the floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  openHippoDbReadOnly,
+  closeHippoDb,
+  getSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { v54 } from '../../src/db/migrations/v54.js';
@@ -34,14 +40,20 @@ function meta(db: DatabaseSyncLike, key: string): string | undefined {
 
 function indexSql(db: DatabaseSyncLike, name: string): string | undefined {
   // SAFETY: one TEXT `sql` column.
-  return (db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(name) as { sql?: string } | undefined)?.sql;
+  return (
+    db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(name) as
+      | { sql?: string }
+      | undefined
+  )?.sql;
 }
 
 /** Puts the store back to its v53 shape, keeping every row, with the floor at `floor`; `alsoRun` changes it further before the close. */
 function rewindToV53(floor: string, alsoRun?: (db: DatabaseSyncLike) => void): void {
   withDb((db) => {
     for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) db.exec(`DROP INDEX IF EXISTS ${idx}`);
-    for (const t of OWNER_TABLES) for (const c of ['owner_subject', 'origin_project']) db.exec(`ALTER TABLE ${t} DROP COLUMN ${c}`);
+    for (const t of OWNER_TABLES) {
+      for (const c of ['owner_subject', 'origin_project']) db.exec(`ALTER TABLE ${t} DROP COLUMN ${c}`);
+    }
     for (const t of Object.keys(REQUEST_INDEXES)) db.exec(`ALTER TABLE ${t} DROP COLUMN request_id`);
     db.exec('DROP TABLE session_owners');
     db.prepare(`UPDATE meta SET value = '53' WHERE key = 'schema_version'`).run();
@@ -63,10 +75,21 @@ describe('schema v54', () => {
   it('fresh store has both columns on three tables, session_owners and two indexes', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      for (const t of OWNER_TABLES) expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
-      expect([...tableColumns(db, 'session_owners')].sort()).toEqual(['created_at', 'owner_subject', 'session_id', 'tenant_id']);
-      expect(indexSql(db, 'idx_task_snapshots_owner')).toMatch(/\(tenant_id, owner_subject, origin_project, status, updated_at DESC\)/);
-      expect(indexSql(db, 'idx_session_handoffs_owner')).toMatch(/\(tenant_id, owner_subject, origin_project, created_at DESC\)/);
+      for (const t of OWNER_TABLES) {
+        expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
+      }
+      expect([...tableColumns(db, 'session_owners')].sort()).toEqual([
+        'created_at',
+        'owner_subject',
+        'session_id',
+        'tenant_id',
+      ]);
+      expect(indexSql(db, 'idx_task_snapshots_owner')).toMatch(
+        /\(tenant_id, owner_subject, origin_project, status, updated_at DESC\)/,
+      );
+      expect(indexSql(db, 'idx_session_handoffs_owner')).toMatch(
+        /\(tenant_id, owner_subject, origin_project, created_at DESC\)/,
+      );
       for (const [t, idx] of Object.entries(REQUEST_INDEXES)) {
         expect(tableColumns(db, t).has('request_id')).toBe(true);
         expect(indexSql(db, idx)).toMatch(/UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/);
@@ -75,20 +98,46 @@ describe('schema v54', () => {
   });
 
   it('v53 store upgrades with guarded ALTERs and rows untouched, owners NULL', () => {
-    const snap = saveActiveTaskSnapshot(home, 'default', { task: 'ship v54', summary: 'columns', next_step: 'test', session_id: 's1' });
+    const snap = saveActiveTaskSnapshot(home, 'default', {
+      task: 'ship v54',
+      summary: 'columns',
+      next_step: 'test',
+      session_id: 's1',
+    });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'half done', nextAction: 'finish' });
-    withDb((db) => recordFailure(db, { tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'abc' }));
+    withDb((db) =>
+      recordFailure(db, { tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'abc' }),
+    );
     rewindToV53('1.24.0');
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: the SELECT names exactly these four columns.
-      const s = db.prepare(`SELECT id, task, owner_subject, origin_project FROM task_snapshots`).all() as Array<{ id: number; task: string; owner_subject: string | null; origin_project: string | null }>;
+      const s = db.prepare(`SELECT id, task, owner_subject, origin_project FROM task_snapshots`).all() as Array<{
+        id: number;
+        task: string;
+        owner_subject: string | null;
+        origin_project: string | null;
+      }>;
       expect(s).toEqual([{ id: snap.id, task: 'ship v54', owner_subject: null, origin_project: null }]);
       // SAFETY: the SELECT names exactly these four columns.
-      const h = db.prepare(`SELECT session_id, summary, owner_subject, origin_project FROM session_handoffs`).all() as Array<{ session_id: string; summary: string; owner_subject: string | null; origin_project: string | null }>;
+      const h = db
+        .prepare(`SELECT session_id, summary, owner_subject, origin_project FROM session_handoffs`)
+        .all() as Array<{
+        session_id: string;
+        summary: string;
+        owner_subject: string | null;
+        origin_project: string | null;
+      }>;
       expect(h).toEqual([{ session_id: 's1', summary: 'half done', owner_subject: null, origin_project: null }]);
       // SAFETY: the SELECT names exactly these four columns.
-      const f = db.prepare(`SELECT sig_hash, owner_subject, origin_project, request_id FROM failure_log`).all() as Array<{ sig_hash: string; owner_subject: string | null; origin_project: string | null; request_id: string | null }>;
+      const f = db
+        .prepare(`SELECT sig_hash, owner_subject, origin_project, request_id FROM failure_log`)
+        .all() as Array<{
+        sig_hash: string;
+        owner_subject: string | null;
+        origin_project: string | null;
+        request_id: string | null;
+      }>;
       expect(f).toEqual([{ sig_hash: 'abc', owner_subject: null, origin_project: null, request_id: null }]);
       expect(tableExists(db, 'session_owners')).toBe(true);
       for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) expect(indexSql(db, idx)).toBeDefined();
@@ -125,7 +174,9 @@ describe('schema v54', () => {
       expect(tableExists(db, 'failure_log')).toBe(false);
       expect(tableColumns(db, 'compactions').has('request_id')).toBe(true);
       expect(indexSql(db, REQUEST_INDEXES.compactions)).toBeDefined();
-      for (const t of ['task_snapshots', 'session_handoffs']) expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
+      for (const t of ['task_snapshots', 'session_handoffs']) {
+        expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
+      }
       expect(tableExists(db, 'session_owners')).toBe(true);
     });
   });
@@ -151,7 +202,9 @@ describe('schema v54', () => {
   });
 
   it('REQUIRED_SCHEMA_OBJECTS names session_owners, both owner indexes and both request indexes', () => {
-    expect(REQUIRED_SCHEMA_OBJECTS).toEqual(expect.arrayContaining(['session_owners', ...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]));
+    expect(REQUIRED_SCHEMA_OBJECTS).toEqual(
+      expect.arrayContaining(['session_owners', ...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]),
+    );
   });
 
   it('a stamped store that lost its request indexes gets them back on the next open', () => {
@@ -161,7 +214,9 @@ describe('schema v54', () => {
     reproveStoreSchema(home); // the drop stands for another process's
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      for (const idx of Object.values(REQUEST_INDEXES)) expect(indexSql(db, idx)).toMatch(/UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/);
+      for (const idx of Object.values(REQUEST_INDEXES)) {
+        expect(indexSql(db, idx)).toMatch(/UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/);
+      }
     });
   });
 });

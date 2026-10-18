@@ -57,9 +57,22 @@ export function turn(role: 'user' | 'assistant', text: string, hasAnswer?: boole
  *  session). 4+3+3 = 10 turns. Exactly 1 gold turn (the last turn of the
  *  answer session). question_date = day 7 (one day after the newest session). */
 export function buildQuestionA() {
-  const s0 = [turn('user', 'A-s0-t0 alpha topic note'), turn('assistant', 'A-s0-t1 alpha topic reply'), turn('user', 'A-s0-t2 alpha topic follow-up'), turn('assistant', 'A-s0-t3 alpha topic wrap-up')];
-  const s1 = [turn('user', 'A-s1-t0 beta topic note'), turn('assistant', 'A-s1-t1 beta topic reply'), turn('user', 'A-s1-t2 beta topic follow-up')];
-  const s2 = [turn('user', 'A-s2-t0 gamma topic note', false), turn('assistant', 'A-s2-t1 gamma topic reply', false), turn('user', 'A-s2-t2 gamma topic answer', true)];
+  const s0 = [
+    turn('user', 'A-s0-t0 alpha topic note'),
+    turn('assistant', 'A-s0-t1 alpha topic reply'),
+    turn('user', 'A-s0-t2 alpha topic follow-up'),
+    turn('assistant', 'A-s0-t3 alpha topic wrap-up'),
+  ];
+  const s1 = [
+    turn('user', 'A-s1-t0 beta topic note'),
+    turn('assistant', 'A-s1-t1 beta topic reply'),
+    turn('user', 'A-s1-t2 beta topic follow-up'),
+  ];
+  const s2 = [
+    turn('user', 'A-s2-t0 gamma topic note', false),
+    turn('assistant', 'A-s2-t1 gamma topic reply', false),
+    turn('user', 'A-s2-t2 gamma topic answer', true),
+  ];
   return {
     question_id: 'fixture_q_a',
     question_type: 'single-session-user',
@@ -77,9 +90,22 @@ export function buildQuestionA() {
  *  Sessions at day 0, 3, 6 (day 6 = newest = answer session, ALL 4 turns
  *  gold). 3+3+4 = 10 turns. question_date = day 7. */
 export function buildQuestionB() {
-  const s0 = [turn('user', 'B-s0-t0 delta topic note'), turn('assistant', 'B-s0-t1 delta topic reply'), turn('user', 'B-s0-t2 delta topic follow-up')];
-  const s1 = [turn('user', 'B-s1-t0 epsilon topic note'), turn('assistant', 'B-s1-t1 epsilon topic reply'), turn('user', 'B-s1-t2 epsilon topic follow-up')];
-  const s2 = [turn('user', 'B-s2-t0 zeta topic note'), turn('assistant', 'B-s2-t1 zeta topic reply'), turn('user', 'B-s2-t2 zeta topic follow-up'), turn('assistant', 'B-s2-t3 zeta topic answer')];
+  const s0 = [
+    turn('user', 'B-s0-t0 delta topic note'),
+    turn('assistant', 'B-s0-t1 delta topic reply'),
+    turn('user', 'B-s0-t2 delta topic follow-up'),
+  ];
+  const s1 = [
+    turn('user', 'B-s1-t0 epsilon topic note'),
+    turn('assistant', 'B-s1-t1 epsilon topic reply'),
+    turn('user', 'B-s1-t2 epsilon topic follow-up'),
+  ];
+  const s2 = [
+    turn('user', 'B-s2-t0 zeta topic note'),
+    turn('assistant', 'B-s2-t1 zeta topic reply'),
+    turn('user', 'B-s2-t2 zeta topic follow-up'),
+    turn('assistant', 'B-s2-t3 zeta topic answer'),
+  ];
   return {
     question_id: 'fixture_q_b',
     question_type: 'multi-session',
@@ -99,8 +125,16 @@ export function buildQuestionB() {
  *  turn. T_eval must clamp to day(10), not day(7), so every memory's
  *  age_days >= 0 (the day-10 session's own memories: age == 0 exactly). */
 export function buildQuestionC() {
-  const s0 = [turn('user', 'C-s0-t0 eta topic note'), turn('assistant', 'C-s0-t1 eta topic reply'), turn('user', 'C-s0-t2 eta topic follow-up')];
-  const s1 = [turn('user', 'C-s1-t0 theta topic note', false), turn('assistant', 'C-s1-t1 theta topic reply', false), turn('user', 'C-s1-t2 theta topic answer', true)];
+  const s0 = [
+    turn('user', 'C-s0-t0 eta topic note'),
+    turn('assistant', 'C-s0-t1 eta topic reply'),
+    turn('user', 'C-s0-t2 eta topic follow-up'),
+  ];
+  const s1 = [
+    turn('user', 'C-s1-t0 theta topic note', false),
+    turn('assistant', 'C-s1-t1 theta topic reply', false),
+    turn('user', 'C-s1-t2 theta topic answer', true),
+  ];
   return {
     question_id: 'fixture_q_c',
     question_type: 'temporal-reasoning',

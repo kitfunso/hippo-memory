@@ -8,13 +8,21 @@ import { plural } from '../util/format.js';
  * The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them without a console spy.
  */
 export function sleepResultLines(result: api.SleepResult): string[] {
-  return [...sleepCountLines(result), ...(result.dryRun ? ['\n(dry run  - nothing ' +
-    'written)'] : []), ...sleepDedupeAndAuditLines(result), ...sleepShareAndGraphLines(result)];
+  return [
+    ...sleepCountLines(result),
+    ...(result.dryRun ? ['\n(dry run  - nothing ' + 'written)'] : []),
+    ...sleepDedupeAndAuditLines(result),
+    ...sleepShareAndGraphLines(result),
+  ];
 }
 
 function sleepCountLines(result: api.SleepResult): string[] {
-  const lines = [`Running consolidation${result.dryRun ? ' (dry ' +
-    'run)' : ''}...`, `\nResults:`, `   Active memories:  ${result.active}`, `   Removed (decayed): ${result.removed}`];
+  const lines = [
+    `Running consolidation${result.dryRun ? ' (dry ' + 'run)' : ''}...`,
+    `\nResults:`,
+    `   Active memories:  ${result.active}`,
+    `   Removed (decayed): ${result.removed}`,
+  ];
   // Only when dormant.enabled moved something, so every other render stays byte-identical.
   if (result.dormant !== undefined && result.dormant > 0) {
     lines.push(`   Kept dormant:      ${result.dormant}  (hippo dormant to list)`);
@@ -45,7 +53,7 @@ function sleepDedupeAndAuditLines(result: api.SleepResult): string[] {
     if (result.audit.errorsRemoved > 0) {
       lines.push(
         `\nAudit: ${result.dryRun ? 'would remove' : 'removed'} ${result.audit.errorsRemoved} junk memories (too ` +
-        `short/empty).`,
+          `short/empty).`,
       );
     }
     if (result.audit.warningCount > 0) {
@@ -66,15 +74,13 @@ function sleepShareAndGraphLines(result: api.SleepResult): string[] {
     // The secret veto is never silent.
     lines.push(
       `\nAuto-share: withheld ${result.secretSkipped} secret-flagged ` +
-      `${result.secretSkipped === 1 ? 'memory' : 'memories'} (secret veto).`,
+        `${result.secretSkipped === 1 ? 'memory' : 'memories'} (secret veto).`,
     );
   }
   if (result.ambient) lines.push(`\n${renderAmbientSummary(result.ambient)}`);
   if (result.graph && result.graph.tenants > 0) {
     const { tenants, entities, relations } = result.graph;
-    lines.push(
-      `\nGraph: rebuilt ${plural(tenants, 'tenant')} (${entities} entities, ${relations} relations).`,
-    );
+    lines.push(`\nGraph: rebuilt ${plural(tenants, 'tenant')} (${entities} entities, ${relations} relations).`);
   }
   return lines;
 }

@@ -7,11 +7,7 @@ const REPO = process.cwd();
 const SCRIPT = path.join(REPO, 'scripts', 'check-tests-pass.mjs');
 const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'prepublish-gate');
 
-function runGate(
-  fixture: string,
-  env: Record<string, string | undefined> = {},
-  extraArgs: string[] = [],
-) {
+function runGate(fixture: string, env: Record<string, string | undefined> = {}, extraArgs: string[] = []) {
   const r = spawnSync(process.execPath, [SCRIPT, '--root', path.join(FIXTURES, fixture), ...extraArgs], {
     cwd: REPO,
     encoding: 'utf-8',
@@ -110,7 +106,9 @@ describe('tests run the worktree CLI, never a PATH-resolved hippo', () => {
   test('no test or benchmark helper spawns a bare `hippo` command', () => {
     // benchmarks/ holds adapters the tests import, so it is scanned too (codex round 2).
     const offenders = ['tests', 'benchmarks']
-      .flatMap((dir) => readdirSync(path.join(REPO, dir), { recursive: true, encoding: 'utf-8' }).map((f) => path.join(dir, f)))
+      .flatMap((dir) =>
+        readdirSync(path.join(REPO, dir), { recursive: true, encoding: 'utf-8' }).map((f) => path.join(dir, f)),
+      )
       .filter((f) => /\.(ts|mjs|js)$/.test(f))
       .filter((f) => !AGENT_STANDINS.has(f))
       .filter((f) => /(exec|spawn)\w*\(\s*[`'"]hippo\b/.test(readFileSync(path.join(REPO, f), 'utf-8')));

@@ -30,7 +30,11 @@ function newRoot(): string {
 }
 
 function put(root: string, label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'default'): string {
-  const entry = { ...createMemory(`${label}: a plain note about the team`, { tenantId }), origin_project: 'proj', ...extra };
+  const entry = {
+    ...createMemory(`${label}: a plain note about the team`, { tenantId }),
+    origin_project: 'proj',
+    ...extra,
+  };
   writeEntry(root, entry);
   return entry.id;
 }
@@ -74,8 +78,15 @@ describe('detectChurnStale candidate read', () => {
     const order = loadAllEntries(root, 'default').map((e) => e.id);
     const inOrder = (ids: Set<string>): string[] => order.filter((id) => ids.has(id));
     for (const legacyName of [undefined, 'legacy', '']) {
-      const result = detectChurnStale(sqliteSyncStore(root).localFiles.learning, NO_REFS_REPO, { tenantId: 'default', projectName: 'proj', legacyName, dryRun: true });
-      expect(result.checked, `legacy ${legacyName}`).toBe(checked.size + (legacyName === 'legacy' ? legacyChecked.size : 0));
+      const result = detectChurnStale(sqliteSyncStore(root).localFiles.learning, NO_REFS_REPO, {
+        tenantId: 'default',
+        projectName: 'proj',
+        legacyName,
+        dryRun: true,
+      });
+      expect(result.checked, `legacy ${legacyName}`).toBe(
+        checked.size + (legacyName === 'legacy' ? legacyChecked.size : 0),
+      );
       expect(result.skippedPinned).toEqual(inOrder(pinned));
       expect(result.marked).toBe(0);
     }
@@ -86,7 +97,12 @@ describe('detectChurnStale candidate read', () => {
     for (let i = 0; i < 30; i++) put(root, `other ${i}`, { origin_project: 'other' });
     const pinned = put(root, 'pinned', { pinned: true });
     put(root, 'current');
-    const { result, statements, rowsRead } = recordStatements(() => detectChurnStale(sqliteSyncStore(root).localFiles.learning, NO_REFS_REPO, { tenantId: 'default', projectName: 'proj' }));
+    const { result, statements, rowsRead } = recordStatements(() =>
+      detectChurnStale(sqliteSyncStore(root).localFiles.learning, NO_REFS_REPO, {
+        tenantId: 'default',
+        projectName: 'proj',
+      }),
+    );
     expect(result.checked).toBe(1);
     expect(result.skippedPinned).toEqual([pinned]);
     expect(countMatching(statements, TENANT_READ)).toBe(0);

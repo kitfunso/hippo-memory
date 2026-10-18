@@ -3,8 +3,16 @@
 import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
 import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
 import {
-  bufferToFloat32, decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows, type HippoStore, type PhysicsParticle,
-  type RecallScopeFilter, type VectorCandidateSpec, type VectorReads, type VectorRow,
+  bufferToFloat32,
+  decodeVector,
+  EMBEDDING_MODEL_META_KEY,
+  rankVectorRows,
+  type HippoStore,
+  type PhysicsParticle,
+  type RecallScopeFilter,
+  type VectorCandidateSpec,
+  type VectorReads,
+  type VectorRow,
 } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
 
@@ -38,7 +46,9 @@ export function passesSpec(row: FilterRow, spec: VectorCandidateSpec): boolean {
   if (spec.tenantId !== undefined && row.tenant_id !== spec.tenantId) return false;
   if (row.kind === 'archived' || (!spec.includeSuperseded && row.superseded_by !== null)) return false;
   const origins: readonly string[] | undefined = spec.origin === undefined ? undefined : [spec.origin].flat();
-  if (origins !== undefined && row.origin_project !== '' && !origins.some((o) => o === row.origin_project)) return false;
+  if (origins !== undefined && row.origin_project !== '' && !origins.some((o) => o === row.origin_project)) {
+    return false;
+  }
   return passesScope(row.scope, spec.scope);
 }
 
@@ -58,26 +68,39 @@ export function inMemoryVectorStore(hippoRoot: string): InMemoryVectorStore {
   try {
     storedModel = getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null;
     // SAFETY: each SELECT names exactly the columns of the row type it is read as; node:sqlite returns BLOBs as Uint8Array.
-    vectorRows = db.prepare('SELECT memory_id AS id, vector FROM memory_vectors ORDER BY memory_id DESC').all() as typeof vectorRows;
+    vectorRows = db
+      .prepare('SELECT memory_id AS id, vector FROM memory_vectors ORDER BY memory_id DESC')
+      .all() as typeof vectorRows;
     // SAFETY: as above.
-    filterRows = db.prepare('SELECT id, tenant_id, kind, scope, superseded_by, origin_project FROM memories').all() as typeof filterRows;
+    filterRows = db
+      .prepare('SELECT id, tenant_id, kind, scope, superseded_by, origin_project FROM memories')
+      .all() as typeof filterRows;
     // SAFETY: as above.
-    physicsRows = db.prepare('SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation FROM memory_physics').all() as PhysicsRow[];
+    physicsRows = db
+      .prepare(
+        'SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation FROM memory_physics',
+      )
+      .all() as PhysicsRow[];
   } finally {
     closeHippoDb(db);
   }
   const vectors: VectorRow[] = vectorRows.map((r) => ({ id: r.id, vector: decodeVector(r.vector) }));
   const vectorById = new Map(vectors.map((r) => [r.id, r.vector]));
   const filters = new Map(filterRows.map((r) => [r.id, r]));
-  const particles = new Map(physicsRows.map((r): [string, PhysicsParticle] => [r.memory_id, {
-    memoryId: r.memory_id,
-    position: bufferToFloat32(r.position_blob),
-    velocity: bufferToFloat32(r.velocity_blob),
-    mass: r.mass,
-    charge: r.charge,
-    temperature: r.temperature,
-    lastSimulation: r.last_simulation,
-  }]));
+  const particles = new Map(
+    physicsRows.map((r): [string, PhysicsParticle] => [
+      r.memory_id,
+      {
+        memoryId: r.memory_id,
+        position: bufferToFloat32(r.position_blob),
+        velocity: bufferToFloat32(r.velocity_blob),
+        mass: r.mass,
+        charge: r.charge,
+        temperature: r.temperature,
+        lastSimulation: r.last_simulation,
+      },
+    ]),
+  );
   const port = portOnlyStore(hippoRoot);
   const calls: string[] = [];
   const store: InMemoryVectorStore['store'] = {
@@ -90,10 +113,12 @@ export function inMemoryVectorStore(hippoRoot: string): InMemoryVectorStore {
       },
       async storedVectors(ids) {
         calls.push('storedVectors');
-        return new Map(ids.flatMap((id): [string, number[]][] => {
-          const v = vectorById.get(id);
-          return v ? [[id, Array.from(v)]] : [];
-        }));
+        return new Map(
+          ids.flatMap((id): [string, number[]][] => {
+            const v = vectorById.get(id);
+            return v ? [[id, Array.from(v)]] : [];
+          }),
+        );
       },
       async nearestEntries(queryVector, spec) {
         calls.push('nearestEntries');
@@ -102,15 +127,24 @@ export function inMemoryVectorStore(hippoRoot: string): InMemoryVectorStore {
           return row !== undefined && passesSpec(row, spec);
         });
         const matches = rankVectorRows(queryVector, admitted, spec.limit ?? 50);
-        const rows = new Map((await port.entriesByIds(matches.map((m) => m.id), spec.tenantId)).map((e) => [e.id, e]));
+        const rows = new Map(
+          (
+            await port.entriesByIds(
+              matches.map((m) => m.id),
+              spec.tenantId,
+            )
+          ).map((e) => [e.id, e]),
+        );
         return matches.flatMap((m) => rows.get(m.id) ?? []);
       },
       async physicsParticles(ids) {
         calls.push('physicsParticles');
-        return new Map(ids.flatMap((id): [string, PhysicsParticle][] => {
-          const p = particles.get(id);
-          return p ? [[id, p]] : [];
-        }));
+        return new Map(
+          ids.flatMap((id): [string, PhysicsParticle][] => {
+            const p = particles.get(id);
+            return p ? [[id, p]] : [];
+          }),
+        );
       },
     },
   };

@@ -29,7 +29,13 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'hippo-vgate-'));
   mkdirSync(join(root, 'extensions', 'openclaw-plugin'), { recursive: true });
   mkdirSync(join(root, 'src', 'util'), { recursive: true });
-  for (const path of ['package.json', 'openclaw.plugin.json', 'extensions/openclaw-plugin/package.json', 'extensions/openclaw-plugin/openclaw.plugin.json', 'server.json']) {
+  for (const path of [
+    'package.json',
+    'openclaw.plugin.json',
+    'extensions/openclaw-plugin/package.json',
+    'extensions/openclaw-plugin/openclaw.plugin.json',
+    'server.json',
+  ]) {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
   }
   writeFileSync(join(root, 'src', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
@@ -39,7 +45,10 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
     const lock: LockFixture = {
       name: 'fixture',
       lockfileVersion: 3,
-      packages: { '': { name: 'fixture', version: overrides.lockRootVersion ?? version }, 'node_modules/left-pad': { version: '1.3.0' } },
+      packages: {
+        '': { name: 'fixture', version: overrides.lockRootVersion ?? version },
+        'node_modules/left-pad': { version: '1.3.0' },
+      },
     };
     if (overrides.lockVersion !== null) lock.version = overrides.lockVersion ?? version;
     writeFileSync(join(root, 'package-lock.json'), JSON.stringify(lock));

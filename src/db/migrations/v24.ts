@@ -58,35 +58,35 @@ const CREATE_TABLE_GITHUB_REPOSITORIES_SQL = `
       `;
 
 export const v24: Migration = {
-    version: 24,
-    up: (db) => {
-      // GitHub connector schema.
-      // Six tables + a min_compatible_binary meta row for rollback safety.
+  version: 24,
+  up: (db) => {
+    // GitHub connector schema.
+    // Six tables + a min_compatible_binary meta row for rollback safety.
 
-      db.exec(CREATE_TABLE_GITHUB_EVENT_LOG_SQL);
-      db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_github_event_log_memory ` +
-          `ON github_event_log(memory_id) WHERE memory_id IS NOT NULL`,
-      );
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_github_event_log_delivery ON github_event_log(delivery_id)`);
+    db.exec(CREATE_TABLE_GITHUB_EVENT_LOG_SQL);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_github_event_log_memory ` +
+        `ON github_event_log(memory_id) WHERE memory_id IS NOT NULL`,
+    );
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_github_event_log_delivery ON github_event_log(delivery_id)`);
 
-      db.exec(CREATE_TABLE_GITHUB_CURSORS_SQL);
+    db.exec(CREATE_TABLE_GITHUB_CURSORS_SQL);
 
-      db.exec(CREATE_TABLE_GITHUB_DLQ_SQL);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_github_dlq_tenant_received ON github_dlq(tenant_id, received_at)`);
+    db.exec(CREATE_TABLE_GITHUB_DLQ_SQL);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_github_dlq_tenant_received ON github_dlq(tenant_id, received_at)`);
 
-      db.exec(CREATE_TABLE_GITHUB_INSTALLATIONS_SQL);
+    db.exec(CREATE_TABLE_GITHUB_INSTALLATIONS_SQL);
 
-      // PAT-mode multi-tenant routing: maps repo_full_name to a tenant when the webhook envelope has no `installation`
-      // field.
-      // Composite PK so one repo can be visible to several tenants; the collision is on the (repo, tenant) pair.
-      db.exec(CREATE_TABLE_GITHUB_REPOSITORIES_SQL);
+    // PAT-mode multi-tenant routing: maps repo_full_name to a tenant when the webhook envelope has no `installation`
+    // field.
+    // Composite PK so one repo can be visible to several tenants; the collision is on the (repo, tenant) pair.
+    db.exec(CREATE_TABLE_GITHUB_REPOSITORIES_SQL);
 
-      // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak
-      // github:private:* rows; the startup guard refuses a DB whose min_compatible_binary is newer.
-      db.prepare(
-        `INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ` +
-          `ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-      ).run('1.2.1');
-    },
+    // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak
+    // github:private:* rows; the startup guard refuses a DB whose min_compatible_binary is newer.
+    db.prepare(
+      `INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ` +
+        `ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+    ).run('1.2.1');
+  },
 };

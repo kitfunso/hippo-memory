@@ -1,21 +1,21 @@
 import type { Migration } from './types.js';
 
 export const v17: Migration = {
-    version: 17,
-    up: (db) => {
-      // Slack ingestion: idempotency log, per-channel backfill cursors, DLQ.
-      db.exec(`
+  version: 17,
+  up: (db) => {
+    // Slack ingestion: idempotency log, per-channel backfill cursors, DLQ.
+    db.exec(`
         CREATE TABLE IF NOT EXISTS slack_event_log (
           event_id TEXT PRIMARY KEY,
           ingested_at TEXT NOT NULL,
           memory_id TEXT
         )
       `);
-      db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_slack_event_log_memory ` +
-          `ON slack_event_log(memory_id) WHERE memory_id IS NOT NULL`,
-      );
-      db.exec(`
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_slack_event_log_memory ` +
+        `ON slack_event_log(memory_id) WHERE memory_id IS NOT NULL`,
+    );
+    db.exec(`
         CREATE TABLE IF NOT EXISTS slack_cursors (
           tenant_id TEXT NOT NULL,
           channel_id TEXT NOT NULL,
@@ -24,7 +24,7 @@ export const v17: Migration = {
           PRIMARY KEY (tenant_id, channel_id)
         )
       `);
-      db.exec(`
+    db.exec(`
         CREATE TABLE IF NOT EXISTS slack_dlq (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           tenant_id TEXT NOT NULL,
@@ -34,15 +34,15 @@ export const v17: Migration = {
           retried_at TEXT
         )
       `);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_slack_dlq_tenant_received ON slack_dlq(tenant_id, received_at)`);
-      // Multi-tenant routing seam, empty by default: single-tenant deployments resolve via the HIPPO_TENANT fallback;
-      // multi-workspace deployments populate it to map team_id -> tenant_id.
-      db.exec(`
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_slack_dlq_tenant_received ON slack_dlq(tenant_id, received_at)`);
+    // Multi-tenant routing seam, empty by default: single-tenant deployments resolve via the HIPPO_TENANT fallback;
+    // multi-workspace deployments populate it to map team_id -> tenant_id.
+    db.exec(`
         CREATE TABLE IF NOT EXISTS slack_workspaces (
           team_id TEXT PRIMARY KEY,
           tenant_id TEXT NOT NULL,
           added_at TEXT NOT NULL
         )
       `);
-    },
+  },
 };

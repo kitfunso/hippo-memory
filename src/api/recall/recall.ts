@@ -21,7 +21,10 @@ import { classifyOriginProject, projectNames } from '../../core/project-identity
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import {
-  passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf, recallScopeFilter,
+  passesScopeFilterForRecall,
+  assertScopeRequestAllowed,
+  personalScopeOf,
+  recallScopeFilter,
 } from '../../core/recall-scope.js';
 import type {
   RecallSuppressionSummary,
@@ -118,7 +121,15 @@ async function retrieveBand(
   const reads = await readRecall(ctx, store, bandOpts, plan, band.goals);
   const composed = composeRecall(ctx, bandOpts, { windowSize, all: band.all, plan, reads, auditBand: !band.wide });
   if (band.wide) await finishShownRecall(ctx, store, opts, band.wide, composed);
-  else await finishBandRecall(ctx, store, opts, composed.writes, composed.result.results.map((r) => r.id));
+  else {
+    await finishBandRecall(
+      ctx,
+      store,
+      opts,
+      composed.writes,
+      composed.result.results.map((r) => r.id),
+    );
+  }
   return composed.result;
 }
 
@@ -284,12 +295,7 @@ function withVectorCandidates(pool: MemoryEntry[], ranked: RankedResults): Memor
   return [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
 }
 
-function shownAuditAndTrace(
-  ctx: Context,
-  opts: RecallOptions,
-  shownIds: readonly string[],
-  ranked: RankedResults,
-) {
+function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonly string[], ranked: RankedResults) {
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
   const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shownIds.length));
   const trace = opts.trace?.suppressRecallTrace
@@ -310,11 +316,7 @@ function recallWindowSize(window: RecallWindowOptions = {}): number {
   // Throw before loadSearchEntries, which runs initStore and migrates legacy state on first call.
   // The consumer site at `if (freshTailCount > 0)` does NOT re-validate.
   const freshTailCountPreflight = window.freshTailCount ?? 0;
-  if (
-    freshTailCountPreflight > 0 &&
-    !window.freshTailSessionId &&
-    envRequireSessionScopedFreshTail()
-  ) {
+  if (freshTailCountPreflight > 0 && !window.freshTailSessionId && envRequireSessionScopedFreshTail()) {
     throw new RecallContractError(
       'fresh_tail_requires_session_id',
       'fresh-tail requires a session id when HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1; ' +
@@ -324,11 +326,7 @@ function recallWindowSize(window: RecallWindowOptions = {}): number {
   // Undefined keeps the store default: defaulting to `limit` would shrink the pool and kill overflow summaries.
   // 0 would reach FTS/LIKE LIMIT 0 and then an uncapped full-store fallback, so non-positive values throw.
   if (scorerWindow !== undefined) {
-    if (
-      !Number.isFinite(scorerWindow) ||
-      !Number.isInteger(scorerWindow) ||
-      scorerWindow < 1
-    ) {
+    if (!Number.isFinite(scorerWindow) || !Number.isInteger(scorerWindow) || scorerWindow < 1) {
       throw new RecallContractError(
         'invalid_scorer_window',
         `scorerWindow must be a positive integer; got ${scorerWindow}`,
@@ -719,26 +717,22 @@ function recallTrace(ctx: Context, opts: RecallOptions, rankedOut: RecallResultI
 
 // The memory-recall scope rule: an explicit scope must match exactly; without one, private and legacy rows are denied.
 function scopeContinuity(block: ContinuityBlock, scope: string | undefined, own: string | undefined): ContinuityBlock {
-  const rowScope = (
-    r: { scope?: string | null } | null | undefined,
-  ): string | null => r?.scope ?? null;
+  const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
   const { activeSnapshot: snapshot, sessionHandoff } = block;
   return {
     activeSnapshot: snapshot && passesScopeFilterForRecall(rowScope(snapshot), scope, own) ? snapshot : null,
     sessionHandoff:
       sessionHandoff && passesScopeFilterForRecall(rowScope(sessionHandoff), scope, own) ? sessionHandoff : null,
-    recentSessionEvents: block.recentSessionEvents.filter((e) =>
-      passesScopeFilterForRecall(rowScope(e), scope, own),
-    ),
+    recentSessionEvents: block.recentSessionEvents.filter((e) => passesScopeFilterForRecall(rowScope(e), scope, own)),
   };
 }
 
 function continuityTokensOf(c: ContinuityBlock): number {
   const filteredSnapshot = c.activeSnapshot;
   const filteredHandoff = c.sessionHandoff;
-  const tokenCount = (s?: string | null): number =>
-    s ? estimateTokens(s) : 0;
-  return tokenCount(filteredSnapshot?.task) +
+  const tokenCount = (s?: string | null): number => (s ? estimateTokens(s) : 0);
+  return (
+    tokenCount(filteredSnapshot?.task) +
     tokenCount(filteredSnapshot?.summary) +
     tokenCount(filteredSnapshot?.next_step) +
     tokenCount(filteredHandoff?.summary) +
@@ -749,7 +743,8 @@ function continuityTokensOf(c: ContinuityBlock): number {
     tokenCount(filteredHandoff?.outcome) +
     tokenCount(filteredHandoff?.targetRuntime) +
     tokenCount(filteredHandoff?.cardId) +
-    c.recentSessionEvents.reduce((acc, e) => acc + tokenCount(e.content), 0);
+    c.recentSessionEvents.reduce((acc, e) => acc + tokenCount(e.content), 0)
+  );
 }
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect
@@ -775,4 +770,3 @@ function detectRecallAvailability(
     pool: entries.map((e) => ({ id: e.id, created: e.created })),
   });
 }
-

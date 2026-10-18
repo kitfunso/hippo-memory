@@ -54,9 +54,13 @@ export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): S
   const local = requireGroup(ctx.store, 'localFiles');
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.
-  const held = local.captures.textsHolding(ctx.tenantId, items.map((i) => longestWord(i.content)), {
-    project: projectNames(req.project),
-  });
+  const held = local.captures.textsHolding(
+    ctx.tenantId,
+    items.map((i) => longestWord(i.content)),
+    {
+      project: projectNames(req.project),
+    },
+  );
   const tally = captureExtractedItems(
     { root: ctx.hippoRoot, files: local, config: ctx.config },
     {

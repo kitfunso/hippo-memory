@@ -18,7 +18,8 @@ export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   // SAFETY: row's shape matches the single `name` column named in the
   // SELECT above.
   const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
-    { name?: string } | undefined;
+    | { name?: string }
+    | undefined;
   return !!row?.name;
 }
 
@@ -39,7 +40,8 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
   try {
     // SAFETY: COUNT(*) returns one row with one numeric column.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as
-      { n: number } | undefined;
+      | { n: number }
+      | undefined;
     return Number(row?.n ?? 0);
   } catch (err) {
     // Callers treat an uncountable table as unknown; the bundle and doctor still finish.

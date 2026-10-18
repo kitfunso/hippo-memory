@@ -3,8 +3,14 @@
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  COMPACTION_ITEM_MAX_CHARS, COMPACTION_ITEM_ROW_CAP, collectSessionTurns, compactSummaryBody, parseCompactionItems,
-  scrubForSharing, sessionTail, type SessionTurn,
+  COMPACTION_ITEM_MAX_CHARS,
+  COMPACTION_ITEM_ROW_CAP,
+  collectSessionTurns,
+  compactSummaryBody,
+  parseCompactionItems,
+  scrubForSharing,
+  sessionTail,
+  type SessionTurn,
 } from '../../src/entry/session-text.js';
 
 describe('hippo-memory/session-text entry types', () => {

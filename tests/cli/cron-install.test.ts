@@ -54,7 +54,11 @@ describe.skipIf(process.platform === 'win32')('hippo init installs the daily run
   }
 
   const calls = (): string[] => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean) : []);
-  const markerLines = (): string[] => fs.readFileSync(state, 'utf8').split('\n').filter((l) => l.includes(MARKER));
+  const markerLines = (): string[] =>
+    fs
+      .readFileSync(state, 'utf8')
+      .split('\n')
+      .filter((l) => l.includes(MARKER));
 
   it('writes one marked line, keeps an unrelated line, and adds nothing on a second run', () => {
     fs.writeFileSync(state, '0 1 * * * /usr/bin/true # unrelated\n');

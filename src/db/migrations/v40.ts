@@ -49,12 +49,12 @@ const RECALL_TRACES_SCHEMA_SQL = `
       `;
 
 export const v40: Migration = {
-    version: 40,
-    up: (db) => {
-      // Retrieval-trace persistence: one trace row per recall, a WITHOUT ROWID results table, append-only outcomes
-      // (audit_log pruning must not erase them).
-      // No min_compatible_binary bump on purpose: old binaries ignore these tables and recordTraceOutcome re-validates
-      // trace ids; a bump would lock them out.
-      db.exec(RECALL_TRACES_SCHEMA_SQL);
-    },
+  version: 40,
+  up: (db) => {
+    // Retrieval-trace persistence: one trace row per recall, a WITHOUT ROWID results table, append-only outcomes
+    // (audit_log pruning must not erase them).
+    // No min_compatible_binary bump on purpose: old binaries ignore these tables and recordTraceOutcome re-validates
+    // trace ids; a bump would lock them out.
+    db.exec(RECALL_TRACES_SCHEMA_SQL);
+  },
 };

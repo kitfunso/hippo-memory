@@ -18,7 +18,8 @@ export function groupFlush(
 ): FlushComponent[] {
   const find = unionFind(units);
   const byRoot = new Map<
-    string, { refreshes: StrengthRefresh[]; writes: MemoryEntry[]; deletes: string[]; dormant: DormantMove[] }
+    string,
+    { refreshes: StrengthRefresh[]; writes: MemoryEntry[]; deletes: string[]; dormant: DormantMove[] }
   >();
   const componentOf = (id: string) => {
     const root = find(id);

@@ -6,8 +6,14 @@
  * docs/ARCHITECTURE.md#srccoreablationts. */
 
 import {
-  envAblateDecay, envAblateOutcome, envAblateOutcomeFast, envAblateOutcomeSlow, envAblateRecallBoost, envAblateRecency,
-  envEvalRecencyDays, envFakeNowMs,
+  envAblateDecay,
+  envAblateOutcome,
+  envAblateOutcomeFast,
+  envAblateOutcomeSlow,
+  envAblateRecallBoost,
+  envAblateRecency,
+  envEvalRecencyDays,
+  envFakeNowMs,
 } from '../util/env.js';
 
 interface AblationFlags {

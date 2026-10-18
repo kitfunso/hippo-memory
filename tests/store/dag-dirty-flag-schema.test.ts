@@ -39,7 +39,11 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('migration v28 is idempotent: each column once, schema version unchanged, a written value survives a reopen', () => {
-    const summary = createMemory('idempotency summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('idempotency summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     const columns = ['summary_dirty', 'last_rebuilt_at', 'rebuild_count', 'dag_level_3_built_at'];
     const inspect = () => {
@@ -70,14 +74,18 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('backfill leaves rows clean (summary_dirty=0, rebuild_count=0, NULL timestamps)', () => {
-    const summary = createMemory('test summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('test summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     const db = openHippoDb(hippoRoot);
     // SAFETY: the SELECT list above names exactly these four columns, so
     // every returned row has this shape.
-    const row = db.prepare(
-      `SELECT summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at FROM memories WHERE id = ?`,
-    ).get(summary.id) as {
+    const row = db
+      .prepare(`SELECT summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at FROM memories WHERE id = ?`)
+      .get(summary.id) as {
       summary_dirty: number;
       last_rebuilt_at: string | null;
       rebuild_count: number;
@@ -94,8 +102,16 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     // Seed 2 summaries in different tenants. createMemory defaults
     // tenantId to 'default'; manually rewrite the second to 'tenant2'
     // via SQL — keeps the test self-contained without env shenanigans.
-    const summaryA = createMemory('summary A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
-    const summaryB = createMemory('summary B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summaryA = createMemory('summary A', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
+    const summaryB = createMemory('summary B', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summaryA);
     writeEntry(hippoRoot, summaryB);
     const db = openHippoDb(hippoRoot);
@@ -107,14 +123,18 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('markSummaryDirtyInTx is idempotent (second call writes no audit row + summary_dirty stays 1)', () => {
-    const summary = createMemory('idempotent test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('idempotent test', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     markDirty(hippoRoot, summary.id, 'default', 'actor');
     markDirty(hippoRoot, summary.id, 'default', 'actor');
     const db = openHippoDb(hippoRoot);
-    const auditRows = db.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).all(summary.id);
+    const auditRows = db
+      .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+      .all(summary.id);
     // SAFETY: `SELECT summary_dirty` names exactly this one numeric column.
     const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(summary.id) as {
       summary_dirty: number;
@@ -125,14 +145,16 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('markSummaryDirtyInTx no-ops on non-summary rows (dag_level !== 2)', () => {
-    const leaf = createMemory('a leaf', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 1 });
+    const leaf = createMemory('a leaf', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 1,
+    });
     writeEntry(hippoRoot, leaf);
     markDirty(hippoRoot, leaf.id, 'default', 'actor');
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
-    const auditRows = db.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`,
-    ).all();
+    const auditRows = db.prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`).all();
     db.close();
     expect(auditRows).toEqual([]);
   });
@@ -141,9 +163,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     markDirty(hippoRoot, 'sem_does_not_exist', 'default', 'actor');
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
-    const auditRows = db.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`,
-    ).all();
+    const auditRows = db.prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`).all();
     db.close();
     expect(auditRows).toEqual([]);
   });
@@ -155,7 +175,11 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     // Independent-review-critic MED: without this test, dropping the
     // tenant_id clause from markSummaryDirtyInTx's UPDATE would pass all
     // prior 7 cases.
-    const summaryB = createMemory('cross-tenant target', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summaryB = createMemory('cross-tenant target', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summaryB);
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
@@ -166,9 +190,9 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(dirtyFor(hippoRoot, 'tenant2')).toEqual([]);
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db2 = openHippoDb(hippoRoot);
-    const auditRows = db2.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).all(summaryB.id);
+    const auditRows = db2
+      .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+      .all(summaryB.id);
     db2.close();
     expect(auditRows).toEqual([]);
   });
@@ -178,7 +202,11 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     // is useless without VALID_AUDIT_OPS Set extensions in BOTH cli.ts +
     // server.ts. This test exercises the queryAuditEvents path that both
     // downstream sites consume.
-    const summary = createMemory('audit round-trip', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('audit round-trip', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     markDirty(hippoRoot, summary.id, 'default', 'test-actor');
     const db = openHippoDb(hippoRoot);

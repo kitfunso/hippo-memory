@@ -21,14 +21,31 @@ const BASE_ENV: NodeJS.ProcessEnv = { ...process.env };
 delete BASE_ENV.HIPPO_SESSION_ID;
 delete BASE_ENV.CLAUDE_CODE_SESSION_ID;
 
-interface Payload { session_id: string; prompt?: string; hook_event_name?: string; source?: string; agent_id?: string }
-interface ArmRow { session_id: string; tenant_id: string; surface: string; event: string; items: number; tokens: number; block_hash: string }
+interface Payload {
+  session_id: string;
+  prompt?: string;
+  hook_event_name?: string;
+  source?: string;
+  agent_id?: string;
+}
+interface ArmRow {
+  session_id: string;
+  tenant_id: string;
+  surface: string;
+  event: string;
+  items: number;
+  tokens: number;
+  block_hash: string;
+}
 
 let tmp: string;
 let proj: string;
 const store = (dir: string): string => path.join(dir, '.hippo');
 
-interface Config { pinnedInject: { promptRecall: boolean }; pilot?: { holdoutRateBp: number } }
+interface Config {
+  pinnedInject: { promptRecall: boolean };
+  pilot?: { holdoutRateBp: number };
+}
 
 function setRate(rate: number | null, dir = store(proj)): void {
   const config: Config = { pinnedInject: { promptRecall: false } };
@@ -41,16 +58,32 @@ function env(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 }
 
 // In process unless `spawned`: the holdout case and the concurrent pair run real children, the rest read rows and bytes.
-async function run(args: string[], payload: Payload | null, dir = proj, extra: NodeJS.ProcessEnv = {}, spawned = false): Promise<{ status: number | null; stdout: string; stderr: string }> {
+async function run(
+  args: string[],
+  payload: Payload | null,
+  dir = proj,
+  extra: NodeJS.ProcessEnv = {},
+  spawned = false,
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
   const opts = { cwd: dir, env: env(extra), input: payload === null ? '' : JSON.stringify(payload) };
   return spawned ? hippoRun(args, opts) : runCliAs(args, opts);
 }
 
 function snapshotFor(sessionId: string): void {
-  saveActiveTaskSnapshot(store(proj), 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: sessionId });
+  saveActiveTaskSnapshot(store(proj), 'default', {
+    task: 'ship',
+    summary: 'half done',
+    next_step: 'run tests',
+    session_id: sessionId,
+  });
 }
 
-const prompt = (sessionId: string, extra: Partial<Payload> = {}): Payload => ({ session_id: sessionId, prompt: 'hi', hook_event_name: 'UserPromptSubmit', ...extra });
+const prompt = (sessionId: string, extra: Partial<Payload> = {}): Payload => ({
+  session_id: sessionId,
+  prompt: 'hi',
+  hook_event_name: 'UserPromptSubmit',
+  ...extra,
+});
 
 function ledger<T>(root: string, sql: string): T[] {
   const db = openHippoDb(root);
@@ -62,7 +95,10 @@ function ledger<T>(root: string, sql: string): T[] {
   }
 }
 const arms = (root = store(proj)): ArmRow[] =>
-  ledger<ArmRow>(root, `SELECT session_id, tenant_id, surface, event, items, tokens, block_hash FROM token_ledger WHERE event = 'arm' ORDER BY id`);
+  ledger<ArmRow>(
+    root,
+    `SELECT session_id, tenant_id, surface, event, items, tokens, block_hash FROM token_ledger WHERE event = 'arm' ORDER BY id`,
+  );
 const injects = (root = store(proj)): number =>
   ledger<{ n: number }>(root, `SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'inject'`)[0].n;
 
@@ -85,7 +121,17 @@ describe('the per-prompt hook', () => {
     const r = await run(HOOK_ARGS, prompt('h1'), proj, {}, true);
     expect(r.status).toBe(0);
     expect(r.stdout).toBe('');
-    expect(arms()).toEqual([{ session_id: 'h1', tenant_id: 'default', surface: 'pilot', event: 'arm', items: 10000, tokens: 0, block_hash: 'holdout' }]);
+    expect(arms()).toEqual([
+      {
+        session_id: 'h1',
+        tenant_id: 'default',
+        surface: 'pilot',
+        event: 'arm',
+        items: 10000,
+        tokens: 0,
+        block_hash: 'holdout',
+      },
+    ]);
     expect(injects()).toBe(0);
   });
 
@@ -191,21 +237,29 @@ describe('the per-prompt hook', () => {
     expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toBe('');
     snapshotFor('  ');
     // At rate 10000 any hashed id is holdout, so printing proves the blank id never reached the gate.
-    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toContain('Restored after compaction');
+    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toContain(
+      'Restored after compaction',
+    );
     expect((await run(HOOK_ARGS, prompt('  '))).stdout).toContain('rollback plan');
     expect(arms()).toHaveLength(0);
   });
 
   it('two concurrent processes on a fresh session: one row, both print nothing', async () => {
-    const child = () => new Promise<{ code: number | null; out: string }>((resolve) => {
-      const c = spawn(process.execPath, [HIPPO_JS, ...HOOK_ARGS], { cwd: proj, env: env() });
-      let out = '';
-      c.stdout.on('data', (d) => { out += String(d); });
-      c.on('close', (code) => resolve({ code, out }));
-      c.stdin.end(JSON.stringify(prompt('race')));
-    });
+    const child = () =>
+      new Promise<{ code: number | null; out: string }>((resolve) => {
+        const c = spawn(process.execPath, [HIPPO_JS, ...HOOK_ARGS], { cwd: proj, env: env() });
+        let out = '';
+        c.stdout.on('data', (d) => {
+          out += String(d);
+        });
+        c.on('close', (code) => resolve({ code, out }));
+        c.stdin.end(JSON.stringify(prompt('race')));
+      });
     const results = await Promise.all([child(), child()]);
-    expect(results.map((r) => [r.code, r.out])).toEqual([[0, ''], [0, '']]);
+    expect(results.map((r) => [r.code, r.out])).toEqual([
+      [0, ''],
+      [0, ''],
+    ]);
     expect(arms()).toHaveLength(1);
   });
 
@@ -216,7 +270,12 @@ describe('the per-prompt hook', () => {
     fs.mkdirSync(globalRoot, { recursive: true });
     initStore(globalRoot);
     setRate(10000, globalRoot);
-    saveActiveTaskSnapshot(globalRoot, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'gs1' });
+    saveActiveTaskSnapshot(globalRoot, 'default', {
+      task: 'ship',
+      summary: 'half done',
+      next_step: 'run tests',
+      session_id: 'gs1',
+    });
     await run(HOOK_ARGS, prompt('gs1'), bare);
     expect(arms(globalRoot).map((a) => a.block_hash)).toEqual(['holdout']);
     expect((await run(['compact-resume'], { session_id: 'gs1', source: 'compact' }, bare)).stdout).toBe('');
@@ -225,7 +284,12 @@ describe('the per-prompt hook', () => {
 
 describe('compact-resume', () => {
   const snapshot = (sessionId: string): void => {
-    saveActiveTaskSnapshot(store(proj), 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: sessionId });
+    saveActiveTaskSnapshot(store(proj), 'default', {
+      task: 'ship',
+      summary: 'half done',
+      next_step: 'run tests',
+      session_id: sessionId,
+    });
   };
 
   it('prints nothing for a holdout session with a fresh snapshot and books no row', async () => {
@@ -241,12 +305,16 @@ describe('compact-resume', () => {
     setRate(5000);
     snapshot(id);
     await run(HOOK_ARGS, prompt(id));
-    expect((await run(['compact-resume'], { session_id: id, source: 'compact' })).stdout).toContain('Restored after compaction');
+    expect((await run(['compact-resume'], { session_id: id, source: 'compact' })).stdout).toContain(
+      'Restored after compaction',
+    );
   });
 
   it('prints as before at rate 0', async () => {
     setRate(0);
     snapshot('cr0');
-    expect((await run(['compact-resume'], { session_id: 'cr0', source: 'compact' })).stdout).toContain('Restored after compaction');
+    expect((await run(['compact-resume'], { session_id: 'cr0', source: 'compact' })).stdout).toContain(
+      'Restored after compaction',
+    );
   });
 });

@@ -3,7 +3,12 @@
 import { withSqliteAllowed } from '../../src/db/index.js';
 import { sqliteStore, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
 
-const OPTIONAL_GROUPS: ReadonlySet<string> = new Set<OptionalGroup>(['localFiles', 'vectorViews', 'readiness', 'lastRecall']);
+const OPTIONAL_GROUPS: ReadonlySet<string> = new Set<OptionalGroup>([
+  'localFiles',
+  'vectorViews',
+  'readiness',
+  'lastRecall',
+]);
 
 function allowed<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
   return (...args) => withSqliteAllowed(() => fn(...args));
@@ -35,6 +40,9 @@ export function portOnlyStore(hippoRoot: string): HippoStore {
   };
   const groups = Object.entries(inner).filter(([key]) => !(key in base) && !OPTIONAL_GROUPS.has(key));
   // SAFETY: what is left of sqliteStore's own keys is its required groups, each wrapped whole.
-  const required = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<StoreGroups, OptionalGroup>;
+  const required = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<
+    StoreGroups,
+    OptionalGroup
+  >;
   return { ...base, ...required };
 }

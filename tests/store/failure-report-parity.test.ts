@@ -45,8 +45,19 @@ const LONG_TAIL = 'only-in-the-untruncated-detail';
 const LONG_ERROR = `Exit code 2\n${'src/deep/module.ts(12,3): error TS2304: Cannot find name foo. '.repeat(8)}${LONG_TAIL}`;
 
 const PAYLOADS: Array<[string, JsonValue]> = [
-  ['a lesson', { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'cd src && npm run build' }, error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo' }],
-  ['an error past 200 chars', { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'npm run build' }, error: LONG_ERROR }],
+  [
+    'a lesson',
+    {
+      session_id: 's1',
+      tool_name: 'Bash',
+      tool_input: { command: 'cd src && npm run build' },
+      error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
+    },
+  ],
+  [
+    'an error past 200 chars',
+    { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'npm run build' }, error: LONG_ERROR },
+  ],
   ['a routine skip', { session_id: 's1', tool_name: 'Grep', error: 'No matches found for pattern foo' }],
   ['an interrupt', { session_id: 's1', tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true }],
   ['no tool name', { session_id: 's1', error: 'ENOENT: no such file or directory, open config.json' }],
@@ -76,7 +87,9 @@ describe('failureReport', () => {
   it('scrubs the text for sharing before it cuts it, so a mask longer than what it hides still fits in 200', async () => {
     const error = `mail to a@b.co and /root/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`;
     const report = failureReport({ tool_name: 'Bash', error });
-    expect(report.text).toBe(`Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(0, 200));
+    expect(report.text).toBe(
+      `Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(0, 200),
+    );
     // Only what leaves the machine is masked: the local reading and the detail hash are as before.
     expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toContain('a@b.co');
     await captureToolFailure(failureTarget(root), { tool_name: 'Bash', error });

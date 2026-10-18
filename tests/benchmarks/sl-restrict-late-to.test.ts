@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { hitRateByPhase, parseRestrictLateTo } from '../../benchmarks/sequential-learning/run.mjs';
 
 // Synthetic 25-trap result fixture. Hit pattern: alternate hit/miss for clarity.
-function buildTrapResults(hitPattern: boolean[]): Array<{trapCategory: string|null, trapHit: boolean}> {
+function buildTrapResults(hitPattern: boolean[]): Array<{ trapCategory: string | null; trapHit: boolean }> {
   return hitPattern.map((hit, i) => ({ trapCategory: 'cat_' + i, trapHit: hit }));
 }
 
@@ -19,9 +19,10 @@ describe('hitRateByPhase with restrictLateTo', () => {
   it('restrictLateTo=4 puts last 4 traps in late, first 11 in early, middle 10 in mid', () => {
     // Build pattern: first 11 all hit, middle 10 half hit, last 4 none hit.
     const pattern = [
-      ...Array(11).fill(true),  // early all hit -> 100%
-      ...Array(5).fill(true), ...Array(5).fill(false),  // mid 50%
-      ...Array(4).fill(false),  // late all miss -> 0%
+      ...Array(11).fill(true), // early all hit -> 100%
+      ...Array(5).fill(true),
+      ...Array(5).fill(false), // mid 50%
+      ...Array(4).fill(false), // late all miss -> 0%
     ];
     expect(pattern.length).toBe(25);
     const results = buildTrapResults(pattern);
@@ -33,9 +34,9 @@ describe('hitRateByPhase with restrictLateTo', () => {
 
   it('restrictLateTo=4 with all late traps hit returns late=1.0', () => {
     const pattern = [
-      ...Array(11).fill(false),  // early all miss
-      ...Array(10).fill(false),  // mid all miss
-      ...Array(4).fill(true),    // late all hit
+      ...Array(11).fill(false), // early all miss
+      ...Array(10).fill(false), // mid all miss
+      ...Array(4).fill(true), // late all hit
     ];
     const results = buildTrapResults(pattern);
     const phases = hitRateByPhase(results, 4);
@@ -54,7 +55,7 @@ describe('hitRateByPhase with restrictLateTo', () => {
     const results = buildTrapResults(Array(25).fill(true));
     const phases = hitRateByPhase(results, 30);
     expect(phases.late).toBe(1.0);
-    expect(phases.early).toBe(0);  // empty slice
+    expect(phases.early).toBe(0); // empty slice
     expect(phases.mid).toBe(0);
   });
 

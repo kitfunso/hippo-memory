@@ -83,9 +83,7 @@ describe('hippo recall --continuity', () => {
     expect(r.stdout).toContain('Session Handoff');
     expect(r.stdout).toContain('Recent Session');
     // Snapshot heading comes BEFORE the "Found N memories" line.
-    expect(r.stdout.indexOf('Active Task Snapshot')).toBeLessThan(
-      r.stdout.indexOf('Found'),
-    );
+    expect(r.stdout.indexOf('Active Task Snapshot')).toBeLessThan(r.stdout.indexOf('Found'));
   });
 
   it('does not include continuity when flag is absent (hot path)', async () => {

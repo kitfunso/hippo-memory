@@ -24,7 +24,9 @@ describe('typed-object id parser properties', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
-  afterEach(() => { vi.restoreAllMocks(); });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('an id written with padding and leading zeros comes back as that id', async () => {
     const pad = str(' \t\n', 0, 2);
@@ -83,7 +85,28 @@ function positionOrStatus(raw: string, key: Part, id: Part) {
 
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 // JSON a cursor could decode to: right pairs, wrong lengths, wrong part types, fractions, nesting and broken text.
-const JSON_TEXT = ['[1,2]', '["a",1]', '["a","b"]', '[1.5,2]', '[1,2.5]', '["",1]', '["a",""]', '[1]', '[1,2,3]', '[]', '{"key":1,"id":2}', 'null', '7', '"a"', '[null,1]', '[true,"a"]', '[[1],2]', '[1e400,1]', '[1,"a"', ''];
+const JSON_TEXT = [
+  '[1,2]',
+  '["a",1]',
+  '["a","b"]',
+  '[1.5,2]',
+  '[1,2.5]',
+  '["",1]',
+  '["a",""]',
+  '[1]',
+  '[1,2,3]',
+  '[]',
+  '{"key":1,"id":2}',
+  'null',
+  '7',
+  '"a"',
+  '[null,1]',
+  '[true,"a"]',
+  '[[1],2]',
+  '[1e400,1]',
+  '[1,"a"',
+  '',
+];
 const HOSTILE_CURSOR: Gen<string> = oneOf([
   map(pick(JSON_TEXT), (text) => Buffer.from(text).toString('base64url')),
   str(B64URL, 0, 40),
@@ -135,7 +158,8 @@ interface FlagDraw {
 }
 
 const VERBS: ReadonlyMap<string, VerbFlags> = new Map(Object.entries(COMMANDS).map(([verb, row]) => [verb, row.flags]));
-const declaredBy = (verb: VerbFlags): string[] => [verb.switches, verb.values, verb.numbers, verb.lists].flatMap((names) => names ?? []);
+const declaredBy = (verb: VerbFlags): string[] =>
+  [verb.switches, verb.values, verb.numbers, verb.lists].flatMap((names) => names ?? []);
 // A flag no verb declares parses as a value flag, and `help` belongs to the entry point.
 const NAMES = [...new Set([...[...VERBS.values()].flatMap(declaredBy), 'help', 'zz-unlisted'])];
 
@@ -145,7 +169,9 @@ function familyOn(verb: VerbFlags | undefined, name: string): Family {
 }
 
 // A verb that reads one of its flags unlike the other verbs with that name: a parse that ignored the verb would get it wrong.
-const OWN_KIND_VERBS = [...VERBS].filter(([, verb]) => declaredBy(verb).some((name) => familyOn(verb, name) !== familyOn(undefined, name))).map(([name]) => name);
+const OWN_KIND_VERBS = [...VERBS]
+  .filter(([, verb]) => declaredBy(verb).some((name) => familyOn(verb, name) !== familyOn(undefined, name)))
+  .map(([name]) => name);
 // A command the table lacks parses each flag by the kind its declaring verbs agree on.
 const UNLISTED_COMMANDS = ['', 'no-such-verb'];
 const COMMAND = oneOf([pick([...VERBS.keys(), ...UNLISTED_COMMANDS]), pick([...OWN_KIND_VERBS, ...UNLISTED_COMMANDS])]);
@@ -166,7 +192,13 @@ function itemOf({ family, form, value }: FlagDraw, key: string): Item {
 }
 
 function drawn(family: Family, form: Form, value: Gen<string>): Gen<FlagDraw> {
-  return map(both(both(pick([true, false]), int(0, 999)), value), ([[own, index], text]) => ({ family, own, index, form, value: text }));
+  return map(both(both(pick([true, false]), int(0, 999)), value), ([[own, index], text]) => ({
+    family,
+    own,
+    index,
+    form,
+    value: text,
+  }));
 }
 
 // A positional is never the literal a switch would take as its value, and neither it nor a separated value opens with two dashes.
@@ -189,9 +221,15 @@ const DRAW: Gen<Item | FlagDraw> = oneOf<Item | FlagDraw>([
 ]);
 
 // After a bare `--` every token is a positional, whatever it looks like.
-const TAIL: Gen<string[] | null> = oneOf<string[] | null>([just(null), arr(pick(['--pin', '-h', '--', 'x', '--tag=a', '']), 0, 4)]);
+const TAIL: Gen<string[] | null> = oneOf<string[] | null>([
+  just(null),
+  arr(pick(['--pin', '-h', '--', 'x', '--tag=a', '']), 0, 4),
+]);
 // A value flag with nothing after it, or with a flag after it, is set with no value.
-const BARE_LAST: Gen<FlagDraw[]> = oneOf<FlagDraw[]>([just([]), map(drawn('plain', 'bare', just('')), (draw) => [draw])]);
+const BARE_LAST: Gen<FlagDraw[]> = oneOf<FlagDraw[]>([
+  just([]),
+  map(drawn('plain', 'bare', just('')), (draw) => [draw]),
+]);
 
 function parseOf(items: readonly Item[]) {
   const args: string[] = [];
@@ -218,7 +256,11 @@ describe('parseArgs properties', () => {
       });
       const { args, flags } = parseOf(items);
       const typed = [...items.flatMap((item) => item.tokens), ...(tail === null ? [] : ['--', ...tail])];
-      expect(parseArgs(['node', 'hippo', command, ...typed])).toEqual({ command, args: [...args, ...(tail ?? [])], flags });
+      expect(parseArgs(['node', 'hippo', command, ...typed])).toEqual({
+        command,
+        args: [...args, ...(tail ?? [])],
+        flags,
+      });
     });
   });
 });

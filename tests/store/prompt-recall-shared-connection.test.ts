@@ -32,9 +32,12 @@ let globalRoot: string;
 let ctx: FullContext;
 
 function enablePromptRecall(root: string) {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
-    pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
-  }));
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({
+      pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -58,8 +61,14 @@ afterEach(() => {
 describe('prompt recall reuses the ambient load connection', () => {
   it('runs the pinned-ambient query and the FTS recall query on the same connection, local and global', async () => {
     enablePromptRecall(local);
-    writeEntry(local, { ...createMemory('the postgres migration script needs a rollback plan before deploy'), origin_project: PROJECT });
-    writeEntry(globalRoot, { ...createMemory('a global postgres migration note about the rollback plan'), origin_project: PROJECT });
+    writeEntry(local, {
+      ...createMemory('the postgres migration script needs a rollback plan before deploy'),
+      origin_project: PROJECT,
+    });
+    writeEntry(globalRoot, {
+      ...createMemory('a global postgres migration note about the rollback plan'),
+      origin_project: PROJECT,
+    });
 
     const calls: Array<{ conn: unknown; sql: string }> = [];
     const originalPrepare = DatabaseSync.prototype.prepare;

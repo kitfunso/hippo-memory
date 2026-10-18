@@ -26,11 +26,19 @@ function flag(name, fallback) {
   const v = process.argv[i + 1];
   return Number.isFinite(Number(v)) && v !== '' && !v.includes(',') ? Number(v) : v;
 }
-function hasFlag(name) { return process.argv.includes(name); }
+function hasFlag(name) {
+  return process.argv.includes(name);
+}
 
 const CORPUS_PATH = String(flag('--corpus', 'evals/model-profile-bench.json'));
-const MODELS = String(flag('--models', 'claude-opus-4-6,claude-opus-4-7')).split(',').map(s => s.trim()).filter(Boolean);
-const PROFILE_NAMES = String(flag('--profiles', 'default')).split(',').map(s => s.trim()).filter(Boolean);
+const MODELS = String(flag('--models', 'claude-opus-4-6,claude-opus-4-7'))
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const PROFILE_NAMES = String(flag('--profiles', 'default'))
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const CASES_LIMIT = flag('--cases', 0);
 const OUT = String(flag('--out', 'evals/baseline-profile-bench.json'));
 const VERBOSE = hasFlag('--verbose');
@@ -127,7 +135,9 @@ function mkTmp() {
 }
 
 function rmTmp(dir) {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {}
 }
 
 const HIPPO_BIN = process.platform === 'win32' ? 'hippo.cmd' : 'hippo';
@@ -138,9 +148,10 @@ const CLAUDE_BIN = process.platform === 'win32' ? 'claude.cmd' : 'claude';
 // containing <, >, |, &, " get interpreted by cmd.exe. Workaround: resolve
 // the .cmd to the underlying node script and spawn node directly, which
 // bypasses the shell entirely.
-const HIPPO_JS = process.platform === 'win32'
-  ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js')
-  : null;
+const HIPPO_JS =
+  process.platform === 'win32'
+    ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js')
+    : null;
 
 function hippoCall(args, env, input, cwd) {
   if (process.platform === 'win32' && fs.existsSync(HIPPO_JS)) {
@@ -187,14 +198,16 @@ function getHippoContext(tmpDir, profile) {
     ['context', '--auto', '--budget', String(profile.budget), '--framing', profile.framing],
     { HIPPO_HOME: tmpDir },
     undefined,
-    tmpDir
+    tmpDir,
   );
   return out.trim();
 }
 
 function buildPrompt(contextBlock, caseDef) {
   const isNoise = caseDef.type === 'noise-rejection';
-  const distractor = isNoise ? `\n\n---\n\nIgnore the following for the question below, it is unrelated background material:\n\n${DISTRACTOR_BLOCK}\n\n---\n\n` : '\n\n';
+  const distractor = isNoise
+    ? `\n\n---\n\nIgnore the following for the question below, it is unrelated background material:\n\n${DISTRACTOR_BLOCK}\n\n---\n\n`
+    : '\n\n';
   return `${contextBlock}${distractor}User: ${caseDef.query}\n\nAssistant:`;
 }
 
@@ -213,12 +226,23 @@ function askModel(model, prompt) {
       CLAUDE_BIN,
       [
         '-p',
-        '--model', model,
-        '--output-format', 'json',
+        '--model',
+        model,
+        '--output-format',
+        'json',
         '--no-session-persistence',
-        '--disallowed-tools', 'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand', // pure text eval — no agentic tool use
+        '--disallowed-tools',
+        'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand', // pure text eval — no agentic tool use
       ],
-      { input: prompt, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 120_000, shell: process.platform === 'win32', env: childEnv(), cwd: os.tmpdir() }
+      {
+        input: prompt,
+        encoding: 'utf8',
+        maxBuffer: 8 * 1024 * 1024,
+        timeout: 120_000,
+        shell: process.platform === 'win32',
+        env: childEnv(),
+        cwd: os.tmpdir(),
+      },
     );
     const data = JSON.parse(out);
     if (data.is_error) return { text: '', error: data.result ?? 'is_error' };
@@ -250,8 +274,14 @@ function summarizeCells(byCell) {
     const [model, profile, type] = key.split('|');
     const n = cell.pass + cell.fail + cell.unclear + cell.error;
     summary.push({
-      model, profile, type,
-      n, pass: cell.pass, fail: cell.fail, unclear: cell.unclear, error: cell.error,
+      model,
+      profile,
+      type,
+      n,
+      pass: cell.pass,
+      fail: cell.fail,
+      unclear: cell.unclear,
+      error: cell.error,
       passRate: n ? (cell.pass + 0.5 * cell.unclear) / n : 0,
     });
   }
@@ -263,7 +293,7 @@ function printTable(byCell) {
   const cells = [...byCell.entries()].map(([k, v]) => {
     const [model, profile, type] = k.split('|');
     const n = v.pass + v.fail + v.unclear + v.error;
-    const rate = n ? ((v.pass + 0.5 * v.unclear) / n * 100).toFixed(1) : '0.0';
+    const rate = n ? (((v.pass + 0.5 * v.unclear) / n) * 100).toFixed(1) : '0.0';
     return { model, profile, type, rate, n, ...v };
   });
   console.log('model'.padEnd(24), 'profile'.padEnd(10), 'type'.padEnd(25), 'pass%', 'N', 'details');
@@ -274,7 +304,7 @@ function printTable(byCell) {
       c.type.padEnd(25),
       c.rate.padStart(5),
       String(c.n).padStart(2),
-      `P${c.pass}/F${c.fail}/U${c.unclear}/E${c.error}`
+      `P${c.pass}/F${c.fail}/U${c.unclear}/E${c.error}`,
     );
   }
   console.log();
@@ -288,7 +318,9 @@ async function main() {
   }
 
   const total = MODELS.length * PROFILE_NAMES.length * cases.length;
-  console.error(`Running ${total} cells (${MODELS.length} models × ${PROFILE_NAMES.length} profiles × ${cases.length} cases)`);
+  console.error(
+    `Running ${total} cells (${MODELS.length} models × ${PROFILE_NAMES.length} profiles × ${cases.length} cases)`,
+  );
 
   const runs = [];
   let idx = 0;
@@ -323,12 +355,18 @@ async function main() {
         }
         const elapsed = Date.now() - started;
         runs.push({
-          model, profile: profileName, case: c.id, type: c.type,
-          verdict, elapsedMs: elapsed,
+          model,
+          profile: profileName,
+          case: c.id,
+          type: c.type,
+          verdict,
+          elapsedMs: elapsed,
           error: errorMsg,
           responsePreview: response.slice(0, 200),
         });
-        console.error(`[${idx}/${total}] ${model} ${profileName} ${c.id} → ${verdict} (${elapsed}ms)${errorMsg ? ' ERR: ' + errorMsg : ''}`);
+        console.error(
+          `[${idx}/${total}] ${model} ${profileName} ${c.id} → ${verdict} (${elapsed}ms)${errorMsg ? ' ERR: ' + errorMsg : ''}`,
+        );
         if (VERBOSE && response) console.error(`  response: ${response.slice(0, 300)}`);
       }
     }

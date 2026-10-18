@@ -60,7 +60,11 @@ class ContainerRun {
   private readonly items = new Map<string, MemoryItem>();
   private readonly tag: string;
 
-  constructor(private readonly s: StoreSession, private readonly tx: ContainerTx, private readonly w: ContainerWork) {
+  constructor(
+    private readonly s: StoreSession,
+    private readonly tx: ContainerTx,
+    private readonly w: ContainerWork,
+  ) {
     this.tag = w.tool.tag;
     for (const item of w.container.items) this.items.set(item.key, item);
   }
@@ -124,9 +128,7 @@ class ContainerRun {
     let moved = 0;
     for (const row of this.tx.liveBySourcePrefix(this.s.tenantId, old)) {
       const source = this.w.prefix + row.source.slice(old.length);
-      if (
-        this.tx.renameSourceAndOrigin(row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0
-      ) {
+      if (this.tx.renameSourceAndOrigin(row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0) {
         continue;
       }
       moved++;
@@ -135,8 +137,7 @@ class ContainerRun {
     this.tally.renamed += moved;
     if (
       moved === 0 &&
-      (this.w.container.items.length === 0 ||
-        this.tx.liveBySourcePrefix(this.s.tenantId, this.w.prefix).length > 0)
+      (this.w.container.items.length === 0 || this.tx.liveBySourcePrefix(this.s.tenantId, this.w.prefix).length > 0)
     ) {
       return;
     }
@@ -183,7 +184,8 @@ class ContainerRun {
   private dormantRows(liveKeys: ReadonlySet<string>, refusals: ReadonlyMap<string, Refusal>): DormantRow[] {
     const needed = this.w.container.items.some((item) => !refusals.has(item.key) && !liveKeys.has(item.key));
     if (!needed) return [];
-    return this.tx.dormantBySourcePrefix(this.s.tenantId, this.w.prefix)
+    return this.tx
+      .dormantBySourcePrefix(this.s.tenantId, this.w.prefix)
       .filter((snap) => !snap.entry.superseded_by)
       .map((snap) => ({
         id: snap.entry.id,

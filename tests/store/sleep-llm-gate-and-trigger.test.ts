@@ -26,7 +26,12 @@ function newRoot(configJson?: string): string {
 }
 
 function llmReturning(res: () => Response) {
-  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('real network call in a test'); }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new Error('real network call in a test');
+    }),
+  );
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
   return vi.fn<typeof fetch>(async () => res());
 }
@@ -76,7 +81,11 @@ describe('the sleep LLM gate', () => {
   });
 
   describe('a failing extraction call', () => {
-    const TOPICS = ['the release train leaves every second thursday', 'the staging cluster restarts at noon', 'invoices are exported as csv on fridays'];
+    const TOPICS = [
+      'the release train leaves every second thursday',
+      'the staging cluster restarts at noon',
+      'invoices are exported as csv on fridays',
+    ];
 
     function rootWithCandidates(): string {
       const root = newRoot();
@@ -87,7 +96,9 @@ describe('the sleep LLM gate', () => {
     it('stops the pass at the first one every later call would repeat, and says how many it skipped', async () => {
       const root = rootWithCandidates();
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const fetcher = llmReturning(() => new Response('{"type":"error","error":{"type":"authentication_error"}}', { status: 401 }));
+      const fetcher = llmReturning(
+        () => new Response('{"type":"error","error":{"type":"authentication_error"}}', { status: 401 }),
+      );
 
       const result = await consolidate(root, { fetcher });
 
@@ -100,7 +111,9 @@ describe('the sleep LLM gate', () => {
     it('keeps going past a rate limit, which the next call can clear', async () => {
       const root = rootWithCandidates();
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const fetcher = llmReturning(() => new Response('{"type":"error"}', { status: 429, headers: { 'retry-after': '0' } }));
+      const fetcher = llmReturning(
+        () => new Response('{"type":"error"}', { status: 429, headers: { 'retry-after': '0' } }),
+      );
 
       const result = await consolidate(root, { fetcher });
 

@@ -14,7 +14,13 @@ import { cliApiContext } from '../../src/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
 import { handoffText, snapshotText } from '../../src/api/context-render.js';
 import {
-  cliRecallOrigin, cliRecallReranker, cliRecallSetting, fitRecallRows, loadCliRecallContinuity, recallJsonRow, type CliRecallSetting,
+  cliRecallOrigin,
+  cliRecallReranker,
+  cliRecallSetting,
+  fitRecallRows,
+  loadCliRecallContinuity,
+  recallJsonRow,
+  type CliRecallSetting,
 } from '../../src/api/recall/rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -23,25 +29,70 @@ let hippoRoot: string;
 let globalRoot: string;
 
 const ctx = () => cliApiContext(hippoRoot, 'default');
-const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecallSetting => ({ globalRoot, primaryIsGlobal, activeScope });
+const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecallSetting => ({
+  globalRoot,
+  primaryIsGlobal,
+  activeScope,
+});
 
 async function rankDeploy() {
   const config = loadConfig(hippoRoot);
-  return rankRecall({ store: sqliteStore(hippoRoot), config, tenantId: 'default' }, {
-    query: 'deploy', budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
-    search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
-  });
+  return rankRecall(
+    { store: sqliteStore(hippoRoot), config, tenantId: 'default' },
+    {
+      query: 'deploy',
+      budget: 4000,
+      cost: (r) => r.tokens,
+      window: { limit: 10 },
+      includeSuperseded: false,
+      explicitScope: null,
+      activeScope: null,
+      search: {
+        usePhysics: false,
+        physicsConfig: config.physics,
+        multihop: false,
+        mmr: false,
+        mmrLambda: 0.7,
+        localBump: 1.2,
+        explain: false,
+      },
+    },
+  );
 }
 
 function seedContinuity(): void {
   saveActiveTaskSnapshot(hippoRoot, 'default', {
-    task: 'Route recall through the api', summary: 'Moving the store reads.', next_step: 'Run the tests.', session_id: 'sess-1', source: 'test',
+    task: 'Route recall through the api',
+    summary: 'Moving the store reads.',
+    next_step: 'Run the tests.',
+    session_id: 'sess-1',
+    source: 'test',
   });
-  saveSessionHandoff(hippoRoot, 'default', { version: 1, sessionId: 'sess-1', summary: 'Halfway.', nextAction: 'Pick up at the test file.' });
-  appendSessionEvent(hippoRoot, 'default', { session_id: 'sess-1', event_type: 'note', content: 'open trail event', source: 'test' });
-  appendSessionEvent(hippoRoot, 'default', { session_id: 'sess-1', event_type: 'note', content: 'team trail event', source: 'test', scope: 'team-a' });
+  saveSessionHandoff(hippoRoot, 'default', {
+    version: 1,
+    sessionId: 'sess-1',
+    summary: 'Halfway.',
+    nextAction: 'Pick up at the test file.',
+  });
   appendSessionEvent(hippoRoot, 'default', {
-    session_id: 'sess-1', event_type: 'note', content: 'private trail event', source: 'test', scope: 'slack:private:C1',
+    session_id: 'sess-1',
+    event_type: 'note',
+    content: 'open trail event',
+    source: 'test',
+  });
+  appendSessionEvent(hippoRoot, 'default', {
+    session_id: 'sess-1',
+    event_type: 'note',
+    content: 'team trail event',
+    source: 'test',
+    scope: 'team-a',
+  });
+  appendSessionEvent(hippoRoot, 'default', {
+    session_id: 'sess-1',
+    event_type: 'note',
+    content: 'private trail event',
+    source: 'test',
+    scope: 'slack:private:C1',
   });
 }
 
@@ -51,8 +102,12 @@ beforeEach(() => {
   globalRoot = join(home, 'global');
   vi.stubEnv('HIPPO_HOME', globalRoot);
   initStore(hippoRoot);
-  for (const [i, text] of ['deploy pipeline uses blue green rollout', 'deploy token rotation happens weekly', 'deploy target moved to the new cluster',
-    'deploy canary runs for ten minutes before promotion to the rest of the fleet'].entries()) {
+  for (const [i, text] of [
+    'deploy pipeline uses blue green rollout',
+    'deploy token rotation happens weekly',
+    'deploy target moved to the new cluster',
+    'deploy canary runs for ten minutes before promotion to the rest of the fleet',
+  ].entries()) {
     writeEntry(hippoRoot, { ...createMemory(text), id: `mem_cli_${i}`, strength: 1 });
   }
 });
@@ -99,13 +154,34 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
 
   it('tags a ranked row global when it came from the global store and local when it did not', async () => {
     initStore(globalRoot);
-    writeEntry(globalRoot, { ...createMemory('deploy rollback checklist lives in the shared runbook'), id: 'mem_glob_0', strength: 1 });
+    writeEntry(globalRoot, {
+      ...createMemory('deploy rollback checklist lives in the shared runbook'),
+      id: 'mem_glob_0',
+      strength: 1,
+    });
     const config = loadConfig(hippoRoot);
     const global = { store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
-    const ranked = await rankRecall({ store: sqliteStore(hippoRoot), config, global, tenantId: 'default' }, {
-      query: 'deploy', budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
-      search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
-    });
+    const ranked = await rankRecall(
+      { store: sqliteStore(hippoRoot), config, global, tenantId: 'default' },
+      {
+        query: 'deploy',
+        budget: 4000,
+        cost: (r) => r.tokens,
+        window: { limit: 10 },
+        includeSuperseded: false,
+        explicitScope: null,
+        activeScope: null,
+        search: {
+          usePhysics: false,
+          physicsConfig: config.physics,
+          multihop: false,
+          mmr: false,
+          mmrLambda: 0.7,
+          localBump: 1.2,
+          explain: false,
+        },
+      },
+    );
     const origin = cliRecallOrigin(ctx(), cliRecallSetting(ctx(), null));
     const byId = new Map(ranked.results.map((r) => [r.entry.id, origin.isGlobal(r)]));
     expect(byId.get('mem_glob_0')).toBe(true);

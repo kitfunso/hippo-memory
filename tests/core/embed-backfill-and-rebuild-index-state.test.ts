@@ -37,7 +37,12 @@ let partly: string;
 let indexedOld: string;
 let n = 0;
 
-interface VectorRow { memory_id: string; model: string; dim: number; bytes: string }
+interface VectorRow {
+  memory_id: string;
+  model: string;
+  dim: number;
+  bytes: string;
+}
 
 /** Everything an embed run leaves in hippo.db's vector index; vectors are in the order they were inserted. */
 interface IndexState {
@@ -62,8 +67,16 @@ function fake(id: string, onCall: (texts: string[]) => void = () => undefined): 
 function row(i: number): MemoryEntry {
   // Three rows share each minute, so order inside a tie is id order and a read ordered by content would differ.
   const created = new Date(Date.parse(SEEDED_AT) + Math.floor(i / 3) * 60_000).toISOString();
-  const options = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANTS[i % 2], tags: [`topic:${i % 7}`, `path:/work/site-${i}`] };
-  return { ...createMemory(`index state memory ${ROWS - i} about release ${i % 11}`, options), created, last_retrieved: created };
+  const options = {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tenantId: TENANTS[i % 2],
+    tags: [`topic:${i % 7}`, `path:/work/site-${i}`],
+  };
+  return {
+    ...createMemory(`index state memory ${ROWS - i} about release ${i % 11}`, options),
+    created,
+    last_retrieved: created,
+  };
 }
 
 function copyOf(from: string): string {
@@ -73,7 +86,10 @@ function copyOf(from: string): string {
 }
 
 function useHashedServer(root: string): void {
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }));
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }),
+  );
 }
 
 function indexOn(root: string): IndexState {
@@ -81,7 +97,9 @@ function indexOn(root: string): IndexState {
   try {
     return {
       // SAFETY: the SELECT names exactly VectorRow's four fields.
-      vectors: db.prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid').all() as VectorRow[],
+      vectors: db
+        .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid')
+        .all() as VectorRow[],
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
       particles: [...loadPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
     };
@@ -91,7 +109,12 @@ function indexOn(root: string): IndexState {
 }
 
 function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorRow {
-  return { memory_id: entry.id, model, dim: vector.length, bytes: Buffer.from(Float32Array.from(vector).buffer).toString('hex').toUpperCase() };
+  return {
+    memory_id: entry.id,
+    model,
+    dim: vector.length,
+    bytes: Buffer.from(Float32Array.from(vector).buffer).toString('hex').toUpperCase(),
+  };
 }
 
 function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
@@ -105,7 +128,9 @@ function rebuiltState(root: string, providerId: string, vectorOf: (entry: Memory
   return {
     vectors: entries.map((e) => vectorRow(e, model, vectorOf(e))),
     model,
-    particles: entries.map((e) => particleOf(e, vectorOf(e), FAKE_NOW)).sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
+    particles: entries
+      .map((e) => particleOf(e, vectorOf(e), FAKE_NOW))
+      .sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
   };
 }
 
@@ -116,15 +141,24 @@ beforeAll(async () => {
   partly = join(home, 'partly');
   initStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
-  rows.forEach((entry, i) => { if (!isLate(i)) writeEntry(partly, entry); });
+  rows.forEach((entry, i) => {
+    if (!isLate(i)) writeEntry(partly, entry);
+  });
   await embedAll(localIndex(partly), undefined, fake('fake-old'));
-  rows.forEach((entry, i) => { if (isLate(i)) writeEntry(partly, entry); });
+  rows.forEach((entry, i) => {
+    if (isLate(i)) writeEntry(partly, entry);
+  });
 
   indexedOld = copyOf(partly);
   await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
   const db = openHippoDb(indexedOld);
   try {
-    savePhysicsState(db, loadEveryTenantEntries(indexedOld).map((e) => initializeParticle(e, fakeVector('fake-old', e), new Date(SEEDED_AT))));
+    savePhysicsState(
+      db,
+      loadEveryTenantEntries(indexedOld).map((e) =>
+        initializeParticle(e, fakeVector('fake-old', e), new Date(SEEDED_AT)),
+      ),
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -158,7 +192,13 @@ describe('embedAll backfill on hippo.db', () => {
     expect(new Set(pending.map((e) => e.tenant_id))).toEqual(new Set(TENANTS));
 
     const calls: string[][] = [];
-    expect(await embedAll(localIndex(root), undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(120);
+    expect(
+      await embedAll(
+        localIndex(root),
+        undefined,
+        fake('fake-old', (texts) => calls.push(texts)),
+      ),
+    ).toBe(120);
 
     expect(calls.map((texts) => texts.length)).toEqual([64, 56]);
     expect(calls.flat()).toEqual(pending.map((e) => embeddingInputText(e)));
@@ -174,7 +214,13 @@ describe('embedAll backfill on hippo.db', () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
     const calls: string[][] = [];
-    expect(await embedAll(localIndex(root), undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(0);
+    expect(
+      await embedAll(
+        localIndex(root),
+        undefined,
+        fake('fake-old', (texts) => calls.push(texts)),
+      ),
+    ).toBe(0);
     expect(calls).toEqual([]);
     expect(indexOn(root)).toEqual(before);
   });
@@ -218,21 +264,35 @@ describe('a model identity change on hippo.db', () => {
 function peakFullRowsRead(statements: readonly string[], fullReads: number): number {
   const reads = statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS));
   expect(reads).toHaveLength(fullReads);
-  return Math.max(...reads.map((sql) => {
-    const idList = /\bid IN \(([?,\s]+)\)/.exec(sql);
-    return idList ? idList[1].split('?').length - 1 : ROWS;
-  }));
+  return Math.max(
+    ...reads.map((sql) => {
+      const idList = /\bid IN \(([?,\s]+)\)/.exec(sql);
+      return idList ? idList[1].split('?').length - 1 : ROWS;
+    }),
+  );
 }
 
 describe('rows held while embedding hippo.db', () => {
   // A rebuild reads its 300 rows twice, once to embed and once to reset the particles.
   it.each([
     { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120, fullReads: 2 },
-    { name: 'a rebuild of 300 rows', template: (): string => indexedOld, id: 'fake-new', embedded: ROWS, fullReads: 10 },
+    {
+      name: 'a rebuild of 300 rows',
+      template: (): string => indexedOld,
+      id: 'fake-new',
+      embedded: ROWS,
+      fullReads: 10,
+    },
   ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded, fullReads }) => {
     const root = copyOf(template());
     const calls: number[] = [];
-    const log = await recordStatementsAsync(() => embedAll(localIndex(root), undefined, fake(id, (texts) => calls.push(texts.length))));
+    const log = await recordStatementsAsync(() =>
+      embedAll(
+        localIndex(root),
+        undefined,
+        fake(id, (texts) => calls.push(texts.length)),
+      ),
+    );
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
     expect(peakFullRowsRead(log.statements, fullReads)).toBe(PAGE);

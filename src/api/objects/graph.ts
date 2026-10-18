@@ -13,10 +13,7 @@ export function graphEntityOf(raw: string | null): string | undefined {
 }
 
 /** The entity/relation rows behind GET /v1/graph, as the caller's role, scopes and owner may see them. */
-export async function graphRows(
-  ctx: Context,
-  query: { entity?: string; limit: number },
-): Promise<GraphRows> {
+export async function graphRows(ctx: Context, query: { entity?: string; limit: number }): Promise<GraphRows> {
   const { role, scopes, owner } = ctx.actor;
   return ctx.store.graphReads.graphRows(ctx.tenantId, { ...query, reader: { role, scopes, owner } });
 }

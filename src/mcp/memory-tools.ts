@@ -2,18 +2,11 @@
 
 import { hasGroup } from '../store/index.js';
 import { startAutoSleepIfDue } from '../api/sleep/auto-sleep.js';
-import {
-  remember as apiRemember,
-  outcome as apiOutcome,
-  learn as apiLearn,
-  MCP_LEARN,
-} from '../api/index.js';
+import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../api/index.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from '../api/recall/last-recalled.js';
 
-export async function runRememberTool(
-  { args, ctx, hippoRoot, config, tenantId, store }: ToolCall
-): Promise<string> {
+export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId, store }: ToolCall): Promise<string> {
   const text = String(args.text || '');
   if (!text) return 'No text provided.';
   const tags: string[] = [];
@@ -55,10 +48,7 @@ export async function runLearnTool({ args, ctx }: ToolCall): Promise<string> {
   const days = Number(args.days) || 7;
   // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin
   // (mcpActor fails closed).
-  const result = await apiLearn(
-    mcpApiContext(ctx),
-    { repoPath: process.cwd(), days, profile: MCP_LEARN },
-  );
+  const result = await apiLearn(mcpApiContext(ctx), { repoPath: process.cwd(), days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';
   const { added, skipped, rejected, lowInfo } = result;

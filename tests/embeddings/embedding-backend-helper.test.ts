@@ -10,7 +10,9 @@ describe('skipWithoutEmbeddings', () => {
 
   it('throws an error naming the variable when the backend is missing and the variable is 1', () => {
     const skip = vi.fn();
-    expect(() => skipWithoutEmbeddings({ skip }, false, { HIPPO_REQUIRE_EMBEDDINGS: '1' })).toThrow(/HIPPO_REQUIRE_EMBEDDINGS/);
+    expect(() => skipWithoutEmbeddings({ skip }, false, { HIPPO_REQUIRE_EMBEDDINGS: '1' })).toThrow(
+      /HIPPO_REQUIRE_EMBEDDINGS/,
+    );
     expect(skip).not.toHaveBeenCalled();
   });
 

@@ -65,16 +65,16 @@ function getDlqRow(db: DatabaseSyncLike, table: DlqTable, selectColumns: string,
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
-  const row = db
-    .prepare(`SELECT ${selectColumns} FROM ${table} WHERE id = ?`)
-    .get(id) as DlqRawRow | undefined;
+  const row = db.prepare(`SELECT ${selectColumns} FROM ${table} WHERE id = ?`).get(id) as DlqRawRow | undefined;
   return row ?? null;
 }
 
 function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, id: number): void {
   assertTable(table);
-  db.prepare(`UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`)
-    .run(new Date().toISOString(), id);
+  db.prepare(`UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`).run(
+    new Date().toISOString(),
+    id,
+  );
 }
 
 type DlqKind = 'int' | 'text' | 'nullableText' | 'count' | 'bucket';
@@ -89,11 +89,16 @@ export interface DlqColumn {
 
 function coerceDlqValue(kind: DlqKind, raw: DlqRawValue | undefined): string | number | null {
   switch (kind) {
-    case 'int': return Number(raw);
-    case 'count': return Number(raw ?? 0);
-    case 'text': return String(raw);
-    case 'nullableText': return raw == null ? null : String(raw);
-    case 'bucket': return raw == null ? 'parse_error' : String(raw);
+    case 'int':
+      return Number(raw);
+    case 'count':
+      return Number(raw ?? 0);
+    case 'text':
+      return String(raw);
+    case 'nullableText':
+      return raw == null ? null : String(raw);
+    case 'bucket':
+      return raw == null ? 'parse_error' : String(raw);
   }
 }
 
@@ -112,9 +117,8 @@ export function dlqAccess<Item, Insert extends object>(
   const selectColumns = columns.map((c) => c.column).join(', ');
   const insertColumns = columns.filter((c) => c.insert);
   // SAFETY: the column map names every field of Item with the kind that coerces it.
-  const toItem = (raw: DlqRawRow): Item => Object.fromEntries(
-    columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])]),
-  ) as Item;
+  const toItem = (raw: DlqRawRow): Item =>
+    Object.fromEntries(columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])])) as Item;
   return {
     insert: (db, row) => {
       // SAFETY: every insert field of the column map is a string, null or absent on Insert.

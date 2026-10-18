@@ -60,13 +60,7 @@ export class RejectedValueError extends BadRequestError {
   readonly reason: string | null;
   readonly rejectedAt: string;
 
-  constructor(opts: {
-    digest: string;
-    tenantId: string;
-    entryId: string;
-    reason: string | null;
-    rejectedAt: string;
-  }) {
+  constructor(opts: { digest: string; tenantId: string; entryId: string; reason: string | null; rejectedAt: string }) {
     super(
       `Memory value refused: matches a rejected value (digest ${opts.digest.slice(0, DIGEST_DISPLAY_CHARS)}..., ` +
         `reason: ${opts.reason ?? 'none given'}). Run "hippo unreject" to allow it again.`,

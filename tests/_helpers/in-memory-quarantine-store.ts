@@ -30,22 +30,38 @@ interface RecordDbRow {
   decided_by: string | null;
 }
 
-function copyRows(hippoRoot: string): { readonly memories: Map<string, MemoryEntry>; readonly records: QuarantineRow[] } {
+function copyRows(hippoRoot: string): {
+  readonly memories: Map<string, MemoryEntry>;
+  readonly records: QuarantineRow[];
+} {
   return withSqliteAllowed(() => {
     const db = openHippoDb(hippoRoot);
     try {
       // SAFETY: the SELECT names one column, id.
       const ids = db.prepare('SELECT id FROM memories').all() as { id: string }[];
       // SAFETY: the SELECT names exactly RecordDbRow's columns.
-      const rows = db.prepare(
-        'SELECT tenant_id, memory_id, original_scope, reason, status, quarantined_at, decided_at, decided_by FROM memory_quarantine',
-      ).all() as RecordDbRow[];
+      const rows = db
+        .prepare(
+          'SELECT tenant_id, memory_id, original_scope, reason, status, quarantined_at, decided_at, decided_by FROM memory_quarantine',
+        )
+        .all() as RecordDbRow[];
       const records = rows.map((r): QuarantineRow => ({
-        tenantId: r.tenant_id, memoryId: r.memory_id, originalScope: r.original_scope, reason: r.reason,
+        tenantId: r.tenant_id,
+        memoryId: r.memory_id,
+        originalScope: r.original_scope,
+        reason: r.reason,
         status: r.status === 'approved' || r.status === 'rejected' ? r.status : 'pending',
-        quarantinedAt: r.quarantined_at, decidedAt: r.decided_at, decidedBy: r.decided_by,
+        quarantinedAt: r.quarantined_at,
+        decidedAt: r.decided_at,
+        decidedBy: r.decided_by,
       }));
-      return { memories: selectEntriesByIds(db, ids.map((r) => r.id)), records };
+      return {
+        memories: selectEntriesByIds(
+          db,
+          ids.map((r) => r.id),
+        ),
+        records,
+      };
     } finally {
       closeHippoDb(db);
     }
@@ -54,7 +70,8 @@ function copyRows(hippoRoot: string): { readonly memories: Map<string, MemoryEnt
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
 const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
-const newestFirst = (a: QuarantineRow, b: QuarantineRow): number => byBytes(b.quarantinedAt, a.quarantinedAt) || byBytes(b.memoryId, a.memoryId);
+const newestFirst = (a: QuarantineRow, b: QuarantineRow): number =>
+  byBytes(b.quarantinedAt, a.quarantinedAt) || byBytes(b.memoryId, a.memoryId);
 
 function isBelow(row: QuarantineRow, after: KeysetPosition): boolean {
   const byKey = byBytes(row.quarantinedAt, String(after.key));
@@ -79,18 +96,29 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
 
   const quarantine: Quarantine = {
     async listQuarantined(tenantId, { status, limit, after }) {
-      const hits = records.filter((row) => row.tenantId === tenantId && (status === 'all' || row.status === status)
-        && (status !== 'pending' || owned(tenantId, row.memoryId) !== undefined) && (!after || isBelow(row, after)));
+      const hits = records.filter(
+        (row) =>
+          row.tenantId === tenantId &&
+          (status === 'all' || row.status === status) &&
+          (status !== 'pending' || owned(tenantId, row.memoryId) !== undefined) &&
+          (!after || isBelow(row, after)),
+      );
       const page = hits.sort(newestFirst).slice(0, limit ?? 100);
-      return structuredClone(page.map((row): QuarantinedMemory => ({ ...row, content: owned(tenantId, row.memoryId)?.content ?? null })));
+      return structuredClone(
+        page.map((row): QuarantinedMemory => ({ ...row, content: owned(tenantId, row.memoryId)?.content ?? null })),
+      );
     },
     async approveQuarantined(tenantId, id, actor) {
       const row = pendingOrRefusal(tenantId, id);
       if ('outcome' in row) return row;
       const memory = owned(tenantId, id);
-      if (!memory || memory.scope !== `quarantine:private:${row.originalScope ?? 'unscoped'}`) return { outcome: 'scope_moved' };
+      if (!memory || memory.scope !== `quarantine:private:${row.originalScope ?? 'unscoped'}`) {
+        return { outcome: 'scope_moved' };
+      }
       // The audit row goes in first: if it is refused, neither change below has happened, as one transaction would have it.
-      await base.store.appendAuditEvents([{ tenantId, actor, op: 'quarantine_approve', targetId: id, metadata: { originalScope: row.originalScope } }]);
+      await base.store.appendAuditEvents([
+        { tenantId, actor, op: 'quarantine_approve', targetId: id, metadata: { originalScope: row.originalScope } },
+      ]);
       memories.set(id, { ...memory, scope: row.originalScope });
       decide(row, 'approved', actor);
       return { outcome: 'approved' };
@@ -108,8 +136,12 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
     ...base.store,
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
-      const found = [...memories.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId));
-      return structuredClone(found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)));
+      const found = [...memories.values()].filter(
+        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+      );
+      return structuredClone(
+        found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),
+      );
     },
     quarantine,
   };
@@ -118,7 +150,13 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
 
 /** The memory ids the fixture holds a record for. `gone` has no memory row, `moved` left its quarantine scope, and tenant B also holds a record for `a1`. */
 export const HELD = {
-  a1: 'mem_qa1', a2: 'mem_qa2', a3: 'mem_qa3', gone: 'mem_qgone', moved: 'mem_qmoved', b1: 'mem_qb1', solo: 'mem_qsolo',
+  a1: 'mem_qa1',
+  a2: 'mem_qa2',
+  a3: 'mem_qa3',
+  gone: 'mem_qgone',
+  moved: 'mem_qmoved',
+  b1: 'mem_qb1',
+  solo: 'mem_qsolo',
 } as const;
 export const BULK_TENANT = 'bulk';
 export const BULK_RECORDS = 105;
@@ -153,15 +191,38 @@ export function seedQuarantineRecords(dir: string): string {
   const db = openStore(dir);
   vi.useFakeTimers({ toFake: ['Date'] });
   try {
-    for (const r of [...SEEDED, ...Array.from({ length: BULK_RECORDS }, (_, i): Seeded => ({ tenantId: BULK_TENANT, memoryId: bulkId(i), originalScope: null, second: 6 }))]) {
+    for (const r of [
+      ...SEEDED,
+      ...Array.from({ length: BULK_RECORDS }, (_, i): Seeded => ({
+        tenantId: BULK_TENANT,
+        memoryId: bulkId(i),
+        originalScope: null,
+        second: 6,
+      })),
+    ]) {
       vi.setSystemTime(new Date(heldAt(r.second)));
       if (r.memoryScope !== undefined) {
-        const entry = createMemory(heldContent(r.memoryId), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: r.tenantId, scope: r.memoryScope });
+        const entry = createMemory(heldContent(r.memoryId), {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          tenantId: r.tenantId,
+          scope: r.memoryScope,
+        });
         writeEntry(dir, { ...entry, id: r.memoryId });
       }
-      recordQuarantine(db, { tenantId: r.tenantId, memoryId: r.memoryId, originalScope: r.originalScope, reason: 'test', actor: 'seed' });
+      recordQuarantine(db, {
+        tenantId: r.tenantId,
+        memoryId: r.memoryId,
+        originalScope: r.originalScope,
+        reason: 'test',
+        actor: 'seed',
+      });
     }
-    return createApiKey(db, { tenantId: TENANT_B, label: 'globex-admin', role: 'admin', expiresAt: '2999-01-01T00:00:00.000Z' }).plaintext;
+    return createApiKey(db, {
+      tenantId: TENANT_B,
+      label: 'globex-admin',
+      role: 'admin',
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    }).plaintext;
   } finally {
     vi.useRealTimers();
     closeHippoDb(db);

@@ -105,7 +105,8 @@ async function recall(token: string, address?: string): Promise<Reply> {
 const OK: Reply = { status: 200, retryAfter: null, refusal: null };
 const UNAUTHORISED: Reply = { status: 401, retryAfter: null, refusal: { error: 'invalid api key' } };
 /** The `n`th well-formed wrong secret for `key`'s id. */
-const wrongSecret = (key: string, n: number): string => `${key.slice(0, key.indexOf('.'))}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n % 26).repeat(32)}`;
+const wrongSecret = (key: string, n: number): string =>
+  `${key.slice(0, key.indexOf('.'))}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n % 26).repeat(32)}`;
 const scryptRuns = (): number => _readApiKeyVerifyStatsForTests().scryptRuns;
 
 describe('key derivation bounds', () => {
@@ -124,7 +125,9 @@ describe('key derivation bounds', () => {
 
     const refused: Reply[] = [];
     for (let i = 0; i < 20; i++) refused.push(await guess());
-    expect(refused).toEqual(Array(20).fill({ status: 429, retryAfter: '12', refusal: { error: 'too many key checks from this address' } }));
+    expect(refused).toEqual(
+      Array(20).fill({ status: 429, retryAfter: '12', refusal: { error: 'too many key checks from this address' } }),
+    );
     expect(scryptRuns() - before).toBe(5);
 
     expect(await recall(key, '203.0.113.77')).toEqual(OK);
@@ -161,7 +164,9 @@ describe('key derivation bounds', () => {
     watchPool();
     const replies = await Promise.all(keys.map((key) => recall(key)));
     expect(replies.filter((r) => r.status === 200)).toHaveLength(10);
-    expect(replies.filter((r) => r.status !== 200)).toEqual(Array(3).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }));
+    expect(replies.filter((r) => r.status !== 200)).toEqual(
+      Array(3).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }),
+    );
     expect({ derived: scryptRuns() - before, mostAtOnce: pool.peak }).toEqual({ derived: 10, mostAtOnce: 2 });
   });
 

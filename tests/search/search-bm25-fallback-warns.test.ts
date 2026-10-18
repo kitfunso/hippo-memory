@@ -20,7 +20,11 @@ let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
 
 function useModel(model: string): void {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model } }), 'utf8');
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model } }),
+    'utf8',
+  );
 }
 
 function fallbackLines(): string[] {
@@ -42,7 +46,10 @@ afterEach(() => {
 
 describe('hybridSearch BM25 fallback', () => {
   it('warns once when the index was built by another model', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }))),
+    );
     const entry = createMemory('the deploy runs on fridays');
     writeEntry(root, entry);
     await embedMemory(localIndex(root), entry);
@@ -58,11 +65,17 @@ describe('hybridSearch BM25 fallback', () => {
   });
 
   it('warns once when the query embedding call throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }))),
+    );
     const entry = createMemory('the deploy runs on fridays');
     writeEntry(root, entry);
     await embedMemory(localIndex(root), entry);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream down', { status: 500 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('upstream down', { status: 500 })),
+    );
 
     const entries = loadAllEntries(root, 'default');
     await hybridSearch('deploy fridays', entries, { hippoRoot: root });

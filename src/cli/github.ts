@@ -51,10 +51,7 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
   if (eventName === 'pull_request' && isGitHubPullRequestEvent(parsed, eventName)) {
     return { eventName: 'pull_request', payload: parsed };
   }
-  if (
-    eventName === 'pull_request_review_comment' &&
-    isGitHubPullRequestReviewCommentEvent(parsed, eventName)
-  ) {
+  if (eventName === 'pull_request_review_comment' && isGitHubPullRequestReviewCommentEvent(parsed, eventName)) {
     return { eventName: 'pull_request_review_comment', payload: parsed };
   }
   return null;
@@ -88,9 +85,7 @@ async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Fla
   }
   const token = envGitHubToken();
   if (!token) {
-    console.error(
-      'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
-    );
+    console.error('GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.');
     throw new CliExit(2);
   }
   const maxPerStream = maxPerStreamFlag(flags['max']);
@@ -120,9 +115,7 @@ export async function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _fla
     return;
   }
   for (const it of items) {
-    console.log(
-      `${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`,
-    );
+    console.log(`${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`);
   }
 }
 
@@ -158,9 +151,10 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
     event.payload.action === 'deleted'
   ) {
     const repo = event.payload.repository?.full_name ?? '';
-    const artifactRef = event.eventName === 'issue_comment'
-      ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
-      : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
+    const artifactRef =
+      event.eventName === 'issue_comment'
+        ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
+        : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
     const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
     const r = await handleCommentDeleted(innerCtx, {
       artifactRef,

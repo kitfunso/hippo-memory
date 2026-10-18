@@ -51,16 +51,46 @@ const cases: Array<[string, string, Body, RegExp]> = [
   ['memory kind', '/v1/memories', { content: 'c', kind: over(256) }, /kind exceeds 256-character cap/],
   ['memory scope', '/v1/memories', { content: 'c', scope: over(256) }, /scope exceeds 256-character cap/],
   ['memory owner', '/v1/memories', { content: 'c', owner: over(256) }, /owner exceeds 256-character cap/],
-  ['memory artifactRef', '/v1/memories', { content: 'c', artifactRef: over(4096) }, /artifactRef exceeds 4096-character cap/],
-  ['memory tag length', '/v1/memories', { content: 'c', tags: [over(256)] }, /each tags entry exceeds 256-character cap/],
-  ['memory tag count', '/v1/memories', { content: 'c', tags: Array.from({ length: 101 }, () => 't') }, /tags exceeds 100-item cap/],
-  ['memory project name', '/v1/memories', { content: 'c', project: { name: over(256) } }, /project.name exceeds 256-character cap/],
+  [
+    'memory artifactRef',
+    '/v1/memories',
+    { content: 'c', artifactRef: over(4096) },
+    /artifactRef exceeds 4096-character cap/,
+  ],
+  [
+    'memory tag length',
+    '/v1/memories',
+    { content: 'c', tags: [over(256)] },
+    /each tags entry exceeds 256-character cap/,
+  ],
+  [
+    'memory tag count',
+    '/v1/memories',
+    { content: 'c', tags: Array.from({ length: 101 }, () => 't') },
+    /tags exceeds 100-item cap/,
+  ],
+  [
+    'memory project name',
+    '/v1/memories',
+    { content: 'c', project: { name: over(256) } },
+    /project.name exceeds 256-character cap/,
+  ],
   ['archive reason', '/v1/memories/mem_1/archive', { reason: over(4096) }, /reason exceeds 4096-character cap/],
   ['outcome id', '/v1/outcome', { good: true, ids: [over(256)] }, /each ids entry exceeds 256-character cap/],
   ['key label', '/v1/auth/keys', { label: over(256) }, /label exceeds 256-character cap/],
   ['prediction classTag', '/v1/predictions', { claim: 'c', classTag: over(256) }, /classTag exceeds 256-character cap/],
-  ['prediction unit', '/v1/predictions', { claim: 'c', classTag: 't', unit: over(256) }, /unit exceeds 256-character cap/],
-  ['prediction targetDate', '/v1/predictions', { claim: 'c', classTag: 't', targetDate: over(64) }, /targetDate exceeds 64-character cap/],
+  [
+    'prediction unit',
+    '/v1/predictions',
+    { claim: 'c', classTag: 't', unit: over(256) },
+    /unit exceeds 256-character cap/,
+  ],
+  [
+    'prediction targetDate',
+    '/v1/predictions',
+    { claim: 'c', classTag: 't', targetDate: over(64) },
+    /targetDate exceeds 64-character cap/,
+  ],
 ];
 
 describe('body field caps', () => {

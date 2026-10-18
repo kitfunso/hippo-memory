@@ -28,7 +28,11 @@ describe('V1 route lookup', () => {
 
   it('lets a pattern row above a literal one keep the literal path, as the walk does', () => {
     const literal = V1_ROUTES.find((route) => 'path' in route && route.path === '/v1/predictions/stats')!;
-    const pattern = { ...V1_ROUTES.find((route) => 'pattern' in route)!, method: 'GET', pattern: '/v1/predictions/:id' };
+    const pattern = {
+      ...V1_ROUTES.find((route) => 'pattern' in route)!,
+      method: 'GET',
+      pattern: '/v1/predictions/:id',
+    };
     const rows = [pattern, literal];
     expect(routeLookup(rows, routeMatches)('GET', '/v1/predictions/stats')?.route).toBe(pattern);
   });

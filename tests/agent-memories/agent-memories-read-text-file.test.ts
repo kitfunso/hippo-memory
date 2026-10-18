@@ -49,9 +49,13 @@ describe('readTextFile', () => {
   });
 
   // Windows has no FIFO a path can name.
-  it.skipIf(process.platform === 'win32')('sets aside a FIFO as not a file, without waiting for a writer', () => {
-    const fifo = path.join(dir, 'pipe');
-    execFileSync('mkfifo', [fifo]);
-    expect(readTextFile(fifo)).toEqual({ ok: false, reason: `${fifo}: not a file` });
-  }, 2_000);
+  it.skipIf(process.platform === 'win32')(
+    'sets aside a FIFO as not a file, without waiting for a writer',
+    () => {
+      const fifo = path.join(dir, 'pipe');
+      execFileSync('mkfifo', [fifo]);
+      expect(readTextFile(fifo)).toEqual({ ok: false, reason: `${fifo}: not a file` });
+    },
+    2_000,
+  );
 });

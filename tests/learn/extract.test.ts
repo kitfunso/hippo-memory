@@ -4,8 +4,7 @@ import { extractFacts } from '../../src/learn/extract.js';
 function mockFetcher(body: string, ok = true): typeof fetch {
   // A real Response satisfies typeof fetch's return type directly, so no
   // cast is needed: extractFacts only reads res.ok and res.json().
-  return async () =>
-    new Response(JSON.stringify({ content: [{ text: body }] }), { status: ok ? 200 : 500 });
+  return async () => new Response(JSON.stringify({ content: [{ text: body }] }), { status: ok ? 200 : 500 });
 }
 
 describe('extractFacts', () => {
@@ -51,7 +50,9 @@ describe('extractFacts', () => {
   });
 
   it('returns [] when fetch throws', async () => {
-    const fetcher: typeof fetch = () => { throw new Error('network down'); };
+    const fetcher: typeof fetch = () => {
+      throw new Error('network down');
+    };
     const facts = await extractFacts('text', { apiKey: 'test', fetcher });
     expect(facts).toEqual([]);
   });

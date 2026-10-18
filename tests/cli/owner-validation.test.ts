@@ -3,10 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  validateOwner,
-  isStrictOwnerEnv,
-} from '../../src/cli/owner-validation.js';
+import { validateOwner, isStrictOwnerEnv } from '../../src/cli/owner-validation.js';
 
 describe('owner format', () => {
   it.each([
@@ -23,15 +20,15 @@ describe('owner format', () => {
   });
 
   it.each([
-    'alice',                       // no prefix
-    'admin:alice',                 // wrong prefix
-    'USER:alice',                  // uppercase prefix
-    'user:alice@example.com',      // @ not allowed
-    'user:alice.smith',            // . not allowed
-    'user: alice',                 // space
-    'user:',                       // empty id
-    ':alice',                      // empty prefix
-    'user:alice:extra',            // extra colon
+    'alice', // no prefix
+    'admin:alice', // wrong prefix
+    'USER:alice', // uppercase prefix
+    'user:alice@example.com', // @ not allowed
+    'user:alice.smith', // . not allowed
+    'user: alice', // space
+    'user:', // empty id
+    ':alice', // empty prefix
+    'user:alice:extra', // extra colon
   ])('rejects invalid owner string %s', (owner) => {
     expect(validateOwner(owner, { strict: true }).ok).toBe(false);
   });

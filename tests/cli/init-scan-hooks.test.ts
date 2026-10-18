@@ -48,9 +48,12 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
 
 /** Each top-level file of a repo with its text, so a patched or new instruction file shows up. */
 function files(repo: string): Record<string, string> {
-  return Object.fromEntries(fs.readdirSync(repo, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => [entry.name, fs.readFileSync(path.join(repo, entry.name), 'utf8')]));
+  return Object.fromEntries(
+    fs
+      .readdirSync(repo, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => [entry.name, fs.readFileSync(path.join(repo, entry.name), 'utf8')]),
+  );
 }
 
 const inHome = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));

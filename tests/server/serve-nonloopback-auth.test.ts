@@ -62,7 +62,9 @@ describe('serve() non-loopback host guard', () => {
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     await expect(serve({ hippoRoot, host: '0.0.0.0', port: 0 })).rejects.toMatchObject({
       name: 'CleartextBindError',
-      message: expect.stringMatching(/0\.0\.0\.0.*--tls-cert.*--allow-cleartext.*HIPPO_ALLOW_CLEARTEXT=1.*allowCleartext: true/s),
+      message: expect.stringMatching(
+        /0\.0\.0\.0.*--tls-cert.*--allow-cleartext.*HIPPO_ALLOW_CLEARTEXT=1.*allowCleartext: true/s,
+      ),
     });
   });
 
@@ -83,7 +85,9 @@ describe('serve() non-loopback host guard', () => {
       await handle.stop();
       handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
       expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([
-        expect.stringMatching(/listening on 0\.0\.0\.0 without TLS, as allowed.*cleartext until the proxy in front adds TLS/),
+        expect.stringMatching(
+          /listening on 0\.0\.0\.0 without TLS, as allowed.*cleartext until the proxy in front adds TLS/,
+        ),
       ]);
     } finally {
       warn.mockRestore();
@@ -141,15 +145,12 @@ describe('serve() non-loopback host guard', () => {
       expect(postRes.status).toBeLessThan(300);
 
       // A follow-up authorized search finds the newly created row.
-      const followUpRes = await fetch(
-        `http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`,
-        { headers: authHeaders },
-      );
+      const followUpRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`, {
+        headers: authHeaders,
+      });
       expect(followUpRes.status).toBe(200);
       const followUpBody: { results: Array<{ content: string }> } = await followUpRes.json();
-      const found = followUpBody.results.some((r) =>
-        r.content.includes('nonloopback-auth-marker'),
-      );
+      const found = followUpBody.results.some((r) => r.content.includes('nonloopback-auth-marker'));
       expect(found).toBe(true);
     });
   });
@@ -165,7 +166,6 @@ function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10
 }
 
 describe('clientIpForRateLimit from a peer HIPPO_TRUSTED_PROXIES lists', () => {
-
   beforeEach(() => {
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '10.0.0.0/24');
   });

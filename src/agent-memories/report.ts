@@ -147,7 +147,7 @@ export function detailLines(report: ImportReport, dryRun: boolean): string[] {
     if (t.unlisted > 0) {
       lines.push(
         `    ${plural(t.unlisted, 'kept row sits', 'kept rows sit')} in folders not listed this run (a moved ` +
-        `project's old copy)`,
+          `project's old copy)`,
       );
     }
   }

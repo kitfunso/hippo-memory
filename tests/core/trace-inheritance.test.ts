@@ -21,7 +21,8 @@ import { initializeParticle } from '../../src/core/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
 
@@ -72,10 +73,10 @@ describe('Trace layer inherits core memory mechanics', () => {
     // Seed several traces — sampleForReplay draws from whatever survivors
     // exist, so as long as traces are eligible at all they can be picked.
     const traces = Array.from({ length: 5 }, (_, i) =>
-      createMemory7(
-        `Task: scenario ${i}\nOutcome: success\nSteps:\n  1. step ${i}`,
-        { layer: Layer.Trace, traceOutcome: 'success' },
-      ),
+      createMemory7(`Task: scenario ${i}\nOutcome: success\nSteps:\n  1. step ${i}`, {
+        layer: Layer.Trace,
+        traceOutcome: 'success',
+      }),
     );
 
     const picked = sampleForReplay(traces, 5, new Date(), 42);
@@ -86,10 +87,10 @@ describe('Trace layer inherits core memory mechanics', () => {
 
   it('physics state is created for traces on first consolidate', async () => {
     // Persist a trace.
-    const trace = createMemory7(
-      'Task: physics trace\nOutcome: success\nSteps:\n  1. do thing',
-      { layer: Layer.Trace, traceOutcome: 'success' },
-    );
+    const trace = createMemory7('Task: physics trace\nOutcome: success\nSteps:\n  1. do thing', {
+      layer: Layer.Trace,
+      traceOutcome: 'success',
+    });
     writeEntry(tmpDir, trace);
 
     // Simulate what embeddings.ts does when embeddings are available:

@@ -23,5 +23,4 @@ export const DECAY_KEY_WHERE = 'pinned >= 0';
 
 /** The day a row reaches DECAY_KEY_HALF_LIVES of decay, reward factor included, so `key >= julianday(now)` is exactly
  * `decay exponent <= DECAY_KEY_HALF_LIVES`; migration v60 and the context read must share this one text. */
-export const DECAY_KEY_SQL =
-  `julianday(last_retrieved) + ${DECAY_KEY_HALF_LIVES.toFixed(1)} * half_life_days * ${REWARD_FACTOR_SQL}`;
+export const DECAY_KEY_SQL = `julianday(last_retrieved) + ${DECAY_KEY_HALF_LIVES.toFixed(1)} * half_life_days * ${REWARD_FACTOR_SQL}`;

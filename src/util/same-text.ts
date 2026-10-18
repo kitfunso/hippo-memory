@@ -21,7 +21,10 @@ export function heldTexts(entry: Text): string[] {
   if (entry.source !== 'consolidation' || cut < 0) return [];
   const body = entry.content.slice(cut + 2);
   if (/^\[Consolidated from \d+ related memories\]$/.test(entry.content.slice(0, cut))) return [body];
-  return `\n${body}`.split('\n- ').slice(1).map((t) => t.replace(/\n {2}/g, '\n'));
+  return `\n${body}`
+    .split('\n- ')
+    .slice(1)
+    .map((t) => t.replace(/\n {2}/g, '\n'));
 }
 
 /** Keys of every text a row holds word for word: its own, plus each source text inside a sleep-merged row. */
@@ -33,7 +36,9 @@ export function heldTextKeys(entry: Text): string[] {
  * The longest word of a text: every row holding the text word for word contains it, so a store lookup can filter on it.
  */
 export function longestWord(text: string): string {
-  return duplicateKey(text).split(' ').reduce((best, w) => (w.length > best.length ? w : best), '');
+  return duplicateKey(text)
+    .split(' ')
+    .reduce((best, w) => (w.length > best.length ? w : best), '');
 }
 
 export function storedTextKeys(entries: readonly Text[]): Set<string> {

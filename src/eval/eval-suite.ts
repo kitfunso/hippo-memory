@@ -3,11 +3,19 @@
  * detection against a saved baseline.
  *  Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
-import { createMemory, DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
+import { DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import { search } from '../search/bm25-search.js';
 import { multihopSearch } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
-import { DAY_MS } from '../util/time.js';
+import {
+  authMeetingEntries,
+  dateOffset,
+  directRecallEntries,
+  infrastructureMeetingEntries,
+  mem,
+  monitoringMeetingEntries,
+  multiHopEntries,
+} from './eval-suite-fixtures.js';
 import { pct } from '../util/format.js';
 
 export type FeatureCategory =
@@ -69,81 +77,6 @@ export interface RegressionReport {
   verdict: 'PASS' | 'REGRESSION';
 }
 
-const BASE_DATE = new Date('2026-01-15T10:00:00Z');
-
-function dateOffset(days: number): string {
-  const d = new Date(BASE_DATE.getTime() + days * DAY_MS);
-  return d.toISOString();
-}
-
-function mem(id: string, content: string, opts: {
-  layer?: Layer; tags?: string[]; created?: string;
-  extracted_from?: string; dag_level?: number; dag_parent_id?: string;
-} = {}): MemoryEntry {
-  const entry = createMemory(content, {
-    layer: opts.layer ?? Layer.Episodic,
-    tags: opts.tags ?? [],
-    baseHalfLifeDays: 30,
-    extractedFrom: opts.extracted_from,
-    dagLevel: opts.dag_level,
-    dagParentId: opts.dag_parent_id,
-  });
-  entry.id = id;
-  if (opts.created) entry.created = opts.created;
-  return entry;
-}
-
-/** Direct recall: basic keyword matching. */
-function directRecallEntries(): MemoryEntry[] {
-  return [
-    mem(
-      'dr-1',
-      'The PostgreSQL database migration failed because the users table had a NOT NULL constraint on the email column',
-      {
-        created: dateOffset(1),
-        tags: ['topic:database'],
-      },
-    ),
-    mem(
-      'dr-2',
-      'React component rendering performance improved by 40% after memoizing the expensive computation in useMemo',
-      {
-        created: dateOffset(2),
-        tags: ['topic:frontend'],
-      },
-    ),
-    mem(
-      'dr-3',
-      'The API rate limiter should use a sliding window algorithm instead of fixed window to prevent burst traffic',
-      {
-        created: dateOffset(3),
-        tags: ['topic:api'],
-      },
-    ),
-    mem('dr-4', 'Docker container memory limits need to be set to 512MB for the worker service to prevent OOM kills', {
-      created: dateOffset(4), tags: ['topic:devops']
-    }),
-    mem(
-      'dr-5',
-      'The JWT token expiration was set to 24 hours but should be reduced to 1 hour for security compliance',
-      {
-        created: dateOffset(5),
-        tags: ['topic:security'],
-      },
-    ),
-    mem('dr-6', 'Webpack bundle size grew to 2.3MB because lodash was imported as a whole instead of cherry-picking', {
-      created: dateOffset(6), tags: ['topic:frontend']
-    }),
-    mem('dr-7', 'The Redis cache TTL for user sessions should match the JWT expiration to prevent stale sessions', {
-      created: dateOffset(7), tags: ['topic:caching']
-    }),
-    mem('dr-8', 'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching', {
-      created: dateOffset(8),
-      tags: ['topic:api'],
-    }),
-  ];
-}
-
 function directRecallCase(n: number, query: string, description: string): FeatureTestCase {
   return { id: `dr-q${n}`, category: 'direct-recall', query, expectedIds: [`dr-${n}`], description };
 }
@@ -167,86 +100,6 @@ function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[]): void
 }
 
 /** Extraction preference: extracted facts should rank above raw source. */
-function infrastructureMeetingEntries(): MemoryEntry[] {
-  return [
-    mem(
-      'ep-src-1',
-      'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the ' +
-      'staging environment is ' +
-        'using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of the security patches',
-      {
-        created: dateOffset(10),
-        tags: ['speaker:Alice', 'topic:infrastructure', 'session:meeting-1'],
-      },
-    ),
-    mem(
-      'ep-ext-1',
-      'The staging environment runs Kubernetes 1.28 and needs to be upgraded to 1.30 before end of Q2 for security ' +
-      'patches',
-      {
-        created: dateOffset(10),
-        layer: Layer.Semantic,
-        tags: ['speaker:Alice', 'topic:infrastructure', 'extracted'],
-        extracted_from: 'ep-src-1',
-      },
-    ),
-  ];
-}
-
-function monitoringMeetingEntries(): MemoryEntry[] {
-  return [
-    mem(
-      'ep-src-2',
-      'speaker:Bob: Yeah and the thing about the monitoring is that we switched from Datadog to Grafana last month ' +
-      'and the alerting rules ' +
-        'still need to be migrated, Carol was supposed to handle that but she has been busy with the frontend rewrite',
-      {
-        created: dateOffset(11),
-        tags: ['speaker:Bob', 'topic:monitoring', 'session:meeting-1'],
-      },
-    ),
-    mem(
-      'ep-ext-2',
-      'The team switched from Datadog to Grafana last month but alerting rules have not been migrated yet. Carol is ' +
-      'responsible but blocked ' +
-        'by the frontend rewrite.',
-      {
-        created: dateOffset(11),
-        layer: Layer.Semantic,
-        tags: ['speaker:Bob', 'topic:monitoring', 'extracted'],
-        extracted_from: 'ep-src-2',
-      },
-    ),
-  ];
-}
-
-function authMeetingEntries(): MemoryEntry[] {
-  return [
-    mem(
-      'ep-src-3',
-      'speaker:Carol: The login page redesign is almost done, I just need to wire up the OAuth2 PKCE flow with the ' +
-      'new identity provider and ' +
-        'write the integration tests',
-      {
-        created: dateOffset(12),
-        tags: ['speaker:Carol', 'topic:auth', 'session:meeting-2'],
-      },
-    ),
-    mem(
-      'ep-ext-3',
-      'Carol is nearly done with the login page redesign. Remaining work: wire up OAuth2 PKCE flow with the new ' +
-      'identity provider and write ' +
-        'integration tests.',
-      {
-        created: dateOffset(12),
-        layer: Layer.Semantic,
-        tags: ['speaker:Carol', 'topic:auth', 'extracted'],
-        extracted_from: 'ep-src-3',
-      },
-    ),
-  ];
-}
-
 function extractionPreferenceEntries(): MemoryEntry[] {
   return [...infrastructureMeetingEntries(), ...monitoringMeetingEntries(), ...authMeetingEntries()];
 }
@@ -322,8 +175,8 @@ function dagSummaryEntry(): MemoryEntry {
   return mem(
     'dag-summary-1',
     'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing ' +
-    'index), ' +
-    '/reports takes 8s ' +
+      'index), ' +
+      '/reports takes 8s ' +
       '(needs job queue)',
     {
       created: dateOffset(16),
@@ -428,21 +281,36 @@ function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
 
 // Noise resistance: relevant memories must be found despite these.
 const NOISE_TOPICS = [
-  'breakfast meeting catering ordered sandwiches', 'office temperature thermostat adjusted',
-  'printer paper refill third floor supply', 'parking lot gate code changed 4521',
-  'fire drill scheduled next Thursday morning', 'coffee machine broken maintenance called',
-  'desk booking system new policy hybrid', 'meeting room projector HDMI adapter missing',
-  'birthday celebration for Dave next Friday', 'recycling bins moved to kitchen area',
-  'badge access updated for new hires', 'elevator maintenance scheduled weekend',
-  'lunch order from Italian place confirmed', 'desk plants watering schedule posted',
-  'air conditioning unit serviced last week', 'office carpet cleaning Friday evening',
-  'new microwave installed in kitchen', 'visitor parking available spots three',
-  'holiday schedule posted on intranet', 'team photo session Thursday afternoon',
-  'chair ergonomics assessment signup sheet', 'standing desk adjustment instructions',
-  'kitchen fridge cleanup policy reminder', 'window blinds replaced on south side',
-  'bicycle rack installed in parking garage', 'team lunch budget increased quarterly',
-  'noise canceling headphones approved expense', 'monitor arm request form updated',
-  'desk drawer key replacement procedure', 'building security hours extended',
+  'breakfast meeting catering ordered sandwiches',
+  'office temperature thermostat adjusted',
+  'printer paper refill third floor supply',
+  'parking lot gate code changed 4521',
+  'fire drill scheduled next Thursday morning',
+  'coffee machine broken maintenance called',
+  'desk booking system new policy hybrid',
+  'meeting room projector HDMI adapter missing',
+  'birthday celebration for Dave next Friday',
+  'recycling bins moved to kitchen area',
+  'badge access updated for new hires',
+  'elevator maintenance scheduled weekend',
+  'lunch order from Italian place confirmed',
+  'desk plants watering schedule posted',
+  'air conditioning unit serviced last week',
+  'office carpet cleaning Friday evening',
+  'new microwave installed in kitchen',
+  'visitor parking available spots three',
+  'holiday schedule posted on intranet',
+  'team photo session Thursday afternoon',
+  'chair ergonomics assessment signup sheet',
+  'standing desk adjustment instructions',
+  'kitchen fridge cleanup policy reminder',
+  'window blinds replaced on south side',
+  'bicycle rack installed in parking garage',
+  'team lunch budget increased quarterly',
+  'noise canceling headphones approved expense',
+  'monitor arm request form updated',
+  'desk drawer key replacement procedure',
+  'building security hours extended',
 ];
 
 function noiseEntries(): MemoryEntry[] {
@@ -454,14 +322,15 @@ function noiseTargetEntries(): MemoryEntry[] {
     mem(
       'nr-1',
       'The database connection pool was exhausted because max_connections was set to 10 but the application had 25 ' +
-      'concurrent requests',
+        'concurrent requests',
       {
         created: dateOffset(20),
         tags: ['topic:database', 'topic:performance'],
       },
     ),
     mem('nr-2', 'The S3 bucket policy was misconfigured allowing public read access to customer data uploads', {
-      created: dateOffset(21), tags: ['topic:security', 'topic:s3'],
+      created: dateOffset(21),
+      tags: ['topic:security', 'topic:s3'],
     }),
   ];
 }
@@ -483,8 +352,11 @@ function noiseCases(): FeatureTestCase[] {
       description: 'find S3 issue despite noise',
     },
     {
-      id: 'nr-q3', category: 'noise-resistance', query: 'PostgreSQL migration constraint', expectedIds: ['dr-1'],
-      description: 'find earlier DB entry despite noise'
+      id: 'nr-q3',
+      category: 'noise-resistance',
+      query: 'PostgreSQL migration constraint',
+      expectedIds: ['dr-1'],
+      description: 'find earlier DB entry despite noise',
     },
     {
       id: 'nr-q4',
@@ -501,58 +373,21 @@ function addNoiseResistance(entries: MemoryEntry[], cases: FeatureTestCase[]): v
   cases.push(...noiseCases());
 }
 
-/** Multi-hop: entity chaining across sessions. */
-function multiHopEntries(): MemoryEntry[] {
-  return [
-    mem(
-      'mh-1',
-      'speaker:Alice works on the payment gateway integration with Stripe. She found a webhook signature validation ' +
-      'bug.',
-      {
-        created: dateOffset(25),
-        tags: ['speaker:Alice', 'topic:payments'],
-      },
-    ),
-    mem(
-      'mh-2',
-      'speaker:Bob reviewed the Stripe webhook code and confirmed the signature validation uses the wrong secret key ' +
-      'from the test environment.',
-      {
-        created: dateOffset(26),
-        tags: ['speaker:Bob', 'topic:payments'],
-      },
-    ),
-    mem(
-      'mh-3',
-      'speaker:Alice fixed the Stripe webhook by switching to the production secret key. Payment confirmations now ' +
-      'arrive within 2 seconds.',
-      {
-        created: dateOffset(27),
-        tags: ['speaker:Alice', 'topic:payments'],
-      },
-    ),
-    mem(
-      'mh-4',
-      'speaker:Carol reported that the billing dashboard shows incorrect revenue numbers because it reads from the ' +
-      'payments_raw table instead of ' +
-        'payments_reconciled.',
-      {
-        created: dateOffset(28),
-        tags: ['speaker:Carol', 'topic:billing'],
-      },
-    ),
-  ];
-}
-
 function multiHopCases(): FeatureTestCase[] {
   return [
     {
-      id: 'mh-q1', category: 'multi-hop', query: 'Who fixed the Stripe webhook bug and what was the root cause?',
-      expectedIds: ['mh-1', 'mh-2', 'mh-3'], description: 'chain Alice -> Stripe -> Bob -> fix'
+      id: 'mh-q1',
+      category: 'multi-hop',
+      query: 'Who fixed the Stripe webhook bug and what was the root cause?',
+      expectedIds: ['mh-1', 'mh-2', 'mh-3'],
+      description: 'chain Alice -> Stripe -> Bob -> fix',
     },
     {
-      id: 'mh-q2', category: 'multi-hop', query: 'What are all the payment-related issues the team discussed?',
-      expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'], description: 'find all payment topics across speakers'
+      id: 'mh-q2',
+      category: 'multi-hop',
+      query: 'What are all the payment-related issues the team discussed?',
+      expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'],
+      description: 'find all payment topics across speakers',
     },
   ];
 }
@@ -619,7 +454,7 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
     } else {
       results = search(c.query, entries, { budget: 50000 });
     }
-    const returnedIds = results.map(r => r.entry.id);
+    const returnedIds = results.map((r) => r.entry.id);
 
     caseResults.push({
       case: c,
@@ -751,7 +586,7 @@ export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): 
   lines.push('');
   lines.push(
     `${pad('Feature', 24)} | ${pad('MRR', 8)} | ${pad('R@5', 8)} | ${pad('NDCG@5', 8)} | ${pad('vs baseline', 12)} | ` +
-    `verdict`,
+      `verdict`,
   );
   lines.push(
     `${'─'.repeat(24)}-|-${'─'.repeat(8)}-|-${'─'.repeat(8)}-|-` +
@@ -770,7 +605,7 @@ export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): 
   lines.push('');
   lines.push(
     `Overall: MRR ${pct(result.overall.mrr)} | R@5 ${pct(result.overall.recallAt5)} | NDCG@5 ` +
-    `${pct(result.overall.ndcgAt5)}`,
+      `${pct(result.overall.ndcgAt5)}`,
   );
 
   if (report) lines.push(...formatReportLines(report));

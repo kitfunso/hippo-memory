@@ -7,7 +7,12 @@ import { dirname, join } from 'node:path';
 import { restoreDormant } from '../../src/api/index.js';
 import { gitLayout } from '../../src/agent-memories/git.js';
 import { containerId, containerPrefix } from '../../src/agent-memories/source.js';
-import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../../src/agent-memories/sync.js';
+import {
+  importAtSessionEnd,
+  importForStore,
+  importProjectMemories,
+  importSessionFolder,
+} from '../../src/agent-memories/sync.js';
 import { repairProjectNames } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
@@ -19,8 +24,22 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import {
-  agentRows, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, toolTally,
-  userNotes, withDb, writeConfig, type World,
+  agentRows,
+  closeWorld,
+  codexSummary,
+  ctxFor,
+  dormantRows,
+  expectedContainer,
+  liveRows,
+  liveTexts,
+  note,
+  openWorld,
+  projectNotes,
+  toolTally,
+  userNotes,
+  withDb,
+  writeConfig,
+  type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -66,7 +85,7 @@ function spawnsDuring<T>(run: () => T): Spawned<T> {
 }
 
 describe('agent memory sync: routing and sharing', () => {
-  it('the handover sets aside the global p- rows the store-less hook path wrote once the project\'s own store syncs them', () => {
+  it("the handover sets aside the global p- rows the store-less hook path wrote once the project's own store syncs them", () => {
     const hand = join(w.dir, 'hand');
     mkdirSync(join(hand, '.git'), { recursive: true });
     note(projectNotes(w, hand), 'deploy.md', DEPLOY);
@@ -97,7 +116,11 @@ describe('agent memory sync: routing and sharing', () => {
 
   it('post-compact reads the session folder only and runs no git call', () => {
     const Q = 'The session folder note says the queue drains at midnight.';
-    note(projectNotes(w, join(w.dir, 'other')), 'p.md', 'A note in another project folder is read by its own sleep, not by this compaction hook.');
+    note(
+      projectNotes(w, join(w.dir, 'other')),
+      'p.md',
+      'A note in another project folder is read by its own sleep, not by this compaction hook.',
+    );
     note(userNotes(w), 'u.md', USER_NOTE);
     codexSummary(w, '- The compaction hook must not read this Codex bullet.');
     const transcript = join(dirname(note(projectNotes(w), 'q.md', Q)), '..', 's.jsonl');
@@ -136,7 +159,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(liveTexts(w.local)).toEqual([]);
   });
 
-  it('a project store that opts out of imports keeps another repo\'s session notes out of the global store too', () => {
+  it("a project store that opts out of imports keeps another repo's session notes out of the global store too", () => {
     const x = join(w.dir, 'repox');
     mkdirSync(join(x, '.git'), { recursive: true });
     const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
@@ -160,8 +183,13 @@ describe('agent memory sync: routing and sharing', () => {
       tags: ['claude-code-memory'],
     };
     writeEntry(w.global, stray);
-    withDb(w.global, (db) => db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES ('default', 'c1', 's1', 'repoa', 'auto', ?, ?, ?)`)
-      .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()));
+    withDb(w.global, (db) =>
+      db
+        .prepare(
+          `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES ('default', 'c1', 's1', 'repoa', 'auto', ?, ?, ?)`,
+        )
+        .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()),
+    );
     const repair = (dryRun: boolean) => repairProjectNames(cliApiContext(w.global, 'default'), { dryRun });
 
     expect(repair(true).copies).toEqual([stray.id]);
@@ -175,7 +203,11 @@ describe('agent memory sync: routing and sharing', () => {
   });
 
   it('a global-store sleep runs the user pass only', () => {
-    note(projectNotes(w, dirname(w.global)), 'home.md', 'A note in the folder Claude keeps for the global store\'s parent.');
+    note(
+      projectNotes(w, dirname(w.global)),
+      'home.md',
+      "A note in the folder Claude keeps for the global store's parent.",
+    );
     note(userNotes(w), 'u.md', USER_NOTE);
 
     const report = importForStore(w.global, opts());
@@ -183,13 +215,15 @@ describe('agent memory sync: routing and sharing', () => {
     expect(report.tools.flatMap((t) => t.containers.map((c) => c.scope))).toEqual(['user']);
   });
 
-  it('a user container lands in the global store with origin \'\'', () => {
+  it("a user container lands in the global store with origin ''", () => {
     const dir = userNotes(w);
     note(dir, 'u.md', USER_NOTE);
 
     expect(claude(importForStore(w.local, opts())).imported).toBe(1);
     expect(liveRows(w.global)).toMatchObject([{ content: USER_NOTE, origin_project: '' }]);
-    expect(liveRows(w.global)[0].source.startsWith(`agent-memory:claude-code:${expectedContainer(dir, 'u')}/u.md#`)).toBe(true);
+    expect(
+      liveRows(w.global)[0].source.startsWith(`agent-memory:claude-code:${expectedContainer(dir, 'u')}/u.md#`),
+    ).toBe(true);
     expect(agentRows(w.local)).toEqual([]);
   });
 
@@ -228,7 +262,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(stats.neverAutoShareSkipped).toBe(2);
   });
 
-  it('a moved project root leaves the old container\'s rows alone', () => {
+  it("a moved project root leaves the old container's rows alone", () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
     importForStore(w.local, opts());
     const [old] = liveRows(w.local);
@@ -239,8 +273,12 @@ describe('agent memory sync: routing and sharing', () => {
 
     expect(claude(importForStore(store, opts()))).toMatchObject({ imported: 1, setAside: 0 });
     expect(liveRows(store)).toHaveLength(2);
-    expect(toolTally(importForStore(store, { ...opts(), dryRun: true }), 'claude-code')).toMatchObject({ unchanged: 1 });
-    expect(importForStore(store, { ...opts(), dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
+    expect(toolTally(importForStore(store, { ...opts(), dryRun: true }), 'claude-code')).toMatchObject({
+      unchanged: 1,
+    });
+    expect(
+      importForStore(store, { ...opts(), dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted,
+    ).toBe(1);
 
     unlinkSync(copied);
     expect(claude(importForStore(store, opts())).setAside).toBe(1);

@@ -24,7 +24,8 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const db = openHippoDb(home);
     try {
       const cols = rowsAs<{ name: string; notnull: number; dflt_value: string | null }>(
-        db, `PRAGMA table_info(session_events)`,
+        db,
+        `PRAGMA table_info(session_events)`,
       );
       const tenant = cols.find((c) => c.name === 'tenant_id');
       const scope = cols.find((c) => c.name === 'scope');
@@ -43,7 +44,8 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const db = openHippoDb(home);
     try {
       const cols = rowsAs<{ name: string; notnull: number; dflt_value: string | null }>(
-        db, `PRAGMA table_info(session_handoffs)`,
+        db,
+        `PRAGMA table_info(session_handoffs)`,
       );
       expect(cols.some((c) => c.name === 'tenant_id' && c.notnull === 1)).toBe(true);
       expect(cols.some((c) => c.name === 'scope')).toBe(true);
@@ -56,9 +58,7 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const home = makeRoot('v22');
     const db = openHippoDb(home);
     try {
-      const idx = rowsAs<{ name: string }>(
-        db, `SELECT name FROM sqlite_master WHERE type='index'`,
-      );
+      const idx = rowsAs<{ name: string }>(db, `SELECT name FROM sqlite_master WHERE type='index'`);
       const names = new Set(idx.map((i) => i.name));
       expect(names.has('idx_session_events_tenant_session')).toBe(true);
       expect(names.has('idx_session_handoffs_tenant_session')).toBe(true);
@@ -91,10 +91,12 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       v22.up(db);
 
       const evt = rowAs<{ tenant_id: string }>(
-        db, `SELECT tenant_id FROM session_events WHERE session_id='sess-mapped'`,
+        db,
+        `SELECT tenant_id FROM session_events WHERE session_id='sess-mapped'`,
       );
       const hf = rowAs<{ tenant_id: string }>(
-        db, `SELECT tenant_id FROM session_handoffs WHERE session_id='sess-mapped'`,
+        db,
+        `SELECT tenant_id FROM session_handoffs WHERE session_id='sess-mapped'`,
       );
       expect(evt.tenant_id).toBe('tenantA');
       expect(hf.tenant_id).toBe('tenantA');
@@ -125,7 +127,8 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
       v22.up(db);
 
       const evt = rowAs<{ tenant_id: string }>(
-        db, `SELECT tenant_id FROM session_events WHERE session_id='sess-shared'`,
+        db,
+        `SELECT tenant_id FROM session_events WHERE session_id='sess-shared'`,
       );
       expect(evt.tenant_id).toBe('default');
     } finally {

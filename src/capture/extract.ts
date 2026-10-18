@@ -32,8 +32,10 @@ const PREFERENCE_PATTERNS = [
   /\b(?:we(?:'re| are)\s+using|the stack is|we use)\s/i,
 ];
 const CATEGORIES = [
-  ['decision', DECISION_PATTERNS], ['rule', RULE_PATTERNS],
-  ['error', ERROR_PATTERNS], ['preference', PREFERENCE_PATTERNS],
+  ['decision', DECISION_PATTERNS],
+  ['rule', RULE_PATTERNS],
+  ['error', ERROR_PATTERNS],
+  ['preference', PREFERENCE_PATTERNS],
 ] as const;
 const MAX_CHARS = 500;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
@@ -83,7 +85,7 @@ function proseOnly(text: string): string {
 }
 
 function masked(text: string): string {
-  return text.replace(NO_BREAK, span => 'x'.repeat(span.length));
+  return text.replace(NO_BREAK, (span) => 'x'.repeat(span.length));
 }
 
 /**
@@ -104,7 +106,10 @@ function proseBlocks(text: string): string[] {
   };
   for (const line of text.split('\n')) {
     const trimmed = line.trim();
-    if (!trimmed || /^#+\s/.test(trimmed)) { flush(); continue; }
+    if (!trimmed || /^#+\s/.test(trimmed)) {
+      flush();
+      continue;
+    }
     const bullet = trimmed.match(BULLET);
     if (bullet || !continues(trimmed, pending.at(-1))) flush();
     pending.push(bullet?.[1] ?? trimmed);
@@ -125,8 +130,11 @@ function insideBrackets(lead: string): boolean {
 
 function extractFromPatterns(sentence: string, patterns: readonly RegExp[], category: string): ExtractedItem | null {
   // A keyword inside brackets does not support a detached assertion; a later one outside them still does.
-  const keyed = patterns.some((pattern) => [...sentence.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))]
-    .some((match) => !insideBrackets(sentence.slice(0, match.index))));
+  const keyed = patterns.some((pattern) =>
+    [...sentence.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))].some(
+      (match) => !insideBrackets(sentence.slice(0, match.index)),
+    ),
+  );
   if (!keyed) return null;
   const content = sentence
     .replace(
@@ -148,7 +156,7 @@ function extractSpecSections(text: string): ExtractedItem[] {
   let open = false;
   for (const line of text.split('\n')) {
     const trimmed = line.trim();
-    if (SPEC_HEADING_PATTERNS.some(pattern => pattern.test(trimmed))) {
+    if (SPEC_HEADING_PATTERNS.some((pattern) => pattern.test(trimmed))) {
       inSpecSection = true;
       open = false;
       continue;
@@ -162,8 +170,8 @@ function extractSpecSections(text: string): ExtractedItem[] {
     open = inSpecSection && (bullet !== null || wrapped);
   }
   return bullets
-    .filter(content => content.length <= MAX_CHARS && !content.endsWith('?'))
-    .map(content => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
+    .filter((content) => content.length <= MAX_CHARS && !content.endsWith('?'))
+    .map((content) => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
 }
 
 function extractOne(text: string): ExtractedItem[] {
@@ -175,7 +183,10 @@ function extractOne(text: string): ExtractedItem[] {
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       for (const [category, patterns] of CATEGORIES) {
         const item = extractFromPatterns(sentence, patterns, category);
-        if (item) { items.push(item); break; }
+        if (item) {
+          items.push(item);
+          break;
+        }
       }
     }
   }

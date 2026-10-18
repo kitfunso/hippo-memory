@@ -81,7 +81,9 @@ function listSourceFiles(dir) {
  * @returns {{ file: string, line: number, name: string }[]}
  */
 export function findCliRecallWrites(srcDir) {
-  return findInCli(srcDir, (file) => (RECALL_VERB_FILES.includes(file) ? [...RECALL_ONLY, ...SHARED_WRITERS] : RECALL_ONLY));
+  return findInCli(srcDir, (file) =>
+    RECALL_VERB_FILES.includes(file) ? [...RECALL_ONLY, ...SHARED_WRITERS] : RECALL_ONLY,
+  );
 }
 
 /**
@@ -90,7 +92,9 @@ export function findCliRecallWrites(srcDir) {
  * @returns {{ file: string, line: number, name: string }[]}
  */
 export function findCliStoreWrites(srcDir) {
-  return findInCli(srcDir, (file) => STORE_WRITERS.filter((name) => !(STORE_WRITER_EXCEPTIONS[file] ?? []).includes(name)));
+  return findInCli(srcDir, (file) =>
+    STORE_WRITERS.filter((name) => !(STORE_WRITER_EXCEPTIONS[file] ?? []).includes(name)),
+  );
 }
 
 /** Each line of a CLI file under srcDir that names one of the identifiers `bannedIn` answers for that file, sorted. */
@@ -110,13 +114,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
-    console.error('\nFix: pass the input to retrieve() (src/api/recall/recall.ts) and let it rank and record; the CLI parses flags and prints.\n');
+    console.error(
+      '\nFix: pass the input to retrieve() (src/api/recall/recall.ts) and let it rank and record; the CLI parses flags and prints.\n',
+    );
   }
   const writes = findCliStoreWrites(srcDir);
   if (writes.length > 0) {
     console.error(`\n${writes.length} memory writer or store opener reference(s) in the CLI under ${srcDir}/:`);
     for (const h of writes) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
-    console.error('\nFix: move the row change into a function that takes the store root, in src/api or the module that owns the rows, and call that.\n');
+    console.error(
+      '\nFix: move the row change into a function that takes the store root, in src/api or the module that owns the rows, and call that.\n',
+    );
   }
   if (hits.length + writes.length > 0) process.exit(1);
   console.log('The CLI ranks and records recall only through retrieve(). OK.');

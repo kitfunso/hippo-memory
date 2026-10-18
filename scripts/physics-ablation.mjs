@@ -114,9 +114,7 @@ function pairedBootstrapCI(diffs, iters = 5000, alpha = 0.05) {
 
 function sessionToContent(questionDate, sessionId, turns) {
   const header = `[Date: ${questionDate || 'unknown'}]\n[Session: ${sessionId}]\n\n`;
-  const body = turns
-    .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`)
-    .join('\n');
+  const body = turns.map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n');
   return header + body;
 }
 
@@ -193,22 +191,24 @@ function buildPasses(entries, corpus) {
     {
       name: 'classic',
       label: 'hybrid BM25+cosine+MMR (physics OFF)',
-      run: async (q) => hybridSearch(q, entries, {
-        hippoRoot: HIPPO_ROOT,
-        preparedCorpus: corpus,
-        budget: 1_000_000,
-        minResults: 10,
-      }),
+      run: async (q) =>
+        hybridSearch(q, entries, {
+          hippoRoot: HIPPO_ROOT,
+          preparedCorpus: corpus,
+          budget: 1_000_000,
+          minResults: 10,
+        }),
     },
     {
       name: 'physics',
       label: 'physicsSearch (physics ON)',
-      run: async (q) => physicsSearch(q, entries, {
-        hippoRoot: HIPPO_ROOT,
-        physicsConfig: { ...DEFAULT_PHYSICS_CONFIG, enabled: true },
-        budget: 1_000_000,
-        minResults: 10,
-      }),
+      run: async (q) =>
+        physicsSearch(q, entries, {
+          hippoRoot: HIPPO_ROOT,
+          physicsConfig: { ...DEFAULT_PHYSICS_CONFIG, enabled: true },
+          budget: 1_000_000,
+          minResults: 10,
+        }),
     },
   ];
 }
@@ -285,15 +285,24 @@ async function runAblation(cases, entries) {
   return summary;
 }
 
-function fmtPct(x) { return (100 * x).toFixed(2) + '%'; }
-function fmtMs(x) { return x.toFixed(1) + 'ms'; }
-function sign(x) { return x >= 0 ? '+' : ''; }
+function fmtPct(x) {
+  return (100 * x).toFixed(2) + '%';
+}
+function fmtMs(x) {
+  return x.toFixed(1) + 'ms';
+}
+function sign(x) {
+  return x >= 0 ? '+' : '';
+}
 
 /** Paired per-case diffs, the per-type table and the four bootstrap CIs (mrr, recall, ndcg, latency in that draw order). */
 function comparePasses(cl, ph) {
   // Per-case paired diffs
   const byId = new Map(cl.cases.map((c) => [c.id, c]));
-  const diffsMrr = [], diffsR5 = [], diffsNdcg5 = [], diffsLat = [];
+  const diffsMrr = [],
+    diffsR5 = [],
+    diffsNdcg5 = [],
+    diffsLat = [];
   // Per-question-type breakdown
   const byType = new Map();
   for (const pc of ph.cases) {
@@ -312,13 +321,16 @@ function comparePasses(cl, ph) {
     b.cMrr += cc.mrr;
     b.pMrr += pc.mrr;
   }
-  const typeRows = [...byType.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([t, b]) => ({
-    type: t, n: b.n,
-    classicNdcg5: b.cNdcg5 / b.n,
-    physicsNdcg5: b.pNdcg5 / b.n,
-    classicMrr: b.cMrr / b.n,
-    physicsMrr: b.pMrr / b.n,
-  }));
+  const typeRows = [...byType.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([t, b]) => ({
+      type: t,
+      n: b.n,
+      classicNdcg5: b.cNdcg5 / b.n,
+      physicsNdcg5: b.pNdcg5 / b.n,
+      classicMrr: b.cMrr / b.n,
+      physicsMrr: b.pMrr / b.n,
+    }));
   const ciMrr = pairedBootstrapCI(diffsMrr);
   const ciR5 = pairedBootstrapCI(diffsR5);
   const ciNdcg5 = pairedBootstrapCI(diffsNdcg5);
@@ -331,14 +343,14 @@ function decideVerdict(cl, ph, typeRows, ciNdcg5, latRatio) {
   const ciCrossesZero = ciNdcg5.low < 0 && ciNdcg5.high > 0;
 
   // Check per-type signals — is there any type where physics wins by >2pp?
-  const winningTypes = typeRows.filter(r => (r.physicsNdcg5 - r.classicNdcg5) > 0.02);
-  const losingTypes = typeRows.filter(r => (r.physicsNdcg5 - r.classicNdcg5) < -0.02);
+  const winningTypes = typeRows.filter((r) => r.physicsNdcg5 - r.classicNdcg5 > 0.02);
+  const losingTypes = typeRows.filter((r) => r.physicsNdcg5 - r.classicNdcg5 < -0.02);
 
   let verdict, verdictReason;
   if (ndcgDelta < -0.02 && !ciCrossesZero) {
     if (winningTypes.length > 0 && losingTypes.length > 0) {
       verdict = 'CONDITIONAL';
-      verdictReason = `Aggregate loss of ${(ndcgDelta * 100).toFixed(2)} pp NDCG@5, but physics wins on ${winningTypes.map(r => r.type).join(', ')} and loses on ${losingTypes.map(r => r.type).join(', ')}. Consider a per-query-type gate rather than blanket keep/cut.`;
+      verdictReason = `Aggregate loss of ${(ndcgDelta * 100).toFixed(2)} pp NDCG@5, but physics wins on ${winningTypes.map((r) => r.type).join(', ')} and loses on ${losingTypes.map((r) => r.type).join(', ')}. Consider a per-query-type gate rather than blanket keep/cut.`;
     } else {
       verdict = 'CUT';
       verdictReason = `Physics loses by ${(ndcgDelta * 100).toFixed(2)} pp NDCG@5 (95% CI ${(ciNdcg5.low * 100).toFixed(2)}..${(ciNdcg5.high * 100).toFixed(2)} pp, excludes 0). No query type gives physics an edge. Recommend removal.`;
@@ -431,7 +443,7 @@ function renderReadme(report, results) {
 
 | Type | N | Classic NDCG@5 | Physics NDCG@5 | Delta | Classic MRR | Physics MRR |
 |---|---|---|---|---|---|---|
-${typeRows.map(r => `| ${r.type} | ${r.n} | ${r.classicNdcg5.toFixed(4)} | ${r.physicsNdcg5.toFixed(4)} | ${sign(r.physicsNdcg5 - r.classicNdcg5)}${(r.physicsNdcg5 - r.classicNdcg5).toFixed(4)} | ${r.classicMrr.toFixed(4)} | ${r.physicsMrr.toFixed(4)} |`).join('\n')}
+${typeRows.map((r) => `| ${r.type} | ${r.n} | ${r.classicNdcg5.toFixed(4)} | ${r.physicsNdcg5.toFixed(4)} | ${sign(r.physicsNdcg5 - r.classicNdcg5)}${(r.physicsNdcg5 - r.classicNdcg5).toFixed(4)} | ${r.classicMrr.toFixed(4)} | ${r.physicsMrr.toFixed(4)} |`).join('\n')}
 
 ## Verdict: ${verdict}
 
@@ -539,9 +551,7 @@ function buildEvalCases(questions, sessionToMemId) {
   const cases = [];
   let dropped = 0;
   for (const q of questions) {
-    const expectedIds = (q.answer_session_ids || [])
-      .map((sid) => sessionToMemId.get(sid))
-      .filter(Boolean);
+    const expectedIds = (q.answer_session_ids || []).map((sid) => sessionToMemId.get(sid)).filter(Boolean);
     if (expectedIds.length === 0) {
       dropped++;
       continue;

@@ -39,7 +39,13 @@ describe('timeouts', () => {
 
 describe('HIPPO_REQUIRE_SERVER', () => {
   it('is on for 1 and true, off for 0, false and unset', () => {
-    for (const [value, on] of [['1', true], ['true', true], ['0', false], ['false', false], ['', false]] as const) {
+    for (const [value, on] of [
+      ['1', true],
+      ['true', true],
+      ['0', false],
+      ['false', false],
+      ['', false],
+    ] as const) {
       vi.stubEnv('HIPPO_REQUIRE_SERVER', value);
       expect(envRequireServer(), `HIPPO_REQUIRE_SERVER=${value}`).toBe(on);
     }
@@ -49,21 +55,21 @@ describe('HIPPO_REQUIRE_SERVER', () => {
 });
 
 describe('HIPPO_ANCHORING and HIPPO_AVAILABILITY', () => {
-  it.each([['HIPPO_ANCHORING', envAnchoringOff], ['HIPPO_AVAILABILITY', envAvailabilityOff]] as const)(
-    '%s switches the hint off only for an off spelling',
-    (name, off) => {
-      vi.stubEnv(name, undefined);
-      expect(off()).toBe(false);
-      for (const v of ['', 'on', '1', 'maybe']) {
-        vi.stubEnv(name, v);
-        expect(off(), `${name}=${v}`).toBe(false);
-      }
-      for (const v of ['off', 'OFF', '0', 'false']) {
-        vi.stubEnv(name, v);
-        expect(off(), `${name}=${v}`).toBe(true);
-      }
-    },
-  );
+  it.each([
+    ['HIPPO_ANCHORING', envAnchoringOff],
+    ['HIPPO_AVAILABILITY', envAvailabilityOff],
+  ] as const)('%s switches the hint off only for an off spelling', (name, off) => {
+    vi.stubEnv(name, undefined);
+    expect(off()).toBe(false);
+    for (const v of ['', 'on', '1', 'maybe']) {
+      vi.stubEnv(name, v);
+      expect(off(), `${name}=${v}`).toBe(false);
+    }
+    for (const v of ['off', 'OFF', '0', 'false']) {
+      vi.stubEnv(name, v);
+      expect(off(), `${name}=${v}`).toBe(true);
+    }
+  });
 });
 
 describe('trimmed readers', () => {

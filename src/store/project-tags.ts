@@ -1,12 +1,6 @@
 // The rows `hippo projects` and sleep's tag repair read and write, bound to one hippo.db handle and tenant,
 // so the merge and repair rules in src/sharing/project-merge.ts decide without holding the handle.
-import {
-  getMeta,
-  setMeta,
-  withTrialScope,
-  withWriteScope,
-  type DatabaseSyncLike,
-} from '../db/index.js';
+import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { withBackup } from '../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';

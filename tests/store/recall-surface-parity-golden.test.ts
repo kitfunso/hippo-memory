@@ -17,7 +17,18 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
+  CLEARED_ENV,
+  FAKE_NOW,
+  freshStore,
+  normalize,
+  RECALL_INPUTS,
+  rowsOf,
+  seeded,
+  SESSION,
+  seedTemplates,
+  TENANT,
+  type Store,
+  type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../../src/cli/flag-values.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -33,11 +44,26 @@ const SURFACES: readonly Surface[] = ['cli', 'mcp', 'http'];
 
 let templates: Templates;
 
-interface RecallCall { query: string; session?: string; budget?: number; cliFlags?: CliFlags; httpParams?: Record<string, string> }
+interface RecallCall {
+  query: string;
+  session?: string;
+  budget?: number;
+  cliFlags?: CliFlags;
+  httpParams?: Record<string, string>;
+}
 
-interface CliRecalled { output: InProcessResult; hint: string | null }
-interface McpRecalled { output: string; hint: string | null }
-interface HttpRecalled { output: { status: number; body: RecallResult }; hint: string | null }
+interface CliRecalled {
+  output: InProcessResult;
+  hint: string | null;
+}
+interface McpRecalled {
+  output: string;
+  hint: string | null;
+}
+interface HttpRecalled {
+  output: { status: number; body: RecallResult };
+  hint: string | null;
+}
 type Recalled = CliRecalled | McpRecalled | HttpRecalled;
 
 async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
@@ -54,11 +80,22 @@ type ToolArgs = Record<string, string | number | boolean>;
 function callTool(root: string, name: string, args: ToolArgs): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) },
+    {
+      hippoRoot: root,
+      tenantId: TENANT,
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(root),
+      config: loadConfig(root),
+    },
   );
 }
 
-interface ToolReply { text: string; isError: boolean }
+interface ToolReply {
+  text: string;
+  isError: boolean;
+}
 
 function toolReply(res: McpResponse | null): ToolReply {
   // SAFETY: a tools/call result is written by src/mcp/request.ts as { content: [{ text }], isError? }.
@@ -105,13 +142,20 @@ async function recallOn(surface: Surface, s: Store, calls: readonly RecallCall[]
   return out;
 }
 
-interface AuditOp { actor: string; op: string; target_id: string | null; metadata_json: string }
+interface AuditOp {
+  actor: string;
+  op: string;
+  target_id: string | null;
+  metadata_json: string;
+}
 
 function auditOps(root: string): AuditOp[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: the SELECT names exactly the four audit_log columns AuditOp declares.
-    return db.prepare("SELECT actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'recall%' ORDER BY id").all() as AuditOp[];
+    return db
+      .prepare("SELECT actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'recall%' ORDER BY id")
+      .all() as AuditOp[];
   } finally {
     closeHippoDb(db);
   }
@@ -170,7 +214,10 @@ describe('recall surface parity goldens', () => {
 
   // D11: each surface keeps its own session ring, so hints and their audit rows follow the surface's own history.
   it.each(SURFACES)('%s: anchoring hints over repeated recalls in one session', async (surface) => {
-    const calls: RecallCall[] = ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map((query) => ({ query, session: SESSION }));
+    const calls: RecallCall[] = ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map((query) => ({
+      query,
+      session: SESSION,
+    }));
     const got = await onFreshStore('local', async (s) => {
       const out = await recallOn(surface, s, calls);
       return { hints: out.map((r) => r.hint), audit: auditOps(s.root) };
@@ -191,20 +238,28 @@ describe('recall surface parity goldens', () => {
 
   // D7: the audit rows are written first, so a recall the store cannot audit records nothing; only the CLI still answers.
   it('a recall whose audit row the store refuses leaves no hint row, strengthen, trace or count', async () => {
-    const refused = <T>(call: (s: Store) => Promise<T>) => onFreshStore('local', async (s) => {
-      const before = rowsOf(s.root);
-      const db = openHippoDb(s.root);
-      try {
-        db.exec("CREATE TRIGGER refuse_recall_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'recall' BEGIN SELECT RAISE(ABORT, 'recall audit refused'); END");
-      } finally {
-        closeHippoDb(db);
-      }
-      const out = await call(s);
-      return { out, before, after: rowsOf(s.root), globalAudit: auditOps(s.globalRoot) };
-    });
+    const refused = <T>(call: (s: Store) => Promise<T>) =>
+      onFreshStore('local', async (s) => {
+        const before = rowsOf(s.root);
+        const db = openHippoDb(s.root);
+        try {
+          db.exec(
+            "CREATE TRIGGER refuse_recall_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'recall' BEGIN SELECT RAISE(ABORT, 'recall audit refused'); END",
+          );
+        } finally {
+          closeHippoDb(db);
+        }
+        const out = await call(s);
+        return { out, before, after: rowsOf(s.root), globalAudit: auditOps(s.globalRoot) };
+      });
     const cli = await refused((s) => viaCli(s, { query: 'deploy' }));
     const http = await refused(async (s) => (await httpCalls(s, [{ query: 'deploy' }]))[0]!);
-    const mcp = await refused((s) => callTool(s.root, 'hippo_recall', { query: 'deploy' }).then(() => 'answered', (err: Error) => err.message));
+    const mcp = await refused((s) =>
+      callTool(s.root, 'hippo_recall', { query: 'deploy' }).then(
+        () => 'answered',
+        (err: Error) => err.message,
+      ),
+    );
 
     for (const got of [cli, http, mcp]) {
       expect({ ...got.after, ledger: [] }).toEqual({ ...got.before, ledger: [] });
@@ -228,10 +283,19 @@ describe('recall surface parity goldens', () => {
       // SAFETY: `hippo recall --json` prints one JSON object carrying a RecallResult-shaped suppressionSummary.
       return (JSON.parse(out.output.stdout) as Pick<RecallResult, 'suppressionSummary'>).suppressionSummary;
     });
-    const mcpHead = await onFreshStore('wide', async (s) => (await viaMcp(s, { query: 'deploy' })).output.split('\n').slice(0, 4));
-    const windowOf = ({ output: { body } }: HttpRecalled) => ({ windowSize: body.windowSize, summary: body.suppressionSummary, returned: body.results.length });
+    const mcpHead = await onFreshStore('wide', async (s) =>
+      (await viaMcp(s, { query: 'deploy' })).output.split('\n').slice(0, 4),
+    );
+    const windowOf = ({ output: { body } }: HttpRecalled) => ({
+      windowSize: body.windowSize,
+      summary: body.suppressionSummary,
+      returned: body.results.length,
+    });
     const [http, httpScorerWindow50] = await onFreshStore('wide', async (s) =>
-      (await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }])).map(windowOf));
+      (await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }])).map(
+        windowOf,
+      ),
+    );
     const got = { cli, mcpHead, http, httpScorerWindow50 };
     expect(got).toMatchSnapshot();
   });
@@ -252,7 +316,10 @@ describe('recall surface parity goldens', () => {
   // D4: HTTP scores are list positions in every mode; hybrid only reorders.
   it('http scores are positions in bm25, hybrid and physics modes', async () => {
     const got = await onFreshStore('local', async (s) => {
-      const out = await httpCalls(s, ['bm25', 'hybrid', 'physics'].map((mode) => ({ query: 'deploy', httpParams: { mode } })));
+      const out = await httpCalls(
+        s,
+        ['bm25', 'hybrid', 'physics'].map((mode) => ({ query: 'deploy', httpParams: { mode } })),
+      );
       return out.map((r) => r.output.body.results.map((x) => [x.id, x.score]));
     });
     expect(got).toMatchSnapshot();
@@ -262,19 +329,25 @@ describe('recall surface parity goldens', () => {
   it('mcp path applies the goal boost twice', async () => {
     const got = await onFreshStore('local', async (s) => {
       let rankedScore = 0;
-      const result = await retrieve(
-        apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }),
-        {
-          query: 'deploy', window: { limit: 50 }, mode: 'physics', boost: { sessionId: SESSION },
-          filter: { keepHeldCopies: true }, hints: { suppressAvailabilityHint: true },
-          showRanked: ({ ranked }) => {
-            rankedScore = ranked.find((r) => r.entry.id === 'mem_p_goal')?.score ?? 0;
-            return { ids: ranked.map((r) => r.entry.id), audit: [] };
-          },
+      const result = await retrieve(apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }), {
+        query: 'deploy',
+        window: { limit: 50 },
+        mode: 'physics',
+        boost: { sessionId: SESSION },
+        filter: { keepHeldCopies: true },
+        hints: { suppressAvailabilityHint: true },
+        showRanked: ({ ranked }) => {
+          rankedScore = ranked.find((r) => r.entry.id === 'mem_p_goal')?.score ?? 0;
+          return { ids: ranked.map((r) => r.entry.id), audit: [] };
         },
-      );
+      });
       const idx = result.results.findIndex((r) => r.id === 'mem_p_goal');
-      return { rankedScore, bandIndex: idx, bandScore: result.results[idx]?.score ?? null, positionScore: 1 - idx / 50 };
+      return {
+        rankedScore,
+        bandIndex: idx,
+        bandScore: result.results[idx]?.score ?? null,
+        positionScore: 1 - idx / 50,
+      };
     });
     expect(got.bandScore).toBeGreaterThan(got.positionScore);
     expect(got).toMatchSnapshot();
@@ -290,7 +363,10 @@ const CONTEXT_INPUTS: readonly [string, Record<string, string | number | boolean
   ['limit 0', { limit: 0 }],
 ];
 
-type McpOutcome = { isError: string } | { ok: string | true } | { thrown: string; code: string | null; message: string };
+type McpOutcome =
+  | { isError: string }
+  | { ok: string | true }
+  | { thrown: string; code: string | null; message: string };
 type HttpOutcome = { status: number; error?: string | null; code?: string | null };
 
 async function mcpOutcome(root: string, tool: string, args: ToolArgs): Promise<McpOutcome> {
@@ -306,13 +382,19 @@ async function mcpOutcome(root: string, tool: string, args: ToolArgs): Promise<M
   }
 }
 
-async function httpOutcome(handle: ServerHandle, path: string, args: Record<string, string | number | boolean>): Promise<HttpOutcome> {
+async function httpOutcome(
+  handle: ServerHandle,
+  path: string,
+  args: Record<string, string | number | boolean>,
+): Promise<HttpOutcome> {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(args)) params.set(k === 'query' ? 'q' : k, String(v));
   const res = await fetch(`${handle.url}${path}?${params.toString()}`);
   // SAFETY: the server's error replies are { error, code? }; a 200 body is not read past this line.
   const body = (await res.json()) as { error?: string; code?: string };
-  return res.status === 200 ? { status: 200 } : { status: res.status, error: body.error ?? null, code: body.code ?? null };
+  return res.status === 200
+    ? { status: 200 }
+    : { status: res.status, error: body.error ?? null, code: body.code ?? null };
 }
 
 describe('recall and context validation drift, MCP vs HTTP', () => {
@@ -334,12 +416,18 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
   });
 
   it.each(RECALL_INPUTS)('recall: %s', async (_name, args) => {
-    const got = { mcp: await mcpOutcome(s.root, 'hippo_recall', args), http: await httpOutcome(handle, '/v1/memories', args) };
+    const got = {
+      mcp: await mcpOutcome(s.root, 'hippo_recall', args),
+      http: await httpOutcome(handle, '/v1/memories', args),
+    };
     expect(normalize(got, s)).toMatchSnapshot();
   });
 
   it.each(CONTEXT_INPUTS)('context: %s', async (_name, args) => {
-    const got = { mcp: await mcpOutcome(s.root, 'hippo_context', args), http: await httpOutcome(handle, '/v1/context', args) };
+    const got = {
+      mcp: await mcpOutcome(s.root, 'hippo_context', args),
+      http: await httpOutcome(handle, '/v1/context', args),
+    };
     expect(normalize(got, s)).toMatchSnapshot();
   });
 });
@@ -357,12 +445,38 @@ describe('shared store recall, MCP vs HTTP', () => {
     try {
       initStore(root);
       writeFileSync(join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
-      writeEntry(root, seeded('lighthouse rota for the acme repo', 'mem_d18_acme', '2026-01-20T00:00:00.000Z', { origin_project: 'acme' }));
-      writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
-      const mcp = toolReply(await handleMcpRequest(
-        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
-        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' }, store: sqliteStore(root), config: loadConfig(root) },
-      ));
+      writeEntry(
+        root,
+        seeded('lighthouse rota for the acme repo', 'mem_d18_acme', '2026-01-20T00:00:00.000Z', {
+          origin_project: 'acme',
+        }),
+      );
+      writeEntry(
+        root,
+        seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', {
+          origin_project: 'beta',
+        }),
+      );
+      const mcp = toolReply(
+        await handleMcpRequest(
+          {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } },
+          },
+          {
+            hippoRoot: root,
+            tenantId: TENANT,
+            actor: 'mcp',
+            role: 'admin',
+            hostAdmin: true,
+            project: { name: 'acme', legacyName: 'acme' },
+            store: sqliteStore(root),
+            config: loadConfig(root),
+          },
+        ),
+      );
       expect(mcp.isError, mcp.text).toBe(false);
       expect(mcp.text).toContain('the acme repo');
       expect(mcp.text).not.toContain('the beta repo');

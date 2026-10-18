@@ -27,11 +27,20 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_SESSION_ID', '');
   vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
   initStore(store);
-  writeEntry(store, seeded('always run the migration dry run before deploying', 'mem_ctx_pinned', { pinned: true, tags: ['deploy'] }));
-  writeEntry(store, seeded('the deploy pipeline uses blue green rollout for the api', 'mem_ctx_deploy', { tags: ['deploy'] }));
+  writeEntry(
+    store,
+    seeded('always run the migration dry run before deploying', 'mem_ctx_pinned', { pinned: true, tags: ['deploy'] }),
+  );
+  writeEntry(
+    store,
+    seeded('the deploy pipeline uses blue green rollout for the api', 'mem_ctx_deploy', { tags: ['deploy'] }),
+  );
   writeEntry(store, seeded('lunch options near the office include a noodle bar', 'mem_ctx_lunch'));
   saveActiveTaskSnapshot(store, 'default', {
-    task: 'ship the context split', summary: 'renderContext split by stage', next_step: 'run the goldens', session_id: 'sess-golden',
+    task: 'ship the context split',
+    summary: 'renderContext split by stage',
+    next_step: 'run the goldens',
+    session_id: 'sess-golden',
   });
 });
 
@@ -41,12 +50,15 @@ afterEach(() => {
 });
 
 function mask(text: string): string {
-  return text
-    .split(root).join('<root>')
-    .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>')
-    .replace(/\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?/g, '<ts>')
-    // Scores decay by the millisecond between runs; four places still pin the ranking inputs.
-    .replace(/"score":(\d+\.\d+)/g, (_m, v: string) => `"score":${Number(v).toFixed(4)}`);
+  return (
+    text
+      .split(root)
+      .join('<root>')
+      .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>')
+      .replace(/\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?/g, '<ts>')
+      // Scores decay by the millisecond between runs; four places still pin the ranking inputs.
+      .replace(/"score":(\d+\.\d+)/g, (_m, v: string) => `"score":${Number(v).toFixed(4)}`)
+  );
 }
 
 type Flags = Record<string, string | boolean | string[]>;
@@ -55,8 +67,12 @@ describe('hippo context output (in process)', () => {
   it('prints the same bytes and exit codes in every format', async () => {
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags, stdin?: string): Promise<void> => {
-      const r = await runInProcess(() => withHookStdin(stdin, () => handleContext({ hippoRoot: store, tenantId: 'default', args, flags })));
-      transcript.push(`$ context ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}\n--- stderr\n${mask(r.stderr)}`);
+      const r = await runInProcess(() =>
+        withHookStdin(stdin, () => handleContext({ hippoRoot: store, tenantId: 'default', args, flags })),
+      );
+      transcript.push(
+        `$ context ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}\n--- stderr\n${mask(r.stderr)}`,
+      );
     };
     const hook = JSON.stringify({ session_id: 'sess-hook', prompt: 'how does the deploy pipeline roll out' });
 

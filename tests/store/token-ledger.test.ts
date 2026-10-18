@@ -48,14 +48,45 @@ describe('token ledger helpers', () => {
   it('tracks the last injected block per session and surface, and resets', async () => {
     withDb(home, (db) => {
       expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 2, tokens: 100, hash: 'aaa' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'aaa' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's2', surface: 'hook', event: 'inject', items: 1, tokens: 40, hash: 'bbb' });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's1',
+        surface: 'hook',
+        event: 'inject',
+        items: 2,
+        tokens: 100,
+        hash: 'aaa',
+      });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's1',
+        surface: 'hook',
+        event: 'skip',
+        items: 2,
+        tokens: 100,
+        hash: 'aaa',
+      });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's2',
+        surface: 'hook',
+        event: 'inject',
+        items: 1,
+        tokens: 40,
+        hash: 'bbb',
+      });
       expect(lastSentState(db, 'default', 's1', 'hook')).toEqual({ hash: 'aaa', skipsSince: 1 });
       expect(lastSentState(db, 'default', 's1', 'context')).toBeNull();
       expect(lastSentState(db, 'other', 's1', 'hook')).toBeNull();
       expect(lastSentState(db, 'default', null, 'hook')).toBeNull();
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'reset', items: 0, tokens: 0 });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's1',
+        surface: 'hook',
+        event: 'reset',
+        items: 0,
+        tokens: 0,
+      });
       expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
     });
   });
@@ -72,15 +103,56 @@ describe('token ledger helpers', () => {
   it('summarizes sent and skipped tokens per surface and prunes old rows', async () => {
     withDb(home, (db) => {
       const old = new Date(Date.now() - 200 * 86_400_000).toISOString();
-      recordTokenUse(db, { tenantId: 'default', sessionId: 'old', surface: 'recall', event: 'inject', items: 1, tokens: 999, now: old });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 2, tokens: 100, hash: 'a' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'a' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'a' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's2', surface: 'recall', event: 'inject', items: 3, tokens: 300 });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 'old',
+        surface: 'recall',
+        event: 'inject',
+        items: 1,
+        tokens: 999,
+        now: old,
+      });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's1',
+        surface: 'hook',
+        event: 'inject',
+        items: 2,
+        tokens: 100,
+        hash: 'a',
+      });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's1',
+        surface: 'hook',
+        event: 'skip',
+        items: 2,
+        tokens: 100,
+        hash: 'a',
+      });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's1',
+        surface: 'hook',
+        event: 'skip',
+        items: 2,
+        tokens: 100,
+        hash: 'a',
+      });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: 's2',
+        surface: 'recall',
+        event: 'inject',
+        items: 3,
+        tokens: 300,
+      });
       recordTokenUse(db, { tenantId: 'other', surface: 'recall', event: 'inject', items: 3, tokens: 7777 });
 
       // SAFETY: COUNT(*) aggregate row.
-      const oldRows = db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = 'old'`).get() as { n: number };
+      const oldRows = db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = 'old'`).get() as {
+        n: number;
+      };
       expect(Number(oldRows.n)).toBe(0);
 
       const since = new Date(Date.now() - 86_400_000).toISOString();
@@ -159,7 +231,10 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
 
   it('resends a changed block at once', async () => {
     expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
-    writeEntry(hippoDir, createMemory('ALWAYS run the migration dry-run before deploying', { pinned: true, layer: Layer.Episodic }));
+    writeEntry(
+      hippoDir,
+      createMemory('ALWAYS run the migration dry-run before deploying', { pinned: true, layer: Layer.Episodic }),
+    );
     const out = await run(HOOK, payload('s1'));
     expect(out).toContain('ALWAYS run the migration dry-run');
   });
@@ -232,8 +307,21 @@ describe('ledger on the HTTP and MCP surfaces', () => {
 
   it('records MCP recall', async () => {
     await handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } },
+      },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp-test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     // The tool's text holds the note itself inside headings whose wording the formatter owns.
     expect(surfaces().mcp_recall).toBeGreaterThanOrEqual(Math.ceil(NOTE.length / 4));

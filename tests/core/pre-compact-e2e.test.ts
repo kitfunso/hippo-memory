@@ -58,7 +58,12 @@ function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: s
   return runCliAs(args, { cwd, env, input });
 }
 
-async function spawnHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): Promise<InProcessResult> {
+async function spawnHippo(
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  input?: string,
+): Promise<InProcessResult> {
   const r = hippoRun(args, { cwd, env, input });
   return { status: r.status ?? -1, stdout: r.stdout, stderr: r.stderr };
 }
@@ -87,9 +92,24 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: 'Please set up the new payment webhook handler.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: "Sure, I'll wire up the webhook handler now." }] } },
-        { type: 'user', message: { role: 'user', content: 'we decided to use PostgreSQL for the new backend service layer.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Got it, using PostgreSQL. Implementing the schema next.' }] } },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: "Sure, I'll wire up the webhook handler now." }],
+          },
+        },
+        {
+          type: 'user',
+          message: { role: 'user', content: 'we decided to use PostgreSQL for the new backend service layer.' },
+        },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Got it, using PostgreSQL. Implementing the schema next.' }],
+          },
+        },
         { type: 'user', message: { role: 'user', content: "Now let's also add rate limiting to the endpoint." } },
         {
           type: 'assistant',
@@ -106,8 +126,19 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
         // or this session: a prior compaction's summary (isMeta) and a
         // sub-agent turn (isSidechain) trail the real turns here and must
         // NOT win task/next_step derivation.
-        { type: 'user', isMeta: true, message: { role: 'user', content: 'COMPACT SUMMARY META LINE - must not become the task' } },
-        { type: 'assistant', isSidechain: true, message: { role: 'assistant', content: [{ type: 'text', text: 'SIDECHAIN NEXT STEP - must not become next_step' }] } },
+        {
+          type: 'user',
+          isMeta: true,
+          message: { role: 'user', content: 'COMPACT SUMMARY META LINE - must not become the task' },
+        },
+        {
+          type: 'assistant',
+          isSidechain: true,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'SIDECHAIN NEXT STEP - must not become next_step' }],
+          },
+        },
       ]),
     );
 
@@ -140,8 +171,18 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: 'fix the login bug' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Looking into the login bug now.' }] } },
-        { type: 'user', promptSource: 'system', message: { role: 'user', content: '<task-notification>Another Claude session finished a task.</task-notification>' } },
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Looking into the login bug now.' }] },
+        },
+        {
+          type: 'user',
+          promptSource: 'system',
+          message: {
+            role: 'user',
+            content: '<task-notification>Another Claude session finished a task.</task-notification>',
+          },
+        },
       ]),
     );
 
@@ -188,7 +229,10 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       path.join(discoveredProjectDir, 'discoverable-transcript.jsonl'),
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: 'we decided to use MongoDB for the discoverable session.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'DISCOVERABLE SESSION marker text.' }] } },
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'DISCOVERABLE SESSION marker text.' }] },
+        },
       ]),
     );
 
@@ -237,7 +281,12 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       ]),
     );
 
-    const payload = JSON.stringify({ session_id: 'sess-null-path', transcript_path: null, cwd: dir, hook_event_name: 'PreCompact' });
+    const payload = JSON.stringify({
+      session_id: 'sess-null-path',
+      transcript_path: null,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
     const result = await runHippo(['pre-compact'], dir, env, payload);
 
     expect(result.status).toBe(0);
@@ -276,8 +325,19 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       path.join(decoyProjectDir, 'decoy-transcript.jsonl'),
       transcriptJsonl([
-        { type: 'user', message: { role: 'user', content: 'we decided to use MongoDB for the decoy session, this must never leak.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'DECOY SESSION marker — must never be snapshotted under another session id.' }] } },
+        {
+          type: 'user',
+          message: { role: 'user', content: 'we decided to use MongoDB for the decoy session, this must never leak.' },
+        },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'DECOY SESSION marker — must never be snapshotted under another session id.' },
+            ],
+          },
+        },
       ]),
     );
 
@@ -331,7 +391,10 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: longTask } },
-        ...bigChunks.map((text) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } })),
+        ...bigChunks.map((text) => ({
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text }] },
+        })),
         { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: longAssistantText }] } },
       ]),
     );
@@ -393,7 +456,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'some tool output' }] } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Ran the tool, next step: verify the output.' }] } },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Ran the tool, next step: verify the output.' }],
+          },
+        },
       ]),
     );
 
@@ -428,7 +497,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: 'we decided to use PostgreSQL after the store broke.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Next step: verify the corrupted-store path.' }] } },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Next step: verify the corrupted-store path.' }],
+          },
+        },
       ]),
     );
     const payload = JSON.stringify({
@@ -450,8 +525,25 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        { type: 'user', message: { role: 'user', content: 'the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa is what we use.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Noted the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Next step: rotate it.' }] } },
+        {
+          type: 'user',
+          message: {
+            role: 'user',
+            content: 'the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa is what we use.',
+          },
+        },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: 'Noted the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. Next step: rotate it.',
+              },
+            ],
+          },
+        },
       ]),
     );
     const payload = JSON.stringify({
@@ -495,18 +587,36 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
         { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: {} }] } },
       ]),
     );
-    const payload = JSON.stringify({ session_id: 'sess-old-jwt', transcript_path: transcriptPath, cwd: dir, hook_event_name: 'PreCompact' });
+    const payload = JSON.stringify({
+      session_id: 'sess-old-jwt',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
 
     expect((await runHippo(['pre-compact'], dir, env, payload)).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot!.next_step).toBe('retry the export with Authorization: [REDACTED]');
-    const handoff = writeSessionEndHandoff(hippoRoot, { tenantId: 'default', sessionId: 'sess-old-jwt', evidence: null });
+    const handoff = writeSessionEndHandoff(hippoRoot, {
+      tenantId: 'default',
+      sessionId: 'sess-old-jwt',
+      evidence: null,
+    });
     expect(handoff!.nextAction).toBe('retry the export with Authorization: [REDACTED]');
   });
 
   it('hippo snapshot save stores a JWT scrubbed', async () => {
     const result = await runHippo(
-      ['snapshot', 'save', '--task', 'call the export API', '--summary', `the token is ${FAKE_JWT}`, '--next-step', `use Bearer ${FAKE_JWT}`],
+      [
+        'snapshot',
+        'save',
+        '--task',
+        'call the export API',
+        '--summary',
+        `the token is ${FAKE_JWT}`,
+        '--next-step',
+        `use Bearer ${FAKE_JWT}`,
+      ],
       dir,
       env,
     );
@@ -536,8 +646,17 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        { type: 'user', message: { role: 'user', content: 'we decided to use the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for the deploy bot.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Recorded that decision.' }] } },
+        {
+          type: 'user',
+          message: {
+            role: 'user',
+            content: 'we decided to use the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for the deploy bot.',
+          },
+        },
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Recorded that decision.' }] },
+        },
       ]),
     );
     const payload = JSON.stringify({
@@ -561,7 +680,18 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
 
   it("CX6: per-field fallback never carries another session's content into this session's snapshot", async () => {
     const seed = await runHippo(
-      ['snapshot', 'save', '--task', 'SESSION A TASK', '--summary', 'A summary', '--next-step', 'A next', '--session', 'sess-A'],
+      [
+        'snapshot',
+        'save',
+        '--task',
+        'SESSION A TASK',
+        '--summary',
+        'A summary',
+        '--next-step',
+        'A next',
+        '--session',
+        'sess-A',
+      ],
       dir,
       env,
     );
@@ -575,7 +705,13 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output only' }] } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Session B assistant progress note. Next step: continue B work.' }] } },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Session B assistant progress note. Next step: continue B work.' }],
+          },
+        },
       ]),
     );
     const payload = JSON.stringify({
@@ -604,7 +740,10 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: `here is the deploy key ${pem} keep it safe.` } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Stored. Next step: rotate the key.' }] } },
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Stored. Next step: rotate the key.' }] },
+        },
       ]),
     );
     const payload = JSON.stringify({
@@ -634,7 +773,13 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
         { type: 'user', message: { role: 'user', content: turn('turn-two') } },
         { type: 'user', message: { role: 'user', content: turn('turn-three') } },
         { type: 'user', message: { role: 'user', content: turn('NEWEST-TURN-MARKER') } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'FINAL-ASSISTANT-MARKER: continue the rollout.' }] } },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'FINAL-ASSISTANT-MARKER: continue the rollout.' }],
+          },
+        },
       ]),
     );
     const payload = JSON.stringify({
@@ -681,7 +826,10 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: 'Ship the oversized-record survival fix.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Next step: verify the grown-window path.' }] } },
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Next step: verify the grown-window path.' }] },
+        },
         giant,
       ]),
     );
@@ -801,7 +949,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
   it('X5: payload session_id present and different from the snapshot session_id -> silent exit 0 (no cross-session restore)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
-      task: 'session-a task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-a',
+      task: 'session-a task',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-a',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-b', source: 'compact' });
@@ -813,7 +965,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
   it('X5: payload session_id matches the snapshot session_id -> prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
-      task: 'session-match task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-match',
+      task: 'session-match task',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-match',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-match', source: 'compact' });
@@ -825,7 +981,10 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
   it('X5: snapshot has no session_id (manual `snapshot save`) -> payload session_id present still prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
-      task: 'no-session-id task', summary: 's', next_step: 'n', source: 'cli',
+      task: 'no-session-id task',
+      summary: 's',
+      next_step: 'n',
+      source: 'cli',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-any', source: 'compact' });
@@ -838,7 +997,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
   it('DF-Z0: snapshot updated 16 min ago -> silent, even with a matching session id', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
-      task: 'stale snapshot task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-stale',
+      task: 'stale snapshot task',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-stale',
     });
     backdateActiveSnapshot(hippoRoot, 'default', 16);
 
@@ -852,7 +1015,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
   it('DF-Z0: snapshot updated 14 min ago -> prints', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
-      task: 'fresh-enough snapshot task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-fresh',
+      task: 'fresh-enough snapshot task',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-fresh',
     });
     backdateActiveSnapshot(hippoRoot, 'default', 14);
 
@@ -866,7 +1033,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
   it('X8: session event content is capped at 400 chars in compact-resume output', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
-      task: 't', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-long-event',
+      task: 't',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-long-event',
     });
     const longContent = 'E'.repeat(1000);
     appendSessionEvent(hippoRoot, 'default', {
@@ -885,7 +1056,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
   it('source: "startup" -> empty stdout, exit 0 (matcher-defence-in-depth)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
-      task: 't', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-x',
+      task: 't',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-x',
     });
 
     const payload = JSON.stringify({ session_id: 'sess-x', source: 'startup' });
@@ -897,7 +1072,10 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
   it('X13: malformed non-empty stdin -> exit 0, silent (fail closed)', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
-      task: 'manual-use task', summary: 's', next_step: 'n', source: 'pre-compact',
+      task: 'manual-use task',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
     });
 
     const result = await runHippo(['compact-resume'], dir, env, 'not json');
@@ -908,7 +1086,10 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
   it('X13: true manual invocation (no stdin at all) still prints', async () => {
     saveActiveTaskSnapshot(getHippoRoot(dir), 'default', {
-      task: 'manual-use task', summary: 's', next_step: 'n', source: 'pre-compact',
+      task: 'manual-use task',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
     });
 
     const result = await runHippo(['compact-resume'], dir, env);
@@ -927,7 +1108,11 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
   it('corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash/stack leaked to stdout', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
-      task: 'task before corruption', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-corrupt',
+      task: 'task before corruption',
+      summary: 's',
+      next_step: 'n',
+      source: 'pre-compact',
+      session_id: 'sess-corrupt',
     });
 
     // Genuinely corrupt the store: overwrite the main db file with garbage
@@ -982,7 +1167,12 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
     expect(lastSleep.status).toBe(0);
     expect(lastSleep.stdout.trim()).toBe('');
 
-    const compactResume = await runHippo(['compact-resume'], dir, env, JSON.stringify({ session_id: 'sess-combo', source: 'compact' }));
+    const compactResume = await runHippo(
+      ['compact-resume'],
+      dir,
+      env,
+      JSON.stringify({ session_id: 'sess-combo', source: 'compact' }),
+    );
     expect(compactResume.status).toBe(0);
     expect(compactResume.stdout).toContain('Restored after compaction');
     expect(compactResume.stdout).toContain('combined-firing task');
@@ -1004,7 +1194,12 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
     // not a no-op, and that clearing doesn't touch the sqlite-backed snapshot.
     expect(fs.existsSync(logPath)).toBe(false);
 
-    const compactResume = await runHippo(['compact-resume'], dir, env, JSON.stringify({ session_id: 'sess-combo', source: 'compact' }));
+    const compactResume = await runHippo(
+      ['compact-resume'],
+      dir,
+      env,
+      JSON.stringify({ session_id: 'sess-combo', source: 'compact' }),
+    );
     expect(compactResume.status).toBe(0);
     expect(compactResume.stdout).toContain('Restored after compaction');
     expect(compactResume.stdout).toContain('combined-firing task');

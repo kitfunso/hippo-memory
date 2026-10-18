@@ -25,20 +25,33 @@ const counts = {};
 for (const f of walk('src')) {
   const file = f.replaceAll('\\', '/');
   if (file === 'src/util/log.ts') continue;
-  const text = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1');
+  const text = readFileSync(f, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:\\])\/\/.*$/gm, '$1');
   const n = PATTERNS.reduce((sum, re) => sum + (text.match(re)?.length ?? 0), 0);
   if (n > 0) counts[file] = n;
 }
 
 const base = JSON.parse(readFileSync(BASELINE, 'utf8'));
 const risen = Object.entries(counts).filter(([f, n]) => n > (base[f] ?? 0));
-if (process.argv.includes("--update")) {
-  if (risen.length > 0) { console.error('refusing to raise a number:', risen.map(([f]) => f).join(', ')); process.exit(1); }
+if (process.argv.includes('--update')) {
+  if (risen.length > 0) {
+    console.error('refusing to raise a number:', risen.map(([f]) => f).join(', '));
+    process.exit(1);
+  }
   writeFileSync(BASELINE, `${JSON.stringify(counts, null, 2)}\n`);
-  console.log(`Wrote ${BASELINE}: ${Object.values(counts).reduce((a, b) => a + b, 0)} hits over ${Object.keys(counts).length} files.`);
+  console.log(
+    `Wrote ${BASELINE}: ${Object.values(counts).reduce((a, b) => a + b, 0)} hits over ${Object.keys(counts).length} files.`,
+  );
 } else if (risen.length > 0) {
-  for (const [f, n] of risen) console.error(`${f}: ${n} hand-spelled error text (baseline ${base[f] ?? 0}); call errorMessage() from src/util/log.ts`);
+  for (const [f, n] of risen) {
+    console.error(
+      `${f}: ${n} hand-spelled error text (baseline ${base[f] ?? 0}); call errorMessage() from src/util/log.ts`,
+    );
+  }
   process.exit(1);
 } else {
-  console.log(`Error-text ratchet OK: ${Object.values(counts).reduce((a, b) => a + b, 0)} hits, none above ${BASELINE}.`);
+  console.log(
+    `Error-text ratchet OK: ${Object.values(counts).reduce((a, b) => a + b, 0)} hits, none above ${BASELINE}.`,
+  );
 }

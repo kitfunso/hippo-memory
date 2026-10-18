@@ -30,14 +30,18 @@ export function sqliteLessonWrites({ on }: Handles): Sync<LessonWrites> {
     contentsWithTag: (tenantId, tag, origins) => on((db) => contentsWithTagAt(db, tenantId, tag, origins), openStore),
     writeSkippingRejected(entries, actor) {
       const written: string[] = [];
-      on((db, files) => writeEntriesSkippingRejectedAt(
-        db,
-        files,
-        (put) => {
-          for (const entry of entries) if (put(entry)) written.push(entry.id);
-        },
-        actor,
-      ), openStore);
+      on(
+        (db, files) =>
+          writeEntriesSkippingRejectedAt(
+            db,
+            files,
+            (put) => {
+              for (const entry of entries) if (put(entry)) written.push(entry.id);
+            },
+            actor,
+          ),
+        openStore,
+      );
       return written;
     },
     writeTogether(entries) {

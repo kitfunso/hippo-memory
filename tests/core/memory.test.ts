@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, calculateRewardFactor, applyOutcome, Layer, type MemoryEntry, type TraceOutcome} from '../../src/core/memory.js';
+import {
+  calculateStrength,
+  calculateRewardFactor,
+  applyOutcome,
+  Layer,
+  type MemoryEntry,
+  type TraceOutcome,
+} from '../../src/core/memory.js';
 import { strengthSql } from '../../src/store/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -8,7 +15,8 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 describe('Strength formula', () => {
   it('returns 1.0 for a pinned memory regardless of age', () => {
@@ -199,7 +207,7 @@ describe('Decay basis modes', () => {
       avgSessionIntervalDays: 3.5,
     });
     // 2 sessions / 7 half-life = 0.5^(2/7) ≈ 0.820
-    expect(s).toBeCloseTo(0.820, 2);
+    expect(s).toBeCloseTo(0.82, 2);
   });
 
   it('session mode: weekly agent decays slower than daily agent', () => {
@@ -297,15 +305,17 @@ describe('MemoryEntry trace fields', () => {
     // A plain `string`-typed literal, not narrowed to the TraceOutcome union,
     // so the assertion below is a genuine down-cast rather than a no-op.
     const invalidOutcome: string = 'not-a-real-outcome';
-    expect(() => createMemory7('invalid', {
-      layer: Layer.Trace,
-      // SAFETY: intentionally NOT a member of the TraceOutcome union —
-      // this test exercises createMemory's runtime validation (memory.ts
-      // throws "Invalid trace_outcome" for any value outside 'success' |
-      // 'failure' | 'partial' | null), so the invalid literal must reach
-      // the function despite the type system disallowing it structurally.
-      traceOutcome: invalidOutcome as TraceOutcome,
-    })).toThrow(/trace_outcome/);
+    expect(() =>
+      createMemory7('invalid', {
+        layer: Layer.Trace,
+        // SAFETY: intentionally NOT a member of the TraceOutcome union —
+        // this test exercises createMemory's runtime validation (memory.ts
+        // throws "Invalid trace_outcome" for any value outside 'success' |
+        // 'failure' | 'partial' | null), so the invalid literal must reach
+        // the function despite the type system disallowing it structurally.
+        traceOutcome: invalidOutcome as TraceOutcome,
+      }),
+    ).toThrow(/trace_outcome/);
   });
 });
 
@@ -314,7 +324,10 @@ describe('strengthSql parity', () => {
     const now = new Date('2026-06-01T00:00:00.000Z');
     const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
     const row = (id: string, days: number, extra: Partial<MemoryEntry> = {}) => ({
-      ...createMemory7(`parity ${id}`), id, last_retrieved: at(days), ...extra,
+      ...createMemory7(`parity ${id}`),
+      id,
+      last_retrieved: at(days),
+      ...extra,
     });
     const entries = [
       row('pinned-old', 400, { pinned: true }),
@@ -326,7 +339,9 @@ describe('strengthSql parity', () => {
       row('rewarded', 20, { outcome_positive: 6, outcome_negative: 1 }),
       row('wrong', 5, { outcome_negative: 4 }),
       row('short-half-life', 6, { half_life_days: 2 }),
-      ...(['neutral', 'positive', 'negative', 'critical'] as const).map((v) => row(`valence-${v}`, 10, { emotional_valence: v })),
+      ...(['neutral', 'positive', 'negative', 'critical'] as const).map((v) =>
+        row(`valence-${v}`, 10, { emotional_valence: v }),
+      ),
     ];
     const home = makeRoot('strength-parity');
     try {
@@ -334,7 +349,10 @@ describe('strengthSql parity', () => {
       const db = openHippoDb(home);
       try {
         // SAFETY: the SELECT names exactly the columns id and s.
-        const rows = db.prepare(`SELECT id, ${strengthSql(now)} AS s FROM memories`).all() as Array<{ id: string; s: number }>;
+        const rows = db.prepare(`SELECT id, ${strengthSql(now)} AS s FROM memories`).all() as Array<{
+          id: string;
+          s: number;
+        }>;
         expect(rows).toHaveLength(entries.length);
         for (const r of rows) {
           const entry = entries.find((e) => e.id === r.id);

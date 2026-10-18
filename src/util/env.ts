@@ -93,12 +93,24 @@ export function envByName(name: string): string | undefined {
 }
 
 // Eval-only lifecycle switches; ablation.ts caches them per process.
-export function envAblateDecay(): boolean { return flag('HIPPO_ABLATE_DECAY'); }
-export function envAblateRecallBoost(): boolean { return flag('HIPPO_ABLATE_RECALL_BOOST'); }
-export function envAblateOutcome(): boolean { return flag('HIPPO_ABLATE_OUTCOME'); }
-export function envAblateOutcomeSlow(): boolean { return flag('HIPPO_ABLATE_OUTCOME_SLOW'); }
-export function envAblateOutcomeFast(): boolean { return flag('HIPPO_ABLATE_OUTCOME_FAST'); }
-export function envAblateRecency(): boolean { return flag('HIPPO_ABLATE_RECENCY'); }
+export function envAblateDecay(): boolean {
+  return flag('HIPPO_ABLATE_DECAY');
+}
+export function envAblateRecallBoost(): boolean {
+  return flag('HIPPO_ABLATE_RECALL_BOOST');
+}
+export function envAblateOutcome(): boolean {
+  return flag('HIPPO_ABLATE_OUTCOME');
+}
+export function envAblateOutcomeSlow(): boolean {
+  return flag('HIPPO_ABLATE_OUTCOME_SLOW');
+}
+export function envAblateOutcomeFast(): boolean {
+  return flag('HIPPO_ABLATE_OUTCOME_FAST');
+}
+export function envAblateRecency(): boolean {
+  return flag('HIPPO_ABLATE_RECENCY');
+}
 
 /** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null. */
 export function envEvalRecencyDays(): number | null {
@@ -115,28 +127,62 @@ export function envFakeNowMs(): number | null {
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : null;
 }
 
-export function envLossAversionRatio(): string | undefined { return raw('HIPPO_LOSS_AVERSION_RATIO'); }
-export function envSummaryDeboost(): string | undefined { return raw('HIPPO_SUMMARY_DEBOOST'); }
-export function envAutodebiasOff(): boolean { return flagIsOff('HIPPO_AUTODEBIAS'); }
-export function envAnchoringOff(): boolean { return flagIsOff('HIPPO_ANCHORING'); }
-export function envAvailabilityOff(): boolean { return flagIsOff('HIPPO_AVAILABILITY'); }
-export function envDagRebuildCap(): number | undefined { return positiveInt('HIPPO_DAG_REBUILD_CAP'); }
+export function envLossAversionRatio(): string | undefined {
+  return raw('HIPPO_LOSS_AVERSION_RATIO');
+}
+export function envSummaryDeboost(): string | undefined {
+  return raw('HIPPO_SUMMARY_DEBOOST');
+}
+export function envAutodebiasOff(): boolean {
+  return flagIsOff('HIPPO_AUTODEBIAS');
+}
+export function envAnchoringOff(): boolean {
+  return flagIsOff('HIPPO_ANCHORING');
+}
+export function envAvailabilityOff(): boolean {
+  return flagIsOff('HIPPO_AVAILABILITY');
+}
+export function envDagRebuildCap(): number | undefined {
+  return positiveInt('HIPPO_DAG_REBUILD_CAP');
+}
 
 // Paths. HIPPO_HOME and XDG_DATA_HOME come back trimmed, possibly empty.
-export function envHippoHome(): string | undefined { return raw('HIPPO_HOME')?.trim(); }
-export function envXdgDataHome(): string | undefined { return raw('XDG_DATA_HOME')?.trim(); }
-export function envHomeDir(): string | undefined { return raw('HOME') || raw('USERPROFILE'); }
-export function envPath(): string | undefined { return raw('PATH'); }
+export function envHippoHome(): string | undefined {
+  return raw('HIPPO_HOME')?.trim();
+}
+export function envXdgDataHome(): string | undefined {
+  return raw('XDG_DATA_HOME')?.trim();
+}
+export function envHomeDir(): string | undefined {
+  return raw('HOME') || raw('USERPROFILE');
+}
+export function envPath(): string | undefined {
+  return raw('PATH');
+}
 /** The extensions win32 tries on a bare command name, in order. */
-export function envPathExt(): string | undefined { return raw('PATHEXT'); }
-export function envModelCache(): string | undefined { return trimmed('HIPPO_MODEL_CACHE'); }
+export function envPathExt(): string | undefined {
+  return raw('PATHEXT');
+}
+export function envModelCache(): string | undefined {
+  return trimmed('HIPPO_MODEL_CACHE');
+}
 
 // Session, scope and tenant.
-export function envHippoSessionId(): string | undefined { return trimmed('HIPPO_SESSION_ID'); }
-export function envClaudeCodeSessionId(): string | undefined { return trimmed('CLAUDE_CODE_SESSION_ID'); }
-export function envScope(): string | undefined { return raw('HIPPO_SCOPE'); }
-export function envGstackSkill(): string | undefined { return raw('GSTACK_SKILL'); }
-export function envOpenclawSkill(): string | undefined { return raw('OPENCLAW_SKILL'); }
+export function envHippoSessionId(): string | undefined {
+  return trimmed('HIPPO_SESSION_ID');
+}
+export function envClaudeCodeSessionId(): string | undefined {
+  return trimmed('CLAUDE_CODE_SESSION_ID');
+}
+export function envScope(): string | undefined {
+  return raw('HIPPO_SCOPE');
+}
+export function envGstackSkill(): string | undefined {
+  return raw('GSTACK_SKILL');
+}
+export function envOpenclawSkill(): string | undefined {
+  return raw('OPENCLAW_SKILL');
+}
 
 /** The tenant of a store that names none. */
 export const DEFAULT_TENANT_ID = 'default';
@@ -147,62 +193,128 @@ export function envTenant(): string {
 }
 
 // Install and CLI switches.
-export function envSkipAutoIntegrations(): boolean { return flag('HIPPO_SKIP_AUTO_INTEGRATIONS'); }
-export function envSkipSchedule(): boolean { return flag('HIPPO_SKIP_SCHEDULE'); }
-export function envMcpStdio(): boolean { return flag('HIPPO_MCP_STDIO'); }
-export function envRequireServer(): boolean { return flag('HIPPO_REQUIRE_SERVER'); }
-export function envRequireSessionScopedFreshTail(): boolean { return flag('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL'); }
-export function envStdinWaitMs(): number | undefined { return positiveInt('HIPPO_STDIN_WAIT_MS'); }
-export function envLogLevel(): string { return raw('HIPPO_LOG')?.trim().toLowerCase() ?? ''; }
+export function envSkipAutoIntegrations(): boolean {
+  return flag('HIPPO_SKIP_AUTO_INTEGRATIONS');
+}
+export function envSkipSchedule(): boolean {
+  return flag('HIPPO_SKIP_SCHEDULE');
+}
+export function envMcpStdio(): boolean {
+  return flag('HIPPO_MCP_STDIO');
+}
+export function envRequireServer(): boolean {
+  return flag('HIPPO_REQUIRE_SERVER');
+}
+export function envRequireSessionScopedFreshTail(): boolean {
+  return flag('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
+}
+export function envStdinWaitMs(): number | undefined {
+  return positiveInt('HIPPO_STDIN_WAIT_MS');
+}
+export function envLogLevel(): string {
+  return raw('HIPPO_LOG')?.trim().toLowerCase() ?? '';
+}
 /** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text line. */
-export function envLogJson(): boolean { return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json'; }
+export function envLogJson(): boolean {
+  return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json';
+}
 
 // Server.
-export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
+export function envPort(): string | undefined {
+  return raw('HIPPO_PORT');
+}
 /**
  * How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds
  * the default.
  */
-export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
-export function envRequireAuth(): boolean { return flag('HIPPO_REQUIRE_AUTH'); }
+export function envHealthProbeMs(): number | undefined {
+  return positiveInt('HIPPO_HEALTH_PROBE_MS');
+}
+export function envRequireAuth(): boolean {
+  return flag('HIPPO_REQUIRE_AUTH');
+}
 /** `1` lets a request made on this machine in with no key; HIPPO_REQUIRE_AUTH=1 wins over it. */
-export function envAllowKeylessLocal(): boolean { return flag('HIPPO_ALLOW_KEYLESS_LOCAL'); }
+export function envAllowKeylessLocal(): boolean {
+  return flag('HIPPO_ALLOW_KEYLESS_LOCAL');
+}
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
-export function envAllowCleartext(): boolean { return flag('HIPPO_ALLOW_CLEARTEXT'); }
-export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
+export function envAllowCleartext(): boolean {
+  return flag('HIPPO_ALLOW_CLEARTEXT');
+}
+export function envV1Rps(): string | undefined {
+  return raw('HIPPO_V1_RPS');
+}
 /** Requests per second each authenticated caller may make; `0` turns the per-caller limit off. */
-export function envCallerRps(): string | undefined { return trimmed('HIPPO_CALLER_RPS'); }
+export function envCallerRps(): string | undefined {
+  return trimmed('HIPPO_CALLER_RPS');
+}
 /** How long a request body may take to arrive; http-util.ts holds the default. */
-export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
+export function envBodyTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_BODY_TIMEOUT_MS');
+}
 /** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
-export function envSleepTimeoutMs(): number | undefined { return positiveInt('HIPPO_SLEEP_TIMEOUT_MS'); }
+export function envSleepTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_SLEEP_TIMEOUT_MS');
+}
 /** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP
  * request before its timeout error; 0 for no deadline; util/request-scope.ts holds the default. */
-export function envRequestDeadlineMs(): number | undefined { return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS'); }
+export function envRequestDeadlineMs(): number | undefined {
+  return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS');
+}
 /**
  * How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the
  * default.
  */
-export function envStoreQueueMax(): number | undefined { return positiveInt('HIPPO_STORE_QUEUE_MAX'); }
+export function envStoreQueueMax(): number | undefined {
+  return positiveInt('HIPPO_STORE_QUEUE_MAX');
+}
 /** How long the daily runner lets one child `hippo` step run; cli/setup.ts holds the default. */
-export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
-export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
-export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
+export function envDailyStepTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS');
+}
+export function envApiKey(): string | undefined {
+  return raw('HIPPO_API_KEY');
+}
+export function envClientIpHeader(): string | undefined {
+  return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase();
+}
 /** The peers whose HIPPO_CLIENT_IP_HEADER is believed: IPs or CIDRs. */
-export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }
+export function envTrustedProxies(): string | undefined {
+  return raw('HIPPO_TRUSTED_PROXIES');
+}
 /** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and --tls-key flags win. */
-export function envTlsCert(): string | undefined { return trimmed('HIPPO_TLS_CERT'); }
-export function envTlsKey(): string | undefined { return trimmed('HIPPO_TLS_KEY'); }
-export function envMcpSseMaxStreams(): number | undefined { return positiveInt('MCP_SSE_MAX_STREAMS'); }
-export function envMcpSseHeartbeatMs(): number | undefined { return positiveInt('MCP_SSE_HEARTBEAT_MS'); }
-export function envMcpSseMaxAgeSec(): number | undefined { return positiveInt('MCP_SSE_MAX_AGE_SEC'); }
+export function envTlsCert(): string | undefined {
+  return trimmed('HIPPO_TLS_CERT');
+}
+export function envTlsKey(): string | undefined {
+  return trimmed('HIPPO_TLS_KEY');
+}
+export function envMcpSseMaxStreams(): number | undefined {
+  return positiveInt('MCP_SSE_MAX_STREAMS');
+}
+export function envMcpSseHeartbeatMs(): number | undefined {
+  return positiveInt('MCP_SSE_HEARTBEAT_MS');
+}
+export function envMcpSseMaxAgeSec(): number | undefined {
+  return positiveInt('MCP_SSE_MAX_AGE_SEC');
+}
 
 // LLM and reranker credentials and knobs.
-export function envAnthropicApiKey(): string | undefined { return raw('ANTHROPIC_API_KEY'); }
-export function envLlmTimeoutMs(): number | undefined { return positiveInt('HIPPO_LLM_TIMEOUT_MS'); }
-export function envTypesafeApiKey(): string | undefined { return trimmed('TYPESAFE_API_KEY'); }
-export function envJevTimeoutMs(): number | undefined { return positiveInt('HIPPO_JEV_TIMEOUT_MS'); }
-export function envJevModel(): string | undefined { return raw('HIPPO_JEV_MODEL'); }
+export function envAnthropicApiKey(): string | undefined {
+  return raw('ANTHROPIC_API_KEY');
+}
+export function envLlmTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_LLM_TIMEOUT_MS');
+}
+export function envTypesafeApiKey(): string | undefined {
+  return trimmed('TYPESAFE_API_KEY');
+}
+export function envJevTimeoutMs(): number | undefined {
+  return positiveInt('HIPPO_JEV_TIMEOUT_MS');
+}
+export function envJevModel(): string | undefined {
+  return raw('HIPPO_JEV_MODEL');
+}
 /**
  * How long a recall waits for an API provider to embed its query before ranking on BM25 alone; search/vector.ts holds
  * the default.

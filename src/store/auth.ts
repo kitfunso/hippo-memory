@@ -11,8 +11,8 @@ import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from './port/key-write
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
-const ID_LEN = 24;       // base32 chars after prefix
-const SECRET_LEN = 32;   // base32 chars after dot
+const ID_LEN = 24; // base32 chars after prefix
+const SECRET_LEN = 32; // base32 chars after dot
 const SCRYPT_KEYLEN = 32;
 // Node's defaults, written out so a hash states the cost it was made with.
 const SCRYPT_N = 16384;
@@ -74,8 +74,17 @@ interface StoredScrypt {
 
 function validCost(n: number, r: number, p: number): boolean {
   const powerOfTwo = Number.isInteger(n) && n >= 2 && (n & (n - 1)) === 0;
-  return powerOfTwo && n <= SCRYPT_MAX_N && Number.isInteger(r) && r >= 1 && r <= SCRYPT_MAX_R
-    && Number.isInteger(p) && p >= 1 && p <= SCRYPT_MAX_P && 128 * n * r <= SCRYPT_MAXMEM;
+  return (
+    powerOfTwo &&
+    n <= SCRYPT_MAX_N &&
+    Number.isInteger(r) &&
+    r >= 1 &&
+    r <= SCRYPT_MAX_R &&
+    Number.isInteger(p) &&
+    p >= 1 &&
+    p <= SCRYPT_MAX_P &&
+    128 * n * r <= SCRYPT_MAXMEM
+  );
 }
 
 /** Null when `stored` has another shape or asks for more work than a verify may do. */
@@ -146,7 +155,7 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   db.prepare(
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES ` +
-    `(?, ?, ?, ?, ?, ?, ?, ?)`,
+      `(?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(key.keyId, key.keyHash, key.tenantId, key.label, key.createdAt, key.role, key.ownerSubject, key.expiresAt);
 }
 
@@ -190,14 +199,16 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   // owner_subject; `.get` returns undefined when no row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as {
-      key_hash: string;
-      tenant_id: string;
-      revoked_at: string | null;
-      role: string;
-      expires_at: string | null;
-      owner_subject: string | null;
-    } | undefined;
+    .get(keyId) as
+    | {
+        key_hash: string;
+        tenant_id: string;
+        revoked_at: string | null;
+        role: string;
+        expires_at: string | null;
+        owner_subject: string | null;
+      }
+    | undefined;
   if (!row) return null;
   return {
     keyHash: row.key_hash,
@@ -351,8 +362,7 @@ export async function verifyApiKeyCached(
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = new Date().toISOString()): void {
-  db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`)
-    .run(at, keyId);
+  db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`).run(at, keyId);
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Idempotent. */
@@ -377,8 +387,12 @@ function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
   return rows.map((r) => r.scope);
 }
 
-/** Keys newest first, with their row ids, filtered and limited in SQL. */
-export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
+interface ApiKeyFilter {
+  where: string[];
+  params: Array<string | number>;
+}
+
+function apiKeyFilter(opts: ListApiKeysOpts): ApiKeyFilter {
   const where: string[] = ['1 = 1'];
   const params: Array<string | number> = [];
   if (opts.active) {
@@ -398,6 +412,12 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
     where.push('key_id = ?');
     params.push(opts.keyId);
   }
+  return { where, params };
+}
+
+/** Keys newest first, with their row ids, filtered and limited in SQL. */
+export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
+  const { where, params } = apiKeyFilter(opts);
   const after = keysetAfter('id', 'id', opts.after);
   params.push(...after.params);
   const limitSql = opts.limit === undefined ? '' : ' LIMIT ?';
@@ -417,14 +437,18 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
     expires_at: string | null;
     owner_subject: string | null;
   }>;
-  return rows.map(r => ({
+  return rows.map((r) => ({
     rowId: r.id,
     key: {
-      keyId: r.key_id, tenantId: r.tenant_id, label: r.label,
-      createdAt: r.created_at, revokedAt: r.revoked_at,
+      keyId: r.key_id,
+      tenantId: r.tenant_id,
+      label: r.label,
+      createdAt: r.created_at,
+      revokedAt: r.revoked_at,
       role: r.role === 'admin' ? 'admin' : 'member',
       scopes: listScopeGrants(db, r.key_id),
-      expiresAt: r.expires_at, ownerSubject: r.owner_subject,
+      expiresAt: r.expires_at,
+      ownerSubject: r.owner_subject,
     },
   }));
 }
@@ -440,7 +464,7 @@ export function listLiveOwnedKeyIds(
   const rows = db
     .prepare(
       `SELECT key_id, expires_at FROM api_keys WHERE tenant_id = ? AND owner_subject = ? AND revoked_at IS NULL ` +
-      `ORDER BY id`,
+        `ORDER BY id`,
     )
     .all(tenantId, ownerSubject) as Array<{ key_id: string; expires_at: string | null }>;
   // Expiry is filtered here, not in SQL, so it follows the same Date.parse rule the key check uses.

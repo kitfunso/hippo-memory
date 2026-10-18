@@ -17,7 +17,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -54,7 +58,9 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
 
 describe('DAG-aware recall substitution', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('dag-sub'); });
+  beforeEach(() => {
+    root = makeRoot('dag-sub');
+  });
   afterEach(() => safeRmSync(root));
 
   it('1. no DAG, no substitution', async () => {
@@ -74,10 +80,13 @@ describe('DAG-aware recall substitution', () => {
     summary.descendant_count = 12;
     writeEntry(root, summary);
     for (let i = 0; i < 12; i++) {
-      writeEntry(root, makeLeaf(`alpha detail event ${i}`, {
-        dag_level: 1,
-        dag_parent_id: summary.id,
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`alpha detail event ${i}`, {
+          dag_level: 1,
+          dag_parent_id: summary.id,
+        }),
+      );
     }
 
     const r = await retrieve(ctxFor(root), { query: 'alpha detail event', window: { limit: 5 } });
@@ -92,11 +101,14 @@ describe('DAG-aware recall substitution', () => {
     const summary = makeSummary('private topic', { scope: 'slack:private:CSEC' });
     writeEntry(root, summary);
     for (let i = 0; i < 8; i++) {
-      writeEntry(root, makeLeaf(`secret payroll detail ${i}`, {
-        dag_level: 1,
-        dag_parent_id: summary.id,
-        scope: 'slack:private:CSEC',
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`secret payroll detail ${i}`, {
+          dag_level: 1,
+          dag_parent_id: summary.id,
+          scope: 'slack:private:CSEC',
+        }),
+      );
     }
     // No scope passed; default-deny should drop the leaves AND prevent
     // the summary from being substituted in.
@@ -108,11 +120,14 @@ describe('DAG-aware recall substitution', () => {
     const summary = makeSummary('other tenant topic', { tenant_id: 'other' });
     writeEntry(root, summary);
     for (let i = 0; i < 6; i++) {
-      writeEntry(root, makeLeaf(`alpha cross tenant ${i}`, {
-        dag_level: 1,
-        dag_parent_id: summary.id,
-        tenant_id: 'other',
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`alpha cross tenant ${i}`, {
+          dag_level: 1,
+          dag_parent_id: summary.id,
+          tenant_id: 'other',
+        }),
+      );
     }
     // Recall as default tenant: nothing should match (entries belong to other),
     // and even if loadEntriesByIds saw the parent ID, tenant filter blocks it.
@@ -127,10 +142,13 @@ describe('DAG-aware recall substitution', () => {
       const summary = makeSummary(`topic ${s} summary`, { tags: ['dag-summary', `topic:${s}`] });
       writeEntry(root, summary);
       for (let c = 0; c < 3; c++) {
-        writeEntry(root, makeLeaf(`alpha topic event ${s}-${c}`, {
-          dag_level: 1,
-          dag_parent_id: summary.id,
-        }));
+        writeEntry(
+          root,
+          makeLeaf(`alpha topic event ${s}-${c}`, {
+            dag_level: 1,
+            dag_parent_id: summary.id,
+          }),
+        );
       }
     }
     // Pad with 10 unrelated leaves so limit=10 gets fully consumed and
@@ -149,10 +167,13 @@ describe('DAG-aware recall substitution', () => {
     summary.descendant_count = 6;
     writeEntry(root, summary);
     for (let i = 0; i < 6; i++) {
-      writeEntry(root, makeLeaf(`gamma detail ${i}`, {
-        dag_level: 1,
-        dag_parent_id: summary.id,
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`gamma detail ${i}`, {
+          dag_level: 1,
+          dag_parent_id: summary.id,
+        }),
+      );
     }
     const r = await retrieve(ctxFor(root), { query: 'gamma detail', window: { limit: 3, summarizeOverflow: false } });
     expect(r.results.length).toBe(3);
@@ -166,10 +187,13 @@ describe('DAG-aware recall substitution', () => {
     summary.descendant_count = 4;
     writeEntry(root, summary);
     for (let i = 0; i < 4; i++) {
-      writeEntry(root, makeLeaf(`shared keyword summary marker leaf ${i}`, {
-        dag_level: 1,
-        dag_parent_id: summary.id,
-      }));
+      writeEntry(
+        root,
+        makeLeaf(`shared keyword summary marker leaf ${i}`, {
+          dag_level: 1,
+          dag_parent_id: summary.id,
+        }),
+      );
     }
     const r = await retrieve(ctxFor(root), { query: 'shared keyword summary marker', window: { limit: 2 } });
     const summaryHits = r.results.filter((it) => it.id === summary.id);

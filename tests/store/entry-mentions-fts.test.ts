@@ -20,7 +20,11 @@ const TARGETS = ['café', 'Straße', 'cache-key', 'express-js', 'journal_mode', 
 
 function setFts(root: string, flag: '0' | '1'): void {
   const db = new DatabaseSync(join(root, 'hippo.db'));
-  try { setMeta(db, 'fts5_available', flag); } finally { db.close(); }
+  try {
+    setMeta(db, 'fts5_available', flag);
+  } finally {
+    db.close();
+  }
 }
 
 describe('loadEntriesMentioning on the FTS path', () => {
@@ -28,7 +32,11 @@ describe('loadEntriesMentioning on the FTS path', () => {
   beforeEach(() => {
     root = makeRoot('mentions');
     const db = new DatabaseSync(join(root, 'hippo.db'));
-    try { expect(getMeta(db, 'fts5_available', '0')).toBe('1'); } finally { db.close(); }
+    try {
+      expect(getMeta(db, 'fts5_available', '0')).toBe('1');
+    } finally {
+      db.close();
+    }
     for (const content of CONTENTS) writeEntry(root, createMemory(content, { tags: ['Ops'] }));
   });
 
@@ -37,16 +45,28 @@ describe('loadEntriesMentioning on the FTS path', () => {
       const target = { from, to: null, type: 'removal' as const };
       const viaFts = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { dryRun: true });
       setFts(root, '0');
-      const viaLike = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { dryRun: true });
+      const viaLike = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, {
+        dryRun: true,
+      });
       setFts(root, '1');
       expect(viaFts.targets.slice().sort()).toEqual(viaLike.targets.slice().sort());
     }
-    const hit = invalidateMatching(sqliteSyncStore(root).localFiles.learning, { from: 'café', to: null, type: 'removal' }, undefined, { dryRun: true });
+    const hit = invalidateMatching(
+      sqliteSyncStore(root).localFiles.learning,
+      { from: 'café', to: null, type: 'removal' },
+      undefined,
+      { dryRun: true },
+    );
     expect(hit.targets).toHaveLength(1);
   });
 
   it('matches an exact tag through the tags column', () => {
-    const result = invalidateMatching(sqliteSyncStore(root).localFiles.learning, { from: 'ops', to: null, type: 'removal' }, undefined, { dryRun: true });
+    const result = invalidateMatching(
+      sqliteSyncStore(root).localFiles.learning,
+      { from: 'ops', to: null, type: 'removal' },
+      undefined,
+      { dryRun: true },
+    );
     expect(result.targets).toHaveLength(CONTENTS.length);
   });
 });

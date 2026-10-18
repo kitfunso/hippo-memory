@@ -143,9 +143,7 @@ export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number):
   const afterRowid = intactRowid(db, g);
   if (afterRowid === undefined) return { kind: 'lost' };
   // SAFETY: ROWS_ABOVE_SQL names exactly these three columns; node:sqlite returns BLOBs as Uint8Array.
-  const rows = db
-    .prepare(`${ROWS_ABOVE_SQL} LIMIT ?`)
-    .all(afterRowid, g.graph.dim, inlineRows + 1) as StoredRow[];
+  const rows = db.prepare(`${ROWS_ABOVE_SQL} LIMIT ?`).all(afterRowid, g.graph.dim, inlineRows + 1) as StoredRow[];
   if (rows.length > inlineRows) return { kind: 'behind', afterRowid };
   g.lastRowid = afterRowid;
   for (const row of rows) {

@@ -52,7 +52,7 @@ describe('SSE heartbeat when its tick throws', () => {
       }) as typeof process.stderr.write);
       failing = true;
       const before = resolverCalls;
-      await waitFor(() => resolverCalls >= before + 3, { timeoutMs: 3000, what: "three heartbeat ticks" });
+      await waitFor(() => resolverCalls >= before + 3, { timeoutMs: 3000, what: 'three heartbeat ticks' });
       expect(seen.some((l) => l.includes('heartbeat tick failed'))).toBe(true);
     } finally {
       ac.abort();

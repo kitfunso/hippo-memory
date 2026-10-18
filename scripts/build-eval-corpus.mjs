@@ -22,17 +22,19 @@ function loadEntries(root) {
 }
 
 function findMatching(entries, { allOf = [], anyOf = [], noneOf = [], maxLen }) {
-  return entries.filter((e) => {
-    const lc = e.content.toLowerCase();
-    // Short-memory filter: canonical rule-style memories are usually concise.
-    // Excluding long session summaries that happen to mention the keyword in
-    // passing dramatically tightens the corpus.
-    if (maxLen !== undefined && e.content.length > maxLen) return false;
-    for (const t of allOf) if (!lc.includes(t)) return false;
-    if (anyOf.length > 0 && !anyOf.some((t) => lc.includes(t))) return false;
-    for (const t of noneOf) if (lc.includes(t)) return false;
-    return true;
-  }).map((e) => e.id);
+  return entries
+    .filter((e) => {
+      const lc = e.content.toLowerCase();
+      // Short-memory filter: canonical rule-style memories are usually concise.
+      // Excluding long session summaries that happen to mention the keyword in
+      // passing dramatically tightens the corpus.
+      if (maxLen !== undefined && e.content.length > maxLen) return false;
+      for (const t of allOf) if (!lc.includes(t)) return false;
+      if (anyOf.length > 0 && !anyOf.some((t) => lc.includes(t))) return false;
+      for (const t of noneOf) if (lc.includes(t)) return false;
+      return true;
+    })
+    .map((e) => e.id);
 }
 
 const cwdHippo = path.join(process.cwd(), '.hippo');

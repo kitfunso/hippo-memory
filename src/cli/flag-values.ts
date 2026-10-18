@@ -81,7 +81,12 @@ export function nonEmptyStringFlag(flags: CliFlags, name: string): string | unde
 export function stringListFlag(flags: CliFlags, name: string): string[] | undefined {
   const v = flags[name];
   if (Array.isArray(v)) return v;
-  return isStringFlag(v) ? v.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
+  return isStringFlag(v)
+    ? v
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : undefined;
 }
 
 export function isOneOf<T extends string>(allowed: readonly T[], value: string): value is T {
@@ -134,9 +139,7 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
     physicsConfig: config.physics,
     mmr: !flags['no-mmr'] && config.mmr.enabled,
     mmrLambda: numberFlag(flags, 'mmr-lambda') ?? config.mmr.lambda,
-    localBump: flags['equal-sources']
-      ? 1.0
-      : numberFlag(flags, 'local-bump') ?? config.search.localBump,
+    localBump: flags['equal-sources'] ? 1.0 : (numberFlag(flags, 'local-bump') ?? config.search.localBump),
   };
 }
 

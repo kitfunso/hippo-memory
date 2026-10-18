@@ -67,7 +67,7 @@ async function requestPermutation(url: string, query: string, head: readonly Sea
   const key = envLlmRerankerKey();
   const prompt = [
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in ` +
-    `best-first order.`,
+      `best-first order.`,
     `Query: ${redactSecretsStrict(query)}`,
     ...head.map((r, i) => `[${i}] ${redactSecretsStrict(r.entry.content)}`),
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
@@ -80,14 +80,18 @@ async function requestPermutation(url: string, query: string, head: readonly Sea
     headers.authorization = `Bearer ${key}`;
   }
 
-  const resp = await rerankerPost(`${url.replace(/\/$/, '')}/chat/completions`, {
-    headers: { ...headers },
-    body: JSON.stringify({
-      model: envLlmRerankerModel() ?? 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0,
-    }),
-  }, envLlmRerankerTimeoutMs() ?? DEFAULT_TIMEOUT_MS);
+  const resp = await rerankerPost(
+    `${url.replace(/\/$/, '')}/chat/completions`,
+    {
+      headers: { ...headers },
+      body: JSON.stringify({
+        model: envLlmRerankerModel() ?? 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0,
+      }),
+    },
+    envLlmRerankerTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
+  );
   if (!resp.ok) {
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}`);

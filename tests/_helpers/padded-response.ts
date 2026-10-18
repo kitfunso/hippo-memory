@@ -8,7 +8,9 @@ export function paddedJsonResponse(head: string, tail: string, paddingBytes: num
   const chunk = new Uint8Array(CHUNK_BYTES).fill(0x20);
   let sent = 0;
   const body = new ReadableStream<Uint8Array>({
-    start(controller) { controller.enqueue(encoder.encode(head)); },
+    start(controller) {
+      controller.enqueue(encoder.encode(head));
+    },
     pull(controller) {
       if (sent < paddingBytes) {
         sent += chunk.byteLength;

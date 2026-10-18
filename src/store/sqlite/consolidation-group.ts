@@ -2,11 +2,17 @@ import { SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { recordAuditEventsRowByRowAt, reportAuditWriteFailure } from '../audit.js';
 import { replaceDetectedConflictsAt } from '../conflicts.js';
 import {
-  commitInChunksAt, deleteEntriesOneByOneAt, failedUnitOf, memoriesBackingObjectsAt,
+  commitInChunksAt,
+  deleteEntriesOneByOneAt,
+  failedUnitOf,
+  memoriesBackingObjectsAt,
 } from '../delete-and-batch.js';
 import { expireDormantBeforeAt } from '../dormant.js';
 import {
-  loadAllEntryIdsAt, loadCurrentDistilledEntriesAt, loadEntriesPageAt, selectEntriesByIds,
+  loadAllEntryIdsAt,
+  loadCurrentDistilledEntriesAt,
+  loadEntriesPageAt,
+  selectEntriesByIds,
 } from '../entry-reads.js';
 import { ftsDriftAt } from '../entry-row.js';
 import { writeEntriesTogetherAt, writeEntryAt } from '../entry-writes.js';
@@ -16,8 +22,13 @@ import { appendConsolidationRunAt, incrementSleepCountAt, loadSessionDecayContex
 import type { Consolidation } from '../port/consolidation.js';
 import { findPromotableSessionsAt, listSessionEventsAt, traceExistsForSessionAt } from '../sessions.js';
 import {
-  applyRebuildResultAt, childrenKey, clearSummaryDirtyAfterBuildAt, loadAllDirtySummariesAt, loadAllL2SummariesAt,
-  loadChildrenOfSummariesAt, loadChildrenOfSummaryAt,
+  applyRebuildResultAt,
+  childrenKey,
+  clearSummaryDirtyAfterBuildAt,
+  loadAllDirtySummariesAt,
+  loadAllL2SummariesAt,
+  loadChildrenOfSummariesAt,
+  loadChildrenOfSummaryAt,
 } from '../summaries.js';
 import { lazyTombstoneChecks } from '../tombstone-checks.js';
 import { saveStoredParticlesAt, storedParticleIdsAt, storedParticlesByIdsAt } from '../vector-index.js';
@@ -75,7 +86,11 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
 
 type SummaryOps = Pick<
   Consolidation,
-  | 'dirtySummaries' | 'childrenOfSummary' | 'childrenOfSummaries' | 'applyRebuild' | 'clearSummaryDirty'
+  | 'dirtySummaries'
+  | 'childrenOfSummary'
+  | 'childrenOfSummaries'
+  | 'applyRebuild'
+  | 'clearSummaryDirty'
   | 'unprofiledTopicSummaries'
 >;
 

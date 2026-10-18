@@ -34,11 +34,7 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
 
 /** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the
  * guard. */
-export function findRejectedValue(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  digest: string,
-): RejectedValueRow | null {
+export function findRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): RejectedValueRow | null {
   // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(
@@ -65,7 +61,7 @@ export function insertRejectedValue(
 ): void {
   db.prepare(
     `INSERT INTO rejected_values(tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, ` +
-    `normalized_chars)
+      `normalized_chars)
      VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(tenant_id, digest) DO UPDATE SET
        reason = excluded.reason,
@@ -105,12 +101,7 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
 /** Write-path guard check: fires when the digest matches a tombstone AND the write introduces that content (a new row,
  * or a same-id UPSERT changing it). Unchanged same-id re-persists (recall boost, decay, star toggle) are exempt. A miss
  * costs ONE indexed point query; only a hit SELECTs the stored row. */
-export function checkRejectionGuard(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  entryId: string,
-  content: string,
-): void {
+export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entryId: string, content: string): void {
   const incomingDigest = rejectionDigest(content);
   const tombstone = findRejectedValue(db, tenantId, incomingDigest);
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
@@ -123,8 +114,7 @@ export function checkRejectionGuard(
     | undefined;
   const isNewRow = storedRow === undefined;
   const tenantChanged = !isNewRow && storedRow.tenant_id !== tenantId;
-  const isContentIntroduction =
-    isNewRow || tenantChanged || rejectionDigest(storedRow.content) !== incomingDigest;
+  const isContentIntroduction = isNewRow || tenantChanged || rejectionDigest(storedRow.content) !== incomingDigest;
   if (!isContentIntroduction) return; // unchanged same-id re-persist — exempt by construction
 
   throw new RejectedValueError({

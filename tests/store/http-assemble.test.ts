@@ -23,7 +23,13 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 
 let home: string;
 let handle: ServerHandle;
@@ -86,7 +92,10 @@ describe('GET /v1/sessions/:id/assemble', () => {
     // 3 raws under one parent + parent summary. Without summarize: 3 items.
     const summary = createMemory('topic alpha rollup http', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'],
+      layer: Layer.Semantic,
+      dagLevel: 2,
+      confidence: 'inferred',
+      tags: ['dag-summary'],
     });
     writeEntry(home, summary);
     for (let i = 0; i < 3; i++) {

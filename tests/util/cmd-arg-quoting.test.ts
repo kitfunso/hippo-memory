@@ -9,8 +9,23 @@ import { spawnSync } from 'node:child_process';
 import { cmdShimArgs, quoteCmdArg, spawnArgv } from '../../src/util/spawn-argv.js';
 
 const TRICKY_ARGS = [
-  '%PATH%', '100%', '%%', '%cd%', 'p%USERNAME%q r', '%cd:~,%', '%PATH:~0,3%', '%"PATH"^%',
-  'a b', 'x"y', '"', '""', 'a&b', '"&calc', '^%PATH^%', '!PATH!', '',
+  '%PATH%',
+  '100%',
+  '%%',
+  '%cd%',
+  'p%USERNAME%q r',
+  '%cd:~,%',
+  '%PATH:~0,3%',
+  '%"PATH"^%',
+  'a b',
+  'x"y',
+  '"',
+  '""',
+  'a&b',
+  '"&calc',
+  '^%PATH^%',
+  '!PATH!',
+  '',
 ];
 
 describe('quoteCmdArg', () => {

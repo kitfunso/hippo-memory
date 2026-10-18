@@ -29,12 +29,19 @@ describe('`hippo context` prints the ambient summary getContext computed', () =>
     for (const name of ['HIPPO_HOME', 'HOME', 'USERPROFILE']) vi.stubEnv(name, dir);
     const saved = process.cwd();
     process.chdir(dir);
-    const hippo = (...args: string[]) => runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
+    const hippo = (...args: string[]) =>
+      runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
     try {
       expect((await hippo('init', '--no-hooks', '--no-schedule', '--no-learn')).status).toBe(0);
       expect((await hippo('remember', 'ambient single-load pin row')).status).toBe(0);
       // A row the context leaves out: a summary re-derived from every row would count two.
-      writeEntry(path.join(dir, '.hippo'), createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:C123' }));
+      writeEntry(
+        path.join(dir, '.hippo'),
+        createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          scope: 'slack:private:C123',
+        }),
+      );
 
       const result = await hippo('context');
       expect(result.status).toBe(0);
@@ -68,17 +75,27 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
   });
 
   it('cross-project row + private-scope row are excluded from ambientState and its rendered summary', async () => {
-    const admitted = { ...createMemory('ADMITTED-ROW stays visible in the landscape summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-a' };
+    const admitted = {
+      ...createMemory('ADMITTED-ROW stays visible in the landscape summary', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+      origin_project: 'proj-a',
+    };
     writeEntry(projA, admitted);
 
     const crossProjectRow = {
-      ...createMemory('CROSS-PROJECT-ROW belongs to a different project entirely', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ...createMemory('CROSS-PROJECT-ROW belongs to a different project entirely', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
       origin_project: 'proj-b',
     };
     writeEntry(projA, crossProjectRow);
 
     const privateScopeRow = {
-      ...createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:C123' }),
+      ...createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        scope: 'slack:private:C123',
+      }),
       origin_project: 'proj-a',
     };
     writeEntry(projA, privateScopeRow);
@@ -115,7 +132,10 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
 
     // Half-life 7 days, aged ~8 months before the call below: pre-retrieval
     // strength decays to near zero.
-    const aged = { ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-a' };
+    const aged = {
+      ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      origin_project: 'proj-a',
+    };
     writeEntry(projA, aged);
 
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);

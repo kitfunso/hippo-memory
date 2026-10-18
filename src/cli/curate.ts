@@ -64,15 +64,9 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
 }
 
 // Shared between the forget dispatch and cmdForget so the message can't drift.
-const ARCHIVE_REASON_REQUIRED =
-  'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
+const ARCHIVE_REASON_REQUIRED = 'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
-async function cmdForget(
-  hippoRoot: string,
-  tenantId: string,
-  id: string,
-  flags: CliFlags,
-): Promise<void> {
+async function cmdForget(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -93,11 +87,7 @@ async function cmdForget(
   }
 }
 
-async function archiveForgottenRaw(
-  ctx: api.Context,
-  id: string,
-  reason: string | null,
-): Promise<void> {
+async function archiveForgottenRaw(ctx: api.Context, id: string, reason: string | null): Promise<void> {
   if (!reason) {
     fail(ARCHIVE_REASON_REQUIRED);
   }
@@ -119,7 +109,7 @@ async function reportForgetFailure(ctx: api.Context, id: string, cause: unknown)
     // point at the command that owns it.
     printError(
       `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
-      `(or bring it back: hippo dormant restore ${id})`,
+        `(or bring it back: hippo dormant restore ${id})`,
     );
   } else {
     printError(`Memory not found: ${id}`);
@@ -412,9 +402,11 @@ function printDormantRows(rows: Awaited<ReturnType<typeof api.listDormant>>, has
     const preview = truncateWithEllipsis(row.content, DORMANT_PREVIEW_CHARS);
     console.log(`--- ${row.id}`);
     console.log(`    ${preview}`);
-    console.log(`    Dormant since ${row.dormantAt.slice(0, DATE_PREFIX_CHARS)} ` +
-      `(${row.reason}, strength ${row.strength.toFixed(STRENGTH_DECIMALS)})` +
-      `${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`);
+    console.log(
+      `    Dormant since ${row.dormantAt.slice(0, DATE_PREFIX_CHARS)} ` +
+        `(${row.reason}, strength ${row.strength.toFixed(STRENGTH_DECIMALS)})` +
+        `${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`,
+    );
     console.log('');
   }
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
@@ -446,11 +438,7 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
   printQuarantineRows(rows);
 }
 
-async function decideQuarantined(
-  ctx: api.Context,
-  sub: 'approve' | 'reject',
-  id: string,
-): Promise<void> {
+async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id: string): Promise<void> {
   if (!id) {
     fail(`Usage: hippo quarantine ${sub} <id>`);
   }
@@ -581,13 +569,13 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
       console.log(`DRY RUN - no memories would match ${label}.`);
     } else {
       console.log(`DRY RUN - ${result.invalidated} memories WOULD be invalidated:`);
-      result.preview.forEach(p => console.log(`   ${p.id}  ${p.headline}`));
+      result.preview.forEach((p) => console.log(`   ${p.id}  ${p.headline}`));
     }
   } else if (result.invalidated === 0) {
     console.log(`No memories matched ${label}.`);
   } else {
     console.log(`Invalidated ${result.invalidated} memories referencing ${label}.`);
-    result.targets.forEach(id => console.log(`   ${id}`));
+    result.targets.forEach((id) => console.log(`   ${id}`));
   }
   if (result.skippedPinned.length > 0) {
     console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);

@@ -23,10 +23,7 @@ export interface CallerCompactResumeRequest {
   readonly source: string;
 }
 
-export async function compactResumeForCaller(
-  ctx: Context,
-  req: CallerCompactResumeRequest,
-): Promise<CallerHookOutput> {
+export async function compactResumeForCaller(ctx: Context, req: CallerCompactResumeRequest): Promise<CallerHookOutput> {
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (req.source !== 'compact' || callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
   const { sessions } = ctx.store;
@@ -37,14 +34,17 @@ export async function compactResumeForCaller(
     return { stdout: '' };
   }
   const text = compactResumeText(snapshot, await sessionTrail(ctx, sessions, snapshot.session_id));
-  bookTokenUse({
-    tenantId: ctx.tenantId,
-    sessionId: req.sessionId,
-    surface: 'compact_resume',
-    event: 'inject',
-    items: 1,
-    tokens: estimateTokens(text),
-  }, ledgerReachOf(ctx, true));
+  bookTokenUse(
+    {
+      tenantId: ctx.tenantId,
+      sessionId: req.sessionId,
+      surface: 'compact_resume',
+      event: 'inject',
+      items: 1,
+      tokens: estimateTokens(text),
+    },
+    ledgerReachOf(ctx, true),
+  );
   return { stdout: text };
 }
 
@@ -52,8 +52,10 @@ export async function compactResumeForCaller(
 async function sessionTrail(ctx: Context, sessions: Sessions, sessionId: string | null): Promise<SessionEvent[]> {
   if (!sessionId) return [];
   try {
-    return (await sessions.listEvents(ctx.tenantId, { sessionId }))
-      .map((e) => ({ ...e, content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP) }));
+    return (await sessions.listEvents(ctx.tenantId, { sessionId })).map((e) => ({
+      ...e,
+      content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
+    }));
   } catch (err) {
     log.warn(`compact-resume: trail skipped: ${errorMessage(err)}`, errorFields(err));
     return [];
