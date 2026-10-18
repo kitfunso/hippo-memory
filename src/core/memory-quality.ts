@@ -80,7 +80,13 @@ function isRoutineReleaseActivity(text: string): boolean {
   );
 }
 
-const bareText = (text: string): string => text.replace(/[.!?,;:\s]+$/, '');
+const TRAILING_MARK = /[.!?,;:\s]/;
+// Trims from the end in one pass: /[.!?,;:\s]+$/ restarts at every mark of a long run, so it is quadratic on stored text.
+function bareText(text: string): string {
+  let end = text.length;
+  while (end > 0 && TRAILING_MARK.test(text[end - 1])) end--;
+  return text.slice(0, end);
+}
 // These endings close whole sentences too ("the branch you push to"), so they are only a possible cut.
 const POSSIBLE_CUT_ENDING = new RegExp(
   String.raw`\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|` +
@@ -127,12 +133,26 @@ const OUTCOME_DETAIL = new RegExp(
   'i',
 );
 
+/** Each "(...)" up to the first ")" becomes one space, as text.replace(/\([^)]*\)/g, ' ') does, in one pass. */
+function blankAsides(text: string): string {
+  let out = '';
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf('(', from);
+    // No ")" after this "(" means none after any later "(" either, so the scan ends here.
+    const close = open < 0 ? -1 : text.indexOf(')', open + 1);
+    if (close < 0) return out + text.slice(from);
+    out += `${text.slice(from, open)} `;
+    from = close + 1;
+  }
+}
+
 function isSubjectlessOutcome(text: string): boolean {
   const lead = OUTCOME_LEAD.exec(text);
   if (lead === null || RELATION_WORD.test(text)) return false;
   // "Returns 404 for unknown ids" and "Deleted rows must stay
   // deleted" say when or what; "returned 3 matching rows" does not.
-  return !OUTCOME_DETAIL.test(text.slice(lead[0].length).replace(/\([^)]*\)/g, ' '));
+  return !OUTCOME_DETAIL.test(blankAsides(text.slice(lead[0].length)));
 }
 
 // `(?:.*\S)?` ends the quoted command on a non-space, so it and `\s+` never share a run of spaces (no ReDoS).

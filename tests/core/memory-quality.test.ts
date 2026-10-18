@@ -18,6 +18,8 @@ describe('automatic assertion quality', () => {
     ['and the cache is cold', 'sentence-fragment'],
     ['for the deploy script', 'sentence-fragment'],
     ['succeeds (inserts or updates)', 'subjectless-outcome'],
+    // An aside ends at its first ")", so "for" is blanked with it.
+    ['returned (for (3) rows)', 'subjectless-outcome'],
     ['returned 3 matching rows', 'subjectless-outcome'],
     ['TypeError: Cannot read properties of undefined', 'raw-output'],
     ["Command 'npm test' failed (exit 1): test suite failed", 'raw-output'],
@@ -36,6 +38,16 @@ describe('automatic assertion quality', () => {
   ] as const)('rejects %s with an actionable reason', (content, reason) => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: false, reason });
     expect(isContentWorthStoring(content)).toBe(false);
+  });
+
+  // Each input took the old trailing-mark and aside regexes over a second: they rescanned to the end from every start.
+  it.each([
+    ['a long run of marks before a word', `Deploy the build${' \t.'.repeat(20_000)}x`],
+    ['many unclosed asides after an outcome', `returned ${'('.repeat(60_000)}`],
+  ])('reads %s in one pass', (_, content) => {
+    const started = performance.now();
+    assessAutomaticMemory(content);
+    expect(performance.now() - started).toBeLessThan(250);
   });
 
   it.each([
