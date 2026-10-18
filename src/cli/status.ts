@@ -307,7 +307,7 @@ export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: Co
     if (report.extractionCount === 0 && report.manualCount > 0) {
       console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
       console.log(
-        `To measure latency, route corrections through extraction (set new.extractedFrom to the raw receipt).`,
+        `To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`,
       );
     }
   }
