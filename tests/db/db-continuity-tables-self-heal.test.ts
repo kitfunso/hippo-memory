@@ -1,17 +1,13 @@
 // Continuity-tables self-heal (2026-08-15 incident): a store stamped past a
 // table's migration but missing it crashed every prompt; ensureContinuityTables fixes it.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-
-const REPO_ROOT = join(__dirname, '..', '..');
-const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
+import { runCliOut } from '../_helpers/run-cli-as.js';
 
 const CONTINUITY_TABLES = [
   'task_snapshots',
@@ -268,7 +264,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
   });
 
-  it('hippo context runs on the incident shape (compiled CLI, real store)', () => {
+  it('hippo context runs on the incident shape (real CLI verb, real store)', async () => {
     // CLI resolves hippoRoot as <cwd>/.hippo, unlike the direct-hippoRoot
     // calls above, so this case needs its own project/.hippo pair.
     const { base: projectDir, root: hippoDir } = makeStore('continuity-heal-cli');
@@ -287,18 +283,14 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     } finally {
       closeHippoDb(db);
     }
+    reproveStoreSchema(hippoDir); // the CLI verb runs in this process, which has proven the schema already
 
     const env = { ...process.env, HIPPO_SESSION_ID: 'sess-heal' };
 
-    const runContext = (...args: string[]): string =>
-      execFileSync(process.execPath, [CLI_PATH, 'context', ...args, '--budget', '1500'], {
-        cwd: projectDir,
-        env,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-    const pinned = runContext('--pinned-only');
-    const auto = runContext('--auto');
+    const runContext = (...args: string[]): Promise<string> =>
+      runCliOut(['context', ...args, '--budget', '1500'], { cwd: projectDir, env });
+    const pinned = await runContext('--pinned-only');
+    const auto = await runContext('--auto');
 
     const healed = openHippoDb(hippoDir);
     try {

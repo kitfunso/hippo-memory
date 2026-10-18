@@ -11,7 +11,7 @@ import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { contextGet } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { hippoOut } from '../_helpers/spawn-hippo.js';
+import { runCliOut } from '../_helpers/run-cli-as.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -316,16 +316,16 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     return entry;
   }
 
-  function runHippo(args: string[], stdin: string): string {
-    return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: cliTmp, input: stdin });
+  function runHippo(args: string[], stdin: string): Promise<string> {
+    return runCliOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: cliTmp, input: stdin });
   }
 
-  it('emits a static section and a Prompt-Relevant Memory section, with a hook_recall ledger row', () => {
+  it('emits a static section and a Prompt-Relevant Memory section, with a hook_recall ledger row', async () => {
     seedCli('the deploy rollback plan for the postgres migration', { created: '2026-01-01T00:00:00.000Z' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
     const sessionId = 'sess-z1-cli-1';
-    const out = runHippo(
+    const out = await runHippo(
       ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
       JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan' }),
     );
@@ -349,19 +349,19 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     }
   });
 
-  it('skips the repeated static block but still emits a relevant recall section', () => {
+  it('skips the repeated static block but still emits a relevant recall section', async () => {
     seedCli('the deploy rollback plan for the postgres migration', { created: '2026-01-01T00:00:00.000Z' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
     const sessionId = 'sess-z1-cli-2';
     const payload = JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan' });
-    const first = runHippo(
+    const first = await runHippo(
       ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
       payload,
     );
     expect(JSON.parse(first).hookSpecificOutput.additionalContext).toContain('PINNED: always check the rollback plan');
 
-    const second = runHippo(
+    const second = await runHippo(
       ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
       payload,
     );
@@ -371,7 +371,7 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     expect(context).toContain('the deploy rollback plan for the postgres migration');
   });
 
-  it('keeps a cross-project recall in the always-sent section on a repeated prompt', () => {
+  it('keeps a cross-project recall in the always-sent section on a repeated prompt', async () => {
     seedCli('the deploy rollback plan for the postgres migration', { origin_project: 'some-other-project' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
@@ -385,16 +385,16 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
       '--format',
       'additional-context',
     ];
-    runHippo(args, payload);
-    const context: string = JSON.parse(runHippo(args, payload)).hookSpecificOutput.additionalContext;
+    await runHippo(args, payload);
+    const context: string = JSON.parse(await runHippo(args, payload)).hookSpecificOutput.additionalContext;
     expect(context).toContain('## Prompt-Relevant Memory');
     expect(context).toContain('the deploy rollback plan for the postgres migration');
   });
 
-  it('malformed stdin still works exactly as today (no crash, graceful fallback)', () => {
+  it('malformed stdin still works exactly as today (no crash, graceful fallback)', async () => {
     seedCli('PINNED: this must still render on malformed stdin', { pinned: true });
 
-    const out = runHippo(['context', '--pinned-only', '--format', 'additional-context'], 'not json');
+    const out = await runHippo(['context', '--pinned-only', '--format', 'additional-context'], 'not json');
     const parsed = JSON.parse(out);
     expect(parsed.hookSpecificOutput.additionalContext).toContain('PINNED: this must still render on malformed stdin');
   });

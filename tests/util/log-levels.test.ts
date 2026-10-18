@@ -1,12 +1,12 @@
 // HIPPO_LOG picks the stderr threshold; the timestamp and fields such as the request id ride on the same line.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../../src/util/log.js';
 import { runWithRequestId } from '../../src/util/request-scope.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
 
 const AT = '2026-01-02T03:04:05.678Z';
 let stderrSpy: ReturnType<typeof vi.spyOn>;
@@ -150,14 +150,14 @@ describe('errorFields cause chain', () => {
 });
 
 describe('a command that fails at the top level', () => {
-  it('prints only the message by default, and adds the error class and stack under HIPPO_LOG=debug', () => {
+  it('prints only the message by default, and adds the error class and stack under HIPPO_LOG=debug', async () => {
     vi.useRealTimers();
     const dir = makeRoot('cli-top-error', { init: false });
     // A store file that is not a database makes the first read throw past every verb.
     mkdirSync(join(dir, '.hippo'));
     writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096));
     const run = (level: string) =>
-      spawnSync(process.execPath, [resolve('dist', 'cli.js'), 'recall', 'anything'], {
+      runCliAs(['recall', 'anything'], {
         cwd: dir,
         env: {
           ...process.env,
@@ -166,13 +166,12 @@ describe('a command that fails at the top level', () => {
           HIPPO_LOG: level,
           HIPPO_LOG_FORMAT: '',
         },
-        encoding: 'utf8',
       });
 
-    const plain = run('warn');
+    const plain = await run('warn');
     expect([plain.status, ownStderr(plain.stderr)]).toEqual([1, 'Error: file is not a database\n']);
 
-    const debug = run('debug');
+    const debug = await run('debug');
     expect(debug.status).toBe(1);
     expect(ownStderr(debug.stderr)).toMatch(
       /Error: file is not a database\n {2}thrown as Error\nError: file is not a database\n\s+at /,

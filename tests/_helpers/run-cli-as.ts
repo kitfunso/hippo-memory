@@ -78,3 +78,10 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
     resetProcessCaches();
   }
 }
+
+/** `runCliAs` that returns stdout and throws on a non-zero exit, as execFileSync did for a spawned hippo. */
+export async function runCliOut(args: readonly string[], opts: CliAsOptions = {}): Promise<string> {
+  const r = await runCliAs(args, opts);
+  if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+  return r.stdout;
+}

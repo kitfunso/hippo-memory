@@ -2,19 +2,19 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { hippoRun } from '../_helpers/spawn-hippo.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+import type { InProcessResult } from '../_helpers/run-in-process.js';
 
 let tmp: string;
 let repo: string;
 let log: string;
 let env: NodeJS.ProcessEnv;
 
-const hippo = (args: readonly string[], input?: string): SpawnSyncReturns<string> =>
-  hippoRun(args, { cwd: repo, env, input });
+const hippo = (args: readonly string[], input?: string): Promise<InProcessResult> =>
+  runCliAs(args, { cwd: repo, env, input });
 
-beforeEach(() => {
+beforeEach(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-failures-'));
   repo = path.join(tmp, 'repo');
   const home = path.join(tmp, 'home');
@@ -42,7 +42,7 @@ beforeEach(() => {
     USERPROFILE: home,
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   });
-  expect(hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']).status).toBe(0);
+  expect((await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn'])).status).toBe(0);
 });
 
 afterEach(() => {
@@ -53,13 +53,13 @@ afterEach(() => {
 const linesWith = (text: string, needle: string): string[] => text.split('\n').filter((line) => line.includes(needle));
 
 describe('a session-end step that fails', () => {
-  it('a Codex history file that cannot be read is named in the session log and at warn', () => {
+  it('a Codex history file that cannot be read is named in the session log and at warn', async () => {
     const codexHome = path.join(tmp, 'codex');
     const unreadable = path.join(codexHome, 'history.jsonl');
     // A folder where the history file should be: it exists, and reading it throws.
     fs.mkdirSync(unreadable, { recursive: true });
 
-    const run = hippo([
+    const run = await hippo([
       '__codex-session-end-worker',
       '--codex-home',
       codexHome,
@@ -81,10 +81,13 @@ describe('a session-end step that fails', () => {
     expect(linesWith(run.stderr, `[hippo] warn: ${failure}`)).toHaveLength(1);
   });
 
-  it('a sleep that fails is named in the session log and at warn, and the later steps still run', () => {
+  it('a sleep that fails is named in the session log and at warn, and the later steps still run', async () => {
     fs.writeFileSync(path.join(repo, '.hippo', 'hippo.db'), 'not a sqlite database');
 
-    const run = hippo(['__session-end-worker', '--log-file', log], JSON.stringify({ hook_event_name: 'SessionEnd' }));
+    const run = await hippo(
+      ['__session-end-worker', '--log-file', log],
+      JSON.stringify({ hook_event_name: 'SessionEnd' }),
+    );
 
     expect(run.status).toBe(0);
     const text = fs.readFileSync(log, 'utf8');

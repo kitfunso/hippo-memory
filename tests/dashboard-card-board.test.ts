@@ -6,7 +6,6 @@ import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
-import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
@@ -14,6 +13,7 @@ import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/store/tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
+import { runCliOut } from './_helpers/run-cli-as.js';
 import {
   createCard,
   claimCard,
@@ -188,7 +188,6 @@ describe('dashboard entry', () => {
 });
 
 describe('card routes', () => {
-  const CLI_PATH = join(__dirname, '..', 'dist', 'cli.js');
   let home: string;
   let cwd: string;
   let hippoRoot: string;
@@ -203,6 +202,7 @@ describe('card routes', () => {
   let showPJson: string;
   let showCJson: string;
 
+  // Seeds a real store and runs four CLI verbs in process, and a runner's disk sets how long that takes.
   beforeAll(async () => {
     home = makeRoot('w2c-routes', { init: false });
     cwd = join(home, 'cwd');
@@ -211,11 +211,7 @@ describe('card routes', () => {
     mkdirSync(globalDir, { recursive: true });
     const cliEnv: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: globalDir, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     delete cliEnv.HIPPO_TENANT;
-    execFileSync(process.execPath, [CLI_PATH, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-      cwd,
-      env: cliEnv,
-      encoding: 'utf8',
-    });
+    await runCliOut(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd, env: cliEnv });
     hippoRoot = join(cwd, '.hippo');
     expect(existsSync(hippoRoot)).toBe(true);
     vi.stubEnv('HIPPO_TENANT', undefined);
@@ -247,27 +243,13 @@ describe('card routes', () => {
     const t = createCard(hippoRoot, 'tenant_a', { title: 'T' });
     T = t.id;
 
-    // execFileSync blocks the event loop; run every parity read before the
-    // server takes its first request (tests/cli-scope-valueless-guard.test.ts:61-66).
-    listJson = execFileSync(process.execPath, [CLI_PATH, 'card', 'list', '--json'], {
-      cwd,
-      env: cliEnv,
-      encoding: 'utf8',
-    });
-    showPJson = execFileSync(process.execPath, [CLI_PATH, 'card', 'show', P, '--json'], {
-      cwd,
-      env: cliEnv,
-      encoding: 'utf8',
-    });
-    showCJson = execFileSync(process.execPath, [CLI_PATH, 'card', 'show', C, '--json'], {
-      cwd,
-      env: cliEnv,
-      encoding: 'utf8',
-    });
+    listJson = await runCliOut(['card', 'list', '--json'], { cwd, env: cliEnv });
+    showPJson = await runCliOut(['card', 'show', P, '--json'], { cwd, env: cliEnv });
+    showCJson = await runCliOut(['card', 'show', C, '--json'], { cwd, env: cliEnv });
 
     server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     port = await listenAndGetPort(server);
-  });
+  }, 30_000);
 
   afterEach(() => {
     vi.stubEnv('HIPPO_TENANT', undefined);
