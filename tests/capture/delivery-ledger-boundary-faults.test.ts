@@ -194,6 +194,7 @@ describe('B11 and U1', () => {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'u1.log');
       await cmdPreCompact(p.hippoRoot, syncStore(p.hippoRoot), {
+        tenantId: 'default',
         stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',
         logFile,

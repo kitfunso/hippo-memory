@@ -23,6 +23,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import * as api from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -43,7 +44,7 @@ function mintKey(home: string, role: 'admin' | 'member'): { plaintext: string; k
 }
 
 function keyCount(home: string): number {
-  return listApiKeys(home, { active: true }).length;
+  return listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).length;
 }
 
 function seedScopedMemories(home: string): void {

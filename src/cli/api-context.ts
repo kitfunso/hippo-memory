@@ -60,10 +60,11 @@ export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefi
  * adapter. */
 export function cliSyncOptions(
   hippoRoot: string,
+  tenantId: string,
   machine: Machine,
   extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
 ): SyncOptions {
-  return { configAt: cliConfig, machine, agentImport: cliLocalFiles(hippoRoot).agentImport, ...extra };
+  return { tenantId, configAt: cliConfig, machine, agentImport: cliLocalFiles(hippoRoot).agentImport, ...extra };
 }
 
 /** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */
@@ -114,9 +115,9 @@ export const cliStdioHost: McpHost = {
       config: cliConfig(hippoRoot),
       reach: cliReach(hippoRoot, store),
       autoSleepRunner: (root) =>
-        runDetachedSqliteRequest(() => runConsolidation(cliLocalFiles(root), { config: cliConfig(root) })).then(
-          () => {},
-        ),
+        runDetachedSqliteRequest(() =>
+          runConsolidation(cliLocalFiles(root), { config: cliConfig(root), tenantId }),
+        ).then(() => {}),
     };
   },
   runRequest: cliRequest,

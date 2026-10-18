@@ -7,7 +7,7 @@ import { configReader } from '../core/config.js';
 import { setLossAversionRatio } from '../core/memory.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
-import { envLossAversionRatio, envRuntimeSettings } from '../util/env.js';
+import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../util/env.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
 import type { SleepResult } from '../api/sleep/sleep.js';
@@ -51,7 +51,10 @@ process.once('message', (message) => {
   setLossAversionRatio(envLossAversionRatio());
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
-      ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles, { config: loadConfig(job.hippoRoot) })
+      ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles, {
+          config: loadConfig(job.hippoRoot),
+          tenantId: envTenant(),
+        })
       : sleepJob(job);
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
   runSqliteRequest(work, 'server')

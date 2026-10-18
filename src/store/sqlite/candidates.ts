@@ -15,6 +15,8 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { originInSql } from '../../core/project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
+import type { TenantId } from '../../util/tenant.js';
+import { tenantAnd } from './tenant.js';
 import type { AmbientRefusalReason } from '../../core/read-admission.js';
 import type {
   AmbientCandidates,
@@ -277,18 +279,17 @@ export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
 /** Tenant rows holding any of `words` that `admit` passes (default: team-visible); a row equal to a text apart from
  * spacing holds its every word. With `project`, only rows carrying one of those names plus user-global rows, as
- * loadContextCandidates' filter. No `tenantId` reads every tenant. */
+ * loadContextCandidates' filter. */
 export function loadTextsHoldingWordsAt(
   db: DatabaseSyncLike,
-  tenantId: string | undefined,
+  tenantId: TenantId,
   words: readonly string[],
   project?: readonly string[],
   admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {
   const unique = [...new Set(words)];
   const out: HeldText[] = [];
-  const tenantWhere = tenantId === undefined ? '1' : 'tenant_id = ?';
-  const tenantParams = tenantId === undefined ? [] : [tenantId];
+  const tenant = tenantAnd(tenantId);
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
   // Chunked so one statement stays far under SQLite's bound-parameter limit.
   for (let i = 0; i < unique.length; i += 200) {
@@ -296,10 +297,10 @@ export function loadTextsHoldingWordsAt(
     // SAFETY: rows' shape matches the three columns named in the SELECT below.
     const rows = db
       .prepare(
-        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ` +
+        `SELECT content, source, origin_project FROM memories WHERE 1${tenant.sql}${originWhere} AND ` +
           `${admit.sql} AND (${chunk.map(() => 'instr(content, ?) ' + '> 0').join(' OR ')})`,
       )
-      .all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{
+      .all(...tenant.args, ...(project ?? []), ...admit.params, ...chunk) as Array<{
       content: string;
       source: string | null;
       origin_project: string | null;
@@ -354,18 +355,17 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
   });
 }
 
-/** Row count and newest `created` per source, for peer listings that need no row; all tenants when `tenantId` is
- * absent. */
-export function tallySourcesAt(db: DatabaseSyncLike, tenantId?: string): SourceTally[] {
-  const where = tenantId !== undefined ? 'WHERE tenant_id = ?' : '';
+/** Row count and newest `created` per source, for peer listings that need no row. */
+export function tallySourcesAt(db: DatabaseSyncLike, tenantId: TenantId): SourceTally[] {
+  const tenant = tenantAnd(tenantId);
   // SAFETY: rows' shape matches the four aliased columns in the SELECT below.
   return db
     .prepare(
       `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
         `char(31) || id) AS first
-     FROM memories ${where} GROUP BY COALESCE(source, 'cli')`,
+     FROM memories WHERE 1${tenant.sql} GROUP BY COALESCE(source, 'cli')`,
     )
-    .all(...(tenantId !== undefined ? [tenantId] : [])) as SourceTally[];
+    .all(...tenant.args) as SourceTally[];
 }
 
 // A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.

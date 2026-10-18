@@ -7,6 +7,7 @@ import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import type { VectorSource } from '../search/vector.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
+import { ALL_TENANTS } from '../util/tenant.js';
 
 // Generous so metrics are not truncated.
 const DEFAULT_EVAL_BUDGET = 100_000;
@@ -149,6 +150,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
   const { stores } = options;
   return stores
     ? searchBothHybrid(query, stores.local, stores.global, {
+        tenantId: ALL_TENANTS,
         budget,
         now: options.now,
         embeddingWeight: options.embeddingWeight,

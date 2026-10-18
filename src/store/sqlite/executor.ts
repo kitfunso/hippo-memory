@@ -12,6 +12,7 @@ import { errorFields, errorMessage, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { workerCounts } from './executor-counts.js';
+import { markAllTenants } from './tenant-wire.js';
 import { type Job, type OpMode, type OpRoute, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
@@ -163,7 +164,7 @@ class WorkerPool implements SqliteExecutor {
         return;
       }
       const pending: Pending = {
-        job: { id: this.#nextId++, op, args, requestId },
+        job: { id: this.#nextId++, op, ...markAllTenants(args), requestId },
         settle,
         fail: reject,
         deadlineAt,
@@ -191,7 +192,7 @@ class WorkerPool implements SqliteExecutor {
     if (this.#setup !== 'none') return;
     this.#setup = 'running';
     const pending: Pending = {
-      job: { id: this.#nextId++, op: STORE_SETUP_OP, args: [], requestId: undefined },
+      job: { id: this.#nextId++, op: STORE_SETUP_OP, args: [], allTenants: [], requestId: undefined },
       settle: (reply) => this.#setupEnded(reply.ok ? undefined : decodeError(reply.error)),
       fail: (err) => this.#setupEnded(err),
       deadlineAt: undefined,

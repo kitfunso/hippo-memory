@@ -43,6 +43,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';
@@ -58,7 +59,7 @@ afterEach(() => {
 });
 
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
-const opts = () => ({ configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
+const opts = () => ({ configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport, machine: w.machine });
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
   const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), origin_project: origin };
@@ -256,7 +257,7 @@ describe('agent memory sync: routing and sharing', () => {
     plainRow(w.local, CONTROL, 'proj');
 
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = autoShare(...sharingStores(w.local), { minScore: 0, stats });
+    const shared = autoShare(...sharingStores(w.local), { tenantId: ALL_TENANTS, minScore: 0, stats });
     expect(shared.map((e) => e.content)).toEqual([CONTROL]);
     expect(stats.neverAutoShareSkipped).toBe(2);
   });

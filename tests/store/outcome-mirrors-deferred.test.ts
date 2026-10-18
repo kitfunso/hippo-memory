@@ -12,6 +12,7 @@ import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const open: DatabaseSyncLike[] = [];
 afterEach(() => {
@@ -35,6 +36,7 @@ function rowTexts(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): string
   const rows = selectEntriesByIds(
     db,
     entries.map((entry) => entry.id),
+    ALL_TENANTS,
   );
   return entries.map((entry) => serializeEntry(rows.get(entry.id)!));
 }

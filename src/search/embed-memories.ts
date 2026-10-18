@@ -30,6 +30,7 @@ import { chunked } from '../util/chunked.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { MINUTE_MS } from '../util/time.js';
+import { ALL_TENANTS } from '../util/tenant.js';
 
 const STORE_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
@@ -269,7 +270,7 @@ async function backfillInStore(
   let count = 0;
   let afterId: string | undefined;
   for (;;) {
-    const page = await writes.entriesWithoutVector({ model, afterId, limit: STORE_PAGE });
+    const page = await writes.entriesWithoutVector({ model, afterId, limit: STORE_PAGE, tenantId: ALL_TENANTS });
     if (page.length === 0) return count;
     afterId = page[page.length - 1].id;
     const vectors = await provider.embed(

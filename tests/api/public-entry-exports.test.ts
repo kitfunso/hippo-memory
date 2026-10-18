@@ -248,7 +248,8 @@ describe('published runtime exports', () => {
       parseCompactionItems
       scrubForSharing sessionTail
       transcriptWorkingState",
-        "./store-kit": "EMBEDDING_MODEL_META_KEY
+        "./store-kit": "ALL_TENANTS
+      EMBEDDING_MODEL_META_KEY
       OTHER_STORE_MARKER
       PROTECTED_ROWS
       RECALL_DEFAULT_DENY_SCOPES RejectedValueError

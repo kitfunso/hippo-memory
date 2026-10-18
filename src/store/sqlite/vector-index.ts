@@ -18,6 +18,8 @@ import {
 } from '../../db/physics-state.js';
 import { initializeParticle } from '../../core/physics.js';
 import { float32ToBuffer } from '../../util/vector-codec.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
+import { tenantAnd } from './tenant.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../port.js';
 import {
   EMBEDDING_MODEL_META_KEY,
@@ -173,16 +175,15 @@ export function pendingVectorIdsAt(
 export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
   if (!Number.isInteger(query.limit)) throw new RangeError('limit must be an integer');
   const limit = Math.max(1, Math.min(query.limit, MAX_BACKFILL_PAGE));
-  const tenantClause = query.tenantId === undefined ? '' : ' AND tenant_id = ?';
-  const tenantArgs = query.tenantId === undefined ? [] : [query.tenantId];
+  const tenant = tenantAnd(query.tenantId);
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenantClause}
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenant.sql}
        AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id AND v.model = ?)
      ORDER BY id LIMIT ?`,
     )
-    .all(query.afterId ?? '', ...tenantArgs, query.model, limit) as MemoryRow[];
+    .all(query.afterId ?? '', ...tenant.args, query.model, limit) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -278,10 +279,10 @@ const RESET_ID_PAGE = 1000;
 function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
   let after: EntryCursor | undefined;
   do {
-    const page = loadEntryIdsPageAt(db, { limit: RESET_ID_PAGE, after });
+    const page = loadEntryIdsPageAt(db, ALL_TENANTS, { limit: RESET_ID_PAGE, after });
     for (const ids of chunked(page.ids, PARTICLE_PAGE)) {
       const vectors = loadVectors(db, ids);
-      const rows = selectEntriesByIds(db, [...vectors.keys()]);
+      const rows = selectEntriesByIds(db, [...vectors.keys()], ALL_TENANTS);
       for (const id of ids) {
         const entry = rows.get(id);
         const vector = vectors.get(id);

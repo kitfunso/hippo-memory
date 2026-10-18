@@ -112,7 +112,7 @@ function globalTarget(ctx: McpContext): ConfiguredFolder {
 }
 
 export async function runPeersTool({ ctx, tenantId }: ToolCall): Promise<string> {
-  // Tenant-scope peer discovery to the caller, as hippo_share does; undefined would list host-wide.
+  // Tenant-scope peer discovery to the caller, as hippo_share does.
   const peers = await listPeers(globalTarget(ctx), tenantId);
   if (peers.length === 0) return 'No peers found.';
   return peers

@@ -70,6 +70,7 @@ import {
 } from '../_helpers/root-forms.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -302,7 +303,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
 
   it.each([
     ['with a tenant', TENANT],
-    ['without one', undefined],
+    ['every tenant', ALL_TENANTS],
   ] as const)('entriesByIds %s', async (_name, tenantId) => {
     const ids = ['mem_p_plain', 'mem_x_summary', 'mem_missing'];
     const { direct, port } = await parity(
@@ -464,7 +465,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       ['mem_p_private'],
     ],
     ['another tenant', { tenantId: 'other', includeSuperseded: true }, []],
-    ['a cut at 1', { includeSuperseded: false, limit: 1 }, ['mem_p_plain']],
+    ['a cut at 1', { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 1 }, ['mem_p_plain']],
   ];
 
   it.each(NEAREST)('nearestEntries: %s', async (_name, spec, ids) => {

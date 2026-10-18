@@ -22,6 +22,7 @@ import { authCreate, adminActor } from '../../src/api/index.js';
 import { listApiKeys } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-role-cli-'));
@@ -55,7 +56,7 @@ describe('auth CLI role surfacing', () => {
 
       const db = openHippoDb(t.ctx.hippoRoot);
       try {
-        const items = listApiKeys(t.ctx.hippoRoot, { active: true });
+        const items = listApiKeys(t.ctx.hippoRoot, { tenantId: ALL_TENANTS, active: true });
         expect(items.length).toBe(2);
         const byLabel = Object.fromEntries(items.map((i) => [i.label, i.role]));
         expect(byLabel['admin-key']).toBe('admin');
@@ -85,7 +86,7 @@ describe('auth CLI role surfacing', () => {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run('hk_legacy0000000000000000', 'fakehash', 'default', 'legacy', new Date().toISOString(), 'superadmin');
 
-        const items = listApiKeys(t.ctx.hippoRoot, { active: true });
+        const items = listApiKeys(t.ctx.hippoRoot, { tenantId: ALL_TENANTS, active: true });
         const legacy = items.find((i) => i.keyId === 'hk_legacy0000000000000000');
         expect(legacy).toBeDefined();
         expect(legacy!.role).toBe('member'); // fail-safe-to-member

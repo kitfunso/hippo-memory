@@ -15,6 +15,7 @@ import {
   type VectorRow,
 } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface FilterRow {
   readonly tenant_id: string;
@@ -43,7 +44,7 @@ function passesScope(scope: string | null, filter: RecallScopeFilter | undefined
 
 // The JS twin of loadVectorCandidateEntries' WHERE: a NULL origin_project fails both arms there, so it fails here too.
 export function passesSpec(row: FilterRow, spec: VectorCandidateSpec): boolean {
-  if (spec.tenantId !== undefined && row.tenant_id !== spec.tenantId) return false;
+  if (spec.tenantId !== ALL_TENANTS && row.tenant_id !== spec.tenantId) return false;
   if (row.kind === 'archived' || (!spec.includeSuperseded && row.superseded_by !== null)) return false;
   const origins: readonly string[] | undefined = spec.origin === undefined ? undefined : [spec.origin].flat();
   if (origins !== undefined && row.origin_project !== '' && !origins.some((o) => o === row.origin_project)) {

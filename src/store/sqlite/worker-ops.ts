@@ -1,6 +1,7 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each store method.
 import type { HippoStore, LocalFiles, StoreGroups } from '../port.js';
 import type { WireError } from './error-codec.js';
+import type { TenantMark } from './tenant-wire.js';
 
 /** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every write. */
 export type OpMode = 'read' | 'write';
@@ -286,6 +287,8 @@ export interface Job {
   /** `<group>.<method>` of the synchronous store, `base.<method>` for a base one. */
   readonly op: string;
   readonly args: readonly unknown[];
+  /** Where ALL_TENANTS sat in the arguments, since a symbol cannot be copied to the thread. */
+  readonly allTenants: readonly TenantMark[];
   /** Of the request the call belongs to, so the thread's log lines carry it. */
   readonly requestId: string | undefined;
   /** wal_autocheckpoint as the server thread has it: a worker cannot see the checkpointer start or stop. */

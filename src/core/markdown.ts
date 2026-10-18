@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import {
   type MemoryEntry,
   Layer,

@@ -18,6 +18,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { EntryCursor } from '../../src/store/port/consolidation.js';
 import { SleepRows } from '../../src/consolidate/survivors.js';
 import { rowsInPages } from '../../src/util/pages.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -40,14 +41,14 @@ describe('rows that may mention a target', () => {
     seeded(root, 11);
     const db = openHippoDb(root);
     try {
-      const all = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', undefined, { limit: 100 });
+      const all = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', 'default', { limit: 100 });
       expect(all.entries).toHaveLength(11);
       expect(all.next).toBeNull();
       const ids: string[] = [];
       let after;
       let pages = 0;
       do {
-        const page = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', undefined, { limit: 4, after });
+        const page = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
         ids.push(...page.entries.map((e) => e.id));
         after = page.next ?? undefined;
         pages++;
@@ -67,7 +68,7 @@ describe('the FTS check on a read', () => {
     const db = openHippoDb(root);
     try {
       const { statements } = recordStatements(() =>
-        loadEntriesMentioningAt(db, ['quuxlib'], 'ops', undefined, { limit: 100 }),
+        loadEntriesMentioningAt(db, ['quuxlib'], 'ops', 'default', { limit: 100 }),
       );
       expect(countMatching(statements, /COUNT\(\*\)/i)).toBe(0);
     } finally {
@@ -108,7 +109,7 @@ describe('walks of every row a read names', () => {
         const ids: string[] = [];
         let after: EntryCursor | undefined;
         do {
-          const page = loadEntryIdsPageAt(db, { limit: 3, after });
+          const page = loadEntryIdsPageAt(db, ALL_TENANTS, { limit: 3, after });
           ids.push(...page.ids);
           after = page.next ?? undefined;
         } while (after);

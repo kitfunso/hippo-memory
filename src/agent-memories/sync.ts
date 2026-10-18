@@ -50,6 +50,8 @@ export const ADAPTERS: readonly Adapter[] = [
 export const TOOLS_ENV = 'HIPPO_AGENT_MEMORY_TOOLS';
 
 export interface SyncOptions {
+  /** The tenant every imported row is written as; the caller's root resolved it. */
+  readonly tenantId: string;
   readonly machine: Machine;
   /** Reads one store's config; the caller's, so this module never touches config.json. */
   readonly configAt: (hippoRoot: string) => HippoConfig;
@@ -297,11 +299,11 @@ interface OpenStore {
 function openTarget(ai: AgentImport, target: string, hasItems: boolean, opts: SyncOptions): OpenStore | null {
   const global = isGlobalStoreRoot(target);
   if (!isInitialized(target)) {
-    if (opts.dryRun) return { ai, target: ai.openStandIn(), global };
+    if (opts.dryRun) return { ai, target: ai.openStandIn(opts.tenantId), global };
     if (!hasItems) return null;
     ai.create(target);
   }
-  return { ai, target: ai.open(target, { busyWaitMs: opts.busyWaitMs }), global };
+  return { ai, target: ai.open(target, opts.tenantId, { busyWaitMs: opts.busyWaitMs }), global };
 }
 
 function storeSession(pass: Pass, store: OpenStore, opts: SyncOptions, legacy: LegacyWork | null): StoreSession {
@@ -454,16 +456,14 @@ function duplicateCheck(
   origins: readonly string[],
   adopted: ReadonlySet<string>,
 ): (text: string) => boolean {
-  let keys: Set<string> | null = null;
+  const visible = store.global ? origins : null;
+  // Only the rows holding the text's words can hold the text, so the store is asked for those alone.
   return (text) => {
-    keys ??= otherPathKeys(store, origins, adopted);
-    return keys.has(duplicateKey(text));
+    const key = duplicateKey(text);
+    return store.target
+      .rowsHoldingOutsideSourcePrefix(text, AGENT_MEMORY_SOURCE_PREFIX, visible)
+      .some((r) => !adopted.has(r.id) && heldTextKeys(r).includes(key));
   };
-}
-
-function otherPathKeys(store: OpenStore, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
-  const rows = store.target.rowsOutsideSourcePrefix(AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
-  return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 
 /**
@@ -504,7 +504,7 @@ function handOver(
   if (synced.length === 0 || !isInitialized(globalRoot)) return;
   let target: ImportTarget | undefined;
   try {
-    target = ai.open(globalRoot, { busyWaitMs: opts.busyWaitMs });
+    target = ai.open(globalRoot, opts.tenantId, { busyWaitMs: opts.busyWaitMs });
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.
     const names = projectNames(resolveProjectIdentity(projectRoot));

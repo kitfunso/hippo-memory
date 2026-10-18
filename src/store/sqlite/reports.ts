@@ -70,7 +70,7 @@ export function sqliteReports(on: OnHandle): Sync<Reports> {
         openStore,
       );
     },
-    entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId ?? undefined, page), openStore),
+    entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId, page), openStore),
     countEntries: () => on((db) => countAllEntriesAt(db), openStore),
     stats: () => on(buildStatsFromDb, openStore),
     statusCounts: (now, atRiskBelow) => on((db) => statusCountsAt(db, now, atRiskBelow), openStore),

@@ -225,7 +225,7 @@ function hostState(root: string) {
 async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: number } = {}) {
   const local = sqliteSyncStore(root).localFiles;
   const result = await withCountedIds(() =>
-    runConsolidation(local, { ...opts, now: NOW, config: loadConfig(root), budget: fastBudget }),
+    runConsolidation(local, { ...opts, now: NOW, config: loadConfig(root), budget: fastBudget, tenantId: 'default' }),
   );
   return { result, state: hostState(root) };
 }

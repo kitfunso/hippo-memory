@@ -5,7 +5,7 @@
  * memory-value-wiring.test.ts guards parity.
  */
 
-import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, calculateStrength } from '../core/memory.js';
 import { compareEntryIdentity, compareScoresDesc, type EntryIdentity } from '../core/compare.js';

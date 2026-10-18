@@ -148,9 +148,6 @@ describe('invalidateMatching with onlyId', () => {
       invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: other.id }).targets,
     ).toEqual([]);
     expect(
-      invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { onlyId: other.id }).targets,
-    ).toEqual([other.id]);
-    expect(
       invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { onlyId: pinned.id })
         .skippedPinned,
     ).toEqual([pinned.id]);

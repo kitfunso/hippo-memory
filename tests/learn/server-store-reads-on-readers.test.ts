@@ -20,6 +20,7 @@ import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { rejectValue } from '../../src/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 type Served = HippoStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -241,12 +242,16 @@ const READS: readonly Read[] = [
     (s) => s.vectorViews.storedVectorViews(VECTOR_IDS),
     /'mem_p_noise' => Float32Array\(8\) \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
   ),
-  read('keyAudit.auditEventsAfter', (s) => s.keyAudit.auditEventsAfter({ afterId: 0, limit: 5 }), "op: 'remember'"),
+  read(
+    'keyAudit.auditEventsAfter',
+    (s) => s.keyAudit.auditEventsAfter({ tenantId: ALL_TENANTS, afterId: 0, limit: 5 }),
+    "op: 'remember'",
+  ),
   read('keyAudit.auditHighId', (s) => s.keyAudit.auditHighId(), /^[1-9]\d*$/),
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read(
     'vectorWrites.entriesWithoutVector',
-    (s) => s.vectorWrites.entriesWithoutVector({ model: VECTOR_IDENTITY, limit: 5 }),
+    (s) => s.vectorWrites.entriesWithoutVector({ tenantId: ALL_TENANTS, model: VECTOR_IDENTITY, limit: 5 }),
     'mem_p_fill0',
   ),
   read(

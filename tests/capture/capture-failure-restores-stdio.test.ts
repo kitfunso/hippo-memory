@@ -28,6 +28,7 @@ describe('cmdCapture failure', () => {
     const log = path.join(dir, 'tee.log');
     expect(() =>
       cmdCapture(captureTarget(root), {
+        tenantId: 'default',
         source: 'file',
         filePath: path.join(dir, 'absent.md'),
         logFile: log,

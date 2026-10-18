@@ -27,6 +27,7 @@ import { appendSessionEventAt } from './sessions.js';
 import { saveActiveTaskSnapshotAt } from './task-snapshots.js';
 import { loadEmbeddingIndexAt } from './vector-index.js';
 import { onHandle, openStore } from './handles.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
@@ -45,7 +46,7 @@ function everyTenantEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
   const entries: MemoryEntry[] = [];
   let after: EntryCursor | null = null;
   do {
-    const page = loadEntriesPageAt(db, undefined, { limit: EVAL_PAGE_ROWS, after: after ?? undefined });
+    const page = loadEntriesPageAt(db, ALL_TENANTS, { limit: EVAL_PAGE_ROWS, after: after ?? undefined });
     entries.push(...page.entries);
     after = page.next;
   } while (after !== null);
@@ -57,9 +58,9 @@ export function loadTenantEntries(hippoRoot: string, tenantId: string): MemoryEn
   return onHandle(hippoRoot, (db) => loadAllEntriesAt(db, tenantId), openStore);
 }
 
-/** The row with `id`; null when absent, or in another tenant when `tenantId` is given. */
-export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
-  return onHandle(hippoRoot, (db) => readEntryAt(db, id, tenantId), openStore);
+/** The row with `id` in any tenant, or null: the eval kit reads back what it wrote, as loadAllEntries does. */
+export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
+  return onHandle(hippoRoot, (db) => readEntryAt(db, id, ALL_TENANTS), openStore);
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. */

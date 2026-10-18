@@ -17,7 +17,7 @@ import { COMPACTION_MEMORY_TAG } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { summaryWith } from '../_helpers/compaction-hooks.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { folderFiles } from '../_helpers/cli-stores.js';
+import { compactionFolder } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, readEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
@@ -114,7 +114,11 @@ describe('shared store origin stamp', () => {
       expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
       expect(promoted.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(promoted.source)).toBeNull();
-      const shared = await shareMemory(...sharingStores(store), entry.id, { force: true, skipEmbed: true });
+      const shared = await shareMemory(...sharingStores(store), entry.id, {
+        tenantId: 'default',
+        force: true,
+        skipEmbed: true,
+      });
       expect(shared?.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(shared?.source)).toBeNull();
       expect(originOf(getGlobalRoot(), shared?.id ?? '')).toBeNull();
@@ -128,7 +132,11 @@ describe('shared store origin stamp', () => {
       const promoted = await copyToGlobal(store, entry.id);
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
       expect(promoted.source).toBe(`promoted:${store}`);
-      const shared = await shareMemory(...sharingStores(store), entry.id, { force: true, skipEmbed: true });
+      const shared = await shareMemory(...sharingStores(store), entry.id, {
+        tenantId: 'default',
+        force: true,
+        skipEmbed: true,
+      });
       const label = folderStamp === '' ? path.basename(path.dirname(store)) : folderStamp;
       expect(shared?.source.startsWith(`shared:${label}:`)).toBe(true);
       expect(shared?.origin_project).toBe(folderStamp);
@@ -215,7 +223,7 @@ function compact(store: string, cwd: string | null): void {
     transcriptPath: null,
     compactSummary: summaryWith([ITEM]),
   };
-  expect(saveCompaction(folderFiles(store), payload, () => undefined).written).toBe(1);
+  expect(saveCompaction(compactionFolder(store), payload, () => undefined).written).toBe(1);
 }
 
 const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>

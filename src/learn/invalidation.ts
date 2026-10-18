@@ -98,11 +98,10 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
 export function invalidateMatching(
   learning: Learning,
   target: InvalidationTarget,
-  tenantId?: string,
+  tenantId: string,
   options?: InvalidationOptions,
 ): InvalidationResult {
-  // tenantId opt-in: when set, only that tenant's memories are weakened; undefined is host-wide.
-  // The onlyId read is tenant-scoped too, so another tenant's id is invisible here.
+  // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's id is invisible.
   if (options?.onlyId !== undefined) {
     const entries = [learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
     const { result, weakened } = weakenMatches(entries, target, options);
@@ -138,7 +137,7 @@ export async function invalidateMatchingAmong(
   store: HippoStore,
   live: MemoryEntry[],
   target: InvalidationTarget,
-  tenantId?: string,
+  tenantId: string,
 ): Promise<InvalidationResult> {
   const seen = weakenMatches(live, target, { dryRun: true }).result;
   const ids = [...seen.targets, ...seen.skippedPinned];

@@ -6,6 +6,7 @@ import { listApiKeys } from '../_helpers/root-forms.js';
 import { log } from '../../src/util/log.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -26,7 +27,7 @@ describe('/v1/auth/keys role rules', () => {
   }
 
   function isActive(keyId: string): boolean {
-    return listApiKeys(home, { active: true }).some((k) => k.keyId === keyId);
+    return listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).some((k) => k.keyId === keyId);
   }
 
   function post(bearer: string, body: { role?: string }): Promise<Response> {

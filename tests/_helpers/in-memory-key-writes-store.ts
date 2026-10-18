@@ -17,6 +17,7 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { FIXTURE_REVOKED_AT, TENANT_A, TENANT_B, type StoreSide, type TwoTenantFixture } from './store-conformance.js';
 import { portOnlyStore } from './port-only-store.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryKeyWritesStore extends StoreSide {
   readonly store: HippoStore & { readonly keyWrites: KeyWrites };
@@ -74,7 +75,11 @@ function copyRows(hippoRoot: string): CopiedRows {
         },
       ]),
     );
-    return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighId(hippoRoot) };
+    return {
+      keys,
+      audit: listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 }),
+      highId: auditHighId(hippoRoot),
+    };
   } finally {
     closeHippoDb(db);
   }
@@ -88,7 +93,7 @@ function expiryMs(expiresAt: string | null): number {
 }
 
 function listed(row: KeyRow, query: KeyListQuery, nowIso: string): boolean {
-  if (query.tenantId !== null && row.tenantId !== query.tenantId) return false;
+  if (query.tenantId !== ALL_TENANTS && row.tenantId !== query.tenantId) return false;
   // The SQL compares the stamps as strings, which toISOString makes correct.
   if (query.active && (row.revokedAt !== null || (row.expiresAt !== null && row.expiresAt <= nowIso))) return false;
   if (query.ownerSubject !== undefined && row.ownerSubject !== query.ownerSubject) return false;

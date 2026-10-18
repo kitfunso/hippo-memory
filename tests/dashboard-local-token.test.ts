@@ -23,7 +23,7 @@ describe('dashboard local access token', () => {
   beforeEach(async () => {
     ({ base: home, root: hippoRoot } = makeStore('dash-token'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
-    server = serveDashboard(hippoRoot, 0, TOKEN);
+    server = serveDashboard(hippoRoot, 0, TOKEN, { tenantId: 'default' });
     port = await boundPort(server);
   });
 
@@ -163,7 +163,7 @@ describe('dashboard local access token', () => {
     const savedTty = process.stdout.isTTY;
     process.stdout.isTTY = tty;
     try {
-      const second = serveDashboard(hippoRoot, 0, 'another-token-abcdef');
+      const second = serveDashboard(hippoRoot, 0, 'another-token-abcdef', { tenantId: 'default' });
       const secondPort = await boundPort(second);
       await new Promise((r) => setImmediate(r));
       await new Promise<void>((resolve) => second.close(() => resolve()));

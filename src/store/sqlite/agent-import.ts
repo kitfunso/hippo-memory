@@ -18,7 +18,11 @@ import {
   replaceDormantEntry,
 } from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
-import { entryIdTakenAt, selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from './entry-reads.js';
+import {
+  entryIdTakenAt,
+  selectLiveEntriesBySourcePrefix,
+  selectRowsHoldingOutsideSourcePrefixAt,
+} from './entry-reads.js';
 import {
   renameEntrySourceAndOriginAt,
   renameEntrySourceAt,
@@ -37,7 +41,6 @@ import type { MemoryEntry } from '../../core/memory.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
 import { setAsideRow } from './set-aside.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { resolveTenantId } from './tenant.js';
 import type { AgentImport, ContainerTx, ImportTarget } from '../port/agent-import.js';
 import type { EntryCursor } from '../port/consolidation.js';
 
@@ -71,13 +74,13 @@ function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {
   };
 }
 
-function importTarget(db: DatabaseSyncLike, root: string, close: () => void): ImportTarget {
-  const tenantId = resolveTenantId({});
+function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, close: () => void): ImportTarget {
   return {
     root,
     tenantId,
     liveBySourcePrefix: (prefix) => [...liveUnder(db, tenantId, prefix)],
-    rowsOutsideSourcePrefix: (prefix, origins) => selectRowsOutsideSourcePrefixAt(db, tenantId, prefix, origins),
+    rowsHoldingOutsideSourcePrefix: (text, prefix, origins) =>
+      selectRowsHoldingOutsideSourcePrefixAt(db, tenantId, text, prefix, origins),
     projectTagReads: () => projectTagReads(db, tenantId),
     inContainer: (scope, dryRun, work) => {
       const run = () => work(containerTx(db, root));
@@ -93,15 +96,15 @@ function importTarget(db: DatabaseSyncLike, root: string, close: () => void): Im
 
 export const sqliteAgentImport: AgentImport = {
   create: (root) => initStore(root),
-  open: (root, opts) => {
+  open: (root, tenantId, opts) => {
     const db = openBareHandle(root, { busyWaitMs: opts.busyWaitMs });
-    return importTarget(db, root, () => closeHippoDb(db));
+    return importTarget(db, root, tenantId, () => closeHippoDb(db));
   },
-  openStandIn: () => {
+  openStandIn: (tenantId) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
     // Its folder is deleted at close, so a request scope must not keep the file open past that.
     const db = outsideRequestStores(() => openBareHandle(root));
-    return importTarget(db, root, () => {
+    return importTarget(db, root, tenantId, () => {
       closeHippoDb(db);
       fs.rmSync(root, { recursive: true, force: true });
     });

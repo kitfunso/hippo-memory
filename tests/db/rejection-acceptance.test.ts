@@ -40,6 +40,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -78,7 +79,13 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     );
 
     expect(() =>
-      cmdCapture(captureTarget(home), { source: 'file', filePath: fixturePath, dryRun: false, global: false }),
+      cmdCapture(captureTarget(home), {
+        tenantId: 'default',
+        source: 'file',
+        filePath: fixturePath,
+        dryRun: false,
+        global: false,
+      }),
     ).not.toThrow();
 
     const contents = loadEveryTenantEntries(home).map((e) => e.content);
@@ -411,6 +418,7 @@ describe('import dry-run tombstone accuracy', () => {
     await api.reject(ctx(home), { value: rejectedChunk, reason: 'pre-emptive dry-run test tombstone' });
 
     const dryResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
+      tenantId: 'default',
       hippoRoot: home,
       dryRun: true,
     });
@@ -419,6 +427,7 @@ describe('import dry-run tombstone accuracy', () => {
     expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
     const realResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
+      tenantId: 'default',
       hippoRoot: home,
       dryRun: false,
     });
@@ -478,7 +487,13 @@ describe('capture dry-run tombstone accuracy', () => {
     );
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    cmdCapture(captureTarget(home), { source: 'file', filePath: fixturePath, dryRun: true, global: false });
+    cmdCapture(captureTarget(home), {
+      tenantId: 'default',
+      source: 'file',
+      filePath: fixturePath,
+      dryRun: true,
+      global: false,
+    });
     const dryLogs = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
     logSpy.mockRestore();
 
@@ -486,7 +501,13 @@ describe('capture dry-run tombstone accuracy', () => {
     expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
     // Real run agrees: the tombstoned item is refused, the sibling lands.
-    cmdCapture(captureTarget(home), { source: 'file', filePath: fixturePath, dryRun: false, global: false });
+    cmdCapture(captureTarget(home), {
+      tenantId: 'default',
+      source: 'file',
+      filePath: fixturePath,
+      dryRun: false,
+      global: false,
+    });
     const contents = loadEveryTenantEntries(home).map((e) => e.content);
     expect(contents).not.toContain(rejectedContent);
     expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);
@@ -666,7 +687,7 @@ describe('autoShare per-candidate rejection containment', () => {
 
     const stats = { secretSkipped: 0, rejectedSkipped: 0 };
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const shared = autoShare(...sharingStores(localRoot), { minScore: 0, stats });
+    const shared = autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0, stats });
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 candidate(s) refused'));
     errorSpy.mockRestore();
 

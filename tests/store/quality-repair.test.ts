@@ -351,7 +351,12 @@ describe('recoverable automatic memory quality repair', () => {
       const repair = { tenantId: 'default', apply: true, protect: repairProtection };
       expect(repairAutomaticMemories({ hippoRoot: world.local }, repair).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
-      importForStore(world.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: world.machine });
+      importForStore(world.local, {
+        configAt: loadConfig,
+        tenantId: 'default',
+        agentImport: sqliteAgentImport,
+        machine: world.machine,
+      });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
     } finally {
       closeWorld(world);

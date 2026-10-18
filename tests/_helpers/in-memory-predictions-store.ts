@@ -7,6 +7,7 @@ import { predictionBaserateOf } from '../../src/store/sqlite/predictions.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
 import type { Prediction } from '../../src/store/port/predictions.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryPredictionsStore extends StoreSide {
   readonly store: HippoStore & { readonly predictions: Predictions };
@@ -157,7 +158,7 @@ export function inMemoryPredictionsStore(hippoRoot: string): InMemoryPredictions
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
       const found = [...mirrors.values()].filter(
-        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenant_id === tenantId),
       );
       return structuredClone(
         found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),

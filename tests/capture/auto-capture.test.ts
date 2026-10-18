@@ -482,7 +482,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
         },
       }),
     );
-    const check = runDoctor({ diagnosticsAt, cwd: dir, home: dir, version: 't' }).checks.find(
+    const check = runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' }).checks.find(
       (c) => c.id === 'claude-code',
     )!;
     expect(check.status).toBe('warn');
@@ -490,8 +490,9 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     expect(check.detail).toMatch(/failed-tool capture/);
     installJsonHooks('claude-code');
     expect(
-      runDoctor({ diagnosticsAt, cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!
-        .status,
+      runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' }).checks.find(
+        (c) => c.id === 'claude-code',
+      )!.status,
     ).toBe('pass');
   });
 });

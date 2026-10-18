@@ -2,6 +2,7 @@
 // import of this module outside the roots, the adapters and the eval switches. Accessors read at call time, so a test
 // that sets a variable between cases still holds.
 import type { RuntimeSettings } from '../core/config.js';
+import { DEFAULT_TENANT_ID } from './tenant.js';
 
 function raw(name: string): string | undefined {
   return process.env[name];
@@ -194,9 +195,6 @@ export function envClaudeCodeSessionId(): string | undefined {
 export function envActiveScope(): string | null {
   return trimmed('HIPPO_SCOPE') ?? trimmed('GSTACK_SKILL') ?? trimmed('OPENCLAW_SKILL') ?? null;
 }
-
-/** The tenant of a store that names none. */
-export const DEFAULT_TENANT_ID = 'default';
 
 /** HIPPO_TENANT trimmed; empty or whitespace-only falls through to the default tenant. */
 export function envTenant(): string {

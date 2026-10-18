@@ -28,7 +28,7 @@ describe('cmdCapture reading stdin', () => {
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    cmdCapture(target, { source: 'stdin', dryRun: true, global: false });
+    cmdCapture(target, { tenantId: 'default', source: 'stdin', dryRun: true, global: false });
 
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('reading stdin failed: EAGAIN');
     expect(read).toHaveBeenCalledWith(0, 'utf8');

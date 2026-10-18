@@ -229,7 +229,13 @@ describe('automatic quality does not govern manual or trusted import storage', (
       { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
       { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
     ];
-    cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: turns,
+      dryRun: false,
+      global: false,
+    });
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([
       'Never deploy on Fridays because the on-call rota is thin',
     ]);

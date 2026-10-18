@@ -6,6 +6,7 @@ import { canTouchScope } from '../../core/recall-scope.js';
 import type { HippoStore } from '../../store/port.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import type { EntryCursor } from '../../store/port/consolidation.js';
+import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
 export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry | null> {
@@ -36,19 +37,19 @@ export interface TenantReach {
   everyTenant?: boolean;
 }
 
-function tenantFilter(ctx: Context, reach: TenantReach): string | undefined {
+function tenantFilter(ctx: Context, reach: TenantReach): TenantId {
   if (!reach.everyTenant) return ctx.tenantId;
   requireHostAdmin(ctx, 'Reading every tenant');
-  return undefined;
+  return ALL_TENANTS;
 }
 
 /** Rows a listing reads per query by default; the verbs still receive every row. */
 const LIST_PAGE_SIZE = 1000;
 
-/** The tenant's memory rows (null: every tenant's), oldest first, `pageSize` per query, so a pass can hold one page. */
+/** The tenant's memory rows, oldest first, `pageSize` per query, so a pass can hold one page. */
 export async function* memoryPages(
   store: HippoStore,
-  tenant: string | null,
+  tenant: TenantId,
   pageSize: number = LIST_PAGE_SIZE,
 ): AsyncGenerator<MemoryEntry[]> {
   const limit = Math.max(1, Math.trunc(pageSize));
@@ -67,7 +68,7 @@ export async function memoryList(
   opts: { pageSize?: number } = {},
 ): Promise<MemoryEntry[]> {
   const all: MemoryEntry[] = [];
-  for await (const page of memoryPages(ctx.store, tenantFilter(ctx, reach) ?? null, opts.pageSize)) all.push(...page);
+  for await (const page of memoryPages(ctx.store, tenantFilter(ctx, reach), opts.pageSize)) all.push(...page);
   return all;
 }
 

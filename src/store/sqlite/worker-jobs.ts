@@ -12,6 +12,7 @@ import { watchCommits } from './commit-watch.js';
 import { flushHeldMirrors } from './mirrors.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
+import { restoreAllTenants } from './tenant-wire.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from './vector-reads.js';
 import {
@@ -119,7 +120,9 @@ async function answer(ops: Ops, stores: WorkerStores, hippoRoot: string, job: Jo
   stores.jobId = job.id;
   try {
     const value = await requestScopes.run(stores, () =>
-      job.op === STORE_SETUP_OP ? initStore(hippoRoot) : runOp(ops, job.op, job.args),
+      job.op === STORE_SETUP_OP
+        ? initStore(hippoRoot)
+        : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
     );
     return { id: job.id, ok: true, value, auditFailures: auditWriteFailureCount() - failuresBefore };
   } catch (err) {

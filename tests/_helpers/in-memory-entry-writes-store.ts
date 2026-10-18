@@ -18,6 +18,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface Tombstone {
   readonly reason: string | null;
@@ -293,7 +294,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
       const rows = [...memories.values()].filter(
-        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenant_id === tenantId),
       );
       const cmp = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
       return structuredClone(

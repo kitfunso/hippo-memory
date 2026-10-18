@@ -82,6 +82,7 @@ describe('server under a held write lock', () => {
       id: 1,
       op: 'entryWrites.writeEntry',
       args: [{ entry, actor: 'test' }],
+      allTenants: [],
       requestId: undefined,
       walPages: 100,
     };

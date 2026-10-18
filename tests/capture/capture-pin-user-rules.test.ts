@@ -25,7 +25,13 @@ describe('capture pins the rules a person states', () => {
   let ctx: FullContext;
 
   const capture = (turns: SessionTurn[]) =>
-    cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'last-session',
+      sessionTurns: turns,
+      dryRun: false,
+      global: false,
+    });
   const injected = async () =>
     (
       await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT })
@@ -74,7 +80,13 @@ describe('capture pins the rules a person states', () => {
   it('a file capture names no speaker, so its rules stay unpinned', () => {
     const file = join(scratch, 'notes.md');
     writeFileSync(file, TAUGHT);
-    cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'file',
+      filePath: file,
+      dryRun: false,
+      global: false,
+    });
     expect(loadAllEntries(root, 'default').map((e) => [e.content, e.pinned])).toEqual([
       [expect.stringContaining('never edit CHANGELOG.md'), false],
     ]);

@@ -22,6 +22,7 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';
@@ -148,7 +149,7 @@ beforeAll(() => {
   for (const entry of dagRows()) writeEntry(fixture.dir, entry);
   const db = openHippoDb(fixture.dir);
   try {
-    fixtureAudit = listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+    fixtureAudit = listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
   } finally {
     closeHippoDb(db);
   }

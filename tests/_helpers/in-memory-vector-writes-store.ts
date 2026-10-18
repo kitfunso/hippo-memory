@@ -23,6 +23,7 @@ import { iterateEveryTenantEntriesAt } from '../../src/store/sqlite/entry-reads.
 import { passesSpec, type FilterRow } from './in-memory-vector-store.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryVectorWritesStore extends StoreSide {
   readonly store: HippoStore & { readonly vectors: VectorReads; readonly vectorWrites: VectorWrites };
@@ -61,7 +62,7 @@ function copyRows(hippoRoot: string): Copied {
       vectors: new Map(vectorRows.map((r) => [r.memory_id, { model: r.model, bytes: new Uint8Array(r.vector) }])),
       particles: loadPhysicsState(db),
       storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }),
+      audit: listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 }),
     };
   } finally {
     closeHippoDb(db);
@@ -125,7 +126,7 @@ export function inMemoryVectorWritesStore(hippoRoot: string): InMemoryVectorWrit
           (id) =>
             id > afterId &&
             vectors.get(id)?.model !== model &&
-            (tenantId === undefined || entries.get(id)?.tenant_id === tenantId),
+            (tenantId === ALL_TENANTS || entries.get(id)?.tenant_id === tenantId),
         );
       return ids.slice(0, Math.max(1, Math.min(limit, 500))).flatMap((id) => {
         const entry = entries.get(id);

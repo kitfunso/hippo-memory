@@ -35,7 +35,7 @@ while (!everyoneHere()) {
   if (Date.now() - arrivedAt > 20000) throw new Error('barrier timed out: the other workers never started');
   Atomics.wait(pause, 0, 0, 2);
 }
-const report = importForStore(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } });
+const report = importForStore(root, { configAt: loadConfig, tenantId: 'default', agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } });
 const imported = report.tools.reduce((n, t) => n + t.tally.imported, 0);
 process.stdout.write(JSON.stringify({ imported, warnings: report.warnings, arrivedAt, doneAt: Date.now() }));
 `;

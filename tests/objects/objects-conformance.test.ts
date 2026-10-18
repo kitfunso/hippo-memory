@@ -32,6 +32,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';
@@ -237,7 +238,7 @@ const ids =
   async (g) =>
     (await g.listObjects(tenantId, kind, query)).map((o) => o.id);
 const mirrorViews =
-  (mirrorIds: readonly string[], tenantId?: string): Call =>
+  (mirrorIds: readonly string[], tenantId: TenantId = ALL_TENANTS): Call =>
   async (_g, store) =>
     (await store.entriesByIds(mirrorIds, tenantId)).map((e) => ({
       id: e.id,
@@ -323,7 +324,7 @@ function superseded(c: KindCase, nth: number, replaced: number, id: number, d: D
 function auditRowsAt(root: string): AuditEvent[] {
   const db = openHippoDb(root);
   try {
-    return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+    return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
   } finally {
     closeHippoDb(db);
   }

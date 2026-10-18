@@ -46,6 +46,7 @@ import {
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
 import { plural } from '../util/format.js';
+import { ALL_TENANTS } from '../util/tenant.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -202,7 +203,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
 
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
-  if (flags['agents']) return importAgentMemories(hippoRoot, useGlobal, dryRun);
+  if (flags['agents']) return importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
 
   if (useGlobal) {
     cliInitGlobal();
@@ -215,6 +216,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     global: useGlobal,
     extraTags,
     hippoRoot,
+    tenantId,
     target: { root: targetRoot, store: cliSyncStore(targetRoot) },
   };
 
@@ -320,8 +322,12 @@ function printFileImportSummary(
   }
 }
 
-function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: boolean): void {
-  const opts = cliSyncOptions(hippoRoot, currentMachine(), { dryRun });
+function importAgentMemories(
+  hippoRoot: string,
+  tenantId: string,
+  { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
+): void {
+  const opts = cliSyncOptions(hippoRoot, tenantId, currentMachine(), { dryRun });
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
@@ -343,7 +349,6 @@ async function importVaultFolder(
   checkVaultArgs(folderPath, flags, useGlobal);
   const vaultOptions: ImportOptions = {
     ...importOptions,
-    tenantId,
     name: nonEmptyStringFlag(flags, 'name'),
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
@@ -493,12 +498,12 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
 export async function handlePeers({ tenantId, flags }: CommandContext): Promise<void> {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flagIsTrue(flags, 'all-tenants');
-  const tenantScope = allTenants ? undefined : tenantId;
+  const tenantScope = allTenants ? ALL_TENANTS : tenantId;
   const peers = await listPeers(cliFolder(getGlobalRoot()), tenantScope);
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {
-    const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
+    const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantId}")`;
     console.log(`${plural(peers.length, 'project')} contributing to ${scopeLabel}:\n`);
     for (const p of peers) {
       console.log(

@@ -1,7 +1,7 @@
 /** Memory importers for Hippo.
  *  Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown. */
 
-import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../util/tenant.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
@@ -42,8 +42,8 @@ export interface ImportOptions {
   global?: boolean;
   extraTags?: string[];
   hippoRoot: string;
-  /** Tenant scope for the dedup read: when set and `global` is false, only this tenant's entries count.
-   *  Ignored when `global: true` (host-wide); undefined means host-wide dedup. */
+  /** The tenant written as, DEFAULT_TENANT_ID when left out: the dedup read counts only its entries, except under
+   * `global`, which counts every tenant's. */
   tenantId?: string;
   /**
    * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key. REQUIRED by importVault
@@ -119,8 +119,8 @@ interface OpenImport {
   readonly targetRoot: string;
   readonly learning: LocalFiles['learning'];
   readonly sharing: LocalFiles['sharing'];
-  /** Whose rows a chunk is checked against; undefined checks every tenant's. */
-  readonly tenantId: string | undefined;
+  /** Whose rows a chunk is checked against. */
+  readonly tenantId: TenantId;
   /** Keys of the chunks this run wrote; a dry run writes none. */
   readonly written: Set<string>;
   readonly rejections: Sync<Rejections>;
@@ -130,7 +130,7 @@ interface OpenImport {
 function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
   const { localFiles, rejections } = target.store;
   if (global) localFiles.ensureFiles();
-  const scope = global ? undefined : tenantId;
+  const scope = global ? ALL_TENANTS : (tenantId ?? DEFAULT_TENANT_ID);
   return {
     targetRoot: target.root,
     learning: localFiles.learning,

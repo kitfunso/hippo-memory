@@ -7,6 +7,7 @@ import { auditPrune } from '../../src/api/auth/audit.js';
 import { adminActor } from '../../src/api/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 const INSERT_SQL =
   'INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)';
@@ -20,7 +21,7 @@ function add(tenantId: string, n: number): void {
   }
 }
 
-function page(afterId: number, limit: number, tenantId?: string) {
+function page(afterId: number, limit: number, tenantId: TenantId = ALL_TENANTS) {
   return listAuditEventsAfter(db, { afterId, limit, tenantId });
 }
 
@@ -96,12 +97,12 @@ describe('listAuditEventsAfter', () => {
     add('tenant-a', 3);
     expect(page(0, 0)).toHaveLength(1);
     expect(page(0, -5)).toHaveLength(1);
-    expect(listAuditEventsAfter(db, { afterId: 0 })).toHaveLength(3);
+    expect(listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0 })).toHaveLength(3);
     const insert = db.prepare(INSERT_SQL);
     db.exec('BEGIN');
     for (let i = 0; i < 1100; i++) insert.run(new Date().toISOString(), 'tenant-c', 'test', 'remember', null, '{}');
     db.exec('COMMIT');
-    expect(listAuditEventsAfter(db, { afterId: 0 })).toHaveLength(1000);
+    expect(listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0 })).toHaveLength(1000);
     expect(page(0, 50000, 'tenant-c')).toHaveLength(1100);
   });
 
@@ -113,7 +114,7 @@ describe('listAuditEventsAfter', () => {
     const first = page(0, 3);
     const lastSeen = first[first.length - 1]!.id;
     await auditPrune(apiCtx(home, 'tenant-a', adminActor('cli')), { olderThanDays: 30 });
-    const rest = listAuditEventsAfter(db, { afterId: lastSeen, limit: 100 });
+    const rest = listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: lastSeen, limit: 100 });
     expect(rest.every((r) => r.id > lastSeen)).toBe(true);
     expect(new Set(rest.map((r) => r.id)).size).toBe(rest.length);
     expect(rest.some((r) => r.op === 'audit_prune')).toBe(true);

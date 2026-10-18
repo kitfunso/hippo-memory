@@ -1,6 +1,6 @@
 /** Core data model for Hippo memory entries, based on the strength formula from PLAN.md. */
 
-import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
 import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';

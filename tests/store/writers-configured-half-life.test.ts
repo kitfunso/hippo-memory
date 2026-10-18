@@ -172,6 +172,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       return added(root, () =>
         importProjectMemories(root, {
           configAt: loadConfig,
+          tenantId: 'default',
           agentImport: sqliteAgentImport,
           machine: { home, env: {}, platform: process.platform },
         }),
@@ -185,7 +186,13 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       fs.writeFileSync(file, 'decision: rotate deploy keys every 90 days\n');
       vi.spyOn(console, 'log').mockImplementation(() => {});
       return added(root, () =>
-        cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false }),
+        cmdCapture(captureTarget(root), {
+          tenantId: 'default',
+          source: 'file',
+          filePath: file,
+          dryRun: false,
+          global: false,
+        }),
       );
     },
   ],
@@ -194,7 +201,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     (root) => {
       const file = path.join(tmp(), 'notes.txt');
       fs.writeFileSync(file, 'The nightly backup runs at 02:00 UTC.\n\nRestores are tested every quarter.\n');
-      return added(root, () => importGenericFile(file, { hippoRoot: root }));
+      return added(root, () => importGenericFile(file, { tenantId: 'default', hippoRoot: root }));
     },
   ],
   [
@@ -203,7 +210,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       const vault = tmp();
       fs.writeFileSync(path.join(vault, 'note.md'), 'The on-call rota changes every Monday at 09:00.\n');
       // The row itself goes through remember(); the result's copy must say what was stored.
-      return (await importVault(vault, { hippoRoot: root, name: 'notes' })).entries;
+      return (await importVault(vault, { tenantId: 'default', hippoRoot: root, name: 'notes' })).entries;
     },
   ],
   [

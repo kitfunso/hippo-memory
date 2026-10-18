@@ -5,7 +5,7 @@ import { remember } from '../../src/api/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
-import { resolveTenantForSlackTeam } from '../../src/connectors/slack/tenant-routing.js';
+import { resolveTenantForSlackTeam, type SlackFallback } from '../../src/connectors/slack/tenant-routing.js';
 import { ingestMessage, type IngestInput } from '../../src/connectors/slack/ingest.js';
 import type { IngestResult } from '../../src/connectors/ingest.js';
 import { messageToRememberOpts } from '../../src/connectors/slack/transform.js';
@@ -22,6 +22,10 @@ import { stageScratchWinner } from '../_helpers/race-winner.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { envTenant } from '../../src/util/env.js';
+
+// The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
+const fallback = (allowUnknown = false): SlackFallback => ({ hostTenant: envTenant(), allowUnknown });
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -78,7 +82,7 @@ describe('Slack hardening + migration v19', () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
     try {
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-tenant-A');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', fallback())).toBe('env-tenant-A');
     } finally {
       closeHippoDb(db);
       restore();
@@ -95,7 +99,7 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBeNull();
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', fallback())).toBeNull();
     } finally {
       closeHippoDb(db);
       restore();
@@ -112,7 +116,7 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', true)).toBe('env-fallback');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', fallback(true))).toBe('env-fallback');
     } finally {
       closeHippoDb(db);
       r2();
@@ -353,7 +357,7 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replayDlqEntry(
-      { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
+      { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );

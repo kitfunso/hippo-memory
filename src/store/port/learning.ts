@@ -9,10 +9,11 @@ export interface Learning {
   entriesMentioning(
     tokens: readonly string[],
     tag: string,
-    tenantId: string | undefined,
+    tenantId: string,
     page: { readonly limit: number; readonly after?: EntryCursor },
   ): EntryPage;
-  readEntry(id: string, tenantId?: string): MemoryEntry | null;
+  /** The row with `id`; null when absent or in another tenant. */
+  readEntry(id: string, tenantId: string): MemoryEntry | null;
   /** Rows of `tenantId` that are current and whose origin project is one of `origins`. */
   currentEntriesFromOrigins(tenantId: string, origins: readonly string[]): MemoryEntry[];
   /** Writes one memory; throws RejectedValueError when its value was rejected. */

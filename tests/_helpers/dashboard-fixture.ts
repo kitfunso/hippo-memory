@@ -17,6 +17,7 @@ import type { DashboardRow } from '../../src/store/port/dashboard-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from './root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { envTenant } from '../../src/util/env.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
 export const DAY = 86_400_000;
@@ -112,8 +113,13 @@ export async function startDashboard(
   now: () => number = () => NOW,
   opts: { bodyDeadlineMs?: number } = {},
 ): Promise<RunningDashboard> {
-  // One test clock drives both the projections and the cache age.
-  const server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { now, cacheClock: now, ...opts });
+  // One test clock drives both the projections and the cache age; the tenant is read as the CLI root reads it.
+  const server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, {
+    now,
+    cacheClock: now,
+    tenantId: envTenant(),
+    ...opts,
+  });
   const port = await new Promise<number>((resolve) => {
     const done = (): void => {
       // SAFETY: serveDashboard binds a TCP port, so address() is an AddressInfo once listening.

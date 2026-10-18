@@ -16,6 +16,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow, ftsDriftAt } from './entry-row.js';
 import { chunked } from '../../util/chunked.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { DIGEST_DISPLAY_CHARS } from '../../util/token-text.js';
 import { placeholders } from '../../util/sql.js';
 import { CLI_ACTOR } from '../../core/actor.js';
@@ -441,8 +442,9 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
   const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
   const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
   return {
-    entryIdsPage: (page) => on((db) => loadEntryIdsPageAt(db, page), openStore),
-    entriesByIds: (ids) => (ids.length === 0 ? new Map() : on((db) => selectEntriesByIds(db, ids), openStore)),
+    entryIdsPage: (page) => on((db) => loadEntryIdsPageAt(db, ALL_TENANTS, page), openStore),
+    entriesByIds: (ids) =>
+      ids.length === 0 ? new Map() : on((db) => selectEntriesByIds(db, ids, ALL_TENANTS), openStore),
     objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
     ftsDrift: (repair) => on((db) => ftsDriftAt(db, repair)),
     sessionDecayContext: () => on((db) => loadSessionDecayContextAt(db), openStore),
@@ -470,7 +472,7 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
       return failed.length;
     },
     reportAuditFailure: (op, reason) => reportAuditWriteFailure(op, reason),
-    entriesPage: (page) => on((db) => loadEntriesPageAt(db, undefined, page), openStore),
+    entriesPage: (page) => on((db) => loadEntriesPageAt(db, ALL_TENANTS, page), openStore),
     currentDistilledEntries: () => on((db) => loadCurrentDistilledEntriesAt(db), openStore),
     deleteOneByOne: (targets, opts) =>
       targets.length === 0 ? [] : on((db, files) => deleteEntriesOneByOneAt(db, files, targets, opts), openStore),

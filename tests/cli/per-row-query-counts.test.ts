@@ -392,7 +392,7 @@ describe('strengthenRetrieved', () => {
         strengthenRetrieved(
           root,
           entries.map((e) => e.id),
-          { recallBoostAblated: false },
+          { tenantId: 'default', recallBoostAblated: false },
         ),
       );
       expect(result.size).toBe(n);
@@ -404,7 +404,9 @@ describe('strengthenRetrieved', () => {
     const root = freshRoot('qc-strengthen-repeat');
     const [entry] = rows(1, 'repeat');
     seed(ctxFor(root), [entry]);
-    expect([...strengthenRetrieved(root, [entry.id, entry.id], { recallBoostAblated: false })]).toEqual([entry.id]);
+    expect([
+      ...strengthenRetrieved(root, [entry.id, entry.id], { tenantId: 'default', recallBoostAblated: false }),
+    ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
     expect(after?.retrieval_count).toBe(entry.retrieval_count + 1);
     expect(after?.half_life_days).toBe(entry.half_life_days + 2);

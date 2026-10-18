@@ -1,4 +1,4 @@
-// The dashboard derives its tenant via resolveTenantId({}), which reads HIPPO_TENANT.
+// The dashboard serves the tenant its CLI root resolved.
 // A pin for another tenant's memory id must return 404 and leave the row untouched.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
@@ -68,9 +68,8 @@ describe('dashboard tenant-scoping', () => {
     });
     writeEntry(hippoRoot, a);
 
-    // Run the dashboard under HIPPO_TENANT=tenant_b on an ephemeral port.
-    vi.stubEnv('HIPPO_TENANT', 'tenant_b');
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
+    // Run the dashboard as tenant_b on an ephemeral port.
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'tenant_b' });
     const port = await boundPort(server);
 
     const res = await post(port, `/api/memory/${a.id}/pin`, '{"pinned":true}');

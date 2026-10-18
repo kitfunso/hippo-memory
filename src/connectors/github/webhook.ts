@@ -2,6 +2,7 @@ import {
   envGitHubAllowUnknownInstallationFallback,
   envGitHubWebhookSecret,
   envGitHubWebhookSecretPrevious,
+  envTenant,
 } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { DAY_MS } from '../../util/time.js';
@@ -24,7 +25,6 @@ import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import type { Context } from '../../api/index.js';
 import type { HippoConfig } from '../../core/config.js';
 import type { HippoStore } from '../../store/index.js';
-import { resolveTenantId } from '../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -160,7 +160,10 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown
   // routing - same policy as Slack.
-  const resolvedTenant = await resolveTenantForGitHub(d.store, routing, envGitHubAllowUnknownInstallationFallback());
+  const resolvedTenant = await resolveTenantForGitHub(d.store, routing, {
+    hostTenant: envTenant(),
+    allowUnknown: envGitHubAllowUnknownInstallationFallback(),
+  });
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,
@@ -203,7 +206,7 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
   })();
   const parkRaw = async (error: string, bucket: DlqBucket): Promise<null> => {
     await parkAndAck(d, {
-      tenantId: resolveTenantId({}),
+      tenantId: envTenant(),
       error,
       bucket,
       installationId: installationFromRaw,

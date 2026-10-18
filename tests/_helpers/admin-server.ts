@@ -2,7 +2,7 @@
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { resolveTenantId } from '../../src/store/sqlite/tenant.js';
+import { resolveTenantId } from '../../src/server/host-tenant.js';
 
 type ServeOpts = Parameters<typeof serve>[0];
 

@@ -1,6 +1,7 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
-import { DEFAULT_TENANT_ID, envHippoSessionId } from '../util/env.js';
+import { envHippoSessionId } from '../util/env.js';
+import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';

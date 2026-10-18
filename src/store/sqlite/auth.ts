@@ -16,6 +16,7 @@ import { raiseMinBinary } from '../../db/meta.js';
 import { keysetAfter } from '../../util/keyset.js';
 import type { HippoStore } from '../index.js';
 import { DAY_MS } from '../../util/time.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../util/version.js';
 import type { ApiKeyRecord } from '../port/types.js';
 import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../port/key-writes.js';
@@ -351,7 +352,7 @@ function apiKeyFilter(opts: ListApiKeysOpts): ApiKeyFilter {
     where.push('revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)');
     params.push(new Date().toISOString());
   }
-  if (opts.tenantId !== undefined) {
+  if (opts.tenantId !== ALL_TENANTS) {
     where.push('tenant_id = ?');
     params.push(opts.tenantId);
   }

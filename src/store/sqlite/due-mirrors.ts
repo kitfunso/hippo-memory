@@ -11,6 +11,7 @@ import {
   withWriteScope,
 } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { deferMirrorWrite, mirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
 import { cachedStatement } from './statement-cache.js';
@@ -68,9 +69,11 @@ function rewriteDueMirrorsIn(hippoRoot: string): void {
  * or its row is gone, and only if no later write has marked the row again. */
 function rewriteDueMirrors(db: DatabaseSyncLike, hippoRoot: string): void {
   for (let marks = dueMarks(db, DUE); marks.length > 0; marks = dueMarks(db, marks.at(-1)!.key)) {
+    // A mark names a row by id alone, and one rewrite serves the marks every tenant's jobs left.
     const rows = selectEntriesByIds(
       db,
       marks.map((mark) => mark.key.slice(DUE.length)),
+      ALL_TENANTS,
     );
     const written = new Set(writeMarkdownMirrors(hippoRoot, [...rows.values()]));
     const served = marks.filter(({ key }) => {

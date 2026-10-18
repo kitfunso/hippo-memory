@@ -4,7 +4,7 @@ import type { OriginFilter, AppendAuditOpts } from './types.js';
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
   readonly limit: number;
-  readonly tenantId?: string;
+  readonly tenantId: string;
   readonly requestedScope?: string;
   readonly explicitScopeMode: 'exact' | 'additive';
   readonly includeSuperseded: boolean;
@@ -64,6 +64,6 @@ export interface RecallTraceResultInput {
 
 /** The caller passes the eval-only recall-boost ablation switch, so the store never reads experiment config itself. */
 export interface StrengthenOptions {
-  readonly tenantId?: string;
+  readonly tenantId: string;
   readonly recallBoostAblated: boolean;
 }

@@ -17,6 +17,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { strengthenRetrieved } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -58,7 +59,8 @@ const ROWS: readonly Row[] = [
   [
     'store/sqlite/folder-forms.ts strengthenRetrieved',
     /strengthenRetrieved/,
-    async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`,
+    async (root) =>
+      `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }).size}`,
     'found 0',
   ],
   [
@@ -88,7 +90,7 @@ const ROWS: readonly Row[] = [
         await physicsSearch('deploy', [entry], {
           hippoRoot: root,
           queryEmbedding: [1, 0, 0],
-          vectorCandidates: { includeSuperseded: false },
+          vectorCandidates: { tenantId: ALL_TENANTS, includeSuperseded: false },
         }),
       ),
     'ranked 1',

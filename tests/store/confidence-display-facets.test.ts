@@ -239,7 +239,7 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'default' });
     const port = await boundPort(server);
 
     // SAFETY: each route returns the dashboard-types.ts shape named in the cast.

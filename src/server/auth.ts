@@ -1,7 +1,6 @@
 // Bearer and loopback auth for the HTTP server.
-import { envAllowKeylessLocal, envRequireAuth } from '../util/env.js';
+import { envAllowKeylessLocal, envRequireAuth, envTenant } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { resolveTenantId } from '../store/index.js';
 import { sqliteReach } from '../store/sqlite/store.js';
 import { hasGroup } from '../store/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -257,7 +256,7 @@ function bearerActor(id: BearerIdentity): Actor {
   if (id.owner !== undefined) actor.owner = id.owner;
   if (id.viaAuthResolver) actor.viaAuthResolver = true;
   // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
-  else if (id.role === 'admin' && id.tenantId === resolveTenantId({})) actor.hostAdmin = true;
+  else if (id.role === 'admin' && id.tenantId === envTenant()) actor.hostAdmin = true;
   return actor;
 }
 
@@ -324,7 +323,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   }
   return {
     hippoRoot: opts.hippoRoot,
-    tenantId: resolveTenantId({}),
+    tenantId: envTenant(),
     actor: keylessLocalActor(),
     store: opts.store,
     reach,

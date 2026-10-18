@@ -15,7 +15,6 @@ import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
-import { resolveTenantId } from './store/index.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
 import { DAY_MS } from './util/time.js';
@@ -51,6 +50,8 @@ export interface DoctorOptions {
    */
   home?: string;
   version: string;
+  /** The tenant the CLI root resolved. */
+  tenantId: string;
   nodeVersion?: string;
   now?: Date;
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
@@ -226,9 +227,9 @@ function compactionsCheck(
 }
 
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
-function projectsCheck(global: Diagnostics, globalRoot: string): DoctorCheck {
+function projectsCheck(global: Diagnostics, globalRoot: string, tenantId: string): DoctorCheck {
   try {
-    const r = global.projectTags(resolveTenantId({}), (reads) => planProjectRepair(reads, globalRoot));
+    const r = global.projectTags(tenantId, (reads) => planProjectRepair(reads, globalRoot));
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0
@@ -500,7 +501,7 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
-  if (hasGlobal) checks.push(projectsCheck(opts.diagnosticsAt(globalRoot), globalRoot));
+  if (hasGlobal) checks.push(projectsCheck(opts.diagnosticsAt(globalRoot), globalRoot, opts.tenantId));
 
   checks.push(claudeCodeCheck(home));
 

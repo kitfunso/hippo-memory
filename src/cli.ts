@@ -2,13 +2,12 @@
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in cli/verbs.ts.
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envLossAversionRatio, envSkipAutoIntegrations, validateFlags } from './util/env.js';
+import { envLossAversionRatio, envSkipAutoIntegrations, envTenant, validateFlags } from './util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './core/project-identity.js';
-import { resolveTenantId } from './store/index.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { exitAfterFlush } from './util/crash-handlers.js';
@@ -249,7 +248,7 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
     printUsage();
     throw new CliExit(1);
   }
-  const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: resolveTenantId({}), args, flags });
+  const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
   await (spec.scoped ? (await import('./cli/api-context.js')).cliRequest(run) : run());
 }
 

@@ -34,6 +34,7 @@ import { inMemoryVectorStore } from '../_helpers/in-memory-vector-store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -337,7 +338,7 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
       { tenantId: 'default', scope: { mode: 'exact', value: 'slack:private:C1' }, includeSuperseded: false },
     ],
     ['an origin filter', NEAR, { tenantId: 'default', includeSuperseded: false, origin: ['no-such-project'] }],
-    ['no tenant, a 51-way tie cut at 5', NEAR, { includeSuperseded: false, limit: 5 }],
+    ['every tenant, a 51-way tie cut at 5', NEAR, { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 5 }],
     ['a two-way tie cut at 1', TIE, { tenantId: 'default', includeSuperseded: false, limit: 1 }],
   ] as const)('nearestEntries: %s', async (_name, q, spec) => {
     expect(await ids(memory, q, spec)).toEqual(await ids(sqlite, q, spec));
@@ -346,7 +347,10 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
   it('a tie at the cut goes to the smaller id on both', async () => {
     const spec = { tenantId: 'default', includeSuperseded: false, limit: 1 };
     expect(await ids(sqlite, TIE, spec)).toEqual(['mem_v_tie_a']);
-    expect(await ids(sqlite, NEAR, { includeSuperseded: false, limit: 2 })).toEqual(['mem_o_00', 'mem_o_01']);
+    expect(await ids(sqlite, NEAR, { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 2 })).toEqual([
+      'mem_o_00',
+      'mem_o_01',
+    ]);
   });
 
   it('2,000 stored vectors rank the same read as Float32 views and as number[] copies', async () => {

@@ -43,9 +43,9 @@ describe('loadEntriesMentioning on the FTS path', () => {
   it('matches the same rows for invalidation on both paths', () => {
     for (const from of TARGETS) {
       const target = { from, to: null, type: 'removal' as const };
-      const viaFts = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, { dryRun: true });
+      const viaFts = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', { dryRun: true });
       setFts(root, '0');
-      const viaLike = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, undefined, {
+      const viaLike = invalidateMatching(sqliteSyncStore(root).localFiles.learning, target, 'default', {
         dryRun: true,
       });
       setFts(root, '1');
@@ -54,7 +54,7 @@ describe('loadEntriesMentioning on the FTS path', () => {
     const hit = invalidateMatching(
       sqliteSyncStore(root).localFiles.learning,
       { from: 'café', to: null, type: 'removal' },
-      undefined,
+      'default',
       { dryRun: true },
     );
     expect(hit.targets).toHaveLength(1);
@@ -64,7 +64,7 @@ describe('loadEntriesMentioning on the FTS path', () => {
     const result = invalidateMatching(
       sqliteSyncStore(root).localFiles.learning,
       { from: 'ops', to: null, type: 'removal' },
-      undefined,
+      'default',
       { dryRun: true },
     );
     expect(result.targets).toHaveLength(CONTENTS.length);

@@ -13,6 +13,7 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const AT = '2026-03-01T12:00:00.000Z';
@@ -41,7 +42,7 @@ const revokedAtOf =
   async (_g, store) =>
     (await store.findApiKey(keyId))?.revokedAt;
 const after =
-  (afterId: number, limit?: number, tenantId?: string): Call =>
+  (afterId: number, limit?: number, tenantId: TenantId = ALL_TENANTS): Call =>
   (g) =>
     g.auditEventsAfter({ afterId, limit, tenantId });
 const highId: Call = (g) => g.auditHighId();

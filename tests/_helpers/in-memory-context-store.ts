@@ -29,6 +29,7 @@ import { assertTenantId } from '../../src/core/tenant-id.js';
 import { computeSchemaFit } from '../../src/index.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';
 import type { StoreSide } from './store-conformance.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryContextStore extends StoreSide {
   readonly store: HippoStore & { readonly contextReads: ContextReads; readonly vectors: VectorReads };
@@ -353,7 +354,7 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
     withSqliteAllowed(() => {
       const db = openHippoDb(hippoRoot);
       try {
-        return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+        return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
       } finally {
         closeHippoDb(db);
       }

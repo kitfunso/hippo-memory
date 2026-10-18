@@ -1,5 +1,5 @@
 import { errorMessage } from '../../util/log.js';
-import { DEFAULT_TENANT_ID } from '../../util/env.js';
+import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
 import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../../db/index.js';

@@ -1,5 +1,5 @@
 // hippo.db's Conflicts group: listing and resolving the memory_conflicts rows.
-import { DEFAULT_TENANT_ID } from '../../util/env.js';
+import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../util/tenant.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../core/rejection-digest.js';
@@ -76,10 +76,10 @@ function toConflictRow(r: ConflictJoinRow): ConflictRow {
 
 /** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no cross-tenant or stale pair
  * surfaces; with none, every conflict comes back with whichever members still exist. */
-function conflictSelect(tenantId: string | null, filters: readonly KeysetClause[]): KeysetClause {
-  const join = tenantId === null ? 'LEFT JOIN' : 'JOIN';
+function conflictSelect(tenantId: TenantId, filters: readonly KeysetClause[]): KeysetClause {
+  const join = tenantId === ALL_TENANTS ? 'LEFT JOIN' : 'JOIN';
   const where: KeysetClause[] =
-    tenantId === null
+    tenantId === ALL_TENANTS
       ? [...filters]
       : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
   return {
@@ -152,7 +152,7 @@ export function replaceDetectedConflictsAt(
   detectedAt: string = new Date().toISOString(),
 ): void {
   const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
-  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
+  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, changedIds, ALL_TENANTS).values()]);
 }
 
 /** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read
@@ -361,7 +361,7 @@ function resolveConflictAt(
   });
   if (removal === null) return false;
   const { keep, loser } = resolution;
-  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keep.id, loser.id]).values()]);
+  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keep.id, loser.id], tenantId).values()]);
   if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loser.id, removal);
   return true;
 }

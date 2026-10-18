@@ -86,7 +86,12 @@ function compaction(id: string, origin: string, cwd: string): void {
 
 const texts = (r: Awaited<ReturnType<typeof contextGet>>): string[] => r.entries.map((e) => e.entry.content);
 const sync = (cwd: string) =>
-  importAtSessionEnd(cwd, undefined, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
+  importAtSessionEnd(cwd, undefined, {
+    configAt: loadConfig,
+    tenantId: 'default',
+    agentImport: sqliteAgentImport,
+    machine: w.machine,
+  });
 const prefixFor = (cwd: string, origin: string): string =>
   containerPrefix('claude-code', containerId(projectNotes(w, cwd), 'project', process.platform, origin));
 
@@ -124,7 +129,7 @@ describe('two repos named api in one global store', () => {
     const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
     expect(plan.folds).toEqual([]);
     expect(plan.collisions).toEqual([{ name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] }]);
-    const check = runDoctor({ diagnosticsAt, cwd: a, home: w.home, version: 'test' }).checks.find(
+    const check = runDoctor({ diagnosticsAt, tenantId: 'default', cwd: a, home: w.home, version: 'test' }).checks.find(
       (c) => c.id === 'projects',
     );
     expect(check).toMatchObject({ status: 'warn' });

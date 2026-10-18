@@ -11,7 +11,6 @@ import { cardDetail, cardList } from '../api/objects/cards.js';
 import { cliConfig, cliStore } from '../cli/api-context.js';
 import { evalNow } from '../core/ablation.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
-import { envTenant } from '../util/env.js';
 import {
   BodyTimeoutError,
   BodyTooLargeError,
@@ -92,6 +91,7 @@ async function readActionBody(req: http.IncomingMessage, deadlineMs: number): Pr
 /** What every request shares; built once in openDashboardRoot. */
 interface DashboardRoot {
   readonly store: HippoStore & StoreGroups;
+  readonly tenantId: string;
   /** A fresh api Context on the server's one store, so a config edit shows on the next request. */
   readonly context: () => Context;
   readonly snapshots: SnapshotService;
@@ -124,8 +124,7 @@ async function memoryDetail(ctx: RouteContext, id: string, fresh: boolean): Prom
 }
 
 async function handleRead(ctx: RouteContext, segments: string[]): Promise<boolean> {
-  const { snapshots, req, res, url } = ctx;
-  const tenantId = envTenant();
+  const { snapshots, req, res, url, tenantId } = ctx;
   // A cross-site <img src=...?fresh=1> must not force a full rebuild.
   const fresh = url.searchParams.get('fresh') === '1' && !isCrossSite(req);
   const [, head, a, b] = segments;
@@ -411,6 +410,8 @@ function superviseListener(server: http.Server, release: () => void, port: numbe
   if (handleSignals) stopOnSignal(server);
 }
 interface DashboardOptions {
+  /** The tenant the CLI root resolved; the dashboard reads and writes as it. */
+  readonly tenantId: string;
   readonly now?: () => number;
   readonly cacheClock?: () => number;
   readonly handleSignals?: boolean;
@@ -426,12 +427,13 @@ function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): Dashboard
   const snapshots = createSnapshotService(store.localFiles.dashboard, now, opts.cacheClock);
   return {
     store,
+    tenantId: opts.tenantId,
     now,
     snapshots,
     bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
     context: () => ({
       hippoRoot,
-      tenantId: envTenant(),
+      tenantId: opts.tenantId,
       actor: adminActor(DASHBOARD_ACTOR),
       store,
       config: cliConfig(hippoRoot),
@@ -484,11 +486,11 @@ export function serveDashboard(
   hippoRoot: string,
   port: number = 3333,
   token: string = randomBytes(32).toString('base64url'),
-  opts?: DashboardOptions,
+  opts: DashboardOptions,
 ): http.Server {
   const distUiDir = path.join(PACKAGE_ROOT, 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
-  const root = openDashboardRoot(hippoRoot, opts ?? {});
+  const root = openDashboardRoot(hippoRoot, opts);
 
   const handleRequest = dashboardRequestHandler(root, { distUiDir, hasDistUi }, { token, port });
 
@@ -498,7 +500,7 @@ export function serveDashboard(
   };
   // One id per request, so the lines it logs can be told apart from a concurrent request's.
   const server = http.createServer((req, res) => runWithRequestId(randomUUID(), () => onRequest(req, res)));
-  superviseListener(server, root.release, port, opts?.handleSignals === true);
+  superviseListener(server, root.release, port, opts.handleSignals === true);
 
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.

@@ -425,7 +425,7 @@ function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forc
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in src/hooks/.
 
-export function handleSetup({ flags }: CommandContext): void {
+export function handleSetup({ tenantId, flags }: CommandContext): void {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
@@ -447,7 +447,7 @@ export function handleSetup({ flags }: CommandContext): void {
 
   if (!flags['no-learn']) {
     console.log('');
-    const imported = importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine(), { dryRun }));
+    const imported = importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine(), { dryRun }));
     printAgentImport(imported, dryRun ? '[dry-run] ' : '');
   }
 
@@ -563,13 +563,13 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = replayCompactions({ root: globalRoot, files: cliLocalFiles(globalRoot) }, warn);
+    const finished = replayCompactions({ root: globalRoot, files: cliLocalFiles(globalRoot), tenantId }, warn);
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
     }
     await repairQualityOnceAt(globalRoot, tenantId);
   }
-  printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine())), '');
+  printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine())), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   if (workspaces.length === 0) {

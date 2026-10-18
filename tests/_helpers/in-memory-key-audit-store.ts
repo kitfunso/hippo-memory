@@ -15,6 +15,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import type { StoreSide } from './store-conformance.js';
 import { portOnlyStore } from './port-only-store.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryKeyAuditStore extends StoreSide {
   readonly store: HippoStore & { readonly keyAudit: KeyAudit };
@@ -37,7 +38,11 @@ function copyRows(hippoRoot: string): CopiedRows {
         return record ? [[key_id, record]] : [];
       }),
     );
-    return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighId(hippoRoot) };
+    return {
+      keys,
+      audit: listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 }),
+      highId: auditHighId(hippoRoot),
+    };
   } finally {
     closeHippoDb(db);
   }
@@ -80,7 +85,7 @@ export function inMemoryKeyAuditStore(hippoRoot: string): InMemoryKeyAuditStore 
     async auditEventsAfter(opts) {
       const limit = checkedLimit(opts);
       const rows = audit.filter(
-        (e) => e.id > opts.afterId && (opts.tenantId === undefined || e.tenantId === opts.tenantId),
+        (e) => e.id > opts.afterId && (opts.tenantId === ALL_TENANTS || e.tenantId === opts.tenantId),
       );
       return structuredClone(rows.slice(0, limit));
     },

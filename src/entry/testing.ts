@@ -15,7 +15,7 @@ export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/
 export type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
 export { embedMemory } from './folder-search.js';
 // Benchmarks and token evals seed and read hippo.db on a handle they open themselves.
-export { resolveTenantId } from '../store/sqlite/tenant.js';
+export { resolveTenantId } from '../server/host-tenant.js';
 export { upsertEntryRow } from '../store/sqlite/entry-row.js';
 export { writeEntryDbOnly } from '../store/sqlite/entry-writes.js';
 export { buildIndexFromDb, writeIndexMirror } from '../store/sqlite/mirrors.js';

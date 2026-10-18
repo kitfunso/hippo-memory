@@ -14,7 +14,7 @@
  * the tombstone-interaction cases; this file covers plain landing).
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
@@ -23,10 +23,6 @@ import { storeExtractedFacts, type ExtractedFact } from '../../src/learn/extract
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, appendSessionEvent } from '../_helpers/root-forms.js';
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 
 describe('merge pass partitions by tenant before clustering', () => {
   it('two tenants with byte-identical overlapping episodic content produce two separate merged rows, each in its own source tenant, never mixed into one', async () => {
@@ -102,9 +98,8 @@ describe('merge pass partitions by tenant before clustering', () => {
 });
 
 describe('trace pass lands in the resolved tenant and stays idempotent there', () => {
-  it('an auto-promoted trace lands in HIPPO_TENANT (not default), and a second sleep does not regenerate it', async () => {
+  it("an auto-promoted trace lands in the caller's tenant (not default), and a second sleep does not regenerate it", async () => {
     const home = makeRoot('consolidate-tenant-landing');
-    vi.stubEnv('HIPPO_TENANT', 'tenant-x');
 
     const sid = 'test-session-tenant-x';
     appendSessionEvent(home, 'tenant-x', {
@@ -121,22 +116,22 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
       metadata: { summary: 'rotated the deploy key' },
     });
 
-    const firstResult = await consolidate(home, { now: new Date() });
+    const firstResult = await consolidate(home, { now: new Date(), tenantId: 'tenant-x' });
     expect(firstResult.promotedTraces).toBe(1);
 
     const allAfterFirst = loadEveryTenantEntries(home);
     const traces = allAfterFirst.filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
-    // (c): the trace landed under the resolved tenant, not 'default':
-    // this is the fix; before it, createMemory omitted tenantId and every
-    // trace stamped 'default' regardless of HIPPO_TENANT.
+    // (c): the trace landed under the caller's tenant, not 'default':
+    // before the fix, createMemory omitted tenantId and every trace
+    // stamped 'default' whatever the tenant.
     expect(traces[0]!.tenant_id).toBe('tenant-x');
 
     // (d): idempotency ghost regression pin. traceExistsForSession checks
     // under consolidationTenant ('tenant-x'). Before the fix the trace
     // itself lived in 'default', so that check never matched under a
     // non-default tenant and every sleep regenerated a duplicate trace.
-    const secondResult = await consolidate(home, { now: new Date() });
+    const secondResult = await consolidate(home, { now: new Date(), tenantId: 'tenant-x' });
     expect(secondResult.promotedTraces).toBe(0);
 
     const allAfterSecond = loadEveryTenantEntries(home);

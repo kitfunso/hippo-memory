@@ -14,6 +14,7 @@ const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(
     importProjectMemories(hippoRoot, {
       configAt: loadConfig,
+      tenantId: 'default',
       agentImport: sqliteAgentImport,
       machine: { home, env: {}, platform: process.platform },
     }),

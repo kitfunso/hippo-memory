@@ -35,7 +35,10 @@ export interface ImportTarget {
   readonly tenantId: string;
   /** The live rows whose source starts with `prefix`, oldest first, read a page at a time. */
   liveBySourcePrefix(prefix: string): MemoryEntry[];
-  rowsOutsideSourcePrefix(
+  /** Live rows outside `prefix` that may hold `text` word for word, spacing aside; `origins` (global store only) keeps
+   * user-global rows and those projects. A superset the caller checks again. */
+  rowsHoldingOutsideSourcePrefix(
+    text: string,
     prefix: string,
     origins: readonly string[] | null,
   ): Array<{ id: string; content: string; source: string }>;
@@ -51,9 +54,10 @@ export interface ImportTarget {
 export interface AgentImport {
   /** Creates the store at `root` with its folders. */
   create(root: string): void;
-  open(root: string, opts: { busyWaitMs?: number }): ImportTarget;
+  /** `root`'s store, read and written as `tenantId`. */
+  open(root: string, tenantId: string, opts: { busyWaitMs?: number }): ImportTarget;
   /** An empty store in a scratch folder a dry run plans against. */
-  openStandIn(): ImportTarget;
+  openStandIn(tenantId: string): ImportTarget;
   /** True when `err` means another writer held the store past its wait. */
   isBusy<E>(err: E): boolean;
 }

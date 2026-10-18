@@ -24,6 +24,7 @@ const sync = (root: string, home: string): Tally =>
   totalTally(
     importProjectMemories(root, {
       configAt: loadConfig,
+      tenantId: 'default',
       agentImport: sqliteAgentImport,
       machine: { home, env: {}, platform: process.platform },
     }),

@@ -20,6 +20,7 @@ import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_h
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
@@ -142,6 +143,7 @@ describe('embedAll with a store', () => {
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(await run()).toBe(0);
     const left = await memory.store.vectorWrites.entriesWithoutVector({
+      tenantId: ALL_TENANTS,
       model: embeddingIndexIdentity('fake-a'),
       limit: 500,
     });

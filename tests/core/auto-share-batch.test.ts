@@ -10,6 +10,7 @@ import { countMatching, recordStatements } from '../_helpers/count-statements.js
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 
@@ -41,7 +42,9 @@ describe('autoShare batching', () => {
         }),
       );
     }
-    const { result, statements } = recordStatements(() => autoShare(...sharingStores(hippoRoot)));
+    const { result, statements } = recordStatements(() =>
+      autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS }),
+    );
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(
       expect.arrayContaining(result.map((e) => e.content)),
     );

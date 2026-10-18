@@ -245,11 +245,15 @@ describe('full-text drift repair moved off the open path', () => {
   it('doctor warns on drift and points at sleep', () => {
     vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
     expect(
-      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts'),
+      runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' }).checks.find(
+        (c) => c.id === 'fts',
+      ),
     ).toMatchObject({ status: 'pass' });
     desyncFts();
     expect(
-      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts'),
+      runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' }).checks.find(
+        (c) => c.id === 'fts',
+      ),
     ).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
   });
 });

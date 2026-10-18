@@ -1,5 +1,6 @@
 import type { JsonValue } from '../../util/json.js';
 import type { KeysetPosition } from '../../util/keyset.js';
+import type { TenantId } from '../../util/tenant.js';
 
 /** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither
  * holds the plaintext. */
@@ -15,10 +16,8 @@ export interface SelfKeyMint extends KeyMint {
   readonly perSubject: number;
 }
 
-/** `listApiKeyRows`'s filters inside one tenant; null, sent only by the host's `hippo auth list`, is every tenant. */
-export interface KeyListQuery extends Omit<ListApiKeysOpts, 'tenantId'> {
-  readonly tenantId: string | null;
-}
+/** `listApiKeyRows`'s filters; ALL_TENANTS is sent only by the host's `hippo auth list`. */
+export type KeyListQuery = ListApiKeysOpts;
 
 export interface KeyWrites {
   /** Inserts the key and appends its auth_create row in one transaction; with either one failing, neither is written. A
@@ -59,8 +58,8 @@ export interface ApiKeyListItem {
 export interface ListApiKeysOpts {
   /** Only keys that still work: unrevoked and unexpired. */
   active: boolean;
-  /** Only this tenant's keys; omit for every tenant (the CLI's single-tenant view). */
-  tenantId?: string;
+  /** Only this tenant's keys; ALL_TENANTS is every tenant's (the CLI's single-tenant view). */
+  tenantId: TenantId;
   /** Only keys minted by this auth-resolver subject. */
   ownerSubject?: string;
   /** Only this one key. */

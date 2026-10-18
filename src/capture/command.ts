@@ -10,6 +10,7 @@ import type { HippoConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
+import { ALL_TENANTS } from '../util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
@@ -30,10 +31,9 @@ export interface CaptureOptions {
   logFile?: string;
   dryRun: boolean;
   global: boolean;
-  /** Tenant scope for the dedup read in `cmdCaptureCore`: when set and `global` is false, only this tenant's
-   *  memories count.
-   *  Undefined means host-wide dedup; ignored when `global: true`. */
-  tenantId?: string;
+  /** The caller's tenant: the dedup read counts only its memories, except under `global`, which counts every
+   * tenant's. */
+  tenantId: string;
   /** The session's project: rows are stamped with its id, and dedup reads its rows under either name. */
   originProject?: ProjectRef;
 }
@@ -144,7 +144,7 @@ function storedKeysInView(
   extracted: readonly ExtractedItem[],
 ): Set<string> {
   const stored = local.captures.textsHolding(
-    options.global ? undefined : options.tenantId,
+    options.global ? ALL_TENANTS : options.tenantId,
     extracted.map((item) => longestWord(item.content)),
     { everyScope: true },
   );

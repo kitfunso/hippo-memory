@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '../../util/env.js';
+import { DEFAULT_TENANT_ID } from '../../util/tenant.js';
 import { type MemoryEntry } from '../../core/memory.js';
 import { RawAppendOnlyError } from '../../core/raw-append-only.js';
 import { AUTO_DELETABLE, type SqlFragment } from './rule-sql.js';

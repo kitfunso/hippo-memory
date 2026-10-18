@@ -18,6 +18,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -182,7 +183,7 @@ describe('sharing', () => {
       createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }),
     );
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    autoShare(...sharingStores(hippoRoot), { minScore: 0, stats });
+    autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS, minScore: 0, stats });
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([
       'gotcha: powershell 5.1 has no pipeline chain operators',
     ]);
@@ -207,7 +208,7 @@ describe('sharing', () => {
     );
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
-    autoShare(...sharingStores(hippoRoot), { minScore: 0 });
+    autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS, minScore: 0 });
     expect(loadAllEntries(getGlobalRoot(), 'default')).toEqual([]);
   });
 });

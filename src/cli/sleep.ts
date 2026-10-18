@@ -95,7 +95,7 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
       }
     }
 
-    printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, currentMachine())), '');
+    printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, tenantId, currentMachine())), '');
   }
 }
 
@@ -107,7 +107,7 @@ async function cmdSleepCore(hippoRoot: string, tenantId: string, flags: CliFlags
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!flags['dry-run']) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = replayCompactions({ root: hippoRoot, files: cliLocalFiles(hippoRoot) }, warn);
+    const finished = replayCompactions({ root: hippoRoot, files: cliLocalFiles(hippoRoot), tenantId }, warn);
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`);
     }

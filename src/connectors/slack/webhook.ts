@@ -2,6 +2,7 @@ import {
   envSlackAllowUnknownTeamFallback,
   envSlackSigningSecret,
   envSlackSigningSecretPrevious,
+  envTenant,
 } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { isWellFormedSlackRequest, verifySlackSignature } from './signature.js';
@@ -12,11 +13,10 @@ import { parkInDlq } from '../dlq.js';
 import { createReplayWindow } from '../replay-window.js';
 import { DAY_MS } from '../../util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
-import { resolveTenantForSlackTeam } from './tenant-routing.js';
+import { resolveTenantForSlackTeam, type SlackFallback } from './tenant-routing.js';
 import type { Context } from '../../api/index.js';
 import type { HippoConfig } from '../../core/config.js';
 import type { HippoStore } from '../../store/index.js';
-import { resolveTenantId } from '../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -161,7 +161,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id, envSlackAllowUnknownTeamFallback());
+    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id, hostFallback());
     if (resolvedTenant === null) {
       await parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
@@ -173,7 +173,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     }
   } else {
     // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
-    resolvedTenant = resolveTenantId({});
+    resolvedTenant = envTenant();
   }
   const ctx: Context = {
     hippoRoot: d.hippoRoot,
@@ -194,13 +194,16 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   await dispatchSlackEvent(d, ctx, body);
 }
 
+const hostFallback = (): SlackFallback => ({
+  hostTenant: envTenant(),
+  allowUnknown: envSlackAllowUnknownTeamFallback(),
+});
+
 async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
   // Attribute the parse failure to the originating workspace via the regex-extracted
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
-    teamIdFromRaw !== null
-      ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw, envSlackAllowUnknownTeamFallback())
-      : null;
+    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw, hostFallback()) : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,

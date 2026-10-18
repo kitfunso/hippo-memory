@@ -13,6 +13,7 @@ import { detectSecret } from '../util/secret-detect.js';
 import { embedMemoryDetached, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { chunked } from '../util/chunked.js';
+import { ALL_TENANTS, type TenantId } from '../util/tenant.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
@@ -135,10 +136,9 @@ export async function shareMemory(
   local: FolderStore,
   global: ConfiguredFolder,
   id: string,
-  options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {},
+  options: { force?: boolean; tenantId: string; skipEmbed?: boolean },
 ): Promise<MemoryEntry | null> {
-  // tenantId is optional for single-tenant callers; MCP/REST hosts MUST pass it so tenant A cannot share tenant B's
-  // memory to global (the read finds no row of another tenant).
+  // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
@@ -204,16 +204,13 @@ function assertShareable(entry: MemoryEntry, id: string): void {
 }
 
 /** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or
- * 'promoted:<path>' sources.
- *  `tenantId` filters to one tenant; undefined is host-wide (legacy callers: CLI standalone, dashboard). */
+ * 'promoted:<path>' sources; ALL_TENANTS is the host-wide view. */
 export async function listPeers(
   global: FolderStore,
-  tenantId?: string,
+  tenantId: TenantId,
 ): Promise<Array<{ project: string; count: number; latest: string }>> {
   if (!fs.existsSync(global.root)) return [];
 
-  // Tenant-scoped by default when tenantId provided. Host-wide when
-  // undefined (preserves back-compat).
   const tallies = (await global.store.localFiles.sharing.sourceTallies(tenantId)).sort((a, b) =>
     a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
   );
@@ -284,7 +281,7 @@ function isNewAndClean(
 
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can share or count as a
  * never-auto-share skip, so only those are read. */
-function* autoSharePages(sharing: Sharing, minScore: number, tenantId: string | undefined): Generator<MemoryEntry[]> {
+function* autoSharePages(sharing: Sharing, minScore: number, tenantId: TenantId): Generator<MemoryEntry[]> {
   let after: EntryCursor | null = null;
   do {
     const page: PageRequest = { limit: AUTO_SHARE_PAGE_ROWS, after: after ?? undefined };
@@ -308,7 +305,7 @@ function pageCandidates(
   const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
   if (scored.length === 0) return [];
   const words = scored.map((entry) => longestWord(entry.content)).filter((word) => word.length > 0);
-  const globalKeys = storedTextKeys(to.captures.textsHolding(undefined, words, { everyScope: true }));
+  const globalKeys = storedTextKeys(to.captures.textsHolding(ALL_TENANTS, words, { everyScope: true }));
   return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
 }
 
@@ -360,9 +357,10 @@ export function autoShare(
   options: {
     minScore?: number;
     dryRun?: boolean;
-    tenantId?: string;
+    /** ALL_TENANTS for sleep, which shares every tenant's rows. */
+    tenantId: TenantId;
     stats?: AutoShareStats;
-  } = {},
+  },
 ): MemoryEntry[] {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store.localFiles;
