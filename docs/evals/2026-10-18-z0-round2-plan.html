@@ -104,7 +104,7 @@ r1-c3  A0 broke <b>1 of 2</b>     <span class="g">author writes r1-f2</span>
 
   <doc-claim>
     <p>The inventory brief asks for rules against the usual default.</p>
-    <doc-code diff file="C:/eval-authors/s3x-inventory-template.md" title="s3x-inventory-template.md">
+    <doc-code diff file="C:/eval-authors/r2-inventory-template.md" title="r2-inventory-template.md, a copy of the pinned s3x brief">
 <script type="text/plain">
 @@ -34,1 +34,2 @@
  6. Its text, with list markers and `**` removed, contains none of: remember, CLAUDE.md, AGENTS.md, CLAUDE.local.md, MEMORY.md, `.claude/rules`, auto memory.
@@ -269,19 +269,20 @@ foreach ($s in 1, 2, 3) {
 
 <doc-claim aux="shared">
   <p>Shared: the authoring and runner scripts the claims change.</p>
-  <doc-tree caption="Green is new. The runner and sizer code stay frozen.">
+  <doc-tree caption="Green is new. The runner stays frozen; the analyzer and sizer change on feat/z0-fixed-repo.">
 <script type="text/plain">
 C:/eval-authors/
-  ~ s3x-inventory-template.md   # criterion 7 (claim 2.1)
+  + r2-inventory-template.md    # s3x brief (sha pinned, record 36) + criterion 7 (claim 2.1)
   ~ s3x-fill.mjs                # numbers after the probe (record 37)
 C:/z0-runs/scored/
-  ~ s3x-run.ps1                 # box gate, done; -Seeds (claim 4.1)
+  ~ s3x-run.ps1                 # box gate, -Seeds, -Tasks, -Runner, done (claim 4.1)
   ~ combine.mjs                 # numbers after the probe (record 84)
   ~ split.mjs                   # admissible split for set R only (record 30)
   + s3x-prescreen.ps1           # the probe (claim 2.2)
-hippo-wt-z0s4/scripts/token-eval/
-  ~ z0-filters.mjs              # hook-void filter (claim 4.3)
-  ab-run.mjs, z0-size.mjs       # frozen
+hippo scripts/token-eval/ on feat/z0-fixed-repo
+  ~ z0-filters.mjs              # hook-void filter (claim 4.3), done
+  ~ z0-size-sim.mjs             # spread bounds fix, done
+  ab-run.mjs                    # frozen at 45b57c6b
 </script>
   </doc-tree>
 </doc-claim>
