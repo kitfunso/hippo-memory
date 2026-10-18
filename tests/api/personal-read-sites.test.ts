@@ -9,11 +9,11 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type Me
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { loadRecallSearchEntries, recallScopeFilter } from '../../src/store/search-rows.js';
+import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { loadAmbientTallies } from '../../src/store/ambient.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { canReadScope, personalScopeOf, type ScopeActor } from '../../src/core/recall-scope.js';
+import { canReadScope, personalScopeOf, recallScopeFilter, type ScopeActor } from '../../src/core/recall-scope.js';
 import { touchableScopeSql } from '../../src/store/rule-sql.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { briefFromReceipts } from '../../src/objects/project-briefs.js';

@@ -8,6 +8,7 @@ import { digestSentences, recordSessionDigest, type DigestEdit } from '../../src
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { syncStore } from '../_helpers/cli-stores.js';
 
 // The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
@@ -36,7 +37,7 @@ function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[]
   initStore(hippoRoot);
   const turns = (opts.echo ?? ['go']).map((text) => ({ role: 'user' as const, text }));
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, { turns, finalText, cwd: repo, edits: opts.edits ?? [] }, {
+  recordSessionDigest(hippoRoot, syncStore(hippoRoot), { turns, finalText, cwd: repo, edits: opts.edits ?? [] }, {
     key: 's1', tenantId: 'default', log: (line) => log.push(line),
   });
   const line = log.join('\n');

@@ -1,6 +1,8 @@
 // The request-scope plumbing the composition roots (cli, server, stdio MCP) run their requests in.
 import {
   HOOK_DB_WAIT_MS,
+  isSqliteBusy,
+  noteStoreBusy,
   outsideRequestStores,
   runWithRequestStores,
   scopedBusyWait,
@@ -19,6 +21,17 @@ const PRESETS = {
 /** Runs `fn` with one store handle per store, closed with it, at the root's lock wait. */
 export function runSqliteRequest<T>(fn: () => T | Promise<T>, preset: RequestPreset): Promise<T> {
   return runWithRequestStores(fn, PRESETS[preset]);
+}
+
+/** The hook preset: a store still busy after the wait skips the hook's work with one warning, undefined and exit 0. */
+export async function runSqliteHookRequest<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
+  try {
+    return await runSqliteRequest(fn, 'hook');
+  } catch (error) {
+    if (!isSqliteBusy(error)) throw error;
+    noteStoreBusy('hook skipped');
+    return undefined;
+  }
 }
 
 /** A scope of its own: the caller closes a handle the work holds across its pauses; the lock wait carries over. */

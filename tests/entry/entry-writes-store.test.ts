@@ -5,11 +5,10 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
+  archiveRaw, forget, outcome, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
   type OutcomeResult, type RememberResult, type SupersedeResult,
 } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { lastRecalledIds, resolveClientKey } from '../../src/mcp/session-state.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -85,14 +84,6 @@ describe('the api with ctx.store', () => {
     expect(memory.forgotten()).toBe(2);
     const ops = memory.auditRows().filter((r) => r.ts === NOW).map((r) => r.op);
     expect(ops).toEqual(['remember', 'remember', 'remember', 'outcome', 'remember', 'supersede', 'archive_raw', 'forget']);
-  });
-
-  it('refuses the trace link and the last-recall outcome under a store without lastRecall', async () => {
-    const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: inMemoryEntryWritesStore(copyOf()).store };
-    await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
-    await expect(outcomeForLastRecall(ctx, true)).rejects.toMatchObject({
-      status: 501, message: 'this store keeps no last recall: send the ids your recall returned',
-    });
   });
 });
 

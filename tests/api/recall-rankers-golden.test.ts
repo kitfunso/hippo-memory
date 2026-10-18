@@ -12,7 +12,7 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { onDb } from '../_helpers/store-worker-server.js';
 import {
@@ -151,7 +151,8 @@ describe('recall ranker goldens', () => {
   it.each(CORE)('CLI core ranker: %s', async (_name, query, c) => {
     const got = await onStore(async (s) => {
       let ranked: string[] = [];
-      await retrieve(ctxOf(s), {
+      const ctx = ctxOf(s);
+      await retrieve(ctx, {
         query,
         boost: { sessionId: c.sessionId },
         cliCore: {
@@ -161,6 +162,7 @@ describe('recall ranker goldens', () => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
             return { results: ranking.results, audit: [], tokens: 0 };
           },
+          lastRecall: ctx.store.lastRecall,
         },
       });
       return ranked;

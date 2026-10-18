@@ -4,7 +4,7 @@
  *
  * Covers: recall -> outcome -> recall_trace_outcomes row (E2E, via the CLI's
  * cmdRecall + handleOutcome last-retrieval flow); outcome with no prior trace
- * -> no row, no error; the explicit `traceId` SDK opt on api.outcome; and
+ * -> no row, no error; an explicit `traceId` on the store's lastRecall group; and
  * the storage-overhead smoke bound (success criterion 3).
  *
  * Real-DB per project convention. Scratch HIPPO_HOME / cwd, never a repo
@@ -17,6 +17,7 @@ import { rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
+import { personalScopeOf } from '../../src/core/recall-scope.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
@@ -109,7 +110,7 @@ describe('outcomeForLastRecall — no prior trace', () => {
   });
 });
 
-describe('api.outcome explicit traceId opt (SDK linkage)', () => {
+describe('lastRecall.applyTracedOutcome explicit traceId (store linkage)', () => {
   it('links to the given trace when a caller supplies traceId explicitly', async () => {
     const { home, restore } = tmpHome();
     try {
@@ -130,7 +131,8 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
       }
 
       const ids = recallResult.results.map((r) => r.id);
-      await outcome(ctx, ids, true, { traceId });
+      const target = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor) };
+      await ctx.store.lastRecall.applyTracedOutcome({ ...target, ids, good: true }, traceId);
 
       const db2 = openHippoDb(home);
       try {

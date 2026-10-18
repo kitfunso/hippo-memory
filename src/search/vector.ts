@@ -1,12 +1,11 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { cosineOf } from '../core/cosine.js';
-import { indexNeedsRebuild } from '../store/embeddings/index.js';
-import { indexedModel } from '../store/vector-index.js';
+import { indexedModel, indexNeedsRebuild } from '../embeddings/index-identity.js';
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
-import { hasGroup, type HippoStore, type VectorReads } from '../store/index.js';
+import type { HippoStore, VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../store/port/vector-reads.js';
@@ -31,6 +30,8 @@ export interface VectorSource {
   readonly store: HippoStore;
   /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than failing the search. */
   readonly provider: () => EmbeddingProvider;
+  /** The store is hippo.db, whose index `hippo embed` rebuilds; any other store rebuilds its vectors from hippo.db. */
+  readonly onHippoDb?: boolean;
 }
 
 export interface VectorArmOptions extends CurrentnessOptions {
@@ -81,10 +82,9 @@ function warnBm25Fallback(reason: string, detail: string): void {
   );
 }
 
-function reindexHint(store: HippoStore): string {
+function reindexHint({ store, onHippoDb }: VectorSource): string {
   const why = 'the embedding index was built by another model or is being rebuilt';
-  // `hippo embed` writes only hippo.db, so another store gets its vectors by a rebuild from it.
-  return hasGroup(store, 'localFiles')
+  return onHippoDb
     ? `${why}; run 'hippo embed'`
     : `${why}; run 'hippo embed' on the SQLite store, then rebuild the '${store.kind}' database from it`;
 }
@@ -130,7 +130,7 @@ async function fillVectorArm(
   if (!provider.isAvailable()) return;
   const index = await store.vectors.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {
-    warnBm25Fallback('reindex', reindexHint(store));
+    warnBm25Fallback('reindex', reindexHint(source));
     return;
   }
   const spec = options.vectorCandidates;

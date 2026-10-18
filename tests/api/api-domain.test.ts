@@ -1,7 +1,9 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { readEntry } from '../../src/store/entry-reads.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { BadRequestError } from '../../src/core/api-errors.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import {
@@ -100,10 +102,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
       { content: 'promote-me-to-global' },
     );
 
-    const result = promote(
-      { hippoRoot: home, store: sqliteStore(home), tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } },
-      id,
-    );
+    const result = promote(apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' }), id);
     expect(result.ok).toBe(true);
     expect(result.sourceId).toBe(id);
     expect(result.globalId).toMatch(/^g_/);
@@ -120,6 +119,32 @@ describe('api domain — recall/forget/promote/supersede', () => {
       expect(events[0]!.actor).toBe('api_key:hk_promote');
       expect(events[0]!.targetId).toBe(result.globalId);
       expect(events[0]!.metadata).toMatchObject({ sourceId: id });
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it.each([
+    ['quarantined', { scope: 'quarantine:private:unscoped' }, 'promote-veto quarantined row',
+      (id: string) => `Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`],
+    ['personal', { scope: 'personal:private:alice' }, 'promote-veto personal row',
+      (id: string) => `Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`],
+    ['secret', {}, 'service api key sk_vendor_deadbeef123456 for the ingest worker',
+      (id: string) => `Refusing to promote ${id} to the global store: content matches secret material ` +
+        `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`],
+  ] as const)('promote refuses a %s row with a 400 and its text, writing no copy and no promote row', (_kind, scope, content, text) => {
+    const row = createMemory(content, { tenantId: 'default', ...scope });
+    writeEntry(home, row);
+    const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin', owner: 'alice' });
+
+    const err = (() => { try { promote(ctx, row.id); } catch (e) { return e; } })();
+
+    expect(err).toBeInstanceOf(BadRequestError);
+    expect(err).toMatchObject({ status: 400, message: text(row.id) });
+    const db = openHippoDb(globalHome);
+    try {
+      expect(queryAuditEvents(db, { tenantId: 'default', op: 'promote' })).toEqual([]);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get()).toEqual({ n: 0 });
     } finally {
       closeHippoDb(db);
     }

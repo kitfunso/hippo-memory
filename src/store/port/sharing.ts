@@ -5,8 +5,6 @@ import type { OriginFilter } from './types.js';
 
 /** What share, auto-share, sync down and the two-store search read and write on one hippo.db. */
 export interface Sharing {
-  /** Creates the store's files when they are missing, as a first share needs. */
-  ensureFiles(): void;
   /** The memories that carry any of `signals`, of `tenantId` or of every tenant. */
   entriesWithSignals(signals: EntrySignals, tenantId?: string): MemoryEntry[];
   /** The id, tenant, source and text of every memory of `tenantId` or of every tenant, oldest first. */

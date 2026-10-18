@@ -7,7 +7,7 @@ import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.
 import { recordTokens } from '../../src/api/index.js';
 import { appendAuditEvent } from '../../src/store/audit.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/goals.js';
 import { boostByGoals } from '../../src/search/goal-boost.js';

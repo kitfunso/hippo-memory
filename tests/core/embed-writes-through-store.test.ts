@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { embeddingIndexIdentity, embeddingInputText } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings/index-identity.js';
 import { embedAll, embedMemory } from '../../src/search/embed-memories.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
@@ -18,7 +18,7 @@ import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { localIndex } from '../_helpers/cli-stores.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
@@ -94,7 +94,7 @@ beforeAll(async () => {
   }));
   for (const entry of seeded) writeEntry(fixture.dir, entry);
   oldIndexed = copyOf();
-  await embedAll(sqliteSyncStore(oldIndexed).localFiles, undefined, provider('fake-old'));
+  await embedAll(localIndex(oldIndexed), undefined, provider('fake-old'));
 });
 
 afterAll(async () => {
@@ -135,7 +135,7 @@ describe('embedAll with a store', () => {
     { name: 'a model change, which rebuilds the index and every particle', template: (): string => copyOf(oldIndexed), id: 'fake-new' },
   ])('leaves hippo.db as the no-store path does on $name', async ({ template, id }) => {
     const [plain, viaStore] = [template(), template()];
-    const counts = [await embedAll(sqliteSyncStore(plain).localFiles, undefined, provider(id)), await embedAll({ hippoRoot: viaStore, store: sqliteStore(viaStore) }, undefined, provider(id))];
+    const counts = [await embedAll(localIndex(plain), undefined, provider(id)), await embedAll({ hippoRoot: viaStore, store: sqliteStore(viaStore) }, undefined, provider(id))];
     expect(counts).toEqual([4, 4]);
     const expected = indexOn(plain);
     expect(indexOn(viaStore)).toEqual(expected);

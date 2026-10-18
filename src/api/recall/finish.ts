@@ -9,7 +9,7 @@ import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
-import type { AuditOp } from '../../store/port/audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 
 /**
  * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked within the window returns

@@ -3,7 +3,7 @@
 import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import type { HippoStore } from '../store/index.js';
 import type { HippoConfig } from '../core/config.js';
-import type { StoreReach } from '../store/port.js';
+import type { OptionalGroup, StoreReach, StoreWith } from '../store/port.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -33,6 +33,9 @@ export interface Context {
   /** Set by a composition root per command or request; absent, the api reads the store's config.json. */
   config?: HippoConfig;
 }
+
+/** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */
+export type ContextWith<G extends OptionalGroup> = Context & { readonly store: StoreWith<G> };
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
  * callers build Actor from the api_keys row instead. */

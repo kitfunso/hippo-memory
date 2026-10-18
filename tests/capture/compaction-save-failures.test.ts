@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { initStore } from '../../src/store/open.js';
 import { log as logger } from '../../src/util/log.js';
 import { removeScratch, scratch, summaryWith, type Scratch } from '../_helpers/compaction-hooks.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { folderFiles } from '../_helpers/cli-stores.js';
 
 let s: Scratch;
 let logs: string[];
@@ -35,7 +35,7 @@ describe('saveCompaction reports each failure once', () => {
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const result = saveCompaction(sqliteSyncStore(s.hippoRoot).localFiles, payload(), (m) => logs.push(m));
+      const result = saveCompaction(folderFiles(s.hippoRoot), payload(), (m) => logs.push(m));
       expect(result.deferred).toBe(true);
     } finally {
       db.exec('ROLLBACK');
@@ -51,7 +51,7 @@ describe('saveCompaction reports each failure once', () => {
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const result = saveCompaction(sqliteSyncStore(s.hippoRoot).localFiles, payload(), (m) => logs.push(m));
+      const result = saveCompaction(folderFiles(s.hippoRoot), payload(), (m) => logs.push(m));
       expect(result.deferred).toBe(false);
     } finally {
       db.exec('ROLLBACK');

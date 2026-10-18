@@ -40,10 +40,14 @@ const rpc = (method: string, params?: JsonValue): JsonValue =>
 const tool = (name: string, args: JsonValue = {}, who?: keyof Callers): Send =>
   (s) => post(s, '/mcp', rpc('tools/call', { name, arguments: args }), as(who));
 
-function slack(payload: JsonValue, secret = SECRETS.slack): Send {
+// One signing second for the file: a wall-clock second per request let a redelivery in the same second hit the
+// replay window and one in the next second reach the stored-event check, so the two servers could answer differently.
+const SLACK_SECOND = Math.floor(Date.now() / 1000);
+
+function slack(payload: JsonValue, { secret = SECRETS.slack, second = SLACK_SECOND } = {}): Send {
   return (s) => {
     const body = JSON.stringify(payload);
-    const ts = String(Math.floor(Date.now() / 1000));
+    const ts = String(second);
     const signature = `v0=${createHmac('sha256', secret).update(`v0:${ts}:${body}`).digest('hex')}`;
     const headers = { 'content-type': 'application/json', 'x-slack-request-timestamp': ts, 'x-slack-signature': signature };
     return fetch(`${s.url}/v1/connectors/slack/events`, { method: 'POST', headers, body });
@@ -100,10 +104,11 @@ const V1_STEPS: readonly Step[] = [
 const WEBHOOK_STEPS: readonly Step[] = [
   ['slack url check', slack({ type: 'url_verification', challenge: 'abc123' }), 200],
   ['slack message', slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001'))), 200],
-  ['slack redelivery', slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001'))), 200],
+  // Slack signs a retry afresh, so the event, not the replay window, is what the store must recognise.
+  ['slack redelivery', slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001')), { second: SLACK_SECOND + 1 }), 200],
   ['slack from an unknown team', slack(slackEvent('T_OTHER', 'Ev_2', posted('1700.000002'))), 200],
   ['slack deletion', slack(slackEvent('T_ACME', 'Ev_3', removed('1700.000001'))), 200],
-  ['slack forged', slack(slackEvent('T_ACME', 'Ev_4', posted('1700.000004')), FORGED), 401],
+  ['slack forged', slack(slackEvent('T_ACME', 'Ev_4', posted('1700.000004')), { secret: FORGED }), 401],
   ['github comment', github('d-1', comment('created')), 200],
   ['github deletion', github('d-2', comment('deleted')), 200],
   ['github forged', github('d-3', comment('created'), FORGED), 401],
@@ -217,7 +222,7 @@ describe('the routes moved off the server thread, on store workers against the i
     const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
     expect(bodyOf['context, reaching the global store']).toContain('global store about rollbacks');
     expect(bodyOf['slack message']).toContain('"status":"ingested"');
-    expect(bodyOf['slack redelivery']).toContain('"status":"duplicate"');
+    expect(bodyOf['slack redelivery']).toBe('{"ok":true,"status":"duplicate","memoryId":"<memory>"}');
     expect(bodyOf['github deletion']).toContain('"status":"archived"');
     expect(bodyOf['mcp stream']).toBe(': ping\n\n');
     expect(bodyOf['mcp resolve, on the server thread']).toContain('weakened');

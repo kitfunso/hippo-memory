@@ -9,8 +9,8 @@ import { evalNow } from '../../core/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import type { MemoryEntry } from '../../core/memory.js';
-import type { Context } from '../types.js';
-import { requireGroup, type Consolidation, type HippoStore, type LocalFiles } from '../../store/port.js';
+import type { Context, ContextWith } from '../types.js';
+import type { Consolidation, LocalFiles, StoreWith } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
@@ -26,7 +26,7 @@ export interface SleepPhases {
   computeAmbientState: typeof ambientStateFromTallies;
   configOf: typeof configOf;
   loadPendingExtractionTenants: (store: Consolidation) => DirtyTenantSnapshot['dirtyTenants'];
-  extractGraph: (store: HippoStore, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (store: StoreWith<'localFiles'>, tenantId: string) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 
@@ -58,17 +58,17 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
-/** A sleep's context with hippo.db's own files, proved once before any phase runs. */
-type SleepContext = Context & { readonly local: LocalFiles };
+/** A sleep's context with hippo.db's own files at hand. */
+type SleepContext = ContextWith<'localFiles'> & { readonly local: LocalFiles };
 
 /** `sleep` with its phase dependencies overridable; tests pass
  * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  storeCtx: Context,
+  storeCtx: ContextWith<'localFiles'>,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
-  const ctx: SleepContext = { ...storeCtx, local: requireGroup(storeCtx.store, 'localFiles') };
+  const ctx: SleepContext = { ...storeCtx, local: storeCtx.store.localFiles };
   const dryRun = Boolean(opts.dryRun);
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...overrides };
 
@@ -232,10 +232,12 @@ async function runQualityAudit(
 
 function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): void {
   const sleepConfig = phases.configOf(ctx);
-  if (!sleepConfig.autoShareOnSleep) return;
+  // No global target means a store with no operator's global store beside it, as context reads it.
+  const target = ctx.reach?.globalTarget;
+  if (!sleepConfig.autoShareOnSleep || target === undefined) return;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = phases.autoShare(ctx.store, ctx.local.globalStore(), {
+  const shared = phases.autoShare({ root: ctx.hippoRoot, store: ctx.store }, target, {
     minScore: AUTO_SHARE_MIN_SCORE,
     stats: autoShareStats,
   });

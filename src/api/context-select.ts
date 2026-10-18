@@ -1,15 +1,16 @@
 // getContext's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
-import { recallScopeFilter } from '../store/search-rows.js';
+import { recallScopeFilter } from '../core/recall-scope.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { auditQueryFields } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
+import type { StoreReach } from '../store/port.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { localFilesVectorSource, rankBothStores } from '../sharing/search-both.js';
+import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { searchByEngine } from '../search/engine.js';
-import { vectorSourceOf } from '../search/hybrid.js';
-import type { HybridVectorCandidates } from '../search/vector.js';
+import { configuredVectorSource, vectorSourceOf } from '../search/hybrid.js';
+import type { HybridVectorCandidates, VectorSource } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
 import { scopeMatch } from '../core/active-scope.js';
@@ -43,8 +44,6 @@ export interface ContextSource {
 export interface ContextPlan {
   /** The served store, else hippo.db under the root. */
   local: ContextSource;
-  /** The served store when it is not hippo.db; then every read and write goes through it and no hippo.db opens. */
-  other: HippoStore | undefined;
   pinnedOnly: boolean;
   limit: number;
   includeRecent: number;
@@ -426,9 +425,9 @@ async function searchBothStores(
   );
   const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
   const sources = {
-    local: vectorSourceOf({ store: plan.local.store, config: plan.config }),
+    local: vectorSourceOf({ store: plan.local.store, config: plan.config, onHippoDb: ctx.reach?.isHippoDb }),
     // Its own config.json names the global store's embedding model, read only when the vector arm runs.
-    global: localFilesVectorSource(globalStoreInReach(ctx)),
+    global: globalVectorSource(ctx),
   };
   const merged = await rankBothStores(
     plan.query,
@@ -483,7 +482,7 @@ async function searchLocalRows(
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
   const ctxResults = await searchByEngine(
-    vectorSourceOf({ store, config: ctxConfig }),
+    vectorSourceOf({ store, config: ctxConfig, onHippoDb: ctx.reach?.isHippoDb }),
     query,
     localEntries,
     usePhysicsCtx ? ctxConfig.physics : null,
@@ -517,7 +516,17 @@ async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: 
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */
 export function globalStoreInReach(ctx: Context): HippoStore {
+  return globalInReach(ctx).store;
+}
+
+function globalInReach(ctx: Context): NonNullable<StoreReach['global']> {
   const global = ctx.reach?.global;
   if (global === undefined) throw new Error('hasGlobal without a global store in reach');
-  return global.store;
+  return global;
+}
+
+/** The global store's vectors, embedded by the model its own config.json names. */
+function globalVectorSource(ctx: Context): VectorSource {
+  const { root, store } = globalInReach(ctx);
+  return configuredVectorSource(store, root);
 }

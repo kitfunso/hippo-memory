@@ -15,9 +15,9 @@ export interface SelfKeyMint extends KeyMint {
   readonly perSubject: number;
 }
 
-/** `listApiKeyRows`'s filters, always inside one tenant. */
+/** `listApiKeyRows`'s filters inside one tenant; null, sent only by the host's `hippo auth list`, is every tenant. */
 export interface KeyListQuery extends Omit<ListApiKeysOpts, 'tenantId'> {
-  readonly tenantId: string;
+  readonly tenantId: string | null;
 }
 
 export interface KeyWrites {

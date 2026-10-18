@@ -9,7 +9,9 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
-import { sqliteStore, type HippoStore, type LastRecallWrites, type RecallWrites } from '../../src/store/index.js';
+import {
+  sqliteStore, type HippoStore, type LastRecall, type LastRecallWrites, type RecallWrites,
+} from '../../src/store/index.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
 import { adminActor } from '../../src/api/index.js';
@@ -32,6 +34,7 @@ function cliCore(): CliCoreRecall {
       search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     },
     show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
+    lastRecall: sqliteStore(hippoRoot).lastRecall,
   };
 }
 
@@ -63,19 +66,17 @@ describe('retrieve with the CLI ranking core', () => {
     const inner = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
     const lastRecall = sqliteStore(hippoRoot).lastRecall;
-    const store: HippoStore = {
-      ...inner,
-      lastRecall: {
-        ...lastRecall,
-        finishRecall: async (w: LastRecallWrites, root) => {
-          writes.push(w);
-          return withSqliteAllowed(() => lastRecall.finishRecall(w, root));
-        },
+    const traced: LastRecall = {
+      ...lastRecall,
+      finishRecall: async (w: LastRecallWrites, root) => {
+        writes.push(w);
+        return withSqliteAllowed(() => lastRecall.finishRecall(w, root));
       },
     };
+    const store: HippoStore = { ...inner, lastRecall: traced };
     const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
 
-    const result = await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
+    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), lastRecall: traced } });
 
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);

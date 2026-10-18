@@ -57,7 +57,7 @@ function expiryMs(expiresAt: string | null): number {
 }
 
 function listed(row: KeyRow, query: KeyListQuery, nowIso: string): boolean {
-  if (row.tenantId !== query.tenantId) return false;
+  if (query.tenantId !== null && row.tenantId !== query.tenantId) return false;
   // The SQL compares the stamps as strings, which toISOString makes correct.
   if (query.active && (row.revokedAt !== null || (row.expiresAt !== null && row.expiresAt <= nowIso))) return false;
   if (query.ownerSubject !== undefined && row.ownerSubject !== query.ownerSubject) return false;

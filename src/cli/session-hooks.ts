@@ -12,7 +12,8 @@ import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
 import { resolveProjectIdentity, isInitialized } from '../core/project-identity.js';
-import { cmdCapture, CaptureOptions } from '../capture/command.js';
+import { cmdCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
@@ -45,7 +46,9 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
-import { cliApiContext, cliLedgerReach, cliStore, cliSyncOptions } from './api-context.js';
+import {
+  cliApiContext, cliHookRequest, cliLedgerReach, cliStore, cliSyncOptions, cliSyncStore,
+} from './api-context.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -62,12 +65,13 @@ import {
   hookStoreRoot,
   hookRuntime,
   payloadCwdRoot,
-  runHookWithStores,
   inPilotHoldout,
   hostSessionId,
 } from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
 import { CliExit, fail } from './exit.js';
+
+const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root) });
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
@@ -182,12 +186,12 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
     try {
       await cmdSessionEndWorker(root, tenantId, inlineWorkerFlags(flags, worker));
     } finally {
-      await runHookWithStores(() => flushDeliveryRecorder(rec));
+      await cliHookRequest(() => flushDeliveryRecorder(rec));
     }
     return;
   }
   // After the spawn, so a locked store delays only the row; the hook's short lock wait bounds it.
-  await runHookWithStores(() => flushDeliveryRecorder(rec));
+  await cliHookRequest(() => flushDeliveryRecorder(rec));
 }
 
 function startSessionEndRecorder(
@@ -311,7 +315,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
       }
       else capture(scan?.turns);
     },
-    digest: (scan, log) => recordSessionDigest(hippoRoot, scan, {
+    digest: (scan, log) => recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, {
       key: sessionId || path.basename(transcriptPath ?? '', '.jsonl'),
       tenantId,
       log,
@@ -405,7 +409,7 @@ function captureEndedSession(
       appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
       return false;
     }
-    cmdCapture(store, {
+    cmdCapture(captureTarget(store), {
       source: 'last-session',
       transcriptPath,
       logFile,
@@ -624,12 +628,13 @@ function captureCodexTranscript(
       sessionTurns: scan?.turns,
     };
     try {
-      cmdCapture(store, captureOpts);
+      cmdCapture(captureTarget(store), captureOpts);
     } catch (err) {
       reportSessionEndFailure(logFile ?? null, 'codex session-end: capture', err);
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
-    recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId, log: digestLog });
+    const digestKey = path.basename(transcriptPath, '.jsonl');
+    recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, { key: digestKey, tenantId, log: digestLog });
   } catch (err) {
     reportSessionEndFailure(logFile ?? null, 'codex session-end: transcript scan or digest', err);
   }
@@ -640,13 +645,14 @@ export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandCo
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   const runtime = hookRuntime(flags);
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
-  await runHookWithStores(async () => {
+  const storeRoot = hookStoreRoot(root);
+  await cliHookRequest(async () => {
     // Started before any store wait, so two fires of one hook carry timestamps close enough to match as duplicates.
-    const rec = startDeliveryRecorder(cliApiContext(hookStoreRoot(root), tenantId), {
+    const rec = startDeliveryRecorder(cliApiContext(storeRoot, tenantId), {
       stdinText, runtime, eventType: 'pre-compact', envSessionId: hostSessionId(),
     });
     resetHookInjection(root, tenantId, stdinText, null);
-    await cmdPreCompact(hookStoreRoot(root), {
+    await cmdPreCompact(storeRoot, cliSyncStore(storeRoot), {
       stdinText,
       stdinTimedOut,
       logFile: stringFlag(flags, 'log-file'),
@@ -665,7 +671,7 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
   const { text, timedOut } = await readHookStdin();
   const logFlag = flags['log-file'];
   const store = hookStoreRoot(hippoRoot);
-  const line = await runHookWithStores(() => cmdPostCompact(store, {
+  const line = await cliHookRequest(() => cmdPostCompact(store, cliSyncStore(store), {
     stdinText: text,
     stdinTimedOut: timedOut,
     logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
@@ -697,7 +703,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
         runtime: hookRuntime(flags),
         envSessionId: hostSessionId(),
       });
-      await runHookWithStores(async () => {
+      await cliHookRequest(async () => {
         try {
           return await captureToolFailure(ctx, failure, (id) => rec?.logged(id));
         } finally {
@@ -713,7 +719,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
 
 export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
-  await runHookWithStores(async () => {
+  await cliHookRequest(async () => {
     resetHookInjection(hippoRoot, tenantId, stdinText, 'compact');
     await cmdCompactResume(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
   });
@@ -746,7 +752,8 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     ? await readHookStdin()
     : { text: undefined, timedOut: false };
 
-  cmdCapture(hippoRoot, {
+  const useGlobal = boolFlag(flags, 'global');
+  cmdCapture(captureTarget(useGlobal ? getGlobalRoot() : hippoRoot), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,
@@ -754,7 +761,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     stdinTimedOut: bounded.timedOut,
     logFile: stringFlag(flags, 'log-file'),
     dryRun: boolFlag(flags, 'dry-run'),
-    global: boolFlag(flags, 'global'),
+    global: useGlobal,
     tenantId,
   });
 }

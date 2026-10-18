@@ -15,7 +15,6 @@ import {
 } from './protocol.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { initStore } from '../store/open.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -130,9 +129,12 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
  * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
-function createGlobalStoreOnFirstRun(): string {
+function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): string {
   const root = getGlobalRoot();
-  initStore(root);
+  const target = host.contextFor(root, tenantId).reach?.globalTarget;
+  // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
+  if (target === undefined) return root;
+  target.store.localFiles.ensureFiles();
   log.warn(
     `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
   );
@@ -143,8 +145,9 @@ function createGlobalStoreOnFirstRun(): string {
 function handleFrame(req: McpRequest, host: McpHost): Promise<McpResponse | null> {
   return host.runRequest(() => {
     if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
-    const root = findHippoRoot() ?? createGlobalStoreOnFirstRun();
-    return handleMcpRequest(req, host.contextFor(root, resolveTenantId({})));
+    const tenantId = resolveTenantId({});
+    const root = findHippoRoot() ?? createGlobalStoreOnFirstRun(host, tenantId);
+    return handleMcpRequest(req, host.contextFor(root, tenantId));
   });
 }
 

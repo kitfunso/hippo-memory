@@ -8,7 +8,8 @@ import { detectScope } from '../core/active-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../api/recall/rows.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliLocalFiles } from './api-context.js';
+import type { LocalFiles } from '../store/port.js';
 import type { RankRecallResult } from '../api/recall/pipeline.js';
 import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
@@ -31,12 +32,12 @@ const EXPLAIN_PREVIEW_CHARS = 48;
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
 function noteScopeHidden(
-  ctx: api.Context,
-  globalRoot: string | undefined,
+  ctx: ReturnType<typeof cliApiContext>,
+  global: LocalFiles | undefined,
   query: string,
   requested: string | undefined,
 ): void {
-  const hidden = scopeHiddenCount(ctx, query, globalRoot, requested);
+  const hidden = scopeHiddenCount(ctx, query, global, requested);
   if (hidden > 0) {
     printError(
       `[note] ${plural(hidden, 'candidate')} hidden by recall scope policy (pass an explicit --scope to inspect).`,
@@ -68,7 +69,7 @@ async function cmdExplain(
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
   const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   const explainGlobalOn = origin.globalOn;
-  noteScopeHidden(ctx, explainGlobalOn ? globalRoot : undefined, query, explicitScope || undefined);
+  noteScopeHidden(ctx, explainGlobalOn ? cliLocalFiles(globalRoot) : undefined, query, explicitScope || undefined);
 
   const config = loadConfig(hippoRoot);
   const engine = engineFlags(flags, config);

@@ -8,7 +8,7 @@ import type { KeysetPosition } from '../../util/keyset.js';
 import type { Context } from '../types.js';
 import { memoryPages } from '../memories/memories.js';
 import type { AuditEvent } from '../../store/port/types.js';
-import type { AuditOp } from '../../store/port/audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 import type { QualityRepairResult } from '../../store/port/audit-maintenance.js';
 
 export interface AuditListOptions {

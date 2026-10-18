@@ -54,7 +54,7 @@ describe('share and promote refuse personal rows', () => {
   });
 
   it('promote refuses a personal row with a 400 and the exact text; a team row still promotes', () => {
-    const err = refusal(() => copyToGlobal(hippoRoot, mine.id));
+    const err = refusal(() => copyToGlobal(hippoRoot, mine.id, { owner: 'alice' }));
     expect(err.status).toBe(400);
     expect(err.message).toBe(`Refusing to promote ${mine.id}: it is a personal memory and stays with its owner on this server.`);
     expect(copyToGlobal(hippoRoot, team.id).content).toBe(TEAM);

@@ -9,10 +9,9 @@ import { JEV_DEFAULT_TOP_K } from '../../rerankers/jev.js';
 import type { RerankerFn } from '../../rerankers/types.js';
 import { explainMatch } from '../../search/explain.js';
 import { fitBudget } from '../../search/finalize.js';
-import type { ContinuityBlock } from '../../store/port.js';
+import type { ContinuityBlock, LocalFiles } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
-import { loadSearchEntries } from '../../store/search-rows.js';
-import type { Context } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../graph/recall.js';
 
@@ -46,15 +45,14 @@ export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRec
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
  *  window-capped, so this is a floor on a large store. */
 export function scopeHiddenCount(
-  ctx: Context,
+  ctx: ContextWith<'localFiles'>,
   query: string,
-  globalRoot: string | undefined,
+  global: LocalFiles | undefined,
   requested: string | undefined,
 ): number {
-  const probe = [
-    ...loadSearchEntries(ctx.hippoRoot, query, undefined, ctx.tenantId),
-    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, ctx.tenantId) : []),
-  ];
+  const probe = [ctx.store.localFiles, global].flatMap(
+    (local) => local?.sharing.searchEntries(query, undefined, ctx.tenantId) ?? [],
+  );
   return probe.filter((e) => !passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
 }
 

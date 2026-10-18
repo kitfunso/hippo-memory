@@ -31,7 +31,7 @@ export async function saveCompactionItemsForCaller(ctx: Context, req: CallerItem
   if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) {
     throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   }
-  const key = bindCaller(ctx, req.sessionId, req.project);
+  const key = await bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
   const { written, notes } = await ctx.store.compactions.saveCallerItems(ctx.tenantId, {
     sessionId: req.sessionId,

@@ -6,7 +6,7 @@ import type { Incident, ObjectByKind, ObjectFields, ObjectKind, SavableKind } fr
 import type { Objects } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
-import type { AuditOp } from '../../src/store/port/audit-ops.js';
+import type { AuditOp } from '../../src/core/audit-ops.js';
 
 export interface InMemoryObjectsStore extends StoreSide {
   readonly store: HippoStore & { readonly objects: Objects };

@@ -8,7 +8,6 @@ import { loadRecallEntriesAt, loadSearchEntriesAt } from '../search-rows.js';
 
 export function sqliteSharing(on: OnHandle): Sharing {
   return {
-    ensureFiles: () => on(() => undefined, openStore),
     entriesWithSignals: (signals, tenantId) => on((db) => loadEntriesWithSignalsAt(db, signals, tenantId), openStore),
     textKeys: (tenantId) => on((db) => loadEntryTextKeysAt(db, tenantId), openStore),
     entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids), openStore),

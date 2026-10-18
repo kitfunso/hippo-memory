@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { handlesOf } from '../../src/store/open.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';

@@ -257,6 +257,7 @@ async function cmdRecall(
           : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
+      lastRecall: ctx.store.lastRecall,
       show: async (rank, planning) => {
         slot.presented = await presentRecall(ctx, query, o, { rank, ...priced }, planning);
         return slot.presented.shown;

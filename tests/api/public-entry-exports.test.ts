@@ -88,10 +88,10 @@ describe('package entry re-exports sleep', () => {
     expect(out.admin).toBe(false);
     // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ sleep, type SleepOpts, type SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
+    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
+    // The published signature takes the public Context, whose store is required; the root checks its local files.
+    expect(dts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
     const sleepDts = readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8');
-    // The published signature takes the public Context, whose store is required.
-    expect(sleepDts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
     expect(sleepDts).not.toMatch(/__phases|SleepPhases/);
   });
@@ -132,7 +132,7 @@ describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = runtimeReexports(readFileSync(resolve(REPO_ROOT, 'src', 'index.ts'), 'utf-8'));
     // src/index.ts, not this test, sets the list; these two prove the scan reads a multi-line block and a mixed line.
-    expect(modules).toEqual(expect.arrayContaining(['./core/card.js', './api/sleep/sleep.js']));
+    expect(modules).toEqual(expect.arrayContaining(['./core/card.js', './graph/recall.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 

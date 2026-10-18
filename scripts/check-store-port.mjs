@@ -7,8 +7,9 @@
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // portImportsFromSql counts imports and re-exports in src/store/port.ts and src/store/port/ of a src/store or src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
-// buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and the composition roots.
-// groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
+// buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
+// storeImportsInCli counts value imports of src/store or src/db in src/cli files other than the CLI's composition root.
+// groupChecksInApi counts requireGroup, hasGroup and storeWith calls in files that layers.json puts in the api or a domain layer.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -179,8 +180,17 @@ function countDomainStoreImports(file, sf) {
 }
 
 const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteSyncStore', 'initStore']);
-const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup']);
-const COMPOSITION_ROOTS = new Set(['src/cli/api-context.ts', 'src/server/boot.ts', 'src/mcp/stdio.ts']);
+const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup', 'storeWith']);
+// Where a store may be built, each with why: every other file takes its store as a parameter or from the Context.
+const COMPOSITION_ROOTS = new Map([
+  ['src/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
+  ['src/server/boot.ts', 'the HTTP server builds its store holder here'],
+  ['src/mcp/stdio.ts', 'the stdio MCP server, the one entry with no store found yet'],
+  ['src/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['src/index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
+  ['src/entry/folder-search.ts', 'the published hybridSearch and physicsSearch build the store of the folder they name'],
+  ['src/entry/importers.ts', 'the published importers build the store of the folder their options name'],
+]);
 const LAYERS = JSON.parse(readFileSync('layers.json', 'utf8'));
 const layerOf = (f) => {
   const rel = f.slice('src/'.length);
@@ -450,7 +460,7 @@ function measure() {
     }
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
     if (file.startsWith('src/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
-    if (file.startsWith('src/cli/')) out.storeImportsInCli += countStoreImports(file, sf);
+    if (file.startsWith('src/cli/') && !COMPOSITION_ROOTS.has(file)) out.storeImportsInCli += countStoreImports(file, sf);
     if (isDomain(file)) out.storeImportsInDomain += countDomainStoreImports(file, sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);

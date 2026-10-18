@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { createApiKey, listApiKeys, type CreateApiKeyResult } from '../../src/store/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { recordQuarantine } from '../../src/store/quarantine.js';
@@ -22,7 +22,7 @@ import { type JsonValue, isJsonString, isJsonObject } from '../../src/util/json.
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
-import { loadAllPredictions } from '../_helpers/root-forms.js';
+import { listApiKeys, loadAllPredictions } from '../_helpers/root-forms.js';
 
 const ROWS = 7;
 const PAGE = 3;

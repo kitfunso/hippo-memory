@@ -6,12 +6,10 @@ import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { initStore } from '../store/open.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import type { Sync } from '../store/port.js';
+import type { LocalFiles, Sync } from '../store/port.js';
 import type { Rejections } from '../store/port/rejections.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { log } from '../util/log.js';
@@ -55,13 +53,27 @@ export interface ImportOptions {
   scope?: string;
 }
 
+/** The folder an import writes to and its store, answered at once; a composition root builds it. */
+export interface ImportTarget {
+  readonly root: string;
+  readonly store: { readonly localFiles: LocalFiles; readonly rejections: Sync<Rejections> };
+}
+
+/** `ImportOptions` with the store the import writes to. */
+export type TargetedImport = ImportOptions & { readonly target: ImportTarget };
+
+/** The folder an import writes to: the operator's global store under `global`, else `hippoRoot`. */
+export function importRoot(options: ImportOptions): string {
+  return options.global ? getGlobalRoot() : options.hippoRoot;
+}
+
 /** Given an array of raw text chunks, deduplicate against existing memories,
  *  create MemoryEntry objects, write them (unless dry-run), and return a result. */
 export function importEntries(
   chunks: string[],
   source: string,
   tags: string[],
-  options: ImportOptions
+  options: TargetedImport
 ): ImportResult {
   const target = openImportTarget(options);
   const { keys } = target;
@@ -105,24 +117,18 @@ export function importEntries(
   });
 }
 
-interface ImportTarget {
+interface OpenImport {
   readonly targetRoot: string;
   readonly keys: ReturnType<typeof storedTextKeys>;
   readonly rejections: Sync<Rejections>;
 }
 
 /** The store the import writes to, made ready, with the text keys it already holds. */
-function openImportTarget(options: ImportOptions): ImportTarget {
-  const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
-
-  if (options.global) {
-    initStore(targetRoot);
-  }
-
-  // A published synchronous entry, so it reads the port as hippo.db answers it, without a Promise.
-  const store = sqliteSyncStore(targetRoot);
-  const keys = storedTextKeys(store.localFiles.sharing.textKeys(options.global ? undefined : options.tenantId));
-  return { targetRoot, keys, rejections: store.rejections };
+function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
+  const { localFiles, rejections } = target.store;
+  if (global) localFiles.ensureFiles();
+  const keys = storedTextKeys(localFiles.sharing.textKeys(global ? undefined : tenantId));
+  return { targetRoot: target.root, keys, rejections };
 }
 
 function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
@@ -164,7 +170,7 @@ function createImportEntry(
 }
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
-function writeOrProbeImport(target: ImportTarget, entry: MemoryEntry, options: ImportOptions): boolean {
+function writeOrProbeImport(target: OpenImport, entry: MemoryEntry, options: ImportOptions): boolean {
   const { targetRoot, rejections } = target;
   if (options.dryRun) {
     const check = { tenantId: entry.tenant_id ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };

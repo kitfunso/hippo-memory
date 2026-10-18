@@ -24,6 +24,9 @@ import { remember } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/auth.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -111,6 +114,23 @@ describe('POST /v1/sleep', () => {
     const body = await jsonAs<{ dryRun: boolean; active: number }>(res);
     expect(body.dryRun).toBe(false);
     expect(body.active).toEqual(expect.any(Number));
+  });
+
+  it('shares a high-value memory into the global store, as hippo sleep does', async () => {
+    // Pinned with error and gotcha tags, so its transfer score clears the auto-share bar.
+    const row = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
+    writeEntry(home, createMemory(row, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default',
+    }));
+
+    const res = await fetch(`${handle.url}/v1/sleep`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    expect((await jsonAs<{ shared?: number }>(res)).shared).toBe(1);
+    expect(loadAllEntries(globalHome, 'default').map((e) => e.content)).toContain(row);
   });
 
   it('no_share=true keeps shared undefined', async () => {

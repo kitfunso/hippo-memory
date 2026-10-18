@@ -19,7 +19,7 @@ import { isInitialized } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { apiCtx } from './api-ctx.js';
 import { loadDormantMemories } from './root-forms.js';
-import type { AuditOp } from '../../src/store/port/audit-ops.js';
+import type { AuditOp } from '../../src/core/audit-ops.js';
 
 export interface World {
   readonly dir: string;

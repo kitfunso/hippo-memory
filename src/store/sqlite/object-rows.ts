@@ -24,7 +24,7 @@ import type {
   Skill,
   SkillStatus,
 } from '../../core/object-types.js';
-import type { AuditOp } from '../port/audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 import type { JsonObject } from '../port/types.js';
 
 interface HeadRow {

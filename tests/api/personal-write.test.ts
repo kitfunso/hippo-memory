@@ -10,7 +10,7 @@ import { createApiKey } from '../../src/store/auth.js';
 import { handleRemember } from '../../src/cli/remember.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { mapApiError } from '../../src/api/error-reply.js';
-import { importVault } from '../../src/importers/vault.js';
+import { importVault } from '../../src/entry/importers.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { readEntry } from '../../src/store/entry-reads.js';

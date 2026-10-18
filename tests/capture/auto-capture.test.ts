@@ -20,6 +20,7 @@ import { getHippoRoot } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { installJsonHooks } from '../../src/hooks/json-hooks.js';
 import { runDoctor } from '../../src/doctor.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
@@ -304,11 +305,11 @@ describe('both install routes wire compaction and failed-tool capture', () => {
       UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'hippo context --pinned-only' }] }],
       SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end' }] }],
     } }));
-    const check = runDoctor({ cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!;
+    const check = runDoctor({ diagnosticsAt, cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!;
     expect(check.status).toBe('warn');
     expect(check.detail).toMatch(/compaction snapshot and memories request/);
     expect(check.detail).toMatch(/failed-tool capture/);
     installJsonHooks('claude-code');
-    expect(runDoctor({ cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
+    expect(runDoctor({ diagnosticsAt, cwd: dir, home: dir, version: 't' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
   });
 });

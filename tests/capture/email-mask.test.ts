@@ -6,6 +6,7 @@ import { cmdCapture } from '../../src/capture/command.js';
 import { transcriptWorkingState } from '../../src/capture/working-state.js';
 import { maskEmails } from '../../src/util/secret-detect.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
+import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -52,13 +53,13 @@ describe('no stored text holds an email address', () => {
     const edits = [{ filePath: path.join(repo, 'exports', `${EMAIL}.csv`), base: null }];
     const scan = { turns: [{ role: 'user' as const, text: 'the export keeps failing' }], finalText: REPLY, cwd: repo, edits };
     const log: string[] = [];
-    recordSessionDigest(hippoRoot, scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) });
+    recordSessionDigest(hippoRoot, syncStore(hippoRoot), scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) });
     expect(log.join('\n')).toMatch(/^digest: wrote /);
     expect(loadAllEntries(hippoRoot, 'default').map((e) => e.content)).toEqual(['Updated [email] in customer.ts because the export failed.\nChanged: exports/[email]']);
   });
 
   it('in capture from a transcript', () => {
-    cmdCapture(hippoRoot, { source: 'last-session', transcriptPath: transcript(), dryRun: false, global: false });
+    cmdCapture(captureTarget(hippoRoot), { source: 'last-session', transcriptPath: transcript(), dryRun: false, global: false });
     const rows = JSON.stringify(loadAllEntries(hippoRoot, 'default'));
     expect(rows).toContain('[email]');
     expect(rows).not.toContain(EMAIL);

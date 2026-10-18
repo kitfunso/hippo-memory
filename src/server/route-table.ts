@@ -1,10 +1,11 @@
 import type { Context } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { hasGroup, type StoreGroup, type HippoStore } from '../store/index.js';
-import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE, type WebhookRequest } from '../util/http-util.js';
+import type { StoreGroup, HippoStore } from '../store/index.js';
+import { HttpError, JSON_HEADERS, sendJson, type WebhookRequest } from '../util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
+import { assertStoreSets } from './store-edge.js';
 import { routeLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
@@ -684,5 +685,5 @@ function routeGroup(route: Route): StoreGroup | undefined {
 
 /** A route answers 501 without running when the store lacks the group it needs. */
 function assertRoutePorted(opts: ResolvedServeOptions, group: StoreGroup | undefined): void {
-  if (group !== undefined && !hasGroup(opts.store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+  assertStoreSets(opts.store, group);
 }

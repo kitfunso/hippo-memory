@@ -7,7 +7,7 @@ import { remember as apiRemember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/mcp/server.js';
 import { lastRecalledIds } from '../../src/mcp/session-state.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
@@ -277,7 +277,9 @@ describe('mcp tenant + client-key isolation', () => {
     // through to the test — handleMcpRequest catches the executeTool throw
     // only in the HTTP handler, but here we're calling handleMcpRequest
     // directly, so the throw propagates. Wrap accordingly.
-    const ctxB = { hippoRoot: home, tenantId: 'bravo', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:bravo-token:1.2.3.4', store: sqliteStore(home) };
+    const store = sqliteStore(home);
+    const reach = sqliteReach(home, store);
+    const ctxB = { hippoRoot: home, tenantId: 'bravo', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:bravo-token:1.2.3.4', store, reach };
 
     let threwNotFound = false;
     try {
@@ -300,7 +302,7 @@ describe('mcp tenant + client-key isolation', () => {
     }
 
     // Sanity: tenant A can still share its own memory.
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:alpha-token:1.2.3.4', store: sqliteStore(home) };
+    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:alpha-token:1.2.3.4', store, reach };
     const okRes = await callTool(2, 'hippo_share', { id: a.id, force: true }, ctxA);
     expect(extractText(okRes)).toMatch(/Shared \[mem_|Shared \[g_/);
   });

@@ -84,12 +84,12 @@ function formatKeyRow(item: ApiKeyListItem): string {
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
-function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
 
-  const items = api.authListAllTenants(cliApiContext(root, tenantId), !includeRevoked);
+  const items = await api.authListAllTenants(cliApiContext(root, tenantId), !includeRevoked);
 
   if (asJson) {
     console.log(JSON.stringify(items));
@@ -171,7 +171,7 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
       await cmdAuthCreate(hippoRoot, tenantId, flags);
       return;
     case 'list':
-      cmdAuthList(hippoRoot, tenantId, flags);
+      await cmdAuthList(hippoRoot, tenantId, flags);
       return;
     case 'revoke': {
       const keyId = subArgs[0];

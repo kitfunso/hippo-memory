@@ -4,7 +4,7 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from '../api/index.js';
-import { sqliteStore } from '../store/sqlite/store.js';
+import type { HippoStore } from '../store/port.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { runWithRequestStores } from '../db/request-stores.js';
@@ -25,7 +25,11 @@ type VaultRow = RawRefRow;
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
-export async function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
+export async function importVault(
+  folderPath: string,
+  options: ImportOptions,
+  store: HippoStore,
+): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
   const identity = vaultIdentityOrThrow(options);
   if (options.global) {
@@ -42,12 +46,13 @@ export async function importVault(folderPath: string, options: ImportOptions): P
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
-  return syncVaultFolder(folderPath, options, identity);
+  return syncVaultFolder(folderPath, options, store, identity);
 }
 
 async function syncVaultFolder(
   folderPath: string,
   options: ImportOptions,
+  store: HippoStore,
   { vaultName, scope }: VaultIdentity,
 ): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
@@ -61,7 +66,7 @@ async function syncVaultFolder(
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
     // a bearer-authed request. archiveRaw / remember thread this into audit.
     actor: { subject: 'connector:vault', role: 'admin' },
-    store: sqliteStore(hippoRoot),
+    store,
   };
 
   const existing = await loadVaultRows(ctx, vaultName);

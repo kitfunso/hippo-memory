@@ -6,8 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality, sleep,
+  adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality,
 } from '../../src/api/index.js';
+import { sleep } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { sqliteStore, type HippoStore } from '../../src/store/index.js';
@@ -71,7 +72,7 @@ describe.each([
   });
 });
 
-describe('api sleep under a store without local files', () => {
+describe('package-root sleep under a store without local files', () => {
   it('answers StoreNotPortedError', async () => {
     const root = newRoot('capability-sleep-api');
     await expect(async () => sleep(ctxOn(root, portOnlyStore(root)))).rejects.toThrow(new StoreNotPortedError('port-only', 'localFiles'));

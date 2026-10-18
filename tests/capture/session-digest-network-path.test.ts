@@ -7,6 +7,7 @@ import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { syncStore } from '../_helpers/cli-stores.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];
@@ -41,7 +42,7 @@ function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   initStore(hippoRoot);
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, { turns: [{ role: 'user', text: 'go' }], finalText, cwd, edits }, {
+  recordSessionDigest(hippoRoot, syncStore(hippoRoot), { turns: [{ role: 'user', text: 'go' }], finalText, cwd, edits }, {
     key: 's1', tenantId: 'default', log: (line) => log.push(line),
   });
   return { line: log.join('\n'), content: loadAllEntries(hippoRoot, 'default').find(isSessionDigestRow)?.content ?? '' };
