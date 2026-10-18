@@ -117,7 +117,8 @@ export type { AuditMaintenance } from './port/audit-maintenance.js';
 export type { LessonWrites } from './port/lesson-writes.js';
 
 export type {
-  AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, Ledger, LocalFiles,
+  AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, FolderFiles, ImportTarget, Ledger,
+  LocalFiles,
 } from './port/local-files.js';
 
 /** Every group a store sets whole; only the four in OptionalGroup may be left unset. */
@@ -150,8 +151,8 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
-  /** Unset on a store that keeps no last recall, where outcomeForLastRecall and a traced outcome answer 501 and context
-   * writes no last recall. */
+  /** Unset on a store that keeps no last recall, where an outcome with no ids answers 501 and context writes no last
+   * recall. */
   readonly lastRecall: LastRecall;
 }
 

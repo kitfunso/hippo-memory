@@ -86,7 +86,6 @@ export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'localFiles'>> &
 function sqliteLocalFiles(handles: Handles): LocalFiles {
   const { on } = handles;
   return {
-    hippoRoot: handles.files.hippoRoot,
     ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
     agentImport: sqliteAgentImport,
@@ -100,7 +99,6 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     graphRebuild: sqliteGraphRebuild(on),
     embeddingIndex: sqliteEmbeddingIndex(on),
     ledger: sqliteLedger(on),
-    globalStore: () => sqliteStore(resolveGlobalRootDir()),
   };
 }
 

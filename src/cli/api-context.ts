@@ -7,7 +7,7 @@ import { runConsolidation } from '../consolidate/sleep.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
-import type { FolderStore, LocalFiles } from '../store/port.js';
+import type { FolderStore, LocalFiles, OptionalGroup } from '../store/port.js';
 import {
   runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
 } from '../store/sqlite/store.js';
@@ -57,9 +57,12 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
   return runSqliteRequest(run, 'cli');
 }
 
+/** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api unchecked. */
+export type CliContext = ContextWith<OptionalGroup>;
+
 // The one place the CLI names its audit actor and builds its store;
 // root is a parameter because some verbs target the global store.
-export function cliApiContext(hippoRoot: string, tenantId: string): ContextWith<'localFiles'> {
+export function cliApiContext(hippoRoot: string, tenantId: string): CliContext {
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = loadConfig(hippoRoot);
@@ -69,7 +72,7 @@ export function cliApiContext(hippoRoot: string, tenantId: string): ContextWith<
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
   const store = cliStore(hippoRoot);
-  return ledgerReachOf({ reach: sqliteReach(hippoRoot, store), store });
+  return ledgerReachOf({ hippoRoot, reach: sqliteReach(hippoRoot, store), store });
 }
 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. */

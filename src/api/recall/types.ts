@@ -10,7 +10,7 @@ import type {
 } from '../../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
-import type { HippoStore } from '../../store/port.js';
+import type { HippoStore, LastRecall } from '../../store/port.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
@@ -119,6 +119,8 @@ interface CliCoreRanking {
 export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
   hostSessionId?: string;
+  /** Where a shown list is kept as the last recall, for a later `hippo outcome` with no ids. */
+  lastRecall: LastRecall;
   show: (ranking: RankRecallResult, planning: PlanningFallacyOutput) => ShownCliCore | Promise<ShownCliCore>;
 }
 

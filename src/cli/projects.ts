@@ -4,7 +4,7 @@
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import * as api from '../api/index.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { type CliFlags, flagIsTrue, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
@@ -47,7 +47,7 @@ function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-function projectsList(ctx: api.Context, flags: CliFlags): void {
+function projectsList(ctx: CliContext, flags: CliFlags): void {
   const root = ctx.hippoRoot;
   const projects = api.listProjectNames(ctx);
   if (flags['json']) {
@@ -64,7 +64,7 @@ function projectsList(ctx: api.Context, flags: CliFlags): void {
   }
 }
 
-function projectsMerge(ctx: api.Context, args: string[], flags: CliFlags): void {
+function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): void {
   const apply = flagIsTrue(flags, 'apply');
   const [from, into] = [args[1] ?? '', args[2] ?? ''];
   const r = api.mergeProjectNames(ctx, { from, into, dryRun: !apply });
@@ -91,7 +91,7 @@ function projectsMerge(ctx: api.Context, args: string[], flags: CliFlags): void 
   );
 }
 
-function projectsRepair(ctx: api.Context, flags: CliFlags): void {
+function projectsRepair(ctx: CliContext, flags: CliFlags): void {
   const root = ctx.hippoRoot;
   const apply = flagIsTrue(flags, 'apply');
   const r = api.repairProjectNames(ctx, { dryRun: !apply });

@@ -18,8 +18,8 @@ import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry
 import { extractPathTags } from '../../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../core/recall-scope.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../../util/same-text.js';
-import { requireGroup, type LessonWrites } from '../../store/port.js';
-import type { Context } from '../types.js';
+import type { LessonWrites } from '../../store/port.js';
+import type { Context, ContextWith } from '../types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -198,9 +198,9 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 /** `hippo invalidate`: weakens the caller's tenant's memories that
  * reference `target.from`, or only the one `options.onlyId` names. */
 export function invalidateMemories(
-  ctx: Context,
+  ctx: ContextWith<'localFiles'>,
   target: InvalidationTarget,
   options: InvalidationOptions,
 ): InvalidationResult {
-  return invalidateMatching(requireGroup(ctx.store, 'localFiles').learning, target, ctx.tenantId, options);
+  return invalidateMatching(ctx.store.localFiles.learning, target, ctx.tenantId, options);
 }

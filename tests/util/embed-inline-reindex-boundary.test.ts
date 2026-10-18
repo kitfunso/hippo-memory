@@ -8,7 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../sr
 import { embedMemory } from '../../src/search/embed-memories.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveStoredVectors } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
@@ -49,10 +49,10 @@ function seed(rows: number): MemoryEntry {
 
 describe('inline reindex row cap', () => {
   it('rebuilds inline at 256 rows', async () => {
-    await expect(embedMemory(sqliteSyncStore(root).localFiles, seed(256))).resolves.toBe('indexed');
+    await expect(embedMemory(localIndex(root), seed(256))).resolves.toBe('indexed');
   });
 
   it('leaves the rebuild to hippo embed at 257 rows', async () => {
-    await expect(embedMemory(sqliteSyncStore(root).localFiles, seed(257))).resolves.toBe('failed');
+    await expect(embedMemory(localIndex(root), seed(257))).resolves.toBe('failed');
   });
 });

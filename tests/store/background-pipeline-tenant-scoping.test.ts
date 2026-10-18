@@ -13,7 +13,7 @@ import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { refineStore } from '../../src/cli/refine-llm.js';
 import { cmdCapture } from '../../src/capture/command.js';
-import { captureTarget } from '../_helpers/cli-stores.js';
+import { captureTarget, localIndex, syncStore } from '../_helpers/cli-stores.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../../src/entry/importers.js';
 import { autoShare } from '../../src/sharing/share.js';
@@ -22,7 +22,6 @@ import { listPeers } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { embedAll } from '../../src/search/embed-memories.js';
 import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
@@ -80,7 +79,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+      syncStore(hippoRoot).localFiles.learning,
       { from: 'REST', to: 'GraphQL', type: 'migration' },
       'tenant-a',
     );
@@ -293,7 +292,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     // No tenantId arg → host-wide behaviour (current/pre-1.12.1)
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(syncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
     expect(result.invalidated).toBe(2);
   });
 
@@ -354,7 +353,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
 
     // Side-effect: confirms embedAll returns a non-negative number without throw.
     // (When OPENAI_API_KEY is unset this is 0; when set it would do the rebuild.)
-    const count = await embedAll(sqliteSyncStore(hippoRoot).localFiles);
+    const count = await embedAll(localIndex(hippoRoot));
     expect(count).toBeGreaterThanOrEqual(0);
 
     // The contract assertion: the exact reader call shape embedAll +
@@ -429,7 +428,7 @@ describe('invalidate onlyId', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'tenant B private memory', { tags: ['private'] });
 
     const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+      syncStore(hippoRoot).localFiles.learning,
       { from: `id:${bId}`, to: null, type: 'removal' },
       'tenant-a',
       { onlyId: bId },

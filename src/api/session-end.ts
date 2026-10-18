@@ -81,9 +81,10 @@ async function closeSnapshot(
 /** The caller's hippo.db and the global one, each once; a store that is not hippo.db keeps no ledger. */
 function rereadLedgers(ctx: Context): LocalFiles[] {
   const local = (ctx.reach?.hasLocal ?? true) ? ctx.store.localFiles : undefined;
+  const global = ctx.reach?.global;
   const byRoot = new Map<string, LocalFiles>();
-  for (const files of [local, ctx.reach?.global?.store.localFiles]) {
-    if (files !== undefined) byRoot.set(path.resolve(files.hippoRoot), files);
+  for (const [root, files] of [[ctx.hippoRoot, local], [global?.root, global?.store.localFiles]] as const) {
+    if (root !== undefined && files !== undefined) byRoot.set(path.resolve(root), files);
   }
   return [...byRoot.values()];
 }

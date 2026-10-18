@@ -6,7 +6,7 @@ import { importSpool, spool } from './compaction-spool.js';
 import type {
   CompactionSaveResult, CompactionText, Log, ReplayOptions, ReplaySources,
 } from '../store/compactions-record.js';
-import type { LocalFiles } from '../store/port.js';
+import type { FolderFiles } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -81,7 +81,9 @@ function spoolSummary(
 
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
  * defers. Never throws. */
-export function saveCompaction(local: LocalFiles, payload: PostCompactPayload, log: Log): CompactionSaveResult {
+export function saveCompaction(
+  { root, files }: FolderFiles, payload: PostCompactPayload, log: Log,
+): CompactionSaveResult {
   if (payload.compactSummary === null) {
     log('skip: payload has no compact_summary');
     return { written: null, deferred: false, snapshotSaved: false };
@@ -90,9 +92,9 @@ export function saveCompaction(local: LocalFiles, payload: PostCompactPayload, l
   const { found, ...text } = readCompactionText(payload.compactSummary);
   if (!found) log('no memories section');
 
-  const { defaultHalfLifeDays } = loadConfig(local.hippoRoot);
-  const { result, spoolReason } = local.compactionHooks.save(payload, text, at, log, defaultHalfLifeDays);
-  if (spoolReason !== null) spoolSummary(local.hippoRoot, payload, text, at, spoolReason, result, log);
+  const { defaultHalfLifeDays } = loadConfig(root);
+  const { result, spoolReason } = files.compactionHooks.save(payload, text, at, log, defaultHalfLifeDays);
+  if (spoolReason !== null) spoolSummary(root, payload, text, at, spoolReason, result, log);
   return result;
 }
 
@@ -158,9 +160,9 @@ function replaySources(hippoRoot: string, log: Log): ReplaySources {
 
 /** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left, never throws. */
 export function replayCompactions(
-  local: LocalFiles, log: Log, opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
+  { root, files }: FolderFiles, log: Log, opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
 ): number {
-  return local.compactionHooks.replay(replaySources(local.hippoRoot, log), log, {
-    ...opts, baseHalfLifeDays: loadConfig(local.hippoRoot).defaultHalfLifeDays,
+  return files.compactionHooks.replay(replaySources(root, log), log, {
+    ...opts, baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
   });
 }

@@ -1,5 +1,4 @@
 // The LocalFiles group, kept apart from port.ts so each SQLite-only member lands here.
-import type { HippoStore } from '../port.js';
 import type { AgentImport } from './agent-import.js';
 import type { Captures } from './captures.js';
 import type { CompactionHooks } from './compaction-hooks.js';
@@ -26,10 +25,9 @@ export type { Promotion } from './promotion.js';
 export type { ProjectTags } from './project-tags.js';
 export type { Sharing } from './sharing.js';
 
-/** The store is hippo.db and its files under `hippoRoot`, so a path that reopens them by folder (sleep, its child
- * process, the global store) may run. */
+/** The store is hippo.db and its files under a folder, so a path that reopens them by folder (sleep, its child
+ * process, the global store) may run; the caller names that folder. */
 export interface LocalFiles {
-  readonly hippoRoot: string;
   /** Creates the store's files when they are missing, as `hippo init`, a first share or a global capture needs. */
   ensureFiles(): void;
   readonly consolidation: Consolidation;
@@ -44,6 +42,10 @@ export interface LocalFiles {
   readonly graphRebuild: GraphRebuild;
   readonly embeddingIndex: EmbeddingIndex;
   readonly ledger: Ledger;
-  /** The operator's global store, built at each call because a share may have to create it first. */
-  globalStore(): HippoStore;
+}
+
+/** hippo.db's files and the folder whose config.json governs them. */
+export interface FolderFiles {
+  readonly root: string;
+  readonly files: LocalFiles;
 }

@@ -8,10 +8,9 @@ import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../../src/store/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -194,7 +193,7 @@ describe('pilot arm helpers', () => {
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: sqliteSyncStore(root).localFiles });
+      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: folderFiles(root) });
     } finally {
       vi.stubEnv('HIPPO_LOG', undefined);
     }

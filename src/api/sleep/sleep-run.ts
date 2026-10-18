@@ -9,8 +9,8 @@ import { evalNow } from '../../core/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import type { MemoryEntry } from '../../core/memory.js';
-import type { Context } from '../types.js';
-import { storeWith, type Consolidation, type LocalFiles, type StoreWith } from '../../store/port.js';
+import type { Context, ContextWith } from '../types.js';
+import type { Consolidation, LocalFiles, StoreWith } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
@@ -58,18 +58,17 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
-/** A sleep's context with hippo.db's own files, proved once before any phase runs. */
-type SleepContext = Context & { readonly store: StoreWith<'localFiles'>; readonly local: LocalFiles };
+/** A sleep's context with hippo.db's own files at hand. */
+type SleepContext = ContextWith<'localFiles'> & { readonly local: LocalFiles };
 
 /** `sleep` with its phase dependencies overridable; tests pass
  * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  storeCtx: Context,
+  storeCtx: ContextWith<'localFiles'>,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
-  const store = storeWith(storeCtx.store, 'localFiles');
-  const ctx: SleepContext = { ...storeCtx, store, local: store.localFiles };
+  const ctx: SleepContext = { ...storeCtx, local: storeCtx.store.localFiles };
   const dryRun = Boolean(opts.dryRun);
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...overrides };
 

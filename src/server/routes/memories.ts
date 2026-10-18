@@ -4,6 +4,7 @@ import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, s
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
+import { storeWith, type HippoStore, type StoreWith } from '../../store/port.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { AuthedRouteRequest } from '../types.js';
 import {
@@ -22,6 +23,7 @@ import { MAX_ID_LEN } from '../../util/limits.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
+const NO_LAST_RECALL = 'this store keeps no last recall: send the ids your recall returned';
 
 // POST /v1/memories
 export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
@@ -97,7 +99,8 @@ export async function handlePromoteMemory(
   promoteMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(promoteMatch.id!, 'memory id');
-  const result = promote(ctx, promoteMatch.id!);
+  // The route table answered 501 already for a store without hippo.db's files; this types what it proved.
+  const result = promote({ ...ctx, store: storeWith(ctx.store, 'localFiles') }, promoteMatch.id!);
   sendJson(res, 200, result);
   return;
 }
@@ -147,10 +150,17 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    const result = await outcomeForLastRecall(ctx, good);
+    const { store } = ctx;
+    // Its own 501 text: a client of such a store can still apply the outcome by sending the ids its recall returned.
+    if (!keepsLastRecall(store)) throw new HttpError(501, NO_LAST_RECALL);
+    const result = await outcomeForLastRecall({ ...ctx, store }, good);
     sendJson(res, 200, result);
   }
   return;
+}
+
+function keepsLastRecall(store: HippoStore): store is StoreWith<'lastRecall'> {
+  return store.lastRecall !== undefined;
 }
 
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE

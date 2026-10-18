@@ -16,6 +16,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { sleep, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
+import { sleep as packageSleep } from '../../src/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
@@ -205,10 +206,10 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row!.metadata.errorMessage).toBeUndefined();
   });
 
-  it('a store without local files throws before any phase runs, leaving no audit row', async () => {
+  it('a store without local files throws at the package root before any phase runs, leaving no audit row', async () => {
     const ctx = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres', localFiles: undefined } };
 
-    await expect(async () => sleep(ctx)).rejects.toThrow("the 'postgres' store has no 'localFiles' group");
+    await expect(async () => packageSleep(ctx)).rejects.toThrow("the 'postgres' store has no 'localFiles' group");
 
     expect(getLastConsolidateAuditRow(testCtx.ctx.hippoRoot)).toBeNull();
   });

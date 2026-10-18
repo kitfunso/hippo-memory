@@ -24,7 +24,7 @@ import * as api from '../api/index.js';
 import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
 import {
-  cliApiContext, cliFolder, cliInitGlobal, cliStore, cliSyncOptions, cliSyncStore,
+  cliApiContext, cliFolder, cliInitGlobal, cliStore, cliSyncOptions, cliSyncStore, type CliContext,
 } from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
@@ -163,7 +163,7 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
  * that finishes them. */
-function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): void {
+function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): void {
   let waiting: string;
   try {
     const { memoryIds, vectorIds } = embedCoverage(ctx);
@@ -180,7 +180,7 @@ function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): 
 
 /** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it
  * settles, and awaiting would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
-function backfillVectors(ctx: api.Context, embedCommand: string): void {
+function backfillVectors(ctx: CliContext, embedCommand: string): void {
   void embedMissingMemories(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
 
@@ -365,7 +365,7 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
   }
 }
 
-function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: api.Context, dryRun: boolean): void {
+function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: CliContext, dryRun: boolean): void {
   console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
   console.log(`  Notes found:           ${vaultResult.total}`);
   console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);

@@ -156,9 +156,14 @@ describe('retrieve paths: order and writes', () => {
   });
 
   it('the CLI core returns what it showed, audits the caller rows before the recall, and marks the last recall', async () => {
-    const result = await retrieve(ctx(), {
+    const caller = ctx();
+    const result = await retrieve(caller, {
       query: CLAIM,
-      cliCore: { ...cliCore(), show: (ranking) => ({ results: ranking.results.slice(0, 2), audit: [CALLER_ROW], tokens: 7 }) },
+      cliCore: {
+        ...cliCore(),
+        show: (ranking) => ({ results: ranking.results.slice(0, 2), audit: [CALLER_ROW], tokens: 7 }),
+        lastRecall: caller.store.lastRecall,
+      },
     });
     expect(idsOf(result)).toEqual(CORE_IDS);
     expect(written()).toEqual({

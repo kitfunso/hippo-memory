@@ -290,7 +290,7 @@ export function cmdPostCompact(hippoRoot: string, store: CompactionStore, option
       return null;
     }
     const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
-    const local = store.localFiles;
+    const local = { root: hippoRoot, files: store.localFiles };
     let line: string | null = null;
     let storeBusy = false;
     if (receipt.status !== 'received') {

@@ -3,10 +3,9 @@
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../../core/memory.js';
-import { embedMemory } from '../../search/embed-memories.js';
+import { embedMemory, folderIndex } from '../../search/embed-memories.js';
 import { configOf } from '../config-of.js';
-import { requireGroup } from '../../store/index.js';
-import type { Context } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -18,11 +17,10 @@ export interface PromoteResult {
   globalId: string;
 }
 export function promote(
-  ctx: Context,
+  ctx: ContextWith<'localFiles'>,
   id: string,
 ): PromoteResult {
-  const local = requireGroup(ctx.store, 'localFiles');
-  const { promotion } = local;
+  const { promotion } = ctx.store.localFiles;
   // copyToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
   // archiveRaw's not-found wording (no leak about whether the id exists in another tenant).
   const reach = promotion.reach(id);
@@ -38,8 +36,9 @@ export function promote(
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
 
-  // The store a promote first creates is in no reach yet, so the group builds it; embedMemory never rejects.
-  void embedMemory(requireGroup(local.globalStore(), 'localFiles'), globalEntry);
+  // A promote may create the global store, which only the write target names before it exists; this never rejects.
+  const target = ctx.reach?.globalTarget;
+  if (target !== undefined) void embedMemory(folderIndex(target), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

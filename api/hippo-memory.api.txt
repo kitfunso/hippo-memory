@@ -260,7 +260,7 @@ index.d.ts: resolveConfidence re-export
 index.d.ts: resultToBaseline re-export
 index.d.ts: runFeatureEval re-export
 index.d.ts: search re-export
-index.d.ts: sleep re-export
+index.d.ts: sleep function
 index.d.ts: strengthBucket re-export
 index.d.ts: temporalBoost re-export
 index.d.ts: textOverlap re-export

@@ -8,7 +8,7 @@ import {
   type PlanningFallacyDecision,
 } from '../../predictions/planning-fallacy.js';
 import { reportAuditWriteFailure } from '../../store/audit.js';
-import { requireGroup, type HippoStore, type LastRecallWrites } from '../../store/index.js';
+import type { HippoStore, LastRecall, LastRecallWrites } from '../../store/index.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
@@ -288,7 +288,7 @@ async function recordShown(
     strengthen: strengthenOf(ctx, ids),
     trace: traceOf(ctx, opts, core, shown.results),
   };
-  const audited = await finishOrReport(() => finishShown(ctx, writes, ids.length > 0));
+  const audited = await finishOrReport(() => finishShown(store, core.lastRecall, writes, ids.length > 0));
   if (audited) {
     // The second store logs that it was searched, and strengthens only the rows the first does not hold.
     if (second !== undefined) {
@@ -359,7 +359,11 @@ function traceOf(
 
 // A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs these ids with an
 // older trace; an empty one leaves the marker on the previous recall.
-function finishShown(ctx: Context, writes: LastRecallWrites, marks: boolean): Promise<number | null | void> {
-  if (!marks) return ctx.store.finishRecall(writes);
-  return requireGroup(ctx.store, 'lastRecall').finishRecall(writes, undefined);
+function finishShown(
+  store: HippoStore,
+  lastRecall: LastRecall,
+  writes: LastRecallWrites,
+  marks: boolean,
+): Promise<number | null | void> {
+  return marks ? lastRecall.finishRecall(writes, undefined) : store.finishRecall(writes);
 }

@@ -5,7 +5,7 @@ import { runConsolidation } from '../consolidate/sleep.js';
 import { isStoreBusy } from '../store/busy.js';
 import { loadConfig } from '../core/config.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
-import { sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
+import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
 import type { SleepResult } from '../api/sleep/sleep.js';
@@ -20,6 +20,13 @@ function failed<E>(err: E): SleepReply<never> {
     message: errorMessage(err),
     stack: err instanceof Error ? err.stack : undefined,
   };
+}
+
+/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
+function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
+  const store = sqliteStore(hippoRoot);
+  const reach = sqliteReach(hippoRoot, store);
+  return sleep({ hippoRoot, tenantId: job.tenantId, actor: job.actor, store, reach }, job.opts);
 }
 
 /** Resolves to the exit code once the channel has taken the reply, or failed to. */
@@ -38,10 +45,7 @@ process.once('message', (message) => {
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
       ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles, { config: loadConfig(job.hippoRoot) })
-      : sleep(
-          { hippoRoot: job.hippoRoot, tenantId: job.tenantId, actor: job.actor, store: sqliteStore(job.hippoRoot) },
-          job.opts,
-        );
+      : sleepJob(job);
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
   runSqliteRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)

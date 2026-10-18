@@ -111,7 +111,7 @@ async function cmdSleepCore(
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!flags['dry-run']) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = replayCompactions(cliLocalFiles(hippoRoot), warn);
+    const finished = replayCompactions({ root: hippoRoot, files: cliLocalFiles(hippoRoot) }, warn);
     if (finished > 0) {
       console.log(
         `Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`,

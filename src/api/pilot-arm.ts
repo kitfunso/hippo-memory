@@ -21,9 +21,9 @@ export function sessionPilotArm(
   hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean, opts: SessionArmOptions,
 ): PilotArm | null {
   if (sessionId === undefined || sessionId.trim() === '') return null;
-  const files = ledgerFiles(opts.reach);
-  if (files === null) return null;
-  const rate = configAtRoot({ hippoRoot, config: opts.config }, files.hippoRoot).pilot.holdoutRateBp;
+  const home = ledgerFiles(opts.reach);
+  if (home === null) return null;
+  const rate = configAtRoot({ hippoRoot, config: opts.config }, home.root).pilot.holdoutRateBp;
   if (rate <= 0) return null;
   const { ownTenantOnly } = opts;
   const arm = onLedger(opts.reach, (ledger) => ledger.pilotArm(tenantId, sessionId, rate, { write, ownTenantOnly }));

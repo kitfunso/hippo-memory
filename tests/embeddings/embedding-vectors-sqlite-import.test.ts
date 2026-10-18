@@ -12,7 +12,7 @@ import { embedAll } from '../../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../../src/db/vector-store.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
@@ -130,7 +130,7 @@ describe('memory_vectors upkeep', () => {
       embed: async (texts: string[]) => texts.map((t) => (embedded.push(t), [0, 1])),
     };
 
-    expect(await embedAll(sqliteSyncStore(root).localFiles, undefined, provider)).toBe(1);
+    expect(await embedAll(localIndex(root), undefined, provider)).toBe(1);
 
     expect(embedded).toEqual([embeddingInputText(b)]);
     expect(Object.keys(loadEmbeddingIndex(root)).sort()).toEqual([a.id, b.id].sort());

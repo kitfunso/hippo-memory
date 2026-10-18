@@ -9,10 +9,12 @@ import {
   type MemoryEntry,
 } from './core/memory.js';
 import { sqliteStore } from './store/sqlite/store.js';
-import { requireGroup, type HippoStore } from './store/port.js';
+import { requireGroup, storeWith, type HippoStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './consolidate/sleep.js';
 import { loadConfig } from './core/config.js';
 import type { ConsolidationResult } from './consolidate/run.js';
+import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
+import type { Context } from './api/types.js';
 export {
   MemoryEntry,
   Layer,
@@ -61,7 +63,11 @@ export {
   CARD_LEASE_MS,
 } from './core/card.js';
 export { ConsolidationResult } from './consolidate/run.js';
-export { sleep, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
+export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
+/** Sleeps the whole store under `ctx`; a store with no `localFiles` group throws `StoreNotPortedError`. */
+export async function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
+  return sleepStore({ ...ctx, store: storeWith(ctx.store, 'localFiles') }, opts);
+}
 /** Run a full consolidation pass on `store`, or on the hippo.db under a folder. A store with no `localFiles` group
  * throws `StoreNotPortedError`; with no `options.config`, a folder reads its config.json and a store the defaults. */
 export async function consolidate(

@@ -9,7 +9,6 @@ export const PROCESS_TESTS: readonly string[] = [
   'agent-memories/agent-memories-sync-routing.test.ts',
   'agent-memories/agent-memories-sync.test.ts',
   'agent-memories/claude-memory-import.test.ts',
-  'api/api-async-contract.test.ts',
   'api/api-get-memory.test.ts',
   'api/api-key-expiry.test.ts',
   'api/api-local-write-options.test.ts',

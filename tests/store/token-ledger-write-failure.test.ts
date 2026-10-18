@@ -11,7 +11,8 @@ import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { folderFiles } from '../_helpers/cli-stores.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -104,7 +105,7 @@ describe('token ledger write failures', () => {
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
     const store = makeRoot('ledger-notadb', { init: false });
     const write = (): void => {
-      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: sqliteSyncStore(store).localFiles });
+      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: folderFiles(store) });
     };
     initStore(store);
     fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');

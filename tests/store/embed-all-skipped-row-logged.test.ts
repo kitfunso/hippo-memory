@@ -5,7 +5,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { embedAll } from '../../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 /** Embeds every text except the ones marked unembeddable, which get the `[]` a local provider returns on a per-item failure. */
@@ -41,7 +41,7 @@ describe('embedAll with a row the provider could not embed', () => {
       return true;
     });
 
-    expect(await embedAll(sqliteSyncStore(root).localFiles, undefined, partialProvider())).toBe(1);
+    expect(await embedAll(localIndex(root), undefined, partialProvider())).toBe(1);
 
     expect(Object.keys(loadEmbeddingIndex(root))).toEqual([good.id]);
     const warnings = lines.filter((l) => l.includes('not embedded'));

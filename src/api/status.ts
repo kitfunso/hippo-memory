@@ -3,10 +3,9 @@
 import type { PhysicsParticle } from '../core/physics.js';
 import type { LegacyStats } from '../store/rows.js';
 import type { StatusCounts } from '../store/candidates.js';
-import { requireGroup } from '../store/port.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
-import { requireHostAdmin, type Context } from './types.js';
+import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 import type { StoredVectorSummary } from '../store/port/embedding-index.js';
 
 export interface StoreStatus {
@@ -22,23 +21,23 @@ export async function storeStatus(ctx: Context, now: Date, atRiskBelow: number):
 }
 
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
-export function vectorSummary(ctx: Context): StoredVectorSummary {
+export function vectorSummary(ctx: ContextWith<'localFiles'>): StoredVectorSummary {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return requireGroup(ctx.store, 'localFiles').embeddingIndex.summary();
+  return ctx.store.localFiles.embeddingIndex.summary();
 }
 
 /**
  * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so the host admin only.
  */
-export function embeddingReindexNeeded(ctx: Context, providerId: string): boolean {
+export function embeddingReindexNeeded(ctx: ContextWith<'localFiles'>, providerId: string): boolean {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return requireGroup(ctx.store, 'localFiles').embeddingIndex.requiresReindex(providerId);
+  return ctx.store.localFiles.embeddingIndex.requiresReindex(providerId);
 }
 
 /** Every stored physics particle. Every tenant, so the host admin only. */
-export function storedParticles(ctx: Context): PhysicsParticle[] {
+export function storedParticles(ctx: ContextWith<'localFiles'>): PhysicsParticle[] {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return requireGroup(ctx.store, 'localFiles').embeddingIndex.particles();
+  return ctx.store.localFiles.embeddingIndex.particles();
 }
 
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin only. */

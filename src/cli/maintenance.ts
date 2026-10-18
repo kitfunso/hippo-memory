@@ -5,8 +5,7 @@ import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
 import { countAllMemories } from '../api/memories/memories.js';
-import { cliApiContext, cliLocalFiles } from './api-context.js';
-import type * as api from '../api/index.js';
+import { cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 import { loadConfig } from '../core/config.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
@@ -174,12 +173,12 @@ export async function handleEmbed(
   }
 }
 
-function resetPhysics(ctx: api.Context): void {
+function resetPhysics(ctx: CliContext): void {
   const count = resetPhysicsFromVectors(ctx);
   console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
-function printEmbedStatus(ctx: api.Context): void {
+function printEmbedStatus(ctx: CliContext): void {
   const { memoryIds, vectorIds } = embedCoverage(ctx);
   const activeIds = new Set(memoryIds);
   const activeEmbedded = vectorIds.filter((id) => activeIds.has(id)).length;

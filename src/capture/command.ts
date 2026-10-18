@@ -3,7 +3,7 @@ import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { embedMemory } from '../search/embed-memories.js';
-import type { LocalFiles, Sync } from '../store/port.js';
+import type { FolderFiles, LocalFiles, Sync } from '../store/port.js';
 import type { Rejections } from '../store/port/rejections.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { loadConfig } from '../core/config.js';
@@ -136,7 +136,7 @@ function captureFromCli(
     originProject: options.originProject,
     lean: false,
   };
-  if (!options.dryRun) return captureExtractedItems(store.localFiles, writeOpts, extracted, keys);
+  if (!options.dryRun) return captureExtractedItems({ root, files: store.localFiles }, writeOpts, extracted, keys);
   return previewCapture(store.rejections, writeOpts, extracted, keys, loadConfig(root).defaultHalfLifeDays);
 }
 
@@ -238,24 +238,25 @@ export interface CaptureWriteOptions {
 }
 
 export function captureExtractedItems(
-  local: LocalFiles,
+  { root, files }: FolderFiles,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
-  const baseHalfLifeDays = loadConfig(local.hippoRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(root).defaultHalfLifeDays;
   const items = extracted.map((item) => ({
     content: item.content,
     makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
   }));
-  const outcomes = local.captures.write(
+  const index = { hippoRoot: root, embeddingIndex: files.embeddingIndex };
+  const outcomes = files.captures.write(
     items,
     keys,
     {
       actor: options.actor,
       lean: options.lean,
-      onCaptured: options.lean ? undefined : (entry) => void embedMemory(local, entry),
+      onCaptured: options.lean ? undefined : (entry) => void embedMemory(index, entry),
     },
   );
   for (const outcome of outcomes) tally[outcome]++;

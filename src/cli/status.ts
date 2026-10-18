@@ -27,8 +27,7 @@ import {
 } from '../api/status.js';
 import type { StatusCounts } from '../store/candidates.js';
 import type { Diagnostics } from '../store/port/diagnostics.js';
-import type { Context } from '../api/types.js';
-import { cliApiContext, cliLocalFiles } from './api-context.js';
+import { cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 
 const diagnosticsAt = (hippoRoot: string): Diagnostics => cliLocalFiles(hippoRoot).diagnostics;
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -86,7 +85,7 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
 }
 
 // Embedding status (provider-aware)
-function printEmbeddingStatus(ctx: Context, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
+function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
       return resolveEmbeddingProvider(loadConfig(ctx.hippoRoot).embeddings);
@@ -130,7 +129,7 @@ function printEmbeddingStatus(ctx: Context, counts: Pick<StatusCounts, 'total' |
 const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
 // Physics status
-function printPhysicsStatus(ctx: Context): void {
+function printPhysicsStatus(ctx: CliContext): void {
   try {
     const particles = storedParticles(ctx);
     if (particles.length > 0) {

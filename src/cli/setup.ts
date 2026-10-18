@@ -558,7 +558,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = replayCompactions(cliLocalFiles(globalRoot), warn);
+    const finished = replayCompactions({ root: globalRoot, files: cliLocalFiles(globalRoot) }, warn);
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
     }
