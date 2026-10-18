@@ -21,7 +21,7 @@ import type { LastSent } from '../../core/skip-unchanged.js';
 import type { ApiCall } from '../../core/transcript-calls.js';
 
 /** All surfaces, in report order. */
-export const TOKEN_SURFACES: readonly TokenSurface[] = [
+const TOKEN_SURFACES: readonly TokenSurface[] = [
   'hook',
   'hook_recall',
   'compact_resume',
@@ -36,10 +36,10 @@ export const TOKEN_SURFACES: readonly TokenSurface[] = [
 
 /** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry
  * one session id. */
-export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
+const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
 
 /** Rows older than this are pruned on write. */
-export const TOKEN_LEDGER_RETENTION_DAYS = 90;
+const TOKEN_LEDGER_RETENTION_DAYS = 90;
 
 /** Append one ledger row and prune rows past {@link TOKEN_LEDGER_RETENTION_DAYS}. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {

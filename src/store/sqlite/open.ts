@@ -91,7 +91,7 @@ export function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRo
   return true;
 }
 
-export function importLegacyEntries(
+function importLegacyEntries(
   db: DatabaseSyncLike,
   hippoRoot: string,
   legacyEntries: MemoryEntry[],
@@ -156,7 +156,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
   pruneConsolidationRuns(db);
 }
 
-export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {
+function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {
   const entries: MemoryEntry[] = [];
   for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic]) {
     const dir = layerDir(hippoRoot, layer);

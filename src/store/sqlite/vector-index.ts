@@ -50,7 +50,7 @@ export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
 }
 
 /** Records `identity` as what built the index. */
-export function saveIndexIdentityAt(db: DatabaseSyncLike, identity: string): void {
+function saveIndexIdentityAt(db: DatabaseSyncLike, identity: string): void {
   setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
 }
 

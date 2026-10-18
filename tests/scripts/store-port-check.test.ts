@@ -649,6 +649,28 @@ describe('check-store-port.mjs', () => {
     });
   });
 
+  it('fails and names a file directly in src/store besides the port, its entry and search-rows.ts', () => {
+    const kept = {
+      'src/store/port.ts': 'export type A = 1;\n',
+      'src/store/port-groups.ts': 'export type B = 2;\n',
+      'src/store/index.ts': 'export type C = 3;\n',
+      'src/store/search-rows.ts': EXCEPTION,
+      'src/store/port/g.ts': 'export type E = 4;\n',
+      'src/store/sqlite/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
+    };
+    withFixture(kept, null, ({ run }) => {
+      const r = run();
+      expect(r.status, r.stderr).toBe(0);
+    });
+    const stray = { 'src/store/graph-apply.ts': "export const g = (db: any) => db.prepare('SELECT 2').get();\n" };
+    withFixture({ ...kept, ...stray }, null, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('  src/store/graph-apply.ts');
+      for (const file of Object.keys(kept)) expect(r.stderr).not.toContain(`  ${file}`);
+    });
+  });
+
   it('passes on the real repo', () => {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: REPO, encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);

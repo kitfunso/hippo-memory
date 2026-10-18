@@ -12,6 +12,7 @@
 // portFunctionParams counts parameters of methods on port interfaces whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any but FOLDER_FORM_EXCEPTIONS fails outright.
+// A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/core.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -539,6 +540,18 @@ function folderFormsIn(file, sf) {
     .map((name) => `${file}:${lineOf(sf, fns.get(name).node)} ${name}`);
 }
 
+// The port, its published entry, and the root form the frozen q3b-ranker-floor benchmark imports from dist.
+const STORE_TOP_FILES = new Set(['port.ts', 'port-groups.ts', 'index.ts', 'search-rows.ts']);
+
+/** Each .ts file directly in src/store that STORE_TOP_FILES does not name. */
+function strayStoreTopFiles() {
+  if (!existsSync('src/store')) return [];
+  return readdirSync('src/store', { withFileTypes: true })
+    .filter((e) => e.isFile() && /\.[cm]?ts$/.test(e.name) && !STORE_TOP_FILES.has(e.name))
+    .map((e) => `src/store/${e.name}`)
+    .sort();
+}
+
 /** Every folder form in src/store outside the SQLite adapter, named exceptions included. */
 function folderFormsAboveAdapter() {
   return (existsSync('src/store') ? tsFiles('src/store') : [])
@@ -751,6 +764,15 @@ if (strayForms.length > 0) {
   for (const site of strayForms) console.error(`  ${site}`);
   console.error(
     'Take the store or the handle the caller holds; a folder form for a script or the eval kit goes in src/store/sqlite/folder-forms.ts.',
+  );
+  process.exit(1);
+}
+const strayTop = strayStoreTopFiles();
+if (strayTop.length > 0) {
+  console.error(`Files directly in src/store besides ${[...STORE_TOP_FILES].join(', ')}:`);
+  for (const f of strayTop) console.error(`  ${f}`);
+  console.error(
+    'Put a store group and the SQL only it runs in src/store/sqlite/<feature>.ts, and a rule with no SQL in src/core.',
   );
   process.exit(1);
 }
