@@ -149,10 +149,13 @@ function extractSpecSections(text: string): ExtractedItem[] {
 // A reply to the agent's work states how the person wants it done, rule word or not; "Thanks, looks good" says nothing to keep.
 const ANY_STATEMENT = [/\S/];
 const MIN_FOLLOW_UP_WORDS = 4;
+// A kept reply names code or limits a choice; "Now do the same" and a pasted test count do neither, so digits are no cue.
+const CONSTRAINT_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]|n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
 
 function followUpRule(sentence: string): ExtractedItem | null {
   const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
-  return item && item.content.split(/\s+/).length >= MIN_FOLLOW_UP_WORDS ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
+  if (!item || item.content.split(/\s+/).length < MIN_FOLLOW_UP_WORDS || !CONSTRAINT_CUE.test(item.content)) return null;
+  return { ...item, tags: [...item.tags, 'follow-up'] };
 }
 
 function extractOne(text: string, followUp: boolean): ExtractedItem[] {

@@ -26,6 +26,8 @@ export interface CaptureOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
+  /** False when `sessionTurns` is a later slice of the session (a `--turn` capture), so its first user turn answers the agent. */
+  fromStart?: boolean;
   /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via `hippo last-sleep`.
    *  Appends, because `hippo sleep` writes the same file first. */
   logFile?: string;
@@ -183,9 +185,9 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
         console.log('Transcript had no user/assistant messages to summarise.');
         return null;
       }
-      // The session's first user turn is its request; a tail that cut it off holds only replies to the agent.
-      // SHORTCUT: a --turn capture's slice counts its first user turn as the request; carry the cursor here if that loses replies.
-      const opener = users.length === turns.filter((t) => t.role === 'user').length ? 1 : 0;
+      // The session's first user turn is its request; a tail that cut it off, or a later slice, holds only replies to the agent.
+      const fromStart = options.fromStart !== false;
+      const opener = fromStart && users.length === turns.filter((t) => t.role === 'user').length ? 1 : 0;
       return { texts: [...users, ...assistants], userTexts: users.length, firstFollowUp: opener };
     }
   }
