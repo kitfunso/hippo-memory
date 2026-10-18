@@ -35,8 +35,9 @@ function listingsDuring(fn: () => void): number {
 }
 
 function expectMirrored(entries: readonly MemoryEntry[]): void {
-  for (const entry of entries)
+  for (const entry of entries) {
     expect(fs.existsSync(path.join(layerDir(root, entry.layer), `${entry.id}.md`))).toBe(true);
+  }
   expect(fs.existsSync(path.join(layerDir(root, Layer.Semantic), `${entries[0].id}.md`))).toBe(false);
 }
 

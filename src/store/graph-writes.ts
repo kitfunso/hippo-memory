@@ -23,7 +23,6 @@ import {
   rowToEntity,
   rowToRelation,
   ENTITY_COLS,
-  RELATION_COLS,
 } from './graph-rows.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
@@ -55,16 +54,9 @@ export function resolveConsolidatedSource(
   sourceObject: SourceObjectRef | null,
   label: string,
 ): ResolvedGraphSource {
-  const checked = checkSourceMemory(db, tenantId, memoryId, sourceObject, label);
+  const { memKind, effectiveMemoryId } = checkSourceMemory(db, tenantId, memoryId, sourceObject, label);
   assertSourceObjectUsable(db, tenantId, sourceObject, label);
-  return sourceOf(checked, sourceObject, label);
-}
 
-function sourceOf(
-  { memKind, effectiveMemoryId }: CheckedSourceMemory,
-  sourceObject: SourceObjectRef | null,
-  label: string,
-): ResolvedGraphSource {
   // source_kind is the memory's kind when a memory is present, else 'distilled' for an
   // object-only row (objects are consolidated by construction). All-null is rejected.
   if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
@@ -242,64 +234,64 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
   }
 }
 
-/** Writes one relation and returns its id. `found` skips the endpoint and source-object checks the caller already made
- * in this transaction; the memory check always runs. */
-function writeRelation(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions, found: boolean): number {
+/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated
+ * memory. The schema trigger checks each endpoint once; only a refused insert reads them, to say which one failed. */
+export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
     throw new Error(
       `insertRelation: relType must be one of ${Array.from(GRAPH_RELATION_TYPES).join('|')}; got ${opts.relType}`,
     );
   }
-  const now = new Date().toISOString();
-  const memoryId = opts.memoryId ?? null;
-  const sourceObject = opts.sourceObject ?? null;
-  if (!found) assertEndpointsInTenant(db, tenantId, opts);
-  const { sourceKind, memoryId: effectiveMemoryId } = found
-    ? sourceOf(
-        checkSourceMemory(db, tenantId, memoryId, sourceObject, 'insertRelation'),
-        sourceObject,
-        'insertRelation',
-      )
-    : resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertRelation');
-  const result = cachedStatement(
+  const row: Omit<RelationRow, 'id'> = {
+    tenant_id: tenantId,
+    from_entity_id: opts.fromEntityId,
+    to_entity_id: opts.toEntityId,
+    rel_type: opts.relType,
+    ...relationSource(db, tenantId, opts),
+    source_object_type: opts.sourceObject?.type ?? null,
+    source_object_id: opts.sourceObject?.id ?? null,
+    created_at: new Date().toISOString(),
+  };
+  const insert = cachedStatement(
     db,
     `INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
       `source_object_type, source_object_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    tenantId,
-    opts.fromEntityId,
-    opts.toEntityId,
-    opts.relType,
-    effectiveMemoryId,
-    sourceKind,
-    sourceObject?.type ?? null,
-    sourceObject?.id ?? null,
-    now,
   );
-  return Number(result.lastInsertRowid ?? 0);
+  let id: number;
+  try {
+    const { lastInsertRowid } = insert.run(
+      row.tenant_id,
+      row.from_entity_id,
+      row.to_entity_id,
+      row.rel_type,
+      row.memory_id,
+      row.source_kind,
+      row.source_object_type,
+      row.source_object_id,
+      row.created_at,
+    );
+    id = Number(lastInsertRowid ?? 0);
+  } catch (error) {
+    assertEndpointsInTenant(db, tenantId, opts);
+    throw error;
+  }
+  return rowToRelation({ id, ...row });
 }
 
-/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated
- * memory. */
-export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): Relation {
-  const id = writeRelation(db, tenantId, opts, false);
-  // SAFETY: row's shape matches the columns named in RELATION_COLS above.
-  const row = cachedStatement(db, `SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as
-    | RelationRow
-    | undefined;
-  if (!row) throw new Error('insertRelation: failed to reload inserted relation');
-  return rowToRelation(row);
-}
-
-/** A rebuild's insert: entityIdBySource found both endpoints in this tenant and objectInForce passed the source object,
- * both in this transaction, so neither is read again and the row is not read back. */
-export function insertFoundRelationRow(
+function relationSource(
   db: DatabaseSyncLike,
   tenantId: string,
-  opts: InsertRelationOptions & { readonly sourceObject: SourceObjectRef },
-): void {
-  writeRelation(db, tenantId, opts, true);
+  opts: InsertRelationOptions,
+): Pick<RelationRow, 'memory_id' | 'source_kind'> {
+  const resolved = resolveConsolidatedSource(
+    db,
+    tenantId,
+    opts.memoryId ?? null,
+    opts.sourceObject ?? null,
+    'insertRelation',
+  );
+  return { memory_id: resolved.memoryId, source_kind: resolved.sourceKind };
 }
 
 /** The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph

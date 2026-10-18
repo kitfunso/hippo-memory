@@ -46,9 +46,9 @@ import {
   loadAllEntryIdsAt,
   loadEntriesByIdsAt,
   loadEntryTextKeysPageAt,
-  loadEveryTenantEntriesAt,
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
+  selectAllEntries,
 } from '../../src/store/entry-reads.js';
 import { writeEntriesTogetherAt } from '../../src/store/entry-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/goals.js';
@@ -378,7 +378,7 @@ export function loadFreshRawMemories(
 }
 
 export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadEveryTenantEntriesAt(db), openStore);
+  return onHandle(hippoRoot, (db) => selectAllEntries(db), openStore);
 }
 
 export function loadAllEntryIds(hippoRoot: string): string[] {

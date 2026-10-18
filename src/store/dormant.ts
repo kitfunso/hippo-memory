@@ -236,7 +236,8 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/** The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not parse. */
+/** The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not
+ * parse. */
 export interface DormantText {
   readonly id: string;
   readonly content: string;
@@ -248,7 +249,8 @@ const DORMANT_TEXT_COLUMNS =
   `id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END AS source, ` +
   `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope`;
 
-/** Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match reads. */
+/** Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match
+ * reads. */
 export function dormantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -272,7 +274,8 @@ export function dormantTextsByIds(
     // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
     const rows = cachedStatement(
       db,
-      `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
+      `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories ` +
+        `WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
     ).all(tenantId, ...chunk) as DormantText[];
     for (const row of rows) byId.set(row.id, row);
   }

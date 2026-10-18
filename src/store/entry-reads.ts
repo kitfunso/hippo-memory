@@ -231,11 +231,6 @@ export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry
   return onHandle(hippoRoot, (db) => loadAllEntriesAt(db, tenantId), openStore);
 }
 
-/** Every tenant's entries, for host-wide work such as consolidation; never for a request that answers a tenant. */
-export function loadEveryTenantEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
-  return selectAllEntries(db);
-}
-
 /** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of
  * holding them all. */
 export function loadAllEntryIdsAt(db: DatabaseSyncLike): string[] {

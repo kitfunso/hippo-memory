@@ -8,7 +8,7 @@ import {
   deleteRelationRow,
   entityIdBySource,
   insertEntityRow,
-  insertFoundRelationRow,
+  insertRelationRow,
   objectInForce,
   relationPresent,
   runGraphRebuildTransaction,
@@ -22,7 +22,7 @@ function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: Desi
     return false;
   }
   if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;
-  insertFoundRelationRow(db, tenantId, {
+  insertRelationRow(db, tenantId, {
     fromEntityId,
     toEntityId,
     relType: rel.relType,
