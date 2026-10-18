@@ -1,7 +1,7 @@
 // A dashboard write that committed answers 200 even when the next snapshot rebuild would fail; the next read is where it surfaces.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as dashboardReads from '../src/store/dashboard-reads.js';
+import * as conflicts from '../src/store/conflicts.js';
 import * as entryReads from '../src/store/entry-reads.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import {
@@ -22,9 +22,9 @@ afterEach(async () => {
   store.cleanup();
 });
 
-/** Makes every snapshot build throw, because `loadDashboardRows` is the one store call only a build makes. */
+/** Makes every snapshot build throw: each build pages the open conflicts, and no write or detail read does. */
 function breakSnapshotRebuild(): void {
-  vi.spyOn(dashboardReads, 'loadDashboardRows').mockImplementation(() => {
+  vi.spyOn(conflicts, 'conflictPageAt').mockImplementation(() => {
     throw new Error('forced rebuild failure');
   });
 }

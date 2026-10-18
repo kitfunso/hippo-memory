@@ -4,7 +4,6 @@ import type { SessionHandoff } from '../core/handoff.js';
 import {
   loadCardCommentsAt, loadCardDepsAt, loadCardRow, loadCardRunsAt, loadLatestHandoffForCardAt,
 } from './cards.js';
-import { onHandle, openStore } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
 
 /** A card plus everything `hippo card show` prints about it. */
@@ -21,10 +20,6 @@ export interface CardDetail {
 export function loadCardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
   assertTenantId('loadCardDetail', tenantId);
   return withReadSnapshot(db, () => cardDetailAt(db, tenantId, id));
-}
-
-export function loadCardDetail(hippoRoot: string, tenantId: string, id: string): CardDetail | null {
-  return onHandle(hippoRoot, (db) => loadCardDetailAt(db, tenantId, id), openStore);
 }
 
 function cardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {

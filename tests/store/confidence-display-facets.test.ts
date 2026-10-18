@@ -17,6 +17,7 @@ import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { sessionCookie } from '../_helpers/dashboard-fixture.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -56,7 +57,7 @@ async function hippo(cwd: string, args: string[]): Promise<string> {
 
 function get(port: number, path: string): Promise<string> {
   return new Promise((res, rej) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } }, (r) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: sessionCookie(port, DASHBOARD_TOKEN) } }, (r) => {
       let body = '';
       r.setEncoding('utf8');
       r.on('data', (c) => { body += c; });

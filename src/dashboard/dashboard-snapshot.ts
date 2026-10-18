@@ -1,12 +1,17 @@
 // The dashboard's read model: one in-memory snapshot of a tenant's live memories, grouped by origin project.
 // Pure build functions plus one cache; the queries over it live in dashboard-queries.ts.
 
-import { calculateStrength, facetsOf, netWrong, Layer as MemoryLayer, type ConfidenceInputs, type MemoryEntry, type StrengthInputs } from '../core/memory.js';
+import {
+  calculateStrength, confidenceFacets, netWrong, Layer as MemoryLayer,
+  type ConfidenceInputs, type MemoryEntry, type StrengthInputs,
+} from '../core/memory.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { listMemoryConflicts } from '../store/conflicts.js';
-import { DashboardConnection, loadDashboardRows, type DashboardRow, type DashboardRows, type ExcludedCounts } from '../store/dashboard-reads.js';
-import type { MemoryConflict } from '../store/rows.js';
-import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
+import type {
+  ConflictPair, DashboardReads, DashboardRow, DashboardText, ExcludedCounts,
+} from '../store/port/dashboard-reads.js';
+import type {
+  Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints,
+} from './dashboard-types.js';
 import { DAY_MS } from '../util/time.js';
 import { round1 } from '../util/format.js';
 
@@ -75,12 +80,15 @@ function daysBetween(thenIso: string, nowMs: number): number {
 }
 
 /** Strength now and at +7d and +30d, band, age and the confidence split for one entry at `nowMs`. */
-export function memoryFacts(entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>, nowMs: number): MemoryFacts {
+export function memoryFacts(
+  entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>,
+  nowMs: number,
+): MemoryFacts {
   const now = new Date(nowMs);
   const strength = calculateStrength(entry, now);
   const strength7d = calculateStrength(entry, new Date(nowMs + 7 * DAY_MS));
   const strength30d = calculateStrength(entry, new Date(nowMs + 30 * DAY_MS));
-  const facets = facetsOf(entry, now);
+  const facets = confidenceFacets(entry, now);
   const band = entry.pinned ? BAND_PINNED : strength30d < 0.2 ? BAND_AT_RISK : strength >= 0.5 ? BAND_STRONG : BAND_FADING;
   return {
     strength,
@@ -96,13 +104,11 @@ export function memoryFacts(entry: StrengthInputs & ConfidenceInputs & Pick<Memo
   };
 }
 
-/** One live memory as the snapshot holds it: numbers and short strings only, never the full entry. */
+/** One live memory as the snapshot holds it: numbers and short strings only, never the whole text. */
 export interface Fact {
   id: string;
   head: string;
   truncated: boolean;
-  lower: string;
-  tagsLower: string;
   layer: number;
   band: number;
   strength: number;
@@ -167,9 +173,14 @@ export class Lru<V> {
 export interface SnapshotMemo {
   sorted: Lru<Int32Array>;
   filtered: Lru<FilteredSet>;
+  /** Per needle, a 1 at each fact whose whole text or tags hold it. */
+  text: Lru<Uint8Array>;
   scatter: Map<string, ScatterPoints | ScatterGrid>;
   overview: Overview | null;
 }
+
+/** Visits the tenant's live rows' whole text a page at a time. */
+export type TextScan = (visit: (page: readonly DashboardText[]) => void) => void;
 
 export interface Snapshot {
   id: number;
@@ -178,11 +189,15 @@ export interface Snapshot {
   facts: Fact[];
   projects: ProjectAgg[];
   byKey: Map<string, ProjectAgg>;
-  excluded: { superseded: number; archived: number; quarantined: number };
+  excluded: ExcludedCounts;
   /** Embedded share of live memories, or null when the store has no vector table yet. */
   embeddingCoverage: number | null;
   /** Open conflicts with both members live, each counted once. */
   openConflicts: number;
+  /** Index into `facts` of each live id. */
+  indexOf: ReadonlyMap<string, number>;
+  /** Read at query time by search and the text filter, so no snapshot holds whole contents. */
+  scanText: TextScan;
   memo: SnapshotMemo;
 }
 
@@ -193,8 +208,8 @@ export interface SnapshotInput {
   entries: readonly DashboardRow[];
   /** Rows counted out before `entries` was read; any entry here that is not live adds to them. */
   excluded?: ExcludedCounts;
-  openConflicts: readonly Pick<MemoryConflict, 'memory_a_id' | 'memory_b_id'>[];
-  embeddedIds: ReadonlySet<string> | null;
+  openConflicts: readonly ConflictPair[];
+  scanText: TextScan;
 }
 
 interface CutHead {
@@ -230,30 +245,28 @@ function newDraft(identity: { key: string; name: string; kind: ProjectKind }): P
   };
 }
 
-function toFact(entry: DashboardRow, f: ReturnType<typeof memoryFacts>, project: number, embedded: boolean, createdMs: number): Fact {
-  const { head, truncated } = cutHead(entry.content);
+function toFact(row: DashboardRow, f: MemoryFacts, project: number, createdMs: number): Fact {
+  const { head, truncated } = cutHead(row.head);
   const tier = CONFIDENCE_ORDER.indexOf(f.confidence);
   return {
-    id: entry.id,
+    id: row.id,
     head,
     truncated,
-    lower: entry.content.toLowerCase(),
-    tagsLower: entry.tags.length > 0 ? entry.tags.join('\n').toLowerCase() : '',
     layer: f.layer,
     band: f.band,
     strength: f.strength,
     strength7d: f.strength7d,
     strength30d: f.strength30d,
-    retrievals: entry.retrieval_count,
+    retrievals: row.retrieval_count,
     lastRetrievedDays: f.lastRetrievedDays,
     ageDays: f.ageDays,
     confidence: f.confidence,
     confidenceRank: tier === -1 ? CONFIDENCE_ORDER.length : tier,
-    scope: entry.scope,
-    pinned: entry.pinned,
+    scope: row.scope,
+    pinned: row.pinned,
     wrong: f.wrong,
     inConflict: false,
-    embedded,
+    embedded: row.embedded,
     project,
     createdMs,
   };
@@ -265,7 +278,7 @@ function tallyExcluded(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scop
   else if (entry.kind === 'archived') excluded.archived++;
 }
 
-function draftIndexFor(identity: ReturnType<typeof projectIdentity>, projectIndex: Map<string, number>, drafts: ProjectDraft[]): number {
+function draftIndexFor(identity: ProjectIdentity, projectIndex: Map<string, number>, drafts: ProjectDraft[]): number {
   let p = projectIndex.get(identity.key);
   if (p === undefined) {
     p = drafts.length;
@@ -282,74 +295,81 @@ function finishProject(d: ProjectDraft): ProjectAgg {
   return { summary: d.summary, members: Int32Array.from(d.members), firstCreatedMs: d.firstCreatedMs };
 }
 
-/** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
-export function buildSnapshot(input: SnapshotInput): Snapshot {
-  const { entries, embeddedIds, nowMs } = input;
-  const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0, ...input.excluded };
-  const facts: Fact[] = [];
-  const projectIndex = new Map<string, number>();
-  const drafts: ProjectDraft[] = [];
+/** Folds rows, then open conflicts, into a snapshot one at a time, so a build holds no page past its fold. */
+class SnapshotDraft {
+  private readonly facts: Fact[] = [];
+  private readonly indexOf = new Map<string, number>();
+  private readonly projectIndex = new Map<string, number>();
+  private readonly drafts: ProjectDraft[] = [];
+  private openConflicts = 0;
 
-  for (const entry of entries) {
-    if (!isLiveMemory(entry)) {
-      tallyExcluded(entry, excluded);
-      continue;
-    }
-    const p = draftIndexFor(projectIdentity(entry.origin_project), projectIndex, drafts);
-    const f = memoryFacts(entry, nowMs);
-    const embedded = embeddedIds !== null && embeddedIds.has(entry.id);
-    const parsedCreated = Date.parse(entry.created);
-    const draft = drafts[p];
-    draft.members.push(facts.length);
+  constructor(private readonly nowMs: number, private readonly excluded: ExcludedCounts) {}
+
+  addRow(row: DashboardRow): void {
+    if (!isLiveMemory(row)) return tallyExcluded(row, this.excluded);
+    const p = draftIndexFor(projectIdentity(row.origin_project), this.projectIndex, this.drafts);
+    const f = memoryFacts(row, this.nowMs);
+    const parsedCreated = Date.parse(row.created);
+    const draft = this.drafts[p];
+    draft.members.push(this.facts.length);
     draft.summary.live++;
     draft.summary.bands[BANDS[f.band]]++;
     draft.summary.layers[LAYERS[f.layer]]++;
-    if (entry.pinned) draft.summary.pinned++;
-    if (embedded) draft.summary.embedded++;
+    if (row.pinned) draft.summary.pinned++;
+    if (row.embedded) draft.summary.embedded++;
     if (Number.isFinite(parsedCreated) && parsedCreated < draft.firstCreatedMs) draft.firstCreatedMs = parsedCreated;
     if (f.lastRetrievedDays < draft.lastDays) draft.lastDays = f.lastRetrievedDays;
-    facts.push(toFact(entry, f, p, embedded, Number.isFinite(parsedCreated) ? parsedCreated : nowMs));
+    this.indexOf.set(row.id, this.facts.length);
+    this.facts.push(toFact(row, f, p, Number.isFinite(parsedCreated) ? parsedCreated : this.nowMs));
   }
 
-  const openConflicts = countOpenConflicts(facts, drafts.map((d) => d.summary), input.openConflicts);
-
-  const projects: ProjectAgg[] = drafts.map(finishProject);
-  const embeddedTotal = projects.reduce((sum, p) => sum + p.summary.embedded, 0);
-
-  return {
-    id: input.id,
-    tenantId: input.tenantId,
-    nowMs,
-    facts,
-    projects,
-    byKey: new Map(projects.map((p) => [p.summary.key, p])),
-    excluded,
-    embeddingCoverage: embeddedIds === null ? null : facts.length > 0 ? embeddedTotal / facts.length : 0,
-    openConflicts,
-    memo: { sorted: new Lru(8), filtered: new Lru(8), scatter: new Map(), overview: null },
-  };
-}
-
-// A conflict counts once in each project it touches, and once in the total.
-function countOpenConflicts(
-  facts: Fact[],
-  summaries: ProjectSummary[],
-  conflicts: SnapshotInput['openConflicts'],
-): number {
-  if (conflicts.length === 0) return 0;
-  const byId = new Map<string, number>();
-  facts.forEach((f, i) => byId.set(f.id, i));
-  let total = 0;
-  for (const c of conflicts) {
-    const a = byId.get(c.memory_a_id);
-    const b = byId.get(c.memory_b_id);
-    if (a === undefined || b === undefined) continue;
-    total++;
+  // A conflict counts once in each project it touches, and once in the total.
+  addConflict(pair: ConflictPair): void {
+    const a = this.indexOf.get(pair.memory_a_id);
+    const b = this.indexOf.get(pair.memory_b_id);
+    if (a === undefined || b === undefined) return;
+    const { facts } = this;
+    this.openConflicts++;
     facts[a].inConflict = true;
     facts[b].inConflict = true;
-    for (const p of new Set([facts[a].project, facts[b].project])) summaries[p].openConflicts++;
+    for (const p of new Set([facts[a].project, facts[b].project])) this.drafts[p].summary.openConflicts++;
   }
-  return total;
+
+  addExcluded(counts: ExcludedCounts): void {
+    this.excluded.superseded += counts.superseded;
+    this.excluded.archived += counts.archived;
+    this.excluded.quarantined += counts.quarantined;
+  }
+
+  finish(id: number, tenantId: string, scanText: TextScan): Snapshot {
+    const { facts, nowMs } = this;
+    const projects = this.drafts.map(finishProject);
+    const embeddedTotal = projects.reduce((sum, p) => sum + p.summary.embedded, 0);
+    return {
+      id,
+      tenantId,
+      nowMs,
+      facts,
+      projects,
+      byKey: new Map(projects.map((p) => [p.summary.key, p])),
+      excluded: this.excluded,
+      embeddingCoverage: facts.length > 0 ? embeddedTotal / facts.length : 0,
+      openConflicts: this.openConflicts,
+      indexOf: this.indexOf,
+      scanText,
+      memo: { sorted: new Lru(8), filtered: new Lru(8), text: new Lru(8), scatter: new Map(), overview: null },
+    };
+  }
+}
+
+const noneExcluded = (): ExcludedCounts => ({ superseded: 0, archived: 0, quarantined: 0 });
+
+/** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
+export function buildSnapshot(input: SnapshotInput): Snapshot {
+  const draft = new SnapshotDraft(input.nowMs, { ...noneExcluded(), ...input.excluded });
+  for (const row of input.entries) draft.addRow(row);
+  for (const pair of input.openConflicts) draft.addConflict(pair);
+  return draft.finish(input.id, input.tenantId, input.scanText);
 }
 
 interface CachedSnapshot {
@@ -373,7 +393,7 @@ export interface SnapshotService {
   invalidate(): void;
   /** Id of the most recent build, which is what a client holding the last response still has. */
   currentId(): number;
-  /** Whether a row of the last build's tenant had a vector at that build (a point read before any build), so a detail read never scans vectors. */
+  /** A live row of the last build answers as of that build; any other id reads the vector table. */
   isEmbedded(id: string): boolean;
   close(): void;
 }
@@ -382,36 +402,29 @@ export interface SnapshotService {
 let highestIssuedId = 0;
 
 class SnapshotCacheService implements SnapshotService {
-  private readonly connection: DashboardConnection;
   private cached: CachedSnapshot | null = null;
   // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
   private lastId = Math.max(Date.now(), highestIssuedId);
-  private lastEmbeddedIds: ReadonlySet<string> | null | undefined;
+  private last: Snapshot | null = null;
 
   constructor(
-    private readonly hippoRoot: string,
+    private readonly reads: DashboardReads,
     private readonly now: () => number,
     private readonly cacheClock: () => number,
-  ) {
-    this.connection = new DashboardConnection(hippoRoot);
-  }
+  ) {}
 
   private build(tenantId: string, dv: number | null, nowMs: number): Snapshot {
-    const rows: DashboardRows | null = dv === null ? null : loadDashboardRows(this.hippoRoot, tenantId);
-    const openConflicts = dv === null ? [] : listMemoryConflicts(this.hippoRoot, 'open', tenantId);
+    const draft = new SnapshotDraft(nowMs, noneExcluded());
+    if (dv !== null) {
+      draft.addExcluded(this.reads.scan(tenantId, {
+        rows: (page) => page.forEach((row) => draft.addRow(row)),
+        conflicts: (page) => page.forEach((pair) => draft.addConflict(pair)),
+      }));
+    }
     this.lastId += 1;
     highestIssuedId = Math.max(highestIssuedId, this.lastId);
-    // After loadDashboardRows, whose writable open has run any pending migration and legacy embeddings.json import.
-    this.lastEmbeddedIds = this.connection.embeddedIds(tenantId);
-    return buildSnapshot({
-      id: this.lastId,
-      tenantId,
-      nowMs,
-      entries: rows?.live ?? [],
-      excluded: rows?.excluded,
-      openConflicts,
-      embeddedIds: this.lastEmbeddedIds
-    });
+    const { reads } = this;
+    return draft.finish(this.lastId, tenantId, (visit) => reads.scanText(tenantId, visit));
   }
 
   get(tenantId: string, fresh = false): Snapshot {
@@ -419,13 +432,14 @@ class SnapshotCacheService implements SnapshotService {
     // A frozen eval clock (HIPPO_FAKE_NOW) would never age the cache, so reuse is timed on its own clock.
     const wallMs = this.cacheClock();
     // Read before the build, so a commit that lands during it shows on the next read.
-    const dv = this.connection.dataVersion();
+    const dv = this.reads.commitCount();
     const hit = this.cached;
     if (hit !== null && !fresh) {
       if (cacheStillServes(hit, { tenantId, dataVersion: dv }, wallMs)) return hit.snapshot;
     }
     const snapshot = this.build(tenantId, dv, nowMs);
     this.cached = { snapshot, dataVersion: dv, builtAtMs: wallMs };
+    this.last = snapshot;
     return snapshot;
   }
 
@@ -438,20 +452,24 @@ class SnapshotCacheService implements SnapshotService {
   }
 
   isEmbedded(id: string): boolean {
-    if (this.lastEmbeddedIds !== undefined) return this.lastEmbeddedIds?.has(id) ?? false;
-    this.connection.dataVersion();
-    return this.connection.hasVector(id);
+    const i = this.last?.indexOf.get(id);
+    if (this.last !== null && i !== undefined) return this.last.facts[i].embedded;
+    return this.reads.hasVector(id);
   }
 
   close(): void {
-    this.connection.close();
+    this.reads.close();
     this.cached = null;
-    this.lastEmbeddedIds = undefined;
+    this.last = null;
   }
 }
 
-/** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the
- * snapshot cache; `now` dates the strength projections, `cacheClock` ages the cache. */
-export function createSnapshotService(hippoRoot: string, now: () => number, cacheClock: () => number = Date.now): SnapshotService {
-  return new SnapshotCacheService(hippoRoot, now, cacheClock);
+/** The snapshot cache over the store's dashboard reads, whose commit signal decides reuse; `now` dates the strength
+ * projections, `cacheClock` ages the cache. */
+export function createSnapshotService(
+  reads: DashboardReads,
+  now: () => number,
+  cacheClock: () => number = Date.now,
+): SnapshotService {
+  return new SnapshotCacheService(reads, now, cacheClock);
 }

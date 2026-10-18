@@ -8,6 +8,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { request, type Server } from 'node:http';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
+import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 import { makeStore } from './_helpers/make-root.js';
 
@@ -45,10 +46,28 @@ describe('dashboard local access token', () => {
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Strict/i);
     const pair = cookie.split(';')[0]!;
-    expect(pair.endsWith(`=${TOKEN}`)).toBe(true);
+    expect(pair).toBe(sessionCookie(port, TOKEN));
 
     const again = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } });
     expect(again.status).toBe(200);
+  });
+
+  it('sets a cookie that is not the token, and refuses the raw token sent as the cookie', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
+    const cookie = res.headers.get('set-cookie') ?? '';
+    expect(cookie).not.toContain(TOKEN);
+    expect(cookie.split(';')[0]).toMatch(new RegExp(`^hippo_dashboard_${port}=[0-9a-f]{64}$`));
+
+    const raw = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` } });
+    expect(raw.status).toBe(401);
+    const rawPage = await fetch(`http://127.0.0.1:${port}/`, { headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` } });
+    expect(rawPage.status).toBe(401);
+  });
+
+  it('refuses a session cookie minted for another port', async () => {
+    const otherPortSession = sessionCookie(port + 1, TOKEN).split('=')[1];
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: `hippo_dashboard_${port}=${otherPortSession}` } });
+    expect(res.status).toBe(401);
   });
 
   it('bounds the cookie to one day, so a browser that restores its session does not keep the token forever', async () => {
@@ -69,7 +88,7 @@ describe('dashboard local access token', () => {
     const res = await fetch(`http://127.0.0.1:${port}/memory/abc?token=${TOKEN}&q=a%26b`, { redirect: 'manual', headers: { 'sec-fetch-site': 'cross-site' } });
     const html = await res.text();
     expect(res.status).toBe(200);
-    expect(res.headers.get('set-cookie')).toContain(`=${TOKEN}`);
+    expect(res.headers.get('set-cookie')?.split(';')[0]).toBe(sessionCookie(port, TOKEN));
     expect(html).toContain('<meta http-equiv="refresh" content="0;url=/memory/abc?q=a%26b">');
     expect(html).not.toContain(TOKEN);
   });

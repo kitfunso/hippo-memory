@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../../src/db/index.js';
@@ -21,7 +20,7 @@ import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { copyToGlobal } from '../_helpers/root-forms.js';
+import { copyToGlobal, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

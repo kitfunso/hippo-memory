@@ -9,6 +9,7 @@ export const AUDIT_OPS = [
   'auth_revoke',
   'auth_create', // emitted by api.authCreate
   'outcome',
+  'pin', // emitted by api.pinMemory
   'consolidate', // emitted once per api.sleep invocation
   'audit_prune', // emitted by pruneAuditLog after each retention prune
   'summary_marked_dirty', // emitted by markSummaryDirty on the 0->1 transition

@@ -9,7 +9,8 @@ import type {
   MemoryDetail, MemoryPage, Overview, ProjectDetail, ScatterGrid, ScatterPoints, SearchResult,
 } from '../src/dashboard/dashboard-types.js';
 import {
-  NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
+  NOW, asDashboardRow, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard,
+  type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 
 const AT_RISK = { half_life_days: 10, created: isoAgo(0), last_retrieved: isoAgo(0) } as const;
@@ -82,7 +83,8 @@ describe('overview and project', () => {
       created: isoAgo(i % 300),
       last_retrieved: isoAgo(i % 300),
     }));
-    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries, openConflicts: [], embeddedIds: new Set() });
+    const rows = entries.map((e) => asDashboardRow(e));
+    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries: rows, openConflicts: [], scanText: () => {} });
 
     // SAFETY: 4,001 members is over the cut-off, so the scatter is the grid shape.
     const grid = buildProjectDetail(snap, 'p:big')!.scatter as ScatterGrid;
@@ -96,7 +98,8 @@ describe('overview and project', () => {
 
 describe('KPI series', () => {
   const seriesOf = (id: 'total' | 'projects', entries: MemoryEntry[]): number[] => {
-    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries, openConflicts: [], embeddedIds: new Set() });
+    const rows = entries.map((e) => asDashboardRow(e));
+    const snap = buildSnapshot({ id: 1, tenantId: 'default', nowMs: NOW, entries: rows, openConflicts: [], scanText: () => {} });
     return buildOverview(snap).kpis.find((k) => k.id === id)!.series!;
   };
   const aged = (days: number, project: string): MemoryEntry => ({
