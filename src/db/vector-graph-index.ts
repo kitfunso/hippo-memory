@@ -18,6 +18,7 @@ import {
 } from './vector-graph-rows.js';
 import type { VectorIndex, VectorMatch } from './vector-store.js';
 
+// SHORTCUT: no upper cap; the graph holds about 2.2 KB of heap per 384-dim vector, so cap it or quantize past 500k.
 /** Stored vectors a store holds before its nearest-row reads search a graph. */
 export const VECTOR_GRAPH_THRESHOLD = 20_000;
 
