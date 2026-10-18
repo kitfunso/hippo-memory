@@ -1,12 +1,12 @@
 // E10 lane A: scopeAdmitSql, run on a real store's memories table, admits exactly what passesScopeFilterForRecall admits.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { closeHippoDb } from '../../src/db/index.js';
-import { openStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { passesScopeFilterForRecall } from '../../src/core/recall-scope.js';
 import { scopeAdmitSql } from '../../src/store/rule-sql.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 
 const OWN_A = 'personal:private:a';
 const SCOPES: ReadonlyArray<string | null> = [

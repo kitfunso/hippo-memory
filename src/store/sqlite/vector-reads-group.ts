@@ -2,7 +2,8 @@
 // it runs every other method to its end.
 import { loadPhysicsState } from '../../db/physics-state.js';
 import type { VectorIndex } from '../../db/vector-store.js';
-import { type Handles, openStore } from '../open.js';
+import type { Handles } from '../open.js';
+import { openStore } from './handles.js';
 import type { VectorReads } from '../port.js';
 import { loadVectorCandidateEntriesAt } from '../search-rows.js';
 import { loadStoredVectorsAt, storedIndexStateAt } from '../vector-index.js';

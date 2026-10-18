@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const mode = (p: string): number => statSync(p).mode & 0o777;
 

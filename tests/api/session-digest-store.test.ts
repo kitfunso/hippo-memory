@@ -1,6 +1,7 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'path';
+import { loadConfig } from '../../src/core/config.js';
 import { adminActor, reject } from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts } from '../../src/learn/extract.js';
@@ -8,11 +9,7 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { autoShare, neverAutoShareTags } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts } from '../_helpers/root-forms.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
+import { listMemoryConflicts, writeEntry, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { recordSessionDigest, sessionDigestId, type SessionScan } from '../../src/capture/session-digest.js';
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -20,6 +17,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -62,6 +60,7 @@ function write(key: string, s: SessionScan): string {
   recordSessionDigest(hippoRoot, sqliteSyncStore(hippoRoot), s, {
     key,
     tenantId: 'default',
+    config: loadConfig(hippoRoot),
     log: (line) => log.push(line),
   });
   return log.join('\n');

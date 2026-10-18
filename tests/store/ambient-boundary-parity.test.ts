@@ -1,13 +1,11 @@
 // The JS tally and the SQL aggregate share one freshness window and one schema-fit threshold, so they agree at the edges.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadAmbientTallies } from '../../src/store/ambient.js';
 import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntries } from '../../src/core/ambient.js';
 import { HIGH_SCHEMA_FIT } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries, loadAmbientTallies } from '../_helpers/root-forms.js';
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
 let root = '';

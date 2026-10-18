@@ -9,8 +9,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { createHash } from 'node:crypto';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
@@ -26,6 +24,8 @@ import {
   getCurrentSchemaVersion,
   setMeta,
 } from '../../src/db/index.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

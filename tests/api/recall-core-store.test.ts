@@ -4,8 +4,6 @@ import type { Context } from '../../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -25,7 +23,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadLastRecall } from '../_helpers/root-forms.js';
+import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let home: string;
 let hippoRoot: string;

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb, setFtsInSync } from '../../src/db/index.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { recordStatements } from '../_helpers/count-statements.js';

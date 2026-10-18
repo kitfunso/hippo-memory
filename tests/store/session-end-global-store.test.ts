@@ -3,12 +3,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadActiveTaskSnapshot, loadLatestHandoff } from '../_helpers/root-forms.js';
+import {
+  loadActiveTaskSnapshot,
+  loadLatestHandoff,
+  loadAllEntries,
+  saveActiveTaskSnapshot,
+} from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 const RULE = 'Never run npm install in the billing service';
 const USER_TEXT = `We decided to use pnpm for the billing service. ${RULE}; the lockfile is pnpm-lock.yaml.`;
 

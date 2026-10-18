@@ -6,10 +6,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { appendSessionEvent } from '../../src/store/sessions.js';
 import {
   createMemory,
   deriveHalfLife,
@@ -31,6 +27,8 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;

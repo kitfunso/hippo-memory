@@ -4,7 +4,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHmac } from 'node:crypto';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import {
   importChatGPT,
@@ -24,6 +23,7 @@ import { replayDlqEntry } from '../../src/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

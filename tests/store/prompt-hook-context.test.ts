@@ -4,9 +4,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { adminActor } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
@@ -19,6 +16,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -8,7 +8,6 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { rebuildDirtySummaries, buildDag } from '../../src/consolidate/dag.js';
@@ -18,8 +17,8 @@ import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllDirtySummaries, applyRebuildResult } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

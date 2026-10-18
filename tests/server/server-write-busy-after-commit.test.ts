@@ -2,7 +2,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import {
   openHippoDb,
@@ -18,6 +17,7 @@ import * as client from '../../src/cli/client.js';
 import { mcpErrorResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

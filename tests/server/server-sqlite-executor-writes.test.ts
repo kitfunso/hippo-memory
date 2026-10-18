@@ -12,7 +12,6 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memo
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { predictionMirror } from '../../src/core/prediction.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -39,6 +38,7 @@ import {
   undoAll,
   watched,
 } from '../_helpers/store-worker-server.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

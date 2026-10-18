@@ -3,13 +3,13 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { adminActor, ForbiddenError, memoryInvalidate, rejectOnHost, remember } from '../../src/api/index.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { handleInvalidate, handleReject } from '../../src/cli/curate.js';
 import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { readEntry } from '../_helpers/root-forms.js';
 
 let root: string;
 const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminActor('cli'));

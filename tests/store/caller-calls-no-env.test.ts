@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
@@ -17,6 +16,7 @@ import {
   sessionEndHandoffForCaller,
 } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const TENANT = 'acme-tenant';
 const ENV_TENANT = 'env-tenant';

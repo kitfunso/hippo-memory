@@ -7,10 +7,10 @@ import { collectVerbReads } from '../../scripts/cli-flag-reads.mjs';
 import { parseArgs, runCli as runCliEntry, shouldAutoRepairCodexWrapper } from '../../src/cli.js';
 import { COMMANDS } from '../../src/cli/verbs.js';
 import { undeclaredFlags, type VerbFlags } from '../../src/cli/flags.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 

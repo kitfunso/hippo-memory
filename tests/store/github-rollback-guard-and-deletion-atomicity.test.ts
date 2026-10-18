@@ -10,7 +10,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../../src/db/index.js';
 import { compareSemver, PACKAGE_VERSION } from '../../src/util/version.js';
@@ -20,6 +19,7 @@ import type { GitHubFetcher, GitHubBackfillPage } from '../../src/connectors/git
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });

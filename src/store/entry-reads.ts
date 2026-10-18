@@ -1,7 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { onHandle, openStore } from './open.js';
 import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../util/escape.js';
 import { originInSql } from '../core/project-identity.js';
@@ -39,10 +38,6 @@ export function readEntryAt(db: DatabaseSyncLike, id: string, tenantId?: string)
           .get(id, tenantId) as MemoryRow | undefined)
       : (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined);
   return row ? rowToEntry(row) : null;
-}
-
-export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
-  return onHandle(hippoRoot, (db) => readEntryAt(db, id, tenantId), openStore);
 }
 
 /** Rows by id on the caller's handle, one query per chunk; an
@@ -227,10 +222,6 @@ export function loadFreshRawMemoriesAt(
 /** Every entry of one tenant. A caller that surfaces rows to a user passes the resolved tenant. */
 export function loadAllEntriesAt(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
   return selectAllRows(db, tenantId).map(rowToEntry);
-}
-
-export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadAllEntriesAt(db, tenantId), openStore);
 }
 
 /** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of

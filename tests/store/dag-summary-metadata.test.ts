@@ -13,15 +13,13 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { sqliteDagReads } from '../../src/store/sqlite/dag-reads-group.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEntriesByIds } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import { loadEntriesByIds, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 function safeRmSync(p: string): void {
   try {

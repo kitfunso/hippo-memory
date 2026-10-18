@@ -13,10 +13,10 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { loadConfig } from '../../src/core/config.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 describe('physics scoring default', () => {
   it('is off unless a config opts in', () => {

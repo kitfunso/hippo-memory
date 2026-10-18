@@ -12,12 +12,12 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
 } from '../../src/core/memory.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { contextGet, retrieve } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';

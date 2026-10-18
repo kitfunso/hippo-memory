@@ -1,16 +1,21 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { estimateTokens } from '../../src/util/token-text.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadActiveTaskSnapshot, listSessionEvents, loadLatestHandoff } from '../_helpers/root-forms.js';
+import {
+  loadActiveTaskSnapshot,
+  listSessionEvents,
+  loadLatestHandoff,
+  writeEntry,
+  loadAllEntries,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string;
 

@@ -3,7 +3,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
@@ -21,7 +20,7 @@ import {
   type RunningDashboard,
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
-import { replaceDetectedConflicts, listMemoryConflicts } from './_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from './_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

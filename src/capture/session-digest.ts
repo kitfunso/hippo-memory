@@ -5,7 +5,8 @@ import * as path from 'path';
 import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './transcript.js';
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
-import { loadConfig } from '../core/config.js';
+import type { HippoConfig } from '../core/config.js';
+import { CLI_ACTOR } from '../core/actor.js';
 import { USER_SEGMENT } from '../util/home-path.js';
 import { errorMessage } from '../util/log.js';
 import { SESSION_DIGEST_TAG } from '../core/session-digest-row.js';
@@ -13,8 +14,7 @@ import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isInitialized } from '../core/project-identity.js';
-import { writeEntry } from '../store/entry-writes.js';
-import type { ContextReads, Sync } from '../store/port.js';
+import type { ContextReads, EntryWrites, Sync } from '../store/port.js';
 import type { Sessions } from '../store/port-groups.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../core/session-snapshot.js';
 import { isSyntheticMessage } from '../core/transcript-calls.js';
@@ -580,6 +580,8 @@ export interface SessionDigestOptions {
   /** Session id, or the transcript's basename when the host gives none. */
   key: string;
   tenantId: string;
+  /** The repo store's config, as the caller's Context holds it. */
+  config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 
 export interface DigestOutcome {
@@ -589,11 +591,12 @@ export interface DigestOutcome {
   files: number;
 }
 
-/** The repo store's reads a digest makes, built by the CLI root; each answers at once, since the session-end hook
- * counts this run's statements. */
+/** The repo store's reads and the digest's write, built by the CLI root; each answers at once, since the session-end
+ * hook counts this run's statements. */
 export interface DigestStore {
   readonly contextReads: Sync<ContextReads>;
   readonly sessions: Sync<Sessions>;
+  readonly entryWrites: Sync<EntryWrites>;
 }
 
 /** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient
@@ -654,12 +657,12 @@ function writeSessionDigest(
       confidence: 'observed',
       sourceSessionId: opts.key,
       tenantId: opts.tenantId,
-      baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+      baseHalfLifeDays: opts.config.defaultHalfLifeDays,
     }),
     id: sessionDigestId(opts.tenantId, opts.key),
   };
   try {
-    writeEntry(hippoRoot, entry);
+    store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
   } catch (err) {
     if (err instanceof RejectedValueError) return skipped('it matches a rejected value');
     throw err;

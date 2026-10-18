@@ -8,7 +8,6 @@ import { isPersonalScope } from '../../src/core/recall-scope.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/dormant.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { rejectionDigest } from '../../src/store/rejection.js';
@@ -16,6 +15,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
 const ROWS = 1100;
 const VALUE = 'The deploy window is Friday afternoon';

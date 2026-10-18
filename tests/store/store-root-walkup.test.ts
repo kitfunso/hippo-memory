@@ -6,11 +6,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
@@ -18,7 +13,15 @@ import { adminActor, retrieve } from '../../src/api/index.js';
 import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/core/project-identity.js';
 import { findHippoRoot } from '../../src/mcp/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadLastRecall } from '../_helpers/root-forms.js';
+import {
+  loadLastRecall,
+  writeEntry,
+  readEntry,
+  appendSessionEvent,
+  saveActiveTaskSnapshot,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

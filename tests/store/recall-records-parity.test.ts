@@ -4,10 +4,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { handleRecall } from '../../src/cli/recall.js';
 import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -31,6 +28,8 @@ import {
 } from '../_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../../src/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

@@ -7,10 +7,10 @@ import { ConflictError } from '../../src/core/api-errors.js';
 import type { Context } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { bindSessionOwner } from '../../src/server.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 interface StatementProto {
   readonly sourceSQL: string;

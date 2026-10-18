@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts } from '../../src/learn/extract.js';
@@ -12,6 +10,7 @@ import { assessAutomaticMemory } from '../../src/core/memory-quality.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observed' } as const;
 let root: string;

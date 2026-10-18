@@ -27,9 +27,9 @@ import {
   writeEntryMirrors,
 } from '../entry-writes.js';
 import { gatedWrite } from '../gated-write.js';
-import { updateStats } from '../index-and-stats.js';
+import { updateStatsAt } from '../index-and-stats.js';
 import { removeEntryMirrors } from '../mirrors.js';
-import { initStore, openBareHandle } from '../open.js';
+import { initStore, onHandle, openBareHandle, openStore } from './handles.js';
 import { projectTagReads } from '../project-tags.js';
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
 import { setAsideRow } from '../set-aside.js';
@@ -74,7 +74,8 @@ function importTarget(db: DatabaseSyncLike, root: string, close: () => void): Im
     },
     writeMirror: (entry) => writeEntryMirrors(root, entry),
     removeMirror: (id) => removeEntryMirrors(root, id),
-    bumpRemembered: (count) => updateStats(root, { remembered: count }),
+    bumpRemembered: (count) =>
+      onHandle(root, (own) => updateStatsAt(own, { hippoRoot: root }, { remembered: count }), openStore),
     close,
   };
 }

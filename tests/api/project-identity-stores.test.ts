@@ -15,10 +15,7 @@ import { projectNameMerge, projectNameRepair, projectNameRepairOnce } from '../.
 import { projectTagReads } from '../../src/store/project-tags.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { _resetProjectIdentityCacheForTests, resolveProjectIdentity } from '../../src/core/project-identity.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
-import { initStore } from '../../src/store/open.js';
 import {
   closeWorld,
   ctxFor,
@@ -33,6 +30,8 @@ import {
 import { loadConfig } from '../../src/core/config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // Every sync asks git for each folder's layout in a child process, and the re-sync cases run several syncs.
 const RESYNC_MS = 15_000;

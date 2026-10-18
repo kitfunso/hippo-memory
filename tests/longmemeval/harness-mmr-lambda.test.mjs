@@ -4,8 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 // The harness imports the build, so the store it reads is seeded through the build too.
-import { initStore } from '../../dist/store/open.js';
-import { writeEntry } from '../../dist/store/entry-writes.js';
+import { initStore, writeEntry } from '../../dist/entry/testing.js';
 import { createMemory } from '../../dist/core/memory.js';
 
 const FIXTURE = 'benchmarks/longmemeval/data/synthetic_smoke.json';

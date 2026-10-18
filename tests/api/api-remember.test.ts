@@ -2,14 +2,14 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { remember } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', async () => {

@@ -1,7 +1,6 @@
 // Store rules every typed object shares, one table row per kind; a rule only one kind has stays in its <kind>-store test.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { CustomerNote, Decision, Policy, Process, ProjectBrief, Skill } from '../../src/core/object-types.js';
@@ -47,7 +46,7 @@ import { writeEntryThenFail } from '../_helpers/failing-write.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
-import { deleteEntry } from '../_helpers/root-forms.js';
+import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
 
 let home: string;
 beforeEach(() => {

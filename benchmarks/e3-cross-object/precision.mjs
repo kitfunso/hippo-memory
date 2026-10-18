@@ -4,13 +4,13 @@
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../../dist/store/open.js';
+import { initStore } from '../../dist/entry/testing.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { saveDecision } from '../../dist/objects/decisions.js';
 import { savePolicy } from '../../dist/objects/policies.js';
 import { saveCustomerNote } from '../../dist/objects/customer-notes.js';
 import { saveProjectBrief } from '../../dist/objects/project-briefs.js';
-import { loadEntities, loadRelations } from '../../dist/store/graph-reads.js';
+import { loadEntities, loadRelations } from '../../dist/store/sqlite/folder-forms.js';
 import { extractGraph } from '../../dist/graph/extract.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 

@@ -8,13 +8,12 @@ import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../../src/
 import { extractLessons, partitionLessons } from '../../src/learn/autolearn.js';
 import { contextGet } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
-import { initStore, openStore } from '../../src/store/open.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { gatedWrite } from '../../src/store/gated-write.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
+import { initStore, openStore } from '../../src/store/sqlite/handles.js';
 
 const captureTurns = (turns: readonly SessionTurn[]) => {
   const { users, assistants } = sessionTail(turns);

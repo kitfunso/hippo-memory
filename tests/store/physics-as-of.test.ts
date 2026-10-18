@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
@@ -13,8 +12,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import type { SearchResult } from '../../src/core/search-types.js';
-import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

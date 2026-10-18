@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import {
   calculateStrength,
   confidenceFacets,
@@ -13,8 +12,7 @@ import {
 } from '../../src/core/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { listMemoryConflicts } from '../_helpers/root-forms.js';
-import { updateStats } from '../../src/store/index-and-stats.js';
+import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/util/time.js';
 import { handleStatus } from '../../src/cli/status.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';

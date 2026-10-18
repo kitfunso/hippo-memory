@@ -20,7 +20,7 @@ import { sqliteCaptures } from './captures-group.js';
 import { sqliteCompactionHooks } from './compaction-hooks-group.js';
 import { sqliteCards } from './cards-group.js';
 import { sqliteConflicts } from './conflicts-group.js';
-import { sqliteDashboardReads } from '../dashboard-reads.js';
+import { sqliteDashboardReads } from './dashboard-reads-group.js';
 import { sqliteDormant } from './dormant-group.js';
 import { sqliteGoals } from './goals-group.js';
 import { sqliteRejections } from './rejections-group.js';
@@ -53,7 +53,8 @@ import { updateStatsAt } from '../index-and-stats.js';
 import { flushStatsMirrors } from '../mirrors.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
-import { type Handles, handlesOf, type OnHandle, openStore } from '../open.js';
+import type { Handles, OnHandle } from '../open.js';
+import { handlesOf, openStore } from './handles.js';
 import {
   type AuditLog,
   type AuditMaintenance,

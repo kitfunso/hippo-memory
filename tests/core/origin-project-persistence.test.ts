@@ -5,13 +5,11 @@ import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry, deserializeEntry } from '../../src/core/markdown.js';
 import { stampOriginProject } from '../../src/store/entry-row.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

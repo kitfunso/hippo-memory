@@ -1,12 +1,11 @@
 // A broken full-text index never fails a write or a search, but it says so: warn once per kind of failure, then stay quiet.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { createRequire } from 'node:module';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadSearchEntries } from '../_helpers/root-forms.js';
+import { deleteEntry, loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

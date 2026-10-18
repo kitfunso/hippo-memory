@@ -5,11 +5,9 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { initStore } from '../../src/store/open.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
 import type { DeliveryEventInput } from '../../src/core/delivery.js';
 import { writeDeliveryEventOnHandle } from '../../src/store/recall-trace.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import type { JsonValue } from '../../src/util/json.js';
@@ -36,6 +34,8 @@ import {
   type TurnSpec,
   type Verdict,
 } from '../_helpers/host-transcript.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // Capture-error runs in process; TF1, TF12 and TF13 spawn it once each, far inside the 30 s process-project timeout.
 

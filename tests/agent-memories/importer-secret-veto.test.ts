@@ -14,11 +14,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { importProjectMemories } from '../../src/agent-memories/sync.js';
 import { totalTally, type Tally } from '../../src/agent-memories/report.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { detectSecret } from '../../src/util/secret-detect.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const sync = (root: string, home: string): Tally =>
   totalTally(

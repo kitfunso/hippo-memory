@@ -1,7 +1,6 @@
 // E10 lane A: buildGraphModel hides graph rows whose source memory the caller may not read. Real SQLite, no mocks.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { savePolicy } from '../../src/objects/policies.js';
@@ -11,6 +10,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';

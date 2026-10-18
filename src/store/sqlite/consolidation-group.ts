@@ -34,7 +34,8 @@ import {
 import { lazyTombstoneChecks } from '../tombstone-checks.js';
 import { saveStoredParticlesAt, storedParticleIdsAt, storedParticlesByIdsAt } from '../vector-index.js';
 import { errorMessage } from '../../util/log.js';
-import { type Handles, type OnHandle, openStore, waitingOpener } from '../open.js';
+import { type Handles, type OnHandle, waitingOpener } from '../open.js';
+import { openStore } from './handles.js';
 
 /** Sleep's store work on its hippo.db, each call on its own short-lived handle. */
 export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidation {

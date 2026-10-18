@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
-import { openStore } from '../../src/store/open.js';
 import {
   CHURN_STALE_TAG,
   DAG_LEVEL,
@@ -21,6 +20,7 @@ import { selectEntriesByIds } from '../../src/store/entry-reads.js';
 import { appendAuditEvent } from '../../src/store/audit.js';
 import { applyOutcomeAt, auditingRefusal } from '../../src/store/sqlite/entry-writes-group.js';
 import type { OutcomeWrite } from '../../src/store/port/entry-writes.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace];

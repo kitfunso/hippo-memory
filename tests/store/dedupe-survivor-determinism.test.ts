@@ -18,8 +18,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
 import { deduplicateStore, strengthBucket } from '../../src/consolidate/dedupe.js';
@@ -29,7 +27,8 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memo
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/open.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 // Test 2 builds six fresh stores, one per ingest order, which can pass the unit budget on a Windows runner.
 vi.setConfig({ testTimeout: 15_000 });

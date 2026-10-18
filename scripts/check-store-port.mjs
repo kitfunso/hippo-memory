@@ -11,6 +11,7 @@
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams counts parameters of methods on port interfaces whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
+// folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any but FOLDER_FORM_EXCEPTIONS fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -450,6 +451,104 @@ function strayRecallRecords() {
     );
 }
 
+// A call of one of these, under its name or an import alias, opens hippo.db from the folder it is given.
+const FOLDER_OPENERS = new Set([
+  ...OPENERS,
+  'openHippoDbWithFacts',
+  'withUnmigratedDb',
+  'reproveStoreSchema',
+  'openBareHandle',
+  'onHandleAsync',
+  'initStore',
+  'handlesOf',
+  'sqliteStore',
+  'sqliteSyncStore',
+]);
+// Only the SQLite adapter holds a folder; each folder form left above it, as `file name`, with why.
+const FOLDER_FORM_EXCEPTIONS = new Map([
+  ['src/store/search-rows.ts loadRecallSearchEntries', 'the frozen q3b-ranker-floor benchmark imports it from dist'],
+]);
+
+/** The file's top-level functions, declared or bound to a const, each with its node and whether the file exports it. */
+function topLevelFunctions(sf) {
+  const fns = new Map();
+  const exported = (s) => s.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  for (const s of sf.statements) {
+    if (ts.isFunctionDeclaration(s) && s.name && s.body) fns.set(s.name.text, { node: s, exported: exported(s) });
+    for (const d of ts.isVariableStatement(s) ? s.declarationList.declarations : []) {
+      const init = d.initializer;
+      if (ts.isIdentifier(d.name) && init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
+        fns.set(d.name.text, { node: d, exported: exported(s) });
+      }
+    }
+  }
+  const localExports = sf.statements.filter(
+    (s) => ts.isExportDeclaration(s) && !s.moduleSpecifier && s.exportClause && ts.isNamedExports(s.exportClause),
+  );
+  for (const s of localExports) {
+    for (const e of s.exportClause.elements) {
+      const fn = fns.get((e.propertyName ?? e.name).text);
+      if (fn) fn.exported = true;
+    }
+  }
+  return fns;
+}
+
+/** True when a parameter is a folder: named `...root`, destructuring one, or typed StoreFiles or Handles, which hold one. */
+function takesFolder(sf, node) {
+  const fn = ts.isVariableDeclaration(node) ? node.initializer : node;
+  const isRoot = (name) => /root$/i.test(name);
+  return fn.parameters.some(
+    (p) =>
+      (ts.isIdentifier(p.name) && isRoot(p.name.text)) ||
+      (ts.isObjectBindingPattern(p.name) &&
+        p.name.elements.some((e) => isRoot((e.propertyName ?? e.name).getText(sf)))) ||
+      (p.type !== undefined && /\b(StoreFiles|Handles)\b/.test(p.type.getText(sf))),
+  );
+}
+
+/** `file:line name` of each exported function taking a folder that names a folder opener (a call, a default, a
+ * callback), in a closure or through a same-file helper too. */
+function folderFormsIn(file, sf) {
+  const openers = new Set(FOLDER_OPENERS);
+  for (const s of sf.statements) {
+    const bindings = ts.isImportDeclaration(s) ? s.importClause?.namedBindings : undefined;
+    for (const e of bindings && ts.isNamedImports(bindings) ? bindings.elements : []) {
+      if (e.propertyName && FOLDER_OPENERS.has(e.propertyName.text)) openers.add(e.name.text);
+    }
+  }
+  const fns = topLevelFunctions(sf);
+  const named = new Map();
+  for (const [name, { node }] of fns) {
+    const names = new Set();
+    // `ReturnType<typeof openHippoDb>` names a handle's type and opens nothing, so type positions are skipped.
+    const visit = (n) => {
+      if (ts.isTypeNode(n)) return;
+      if (ts.isIdentifier(n)) names.add(n.text);
+      ts.forEachChild(n, visit);
+    };
+    visit(ts.isVariableDeclaration(node) ? node.initializer : node);
+    named.set(name, names);
+  }
+  const opens = new Set([...named].filter(([, names]) => [...names].some((c) => openers.has(c))).map(([n]) => n));
+  // A helper that opens makes every same-file caller open too, however deep the chain.
+  for (let grew = true; grew;) {
+    const before = opens.size;
+    for (const [name, names] of named) if ([...names].some((c) => c !== name && opens.has(c))) opens.add(name);
+    grew = opens.size > before;
+  }
+  return [...opens]
+    .filter((name) => fns.get(name).exported && takesFolder(sf, fns.get(name).node))
+    .map((name) => `${file}:${lineOf(sf, fns.get(name).node)} ${name}`);
+}
+
+/** Every folder form in src/store outside the SQLite adapter, named exceptions included. */
+function folderFormsAboveAdapter() {
+  return (existsSync('src/store') ? tsFiles('src/store') : [])
+    .filter((file) => !file.startsWith('src/store/sqlite/'))
+    .flatMap((file) => folderFormsIn(file, parse(file)));
+}
+
 /** True when the file runs SQL itself (`<x>.prepare` or `<x>.exec`), holds a handle, or opens one; comments and strings never match. */
 function touchesHippoDb(sf) {
   let found = false;
@@ -616,6 +715,7 @@ if (args.includes('--list')) {
     for (const site of where) console.log(`${counter}\t${site}`);
   }
   for (const f of current.storeFilesWithoutSqlList) console.log(`no SQL\t${f}`);
+  for (const site of folderFormsAboveAdapter()) console.log(`folderFormsAboveAdapter\t${site}`);
   for (const key of BY_FILE_KEYS) {
     for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
   }
@@ -643,6 +743,18 @@ if (rose.length > 0) {
     'Reach the database through the store port instead of opening it, branching on the store, or adding a twin.',
   );
   console.error('`node scripts/check-store-port.mjs --list` shows every count.');
+  process.exit(1);
+}
+const folderForms = folderFormsAboveAdapter();
+const strayForms = folderForms.filter((site) => !FOLDER_FORM_EXCEPTIONS.has(site.replace(/:\d+ /, ' ')));
+if (strayForms.length > 0) {
+  console.error(
+    `Folder forms above src/store/sqlite: ${folderForms.length}, at most ${FOLDER_FORM_EXCEPTIONS.size} allowed:`,
+  );
+  for (const site of strayForms) console.error(`  ${site}`);
+  console.error(
+    'Take the store or the handle the caller holds; a folder form for a script or the eval kit goes in src/store/sqlite/folder-forms.ts.',
+  );
   process.exit(1);
 }
 const fell =

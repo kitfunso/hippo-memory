@@ -1,7 +1,6 @@
 import { appendAuditEvent } from './audit.js';
 import { withBackup } from '../db/backup.js';
 import { withTrialScope, withWriteScope } from '../db/busy.js';
-import { withUnmigratedDb } from '../db/open.js';
 import type { DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
@@ -227,30 +226,30 @@ function repairOn(db: DatabaseSyncLike, root: string, run: RepairRun): QualityRe
   return { ...result, warnings };
 }
 
-/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage,
- * without running migrations. */
-export function repairAutomaticMemories(
+/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage.
+ * `db` is opened without running migrations, read-only for a preview. */
+export function repairAutomaticMemoriesAt(
+  db: DatabaseSyncLike,
   { hippoRoot: root }: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): QualityRepairResult {
-  return withUnmigratedDb(root, !opts.apply, (db) => repairOn(db, root, opts));
+  return repairOn(db, root, opts);
 }
 
 const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
- * null once done. */
-export function repairQualityOnce(
+ * null once done. `db` is opened writable without running migrations. */
+export function repairQualityOnceAt(
+  db: DatabaseSyncLike,
   { hippoRoot: root }: StoreFiles,
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
-  return withUnmigratedDb(root, false, (db) => {
-    if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
-    // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
-    const result = repairOn(db, root, { tenantId, protect, apply: true, doneKey: AUTO_REPAIR_META_KEY });
-    // An unsupported schema changed nothing, so the next run tries again once a migration has run.
-    if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
-    return result;
-  });
+  if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
+  // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
+  const result = repairOn(db, root, { tenantId, protect, apply: true, doneKey: AUTO_REPAIR_META_KEY });
+  // An unsupported schema changed nothing, so the next run tries again once a migration has run.
+  if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
+  return result;
 }

@@ -19,8 +19,6 @@ import { sleep } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { sqliteStore, type HippoStore } from '../../src/store/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -28,6 +26,7 @@ import { Layer } from '../../src/core/memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(undoAll);
 

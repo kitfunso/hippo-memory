@@ -19,7 +19,8 @@ import {
   sessionOwnerOrBindAt,
 } from '../sessions.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../working-memory.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 
 export function sqliteSessions(on: OnHandle): Sync<Sessions> {
   return {

@@ -2,10 +2,12 @@
 // handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { appendAuditEvent } from '../audit.js';
-import { strengthenRetrieved, strengthenRetrievedInOwnTx } from '../entry-writes.js';
+import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
+import { strengthenRetrieved } from './folder-forms.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
 import { loadLastRecallAt, saveIndexAt } from '../index-and-stats.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites, Sync } from '../port.js';
 import { writeRecallTrace } from '../recall-trace.js';
 import { applyOutcomeAt } from './entry-writes-group.js';

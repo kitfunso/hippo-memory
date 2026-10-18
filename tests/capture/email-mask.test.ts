@@ -2,14 +2,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadConfig } from '../../src/core/config.js';
 import { cmdCapture } from '../../src/capture/command.js';
 import { transcriptWorkingState } from '../../src/capture/working-state.js';
 import { maskEmails } from '../../src/util/secret-detect.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
 import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const EMAIL = 'alice@example.com';
 const REPLY = `Updated ${EMAIL} in customer.ts because the export failed.`;
@@ -61,6 +62,7 @@ describe('no stored text holds an email address', () => {
     recordSessionDigest(hippoRoot, syncStore(hippoRoot), scan, {
       key: 's1',
       tenantId: 'default',
+      config: loadConfig(hippoRoot),
       log: (line) => log.push(line),
     });
     expect(log.join('\n')).toMatch(/^digest: wrote /);

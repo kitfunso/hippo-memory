@@ -8,12 +8,12 @@ import { recordQuarantine } from '../../src/store/quarantine.js';
 import { type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import { selectEntriesByIds } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { openStore } from '../../src/store/open.js';
 import type { Quarantine, QuarantineRefusal, QuarantinedMemory } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
 import type { QuarantineRow } from '../../src/store/port/quarantine.js';
+import { writeEntry } from './root-forms.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 
 export interface InMemoryQuarantineStore extends StoreSide {
   readonly store: HippoStore & { readonly quarantine: Quarantine };

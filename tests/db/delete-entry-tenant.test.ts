@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { deleteEntryCore } from '../../src/store/delete-and-batch.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let root: string;
 let db: ReturnType<typeof openHippoDb>;

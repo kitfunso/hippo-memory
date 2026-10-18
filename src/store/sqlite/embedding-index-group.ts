@@ -14,7 +14,8 @@ import {
   seedStoredParticleAt,
   storedVectorSummaryAt,
 } from '../vector-index.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 
 export function sqliteEmbeddingIndex(on: OnHandle): EmbeddingIndex {
   return {

@@ -8,3 +8,8 @@ export { _resetSessionRecallHistoryMcpForTests } from '../mcp/session-state.js';
 export { __resetSessionRecallHistoryHttp } from '../server/routes/recall.js';
 export { _readApiKeyVerifyStatsForTests } from '../store/auth.js';
 export { _resetLogOnceForTests } from '../util/log.js';
+// The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
+export { ambientSecretAdmit } from '../core/read-admission.js';
+export { initStore } from '../store/sqlite/handles.js';
+export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/folder-forms.js';
+export type { WriteEntryOptions } from '../store/entry-writes.js';

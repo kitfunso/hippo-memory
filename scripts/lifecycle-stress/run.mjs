@@ -42,11 +42,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/core/memory.js';
-import { initStore } from '../../dist/store/open.js';
-import { writeEntry } from '../../dist/store/entry-writes.js';
-import { loadAllEntries } from '../../dist/store/entry-reads.js';
+import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
 import { embedMemory } from '../../dist/search/embed-memories.js';
-import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { consolidate } from '../../dist/consolidate/sleep.js';

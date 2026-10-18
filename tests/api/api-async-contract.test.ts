@@ -21,12 +21,12 @@ import {
 import { rememberLocally } from '../../src/api/memories/remember-local.js';
 import { importVault } from '../../src/entry/importers.js';
 import { sqliteStore, type HippoStore, type StoreGroups } from '../../src/store/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const ACME = 'acme';
 const SEEDED_AT = '2026-02-01T00:00:00.000Z';

@@ -4,9 +4,8 @@ import { consolidate } from '../../src/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { NO_MERGE_TAGS } from '../../src/sharing/share.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 const PROBE = 'no-merge-probe';
 const BASE = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';

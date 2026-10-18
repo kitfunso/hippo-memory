@@ -5,10 +5,10 @@ import { PROTECTED_ROWS } from '../../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/dormant.js';
 import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
-import { repairAutomaticMemories } from '../../src/store/quality-repair.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { repairAutomaticMemories } from '../_helpers/root-forms.js';
 
 const ROWS = 1100;
 const HEADER = '[Consolidated from 2 related memories, newest first]';

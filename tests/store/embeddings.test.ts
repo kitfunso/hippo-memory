@@ -90,8 +90,7 @@ describe('isEmbeddingAvailable', () => {
 
 describe('embedding index persistence', () => {
   it('round-trips an index via save + load', async () => {
-    const { loadEmbeddingIndex } = await import('../../src/store/vector-index.js');
-    const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
+    const { loadEmbeddingIndex, saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
     const fs = await import('fs');
     const os = await import('os');
     const path = await import('path');
@@ -114,7 +113,7 @@ describe('embedding index persistence', () => {
   });
 
   it('returns empty object when index file does not exist', async () => {
-    const { loadEmbeddingIndex } = await import('../../src/store/vector-index.js');
+    const { loadEmbeddingIndex } = await import('../_helpers/root-forms.js');
     const loaded = loadEmbeddingIndex('/tmp/hippo-nonexistent-' + Date.now());
     expect(loaded).toEqual({});
   });

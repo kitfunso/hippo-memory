@@ -13,10 +13,9 @@ import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { v54 } from '../../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../../src/db/tables.js';
 import { recordFailure } from '../../src/store/failure-log.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
+import { saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
 
 const OWNER_TABLES = ['task_snapshots', 'session_handoffs', 'failure_log'] as const;
 const OWNER_INDEXES = ['idx_task_snapshots_owner', 'idx_session_handoffs_owner'] as const;

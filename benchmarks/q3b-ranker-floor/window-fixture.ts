@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { adminActor, goalPush, outcome } from '../../dist/api/index.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { createMemory } from '../../dist/core/memory.js';
-import { writeEntry } from '../../dist/store/entry-writes.js';
+import { writeEntry } from '../../dist/entry/testing.js';
 import { loadRecallSearchEntries } from '../../dist/store/search-rows.js';
 import { resolveTenantId } from '../../dist/store/tenant.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';

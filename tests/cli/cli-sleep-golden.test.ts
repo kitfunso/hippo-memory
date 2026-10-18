@@ -5,10 +5,10 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';

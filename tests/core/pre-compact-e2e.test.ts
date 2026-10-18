@@ -4,15 +4,19 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getHippoRoot } from '../../src/core/project-identity.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { defaultSleepLogPath } from '../../src/hooks/shared.js';
 import { WORKING_STATE_CAPS } from '../../src/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import type { InProcessResult } from '../_helpers/run-in-process.js';
-import { loadActiveTaskSnapshot, writeSessionEndHandoff } from '../_helpers/root-forms.js';
+import {
+  loadActiveTaskSnapshot,
+  writeSessionEndHandoff,
+  loadAllEntries,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+} from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

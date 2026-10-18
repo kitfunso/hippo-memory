@@ -12,7 +12,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { backfillRepo } from '../../src/connectors/github/backfill.js';
 import {
@@ -22,6 +21,7 @@ import {
 } from '../../src/connectors/github/octokit-client.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const REPO = 'acme/demo';
 const TENANT = 'default';

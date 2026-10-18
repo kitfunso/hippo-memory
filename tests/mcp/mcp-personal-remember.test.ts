@@ -4,8 +4,8 @@ import { rmSync } from 'node:fs';
 import { createApiKey } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const NO_OWNER_TEXT =
   'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';

@@ -3,12 +3,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 
 const REPO_ROOT = join(__dirname, '..', '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');

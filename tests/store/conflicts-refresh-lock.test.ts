@@ -3,12 +3,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { stageWinner } from '../_helpers/race-winner.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 
 interface StatementProto {
   run(...params: unknown[]): object;

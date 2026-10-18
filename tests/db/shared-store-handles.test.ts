@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { initStore } from '../../src/store/open.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmp: string;
 let root: string;

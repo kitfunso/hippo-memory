@@ -7,11 +7,11 @@ import { adminActor, remember, supersede } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createApiKey } from '../../src/store/auth.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
 const NOTE = 'the billing service retries a failed charge three times';
 const NEWER = 'the billing service retries a failed charge five times';

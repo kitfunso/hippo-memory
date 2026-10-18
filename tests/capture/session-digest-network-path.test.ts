@@ -2,16 +2,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadConfig } from '../../src/core/config.js';
 import {
   _setDigestExistsProbeForTests,
   recordSessionDigest,
   type DigestEdit,
 } from '../../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { syncStore } from '../_helpers/cli-stores.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];
@@ -53,6 +54,7 @@ function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
     {
       key: 's1',
       tenantId: 'default',
+      config: loadConfig(hippoRoot),
       log: (line) => log.push(line),
     },
   );

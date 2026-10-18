@@ -12,12 +12,11 @@ import {
   type MemoryEntry,
 } from '../../src/core/memory.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { openStore } from '../../src/store/open.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 
 const TENANT = 'acme';
 const roots: string[] = [];

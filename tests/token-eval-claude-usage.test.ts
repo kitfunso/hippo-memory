@@ -7,11 +7,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordTokenUse } from '../src/store/token-ledger.js';
 import { readTranscript, readProjects, readLedger, report } from '../scripts/token-eval/claude-usage.mjs';
 import { makeRoot } from './_helpers/make-root.js';
+import { initStore } from '../src/store/sqlite/handles.js';
 
 const dirs: string[] = [];
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });

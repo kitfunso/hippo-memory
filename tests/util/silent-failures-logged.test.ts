@@ -16,11 +16,11 @@ import { countTableRows } from '../../src/db/tables.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { initStore } from '../../src/store/open.js';
 import { renderGraphHtml } from '../../src/graph/view.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

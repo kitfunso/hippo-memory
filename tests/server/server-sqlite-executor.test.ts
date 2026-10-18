@@ -30,7 +30,7 @@ import {
   undoAll,
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/open.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

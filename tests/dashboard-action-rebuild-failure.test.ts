@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as conflicts from '../src/store/conflicts.js';
-import * as entryReads from '../src/store/entry-reads.js';
+import { readEntry } from './_helpers/root-forms.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import {
   DASHBOARD_TOKEN,
@@ -68,7 +68,7 @@ describe('pin while the snapshot rebuild fails', () => {
     expect(pinned.status).toBe(200);
     expect(parse<MemoryDetail>(pinned).pinned).toBe(true);
     expect(parse<MemoryDetail>(pinned).snapshotId).toBe(before.snapshotId);
-    expect(entryReads.readEntry(store.hippoRoot, target.id)!.pinned).toBe(true);
+    expect(readEntry(store.hippoRoot, target.id)!.pinned).toBe(true);
     expect((await get(dash.port, '/api/overview')).status).toBe(500);
   });
 });

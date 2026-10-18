@@ -2,12 +2,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadAmbientCandidates } from '../_helpers/root-forms.js';
+import { loadAmbientCandidates, writeEntry } from '../_helpers/root-forms.js';
 
 /** The pinned and drift statements loadAmbientCandidates really prepares, so the plan checks run the production SQL. */
 interface AmbientSql {

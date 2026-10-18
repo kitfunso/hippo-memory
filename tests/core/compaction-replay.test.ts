@@ -6,7 +6,6 @@ import { replayCompactions, saveCompaction } from '../../src/capture/compaction-
 import { compactionByRequest, saveItems } from '../../src/store/compactions-record.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { initStore } from '../../src/store/open.js';
 import {
   compactionMemories,
   compactionRows,
@@ -23,6 +22,7 @@ import {
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { folderFiles } from '../_helpers/cli-stores.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const MINUTE = 60_000;
 const ITEMS = [

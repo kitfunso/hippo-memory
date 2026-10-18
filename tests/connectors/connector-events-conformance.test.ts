@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type {
   ConnectorDeadLetter,
@@ -34,7 +33,7 @@ import {
   type Outcome,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
-import { markGitHubEventSeen, markSlackEventSeen } from '../_helpers/root-forms.js';
+import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
 import type { GitHubRouting, StoredCursors, SlackTeamRoute, SlackWorkspace } from '../../src/store/port/connectors.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';

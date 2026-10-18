@@ -21,7 +21,8 @@ import {
   type SavableKind,
   type Skill,
 } from '../../core/object-types.js';
-import { type OnHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
+import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from '../open.js';
+import { openStore } from './handles.js';
 import type {
   IncidentOpen,
   IncidentOpenRefusal,

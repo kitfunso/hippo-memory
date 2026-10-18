@@ -14,7 +14,6 @@ import { boostByGoals } from '../../src/search/goal-boost.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
 import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { handlesOf, onHandle, openStore } from '../../src/store/open.js';
 import { planningFallacyEvidenceAt } from '../../src/store/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/recall-trace.js';
 import { serve } from '../../src/server.js';
@@ -31,16 +30,9 @@ import {
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
-import { strengthenRetrieved, writeEntry } from '../../src/store/entry-writes.js';
-import { loadLatestHandoffAt, saveSessionHandoff } from '../../src/store/handoffs.js';
-import { updateStats } from '../../src/store/index-and-stats.js';
+import { loadLatestHandoffAt } from '../../src/store/handoffs.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
-import {
-  appendSessionEvent,
-  listSessionEventsAt,
-  loadActiveTaskSnapshotAt,
-  saveActiveTaskSnapshot,
-} from '../../src/store/sessions.js';
+import { listSessionEventsAt, loadActiveTaskSnapshotAt } from '../../src/store/sessions.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -68,8 +60,15 @@ import {
   loadFreshRawMemories,
   loadStoredVectors,
   loadVectorCandidateEntries,
+  strengthenRetrieved,
+  writeEntry,
+  saveSessionHandoff,
+  updateStats,
+  appendSessionEvent,
+  saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
+import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

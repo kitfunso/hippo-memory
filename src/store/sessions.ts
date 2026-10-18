@@ -9,7 +9,7 @@ import { TASK_OWNER_MIN_BINARY } from '../util/version.js';
 import { type TaskSnapshotRow, rowToTaskSnapshot, type SessionEventRow, rowToSessionEvent } from './rows.js';
 import type { TaskSnapshot, SessionEvent } from './port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
-import { onHandle, openStore, type StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import type { ContinuityKey } from './port/types.js';
 import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 
@@ -117,15 +117,6 @@ export function saveActiveTaskSnapshotAt(
   // The mirror is one file per store, so only the local, unkeyed path writes it.
   if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
   return loaded;
-}
-
-export function saveActiveTaskSnapshot(
-  hippoRoot: string,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  key?: ContinuityKey,
-): TaskSnapshot {
-  return onHandle(hippoRoot, (db) => saveActiveTaskSnapshotAt(db, { hippoRoot }, tenantId, snapshot, key), openStore);
 }
 
 export function loadActiveTaskSnapshotAt(
@@ -299,10 +290,6 @@ export function appendSessionEventAt(
   const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
   writeRecentSessionMirror(hippoRoot, tenantId, recent);
   return loaded;
-}
-
-export function appendSessionEvent(hippoRoot: string, tenantId: string, event: SessionEventInput): SessionEvent {
-  return onHandle(hippoRoot, (db) => appendSessionEventAt(db, { hippoRoot }, tenantId, event), openStore);
 }
 
 export function listSessionEventsAt(

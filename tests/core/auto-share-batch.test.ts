@@ -6,11 +6,10 @@ import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 
