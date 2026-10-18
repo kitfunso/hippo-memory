@@ -110,9 +110,13 @@ describe('Z0 CLI and blind mode', () => {
     expect(out.stdout).toContain('not analysed: the run is abandoned (prereg 114)');
     expect(runCli([...ARGS, '--drop-list', 'drop.json', '--unblind'], dir)).toMatchObject({ code: 2, stderr: expect.stringMatching(/abandoned/) });
     const rn = runCli([...ARGS, '--iterations', '300'], workspace(generate({ arms: RN_ARMS, repos: 2 })));
-    // Two repositories give the t test 1 df (critical value 12.71), so G2's interval reaches past 0 and the run is invalid.
-    expect(rn.stdout).toMatch(/^status: invalid\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
-    expect(rn.stdout).toMatch(/^G2 fail: Claude Code half fail, violation -[\d.]+ \[-[\d.]+, [\d.]+\] t\(1\), bootstrap \[-[\d.]+, -[\d.]+\]/m);
+    // Repositories are fixed and the family is the unit, so two repositories no longer starve G2 of df: the t carries a fractional Satterthwaite df.
+    expect(rn.stdout).toMatch(/^status: valid\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
+    expect(rn.stdout).toMatch(/^G2 pass: Claude Code half pass, violation -[\d.]+ \[-[\d.]+, -[\d.]+\] t\(\d+\.\d\), bootstrap \[-[\d.]+, -[\d.]+\]/m);
+    // A failed G2 still reads invalid, with the design note directly under the status line.
+    const weak = runCli([...ARGS, '--iterations', '300'], workspace(generate({ arms: RN_ARMS, repos: 2, knobs: { A4: { fail: 0.6 } } })));
+    expect(weak.stdout).toMatch(/^status: invalid\ndesign not fully run: X1, X2, X3, X4, set X not planned$/m);
+    expect(weak.stdout).toMatch(/^G2 fail: Claude Code half fail, violation -?[\d.]+ \[-?[\d.]+, -?[\d.]+\] t\(\d+(\.\d)?\)/m);
   });
 
   it('36: a planned set with no records is abandoned data, never "not planned"', () => {

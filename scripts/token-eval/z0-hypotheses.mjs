@@ -1,9 +1,9 @@
-/** Z0 analyzer, part 3 of 6: units, t tests over repositories with bootstrap twins, H1-H4, one Holm procedure per coding
- * over H1 and H2, attribution, reported estimates. The repeat-mistake rate reads each lesson's `first` verdict only (prereg 151);
- * H3 and H4 read Claude Code records only. */
+/** Z0 analyzer, part 3 of 6: units, fixed-repository t tests (family is the unit) with stratified bootstrap twins, H1-H4,
+ * one Holm procedure per coding over H1 and H2, attribution, reported estimates. The repeat-mistake rate reads each lesson's
+ * `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. */
 
 import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
-import { clusterRatioT, coxRatioT, repositoryT } from '../../dist/eval/repository-t.js';
+import { fixedRepositoryRatioT, fixedRepositoryT, repositoryT } from '../../dist/eval/repository-t.js';
 import { pairTasks } from './z0-filters.mjs';
 import { TWO_SEED_ARMS, positionKey, runKey } from './z0-records.mjs';
 
@@ -52,7 +52,7 @@ export function blocks(units) {
 
 /** Units are finite by construction, so a dropped resample is a bug, never data. */
 function meanBootstrap(units, opts) {
-  const e = twoLevelBootstrap(blocks(units), (us) => mean(us.map((u) => u.value)), { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
+  const e = twoLevelBootstrap(blocks(units), (us) => mean(us.map((u) => u.value)), { iterations: opts.iterations, seed: opts.seed, nullValue: 0, fixedRepositories: true });
   if (e.dropped > 0) throw new Error(`repeat-mistake bootstrap dropped ${e.dropped} resamples; every unit must be finite`);
   return e;
 }
@@ -60,10 +60,16 @@ function meanBootstrap(units, opts) {
 // The sizer passes no resample count, since only the t result decides; the analyzer always passes one.
 const twin = (opts, run) => (opts.iterations === undefined ? {} : { bootstrap: run() });
 
-/** The t test over repository means against 0 (each repository counts once), plus `bootstrap` when `opts.iterations` is set. */
-export function repeatT(units, opts) {
+/** Amendment 1's t test over repository means (each repository counts once), kept as a view: it decides nothing. */
+export function acrossRepositories(units) {
   const means = blocks(units).map((fams) => mean(fams.flat().map((u) => u.value)));
-  return { ...repositoryT(means, 0), ...twin(opts, () => meanBootstrap(units, opts)) };
+  return { perRepository: means, t: repositoryT(means, 0) };
+}
+
+/** The fixed-repository t test against 0 (family is the unit), plus `bootstrap` and `across` when `opts.iterations` is set. */
+export function repeatT(units, opts) {
+  const across = opts.iterations === undefined ? {} : { across: acrossRepositories(units) };
+  return { ...fixedRepositoryT(units, 0), ...across, ...twin(opts, () => meanBootstrap(units, opts)) };
 }
 
 /** One unit per (repo, family, seed) holding a scored apply record in either arm; its value is the mean over
@@ -105,32 +111,43 @@ export function taskUnits(scored, armT, armC, prices, keep) {
   const side = (r) => ({ cost: costOf(r, prices), first: priceUsage(r.usage.firstSession, prices), extra: priceUsage(r.usage.extra, prices), resolved: r.resolved ? 1 : 0 });
   return pairTasks(scored, armT, armC)
     .filter(({ t, c }) => t.tool === 'claude-code' && c.tool === 'claude-code' && keep(t))
-    .map(({ t, c }) => ({ repo: t.repo, family: t.familyId ?? `task ${t.taskId}`, set: t.set, t: side(t), c: side(c) }));
+    .map(({ t, c }) => ({ repo: t.repo, family: t.familyId ?? `task ${t.taskId}`, seed: t.seed, set: t.set, t: side(t), c: side(c) }));
 }
 
 export const ratioOf = (field) => (us) => sum(us.map((u) => u.t[field])) / sum(us.map((u) => u.c[field]));
 
 function ratioBootstrap(units, field, opts) {
-  return twoLevelBootstrap(blocks(units), ratioOf(field), { iterations: opts.iterations, seed: opts.seed, nullValue: 1 });
+  return twoLevelBootstrap(blocks(units), ratioOf(field), { iterations: opts.iterations, seed: opts.seed, nullValue: 1, fixedRepositories: true });
 }
 
-const repoSums = (units, field) => blocks(units).map((fams) => ({ t: sum(fams.flat().map((u) => u.t[field])), c: sum(fams.flat().map((u) => u.c[field])) }));
+/** One cell per (repo, family, seed), so each repository is a family-by-seed table; `make` reduces a cell's units. */
+function cellsOf(units, make) {
+  const groups = new Map();
+  for (const u of units) {
+    const key = JSON.stringify([u.repo, u.family, u.seed]);
+    groups.set(key, [...(groups.get(key) ?? []), u]);
+  }
+  return [...groups.values()].map((us) => ({ repo: us[0].repo, family: us[0].family, seed: us[0].seed, ...make(us) }));
+}
 
-/** The pooled ratio of `field` with a cluster-robust t interval over repositories, plus `bootstrap` when `opts.iterations` is set. */
+const ratioCells = (units, field) => cellsOf(units, (us) => ({ t: sum(us.map((u) => u.t[field])), c: sum(us.map((u) => u.c[field])) }));
+
+/** The pooled ratio of `field` with the fixed-repository log-scale interval, plus `bootstrap` when `opts.iterations` is set. */
 export function ratioT(units, field, opts) {
-  return { ...clusterRatioT(repoSums(units, field)), ...twin(opts, () => ratioBootstrap(units, field, opts)) };
+  return { ...fixedRepositoryRatioT(ratioCells(units, field)), ...twin(opts, () => ratioBootstrap(units, field, opts)) };
 }
 
 // A unit may sum `n` pairs (the sizer folds seeds into one unit); the difference stays per pair.
 const resolveDiff = (us) => (sum(us.map((u) => u.t.resolved)) - sum(us.map((u) => u.c.resolved))) / sum(us.map((u) => u.n ?? 1));
 
-/** H4 on set N units: the cost ratio and each repository's resolve difference under the t test, and the gate they give.
- * The cost ratio takes Cox's interval on log repository ratios: skewed costs let symmetric bounds pass a true 1.10 too often
+/** H4 on set N units: the cost ratio and the resolve difference, each a fixed-repository test (family is the unit), and the gate.
+ * The cost ratio's interval is built on the log scale: skewed costs let a symmetric one pass a true 1.10 too often
  * (Amendment 1 skew check, analyzer doc). */
 export function harmT(nUnits, opts) {
-  const costRatio = { ...coxRatioT(repoSums(nUnits, 'cost')), ...twin(opts, () => ratioBootstrap(nUnits, 'cost', opts)) };
-  const boot = () => twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
-  const resolve = { ...repositoryT(blocks(nUnits).map((fams) => resolveDiff(fams.flat())), 0), ...twin(opts, boot) };
+  const costRatio = { ...fixedRepositoryRatioT(ratioCells(nUnits, 'cost')), ...twin(opts, () => ratioBootstrap(nUnits, 'cost', opts)) };
+  const boot = () => twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0, fixedRepositories: true });
+  const cells = cellsOf(nUnits, (us) => ({ value: resolveDiff(us) }));
+  const resolve = { ...fixedRepositoryT(cells, 0), ...twin(opts, boot) };
   return { costRatio, resolveDiff: resolve, gate: harmGate(costRatio, resolve) };
 }
 
@@ -309,11 +326,11 @@ export function armRate(s, arm, coding, keep, opts) {
     const f = r.arm === arm && r.kind === 'apply' && keep(r) ? shareFail(r, coding) : null;
     if (f === null) continue;
     const key = JSON.stringify([r.repo, r.familyId, r.seed]);
-    const g = groups.get(key) ?? { repo: r.repo, family: r.familyId, fails: [] };
+    const g = groups.get(key) ?? { repo: r.repo, family: r.familyId, seed: r.seed, fails: [] };
     g.fails.push(f);
     groups.set(key, g);
   }
-  const units = [...groups.values()].map((g) => ({ repo: g.repo, family: g.family, value: mean(g.fails) }));
+  const units = [...groups.values()].map((g) => ({ repo: g.repo, family: g.family, seed: g.seed, value: mean(g.fails) }));
   return units.length === 0 ? NA : { ...repeatT(units, opts), units: units.length };
 }
 

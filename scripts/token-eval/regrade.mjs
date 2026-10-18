@@ -168,11 +168,24 @@ function gates(ctx, entry, dirs, env) {
   return ids;
 }
 
+/** A final check's resume commands: as saved, or for a save that predates them the final list past the first, null when the first is no prefix of it. */
+export function resumeCommandsOf(g) {
+  if (g.commandsResume !== undefined) return g.commandsResume;
+  const first = g.commandsFirst ?? [];
+  return first.every((c, i) => g.commandsFinal[i] === c) ? g.commandsFinal.slice(first.length) : null;
+}
+
+function resumeOf(g) {
+  const resumed = resumeCommandsOf(g);
+  if (resumed === null) fault('resume-commands', 'the save has no resume commands and its first commands are not a prefix of its final ones');
+  return resumed;
+}
+
 /** One checker call on a saved tree with the shas and commands it saw in the run; a crash or timeout is the value 'error'. */
-function checkOn(ctx, entry, dirs, env, { lesson, sha, commands }) {
+function checkOn(ctx, entry, dirs, env, { lesson, sha, commands, resumeCommands = null }) {
   checkoutTree(dirs.work, sha);
   try {
-    return runCheck(lesson, { work: dirs.work, env: childEnv(env), preCommit: entry.grade.pre, postCommit: sha, commands, scratch: path.join(dirs.root, 'check') });
+    return runCheck(lesson, { work: dirs.work, env: childEnv(env), preCommit: entry.grade.pre, postCommit: sha, commands, resumeCommands, scratch: path.join(dirs.root, 'check') });
   } catch (err) {
     if (!(err instanceof CheckerError)) throw err;
     if (!err.started) fault('checker-start', err.message);
@@ -204,10 +217,11 @@ function lessonChecks(ctx, entry, dirs, env, ids, acc) {
   if (g.verdicts.first === null) return;
   const add = (id, which, v) => acc.push(checkEntry(id, which, which === 'stale' ? g.verdicts.staleFollow : g.verdicts[which], v, ids[id], ids[id] === g.checkers[id]));
   const lesson = ctx.lesson(g.lessonId);
+  const resumeCommands = g.finalChecked ? resumeOf(g) : null;
   const first = verdicts(ctx, entry, dirs, env, { lesson, sha: g.first, commands: g.commandsFirst });
   add(g.lessonId, 'first', first);
   // Reading 8: the final check is re-run only where the run ran it; otherwise final is first, as in the run.
-  add(g.lessonId, 'final', g.finalChecked ? verdicts(ctx, entry, dirs, env, { lesson, sha: g.finalCheck, commands: g.commandsFinal }) : first);
+  add(g.lessonId, 'final', g.finalChecked ? verdicts(ctx, entry, dirs, env, { lesson, sha: g.finalCheck, commands: g.commandsFinal, resumeCommands }) : first);
   if (g.staleLessonId === null) return;
   const raw = verdicts(ctx, entry, dirs, env, { lesson: ctx.lesson(g.staleLessonId), sha: g.stale, commands: g.commandsStale });
   add(g.staleLessonId, 'stale', Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === 'error' ? 'error' : v === 'pass'])));

@@ -20,6 +20,7 @@ const entry = {
   lesson: process.env.CHECK_LESSON_ID, pre: process.env.CHECK_PRE_COMMIT, post: process.env.CHECK_POST_COMMIT,
   preRef: out(git('rev-parse', '-q', '--verify', 'refs/z0/pre')),
   commands: JSON.parse(fs.readFileSync(process.env.CHECK_COMMANDS, 'utf8')),
+  resume: process.env.CHECK_RESUME_COMMANDS ? JSON.parse(fs.readFileSync(process.env.CHECK_RESUME_COMMANDS, 'utf8')) : null,
 };
 const has = arg('has');
 if (has) entry.has = git('cat-file', '-e', has).status === 0;
