@@ -4,7 +4,7 @@ import {
   envSlackSigningSecretPrevious,
 } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
-import { verifySlackSignature } from './signature.js';
+import { isWellFormedSlackRequest, verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
@@ -37,7 +37,7 @@ export async function handleSlackEventsWebhook(
   config: HippoConfig,
 ): Promise<void> {
   const { req, res, opts } = request;
-  // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
+  // Secret and well-formed headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
   if (!secret) {
     closeIfBodyUnread(request);
@@ -50,7 +50,7 @@ export async function handleSlackEventsWebhook(
   const tsHdr = req.headers['x-slack-request-timestamp'];
   const sigStr = isHeaderString(sig) ? sig : null;
   const tsStr = isHeaderString(tsHdr) ? tsHdr : null;
-  if (sigStr === null || tsStr === null) {
+  if (sigStr === null || tsStr === null || !isWellFormedSlackRequest(tsStr, sigStr)) {
     closeIfBodyUnread(request);
     throw new HttpError(401, 'invalid Slack signature');
   }

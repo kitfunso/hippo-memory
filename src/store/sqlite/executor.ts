@@ -404,6 +404,7 @@ class WorkerPool implements SqliteExecutor {
       log.warn(
         `the store's ${lane.mode} worker stopped with ${lost.length} call(s) ` +
           `unanswered${cause === undefined ? '' : `: ${cause.message}`}`,
+        cause === undefined ? undefined : errorFields(cause),
       );
     }
     // The server answers this class as its retryable 503.

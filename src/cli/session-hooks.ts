@@ -271,7 +271,9 @@ function spawnSessionEndWorker(workerArgs: readonly string[]): void {
     windowsHide: true,
   });
   // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught exception.
-  child.on('error', (err) => log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`));
+  child.on('error', (err) =>
+    log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`, errorFields(err)),
+  );
   child.unref();
 }
 

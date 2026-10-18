@@ -20,9 +20,21 @@ function firstMatch(rows: readonly Route[], matches: RouteMatcher, method: strin
   return null;
 }
 
-/** First-match lookup: a literal path is one Map read, any other walks only the pattern and regex rows in table order.
- * A literal key holds the row the whole-table walk picks for it, so a pattern row above a literal one still wins. */
+/** Whether a `%` escape in the path fails to decode, which is what makes a pattern row's path matcher throw. */
+function hasMalformedEscape(path: string): boolean {
+  if (!path.includes('%')) return false;
+  try {
+    decodeURIComponent(path);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** First-match lookup: a literal path is one Map read, any other tests only its own method's pattern and regex rows in
+ * table order; a malformed escape keeps the walk over every method, since the matcher throws on any of them. */
 export function routeLookup(rows: readonly Route[], matches: RouteMatcher): RouteLookup {
+  // A literal key holds the row the whole-table walk picks, so a pattern row above a literal one still wins.
   const literal: ReadonlyMap<string, Route> = new Map(
     rows.flatMap((row): [string, Route][] => {
       if (!('path' in row)) return [];
@@ -30,9 +42,11 @@ export function routeLookup(rows: readonly Route[], matches: RouteMatcher): Rout
     }),
   );
   const walked = rows.filter((row) => !('path' in row));
+  const walkedByMethod = new Map<string, Route[]>();
+  for (const row of walked) walkedByMethod.set(row.method, [...(walkedByMethod.get(row.method) ?? []), row]);
   return (method, path) => {
     const route = literal.get(`${method} ${path}`);
-    if (route === undefined) return firstMatch(walked, matches, method, path);
-    return { route, run: matches(route, method, path)! };
+    if (route !== undefined) return { route, run: matches(route, method, path)! };
+    return firstMatch(hasMalformedEscape(path) ? walked : (walkedByMethod.get(method) ?? []), matches, method, path);
   };
 }

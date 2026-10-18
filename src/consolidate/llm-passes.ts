@@ -2,7 +2,12 @@ import { DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../core/memory-quality.js';
-import { type AnthropicMessageFailure, anthropicApiKey, isPermanentFailure } from '../util/anthropic-messages.js';
+import {
+  type AnthropicMessageFailure,
+  anthropicApiKey,
+  failureFields,
+  isPermanentFailure,
+} from '../util/anthropic-messages.js';
 
 // Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
@@ -18,12 +23,12 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
   const llmErrorsSeen = new Set<string>();
   const llmError =
     (phase: string) =>
-    (msg: string): void => {
+    (msg: string, failure?: AnthropicMessageFailure): void => {
       const line = `  ⚠️ ${phase}: ${msg}`;
       if (llmErrorsSeen.has(line)) return;
       llmErrorsSeen.add(line);
       result.details.push(line);
-      log.warn(`consolidate ${phase}: ${msg}`);
+      log.warn(`consolidate ${phase}: ${msg}`, failure && failureFields(failure));
     };
   const llmOpts = { apiKey, model: config.extraction.model, fetcher };
   return { apiKey, llmError, llmOpts };
@@ -82,7 +87,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
   let extractedCount = 0;
   let stopped = false;
   const onError = (msg: string, failure?: AnthropicMessageFailure): void => {
-    report(msg);
+    report(msg, failure);
     if (failure && isPermanentFailure(failure)) stopped = true;
   };
   for (const [index, candidate] of batch.entries()) {

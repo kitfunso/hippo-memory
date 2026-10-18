@@ -53,6 +53,7 @@ import {
   replyFor,
   sendError,
 } from './request.js';
+import { loopbackBindHosts } from './loopback.js';
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import {
@@ -75,7 +76,6 @@ function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is 
 // which tests that mkdtemp a hippoRoot avoid.
 const VERSION = PACKAGE_VERSION;
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 interface HandleRequestOptions {
   readonly startedAt: string;
   readonly streamSlots: Map<string, number>;
@@ -165,12 +165,13 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
   sendJson(res, 200, { ok: true });
 }
 
-function assertBindable(host: string): void {
-  if (!LOOPBACK_HOSTS.has(host) && !envRequireAuth()) {
+function assertBindable(host: string, loopbackHosts: ReadonlySet<string>): void {
+  if (!loopbackHosts.has(host) && !envRequireAuth()) {
     throw new Error(
       `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
         `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
-        `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
+        `a valid API key. Bind to 127.0.0.1 / ::1 otherwise, or to localhost when every address it resolves to is ` +
+        `loopback.`,
     );
   }
 }
@@ -412,8 +413,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const limiters = bootLimiters(opts.rateLimits);
-  assertBindable(host);
-  assertTlsOrCleartextAllowed(host, opts.tls, LOOPBACK_HOSTS, opts.allowCleartext ?? envAllowCleartext());
+  const loopbackHosts = await loopbackBindHosts(host);
+  assertBindable(host, loopbackHosts);
+  assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
 
   // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer
   // can prove a pid-reusing impostor is not

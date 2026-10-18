@@ -4,7 +4,7 @@
 import { ForbiddenError } from '../../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../../learn/autolearn.js';
 import type { HippoConfig } from '../../core/config.js';
-import { embedMemory } from '../../search/embed-memories.js';
+import { embedMemoryDetached } from '../../search/embed-memories.js';
 import {
   extractInvalidationTarget,
   invalidateMatching,
@@ -125,7 +125,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
   const target = { hippoRoot: ctx.hippoRoot, store: ctx.store, embeddings: ctx.config.embeddings };
-  for (const entry of landed) void embedMemory(target, entry);
+  for (const entry of landed) embedMemoryDetached(target, entry);
 }
 
 /** The keys of the rows holding a lesson's longest word, the only rows that can be its copy. */

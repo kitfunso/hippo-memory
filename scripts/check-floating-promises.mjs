@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-/** Handled: a `.catch` or a two-argument `.then`; a `.finally` or one-argument `.then` inherits. `void f()` is no call, so it passes. */
+/** Handled: a `.catch` or a two-argument `.then`; a `.finally` or one-argument `.then` inherits. */
 export function isHandled(expr) {
   if (!ts.isCallExpression(expr) || !ts.isPropertyAccessExpression(expr.expression)) return false;
   const method = expr.expression.name.text;
@@ -22,7 +22,7 @@ function isPromise(type) {
 }
 
 /**
- * Every statement in the program's files under `srcDir` that is a promise-returning call left unhandled.
+ * Every statement in the program's files under `srcDir` that is a promise-returning call left unhandled, `void f()` included.
  * @param {ts.Program} program
  * @param {string} srcDir
  * @returns {{ file: string, line: number, text: string }[]}
@@ -34,11 +34,13 @@ export function findFloatingPromises(program, srcDir) {
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || !sf.fileName.startsWith(`${root}/`)) continue;
     const visit = (node) => {
+      // `void f()` only silences the lint rule: a rejection still reaches the process-wide handler.
+      const call = ts.isExpressionStatement(node) || ts.isVoidExpression(node) ? node.expression : undefined;
       if (
-        ts.isExpressionStatement(node) &&
-        ts.isCallExpression(node.expression) &&
-        !isHandled(node.expression) &&
-        isPromise(checker.getTypeAtLocation(node.expression))
+        call !== undefined &&
+        ts.isCallExpression(call) &&
+        !isHandled(call) &&
+        isPromise(checker.getTypeAtLocation(call))
       ) {
         const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
         hits.push({ file: sf.fileName.slice(root.length + 1), line: line + 1, text: node.getText(sf).split('\n')[0] });

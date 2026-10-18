@@ -77,6 +77,18 @@ describe('refineSemanticMemory', () => {
       expect(lines[0]).toMatch(pattern);
       expect(lines.join('')).not.toContain(API_KEY);
     });
+
+    it('writes the class, errno name and cause chain of a request that throws', async () => {
+      const reset = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+      const fetcher = async (): Promise<Response> => {
+        throw new TypeError('fetch failed', { cause: reset });
+      };
+      await refineSemanticMemory('merged', [], { apiKey: API_KEY, fetcher });
+      const line = warnLines().join('');
+      expect(line).toContain('errorClass=TypeError');
+      expect(line).toContain('errno=ECONNRESET');
+      expect(line).toContain('cause=Error: read ECONNRESET');
+    });
   });
 });
 

@@ -165,6 +165,18 @@ describe('replay of records a killed hook left', () => {
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('compaction cmp-bad skipped');
   });
 
+  it('warns once for several malformed records, so the once-only key set does not grow with the rows', () => {
+    _resetLogOnceForTests();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    for (const id of ['cmp-bad-1', 'cmp-bad-2', 'cmp-bad-3']) {
+      seed(s.hippoRoot, { id, status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30, items: ITEMS });
+      run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json' WHERE id = '${id}'`);
+    }
+    expect(replayCompactions(folderFiles(s.hippoRoot), log)).toBe(0);
+    const warned = stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('items_json is not valid JSON'));
+    expect(warned).toHaveLength(1);
+  });
+
   it('answers a request lookup that lands on a record with malformed items with null and a warning, not a throw', () => {
     _resetLogOnceForTests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

@@ -43,6 +43,8 @@ describe('hippo session-end worker spawn', () => {
     expect(run.status, run.stderr).toBe(0);
     expect(run.stderr).toContain('the worker did not start');
     expect(run.stderr).toContain('ENOENT');
+    expect(run.stderr).toContain('errorClass=Error');
+    expect(run.stderr).toContain('stack=');
   });
 });
 

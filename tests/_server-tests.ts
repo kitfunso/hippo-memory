@@ -62,6 +62,7 @@ export const SERVER_TESTS: readonly string[] = [
   'server/request-log-route-template.test.ts',
   'server/route-table-gates.test.ts',
   'server/serve-auto-sleep-option.test.ts',
+  'server/serve-localhost-lookup.test.ts',
   'server/serve-nonloopback-auth.test.ts',
   'server/server-addon-routes.test.ts',
   'server/server-audit-route-consolidate.test.ts',
@@ -127,4 +128,5 @@ export const SERVER_TESTS: readonly string[] = [
   'store/store-port-sqlite.test.ts',
   'store/typed-object-characterization.test.ts',
   'store/vector-graph-lanes.test.ts',
+  'store/worker-jobs-cleanup.test.ts',
 ].map((name) => `tests/${name}`);
