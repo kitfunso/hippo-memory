@@ -108,7 +108,7 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
     leaked: [...leaked.values()].sort(),
     retryVoided: { positions: retryVoided, share: plannedPositions.size === 0 ? 0 : retryVoided / plannedPositions.size },
     untaughtApplyDrops: untaught.size,
-    hookVoided: hookVoided.size,
+    hookVoided: { positions: hookVoided.size, share: plannedPositions.size === 0 ? 0 : hookVoided.size / plannedPositions.size },
     carryUnion,
     scored: scored.sort(canonical),
   };

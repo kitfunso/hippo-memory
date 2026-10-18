@@ -144,7 +144,7 @@ export function buildReport(analysis, inputs, args, codes, hashes) {
   return {
     schema: 'z0-report/1', mode: blind ? 'blind' : 'unblinded', status: analysis.status, ofRecord, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED,
     abandoned: analysis.filtered.abandoned, designNotRun: analysis.unplanned, unchecked: analysis.unchecked,
-    untaughtApplyDrops: analysis.filtered.untaughtApplyDrops, hookVoided: analysis.filtered.hookVoided, warnings: inputs.warnings,
+    untaughtApplyDrops: analysis.filtered.untaughtApplyDrops, hookVoided: analysis.filtered.hookVoided.positions, warnings: inputs.warnings,
     counts: view.perCode, voids, gates: view.gates, invalid: abandoned ? null : analysis.gates.failed,
     hypotheses, reported: abandoned ? NOT_ANALYSED : blind ? SEALED : analysis.reported, hashes,
     storedSample: inputs.grading?.storedSample ?? null,

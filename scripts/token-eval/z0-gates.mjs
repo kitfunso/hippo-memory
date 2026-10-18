@@ -40,8 +40,8 @@ export function g3(leaked, plannedRuns) {
   return { pass: leaked * 20 <= plannedRuns, leaked, plannedRuns, share: plannedRuns === 0 ? 0 : leaked / plannedRuns };
 }
 
-/** G4 from the step-0 counts: (invalid + missing) at most 5% per arm, and at most 3 points between arms. */
-export function g4(counts) {
+/** G4 from the step-0 counts: (invalid + missing) at most 5% per arm, at most 3 points between arms, and hook-voided positions at most 5%. */
+export function g4(counts, hookVoided = { positions: 0, share: 0 }) {
   const perArm = Object.fromEntries(Object.entries(counts).map(([arm, c]) => {
     const bad = c.invalid + c.missing;
     return [arm, { invalid: c.invalid, missing: c.missing, planned: c.planned, share: c.planned === 0 ? 0 : bad / c.planned, pass: bad * 20 <= c.planned }];
@@ -49,7 +49,8 @@ export function g4(counts) {
   const shares = Object.values(perArm).map((a) => a.share);
   const gap = shares.length === 0 ? 0 : Math.max(...shares) - Math.min(...shares);
   const armsPass = Object.values(perArm).every((a) => a.pass);
-  return { pass: armsPass && gap <= 0.03 + EPS, gap, armsPass, gapPass: gap <= 0.03 + EPS, perArm };
+  const hookPass = hookVoided.share <= 0.05 + EPS;
+  return { pass: armsPass && gap <= 0.03 + EPS && hookPass, gap, armsPass, gapPass: gap <= 0.03 + EPS, hookVoided, hookPass, perArm };
 }
 
 /** G5 (166): a missing grading file fails; under 30 sampled pairs is short; more than 10% disagreeing needs a re-grade. */
@@ -68,7 +69,7 @@ export function computeGates(records, filtered, grading, opts) {
     G1: g1(records, filtered.counts),
     G2: g2(filtered, opts),
     G3: g3(filtered.leaked.length, filtered.plannedRuns),
-    G4: g4(filtered.counts),
+    G4: g4(filtered.counts, filtered.hookVoided),
     G5: g5(grading),
   };
   const failed = Object.keys(gates).filter((g) => !gates[g].pass);

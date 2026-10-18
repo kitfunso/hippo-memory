@@ -212,7 +212,13 @@ describe('Z0 filters', () => {
     const run = runOf<Z0Record>(f.scored, 'rn-repo1', 1);
     expect(run.filter((r: Z0Record) => r.position === 8)).toEqual([]);
     expect(new Set(run.map((r: Z0Record) => r.position)).size).toBe(17);
-    expect(f.hookVoided).toBe(1);
+    expect(f.hookVoided.positions).toBe(1);
+  });
+
+  it('G4 fails when hook-voided positions pass 5%', () => {
+    const none = { A0: { planned: 100, records: 100, invalid: 0, missing: 0, abandoned: 0, voids: 0, voidReasons: {} } };
+    expect([g4(none, { positions: 5, share: 0.05 }).pass, g4(none, { positions: 6, share: 0.06 }).pass]).toEqual([true, false]);
+    expect(g4(none, { positions: 6, share: 0.06 }).hookPass).toBe(false);
   });
 
   it('9 and 20: seeds 1-2 with a two-seed arm; a crash drops the pair, and a unit left empty is dropped and listed', () => {
