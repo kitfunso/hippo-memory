@@ -4,7 +4,7 @@ import { evalNow } from '../core/ablation.js';
 import { shareMemory, listPeers } from '../sharing/share.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { predictionBaserate } from '../api/objects/predictions.js';
-import { listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
+import { everyConflict, listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
 import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { requireGroup } from '../store/index.js';
@@ -61,7 +61,8 @@ export async function runStatusTool(
 
 export async function runConflictsTool(call: ToolCall): Promise<string> {
   const { ctx, hippoRoot, tenantId, store } = call;
-  const conflicts = await listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, ctx?.project);
+  const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
+  const conflicts = await everyConflict((page) => listOpenConflicts(apiCtx, { ...page, project: ctx?.project }));
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`

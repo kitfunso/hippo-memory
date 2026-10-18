@@ -4,7 +4,7 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import type { DeliveryEventInput } from './delivery-recorder.js';
 import { recordTokenUse, type TokenUse } from './token-ledger.js';
 import { ensurePilotArm, hashArm, readPilotArm, type PilotArm } from './pilot-arm.js';
-import { writeDeliveryEventOnHandle } from './recall-trace.js';
+import { type DeliveryPruneSchedule, writeDeliveryEventOnHandle } from './recall-trace.js';
 
 // SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no database.
 const SQLITE_CORRUPT = 11;
@@ -50,7 +50,7 @@ export interface LedgerTurn {
 }
 
 /** Books a turn's token rows, then its delivery event, on `db`. */
-export function recordLedgerTurnAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
+export function recordLedgerTurnAt(db: DatabaseSyncLike, turn: LedgerTurn, prune: DeliveryPruneSchedule): void {
   const { onRowError } = turn;
   for (const use of turn.uses) {
     if (onRowError === undefined) {
@@ -63,7 +63,7 @@ export function recordLedgerTurnAt(db: DatabaseSyncLike, turn: LedgerTurn): void
       onRowError(error);
     }
   }
-  turn.delivery?.((input) => writeDeliveryEventOnHandle(db, input));
+  turn.delivery?.((input) => writeDeliveryEventOnHandle(db, input, prune));
 }
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */

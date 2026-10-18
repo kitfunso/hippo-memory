@@ -26,7 +26,7 @@ import { importEntries } from '../../src/importers/core.js';
 import { importVault } from '../../src/importers/vault.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
-import { resolveConflict, listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { buildDag } from '../../src/consolidate/dag.js';
 import { buildMemoryDetail } from '../../src/dashboard/dashboard-queries.js';
@@ -36,7 +36,7 @@ import { recordSessionDigest } from '../../src/capture/session-digest.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
-import { loadEntriesByIds, replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { loadEntriesByIds, replaceDetectedConflicts, resolveConflictKeeping } from '../_helpers/root-forms.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -284,8 +284,7 @@ describe('replaceDetectedConflicts', () => {
       replaceDetectedConflicts(root, [{ memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 }]);
       const [conflict] = listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
-      const resolved = resolveConflict(root, { conflictId: conflict.id, keepId: conflict.memory_a_id });
-      expect(resolved?.conflict.status).toBe('resolved');
+      expect(resolveConflictKeeping(root, 'default', conflict.id, conflict.memory_a_id)).toBe(true);
       expect(mirrorsRewritten()).toBe(2);
     }
   });

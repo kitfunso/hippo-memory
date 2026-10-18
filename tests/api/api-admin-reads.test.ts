@@ -30,8 +30,8 @@ describe('api admin reads', () => {
     const status = await getMemoryStatus(ctxFor(actorA), new Date(), 0.1);
     expect(status.total).toBe(2);
     expect(status.openConflicts).toBe(1);
-    expect(await listOpenConflicts(ctxFor(actorA))).toHaveLength(1);
-    expect(await listOpenConflicts(ctxFor(actorB))).toHaveLength(0);
+    expect((await listOpenConflicts(ctxFor(actorA))).conflicts).toHaveLength(1);
+    expect((await listOpenConflicts(ctxFor(actorB))).conflicts).toHaveLength(0);
     await expect(getTouchableMemory(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
     expect((await getTouchableMemory(ctxFor(actorA), personal))?.id).toBe(personal);
   });

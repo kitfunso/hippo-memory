@@ -11,7 +11,7 @@ import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
-import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
+import { purgeMirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
@@ -328,9 +328,7 @@ function reportChunk(hippoRoot: string, out: ChunkLog): void {
     );
   }
   // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of the DB.
-  mirrorBestEffort('markdown mirrors', () => {
-    for (const entry of out.written) writeMarkdownMirror(hippoRoot, entry);
-  });
+  writeMarkdownMirrors(hippoRoot, out.written);
   for (const id of out.removedIds) purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
 }
 

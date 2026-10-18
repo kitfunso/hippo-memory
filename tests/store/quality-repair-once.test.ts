@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repairAutomaticMemories, repairQualityOnce } from '../../src/store/quality-repair.js';
+import { repairAutomaticMemories, repairQualityOnce as repairStoreOnce } from '../../src/store/quality-repair.js';
+import { repairProtection as protect } from '../../src/api/auth/audit.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
@@ -21,6 +22,7 @@ function seed(store: string, content: string, extra: Partial<MemoryEntry> = {}):
   return entry;
 }
 const ids = (store: string) => loadAllEntries(store, 'default').map((entry) => entry.id).sort();
+const repairQualityOnce = (files: { hippoRoot: string }, tenantId: string) => repairStoreOnce(files, tenantId, protect);
 function flag(store: string): string {
   const db = new DatabaseSync(join(store, 'hippo.db'));
   try { return getMeta(db, 'quality_repair_auto'); } finally { db.close(); }
@@ -51,10 +53,10 @@ describe('repairQualityOnce', () => {
     const spy = vi.spyOn(DatabaseSync.prototype, 'prepare');
     const fullReads = () => spy.mock.calls.map((call) => String(call[0])).filter((text) => /FROM memories\s+WHERE tenant_id = \? ORDER BY created/.test(text)).length;
     try {
-      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default' });
+      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect });
       expect(fullReads()).toBe(1);
       spy.mockClear();
-      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply: true });
+      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect, apply: true });
       expect(fullReads()).toBe(2);
     } finally {
       spy.mockRestore();
