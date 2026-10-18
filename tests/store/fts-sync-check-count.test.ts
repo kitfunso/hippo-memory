@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'module';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadSearchEntries } from '../../src/store/search-rows.js';
+import { loadSearchEntries } from '../_helpers/root-forms.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { repairFtsDrift } from '../../src/db/migrate.js';

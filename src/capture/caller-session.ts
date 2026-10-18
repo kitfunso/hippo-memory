@@ -16,12 +16,12 @@ import type { ContinuityKey } from '../store/port/types.js';
  * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns
  * the key the call's rows go under.
  */
-export function bindCaller(ctx: Context, sessionId: string, project: CallerProject): ContinuityKey {
+export async function bindCaller(ctx: Context, sessionId: string, project: CallerProject): Promise<ContinuityKey> {
   assertCallerIds(sessionId, project);
   if (sessionId.trim() === '') throw new BadRequestError('session id: required');
   // A '' project would stamp user-global rows; a rewritten one would split a project.
   assertCallerProject(project);
-  bindSessionOwner(ctx, sessionId);
+  await bindSessionOwner(ctx, sessionId);
   return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };
 }
 

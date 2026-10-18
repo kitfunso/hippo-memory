@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { CODEX_TRUST_LINE } from '../../src/hooks/shared.js';
 import { installJsonHooks, uninstallJsonHooks } from '../../src/hooks/json-hooks.js';
 import { formatDoctor, runDoctor } from '../../src/doctor.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
@@ -433,7 +434,7 @@ describe('hippo doctor and Codex', () => {
   it('says nothing without Codex, warns with the fix before the hooks are in, and passes with the trust reminder after', () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
-      const report = () => runDoctor({ cwd: fake.home, home: fake.home, version: 'test' });
+      const report = () => runDoctor({ diagnosticsAt, cwd: fake.home, home: fake.home, version: 'test' });
       expect(report().checks.find((c) => c.id === 'codex')).toBeUndefined();
       fs.mkdirSync(path.join(fake.home, '.codex'));
       const before = report();
@@ -453,7 +454,7 @@ describe('hippo doctor and Codex', () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
       writeFile(path.join(fake.home, '.codex', 'hooks.json'), text);
-      const report = runDoctor({ cwd: fake.home, home: fake.home, version: 'test' });
+      const report = runDoctor({ diagnosticsAt, cwd: fake.home, home: fake.home, version: 'test' });
       expect(report.checks.find((c) => c.id === 'codex')).toMatchObject({ status: 'warn', detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it" });
       expect(formatDoctor(report)).toContain('fix: repair hooks.json, then run: hippo hook install codex');
     } finally {

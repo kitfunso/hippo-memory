@@ -1,6 +1,13 @@
 entry/folder-search.d.ts: folderVectorSource function
 entry/folder-search.d.ts: hybridSearch function
 entry/folder-search.d.ts: physicsSearch function
+entry/importers.d.ts: importChatGPT function
+entry/importers.d.ts: importClaude function
+entry/importers.d.ts: importCursor function
+entry/importers.d.ts: importEntries function
+entry/importers.d.ts: importGenericFile function
+entry/importers.d.ts: importMarkdown function
+entry/importers.d.ts: importVault function
 entry/json-hooks.d.ts: InstallResult re-export
 entry/json-hooks.d.ts: JsonHookPaths re-export
 entry/json-hooks.d.ts: installJsonHooks re-export
@@ -265,7 +272,7 @@ index.d.ts: resolveConfidence re-export
 index.d.ts: resultToBaseline re-export
 index.d.ts: runFeatureEval re-export
 index.d.ts: search re-export
-index.d.ts: sleep re-export
+index.d.ts: sleep function
 index.d.ts: strengthBucket re-export
 index.d.ts: temporalBoost re-export
 index.d.ts: textOverlap re-export

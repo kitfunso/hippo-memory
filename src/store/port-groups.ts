@@ -155,7 +155,8 @@ export interface DormantRestoreRequest {
 export interface Dormant {
   list(tenantId: string, ownScope: string | null, opts: ListDormantOpts): Promise<DormantMemory[]>;
   holds(tenantId: string, ownScope: string | null, id: string): Promise<boolean>;
-  /** `revive` runs inside the store's write, so a throw refuses before any row changes. */
+  /** `revive` runs inside the store's write, so a throw refuses before any row changes; its entry's origin is filled
+   * as writeEntry fills one. */
   restore(tenantId: string, request: DormantRestoreRequest): Promise<DormantRestoreOutcome>;
   /** Deletes for good, writes the `forget` audit row and counts it; false when no row in reach. */
   forget(tenantId: string, ownScope: string | null, id: string, actor: string): Promise<boolean>;

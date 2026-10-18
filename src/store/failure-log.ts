@@ -3,9 +3,7 @@ import { ConflictError } from '../core/api-errors.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { DAY_MS } from '../util/time.js';
 import type { FailureEvent, FailureOutcome } from './port/failure-log.js';
-
-/** Rows older than this are pruned on write, which also bounds how far back a repeat can be found. */
-export const FAILURE_LOG_RETENTION_DAYS = 90;
+import { FAILURE_LOG_RETENTION_DAYS } from '../core/failure-log-retention.js';
 
 /** Longest session id or tool name kept; the hook payload is not trusted to be short. */
 const MAX_FIELD = 128;

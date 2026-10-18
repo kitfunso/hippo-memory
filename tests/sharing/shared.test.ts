@@ -100,10 +100,8 @@ describe('copyToGlobal', () => {
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe('tenant-a content');
 
-    // Promoting tenant-a's entry with opts.tenantId='tenant-b' throws —
-    // readEntry returns null on a cross-tenant lookup, and copyToGlobal
-    // then surfaces 'Memory not found'.
-    expect(() => copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).toThrow(/Memory not found/);
+    // Promoting tenant-a's entry as tenant-b throws: promote's tenant pre-check answers not found.
+    expect(() => copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).toThrow(/memory not found/);
   });
 });
 

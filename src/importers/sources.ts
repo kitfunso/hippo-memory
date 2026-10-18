@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { type ImportResult, type ImportOptions, importEntries } from './core.js';
+import { type ImportResult, type TargetedImport, importEntries } from './core.js';
 import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
@@ -42,7 +42,7 @@ function parseChatGPTFile(filePath: string): string[] {
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
-export function importChatGPT(filePath: string, options: ImportOptions): ImportResult {
+export function importChatGPT(filePath: string, options: TargetedImport): ImportResult {
   const chunks = parseChatGPTFile(filePath);
   return importEntries(chunks, 'import:chatgpt', ['imported', 'chatgpt'], options);
 }
@@ -137,7 +137,7 @@ function parseClaudeFile(filePath: string): string[] {
   return splitMarkdown(cleaned);
 }
 
-export function importClaude(filePath: string, options: ImportOptions): ImportResult {
+export function importClaude(filePath: string, options: TargetedImport): ImportResult {
   const chunks = parseClaudeFile(filePath);
   return importEntries(chunks, 'import:claude', ['imported', 'claude'], options);
 }
@@ -194,7 +194,7 @@ function parseCursorFile(content: string): string[] {
 const CURSOR_RULE_FILE = /\.mdc?$/i;
 
 /** Import `.cursorrules`, one rule file, or a `.cursor/rules` tree of `.mdc` and `.md` rules. */
-export function importCursor(sourcePath: string, options: ImportOptions): ImportResult {
+export function importCursor(sourcePath: string, options: TargetedImport): ImportResult {
   const files = fs.statSync(sourcePath).isDirectory()
     ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) => path.join(sourcePath, rel))
     : [sourcePath];
@@ -221,7 +221,7 @@ function parseGenericFile(filePath: string): string[] {
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
-export function importGenericFile(filePath: string, options: ImportOptions): ImportResult {
+export function importGenericFile(filePath: string, options: TargetedImport): ImportResult {
   const chunks = parseGenericFile(filePath);
   return importEntries(chunks, 'import:file', ['imported'], options);
 }

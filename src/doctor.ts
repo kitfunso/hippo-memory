@@ -7,7 +7,6 @@ import { findHippoStoreDir, isInitialized } from './core/project-identity.js';
 import { getGlobalRoot } from './sharing/global-store.js';
 import type { StoreHealth } from './store/diagnostics.js';
 import type { Diagnostics } from './store/port/diagnostics.js';
-import { sqliteStore } from './store/sqlite/store.js';
 import { loadConfig } from './core/config.js';
 import {
   getCurrentSchemaVersion,
@@ -59,6 +58,8 @@ export interface DoctorOptions {
   now?: Date;
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
+  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the store. */
+  diagnosticsAt: (hippoRoot: string) => Diagnostics;
 }
 
 /** Minimum Node.js version hippo supports (package.json engines). */
@@ -486,7 +487,7 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);
   if (store !== null) {
-    checks.push(...databaseChecks(sqliteStore(store).localFiles.diagnostics, store, now, opts.spoolFs));
+    checks.push(...databaseChecks(opts.diagnosticsAt(store), store, now, opts.spoolFs));
   }
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
@@ -498,7 +499,7 @@ export function runDoctor(opts: DoctorOptions): DoctorReport {
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
-  if (hasGlobal) checks.push(projectsCheck(sqliteStore(globalRoot).localFiles.diagnostics, globalRoot));
+  if (hasGlobal) checks.push(projectsCheck(opts.diagnosticsAt(globalRoot), globalRoot));
 
   checks.push(claudeCodeCheck(home));
 

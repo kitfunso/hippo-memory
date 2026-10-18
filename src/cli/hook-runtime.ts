@@ -4,7 +4,6 @@ import { envClaudeCodeSessionId, envHippoSessionId } from '../util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { HookRuntime } from '../core/capture-contract.js';
-import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
 import { bookTokenUse } from '../api/ledger-db.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
 import { cliLedgerReach, cliSyncOptions } from './api-context.js';
@@ -127,20 +126,6 @@ export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined,
     return hippoRoot;
   }
   return getHippoRoot(process.cwd());
-}
-
-/**
- * Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that
- * skips the hook's
- * work with one warning, exit 0. */
-export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
-  try {
-    return await runWithRequestStores(fn, { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true });
-  } catch (error) {
-    if (!isSqliteBusy(error)) throw error;
-    noteStoreBusy('hook skipped');
-    return undefined;
-  }
 }
 
 /** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */

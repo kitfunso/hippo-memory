@@ -11,6 +11,7 @@ import {
   tableRows, withDb, writeTranscript, type Project,
 } from '../_helpers/delivery-boundary.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { syncStore } from '../_helpers/cli-stores.js';
 
 const T0 = '2099-01-01T00:00:00.000Z';
 const T0_PLUS_3S = '2099-01-01T00:00:03.000Z';
@@ -141,7 +142,7 @@ describe('B11 and U1', () => {
     try {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'u1.log');
-      await cmdPreCompact(p.hippoRoot, {
+      await cmdPreCompact(p.hippoRoot, syncStore(p.hippoRoot), {
         stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',
         logFile,

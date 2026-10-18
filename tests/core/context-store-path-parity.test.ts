@@ -8,7 +8,7 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { getContext, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
-import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';

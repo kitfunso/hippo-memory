@@ -9,6 +9,7 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { buildSupportBundle } from '../../src/support-bundle.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -136,7 +137,7 @@ function seed(): Seeded {
 describe('buildSupportBundle', () => {
   it('the default bundle redacts every canary, home form and secret, and keeps what it should', () => {
     const s = seed();
-    const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
+    const bundle = buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
     const text = bundleText(bundle);
 
     // On Windows the unresolved tmpdir form can be an 8.3 short name (ABCDEF~1), which no home form covers.
@@ -172,7 +173,7 @@ describe('buildSupportBundle', () => {
     const aliasGlobal = join(aliasHome, 'global');
     vi.stubEnv('HIPPO_HOME', aliasGlobal);
     initStore(aliasGlobal);
-    const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
+    const bundle = buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
     expect(bundleText(bundle).filter((t) => t.includes(aliasHome.toLowerCase())), aliasHome).toEqual([]);
     // Exact, so a swap of only the user's own home (~\AppData\...\global) does not pass for this one.
     const globalStore = JSON.parse(JSON.stringify(bundle)).stores.find((st: { kind: string }) => st.kind === 'global');
@@ -188,7 +189,7 @@ describe('buildSupportBundle', () => {
     // os.tmpdir() reads these on every call, so the bundle sees a temp folder under the home's alias.
     for (const k of Object.keys(saved)) vi.stubEnv(k, join(aliasHome, 'tmp'));
     let bundle: JsonObject;
-    bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
+    bundle = buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
     expect(JSON.parse(JSON.stringify(bundle)).logs.tails['alias.log']).toEqual([`wrote ${join('~', 'tmp', 'scratch.txt')}`]);
   });
 
@@ -206,7 +207,7 @@ describe('buildSupportBundle', () => {
       '',
     ].join('\n'));
 
-    const bundle = buildSupportBundle({ cwd, home, version: 'test', includeLogs: true, now: new Date() });
+    const bundle = buildSupportBundle({ diagnosticsAt, cwd, home, version: 'test', includeLogs: true, now: new Date() });
     const tail = JSON.parse(JSON.stringify(bundle)).logs.tails['hook.log'];
     expect(tail[0]).toBe(`payload ${JSON.stringify({ cwd: join('~', 'proj') })}`);
     expect(tail[1]).toMatch(/^at file:\/\/\/?~\/proj\/x\.js:1:2$/);
@@ -218,7 +219,7 @@ describe('buildSupportBundle', () => {
 
   it('includeLogs adds tails with known secret shapes gone; memory text in a log is not (documented opt-in)', () => {
     const s = seed();
-    const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
+    const bundle = buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
     const parsed = JSON.parse(JSON.stringify(bundle));
     // SAFETY: buildLogsSection always fills tails[name] with the string[] lines returned by tailLogFile.
     const tail = (parsed.logs.tails['last-sleep.log'] as string[]).join('\n');
@@ -259,7 +260,7 @@ describe('buildSupportBundle', () => {
       '',
     ].join('\n'));
 
-    const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
+    const bundle = buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
     const tail: string[] = JSON.parse(JSON.stringify(bundle)).logs.tails['shell.log'];
     expect(tail.slice(0, 4)).toEqual(['cd ~/proj && npm test', 'ls ~/proj', 'ls ~/proj', 'ls ~/proj']);
     // A mount or share no list names keeps its prefix, but the path that names the user still goes.
@@ -277,7 +278,7 @@ describe('buildSupportBundle', () => {
     ];
     const swapped = (home: string, input: string[]): string[] => {
       writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: input }));
-      const bundle = buildSupportBundle({ cwd: s.cwd, home, version: 'test', includeLogs: false, now: new Date() });
+      const bundle = buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home, version: 'test', includeLogs: false, now: new Date() });
       return JSON.parse(JSON.stringify(bundle)).stores[0].config.gitLearnPatterns;
     };
     for (const n of ['x', 'home']) {
@@ -296,7 +297,7 @@ describe('buildSupportBundle', () => {
     writeFileSync(join(s.home, '.hippo', 'logs', 'big.log'),
       `-----BEGIN RSA PRIVATE KEY-----\n${`${bodyLine}\n`.repeat(5000)}-----END RSA PRIVATE KEY-----\nafter the key\n`);
     const parsed = JSON.parse(JSON.stringify(
-      buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() }),
+      buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() }),
     ));
     // SAFETY: buildLogsSection always fills tails[name] with the string[] lines returned by tailLogFile.
     const tail = (parsed.logs.tails['big.log'] as string[]).join('\n');
@@ -313,7 +314,7 @@ describe('buildSupportBundle', () => {
     closeHippoDb(db);
 
     const before = sha256(join(s.hippoRoot, 'hippo.db'));
-    buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
+    buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
     expect(sha256(join(s.hippoRoot, 'hippo.db'))).toBe(before);
 
     const check = openHippoDbReadOnly(s.hippoRoot);
@@ -325,7 +326,7 @@ describe('buildSupportBundle', () => {
     const s = seed();
     expect(existsSync(join(s.hippoRoot, 'hippo.db-wal'))).toBe(false);
     const parsed = JSON.parse(JSON.stringify(
-      buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() }),
+      buildSupportBundle({ diagnosticsAt, cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() }),
     ));
     expect(Object.keys(parsed.stores[0].files)).toEqual(['hippo.db']);
   });
@@ -336,14 +337,14 @@ describe('buildSupportBundle', () => {
     mkdirSync(cwd, { recursive: true });
     vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 
-    const bundle = buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() });
+    const bundle = buildSupportBundle({ diagnosticsAt, cwd, home, version: 'test', includeLogs: false, now: new Date() });
     const parsed = JSON.parse(JSON.stringify(bundle));
     expect(parsed.stores).toEqual([]);
     expect(parsed.doctor.checks.find((c: { id: string }) => c.id === 'store').status).toBe('fail');
 
     mkdirSync(join(cwd, '.hippo'));
     const bare = JSON.parse(JSON.stringify(
-      buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() }),
+      buildSupportBundle({ diagnosticsAt, cwd, home, version: 'test', includeLogs: false, now: new Date() }),
     ));
     expect(bare.stores).toHaveLength(1);
     expect(bare.stores[0].error).toMatch(/no hippo\.db here/);
@@ -357,7 +358,7 @@ describe('buildSupportBundle', () => {
     vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 
     const parsed = JSON.parse(JSON.stringify(
-      buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() }),
+      buildSupportBundle({ diagnosticsAt, cwd, home, version: 'test', includeLogs: false, now: new Date() }),
     ));
     expect(parsed.stores).toEqual([{ kind: 'project', path: expect.stringMatching(/\.hippo$/), error: 'file is not a database' }]);
   });

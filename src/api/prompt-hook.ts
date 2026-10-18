@@ -53,13 +53,13 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
   try {
     // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);
-    const files = ledgerFiles(reach);
-    if (files === null || !configAtRoot(ctx, files.hippoRoot).deliveryLedger.enabled) return null;
+    const home = ledgerFiles(reach);
+    if (home === null || !configAtRoot(ctx, home.root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
-      ledger: files.ledger,
-      storeHash: blockHash(realpathOrResolve(files.hippoRoot)),
+      ledger: home.files.ledger,
+      storeHash: blockHash(realpathOrResolve(home.root)),
       // ledgerFiles falls back to the global store only when the primary is not initialized.
-      writeStore: files !== reach.local || ctx.reach?.isGlobal === true ? 'global' : 'local',
+      writeStore: home !== reach.local || ctx.reach?.isGlobal === true ? 'global' : 'local',
       tenantId: ctx.tenantId,
       stdinText: start.stdinText,
       envSessionId: start.envSessionId,
@@ -80,8 +80,8 @@ export function startToolFailureRecorder(
   start: Omit<DeliveryStart, 'eventType'>,
 ): DeliveryRecorder | null {
   try {
-    const files = ledgerFiles(ledgerReachOf(ctx));
-    if (files === null || realpathOrResolve(files.hippoRoot) !== realpathOrResolve(ctx.hippoRoot)) return null;
+    const home = ledgerFiles(ledgerReachOf(ctx));
+    if (home === null || realpathOrResolve(home.root) !== realpathOrResolve(ctx.hippoRoot)) return null;
     return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
   } catch (error) {
     log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));

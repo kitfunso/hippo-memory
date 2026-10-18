@@ -103,13 +103,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `reject / unreject` (section banner): AT1: reject and unreject, docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 
 ### src/api/memories/outcome.ts
-- `outcome`: `opts.traceId` (LC1, docs/plans/2026-08-02-lc1-recall-trace-persistence.md): OPTIONAL additive opt so a programmatic caller can link this outcome to the recall_traces row it judges.
+- `outcome`: the LC1 trace link (docs/plans/2026-08-02-lc1-recall-trace-persistence.md) is the store's `lastRecall.applyTracedOutcome`; the `opts.traceId` option no src caller sent was dropped in 3.0.
 - `outcome`: if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
 - `outcome`: LC1: link the outcome to its trace, recording only the ids actually credited (post tenant-filtering, matches appliedIds).
 - `outcomeForLastRecall` (section banner): outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
 
 ### src/api/memories/promote.ts
-- `PromoteResult`: Note: `copyToGlobal` does not currently take a tenantId override — it reads the entry from the local root via `readEntry` (no tenant filter) and preserves the entry's existing tenantId on the global side. Task 4 may tighten this once writeEntry/readEntry thread tenant context.
+- `PromoteResult`: `copyToGlobal` reads the local row in `opts.tenantId` (`promote` passes the caller's) and keeps the entry's tenantId on the global side.
+- `assertPromotable`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review. The quarantine, personal-scope and secret vetoes moved here from `src/store` in 3.0; the store keeps only `promotion.writeCopy`.
 - `SupersedeResult`: Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides — A1 keeps the API minimal; the CLI handler will continue to handle those flags and pass the resolved values once Task 4 lands).
 - `ArchiveRawOpts`: We DO NOT emit a second audit event here to avoid double-emitting the archive_raw op (unlike Task 1 remember/forget where the underlying helpers hardcode actor='cli').
 - `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
@@ -962,9 +963,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `loadFreshActiveTaskSnapshot`: Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit hook context, MCP recall block) — the never-expires fix for DF1.
 - `closeTaskSnapshotsForSession`: Close the `active` task snapshot(s) owned by `sessionId`, for the T3 session-end death path (DF1, docs/plans/2026-08-23-df1-snapshot-lifecycle.md).
 - `appendSessionEvent`: v1.2: scope is wired through. Default-deny in api.recall + cmdRecall continuity reads applies to slack:private:* and 'unknown:legacy' rows.
-
-### src/store/sqlite/global-promote.ts
-- `copyToGlobal`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
 
 ### src/store/summaries.ts
 - `summaries.ts` (dirty-flag banner): v0.30 / E1 of DAG live-coupling — dirty-flag helpers for the existing DAG layer's level-2 summaries. Used by E2 (child-write propagation in invalidation.ts / writeEntry / forgetMemory / archiveRawMemory) to mark a summary dirty when one of its children changes, and by E3's sleep-cycle rebuildDirtySummaries phase to enumerate candidates without scanning every memory row.

@@ -7,7 +7,7 @@ import type { HalfLifeMove, HalfLifeRows } from '../half-life.js';
 import type { SessionEvent } from '../rows.js';
 import type { TombstoneChecks } from '../tombstone-checks.js';
 import type { AppendAuditOpts } from './types.js';
-import type { AuditOp } from './audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {

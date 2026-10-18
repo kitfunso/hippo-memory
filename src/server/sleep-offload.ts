@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOpts, type SleepResult, type Context } from '../api/index.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
-import { requireGroup, StoreBusyError } from '../store/port.js';
+import { StoreBusyError } from '../store/port.js';
 import { envSleepTimeoutMs } from '../util/env.js';
 import { HttpError } from '../util/http-util.js';
 
@@ -133,8 +133,8 @@ function inTurn<R>(job: SleepJob): Promise<R> {
 export function sleepInChild(ctx: Context, opts: SleepOpts): Promise<SleepResult> {
   return inTurn<SleepResult>({
     kind: 'sleep',
-    // The child reopens the folder the served store owns.
-    hippoRoot: requireGroup(ctx.store, 'localFiles').hippoRoot,
+    // The child reopens the served folder; the route ran only because its store is hippo.db.
+    hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,
     actor: ctx.actor,
     opts,

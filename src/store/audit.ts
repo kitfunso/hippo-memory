@@ -6,7 +6,7 @@ import { keysetAfter } from '../util/keyset.js';
 import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import type { AppendAuditOpts, AuditEvent, JsonObject } from './port/types.js';
-import type { AuditOp } from './port/audit-ops.js';
+import type { AuditOp } from '../core/audit-ops.js';
 import type { QueryAuditOptions } from './port/audit-log.js';
 import type { AuditPrune } from './port/audit-maintenance.js';
 import type { ListAuditAfterOpts } from './port/key-audit.js';

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { collectSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
 import { getContext } from '../../src/api/index.js';
 import { initStore } from '../../src/store/open.js';
@@ -22,7 +23,7 @@ describe('capture pins the rules a person states', () => {
   let root: string;
   let ctx: FullContext;
 
-  const capture = (turns: SessionTurn[]) => cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
+  const capture = (turns: SessionTurn[]) => cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
   const injected = async () => (await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT }))
     .entries.map(({ entry }) => entry.content);
 
@@ -62,7 +63,7 @@ describe('capture pins the rules a person states', () => {
   it('a file capture names no speaker, so its rules stay unpinned', () => {
     const file = join(scratch, 'notes.md');
     writeFileSync(file, TAUGHT);
-    cmdCapture(root, { source: 'file', filePath: file, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false });
     expect(loadAllEntries(root, 'default').map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false]]);
   });
 

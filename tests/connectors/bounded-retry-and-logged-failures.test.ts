@@ -8,7 +8,7 @@ import { backfillRepo } from '../../src/connectors/github/backfill.js';
 import type { GitHubFetcher } from '../../src/connectors/github/octokit-client.js';
 import { closeHippoDb, openHippoDb, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
 import { resolveCodexSessionTranscript } from '../../src/hooks/codex-session.js';
-import { importChatGPT, importClaude } from '../../src/importers/sources.js';
+import { importChatGPT, importClaude } from '../../src/entry/importers.js';
 import { detectServer } from '../../src/server/server-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

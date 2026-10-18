@@ -2,7 +2,6 @@
 
 import { envRequireSessionScopedFreshTail } from '../../util/env.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
-import { recallScopeFilter } from '../../store/search-rows.js';
 import { estimateTokens } from '../../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../core/handoff.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
@@ -23,7 +22,9 @@ import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../../core/recall-scope.js';
+import {
+  passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf, recallScopeFilter,
+} from '../../core/recall-scope.js';
 import type {
   RecallSuppressionSummary,
   RecallOptions,
@@ -153,7 +154,7 @@ async function sqlBand(
     vectorCandidates: recallVectorSpec(ctx, opts, own),
   };
   const ranked = await searchByEngine(
-    vectorSourceOf({ store, config: configOf(ctx) }),
+    vectorSourceOf({ store, config: configOf(ctx), onHippoDb: ctx.reach?.isHippoDb }),
     opts.query,
     candidates,
     physicsFor(ctx, opts),
@@ -228,7 +229,7 @@ async function wideBand(
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
   const searchOpts = { budget: Infinity, vectorCandidates: recallVectorSpec(ctx, opts, own) };
   const searched = await searchByEngine(
-    vectorSourceOf({ store, config: configOf(ctx) }),
+    vectorSourceOf({ store, config: configOf(ctx), onHippoDb: ctx.reach?.isHippoDb }),
     opts.query,
     pool,
     physicsFor(ctx, opts),

@@ -9,20 +9,19 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { sqliteStore } from '../../src/store/index.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { refineStore } from '../../src/cli/refine-llm.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget, localIndex, syncStore } from '../_helpers/cli-stores.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
-import { importEntries } from '../../src/importers/core.js';
+import { importEntries } from '../../src/entry/importers.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { consolidate } from '../../src/index.js';
 import { listPeers } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { embedAll } from '../../src/search/embed-memories.js';
-import { sharingStores } from '../_helpers/sharing-stores.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
@@ -80,7 +79,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+      syncStore(hippoRoot).localFiles.learning,
       { from: 'REST', to: 'GraphQL', type: 'migration' },
       'tenant-a',
     );
@@ -187,7 +186,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // Capture with tenant-a scope. The dedup branch in cmdCaptureCore calls
     // loadAllEntries(targetRoot, options.tenantId='tenant-a') and sees NOTHING
     // (tenant-b's seed is invisible), so the extracted decision IS written.
-    cmdCapture(hippoRoot, {
+    cmdCapture(captureTarget(hippoRoot), {
       source: 'file',
       filePath: fixturePath,
       dryRun: false,
@@ -214,7 +213,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // sees both tenant-a's and tenant-b's entries).
     const fixturePath2 = join(tmpDir, 'capture-fixture2.txt');
     fs.writeFileSync(fixturePath2, fixtureText, 'utf8');
-    cmdCapture(hippoRoot, {
+    cmdCapture(captureTarget(hippoRoot), {
       source: 'file',
       filePath: fixturePath2,
       dryRun: false,
@@ -293,7 +292,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
 
     // No tenantId arg → host-wide behaviour (current/pre-1.12.1)
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
+    const result = invalidateMatching(syncStore(hippoRoot).localFiles.learning, { from: 'REST', to: 'GraphQL', type: 'migration' });
     expect(result.invalidated).toBe(2);
   });
 
@@ -354,7 +353,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
 
     // Side-effect: confirms embedAll returns a non-negative number without throw.
     // (When OPENAI_API_KEY is unset this is 0; when set it would do the rebuild.)
-    const count = await embedAll(sqliteSyncStore(hippoRoot).localFiles);
+    const count = await embedAll(localIndex(hippoRoot));
     expect(count).toBeGreaterThanOrEqual(0);
 
     // The contract assertion: the exact reader call shape embedAll +
@@ -392,7 +391,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     writeEntry(hippoRoot, b);
 
     // Both tenants' shared entries surface as peers (host-wide aggregation)
-    const peers = listPeers(sqliteStore(hippoRoot));
+    const peers = listPeers(folderStore(hippoRoot));
     const peerNames = peers.map((p) => p.project);
     expect(peerNames).toContain('project-foo');
     expect(peerNames).toContain('project-bar');
@@ -429,7 +428,7 @@ describe('invalidate onlyId', () => {
     const bId = seedFor(hippoRoot, 'tenant-b', 'tenant B private memory', { tags: ['private'] });
 
     const result = invalidateMatching(
-      sqliteSyncStore(hippoRoot).localFiles.learning,
+      syncStore(hippoRoot).localFiles.learning,
       { from: `id:${bId}`, to: null, type: 'removal' },
       'tenant-a',
       { onlyId: bId },

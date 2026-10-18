@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { type ImportResult, type ImportOptions, importEntries } from './core.js';
+import { type ImportResult, type TargetedImport, importEntries } from './core.js';
 
 const SLUG_MAX_CHARS = 50;
 
@@ -63,7 +63,7 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
   return results.filter((r) => r.content.length > 0);
 }
 
-export function importMarkdown(filePath: string, options: ImportOptions): ImportResult {
+export function importMarkdown(filePath: string, options: TargetedImport): ImportResult {
   const raw = fs.readFileSync(filePath, 'utf8');
   const parsed = parseStructuredMarkdown(raw);
 

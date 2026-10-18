@@ -8,6 +8,7 @@ import { importAtSessionEnd } from '../../src/agent-memories/sync.js';
 import { saveItems } from '../../src/store/compactions-record.js';
 import { listDormantSnapshots } from '../../src/store/dormant.js';
 import { runDoctor } from '../../src/doctor.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { planProjectRepair } from '../../src/sharing/project-merge.js';
 import { mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from '../../src/api/objects/projects.js';
@@ -103,7 +104,7 @@ describe('two repos named api in one global store', () => {
     const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
     expect(plan.folds).toEqual([]);
     expect(plan.collisions).toEqual([{ name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] }]);
-    const check = runDoctor({ cwd: a, home: w.home, version: 'test' }).checks.find((c) => c.id === 'projects');
+    const check = runDoctor({ diagnosticsAt, cwd: a, home: w.home, version: 'test' }).checks.find((c) => c.id === 'projects');
     expect(check).toMatchObject({ status: 'warn' });
     expect(check?.detail).toContain('api (github.com/acme-pay/api, github.com/acme-search/api)');
   });

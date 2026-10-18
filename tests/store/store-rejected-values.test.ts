@@ -11,7 +11,7 @@ import { rejectionDigest } from '../../src/store/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
-import type { AuditOp } from '../../src/store/port/audit-ops.js';
+import type { AuditOp } from '../../src/core/audit-ops.js';
 
 let root: string;
 const rejections = (): ReturnType<typeof sqliteSyncStore>['rejections'] => sqliteSyncStore(root).rejections;

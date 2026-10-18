@@ -230,7 +230,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/@huggingface/transformers/.cache
-          key: hf-models-4.2.0-${{ hashFiles('src/store/embeddings/index.ts', 'src/rerankers/cross-encoder.ts') }}
+          key: hf-models-4.2.0-${{ hashFiles('src/embeddings/local.ts', 'src/rerankers/cross-encoder.ts') }}
       - run: npm run build
       # The zero-dep `test` job skips these; here the backend is installed.
       - name: Cross-encoder against the real model

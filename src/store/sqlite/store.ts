@@ -88,7 +88,7 @@ export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'localFiles'>> &
 function sqliteLocalFiles(handles: Handles): LocalFiles {
   const { on } = handles;
   return {
-    hippoRoot: handles.files.hippoRoot,
+    ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
     agentImport: sqliteAgentImport,
     captures: sqliteCaptures(on),
@@ -102,7 +102,6 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     embeddingIndex: sqliteEmbeddingIndex(on),
     ledger: sqliteLedger(on),
     dashboard: sqliteDashboardReads(handles),
-    globalStore: () => sqliteStore(resolveGlobalRootDir()),
   };
 }
 
@@ -232,7 +231,7 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
 }
 
 /** The composition roots reach the request scope through the adapter's one entry. */
-export { runDetachedSqliteRequest, runSqliteRequest } from './request-scope.js';
+export { runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 
 /** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
  * `openGlobal` builds the global store, which a server keeps on threads of its own. */
@@ -246,10 +245,13 @@ export function sqliteReach(
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
+  const globalTarget = other === undefined ? { root: globalRoot, store: sqliteStore(globalRoot) } : undefined;
   const reach: StoreReach = {
     hasLocal: other !== undefined || isInitialized(hippoRoot),
     isGlobal: isGlobalStoreRoot(hippoRoot),
     shared: sharedStore,
+    isHippoDb: other === undefined,
+    globalTarget,
   };
   if (!canReadGlobal) return reach;
   return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
@@ -339,7 +341,8 @@ function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {
       on((db) => createKeyAt(db, mint));
     },
     createSelfApiKey: (mint) => on((db) => createSelfKeyAt(db, mint)),
-    listApiKeys: (query) => on((db) => listApiKeyRows(db, query)),
+    listApiKeys: ({ tenantId, ...query }) =>
+      on((db) => listApiKeyRows(db, { ...query, tenantId: tenantId ?? undefined })),
   };
 }
 

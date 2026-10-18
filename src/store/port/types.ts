@@ -1,5 +1,5 @@
 // Port types that two or more groups, or the store itself, share.
-import type { AuditOp } from './audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 import type { JsonValue } from '../../util/json.js';
 import type { MemoryEntry } from '../../core/memory.js';
 

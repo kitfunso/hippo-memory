@@ -40,7 +40,7 @@ const SELF_META = { label: 'new', role: 'member', self: true, expiresAt: EXPIRES
 const create = (key: NewApiKey): Call => (g) => g.createApiKey({ key, actor: 'api_key:caller', metadata: { label: key.label, role: key.role } });
 const createSelf = (key: NewApiKey & { ownerSubject: string; expiresAt: string }, perSubject: number): Call =>
   (g) => g.createSelfApiKey({ key, actor: OWNER, metadata: SELF_META, perSubject });
-type ListQuery = Omit<KeyListQuery, 'tenantId'> & { tenantId?: string };
+type ListQuery = Omit<KeyListQuery, 'tenantId'> & { tenantId?: string | null };
 const list = (query: ListQuery): Call => (g) => g.listApiKeys({ tenantId: TENANT_A, ...query });
 const listIds = (query: ListQuery): Call => async (g) => (await g.listApiKeys({ tenantId: TENANT_A, ...query })).map((r) => r.key.keyId);
 const find = (keyId: string): Call => (_g, store) => store.findApiKey(keyId);
@@ -183,6 +183,14 @@ describe('KeyWrites.listApiKeys', () => {
       { value: [] },
     ]);
     expect(valueOf(side, 4)).toHaveLength(7);
+  });
+
+  it("lists every tenant's keys, newest first, for a null tenant", async () => {
+    const side = await conforms([listIds({ tenantId: null, active: false }), listIds({ tenantId: null, active: true })]);
+    const { adminA, memberB } = fixture.keys;
+    expect(valueOf(side, 0)).toHaveLength(9);
+    expect(valueOf(side, 0)).toEqual(expect.arrayContaining([adminA, memberB, owned.liveB]));
+    expect(valueOf(side, 1)).toEqual(expect.arrayContaining([adminA, memberB, owned.liveB]));
   });
 
   it('filters by owner and by key id inside the tenant, and carries scope grants', async () => {

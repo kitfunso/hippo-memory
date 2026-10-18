@@ -17,8 +17,8 @@ describe('the store picks no embedding provider', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the store embeddings module exports no provider-driven embed entry point', async () => {
-    const storeExports = Object.keys(await import('../../src/store/embeddings/index.js'));
+  it('the store vector index exports no provider-driven embed entry point', async () => {
+    const storeExports = Object.keys(await import('../../src/store/vector-index.js'));
     expect(storeExports).not.toContain('embedMemory');
     expect(storeExports).not.toContain('embedAll');
     expect(Object.keys(await import('../../src/search/embed-memories.js'))).toEqual(expect.arrayContaining(['embedMemory', 'embedAll']));

@@ -99,7 +99,10 @@ for (let i = 0; i < combos.length; i++) {
     try {
       summary = await runEval(cases, [], {
         stores: isInitialized(globalRoot)
-          ? { local: sqliteStore(hippoRoot), global: sqliteStore(globalRoot) }
+          ? {
+              local: { root: hippoRoot, store: sqliteStore(hippoRoot) },
+              global: { root: globalRoot, store: sqliteStore(globalRoot) },
+            }
           : undefined,
         mmr: c.mmr,
         mmrLambda: c.lambda,

@@ -6,17 +6,18 @@
 import { configOf } from '../config-of.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../core/memory.js';
 import { computeSalience, type SalienceResult } from '../../core/salience.js';
-import { embedMemory, type EmbedOutcome } from '../../search/embed-memories.js';
+import { embedMemory, folderIndex, type EmbedOutcome } from '../../search/embed-memories.js';
 import { errorMessage, log } from '../../util/log.js';
 import { getMemory } from './memories.js';
 import { remember } from './remember.js';
-import type { Context } from '../types.js';
-import { requireGroup } from '../../store/port.js';
+import type { Context, ContextWith } from '../types.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
 // tenant, and a window past this reads more than a duplicate check needs.
 const MAX_SALIENCE_ROWS = 500;
+
+type LocalContext = ContextWith<'localFiles'>;
 
 /** One write by a caller in this process, every field already parsed and checked by it. */
 export interface LocalRememberInput {
@@ -85,9 +86,9 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 
 /** Best-effort and slow (a model load or a network call), so the
  * caller is not held for it; a row left out of the index is logged. */
-function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const local = requireGroup(ctx.store, 'localFiles');
-  return embedMemory(local, entry, undefined, configOf(ctx).embeddings).then((outcome) => {
+function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<EmbedOutcome> {
+  const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store });
+  return embedMemory(target, entry, undefined, configOf(ctx).embeddings).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
         `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,
@@ -100,7 +101,7 @@ function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutco
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
  * refused value throws as `remember` does. */
 export async function rememberLocally(
-  ctx: Context,
+  ctx: LocalContext,
   input: LocalRememberInput,
 ): Promise<LocalRememberOutcome> {
   const schemaFit = await ctx.store.contextReads.schemaFit(ctx.tenantId, input.content, input.fitTags ?? input.tags);
@@ -150,7 +151,7 @@ export type FactExtraction =
 /** Extracts facts from a row just stored and stores them beside it.
  * Best-effort: a failure is named in the result, never thrown. */
 export async function extractRememberedFacts(
-  ctx: Context,
+  ctx: LocalContext,
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {
@@ -172,7 +173,7 @@ export async function extractRememberedFacts(
       },
     });
     if (found.length > 0) {
-      storeExtractedFacts(requireGroup(ctx.store, 'localFiles').learning, entry, found, defaultHalfLifeDays);
+      storeExtractedFacts(ctx.store.localFiles.learning, entry, found, defaultHalfLifeDays);
       facts = found.length;
     }
   } catch (cause) {

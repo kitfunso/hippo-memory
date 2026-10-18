@@ -10,17 +10,18 @@ import {
   embeddingsConfigOf, resolveEmbeddingProvider, type EmbeddingProvider,
 } from '../embeddings/provider.js';
 import type { EmbeddingsConfig } from '../core/config.js';
-import { embeddingIndexIdentity, embeddingInputText, indexNeedsRebuild } from '../store/embeddings/index.js';
+import {
+  embeddingIndexIdentity, embeddingInputText, indexedModel, indexNeedsRebuild, replacesIndex,
+} from '../embeddings/index-identity.js';
 import type {
   EmbeddingIndex,
+  FolderStore,
   HippoStore,
-  LocalFiles,
   VectorRowWrite,
   VectorWrite,
   VectorWriteResult,
   VectorWrites,
 } from '../store/port.js';
-import { indexedModel, replacesIndex } from '../store/vector-index.js';
 import type { EntryCursor } from '../store/port/consolidation.js';
 import { chunked } from '../util/chunked.js';
 import { envByName } from '../util/env.js';
@@ -316,7 +317,14 @@ export type EmbedOutcome = 'indexed' | 'off' | 'failed';
 
 /** Where vectors go: hippo.db's own index under its folder lock, or a store's vector groups, with the folder whose
  * config names the provider. */
-export type EmbedTarget = LocalFiles | { readonly hippoRoot: string; readonly store: HippoStore };
+export type EmbedTarget =
+  | { readonly hippoRoot: string; readonly embeddingIndex: EmbeddingIndex }
+  | { readonly hippoRoot: string; readonly store: HippoStore };
+
+/** hippo.db's own index under its folder. */
+export function folderIndex({ root, store }: FolderStore): EmbedTarget {
+  return { hippoRoot: root, embeddingIndex: store.localFiles.embeddingIndex };
+}
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
  * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory

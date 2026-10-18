@@ -112,7 +112,7 @@ describe('embedding model configuration', () => {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
       const { resolveEmbeddingProvider } = await import('../../src/embeddings/provider.js');
-      const { saveStoredEmbeddingModel } = await import('../../src/store/embeddings/index.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/core/memory.js');
@@ -146,7 +146,7 @@ describe('embedding model configuration', () => {
   it('treats a legacy embedding index as stale when the configured model changes', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { embeddingModelRequiresReindex } = await import('../../src/store/embeddings/index.js');
+    const { embeddingModelRequiresReindex } = await import('../../src/store/vector-index.js');
     const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
     saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
 
@@ -158,7 +158,7 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { saveStoredEmbeddingModel } = await import('../../src/store/embeddings/index.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/core/memory.js');
@@ -186,7 +186,7 @@ describe('embedding model configuration', () => {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
       const { resolveEmbeddingProvider } = await import('../../src/embeddings/provider.js');
-      const { saveStoredEmbeddingModel } = await import('../../src/store/embeddings/index.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/vector-index.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/core/memory.js');
 

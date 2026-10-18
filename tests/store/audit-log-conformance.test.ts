@@ -13,7 +13,7 @@ import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src
 import { inMemoryAuditLogStore } from '../_helpers/in-memory-audit-log-store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import type { AuditOp } from '../../src/store/port/audit-ops.js';
+import type { AuditOp } from '../../src/core/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
 
 const HOST = '__host__';

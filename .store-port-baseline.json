@@ -9,16 +9,15 @@
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
-  "storeImportsInCli": 4,
-  "storeImportsInDomain": 14,
+  "storeImportsInCli": 0,
+  "storeImportsInDomain": 0,
   "handleHoldersOutside": 0,
-  "storeFilesWithoutSql": 2,
+  "storeFilesWithoutSql": 1,
   "portImportsFromSql": 0,
-  "buildsOutsideRoots": 22,
-  "groupChecksInApi": 27,
+  "buildsOutsideRoots": 0,
+  "groupChecksInApi": 0,
   "storeFilesWithoutSqlList": [
-    "src/store/delivery-recorder.ts",
-    "src/store/embeddings/index.ts"
+    "src/store/delivery-recorder.ts"
   ],
   "openersOutsideByFile": {},
   "sqlOutsideByFile": {},

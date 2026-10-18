@@ -124,7 +124,8 @@ export type { AuditMaintenance } from './port/audit-maintenance.js';
 export type { LessonWrites } from './port/lesson-writes.js';
 
 export type {
-  AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, Ledger, LocalFiles,
+  AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, FolderFiles, ImportTarget, Ledger,
+  LocalFiles,
 } from './port/local-files.js';
 
 /** Every group a store sets whole; only the four in OptionalGroup may be left unset. */
@@ -157,8 +158,8 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
-  /** Unset on a store that keeps no last recall, where outcomeForLastRecall and a traced outcome answer 501 and context
-   * writes no last recall. */
+  /** Unset on a store that keeps no last recall, where an outcome with no ids answers 501 and context writes no last
+   * recall. */
   readonly lastRecall: LastRecall;
 }
 
@@ -180,12 +181,33 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
   return methods;
 }
 
+/** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
+export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
+
+/** hippo.db and the folder it sits in, for work that reads both: sharing, sync, embedding and the global store. */
+export interface FolderStore {
+  readonly root: string;
+  readonly store: StoreWith<'localFiles'>;
+}
+
+function setsGroup<G extends OptionalGroup>(store: HippoStore, group: G): store is StoreWith<G> {
+  return store[group] !== undefined;
+}
+
+/** `store` typed with `group` set; a store without it throws StoreNotPortedError, which answers 501. */
+export function storeWith<G extends OptionalGroup>(store: HippoStore, group: G): StoreWith<G> {
+  if (!setsGroup(store, group)) throw new StoreNotPortedError(store.kind, group);
+  return store;
+}
+
 /** Which stores a call reaches, probed once by a composition root so the api reads this instead of the disk. */
 export interface StoreReach {
   readonly hasLocal: boolean; // the primary store has a project of its own, or is not hippo.db
   readonly isGlobal: boolean; // the primary root is the operator's global store
   readonly shared: boolean; // a store serving many people, so the operator's global store stays out
   readonly global?: { readonly root: string; readonly store: HippoStore }; // set only when readable
+  readonly isHippoDb?: boolean; // the primary store is hippo.db, whose folder `hippo embed` and sleep reach
+  readonly globalTarget?: FolderStore; // where share, promote and sync write; set on hippo.db, maybe not created yet
 }
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './busy.js';

@@ -18,7 +18,7 @@ import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
-import { requireGroup, type HippoStore, type Objects } from '../store/port.js';
+import type { Objects, StoreWith } from '../store/port.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { escapeRegex } from '../util/escape.js';
 
@@ -341,10 +341,10 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
-export async function extractGraph(store: HippoStore, tenantId: string): Promise<ExtractResult> {
+export async function extractGraph(store: StoreWith<'localFiles'>, tenantId: string): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
   // The rebuild's write lock is hippo.db's own, so it runs only through the local files.
-  const { graphRebuild } = requireGroup(store, 'localFiles');
+  const { graphRebuild } = store.localFiles;
   // Loaded first: opening a second connection under the rebuild's BEGIN IMMEDIATE dead-locks ('database is locked').
   const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
@@ -355,12 +355,12 @@ export async function extractGraph(store: HippoStore, tenantId: string): Promise
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
 export async function extractGraphChunked(
-  store: HippoStore,
+  store: StoreWith<'localFiles'>,
   tenantId: string,
   budget: WriteBudget = WRITE_BUDGET,
 ): Promise<ExtractResult> {
   assertTenantId('extractGraphChunked', tenantId);
-  const { graphRebuild } = requireGroup(store, 'localFiles');
+  const { graphRebuild } = store.localFiles;
   const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
   const ops = await readGraphDelta(store.graphReads, tenantId, derived);
   let next = 0;

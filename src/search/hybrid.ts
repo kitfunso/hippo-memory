@@ -132,18 +132,20 @@ export async function hybridSearch(
 }
 
 /** The vector arm over `store`, embedding queries with the provider `config` names. */
-export function vectorSourceOf({ store, config }: {
+export function vectorSourceOf({ store, config, onHippoDb }: {
   store: HippoStore;
   config: Pick<HippoConfig, 'embeddings'>;
+  onHippoDb?: boolean;
 }): VectorSource {
-  return { store, provider: () => resolveEmbeddingProvider(config.embeddings) };
+  return { store, provider: () => resolveEmbeddingProvider(config.embeddings), onHippoDb };
 }
 
-/** The vectors `store` holds, embedded by the provider that `embeddings`, else the config under `hippoRoot`, names. */
+/** The vectors hippo.db under `hippoRoot` holds, or `store` when it is another, embedded by the provider that
+ * `embeddings`, else the folder's config, names. */
 export function configuredVectorSource(
-  store: HippoStore, hippoRoot: string, embeddings?: EmbeddingsConfig,
+  store: HippoStore, hippoRoot: string, embeddings?: EmbeddingsConfig, onHippoDb = true,
 ): VectorSource {
-  return { store, provider: () => resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings)) };
+  return { store, provider: () => resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings)), onHippoDb };
 }
 
 function graphStoresOf(source: VectorSource | undefined, options: HybridRankOptions): FusionInput['graph'] {

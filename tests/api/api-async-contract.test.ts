@@ -1,4 +1,5 @@
-// The api's write functions answer through a Promise on every store kind, and the last-recall writes need the store's lastRecall group.
+// The api's write functions answer through a Promise on every store kind; the HTTP edge refuses a last-recall outcome
+// on a store without that group (store-port-capabilities.test.ts).
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -6,17 +7,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   archiveRaw, authCreate, authCreateSelf, authListRows, authRevoke, forget, outcome, outcomeForLastRecall, remember, supersede,
-  type Actor, type Context,
+  type Actor,
 } from '../../src/api/index.js';
-import { mapApiError } from '../../src/api/error-reply.js';
 import { rememberLocally } from '../../src/api/memories/remember-local.js';
-import { importVault } from '../../src/importers/vault.js';
+import { importVault } from '../../src/entry/importers.js';
 import { sqliteStore, type HippoStore, type StoreGroups } from '../../src/store/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
-import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
@@ -108,26 +106,5 @@ describe('every api write function answers through a Promise', () => {
       expect(reply).toBeInstanceOf(Promise);
       await expect(reply).resolves.toEqual(new Map(Object.entries(REPLIES)).get(fn));
     });
-  });
-});
-
-describe('a store without the lastRecall group', () => {
-  // Its entryWrites group answers, so the refusal can only come from the missing lastRecall group.
-  function refusal(call: (ctx: Context) => Promise<object>): Promise<Error | null> {
-    const root = seededRoot();
-    const { store } = inMemoryEntryWritesStore(root);
-    return call({ hippoRoot: root, tenantId: ACME, actor: HOST, store }).then(() => null, (err: Error) => err);
-  }
-
-  it('outcomeForLastRecall is refused with a 501 that asks for the ids the recall returned', async () => {
-    const error = await refusal((ctx) => outcomeForLastRecall(ctx, true));
-    expect(mapApiError(error)).toEqual({ status: 501, message: 'this store keeps no last recall: send the ids your recall returned' });
-  });
-
-  it('outcome with a traceId is refused as not ported, a 501', async () => {
-    const error = await refusal((ctx) => outcome(ctx, ['mem_plain'], true, { traceId: 1 }));
-    expect(error).toBeInstanceOf(StoreNotPortedError);
-    expect(error).toMatchObject({ group: 'lastRecall' });
-    expect(mapApiError(error).status).toBe(501);
   });
 });

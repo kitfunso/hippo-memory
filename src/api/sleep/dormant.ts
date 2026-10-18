@@ -1,7 +1,6 @@
 // Dormant memories: list, restore, forget and check.
 
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
-import { stampOriginProject } from '../../store/entry-row.js';
 import type { DormantMemory, ListDormantOpts } from '../../store/dormant.js';
 import { strengthAblation } from '../../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../../core/memory.js';
@@ -48,10 +47,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
     last_retrieved: now.toISOString(),
   };
   if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-  return stampOriginProject(ctx.hippoRoot, {
-    ...revived,
-    strength: calculateStrength(revived, now, { ablation: strengthAblation() }),
-  });
+  return { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) };
 }
 
 /**

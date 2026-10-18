@@ -13,7 +13,7 @@ import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
 import { PACKAGE_VERSION } from '../util/version.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../core/failure-log-retention.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories/memories.js';
@@ -26,8 +26,10 @@ import {
   vectorSummary,
 } from '../api/status.js';
 import type { StatusCounts } from '../store/candidates.js';
-import type { Context } from '../api/types.js';
-import { cliApiContext } from './api-context.js';
+import type { Diagnostics } from '../store/port/diagnostics.js';
+import { cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
+
+const diagnosticsAt = (hippoRoot: string): Diagnostics => cliLocalFiles(hippoRoot).diagnostics;
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
@@ -83,7 +85,7 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
 }
 
 // Embedding status (provider-aware)
-function printEmbeddingStatus(ctx: Context, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
+function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
       return resolveEmbeddingProvider(loadConfig(ctx.hippoRoot).embeddings);
@@ -127,7 +129,7 @@ function printEmbeddingStatus(ctx: Context, counts: Pick<StatusCounts, 'total' |
 const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
 // Physics status
-function printPhysicsStatus(ctx: Context): void {
+function printPhysicsStatus(ctx: CliContext): void {
   try {
     const particles = storedParticles(ctx);
     if (particles.length > 0) {
@@ -341,7 +343,7 @@ export function handleDoctor({ flags }: CommandContext): void {
   const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
   // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version: string };
-  const report = runDoctor({ version: pkg.version });
+  const report = runDoctor({ version: pkg.version, diagnosticsAt });
   console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
@@ -354,7 +356,9 @@ export function handleSupportBundle({ flags }: CommandContext): void {
   const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
   const now = new Date();
-  const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
+  const bundle = buildSupportBundle({
+    cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now, diagnosticsAt,
+  });
   const stamp = now.toISOString().replace(/[:.]/g, '-');
   const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);
   const json = JSON.stringify(bundle, null, 2);

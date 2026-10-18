@@ -31,12 +31,12 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { rejectionDigest, normalizeValueForRejection, insertRejectedValue, findRejectedValue } from '../../src/store/rejection.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { autoShare } from '../../src/sharing/share.js';
 import * as api from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
-import { importEntries } from '../../src/importers/core.js';
-import { importVault } from '../../src/importers/vault.js';
+import { importEntries, importVault } from '../../src/entry/importers.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -80,7 +80,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     );
 
     expect(() =>
-      cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false }),
+      cmdCapture(captureTarget(home), { source: 'file', filePath: fixturePath, dryRun: false, global: false }),
     ).not.toThrow();
 
     const contents = loadEveryTenantEntries(home).map((e) => e.content);
@@ -475,7 +475,7 @@ describe('capture dry-run tombstone accuracy', () => {
     );
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: true, global: false });
+    cmdCapture(captureTarget(home), { source: 'file', filePath: fixturePath, dryRun: true, global: false });
     const dryLogs = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
     logSpy.mockRestore();
 
@@ -483,7 +483,7 @@ describe('capture dry-run tombstone accuracy', () => {
     expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
     // Real run agrees: the tombstoned item is refused, the sibling lands.
-    cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false });
+    cmdCapture(captureTarget(home), { source: 'file', filePath: fixturePath, dryRun: false, global: false });
     const contents = loadEveryTenantEntries(home).map((e) => e.content);
     expect(contents).not.toContain(rejectedContent);
     expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);

@@ -22,7 +22,7 @@ import {
 import { promptTokens } from '../core/prompt-recall.js';
 import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../core/read-admission.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
-import { hasGroup, type HippoStore } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 import type { StoreReach } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
@@ -215,19 +215,18 @@ function warnIsolationIgnored(hippoRoot: string): void {
 }
 
 /** Which stores this read can draw on, and what kind the primary one is. */
-function storesInReach(ctx: Context, opts: ContextOptions, local: ContextSource) {
-  const other = hasGroup(local.store, 'localFiles') ? undefined : local.store;
+function storesInReach(ctx: Context, opts: ContextOptions) {
   // No reach means an integrator's own store: one project, no global store beside it.
   const reach: StoreReach =
     ctx.reach ?? { hasLocal: true, isGlobal: false, shared: isSharedStore(ctx.hippoRoot) };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
-  // A store serving many people is not its operator's, so the operator's own global store stays out.
-  const hasGlobal = !sharedStore && other === undefined && reach.global !== undefined;
+  // A store serving many people is not its operator's, so the operator's own global store stays out; the root sets
+  // `global` only beside hippo.db.
+  const hasGlobal = !sharedStore && reach.global !== undefined;
   // Global memories do not establish a project boundary for task state.
   return {
-    other,
-    hasLocal: other !== undefined || reach.hasLocal,
+    hasLocal: reach.hasLocal,
     globalRoot: reach.global?.root ?? '',
     sharedStore,
     hasGlobal,
@@ -258,7 +257,7 @@ function entryPricer(
 
 function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
-  const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
+  const { hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts);
   const query = (opts.q ?? '').trim() || NO_QUERY;
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
@@ -281,7 +280,6 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
   const price = entryPricer(cost, currentProject);
   return {
     local,
-    other,
     pinnedOnly,
     limit: opts.limit ?? Number.POSITIVE_INFINITY,
     includeRecent: opts.includeRecent ?? 0,

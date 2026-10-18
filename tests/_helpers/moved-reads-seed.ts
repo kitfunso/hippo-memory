@@ -6,7 +6,7 @@ import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { saveDecision } from '../../src/objects/decisions.js';
-import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { extractGraph } from '../../src/graph/extract.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { mintApiKey } from '../../src/store/auth.js';

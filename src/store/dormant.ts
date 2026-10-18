@@ -16,6 +16,7 @@ import { appendAuditEvent } from './audit.js';
 import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTakenAt } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
+import { stampOriginProject } from './entry-row.js';
 import type { DormantSnapshot } from './port/agent-import.js';
 import type { DormantMove } from './port/consolidation.js';
 
@@ -351,13 +352,13 @@ function auditDormantRestore(
   });
 }
 
-function restoreInWriteScope(db: DatabaseSyncLike, restore: DormantRestore): DormantRestoreOutcome {
+function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
   return withWriteScopeOr<DormantRestoreOutcome, DormantRestoreOutcome>(db, 'restore_dormant', (rollback) => {
     const snapshot = readDormantSnapshot(db, restore.tenantId, restore.id);
     if (!snapshot || !restore.inReach(snapshot.entry.scope ?? null)) return rollback({ status: 'missing' });
     if (entryIdTakenAt(db, restore.id)) return rollback({ status: 'active' });
     const now = new Date();
-    const entry = restore.revive(snapshot, now);
+    const entry = stampOriginProject(hippoRoot, restore.revive(snapshot, now));
     writeEntryDbOnly(db, entry, { actor: restore.actor });
     deleteDormantRow(db, restore.tenantId, restore.id);
     // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.
@@ -376,7 +377,7 @@ export function restoreDormantMemoryAt(
 ): DormantRestoreOutcome {
   let outcome: DormantRestoreOutcome;
   try {
-    outcome = restoreInWriteScope(db, restore);
+    outcome = restoreInWriteScope(db, hippoRoot, restore);
   } catch (error) {
     // Written after the rollback, so the refusal row outlives it.
     if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, restore.actor);

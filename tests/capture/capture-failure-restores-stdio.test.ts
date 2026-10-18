@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initStore } from '../../src/store/open.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let dir: string;
@@ -25,7 +26,7 @@ describe('cmdCapture failure', () => {
     const root = makeRoot();
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const log = path.join(dir, 'tee.log');
-    expect(() => cmdCapture(root, {
+    expect(() => cmdCapture(captureTarget(root), {
       source: 'file', filePath: path.join(dir, 'absent.md'), logFile: log, dryRun: false, global: false,
     })).not.toThrow();
     expect(errs).toHaveBeenCalled();

@@ -57,21 +57,16 @@ afterEach(() => {
 });
 
 describe('bindSessionOwner', () => {
-  it('first writer wins, a second owner gets a 409 ConflictError', () => {
-    bindSessionOwner(ctx('alice'), 's1');
-    let err: unknown;
-    try {
-      bindSessionOwner(ctx('bob'), 's1');
-    } catch (e) {
-      err = e;
-    }
-    expect(err).toBeInstanceOf(ConflictError);
-    expect(err).toMatchObject({ status: 409, message: 'session id belongs to another caller' });
+  it('first writer wins, a second owner gets a 409 ConflictError', async () => {
+    await bindSessionOwner(ctx('alice'), 's1');
+    const refusal = expect(bindSessionOwner(ctx('bob'), 's1')).rejects;
+    await refusal.toBeInstanceOf(ConflictError);
+    await refusal.toMatchObject({ status: 409, message: 'session id belongs to another caller' });
     expect(bindings().map((b) => b.owner_subject)).toEqual(['alice']);
   });
 
   it('same owner rebinds with no write', async () => {
-    bindSessionOwner(ctx('alice'), 's1');
+    await bindSessionOwner(ctx('alice'), 's1');
     const before = bindings();
     const holder = openHippoDb(home);
     holder.exec('BEGIN IMMEDIATE');
@@ -86,47 +81,49 @@ describe('bindSessionOwner', () => {
     expect(bindings()).toEqual(before);
   });
 
-  it('first bind raises the floor to TASK_OWNER_MIN_BINARY in its transaction', () => {
+  it('first bind raises the floor to TASK_OWNER_MIN_BINARY in its transaction', async () => {
     setFloor('0.0.1');
-    bindSessionOwner(ctx('alice'), 's1');
+    await bindSessionOwner(ctx('alice'), 's1');
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
     expect(bindings()).toHaveLength(1);
   });
 
-  it('a floor raise that fails takes the binding with it, since both are one transaction', () => {
+  it('a floor raise that fails takes the binding with it, since both are one transaction', async () => {
     setFloor('0.0.1');
     withDb((db) => db.exec(`CREATE TRIGGER fail_floor BEFORE INSERT ON meta WHEN NEW.key = 'min_compatible_binary' BEGIN SELECT RAISE(ABORT, 'floor boom'); END`));
-    expect(() => bindSessionOwner(ctx('alice'), 's1')).toThrow('floor boom');
+    await expect(bindSessionOwner(ctx('alice'), 's1')).rejects.toThrow('floor boom');
     expect(bindings()).toEqual([]);
     expect(floor()).toBe('0.0.1');
   });
 
-  it('the first bind lifts the floor above the last release before v54, which the open then refuses', () => {
+  it('the first bind lifts the floor above the last release before v54, which the open then refuses', async () => {
     setFloor('0.0.1');
-    bindSessionOwner(ctx('alice'), 's1');
+    await bindSessionOwner(ctx('alice'), 's1');
     // The open refuses any binary below the floor (github-rollback-guard-and-deletion-atomicity.test.ts), so a floor above the release shuts it out.
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
     // compareSemver returns the first differing part's difference: the minor of 1.64.0 over 1.63.2.
     expect(compareSemver(floor() ?? '', PREVIOUS_RELEASE)).toBe(1);
   });
 
-  it('a bind that lost the race to another owner returns the stored owner, not its own', () => {
+  it('a bind that lost the race to another owner returns the stored owner, not its own', async () => {
     const get = StatementSync.prototype.get;
     let raced = false;
+    let alice: Promise<void> = Promise.resolve();
     // Alice commits right after Bob's read finds no owner, so he reaches the insert with her row already there.
     const read = vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (this: StatementProto, ...params: string[]) {
       const row = get.apply(this, params);
       if (raced || !this.sourceSQL.includes('FROM session_owners')) return row;
       raced = true;
-      bindSessionOwner(ctx('alice'), 's1');
+      alice = bindSessionOwner(ctx('alice'), 's1');
       return row;
     });
     try {
-      expect(() => bindSessionOwner(ctx('bob'), 's1')).toThrow(ConflictError);
+      await expect(bindSessionOwner(ctx('bob'), 's1')).rejects.toThrow(ConflictError);
     } finally {
       read.mockRestore();
     }
     expect(raced).toBe(true);
+    await expect(alice).resolves.toBeUndefined();
     expect(bindings().map((b) => b.owner_subject)).toEqual(['alice']);
   });
 
@@ -138,7 +135,7 @@ describe('bindSessionOwner', () => {
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
   });
 
-  it('a new bind prunes bindings older than 90 days, in every tenant, and keeps younger ones', () => {
+  it('a new bind prunes bindings older than 90 days, in every tenant, and keeps younger ones', async () => {
     const daysAgo = (d: number): string => new Date(Date.now() - d * 86_400_000).toISOString();
     withDb((db) => {
       const insert = db.prepare(`INSERT INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`);
@@ -146,13 +143,13 @@ describe('bindSessionOwner', () => {
       insert.run('acme', 'old-acme', 'bob', daysAgo(91));
       insert.run('default', 'young', 'alice', daysAgo(89));
     });
-    bindSessionOwner(ctx('carol'), 'new');
+    await bindSessionOwner(ctx('carol'), 'new');
     expect(bindings().map((b) => b.session_id).sort()).toEqual(['new', 'young']);
   });
 
-  it('two tenants may hold one session id', () => {
-    bindSessionOwner(ctx('alice'), 's1');
-    bindSessionOwner(ctx('bob', 'acme'), 's1');
+  it('two tenants may hold one session id', async () => {
+    await bindSessionOwner(ctx('alice'), 's1');
+    await bindSessionOwner(ctx('bob', 'acme'), 's1');
     expect(bindings().map((b) => [b.tenant_id, b.owner_subject])).toEqual([['acme', 'bob'], ['default', 'alice']]);
   });
 });

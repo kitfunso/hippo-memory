@@ -19,11 +19,13 @@ import {
 } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
-import { ImportOptions, type ImportResult } from '../importers/core.js';
+import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
 import * as api from '../api/index.js';
 import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
-import { cliApiContext, cliInitGlobal, cliLocalFiles, cliSyncOptions } from './api-context.js';
+import {
+  cliApiContext, cliFolder, cliInitGlobal, cliStore, cliSyncOptions, cliSyncStore, type CliContext,
+} from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
@@ -161,7 +163,7 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
  * that finishes them. */
-function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): void {
+function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): void {
   let waiting: string;
   try {
     const { memoryIds, vectorIds } = embedCoverage(ctx);
@@ -178,7 +180,7 @@ function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): 
 
 /** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it
  * settles, and awaiting would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
-function backfillVectors(ctx: api.Context, embedCommand: string): void {
+function backfillVectors(ctx: CliContext, embedCommand: string): void {
   void embedMissingMemories(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
 
@@ -204,11 +206,12 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     requireInit(hippoRoot);
   }
 
-  const importOptions: ImportOptions = {
+  const importOptions: TargetedImport = {
     dryRun,
     global: useGlobal,
     extraTags,
     hippoRoot,
+    target: { root: targetRoot, store: cliSyncStore(targetRoot) },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
@@ -219,7 +222,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
-type FileImporter = (fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>;
+type FileImporter = (fp: string, opts: TargetedImport) => ReturnType<typeof importChatGPT>;
 
 interface PickedImporter {
   filePath: string | undefined;
@@ -250,7 +253,7 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
 }
 
 interface ImportFromFileOptions {
-  readonly importOptions: ImportOptions;
+  readonly importOptions: TargetedImport;
   readonly useGlobal: boolean;
   readonly dryRun: boolean;
   readonly tenantId: string;
@@ -339,7 +342,7 @@ async function importVaultFolder(
     name: nonEmptyStringFlag(flags, 'name'),
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
-  const vaultResult = await importVault(folderPath, vaultOptions);
+  const vaultResult = await importVault(folderPath, vaultOptions, cliStore(hippoRoot));
   printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
 }
 
@@ -362,7 +365,7 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
   }
 }
 
-function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: api.Context, dryRun: boolean): void {
+function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: CliContext, dryRun: boolean): void {
   console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
   console.log(`  Notes found:           ${vaultResult.total}`);
   console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
@@ -398,7 +401,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
 
 // Sync command
 
-export function handleSync({ hippoRoot, tenantId, flags }: CommandContext): void {
+export function handleSync({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();
@@ -409,8 +412,7 @@ export function handleSync({ hippoRoot, tenantId, flags }: CommandContext): void
 
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = flagIsTrue(flags, 'cross-project');
-  const global = cliLocalFiles(hippoRoot).globalStore();
-  const count = syncGlobalToLocal(cliApiContext(hippoRoot, tenantId).store, global, { includeCrossProject });
+  const count = syncGlobalToLocal(cliFolder(hippoRoot), cliFolder(globalRoot), { includeCrossProject });
   const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
@@ -444,8 +446,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const minScore = numberFlag(flags, 'min-score') ?? AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');
-    const { store } = cliApiContext(hippoRoot, tenantId);
-    const results = autoShare(store, cliLocalFiles(hippoRoot).globalStore(), { minScore, dryRun, tenantId });
+    const results = autoShare(cliFolder(hippoRoot), cliFolder(getGlobalRoot()), { minScore, dryRun, tenantId });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
     } else if (dryRun) {
@@ -464,7 +465,8 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
     const ctx = cliApiContext(hippoRoot, tenantId);
-    const result = shareMemory(ctx.store, cliLocalFiles(hippoRoot).globalStore(), shareId, { force, tenantId });
+    const local = { root: hippoRoot, store: ctx.store };
+    const result = shareMemory(local, cliFolder(getGlobalRoot()), shareId, { force, tenantId });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);
@@ -483,11 +485,11 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   }
 }
 
-export function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): void {
+export function handlePeers({ tenantId, flags }: CommandContext): void {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flagIsTrue(flags, 'all-tenants');
   const tenantScope = allTenants ? undefined : tenantId;
-  const peers = listPeers(cliLocalFiles(hippoRoot).globalStore(), tenantScope);
+  const peers = listPeers(cliFolder(getGlobalRoot()), tenantScope);
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {

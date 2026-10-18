@@ -39,7 +39,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
-import type { AuditOp } from '../../src/store/port/audit-ops.js';
+import type { AuditOp } from '../../src/core/audit-ops.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
