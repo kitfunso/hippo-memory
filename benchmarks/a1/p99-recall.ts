@@ -367,6 +367,12 @@ async function main(): Promise<void> {
   process.exit(gatePass ? 0 : 1);
 }
 
+// Every finish calls process.exit, so an emptied event loop means an await never settled and no report was written.
+process.once('beforeExit', () => {
+  console.error('[p99-recall] the event loop emptied before the report: an await never settled');
+  process.exit(3);
+});
+
 main().catch((err: Error) => {
   console.error('[p99-recall] fatal:', err);
   process.exit(2);

@@ -119,6 +119,8 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
     async stop(): Promise<void> {
       const live = !stopped;
       end();
+      // The idle worker is unreferenced, so without this a process with nothing else open ends inside the await.
+      worker?.ref();
       if (live) worker?.postMessage('stop');
       await exited;
     },
