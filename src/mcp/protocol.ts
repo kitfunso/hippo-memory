@@ -11,6 +11,7 @@ import type { HippoConfig } from '../core/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
+import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
 import type { AutoSleepRunner } from '../api/sleep/auto-sleep.js';
@@ -27,23 +28,6 @@ export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProject
 }
 
 // ── MCP protocol types ──
-
-interface McpRequest {
-  jsonrpc: '2.0';
-  id: number | string;
-  method: string;
-  // Kept as Record<string, JsonValue>: wire params are always parsed JSON, and every read of `params` (tools/call
-  // below) narrows via the isJson* predicates first.
-  params?: Record<string, JsonValue>;
-}
-
-interface McpResponse {
-  jsonrpc: '2.0';
-  // JSON-RPC answers a frame it could not parse with id null.
-  id: number | string | null;
-  result?: unknown;
-  error?: { code: number; message: string; data?: { requestId: string } };
-}
 
 /** The method, with the tool's name for a tool call, so a failure or timeout names what ran. */
 export function callName(req: McpRequest): string {
@@ -63,18 +47,14 @@ export function mcpErrorResponse<E>(
   const { status, message } = mapApiError(err);
   if (status === 503) {
     log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId });
-    return { jsonrpc: '2.0', id, error: { code: -32603, message } };
+    return errorReply(id, INTERNAL_ERROR, message);
   }
   if (status !== 500) {
     log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status });
-    return { jsonrpc: '2.0', id, error: { code: -32603, message } };
+    return errorReply(id, INTERNAL_ERROR, message);
   }
   log.error(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
-  return {
-    jsonrpc: '2.0',
-    id,
-    error: { code: -32603, message: `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, data: { requestId } },
-  };
+  return errorReply(id, INTERNAL_ERROR, `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, { requestId });
 }
 
 export type { McpRequest, McpResponse };
