@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import type { HippoConfig } from '../../src/core/config.js';
+import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import { getContext } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
@@ -35,8 +35,14 @@ function ids(result: { entries: Array<{ entry: { id: string } }> }) {
   return result.entries.map((e) => e.entry.id);
 }
 
+// A root loads config once per command, so a test that writes config.json reloads ctx.config as the next command would.
+function writeConfig(root: string, json: string): void {
+  fs.writeFileSync(path.join(root, 'config.json'), json);
+  ctx = { ...ctx, config: loadConfig(root) };
+}
+
 function enablePromptRecall(root: string, overrides: Partial<HippoConfig['pinnedInject']> = {}) {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
+  writeConfig(root, JSON.stringify({
     pinnedInject: {
       promptRecall: true,
       promptRecallThreshold: 0.1,
@@ -120,7 +126,7 @@ describe('getContext prompt recall (api-level)', () => {
   });
 
   it('treats a non-boolean promptRecall value as off', async () => {
-    fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ pinnedInject: { promptRecall: 'false' } }));
+    writeConfig(local, JSON.stringify({ pinnedInject: { promptRecall: 'false' } }));
     seed(local, 'the postgres migration script needs a rollback plan before deploy');
 
     const result = await getContext(ctx, {

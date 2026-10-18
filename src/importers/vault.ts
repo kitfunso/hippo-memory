@@ -67,12 +67,13 @@ async function syncVaultFolder(
     // a bearer-authed request. archiveRaw / remember thread this into audit.
     actor: { subject: 'connector:vault', role: 'admin' },
     store,
+    config: loadConfig(hippoRoot),
   };
 
   const existing = await loadVaultRows(ctx, vaultName);
   const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
   const tally: VaultTally = { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, redacted: 0, entries: [] };
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = ctx.config.defaultHalfLifeDays;
   const seen = new Set<string>();
 
   const run: VaultImportRun = {

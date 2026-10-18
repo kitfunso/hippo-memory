@@ -22,6 +22,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { stageScratchWinner } from '../_helpers/race-winner.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -346,7 +347,7 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replayDlqEntry(
-      { hippoRoot: root, store: sqliteStore(root) },
+      { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );

@@ -9,7 +9,7 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../sr
 import { getContext, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import type { HippoConfig } from '../../src/core/config.js';
+import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import {
   createDeliveryRecorder, type DeliveryEventInput, type DeliveryFault, type DeliveryEventType, type DeliveryRecorder,
 } from '../../src/store/delivery-recorder.js';
@@ -41,6 +41,8 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
   fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({
     pinnedInject: { promptRecallThreshold: 0.1, promptRecallMinShared: 1, ...pinnedInject },
   }));
+  // The root loads config once per command, so the next call sees the file through a reloaded ctx.config.
+  ctx = { ...ctx, config: loadConfig(local) };
 }
 
 function recorder(fault?: DeliveryFault): DeliveryRecorder {

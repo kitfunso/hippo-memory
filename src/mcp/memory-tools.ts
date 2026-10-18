@@ -7,10 +7,9 @@ import {
   outcome as apiOutcome,
   learn as apiLearn,
   MCP_LEARN,
-  type Context,
 } from '../api/index.js';
-import { mcpActor, type ToolCall } from './protocol.js';
-import { lastRecalledIds, resolveClientKey } from './session-state.js';
+import { mcpApiContext, type ToolCall } from './protocol.js';
+import { lastRecalledIds, resolveClientKey } from '../api/recall/last-recalled.js';
 
 export async function runRememberTool(
   { args, ctx, hippoRoot, config, tenantId, store }: ToolCall
@@ -22,13 +21,7 @@ export async function runRememberTool(
   if (args.tag) tags.push(String(args.tag));
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor
   // under HTTP-MCP, 'mcp' for stdio.
-  const apiCtx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: mcpActor(ctx),
-    store,
-  };
-  const result = await apiRemember(apiCtx, {
+  const result = await apiRemember(mcpApiContext(ctx), {
     content: text,
     tags,
     personal: args.personal === true,
@@ -46,9 +39,7 @@ export async function runRememberTool(
   return `Remembered [${result.id}] (half-life: ${result.halfLifeDays}d, tags: ${tagStr})${warnings}`;
 }
 
-export async function runOutcomeTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall
-): Promise<string> {
+export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   const good = Boolean(args.good);
   const clientKey = resolveClientKey(ctx);
   const ids = lastRecalledIds.get(clientKey) ?? [];
@@ -56,24 +47,16 @@ export async function runOutcomeTool(
 
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP,
   // 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips cross-tenant ids silently.
-  const apiCtx: Context = {
-    hippoRoot,
-    tenantId,
-    actor: mcpActor(ctx),
-    store,
-  };
-  const { applied } = await apiOutcome(apiCtx, ids, good);
+  const { applied } = await apiOutcome(mcpApiContext(ctx), ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export async function runLearnTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall
-): Promise<string> {
+export async function runLearnTool({ args, ctx }: ToolCall): Promise<string> {
   const days = Number(args.days) || 7;
   // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin
   // (mcpActor fails closed).
   const result = await apiLearn(
-    { hippoRoot, tenantId, actor: mcpActor(ctx), store },
+    mcpApiContext(ctx),
     { repoPath: process.cwd(), days, profile: MCP_LEARN },
   );
   if (result.status === 'not-a-repo') return 'No git history found.';

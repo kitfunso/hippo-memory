@@ -10,6 +10,7 @@ import { DAY_MS } from '../../util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import type { Context } from '../../api/index.js';
+import type { HippoConfig } from '../../core/config.js';
 import type { HippoStore } from '../../store/index.js';
 import { resolveTenantId } from '../../store/tenant.js';
 import {
@@ -26,7 +27,11 @@ import { type JsonValue, isJsonObject } from '../../util/json.js';
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
  * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
  * cannot tell a gated-off route from a missing one. */
-export async function handleSlackEventsWebhook(request: WebhookRequest, store: HippoStore): Promise<void> {
+export async function handleSlackEventsWebhook(
+  request: WebhookRequest,
+  store: HippoStore,
+  config: HippoConfig,
+): Promise<void> {
   const { req, res, opts } = request;
   // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
@@ -60,6 +65,7 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: H
   await routeUnlessReplayed({
     hippoRoot: opts.hippoRoot,
     store,
+    config,
     res,
     rawBody: rawBytes.toString('utf8'),
     signature: sigStr,
@@ -91,6 +97,7 @@ ${d.signature}`;
 interface SignedSlackRequest {
   hippoRoot: string;
   store: HippoStore;
+  config: HippoConfig;
   res: ServerResponse;
   rawBody: string;
   signature: string;
@@ -169,6 +176,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
     store: d.store,
+    config: d.config,
   };
   if (body === undefined || !isSlackEventEnvelope(body)) {
     await parkAndAck(d, {

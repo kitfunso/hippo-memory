@@ -4,8 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
 import { listMemories } from '../api/memories/memories.js';
-import { cliApiContext, cliFolder } from './api-context.js';
-import { loadConfig } from '../core/config.js';
+import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { isInitialized } from '../core/project-identity.js';
 import { folderVectorSource } from '../entry/folder-search.js';
@@ -84,7 +83,7 @@ async function runCorpusEval(
   const globalRoot = getGlobalRoot();
   const localBump = flags['equal-sources']
     ? 1.0
-    : numberFlag(flags, 'local-bump') ?? loadConfig(hippoRoot).search.localBump;
+    : numberFlag(flags, 'local-bump') ?? cliConfig(hippoRoot).search.localBump;
 
   return runEval(cases, entries, {
     stores: isInitialized(globalRoot) ? { local: cliFolder(hippoRoot), global: cliFolder(globalRoot) } : undefined,

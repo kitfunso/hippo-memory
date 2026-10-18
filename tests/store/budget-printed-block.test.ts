@@ -16,6 +16,7 @@ import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadLastRecall } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
   'observability-alerting-runbook-owner', 'incident-review-follow-up-action-item',
@@ -91,7 +92,7 @@ function retrievalCount(id: string): number {
 async function mcpText(name: string, args: McpArgs): Promise<string> {
   const res: McpResponse | null = await handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: hippoDir, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoDir) },
+    { hippoRoot: hippoDir, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
   );
   // SAFETY: tools/call answers carry one MCP text content block.
   return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
@@ -237,7 +238,7 @@ describe('MCP recall and context', () => {
 });
 
 describe('assemble and drill', () => {
-  const ctx: Omit<Context, 'hippoRoot' | 'store'> = { tenantId: 'default', actor: { subject: 'test:budget', role: 'admin' } };
+  const ctx: Omit<Context, 'hippoRoot' | 'store' | 'config'> = { tenantId: 'default', actor: { subject: 'test:budget', role: 'admin' } };
   const sid = 'sess-budget-window';
   const line = (i: number): string => `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;
 
@@ -276,7 +277,7 @@ describe('assemble and drill', () => {
 
   it('never evicts the fresh tail, even when the tail alone exceeds the budget', async () => {
     const rows = seedSession(5);
-    const r = await assemble({ ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir) }, sid, { budget: 20, freshTailCount: 2, cost: assembleCost(sid) });
+    const r = await assemble({ ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, sid, { budget: 20, freshTailCount: 2, cost: assembleCost(sid) });
     expect(r.items.map((it) => it.id)).toEqual(rows.slice(3));
     expect(r.evicted).toBe(3);
   });
@@ -294,7 +295,7 @@ describe('assemble and drill', () => {
 
   it('drill keeps the first child when it alone exceeds the budget', async () => {
     const id = seedSummary(3);
-    const r = await drillDown({ ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir) }, id, { budget: 5, cost: drillCost });
+    const r = await drillDown({ ...ctx, hippoRoot: hippoDir, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, id, { budget: 5, cost: drillCost });
     expect('children' in r && r.children.map((c) => c.content)).toEqual([line(0)]);
   });
 });

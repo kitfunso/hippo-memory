@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { getContext, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests, markSharedStore } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
@@ -24,6 +24,7 @@ import { seedTwoTenants, TENANT_A, TENANT_B } from '../_helpers/store-conformanc
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds } from '../_helpers/root-forms.js';
+import { contextReach } from '../../src/api/types.js';
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
 
@@ -43,7 +44,7 @@ interface Expected {
 
 interface Case {
   readonly name: string;
-  readonly opts: ContextOptions;
+  readonly opts: Omit<ContextOptions, 'currentProject'> & Partial<Pick<ContextOptions, 'currentProject'>>;
   readonly expected: Expected;
   readonly actor?: Actor;
   readonly tenantId?: string;
@@ -274,6 +275,7 @@ interface PassOptions {
 interface PassConfig {
   embeddings?: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
   physics?: { readonly enabled: boolean };
+  sharedStore?: true;
 }
 
 /** One getContext on a fresh copy of the fixture. */
@@ -290,14 +292,15 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
   if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
   if (c.physicsOff) config.physics = { enabled: false };
   else if (c.physicsOn && embedded) config.physics = { enabled: true };
+  // The store's own flag, which the hippo.db reach and an in-memory store's ctx.config both read.
+  if (c.shared) config.sharedStore = true;
   if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
-  if (c.shared) markSharedStore(root);
   prepare?.(root, globalRoot);
   const store = makeStore?.(root);
   const served = store ?? sqliteStore(root);
   // A store of another kind gets no reach: the api reads it as one project with no global store.
-  const reach = served.kind === 'sqlite' ? sqliteReach(root, served) : undefined;
-  const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
+  const reach = served.kind === 'sqlite' ? contextReach(sqliteReach(root, served), loadConfig) : undefined;
+  const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach, config: loadConfig(root) };
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
   const result = store && store.kind !== 'sqlite'
     ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))

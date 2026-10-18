@@ -4,7 +4,6 @@
 import type { Context } from '../api/types.js';
 import { CLI_ACTOR } from '../core/actor.js';
 import { createMemory } from '../core/memory.js';
-import { loadConfig } from '../core/config.js';
 import {
   failureHash,
   failureSignature,
@@ -15,8 +14,8 @@ import {
 import type { JsonValue } from '../util/json.js';
 import type { CaptureErrorOutcome, FailureOutcome } from '../store/port/failure-log.js';
 
-/** The store a failure is logged and its lesson kept in, with the folder its config is read from. */
-export type FailureTarget = Pick<Context, 'hippoRoot' | 'tenantId' | 'store'>;
+/** The store a failure is logged and its lesson kept in, with that store's config. */
+export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'>;
 
 /**
  * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws.
@@ -77,7 +76,7 @@ export interface LessonCaller {
 }
 
 export async function storeLesson(
-  { hippoRoot, tenantId, store }: FailureTarget,
+  { tenantId, store, config }: FailureTarget,
   text: string,
   caller?: LessonCaller,
 ): Promise<'stored' | 'duplicate'> {
@@ -89,7 +88,7 @@ export async function storeLesson(
     source: 'tool-failure',
     confidence: 'observed',
     tenantId,
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays: config.defaultHalfLifeDays,
   });
   // A caller's project is its checked one; the store's own folder would name the server.
   const write = caller === undefined

@@ -8,7 +8,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { isStoreBusy } from '../../src/store/busy.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
 import { markSnapshotSaved, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../../src/store/compactions-record.js';
@@ -22,10 +22,10 @@ import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../../src/core/api-errors.js';
 import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import type { StoreReach } from '../../src/store/port.js';
+import type { ContextReach } from '../../src/api/types.js';
 
 // A server ctx carries a reach from its composition root; the ledger books nowhere without one.
-const SHARED_REACH: StoreReach = { hasLocal: true, isGlobal: false, shared: true };
+const SHARED_REACH: ContextReach = { hasLocal: true, isGlobal: false, shared: true };
 import {
   bindSessionOwner,
   captureFailureForCaller,
@@ -102,7 +102,7 @@ function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] {
 }
 
 function owned(owner: string): Context {
-  return { hippoRoot: root, store: sqliteStore(root), tenantId: TENANT, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner }, reach: SHARED_REACH };
+  return { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner }, reach: SHARED_REACH };
 }
 
 /** Every session lands in the holdout arm at 10000 basis points. */
@@ -322,7 +322,7 @@ describe('compactResumeForCaller', () => {
 describe('saveCompactionItemsForCaller', () => {
   it('writes with ownerOrSubject as actor and the project as origin', async () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
-    const unowned: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' }, reach: SHARED_REACH };
+    const unowned: Context = { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' }, reach: SHARED_REACH };
     await saveCompactionItemsForCaller(unowned, { sessionId: 'sC', project: { name: 'acme/web', legacyName: 'web' }, trigger: 'auto', items: [ITEMS[0]], requestId: 'cmp-c' });
     withDb((db) => {
       expect(writtenRows(db, 'compaction:sA')).toEqual([

@@ -5,6 +5,7 @@ import { isSubagentPayload } from '../util/hook-payload.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../api/context-auto.js';
 import { detectScope } from '../core/active-scope.js';
+import { resolveProjectIdentity } from '../core/project-identity.js';
 import { bookLedgerTurn, ledgerReachOf } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
@@ -151,7 +152,7 @@ async function renderContext(
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
   const view: ContextView = {
-    hippoRoot,
+    config: ctx.config,
     tenantId: ctx.tenantId,
     ledgerSessionId,
     payloadSessionId,
@@ -225,6 +226,7 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     scope: ctxActiveScope ?? undefined,
     includeRecent: parseCountFlag(flags['include-recent']),
     crossProject,
+    currentProject: resolveProjectIdentity(process.cwd()),
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.

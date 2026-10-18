@@ -1,5 +1,4 @@
 import { predictionMirror } from '../../store/predictions.js';
-import { configOf } from '../config-of.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../../store/port.js';
 import type { Context } from '../types.js';
 import type { Prediction, SavePredictionOptions } from '../../store/port/predictions.js';
@@ -18,7 +17,7 @@ export async function recordPrediction(
 ): Promise<Prediction> {
   return savePrediction(ctx, {
     ...claim,
-    mirror: predictionMirror(ctx.tenantId, claim, configOf(ctx).defaultHalfLifeDays),
+    mirror: predictionMirror(ctx.tenantId, claim, ctx.config.defaultHalfLifeDays),
   });
 }
 

@@ -40,7 +40,7 @@ function contextText(res: McpResponse | null): string {
 /** What an untyped transport (a .mjs script, an older add-on) sends: the compiler cannot stop it omitting the role. */
 function roleless(hippoRoot: string): McpContext {
   // SAFETY: deliberately drops the required role to prove the runtime fails closed for callers the type cannot reach.
-  return { ...JSON.parse(JSON.stringify({ hippoRoot, tenantId: 'default', actor: 'http:untyped' })), store: sqliteStore(hippoRoot) } as McpContext;
+  return { ...JSON.parse(JSON.stringify({ hippoRoot, tenantId: 'default', actor: 'http:untyped' })), store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) } as McpContext;
 }
 
 function callTool(name: string, args: Record<string, number>, ctx: McpContext) {
@@ -59,8 +59,8 @@ describe('mcpActor', () => {
   });
 
   it('gives an admin context host admin only when the transport says so', () => {
-    expect(mcpActor({ hippoRoot: '/unused', tenantId: 't', actor: 'k', role: 'admin', store: sqliteStore('/unused') }).hostAdmin).toBeUndefined();
-    expect(mcpActor({ hippoRoot: '/unused', tenantId: 't', actor: 'k', role: 'admin', hostAdmin: true, store: sqliteStore('/unused') }).hostAdmin).toBe(true);
+    expect(mcpActor({ hippoRoot: '/unused', tenantId: 't', actor: 'k', role: 'admin', store: sqliteStore('/unused'), config: loadConfig('/unused') }).hostAdmin).toBeUndefined();
+    expect(mcpActor({ hippoRoot: '/unused', tenantId: 't', actor: 'k', role: 'admin', hostAdmin: true, store: sqliteStore('/unused'), config: loadConfig('/unused') }).hostAdmin).toBe(true);
   });
 });
 
@@ -88,14 +88,14 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
 
   it("refuses a remote member and a tenant admin, whose repo is not the server's", async () => {
     for (const role of ['member', 'admin'] as const) {
-      const ctx: McpContext = { hippoRoot, tenantId: 'default', actor: `api_key:${role}`, role , store: sqliteStore(hippoRoot) };
+      const ctx: McpContext = { hippoRoot, tenantId: 'default', actor: `api_key:${role}`, role , store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) };
       await expect(callTool('hippo_learn', { days: 3650 }, ctx)).rejects.toThrow('hippo_learn requires a host admin');
     }
     expect(loadEveryTenantEntries(hippoRoot)).toEqual([]);
   });
 
   it('learns for stdio, the local operator, as before', async () => {
-    const text = await runLearnTool({ args: { days: 3650 }, ctx: { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, stdio: true, store: sqliteStore(hippoRoot) }, hippoRoot, config: loadConfig(hippoRoot), tenantId: 'default', store: sqliteStore(hippoRoot) });
+    const text = await runLearnTool({ args: { days: 3650 }, ctx: { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, stdio: true, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) }, hippoRoot, config: loadConfig(hippoRoot), tenantId: 'default', store: sqliteStore(hippoRoot) });
     expect(text).toMatch(/^Git learn: 1 new/);
     expect(loadEveryTenantEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);
   });
@@ -122,13 +122,13 @@ describe('hippo_context reads the server git state only for stdio or a host admi
   });
 
   it("lists a remote member's rows by strength, with no query from the server's branch", async () => {
-    const text = contextText(await callTool('hippo_context', {}, { hippoRoot, tenantId: 'default', actor: 'api_key:m', role: 'member', store: sqliteStore(hippoRoot) }));
+    const text = contextText(await callTool('hippo_context', {}, { hippoRoot, tenantId: 'default', actor: 'api_key:m', role: 'member', store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) }));
     expect(text).toContain('quarterly invoices');
     expect(text).toContain('zebra migration');
   });
 
   it("queries a host admin's context by the server's branch, as stdio does", async () => {
-    const text = contextText(await callTool('hippo_context', {}, { hippoRoot, tenantId: 'default', actor: 'localhost:cli', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) }));
+    const text = contextText(await callTool('hippo_context', {}, { hippoRoot, tenantId: 'default', actor: 'localhost:cli', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) }));
     expect(text).toContain('zebra migration');
     expect(text).not.toContain('quarterly invoices');
   });

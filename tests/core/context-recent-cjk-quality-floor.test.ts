@@ -19,7 +19,7 @@ import { isContentWorthStoring } from '../../src/core/memory-quality.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { getContext } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -64,7 +64,7 @@ describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       seed(home, CJK_SENTENCE, { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 1, budget: 500 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 1, budget: 500 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain(CJK_SENTENCE);

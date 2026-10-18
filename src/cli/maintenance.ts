@@ -5,8 +5,7 @@ import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
 import { countAllMemories } from '../api/memories/memories.js';
-import { cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
-import { loadConfig } from '../core/config.js';
+import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
@@ -199,7 +198,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
   // Embedding (unlike status/reset) needs an available provider.
   const embedProvider = given ?? (() => {
     try {
-      return resolveEmbeddingProvider(loadConfig(root).embeddings);
+      return resolveEmbeddingProvider(cliConfig(root).embeddings);
     } catch (err) {
       printError(errorMessage(err));
       return null;
@@ -210,7 +209,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
     return null;
   }
   if (embedProvider.isAvailable()) return embedProvider;
-  if (loadConfig(root).embeddings.enabled === false) {
+  if (cliConfig(root).embeddings.enabled === false) {
     console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
     return null;
   }

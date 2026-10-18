@@ -12,6 +12,7 @@ import { handleMcpRequest } from '../../src/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -76,7 +77,7 @@ describe('MCP hippo_remember', () => {
   it('appends the warning to the tool result', async () => {
     const response = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: TYPED } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) },
     );
     const text = JSON.stringify(response);
     expect(text).toContain('Remembered [');

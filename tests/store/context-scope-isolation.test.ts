@@ -21,6 +21,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { getContext } from '../../src/api/index.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -128,7 +129,7 @@ describe('getContext origin partition (project A session)', () => {
       path.join(projA, 'config.json'),
       JSON.stringify({ contextProjectIsolation: false }),
     );
-    const result = await getContext(ctx, { ...base, pinnedOnly: true });
+    const result = await getContext({ ...ctx, config: loadConfig(projA) }, { ...base, pinnedOnly: true });
     const got = contents(result.entries);
     expect(got).toContain(BRAVO);
     expect(got).toContain(LEGACY);

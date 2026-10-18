@@ -98,6 +98,7 @@ entry/store-kit.d.ts: GoalRecallLogRow re-export
 entry/store-kit.d.ts: Goals re-export
 entry/store-kit.d.ts: HandoffFilter re-export
 entry/store-kit.d.ts: HandoffOutcome re-export
+entry/store-kit.d.ts: HippoConfig re-export
 entry/store-kit.d.ts: HippoStore re-export
 entry/store-kit.d.ts: KeyAudit re-export
 entry/store-kit.d.ts: KeyListQuery re-export
@@ -183,6 +184,7 @@ entry/store-kit.d.ts: ftsTermParts re-export
 entry/store-kit.d.ts: hasGroup re-export
 entry/store-kit.d.ts: heldTexts re-export
 entry/store-kit.d.ts: isSharedStore re-export
+entry/store-kit.d.ts: loadConfig re-export
 entry/store-kit.d.ts: normalizeValueForRejection re-export
 entry/store-kit.d.ts: ownScopeTouches re-export
 entry/store-kit.d.ts: passesScopeFilterForRecall re-export

@@ -10,8 +10,9 @@ import type {
 } from '../../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
-import type { HippoStore, LastRecall } from '../../store/port.js';
+import type { LastRecall } from '../../store/port.js';
 import type { CallerProject } from '../prompt-hook.js';
+import type { GlobalInReach } from '../types.js';
 import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
@@ -107,9 +108,8 @@ export interface RecallOptions {
 
 interface CliCoreRanking {
   rank: Omit<RankRecallOptions, 'query' | 'boost'>;
-  /** A second store searched beside `ctx.store`: ranking reads `globalStore` with `globalRoot`'s config, and its
-   * recall rows go to it. */
-  sources?: { readonly globalRoot: string; readonly globalStore: HippoStore };
+  /** A second store searched beside `ctx.store`: ranking reads it with its own config, and its recall rows go to it. */
+  sources?: GlobalInReach;
   /** Receives each operator note when ranking reaches it. */
   note?: (line: string) => void;
 }

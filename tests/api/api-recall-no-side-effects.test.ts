@@ -23,7 +23,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, retrieve, getContext } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall } from '../_helpers/root-forms.js';
 
@@ -68,7 +68,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       expect(afterRecall).toEqual([]);
 
       // api.getContext — SHOULD mutate. (getContext opts use `q`, not `query`.)
-      const ctxResult = await getContext(ctx, { q: 'target', budget: 1000 });
+      const ctxResult = await getContext(ctx, { currentProject: cwdProject(), q: 'target', budget: 1000 });
       expect(ctxResult.entries).toHaveLength(2);
       const afterContext = loadLastRecall(home).last_retrieval_ids ?? [];
       expect([...afterContext].sort()).toEqual(ctxResult.entries.map((e) => e.entry.id).sort());

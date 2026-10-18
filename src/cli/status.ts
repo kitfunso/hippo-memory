@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
-import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -27,7 +26,7 @@ import {
 } from '../api/status.js';
 import type { StatusCounts } from '../store/candidates.js';
 import type { Diagnostics } from '../store/port/diagnostics.js';
-import { cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
+import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 
 const diagnosticsAt = (hippoRoot: string): Diagnostics => cliLocalFiles(hippoRoot).diagnostics;
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -88,7 +87,7 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
 function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
-      return resolveEmbeddingProvider(loadConfig(ctx.hippoRoot).embeddings);
+      return resolveEmbeddingProvider(cliConfig(ctx.hippoRoot).embeddings);
     } catch {
       // Status reports a bad provider config as "misconfigured" below instead of failing.
       return null;
@@ -99,7 +98,7 @@ function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total
     console.log(`Embeddings:        misconfigured (check embeddings.provider / apiBaseUrl), BM25 only`);
     return;
   }
-  const embeddingsDisabled = loadConfig(ctx.hippoRoot).embeddings.enabled === false;
+  const embeddingsDisabled = cliConfig(ctx.hippoRoot).embeddings.enabled === false;
   const embAvail = embedProvider.isAvailable();
   if (embeddingsDisabled) {
     console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
@@ -138,7 +137,7 @@ function printPhysicsStatus(ctx: CliContext): void {
       const avgVelMag = sumVelMag / particles.length;
       console.log('');
       console.log(`Physics: ${particles.length} particles, ` +
-        `${physicsEnergyText(particles, loadConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
+        `${physicsEnergyText(particles, cliConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.

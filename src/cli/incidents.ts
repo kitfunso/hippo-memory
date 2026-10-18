@@ -4,13 +4,12 @@ import { extractPathTags } from '../search/path-context.js';
 import * as incidentsModule from '../objects/incidents.js';
 import { objectsOf } from '../api/objects/objects.js';
 import type { Objects } from '../store/port.js';
-import { cliApiContext } from './api-context.js';
+import { cliConfig, cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
 import { fail } from './exit.js';
-import { loadConfig } from '../core/config.js';
 import { CLI_ACTOR } from '../core/actor.js';
 
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
@@ -104,7 +103,7 @@ async function incidentCreate(
   }
 
   const incidentPathTags = extractPathTags(process.cwd());
-  const created = await incidentsModule.openIncident(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
+  const created = await incidentsModule.openIncident(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
     incidentText,
     context,
     linkedMemoryIds,

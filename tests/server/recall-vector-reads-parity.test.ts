@@ -8,9 +8,9 @@ import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorRead
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.js';
 import { resolveVectorArm } from '../../src/search/vector.js';
-import { markSharedStore } from '../../src/core/config.js';
+import { shareRoot } from '../_helpers/share-root.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
@@ -123,8 +123,8 @@ async function runPass(calls: readonly Call[], physics: boolean, backing: Backin
     const embeddingsConfig = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
     writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: physics } }));
     prepare?.(s.root);
-    // serve() marks a port store's root shared, so the hippo.db pass must be shared too to compare like with like.
-    markSharedStore(s.root);
+    // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
+    shareRoot(s.root);
     const memory = backing === 'memory' ? inMemoryVectorStore(s.root) : undefined;
     const store = memory?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
     const before = embeddings.requests();

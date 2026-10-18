@@ -1,27 +1,37 @@
 // The store the token ledger writes to for a caller; context, recall and the session hooks share it.
 import { noteLedgerRowSkipped, type LedgerTurn } from '../store/ledger-turn.js';
-import type { FolderFiles, Ledger, StoreReach } from '../store/port.js';
+import type { HippoConfig } from '../core/config.js';
+import type { FolderFiles, Ledger } from '../store/port.js';
 import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
-import type { Context } from './types.js';
+import type { Context, GlobalInReach } from './types.js';
+
+/** A hippo.db a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
+export interface LedgerHome extends FolderFiles {
+  readonly config: HippoConfig;
+}
 
 /** Where a call's ledger can sit: its own hippo.db, else the operator's global one; a shared store has no `global`. */
 export interface LedgerReach {
-  readonly local?: FolderFiles;
-  readonly global?: StoreReach['global'];
+  readonly local?: LedgerHome;
+  readonly global?: GlobalInReach;
 }
 
 /** The ledger is SQLite-only: a local one needs a reach that says the caller has a store and a SQLite store. */
-export function ledgerReachOf(ctx: Pick<Context, 'hippoRoot' | 'reach' | 'store'>, shared?: boolean): LedgerReach {
+export function ledgerReachOf(
+  ctx: Pick<Context, 'hippoRoot' | 'reach' | 'store' | 'config'>,
+  shared?: boolean,
+): LedgerReach {
   const files = ctx.reach?.hasLocal === true ? ctx.store.localFiles : undefined;
-  const local = files === undefined ? undefined : { root: ctx.hippoRoot, files };
+  const local = files === undefined ? undefined : { root: ctx.hippoRoot, files, config: ctx.config };
   return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
 
 /** The call's own hippo.db, else the global store's (the prompt hook fires where none is); null with neither. */
-export function ledgerFiles(reach: LedgerReach): FolderFiles | null {
+export function ledgerFiles(reach: LedgerReach): LedgerHome | null {
   if (reach.local !== undefined) return reach.local;
-  const files = reach.global?.store.localFiles;
-  return reach.global === undefined || files === undefined ? null : { root: reach.global.root, files };
+  const { global } = reach;
+  const files = global?.store.localFiles;
+  return global === undefined || files === undefined ? null : { root: global.root, files, config: global.config };
 }
 
 /** Runs `call` on ledgerFiles' ledger; undefined on any failure, since a ledger failure must not break recall. */

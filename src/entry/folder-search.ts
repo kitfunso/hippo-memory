@@ -4,7 +4,8 @@
 import type { MemoryEntry } from '../core/memory.js';
 import type { SearchResult } from '../core/search-types.js';
 import { sqliteStore } from '../store/index.js';
-import { configuredVectorSource, hybridSearch as rankHybrid, type HybridSearchOptions } from '../search/hybrid.js';
+import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../search/hybrid.js';
+import { loadConfig } from '../core/config.js';
 import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../search/physics-search.js';
 import type { VectorSource } from '../search/vector.js';
 
@@ -12,7 +13,9 @@ import type { VectorSource } from '../search/vector.js';
 export function folderVectorSource({
   hippoRoot, store, embeddings,
 }: Pick<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>): VectorSource | undefined {
-  return hippoRoot ? configuredVectorSource(store ?? sqliteStore(hippoRoot), hippoRoot, embeddings) : undefined;
+  if (!hippoRoot) return undefined;
+  const config = { embeddings: embeddings ?? loadConfig(hippoRoot).embeddings };
+  return vectorSourceOf({ store: store ?? sqliteStore(hippoRoot), config, onHippoDb: true });
 }
 
 /**

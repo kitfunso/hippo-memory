@@ -9,6 +9,7 @@ import { sqliteReach, sqliteStore, sqliteSyncStore } from '../store/sqlite/store
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
 import type { SleepResult } from '../api/sleep/sleep.js';
+import { contextReach } from '../api/types.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
 
 type JobResult = SleepResult | ConsolidationResult;
@@ -25,8 +26,9 @@ function failed<E>(err: E): SleepReply<never> {
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
 function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
   const store = sqliteStore(hippoRoot);
-  const reach = sqliteReach(hippoRoot, store);
-  return sleep({ hippoRoot, tenantId: job.tenantId, actor: job.actor, store, reach }, job.opts);
+  const reach = contextReach(sqliteReach(hippoRoot, store), loadConfig);
+  const config = loadConfig(hippoRoot);
+  return sleep({ hippoRoot, tenantId: job.tenantId, actor: job.actor, store, reach, config }, job.opts);
 }
 
 /** Resolves to the exit code once the channel has taken the reply, or failed to. */

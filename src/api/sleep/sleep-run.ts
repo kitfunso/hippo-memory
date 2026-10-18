@@ -3,7 +3,6 @@
 import { auditMemories, type AuditIssue } from '../../core/memory-audit.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../sharing/share.js';
 import { runConsolidation } from '../../consolidate/sleep.js';
-import { configOf } from '../config-of.js';
 import { deduplicateStore } from '../../consolidate/dedupe.js';
 import { evalNow } from '../../core/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../core/ambient.js';
@@ -24,7 +23,6 @@ export interface SleepPhases {
   auditMemories: typeof auditMemories;
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
-  configOf: typeof configOf;
   loadPendingExtractionTenants: (store: Consolidation) => DirtyTenantSnapshot['dirtyTenants'];
   extractGraph: (store: StoreWith<'localFiles'>, tenantId: string) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
@@ -36,7 +34,6 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   computeAmbientState: ambientStateFromTallies,
-  configOf,
   loadPendingExtractionTenants: (store) => store.dirtyGraphTenants(),
   extractGraph: extractGraphChunked,
   pageSize: 1000,
@@ -100,7 +97,7 @@ async function runSleepPhases(
 
   // Phase 1: Consolidation.
   const { local } = ctx;
-  const consolidateResult = await phases.consolidate(local, { dryRun, config: phases.configOf(ctx) });
+  const consolidateResult = await phases.consolidate(local, { dryRun, config: ctx.config });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
@@ -231,10 +228,9 @@ async function runQualityAudit(
 }
 
 function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): void {
-  const sleepConfig = phases.configOf(ctx);
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = ctx.reach?.globalTarget;
-  if (!sleepConfig.autoShareOnSleep || target === undefined) return;
+  if (!ctx.config.autoShareOnSleep || target === undefined) return;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
   const shared = phases.autoShare({ root: ctx.hippoRoot, store: ctx.store }, target, {
@@ -259,8 +255,7 @@ function summarizeAmbient(
   result: SleepResult,
   pages: () => Iterable<MemoryEntry[]>,
 ): number {
-  const postSleepConfig = phases.configOf(ctx);
-  if (!postSleepConfig.ambient.enabled) return 0;
+  if (!ctx.config.ambient.enabled) return 0;
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = evalNow();
   const tallies = tallyAmbientEntries([], now);

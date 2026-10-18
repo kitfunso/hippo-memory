@@ -36,6 +36,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadConfig } from '../../dist/core/config.js';
 import { initStore } from '../../dist/store/open.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../dist/store/sessions.js';
@@ -183,11 +184,13 @@ async function measure(
   iterations: number,
   includeContinuity: boolean,
 ): Promise<number[]> {
+  // Loaded once, so no sample pays a config.json parse.
+  const config = loadConfig(home);
   // Warmup: 10% of iterations, discarded.
   const warmup = Math.max(5, Math.floor(iterations * 0.1));
   for (let i = 0; i < warmup; i++) {
     await apiRetrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
       { query: queries[i % queries.length]!, window: { includeContinuity } },
     );
   }
@@ -197,7 +200,7 @@ async function measure(
     const q = queries[i % queries.length]!;
     const t0 = performance.now();
     await apiRetrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
       { query: q, window: { includeContinuity } },
     );
     samples.push(performance.now() - t0);
@@ -216,11 +219,12 @@ async function main(): Promise<void> {
   console.log(`[p99-recall-continuity] seeding ${args.storeSize} memories…`);
   const rng = makeRng(0xC0FFEE);
   const seedStart = Date.now();
+  const config = loadConfig(home);
   for (let i = 0; i < args.storeSize; i++) {
     const cluster = pick(rng, TAG_CLUSTERS);
     const content = buildContent(rng, cluster);
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home), config },
       { content, tags: [cluster.tag] },
     );
     if ((i + 1) % 1000 === 0) {

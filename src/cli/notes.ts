@@ -1,8 +1,8 @@
 // The customer note verbs: one account's note, versioned by supersession.
 
+import { cliConfig } from './api-context.js';
 import * as customerNotesModule from '../objects/customer-notes.js';
 import { stringFlag } from './flag-values.js';
-import { loadConfig } from '../core/config.js';
 import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
@@ -33,7 +33,7 @@ const noteKind = (
   body: (flags) => requiredText(flags, 'text'),
   keyOf: (n) => n.customer,
   save: (customer, note, extraTags, from) => {
-    const { defaultHalfLifeDays } = loadConfig(hippoRoot);
+    const { defaultHalfLifeDays } = cliConfig(hippoRoot);
     return customerNotesModule.saveCustomerNote(objects, defaultHalfLifeDays, tenantId, {
       customer, note, extraTags, changeSummary: from?.changeSummary, supersedesNoteId: from?.id,
     });

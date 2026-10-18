@@ -5,6 +5,7 @@ import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
 import type { GlobalStores } from '../store/sqlite/worker-store.js';
+import type { ConfigReader } from '../core/config.js';
 
 export interface ServerHandle {
   port: number;
@@ -92,6 +93,8 @@ export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
   /** The operator's global store a request reaches beside `store`. */
   globalStores: GlobalStores;
+  /** This server's own config reader: each request reads config.json through it. */
+  configAt: ConfigReader;
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
   offLoop: <T>(run: () => T) => T;
   publicJsonBodies: ReadonlyMap<string, string>;

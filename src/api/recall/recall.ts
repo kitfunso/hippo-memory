@@ -16,8 +16,6 @@ import type { RerankStep } from '../../core/search-types.js';
 import type { PhysicsConfig } from '../../core/physics-config.js';
 import { compareEntryIdentity } from '../../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../util/same-text.js';
-import { isSharedStore } from '../../core/config.js';
-import { configOf } from '../config-of.js';
 import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
@@ -34,7 +32,7 @@ import type {
   ContinuityBlock,
   StoreRanking,
 } from './types.js';
-import { type Context, ownerOrSubject, RecallContractError } from '../types.js';
+import { type Context, ownerOrSubject, RecallContractError, sharedStoreOf } from '../types.js';
 import {
   anchoringRows,
   availabilityRows,
@@ -154,7 +152,7 @@ async function sqlBand(
     vectorCandidates: recallVectorSpec(ctx, opts, own),
   };
   const ranked = await searchByEngine(
-    vectorSourceOf({ store, config: configOf(ctx), onHippoDb: ctx.reach?.isHippoDb }),
+    vectorSourceOf({ store, config: ctx.config, onHippoDb: ctx.reach?.isHippoDb }),
     opts.query,
     candidates,
     physicsFor(ctx, opts),
@@ -181,7 +179,7 @@ async function finishBandRecall(
 
 /** `mode` names the engine: physics with the store's config, hybrid otherwise. */
 function physicsFor(ctx: Context, opts: RecallOptions): PhysicsConfig | null {
-  return opts.mode === 'physics' ? configOf(ctx).physics : null;
+  return opts.mode === 'physics' ? ctx.config.physics : null;
 }
 
 /** The recall load's arguments: exact scope, current rows only, the caller's project and personal scope. */
@@ -229,7 +227,7 @@ async function wideBand(
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
   const searchOpts = { budget: Infinity, vectorCandidates: recallVectorSpec(ctx, opts, own) };
   const searched = await searchByEngine(
-    vectorSourceOf({ store, config: configOf(ctx), onHippoDb: ctx.reach?.isHippoDb }),
+    vectorSourceOf({ store, config: ctx.config, onHippoDb: ctx.reach?.isHippoDb }),
     opts.query,
     pool,
     physicsFor(ctx, opts),
@@ -444,7 +442,7 @@ async function readRecall(
 
 // On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
 function continuityKey(ctx: Context, opts: RecallOptions): ContinuityKey | null {
-  if (!(ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot))) return null;
+  if (!sharedStoreOf(ctx)) return null;
   return { owner: ownerOrSubject(ctx.actor), project: recallOrigin(opts) ?? [] };
 }
 

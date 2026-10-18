@@ -12,6 +12,7 @@ import { cliStdioHost } from '../../src/cli/api-context.js';
 import { retrieve, remember } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -137,7 +138,7 @@ describe('store opens per request', () => {
 
 describe('stdio MCP tool calls', () => {
   it('interleaved calls each open and close their own handle, in the scope the stdio host gives each frame', async () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, store: sqliteStore(root) };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, store: sqliteStore(root), config: loadConfig(root) };
     const reply = (id: number, query: string) =>
       cliStdioHost.runRequest(() =>
         handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx));

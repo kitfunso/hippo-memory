@@ -10,11 +10,12 @@ import {
 } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
-import { lastRecalledIds, resolveClientKey } from '../../src/mcp/session-state.js';
+import { lastRecalledIds, resolveClientKey } from '../../src/api/recall/last-recalled.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const admin: Actor = { subject: 'cli', role: 'admin' };
@@ -69,7 +70,7 @@ describe('the api with ctx.store', () => {
   it('writes through entryWrites with hippo.db blocked, and creates no hippo.db in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryEntryWritesStore(copyOf());
-    const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store };
+    const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) };
     await withSqliteBlocked('in-memory', async () => {
       const raw = await remember(ctx, { content: 'raw call transcript about the outage', kind: 'raw' });
       const note = await remember(ctx, { content: 'deploys go out on tuesdays' });
@@ -159,7 +160,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
   it('remember and apply an outcome through the store, with hippo.db blocked', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryEntryWritesStore(copyOf());
-    const ctx: McpContext = { hippoRoot, tenantId: TENANT_A, actor: 'mcp', role: 'admin', hostAdmin: true, store: memory.store, clientKey: 'entry-writes-store' };
+    const ctx: McpContext = { hippoRoot, tenantId: TENANT_A, actor: 'mcp', role: 'admin', hostAdmin: true, store: memory.store, clientKey: 'entry-writes-store', config: loadConfig(hippoRoot) };
     const call = (name: string, args: Record<string, string | boolean>) => withSqliteBlocked('in-memory', () =>
       handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx));
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>

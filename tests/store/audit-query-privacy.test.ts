@@ -9,9 +9,10 @@ import { auditQueryFields } from '../../src/store/audit.js';
 import { getContext, retrieve, remember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -90,7 +91,7 @@ describe('auditQueryFields', () => {
 
 describe('recall audits store a query hash, never the text', () => {
   it('context recall row has no query key', async () => {
-    await getContext(ctx, { q: QUERY, crossProject: true });
+    await getContext(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
     const rows = auditRows(localRoot).filter((r) => r.op === 'recall' && r.metadata.mode === 'context');
     expect(rows).toHaveLength(1);
     expectHashedOnly(rows[0], QUERY);
@@ -98,7 +99,7 @@ describe('recall audits store a query hash, never the text', () => {
 
   it('context recall writes the same hashed row into the global store it reached', async () => {
     initStore(globalRoot);
-    await getContext(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), { q: QUERY, crossProject: true });
+    await getContext(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), { currentProject: cwdProject(), q: QUERY, crossProject: true });
     const [local, global] = [localRoot, globalRoot].map((root) =>
       auditRows(root).filter((r) => r.op === 'recall' && r.metadata.mode === 'context'));
     expect(global).toHaveLength(1);
@@ -120,14 +121,14 @@ describe('recall audits store a query hash, never the text', () => {
 
 describe('census: a canary query reaches no audit metadata value', () => {
   it('context, CLI, MCP and HTTP recall', async () => {
-    await getContext(ctx, { q: QUERY, crossProject: true });
+    await getContext(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
     await retrieve(ctx, { query: QUERY });
     execFileSync('node', [HIPPO_BIN, 'recall', QUERY], {
       cwd: home,
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(localRoot) };
+    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(localRoot), config: loadConfig(localRoot) };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

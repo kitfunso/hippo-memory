@@ -58,7 +58,7 @@ export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): S
     project: projectNames(req.project),
   });
   const tally = captureExtractedItems(
-    { root: ctx.hippoRoot, files: local },
+    { root: ctx.hippoRoot, files: local, config: ctx.config },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,

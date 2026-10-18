@@ -14,7 +14,6 @@ import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
 import type { ContextOptions } from '../context-types.js';
 import type { Context } from '../types.js';
-import { configAtRoot, configOf } from '../config-of.js';
 import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
 import {
   callerOf,
@@ -213,7 +212,7 @@ export async function retrieveWithCliCore(
   const store = ctx.store;
   const ranking = await rankRecall(
     {
-      store, config: configOf(ctx), onHippoDb: ctx.reach?.isHippoDb, global: rankGlobal(ctx, core.sources),
+      store, config: ctx.config, onHippoDb: ctx.reach?.isHippoDb, global: rankGlobal(ctx, core.sources),
       tenantId: ctx.tenantId, note: core.note,
     },
     { ...core.rank, query: opts.query, boost: opts.boost },
@@ -314,14 +313,14 @@ async function recordShown(
 /** The second store ranked, as the caller's own store when its root is the one searched, so its graph walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
-  if (sources.globalRoot === ctx.hippoRoot) return { store: ctx.store, config: configOf(ctx), onHippoDb: true };
-  return { store: sources.globalStore, config: configAtRoot(ctx, sources.globalRoot), onHippoDb: true };
+  if (sources.root === ctx.hippoRoot) return { store: ctx.store, config: ctx.config, onHippoDb: true };
+  return { store: sources.store, config: sources.config, onHippoDb: true };
 }
 
 /** The second store takes its own recall rows, unless it is the root being searched already. */
 function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
   const sources = core.sources;
-  return sources !== undefined && sources.globalRoot !== ctx.hippoRoot ? sources.globalStore : undefined;
+  return sources !== undefined && sources.root !== ctx.hippoRoot ? sources.store : undefined;
 }
 
 // The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.

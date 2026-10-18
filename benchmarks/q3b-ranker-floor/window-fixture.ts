@@ -146,7 +146,7 @@ export function buildWindowFixture(home: string): Promise<WindowStore> {
       const entry = createMemory(row.content, { baseHalfLifeDays, tenantId, tags: row.tags, pinned: row.pinned });
       writeEntry(root, { ...entry, id: row.id, created: stamp, last_retrieved: stamp, valid_from: stamp });
     }
-    const ctx = { hippoRoot: root, tenantId, actor: adminActor('window-fixture'), store: sqliteStore(root) };
+    const ctx = { hippoRoot: root, tenantId, actor: adminActor('window-fixture'), store: sqliteStore(root), config: loadConfig(root) };
     for (const goal of GOALS) goalPush(ctx, { sessionId: goal.sessionId, goalName: goal.tag });
     for (const t of TARGETS.filter((x) => x.lift === 'outcomes')) {
       for (let i = 0; i < GOOD_OUTCOMES; i++) await outcome(ctx, [t.id], true);

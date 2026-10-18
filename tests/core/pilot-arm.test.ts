@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { loadConfig } from '../../src/core/config.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
 import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../../src/db/index.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../../src/store/pilot-arm.js';
@@ -193,7 +193,7 @@ describe('pilot arm helpers', () => {
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: folderFiles(root) });
+      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: { ...folderFiles(root), config: DEFAULT_CONFIG } });
     } finally {
       vi.stubEnv('HIPPO_LOG', undefined);
     }

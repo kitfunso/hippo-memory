@@ -5,7 +5,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { embedAll } from '../../dist/store/embeddings/index.js';
+import { loadConfig } from '../../dist/core/config.js';
+import { embedAll, folderIndex } from '../../dist/search/embed-memories.js';
+import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { rankWith, SHOWN_ROWS } from './arms.ts';
@@ -109,7 +111,7 @@ async function buildWindowSite(work: string): Promise<Site> {
   const store = await buildWindowFixture(site.home);
   checkPlacement(store);
   const vectors = await inSandbox(site.home, site.home, async () => {
-    await embedAll(store.root);
+    await embedAll(folderIndex({ root: store.root, store: sqliteStore(store.root), config: loadConfig(store.root) }));
     return Object.keys(loadEmbeddingIndex(store.root)).length;
   });
   if (vectors !== WINDOW_ROW_COUNT) throw new Error(`${vectors} of ${WINDOW_ROW_COUNT} window rows have a vector; a partly embedded fixture is not a result`);

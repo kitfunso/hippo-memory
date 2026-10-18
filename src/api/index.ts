@@ -13,8 +13,8 @@ export type { FailureSummary } from '../store/failure-log.js';
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from '../core/project-identity.js';
 
-export { RecallContractError, adminActor, ownerOrSubject, requireHostAdmin } from './types.js';
-export type { Actor, Context } from './types.js';
+export { RecallContractError, adminActor, contextReach, ownerOrSubject, requireHostAdmin } from './types.js';
+export type { Actor, Context, ContextReach, GlobalInReach } from './types.js';
 export { remember } from './memories/remember.js';
 export type { RememberLocal, RememberOptions, RememberResult } from './memories/remember.js';
 export { extractRememberedFacts, rememberLocally } from './memories/remember-local.js';

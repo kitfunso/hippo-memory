@@ -31,6 +31,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -89,7 +90,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
     // v1.13.3: format is "## Cutoff\nShowing N of M candidates; ..." (was
@@ -117,7 +118,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
     // Extract Cutoff totalCandidates value via regex.
@@ -142,7 +143,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
     expect(text).not.toMatch(/## Cutoff/);
@@ -169,7 +170,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
-      store: sqliteStore(home),
+      store: sqliteStore(home), config: loadConfig(home),
     });
     const text = extractText(res);
     const cutoffIdx = text.indexOf('## Cutoff');

@@ -5,9 +5,9 @@ import { rmSync } from 'node:fs';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
-import { markSharedStore } from '../../src/core/config.js';
+import { shareRoot } from '../_helpers/share-root.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
@@ -85,8 +85,8 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
   lastRecalledIds.clear();
   const s = freshStore(templates, scenario.kind);
   try {
-    // serve() marks a port store's root shared, so the hippo.db pass must be shared too to compare like with like.
-    markSharedStore(s.root);
+    // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
+    shareRoot(s.root);
     const store = makeStore?.(s.root);
     const handle = await serve({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];

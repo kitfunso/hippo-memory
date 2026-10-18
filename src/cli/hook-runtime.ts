@@ -136,5 +136,5 @@ export function inPilotHoldout(
   opts: { write: boolean },
 ): boolean {
   const reach = cliLedgerReach(hippoRoot);
-  return sessionPilotArm(hippoRoot, tenantId, sessionId, opts.write, { reach }) === 'holdout';
+  return sessionPilotArm(tenantId, sessionId, opts.write, { reach }) === 'holdout';
 }

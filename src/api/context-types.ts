@@ -39,10 +39,9 @@ export interface ContextOptions {
   /**
    * The active project for the origin partition ('' = not in a project): a name, or an identity whose rows may carry
    * its legacy folder name.
-   * Defaults to `resolveProjectIdentity(process.cwd())`; surfaces whose cwd is not the caller's project (HTTP server)
-   * should pass it.
+   * The surface names it (the CLI from its cwd, a route or hook from its caller), so the api reads no working folder.
    */
-  currentProject?: ProjectRef;
+  currentProject: ProjectRef;
   /**
    * The calling session's id, stamped on this call's recall trace. When it strictly equals the active snapshot's
    * `session_id` the read is unbounded;

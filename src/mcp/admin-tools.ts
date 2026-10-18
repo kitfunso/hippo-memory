@@ -6,8 +6,9 @@ import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { predictionBaserate } from '../api/objects/predictions.js';
 import { everyConflict, listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
 import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
-import { mcpActor, type McpContext, type ToolCall } from './protocol.js';
-import { storeWith, type FolderStore } from '../store/port.js';
+import { mcpApiContext, type McpContext, type ToolCall } from './protocol.js';
+import { storeWith } from '../store/port.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
@@ -17,14 +18,14 @@ const BASERATE_DECIMALS = 3;
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
 export async function runPredictBaserateTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall
+  { args, ctx }: ToolCall
 ): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
   if (!classTag) {
     return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
   }
-  const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, classTag);
+  const baserate = await predictionBaserate(mcpApiContext(ctx), classTag);
   if (baserate.nClosed === 0) {
     return (
       `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
@@ -46,10 +47,10 @@ export async function runPredictBaserateTool(
 }
 
 export async function runStatusTool(
-  { ctx, hippoRoot, config, tenantId, store }: ToolCall,
+  { ctx, config }: ToolCall,
 ): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = await getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, evalNow(), 0.1);
+  const tallies = await getMemoryStatus(mcpApiContext(ctx), evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
@@ -61,8 +62,8 @@ export async function runStatusTool(
 }
 
 export async function runConflictsTool(call: ToolCall): Promise<string> {
-  const { ctx, hippoRoot, tenantId, store } = call;
-  const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
+  const { ctx } = call;
+  const apiCtx = mcpApiContext(ctx);
   const conflicts = await everyConflict((page) => listOpenConflicts(apiCtx, { ...page, project: ctx?.project }));
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
@@ -71,7 +72,7 @@ export async function runConflictsTool(call: ToolCall): Promise<string> {
 }
 
 export async function runResolveTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall,
+  { args, ctx }: ToolCall,
 ): Promise<string> {
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');
@@ -81,7 +82,7 @@ export async function runResolveTool(
   if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
   let loserId: string;
   try {
-    const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
+    const apiCtx = mcpApiContext(ctx);
     ({ loserId } = await resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
     // A missing, unreachable or settled conflict answers alike, so
@@ -97,9 +98,8 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
-  const actor = mcpActor(ctx);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  await getTouchableMemory({ hippoRoot, tenantId, actor, store }, shareId);
+  await getTouchableMemory(mcpApiContext(ctx), shareId);
   // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's
   // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const local = { root: hippoRoot, store: storeWith(store, 'localFiles') };
@@ -109,7 +109,7 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
 }
 
 /** The global store the host's reach names; the tool table runs share and peers only where hippo.db sets one. */
-function globalTarget(ctx: McpContext): FolderStore {
+function globalTarget(ctx: McpContext): ConfiguredFolder {
   const target = ctx.reach?.globalTarget;
   if (target === undefined) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
   return target;

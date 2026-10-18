@@ -21,7 +21,7 @@ import { Layer} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
@@ -76,7 +76,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
       await callTool(
         'hippo_recall',
         { query: 'event', fresh_tail_count: 3 },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+        { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
       );
     } catch (err) {
       thrown = err;
@@ -106,7 +106,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     // SAFETY: hippo_recall's MCP tool result envelope always carries
     // result.content per src/mcp/server.ts; McpResponse.result is typed
@@ -133,7 +133,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3 },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     const r = res!;
     expect(r.error).toBeUndefined();
@@ -159,7 +159,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
       writeEntry(shared, entry);
       return entry;
     });
-    const ctx: McpContext = { hippoRoot: shared, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } , store: sqliteStore(shared) };
+    const ctx: McpContext = { hippoRoot: shared, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } , store: sqliteStore(shared), config: loadConfig(shared) };
     for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
       // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.
       const r = (await callTool('hippo_recall', { query: 'zzqqxx', ...args }, ctx)) as { result?: { content: Array<{ text: string }> } };

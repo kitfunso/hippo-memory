@@ -6,12 +6,12 @@ import { spawn } from 'child_process';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
 import { installedRealCodexPath, resolveCodexWrapperPaths } from '../hooks/codex-wrapper.js';
 import { resolveJsonHookPaths } from '../hooks/json-hooks.js';
-import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
+import { readSessionScan, recordSessionDigest, type SessionScan } from '../capture/session-digest.js';
 import { captureToolFailure } from '../capture/capture-error.js';
 import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { resolveProjectIdentity, isInitialized } from '../core/project-identity.js';
+import { resolveProjectIdentity, isInitialized, type ProjectRef } from '../core/project-identity.js';
 import { cmdCapture, type CaptureOptions, type CaptureTarget } from '../capture/command.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
@@ -33,8 +33,6 @@ import {
   type CaptureInput,
   type HookRuntime,
 } from '../core/capture-contract.js';
-import { loadConfig } from '../core/config.js';
-import { autoSleepDue } from '../api/sleep/auto-sleep.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
 import { normalizeHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
@@ -47,7 +45,7 @@ import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import {
-  cliApiContext, cliHookRequest, cliLedgerReach, cliStore, cliSyncOptions, cliSyncStore,
+  cliApiContext, cliHookRequest, cliLedgerReach, cliSyncOptions, cliSyncStore, cliConfig,
 } from './api-context.js';
 import {
   type CliFlags,
@@ -71,7 +69,7 @@ import {
 import type { JsonValue } from '../util/json.js';
 import { CliExit, fail } from './exit.js';
 
-const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root) });
+const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root), config: cliConfig(root) });
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
@@ -291,124 +289,58 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
   const transcriptPath = stringFlag(flags, 'transcript');
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const sessionId = stringFlag(flags, 'session-id') ?? null;
-  return runSessionEnd({
+  const logLine = (line: string): void => appendSessionEndCloseLog(logFile, line);
+  return runSessionEnd<SessionTurn, SessionScan>(cliApiContext(hippoRoot, tenantId), {
     mode,
-    hippoRoot,
-    tenantId,
     sessionId,
     transcriptPath,
-    contextFor: (root) => cliApiContext(root, tenantId),
-    storeRoot: () => {
-      const root = hookStoreRoot(hippoRoot);
-      return isInitialized(root) ? root : null;
-    },
     log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
-    sleep: () => (mode === 'turn' && sessionId
-      ? sleepIfDue(hippoRoot, tenantId, flags, logFile, transcriptPath, sessionId)
-      : sleepProjectStore(hippoRoot, tenantId, flags, logFile, transcriptPath)),
+    sleep: () => sleepFolderStore(hippoRoot, tenantId, flags, logFile),
+    importAgentNotes: () => logSessionEndImport(logFile, transcriptPath),
     readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),
-    capture: (store, scan) => {
-      const capture = (turns: readonly SessionTurn[] | undefined): boolean =>
-        captureEndedSession(hippoRoot, tenantId, store, flags, transcriptPath, turns);
-      if (mode === 'turn') {
-        captureNewTurns(transcriptPath, sessionId, scan, capture, (line) => appendSessionEndCloseLog(logFile, line));
-      }
-      else capture(scan?.turns);
+    cursor: {
+      after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
+      save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
     },
-    digest: (scan, log) => recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, {
-      key: sessionId || path.basename(transcriptPath ?? '', '.jsonl'),
-      tenantId,
-      log,
-    }),
+    currentProject: () => resolveProjectIdentity(process.cwd()),
+    capture: (into, turns, originProject) =>
+      captureEndedSession(into.hippoRoot, { tenantId, flags, transcriptPath, turns, originProject }),
+    digest: (scan, key, log) => recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, { key, tenantId, log }),
     workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
   });
 }
 
-async function sleepProjectStore(
+/** Sleeps the folder's own store; a failure goes to the session log, and capture runs regardless. */
+async function sleepFolderStore(
   hippoRoot: string,
   tenantId: string,
   flags: CliFlags,
   closeLogFile: string | null,
-  transcriptPath: string | undefined,
 ): Promise<void> {
-  // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
-  if (isInitialized(hippoRoot)) {
-    try {
-      await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, flags);
-    } catch (err) {
-      // cmdSleep writes its own failure line only once its log tee is open, and capture runs regardless.
-      reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
-    }
-  } else {
-    appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
-    logSessionEndImport(closeLogFile, transcriptPath);
-  }
-}
-
-/** A close after every reply sleeps only at the MCP server's auto-sleep threshold; each line starts the log afresh, as
- * a sleep does. */
-async function sleepIfDue(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-  closeLogFile: string | null,
-  transcriptPath: string | undefined,
-  sessionId: string,
-): Promise<void> {
-  if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
-  const prefix = `turn close, session ${sessionId}`;
   try {
-    const { enabled, count, threshold, due } =
-      await autoSleepDue(cliStore(hippoRoot), tenantId, loadConfig(hippoRoot).autoSleep);
-    if (!due) {
-      const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
-      appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });
-      return;
-    }
-    await sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
-    appendSessionEndCloseLog(closeLogFile, `${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
+    await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, flags);
   } catch (err) {
-    appendSessionEndCloseLog(closeLogFile, `${prefix}: sleep check failed: ${errorMessage(err)}`, { startFresh: true });
+    // cmdSleep writes its own failure line only once its log tee is open.
+    reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
   }
 }
 
-/** Captures only the turns after this session's cursor, then moves the cursor, so each reply is extracted once. */
-function captureNewTurns(
-  transcriptPath: string | undefined,
-  sessionId: string | null,
-  scan: ReturnType<typeof readSessionScan>,
-  capture: (turns: readonly SessionTurn[]) => boolean,
-  log: (message: string) => void,
-): void {
-  if (!transcriptPath || !sessionId || !scan) {
-    log('skip capture: no readable transcript for this session');
-    return;
-  }
-  const fresh = turnsAfter(scan.turns, loadTurnPosition(sessionId, transcriptPath));
-  if (fresh.length === 0) {
-    log('skip capture: no new turns since the last reply');
-    return;
-  }
-  if (capture(fresh)) saveTurnPosition(sessionId, transcriptPath, scan.turns, log);
+interface EndedCapture {
+  readonly tenantId: string;
+  readonly flags: CliFlags;
+  readonly transcriptPath: string | undefined;
+  readonly turns: readonly SessionTurn[] | undefined;
+  readonly originProject: ProjectRef | undefined;
 }
 
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 function captureEndedSession(
-  hippoRoot: string,
-  tenantId: string,
   store: string,
-  flags: CliFlags,
-  transcriptPath: string | undefined,
-  turns: readonly SessionTurn[] | undefined,
+  { tenantId, flags, transcriptPath, turns, originProject }: EndedCapture,
 ): boolean {
+  const logFile = stringFlag(flags, 'log-file');
   try {
-    const logFile = stringFlag(flags, 'log-file');
-    // With no stdin of its own, capture would read this as a manual run and scan every project.
-    if (!transcriptPath) {
-      appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
-      return false;
-    }
     cmdCapture(captureTarget(store), {
       source: 'last-session',
       transcriptPath,
@@ -416,13 +348,12 @@ function captureEndedSession(
       dryRun: false,
       global: false,
       tenantId,
-      // In the global store, rows would otherwise read as user-global and show up in every project.
-      originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
+      originProject,
       sessionTurns: turns,
     });
     return true;
   } catch (err) {
-    reportSessionEndFailure(stringFlag(flags, 'log-file') ?? null, 'session-end: capture', err);
+    reportSessionEndFailure(logFile ?? null, 'session-end: capture', err);
     return false;
   }
 }

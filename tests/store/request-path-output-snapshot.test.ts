@@ -12,8 +12,10 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { testReach } from '../_helpers/api-ctx.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -141,7 +143,7 @@ describe('request-path output on a fixed store', () => {
     const store = sqliteStore(localRoot);
     return {
       hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store,
-      reach: sqliteReach(localRoot, store),
+      reach: testReach(localRoot, store), config: loadConfig(localRoot),
     };
   };
   type ToolArgs = { scope?: string };

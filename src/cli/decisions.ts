@@ -9,7 +9,7 @@ import * as decisionsModule from '../objects/decisions.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { cliApiContext } from './api-context.js';
+import { cliConfig, cliApiContext } from './api-context.js';
 import type { Context } from '../api/index.js';
 import {
   closeObject,
@@ -21,7 +21,6 @@ import {
 } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
-import { loadConfig } from '../core/config.js';
 
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
 
@@ -92,7 +91,7 @@ async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags)
   }
 
   const decisionPathTags = extractPathTags(process.cwd());
-  const { defaultHalfLifeDays } = loadConfig(hippoRoot);
+  const { defaultHalfLifeDays } = cliConfig(hippoRoot);
   const created = await decisionsModule.saveDecision(objectsOf(ctx), defaultHalfLifeDays, tenantId, {
     decisionText,
     context,

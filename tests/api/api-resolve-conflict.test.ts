@@ -11,6 +11,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const TENANT = 'default';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -50,7 +51,7 @@ function supersedeB({ b }: Pair): void {
 }
 
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
+  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) });
 }
 
 function replyText(res: McpResponse | null): string {
@@ -112,7 +113,7 @@ describe('CLI hippo resolve', () => {
 });
 
 describe('resolveMemoryConflict', () => {
-  const ctxIn = (tenantId: string) => ({ hippoRoot: root, tenantId, actor: adminActor('test'), store: sqliteStore(root) });
+  const ctxIn = (tenantId: string) => ({ hippoRoot: root, tenantId, actor: adminActor('test'), store: sqliteStore(root), config: loadConfig(root) });
 
   it('answers a resolved conflict with 409 and another tenant\'s with 404', async () => {
     const pair = seedPair();

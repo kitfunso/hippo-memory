@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
 import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
-import { embeddingsConfigOf, resolveEmbeddingProvider } from '../embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
@@ -138,14 +138,6 @@ export function vectorSourceOf({ store, config, onHippoDb }: {
   onHippoDb?: boolean;
 }): VectorSource {
   return { store, provider: () => resolveEmbeddingProvider(config.embeddings), onHippoDb };
-}
-
-/** The vectors hippo.db under `hippoRoot` holds, or `store` when it is another, embedded by the provider that
- * `embeddings`, else the folder's config, names. */
-export function configuredVectorSource(
-  store: HippoStore, hippoRoot: string, embeddings?: EmbeddingsConfig, onHippoDb = true,
-): VectorSource {
-  return { store, provider: () => resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings)), onHippoDb };
 }
 
 function graphStoresOf(source: VectorSource | undefined, options: HybridRankOptions): FusionInput['graph'] {

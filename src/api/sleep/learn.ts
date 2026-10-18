@@ -4,7 +4,6 @@
 import { ForbiddenError } from '../../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../../learn/autolearn.js';
 import type { HippoConfig } from '../../core/config.js';
-import { configOf } from '../config-of.js';
 import { embedMemory } from '../../search/embed-memories.js';
 import {
   extractInvalidationTarget,
@@ -75,7 +74,7 @@ export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResu
   if (!isGitRepo(opts.repoPath)) return { status: 'not-a-repo', ...none };
   const gitLog = fetchGitLog(opts.repoPath, opts.days);
   if (!gitLog.trim()) return { status: 'no-commits', ...none };
-  const config = configOf(ctx);
+  const config = ctx.config;
   const parsed = extractLessons(gitLog, config.gitLearnPatterns);
   if (parsed.length === 0) return { status: 'no-lessons', ...none };
   // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions
@@ -117,9 +116,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   counts.added += landed.length;
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  const { embeddings } = configOf(ctx);
-  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store };
-  for (const entry of landed) void embedMemory(target, entry, undefined, embeddings);
+  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store, embeddings: ctx.config.embeddings };
+  for (const entry of landed) void embedMemory(target, entry);
 }
 
 /** The keys of the rows holding a lesson's longest word, the only rows that can be its copy. */

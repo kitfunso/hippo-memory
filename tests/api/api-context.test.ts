@@ -25,7 +25,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { remember, getContext } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -58,7 +58,7 @@ describe('api.getContext', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      const result = await getContext(ctx, {});
+      const result = await getContext(ctx, { currentProject: cwdProject() });
       expect(result.entries).toEqual([]);
       expect(result.tokens).toBe(0);
       expect(result.activeSnapshot).toBeFalsy();
@@ -79,7 +79,7 @@ describe('api.getContext', () => {
         });
       }
 
-      const result = await getContext(ctx, { budget: 1500 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 1500 });
 
       // All five fit the budget; estimateTokens is ceil(chars / 4), so each 25-character text costs 7.
       expect(result.entries).toHaveLength(5);
@@ -100,7 +100,7 @@ describe('api.getContext', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       for (let i = 0; i < 4; i++) await remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
 
-      const result = await getContext(ctx, { budget: 1500, limit: 2 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 1500, limit: 2 });
 
       expect(result.entries).toHaveLength(2);
     } finally {
@@ -120,7 +120,7 @@ describe('api.getContext', () => {
         });
       }
 
-      const result = await getContext(ctx, { budget: 50 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 50 });
 
       expect(result.tokens).toBeLessThanOrEqual(50);
       // At a 50-token budget, only the smallest-or-fewest memories fit
@@ -138,8 +138,8 @@ describe('api.getContext', () => {
       await remember(ctxA, { content: 'belongs-to-tenant-A', kind: 'distilled' });
       await remember(ctxB, { content: 'belongs-to-tenant-B', kind: 'distilled' });
 
-      const resultA = await getContext(ctxA, { budget: 1500 });
-      const resultB = await getContext(ctxB, { budget: 1500 });
+      const resultA = await getContext(ctxA, { currentProject: cwdProject(), budget: 1500 });
+      const resultB = await getContext(ctxB, { currentProject: cwdProject(), budget: 1500 });
 
       const idsA = resultA.entries.map((e) => e.entry.content);
       const idsB = resultB.entries.map((e) => e.entry.content);
@@ -167,7 +167,7 @@ describe('api.getContext', () => {
       });
       await remember(ctx, { content: 'snapshot-test-mem', kind: 'distilled' });
 
-      const result = await getContext(ctx, { budget: 1500 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 1500 });
 
       expect(result.activeSnapshot).toBeTruthy();
       expect(result.activeSnapshot?.session_id).toBe('sess-ctxtest');
@@ -183,7 +183,7 @@ describe('api.getContext', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'budget-zero-test', kind: 'distilled' });
 
-      const result = await getContext(ctx, { budget: 0 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), budget: 0 });
 
       expect(result.entries).toEqual([]);
       expect(result.tokens).toBe(0);
