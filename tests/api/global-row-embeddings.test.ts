@@ -231,7 +231,7 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
     await vi.waitFor(
       () => {
         const index = loadEmbeddingIndex(globalRoot);
-        expect(index[promoted.globalId]).toBeDefined();
+        expect(index[promoted.globalId]).toHaveLength(MINILM_DIMENSIONS);
       },
       { timeout: 30_000, interval: 250 },
     );

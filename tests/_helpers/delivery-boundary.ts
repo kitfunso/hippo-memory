@@ -5,7 +5,7 @@ import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
+import { readDeliveryEvents, type DeliveryEventRow } from './delivery-events.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';

@@ -5,7 +5,7 @@ import type { SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
 import type { JsonValue } from '../../src/util/json.js';
 import { closeHippoDb, openHippoDbReadOnly } from '../../src/db/index.js';
-import { readDeliveryEvents } from '../../src/store/recall-trace.js';
+import { readDeliveryEvents } from './delivery-events.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';

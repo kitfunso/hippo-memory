@@ -77,7 +77,9 @@ describe('consolidate never deletes a raw row', () => {
 
     expect(readEntry(root, raw.id)?.kind).toBe('raw');
     expect(readEntry(root, plain.id)).toBeNull();
-    await expect(consolidate(root, { now: sixtyDaysOn() })).resolves.toBeDefined();
+    // A second sleep has nothing left to remove: the plain row is already gone and the raw row is never deleted.
+    await expect(consolidate(root, { now: sixtyDaysOn() })).resolves.toMatchObject({ removed: 0 });
+    expect(readEntry(root, raw.id)?.kind).toBe('raw');
   });
 });
 

@@ -1,5 +1,5 @@
 {
-  "count": 10,
+  "count": 9,
   "exports": [
     "src/cli/refine-llm.ts:refineSemanticMemory",
     "src/consolidate/memory-value.ts:MV_FEATURE_NAMES",
@@ -9,7 +9,6 @@
     "src/graph/extract.ts:MAX_REF_NAME_LEN",
     "src/graph/extract.ts:MIN_REF_NAME_LEN",
     "src/mcp/request.ts:recordMcpTokens",
-    "src/store/failure-log.ts:failuresBySession",
-    "src/store/recall-trace.ts:readDeliveryEvents"
+    "src/store/failure-log.ts:failuresBySession"
   ]
 }

@@ -147,7 +147,9 @@ describe('routed writes under a busy store', () => {
           busyWaitMs: 50,
         });
       });
-      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(/warn: removed m1, but the store was busy/);
+      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(
+        /warn: removed m1, but the store was busy.* errorClass=Error/,
+      );
     } finally {
       stderr.mockRestore();
     }

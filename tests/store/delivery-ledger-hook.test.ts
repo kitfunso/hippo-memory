@@ -6,7 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
+import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
 import { blockHash, estimateTokens } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import type { HippoConfig } from '../../src/core/config.js';

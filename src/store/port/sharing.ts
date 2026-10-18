@@ -1,14 +1,23 @@
 // The store work of sharing between a project store and the operator's global store, kept apart from port.ts. Plain
 // return values, like the rest of LocalFiles, save sourceTallies, which hippo_peers reads on a served store's worker.
 import type { MemoryEntry } from '../../core/memory.js';
+import type { EntryCursor, EntryPage } from './consolidation.js';
 import type { OriginFilter } from './types.js';
+
+/** Where a page starts and how many rows it holds at most. */
+export interface PageRequest {
+  readonly limit: number;
+  readonly after?: EntryCursor;
+}
 
 /** What share, auto-share, sync down and the two-store search read and write on one hippo.db. */
 export interface Sharing {
-  /** The memories that carry any of `signals`, of `tenantId` or of every tenant. */
-  entriesWithSignals(signals: EntrySignals, tenantId?: string): MemoryEntry[];
-  /** The id, tenant, source and text of every memory of `tenantId` or of every tenant, oldest first. */
-  textKeys(tenantId?: string): EntryTextKey[];
+  /** A page of the memories of `tenantId`, or of every tenant when it is undefined, oldest first. */
+  entriesPage(tenantId: string | undefined, page: PageRequest): EntryPage;
+  /** A page of the memories that may carry any of `signals`, of `tenantId` or of every tenant, oldest first. */
+  entriesWithSignals(signals: EntrySignals, tenantId: string | undefined, page: PageRequest): EntryPage;
+  /** A page of the id, tenant, source and text of the memories of `tenantId` or of every tenant, oldest first. */
+  textKeysPage(tenantId: string | undefined, page: PageRequest): EntryTextKeyPage;
   /** The memories with these ids, in any tenant; at most 500 ids a call. */
   entriesByIds(ids: readonly string[]): MemoryEntry[];
   /** Writes the rows `fill` puts in one transaction; a rejected value is audited and `put` answers false. Returns how
@@ -43,6 +52,12 @@ export interface EntryTextKey {
   tenant_id: string;
   content: string;
   source: string;
+}
+
+export interface EntryTextKeyPage {
+  readonly keys: EntryTextKey[];
+  /** The cursor that reads the page after this one, or null when this was the last. */
+  readonly next: EntryCursor | null;
 }
 
 export interface RecallSearchEntriesOptions {

@@ -1,4 +1,4 @@
-// An upper bound on how long something took fails when the runner stalls, not when the code gets worse; no test may assert one.
+// An upper bound on how long something took, or on a ratio or product of two timings, fails when the runner stalls, not when the code gets worse; no test may assert one.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,6 +12,13 @@ const CLOCK = String.raw`(?:Date\.now\(\)|performance\.now\(\)|hrtime(?:\.bigint
 // A clock read minus a start time held in a variable; minus a constant is a moment in the past, not a duration.
 const CLOCK_DIFF = new RegExp(String.raw`${CLOCK}\s*-\s*[a-z_$][\w$.]*(?!\s*[*(/\w$.])`);
 const ASSIGNED = new RegExp(String.raw`(?<![\w$.])([A-Za-z_$][\w$]*)\s*=[^=;\n]*?${CLOCK_DIFF.source}`, 'g');
+// Any `name = value` on one line, for the names a ratio or product of timings is kept in.
+const ASSIGNMENT = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*=(?![=>])([^;\n]*)/g;
+// In a file that measures a duration, a name that says ratio or growth holds a ratio of timings.
+const RATIO_NAME = /(?<![\w$])[\w$]*(?:[Rr]atio|[Gg]rowth|[Ss]lowdown)\b/;
+// A helper or name that says it holds a ratio of timings, wherever the clock is read.
+const TIMING_RATIO_NAME =
+  /(?<![\w$])[\w$]*(?:[Ff]astest|[Ss]lowest|[Tt]iming|[Tt]imed|[Ee]lapsed|[Dd]uration)[\w$]*(?:[Rr]atio|[Gg]rowth)\b/;
 // Names a helper or a spawned process gives a duration it measured itself: elapsed, ms, or any name ending in Ms or _ms; _MS constants are limits, not measurements.
 const REPORTED = /(?<![\w$])(?:elapsed|ms|[\w$]*(?:Ms|_ms))\b/;
 const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGreaterThan|toBeGreaterThanOrEqual)\(/;
@@ -49,12 +56,26 @@ function inside(text: string, open: number): string {
 /** Every assertion in `text` that bounds an elapsed time from above, as `file: line text`. */
 function elapsedUpperBounds(file: string, text: string): string[] {
   const durations = [...text.matchAll(ASSIGNED)].map((m) => m[1]);
+  const measuresTime = CLOCK_DIFF.test(text);
   const timed = (code: string): boolean =>
     CLOCK_DIFF.test(code) ||
     REPORTED.test(code) ||
+    (measuresTime && RATIO_NAME.test(code)) ||
+    TIMING_RATIO_NAME.test(code) ||
     durations.some((name) =>
       new RegExp(String.raw`(?<![\w$.])${name.replaceAll('$', String.raw`\$`)}(?![\w$])`).test(code),
     );
+  // A ratio or product of timings is a timing too, whatever it is called; repeat until no new name joins.
+  const products = [...text.matchAll(ASSIGNMENT)].filter((m) => /[*/]/.test(m[2]) || TIMING_RATIO_NAME.test(m[2]));
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [, name, value] of products) {
+      if (!durations.includes(name) && timed(value)) {
+        durations.push(name);
+        grew = true;
+      }
+    }
+  }
   const hits: string[] = [];
   for (const found of text.matchAll(/\bexpect\(/g)) {
     const open = found.index + found[0].length - 1;
@@ -132,6 +153,13 @@ describe('elapsed-time upper bounds in tests', () => {
     'const ms = Number(process.hrtime.bigint() - begin) / 1e6;\nexpect(ms < 250).toBe(true);',
     'expect(ok && LIMIT_MS >= child.durationMs).toBe(true);',
     'expect(\n  Date.now() - started,\n).toBeLessThan(2000);',
+    // A ratio or product of two timings, kept under any name.
+    'const fast = performance.now() - t0;\nconst slow = performance.now() - t1;\nconst growth = slow / fast;\nexpect(growth).toBeLessThan(20);',
+    'const ratio = a.elapsedMs / b.elapsedMs;\nexpect(ratio).toBeLessThan(4);',
+    'const total = perCallMs * calls;\nexpect(total).toBeLessThan(1000);',
+    'const took = performance.now() - t0;\nconst ratio = fastestRatio(crafted, prose);\nexpect(ratio).toBeLessThan(50);',
+    'const took = performance.now() - t0;\nconst slowdown = slow / fast;\nexpect(5).toBeGreaterThan(slowdown);',
+    'const ratio = fastestRatio(crafted, prose);\nexpect(ratio, "x").toBeLessThan(50);',
   ])('flags %j', (sample) => {
     expect(elapsedUpperBounds('x.test.ts', sample)).toHaveLength(1);
   });
@@ -142,8 +170,12 @@ describe('elapsed-time upper bounds in tests', () => {
     // A stored time bracketed by the clock: a slow runner only moves the later read further out.
     'expect(row.updatedAt).toBeLessThanOrEqual(Date.now());',
     'const cutoff = Date.now() - 30 * DAY_MS;\nexpect(row.ts).toBeLessThan(cutoff);',
-    // A ratio of two timings taken in the same test.
-    'const fast = performance.now() - t0;\nconst slow = performance.now() - t1;\nexpect(slow / fast > 0).toBe(true);\nconst growth = slow / fast;\nexpect(growth).toBeLessThan(20);',
+    // A comparison of two timings that bounds neither from above.
+    'const fast = performance.now() - t0;\nconst slow = performance.now() - t1;\nexpect(slow / fast > 0).toBe(true);',
+    // A ratio of counts, or of anything in a file that reads no clock.
+    'expect(compressionRatio).toBeLessThan(0.5);',
+    'const growth = after.rows / before.rows;\nexpect(growth).toBeLessThan(4);',
+    'expect(after.rowsRead).toBeLessThanOrEqual(MAX_GROWTH * before.rowsRead);',
     // A count, whatever it is called.
     'expect(retries).toBeLessThan(5);',
   ])('passes %j', (sample) => {

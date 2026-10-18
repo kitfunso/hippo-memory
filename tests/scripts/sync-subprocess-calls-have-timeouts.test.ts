@@ -43,7 +43,8 @@ describe('synchronous subprocess timeouts', () => {
         missing.push(`${name}:${source.slice(0, match.index).split('\n').length}`);
       }
     }
-    expect(calls).toBeGreaterThan(10);
+    // Proves the scan reached src at all; a count floor would break each time a refactor merges two calls.
+    expect(calls).toBeGreaterThan(0);
     expect(missing).toEqual([]);
   });
 

@@ -24,6 +24,7 @@ import {
 } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
+import { serveStaticFile } from './static-file.js';
 import {
   buildMemoryDetail,
   buildMemoryPage,
@@ -54,30 +55,12 @@ import { printError } from '../cli/output.js';
 import { PACKAGE_ROOT } from '../core/package-root.js';
 import { DAY_MS } from '../util/time.js';
 
-const MIME_TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-} as const;
-
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
 const BODY_MAX_BYTES = 4096;
 const BODY_DRAIN_MAX_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
 const CARD_ID = /^[A-Za-z0-9_-]+$/;
-
-type StaticFileExtension = keyof typeof MIME_TYPES;
-
-function isStaticFileExtension(ext: string): ext is StaticFileExtension {
-  return Object.hasOwn(MIME_TYPES, ext);
-}
 
 function forbidden(res: http.ServerResponse): void {
   res.writeHead(403, { 'Content-Type': 'text/plain' });
@@ -86,23 +69,6 @@ function forbidden(res: http.ServerResponse): void {
 
 function notFoundJson(res: http.ServerResponse): void {
   sendJson(res, 404, { error: 'Not found' });
-}
-
-function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  if (!isStaticFileExtension(ext)) return false;
-  const mime = MIME_TYPES[ext];
-
-  try {
-    const content = fs.readFileSync(filePath);
-    res.writeHead(200, {
-      'Content-Type': mime,
-    });
-    res.end(content);
-    return true;
-  } catch {
-    return false; // an unreadable asset falls through to the next route, which answers 404 or the fallback page
-  }
 }
 
 /** Raised once a body passes the drain ceiling; the caller answers 400 and drops the socket. */

@@ -174,7 +174,8 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
     case 'stdin': {
       try {
         return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0 };
-      } catch {
+      } catch (err) {
+        log.warn(`reading stdin failed: ${errorMessage(err)}`, errorFields(err));
         console.error('No input on stdin. Pipe text in or use --file <path>.');
         process.exitCode = 1;
         return null;
@@ -273,7 +274,7 @@ function previewCapture(
   const refused = rejections.refusedAmong(
     fresh.map((item) => {
       const entry = captureEntry(item, options, baseHalfLifeDays);
-      return { tenantId: entry.tenant_id ?? 'default', entryId: entry.id, content: entry.content };
+      return { tenantId: entry.tenant_id, entryId: entry.id, content: entry.content };
     }),
   );
   let next = 0;

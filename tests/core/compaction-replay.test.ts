@@ -1,9 +1,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMPACTION_DB_WAIT_MS } from '../../src/core/compaction-timing.js';
 import { replayCompactions, saveCompaction } from '../../src/capture/compaction-record.js';
-import { saveItems } from '../../src/store/compactions-record.js';
+import { compactionByRequest, saveItems } from '../../src/store/compactions-record.js';
+import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   compactionMemories,
@@ -36,7 +37,10 @@ beforeEach(() => {
   s = scratch();
   logs = [];
 });
-afterEach(() => removeScratch(s));
+afterEach(() => {
+  vi.restoreAllMocks();
+  removeScratch(s);
+});
 
 const ago = (minutes: number): string => new Date(Date.now() - minutes * MINUTE).toISOString();
 const log = (message: string): void => {
@@ -135,7 +139,9 @@ describe('replay of records a killed hook left', () => {
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
   });
 
-  it('logs a stalled record with malformed items and still replays the others', () => {
+  it('warns about a stalled record with malformed items, naming its id, and still replays the others', () => {
+    _resetLogOnceForTests();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     seed(s.hippoRoot, {
       id: 'cmp-bad',
       status: 'summarised',
@@ -158,7 +164,21 @@ describe('replay of records a killed hook left', () => {
         .map((r) => r.content)
         .sort(),
     ).toEqual([...ITEMS].sort());
-    expect(logs.join('\n')).toContain('replay of cmp-bad failed');
+    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('compaction cmp-bad skipped');
+  });
+
+  it('answers a request lookup that lands on a record with malformed items with null and a warning, not a throw', () => {
+    _resetLogOnceForTests();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    seed(s.hippoRoot, { id: 'cmp-bad', status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30 });
+    run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json', request_id = 'req-1' WHERE id = 'cmp-bad'`);
+    const db = openHippoDb(s.hippoRoot);
+    try {
+      expect(compactionByRequest(db, 'default', 'req-1', 's1')).toBeNull();
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('compaction cmp-bad skipped');
   });
 
   it('leaves a record that is under 10 minutes old to its own hook', () => {

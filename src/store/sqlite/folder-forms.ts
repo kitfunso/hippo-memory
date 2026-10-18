@@ -8,7 +8,7 @@ import { closeHippoDb, type DatabaseSyncLike, openHippoDb } from '../../db/index
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 import { loadAmbientTalliesAt } from '../ambient.js';
 import { batchWriteAndDeleteAt } from '../delete-and-batch.js';
-import { loadAllEntriesAt, loadEveryTenantEntriesAt, readEntryAt } from '../entry-reads.js';
+import { loadAllEntriesAt, readEntryAt, selectAllEntries } from '../entry-reads.js';
 import {
   strengthenRetrievedInOwnTx,
   warnStrengthenFailed,
@@ -34,7 +34,7 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEn
 
 /** Every tenant's entries, oldest first: an eval reads the whole folder it seeded. */
 export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadEveryTenantEntriesAt(db), openStore);
+  return onHandle(hippoRoot, (db) => selectAllEntries(db), openStore);
 }
 
 /** One tenant's entries, oldest first. */

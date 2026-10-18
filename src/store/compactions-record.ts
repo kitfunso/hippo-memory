@@ -46,7 +46,7 @@ import { isRecallBoostAblated } from '../core/ablation.js';
 import { updateStatsAt } from './index-and-stats.js';
 import { type OnHandle, waitingOpener } from './open.js';
 import { resolveTenantId } from './tenant.js';
-import { errorMessage, reportCompactionFailure } from '../util/log.js';
+import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../util/log.js';
 import type { CompactionStart } from './port/compactions.js';
 import type {
   CompactionSaveOutcome,
@@ -104,8 +104,26 @@ function heldOrigins(hippoRoot: string, cwd: string | null, originProject: strin
   return names.includes(originProject) ? names : [originProject];
 }
 
-function toRecord(row: CompactionRow): CompactionRecord {
-  const listed: unknown = row.items_json === null ? [] : JSON.parse(row.items_json);
+/** The item strings a row holds, or null (after a warning naming the row) once its items_json will not parse. */
+function rowItems(row: CompactionRow): string[] | null {
+  if (row.items_json === null) return [];
+  try {
+    const listed = JSON.parse(row.items_json);
+    return Array.isArray(listed) ? listed.filter(isStringValue) : [];
+  } catch (err) {
+    hippoLog.warnThenDebug(
+      `compaction-items-json:${row.id}`,
+      `compaction ${row.id} skipped: its items_json is not valid JSON (${errorMessage(err)})`,
+      errorFields(err),
+    );
+    return null;
+  }
+}
+
+/** The record a row holds, or null for a row whose items cannot be read, so one bad row costs only itself. */
+function toRecord(row: CompactionRow): CompactionRecord | null {
+  const items = rowItems(row);
+  if (items === null) return null;
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -118,7 +136,7 @@ function toRecord(row: CompactionRow): CompactionRecord {
     startedAt: row.started_at,
     summarizedAt: row.summarised_at,
     summary: row.summary,
-    items: Array.isArray(listed) ? listed.filter(isStringValue) : [],
+    items,
     itemsWritten: row.items_written,
     status: row.status,
   };
@@ -560,8 +578,8 @@ interface ReplayRun {
   readonly baseHalfLifeDays: number;
 }
 
-/** Runs `step` over each row until the deadline; a row that will not map or a step that throws is logged and the rest
- * still run. Returns how many `step` finished. */
+/** Runs `step` over each row until the deadline; a row that will not map is skipped, a step that throws is logged, and
+ * the rest still run. Returns how many `step` finished. */
 function replayEach(
   run: ReplayRun,
   rows: CompactionRow[],
@@ -572,7 +590,8 @@ function replayEach(
   for (const row of rows) {
     if (Date.now() > run.deadline) break;
     try {
-      if (step(toRecord(row))) finished++;
+      const record = toRecord(row);
+      if (record !== null && step(record)) finished++;
     } catch (err) {
       run.log(`${what} of ${row.id} failed: ${errorMessage(err)}`);
     }

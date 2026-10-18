@@ -5,6 +5,7 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
+import { eachTextKey } from '../sharing/text-keys.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import type { LocalFiles, Sync } from '../store/port.js';
@@ -127,7 +128,7 @@ interface OpenImport {
 function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
   const { localFiles, rejections } = target.store;
   if (global) localFiles.ensureFiles();
-  const keys = storedTextKeys(localFiles.sharing.textKeys(global ? undefined : tenantId));
+  const keys = storedTextKeys(eachTextKey(localFiles.sharing, global ? undefined : tenantId));
   return { targetRoot: target.root, learning: localFiles.learning, keys, rejections };
 }
 
