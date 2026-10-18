@@ -5,7 +5,7 @@
 
 import { envAnthropicApiKey, envLlmTimeoutMs } from './env.js';
 import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
-import { errorFields, errorMessage, log } from './log.js';
+import { errorCode, errorFields, errorMessage, log, type LogFields } from './log.js';
 import { readCappedJson, readCappedText } from './capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from './json.js';
 import { redactSecretsStrict } from './secret-detect.js';
@@ -37,8 +37,9 @@ export interface AnthropicMessageRequest {
   fetcher?: typeof fetch;
 }
 
+// `cause` is the thrown value behind a message, kept so the site that logs the failure can write its class and chain.
 export type AnthropicMessageFailure =
-  | { kind: 'request'; message: string }
+  | { kind: 'request'; message: string; cause?: unknown }
   | { kind: 'http'; status: number; detail: string }
   | { kind: 'unreadable'; message: string }
   | { kind: 'empty' };
@@ -91,7 +92,7 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
       { timeoutMs, totalMs: llmTotalMs(timeoutMs), fetchFn: req.fetcher ?? fetch },
     );
   } catch (err) {
-    return { ok: false, failure: { kind: 'request', message: errorMessage(err) } };
+    return { ok: false, failure: { kind: 'request', message: errorMessage(err), cause: err } };
   }
   if (!res.ok) return { ok: false, failure: { kind: 'http', status: res.status, detail: await errorSnippet(res) } };
 
@@ -105,6 +106,22 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
   } catch (err) {
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }
+}
+
+/** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one level down. */
+function errnoOf(cause: unknown): string {
+  for (let link = cause, depth = 0; link instanceof Error && depth < 5; link = link.cause, depth++) {
+    const code = errorCode(link);
+    if (code !== '') return code;
+  }
+  return '';
+}
+
+/** Log fields for a transport failure: the class, stack, cause chain and errno name of the error behind it. */
+export function failureFields(failure: AnthropicMessageFailure): LogFields {
+  if (failure.kind !== 'request' || failure.cause === undefined) return {};
+  const code = errnoOf(failure.cause);
+  return code === '' ? errorFields(failure.cause) : { ...errorFields(failure.cause), errno: code };
 }
 
 /** The text extraction and DAG summaries hand to their `onError` callback. */

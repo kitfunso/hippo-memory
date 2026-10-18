@@ -5,6 +5,7 @@ import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { envSkipSchedule } from '../util/env.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import {
   DAILY_TASK_NAME,
   buildDailyRunnerCommand,
@@ -91,20 +92,25 @@ function warnSchedulerTimedOut(command: string): void {
   );
 }
 
-export function setupDailySchedule(globalRoot: string, run: RunScheduler = execFileSync): void {
+export function setupDailySchedule(
+  globalRoot: string,
+  run: RunScheduler = execFileSync,
+  platform: NodeJS.Platform = process.platform,
+): void {
   // Checked here, not per caller, so init, init --scan and setup all honour it.
   if (envSkipSchedule()) {
     console.log('   HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.');
     return;
   }
-  const runnerDir = path.resolve(globalRoot);
-  if (hasUnsafeRunnerPathChars(runnerDir, process.platform)) {
+  const isWindows = platform === 'win32';
+  // The path rules follow the platform being scheduled for, so a Windows root is never judged by POSIX rules.
+  const runnerDir = (isWindows ? path.win32 : path.posix).resolve(globalRoot);
+  if (hasUnsafeRunnerPathChars(runnerDir, platform)) {
     console.log(`   Skipping schedule: runner path contains unsafe characters.`);
     return;
   }
-  const isWindows = process.platform === 'win32';
   const taskName = DAILY_TASK_NAME;
-  const cmd = buildDailyRunnerCommand(runnerDir);
+  const cmd = buildDailyRunnerCommand(runnerDir, platform);
 
   if (isWindows) scheduleOnWindows(taskName, cmd, run);
   else scheduleOnCrontab(taskName, cmd, run);
@@ -136,22 +142,49 @@ function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): vo
   }
 }
 
+/** `crontab -l` exits 1 with "no crontab for <user>" when the user has none yet. */
+function hasNoCrontabYet<E>(err: E): boolean {
+  return (
+    err instanceof Error &&
+    'status' in err &&
+    err.status === 1 &&
+    'stderr' in err &&
+    /no crontab for/i.test(String(err.stderr))
+  );
+}
+
+/** The user's crontab; a user with none has an empty one, and any other failure throws. */
+function readCrontab(run: RunScheduler): string {
+  try {
+    return run('crontab', ['-l'], SCHEDULER_CALL);
+  } catch (err) {
+    if (hasNoCrontabYet(err)) return '';
+    throw err;
+  }
+}
+
 function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): void {
   // Unix: check crontab for existing entry
   const marker = `# hippo:${taskName}`;
   try {
-    const existing = run('crontab', ['-l'], SCHEDULER_CALL);
+    const existing = readCrontab(run);
     if (existing.includes(marker)) {
       return; // already scheduled
     }
 
     const cronLine = `15 6 * * * ${cmd} ${marker}`;
-    const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
+    // A user with no crontab yet gets the line alone, with no blank line above it.
+    const kept = existing.trimEnd();
+    const newCrontab = `${kept === '' ? '' : `${kept}\n`}${cronLine}\n`;
     run('crontab', ['-'], { ...SCHEDULER_CALL, input: newCrontab });
     console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
   } catch (err) {
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
-    // No crontab or no permission: print the line for the user to add by hand.
+    log.warn(
+      `install: crontab could not be read or written, so the daily runner is not scheduled: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+    // No permission or no crontab program: print the line for the user to add by hand.
     const cronLine = `15 6 * * * ${cmd}`;
     console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
     console.log(`   ${cronLine}`);

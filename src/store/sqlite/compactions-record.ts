@@ -112,7 +112,7 @@ function rowItems(row: CompactionRow): string[] | null {
     return Array.isArray(listed) ? listed.filter(isStringValue) : [];
   } catch (err) {
     hippoLog.warnThenDebug(
-      `compaction-items-json:${row.id}`,
+      'compaction-items-json',
       `compaction ${row.id} skipped: its items_json is not valid JSON (${errorMessage(err)})`,
       errorFields(err),
     );

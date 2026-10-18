@@ -14,7 +14,10 @@ describe('graph view --open', () => {
     try {
       openInBrowser('g.html', () => launcher);
       launcher.emit('error', new Error('spawn xdg-open ENOENT'));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not open the browser'));
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('could not open the browser'),
+        expect.objectContaining({ errorClass: 'Error', stack: expect.stringContaining('xdg-open') }),
+      );
       expect(process.exitCode).toBe(1);
     } finally {
       warn.mockRestore();

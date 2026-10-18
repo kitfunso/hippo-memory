@@ -176,16 +176,19 @@ describe('capture log append', () => {
 });
 
 describe('config stamp', () => {
-  it('warns with path and code when config.json is unreadable, and falls back', () => {
+  it('throws with the path and code when config.json cannot be reached, instead of falling back', () => {
     initStore(root);
     const config = path.join(root, 'config.json');
     fs.writeFileSync(config, '{}');
     failStat('EACCES', config);
-    const cfg = loadConfig(root);
-    expect(cfg.embeddings).toBeDefined();
-    const line = logged().find((l) => l.includes('warn:') && l.includes('could not be reached'));
-    expect(line).toContain('code=EACCES');
-    expect(line).toContain('config.json');
+    expect(() => loadConfig(root)).toThrow(/config\.json could not be reached \(EACCES\)/);
+  });
+
+  it('reads a path refused with ENOTDIR as missing', () => {
+    initStore(root);
+    const config = path.join(root, 'config.json');
+    failStat('ENOTDIR', config);
+    expect(loadConfig(root).embeddings).toBeDefined();
   });
 });
 

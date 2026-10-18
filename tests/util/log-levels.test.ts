@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../../src/util/log.js';
 import { runWithRequestId } from '../../src/util/request-scope.js';
+import { warnDamagedColumn } from '../../src/util/stored-json.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -93,6 +94,20 @@ describe('log level filtering', () => {
     _resetLogOnceForTests();
     log.warnThenDebug('row-1000', 'damaged 1000');
     expect(lines()).toEqual([`[hippo] warn: damaged 1000 ts=${AT}\n`]);
+  });
+});
+
+describe('damaged column warnings', () => {
+  it('spend one once-key on 2,000 damaged rows of one column, so a later failure class still logs at warn', () => {
+    vi.stubEnv('HIPPO_LOG', 'warn');
+    for (let row = 0; row < 2_000; row++) {
+      warnDamagedColumn({ table: 'memories', id: `m${row}`, column: 'tags_json' }, 'not valid JSON');
+    }
+    log.warnThenDebug('a-new-failure-class', 'a failure of another class');
+    expect(lines()).toEqual([
+      `[hippo] warn: store: memories.tags_json is not valid JSON; read as empty ts=${AT} table=memories id=m0 column=tags_json\n`,
+      `[hippo] warn: a failure of another class ts=${AT}\n`,
+    ]);
   });
 });
 

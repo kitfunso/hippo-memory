@@ -1,14 +1,18 @@
 // The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes are tested on their
 // own.
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
+import {
+  type AnthropicMessageFailure,
+  describeMessageFailure,
+  sendAnthropicMessage,
+} from '../util/anthropic-messages.js';
 import { certainDefect } from '../core/memory-quality.js';
 
 export interface DagSummaryOptions {
   apiKey: string;
   model?: string;
   fetcher?: typeof fetch;
-  onError?: (msg: string) => void;
+  onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
 }
 
 const DAG_SUMMARY_PROMPT =
@@ -43,7 +47,7 @@ export async function generateDagSummary(
     fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    opts.onError?.(describeMessageFailure(reply.failure));
+    opts.onError?.(describeMessageFailure(reply.failure), reply.failure);
     return null;
   }
 

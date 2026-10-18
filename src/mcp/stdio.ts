@@ -74,7 +74,9 @@ const inFlight = new Map<Promise<void>, string>();
 
 function track(method: string, call: Promise<void>): void {
   inFlight.set(call, method);
-  void call.finally(() => inFlight.delete(call));
+  call
+    .finally(() => inFlight.delete(call))
+    .catch((err) => log.error(`mcp: ${method} failed after it was dispatched`, errorFields(err)));
 }
 
 async function drainInFlight(): Promise<void> {
@@ -236,7 +238,10 @@ export function startStdioLoop(host: McpHost): void {
   });
 
   process.stdin.on('end', () => {
-    void exitWhenDrained();
+    exitWhenDrained().catch((err) => {
+      log.error('mcp: draining the calls in flight failed; exiting', errorFields(err));
+      exitAfterFlush(1);
+    });
   });
 
   exitOnStreamError();

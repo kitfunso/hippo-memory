@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   type AnthropicMessageFailure,
+  failureFields,
   isPermanentFailure,
   sendAnthropicMessage,
 } from '../../src/util/anthropic-messages.js';
@@ -108,6 +109,34 @@ describe('sendAnthropicMessage on a non-2xx reply', () => {
     } finally {
       stderr.mockRestore();
     }
+  });
+});
+
+describe('sendAnthropicMessage on a transport failure', () => {
+  const reset = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+
+  it("keeps a transport failure's error, so the log line has its class, errno name and cause chain", async () => {
+    const reply = await sendAnthropicMessage({
+      apiKey: 'k-test',
+      maxTokens: 10,
+      prompt: 'hi',
+      fetcher: async () => {
+        throw new TypeError('fetch failed', { cause: reset });
+      },
+    });
+    if (reply.ok || reply.failure.kind !== 'request') throw new Error('expected a request failure');
+    expect(reply.failure.message).toBe('fetch failed');
+    expect(failureFields(reply.failure)).toMatchObject({
+      errorClass: 'TypeError',
+      errno: 'ECONNRESET',
+      cause: 'Error: read ECONNRESET',
+    });
+  });
+
+  it('gives no fields to a failure with no thrown error behind it', () => {
+    expect(failureFields({ kind: 'http', status: 500, detail: '' })).toEqual({});
+    expect(failureFields({ kind: 'request', message: 'fetch failed' })).toEqual({});
+    expect(failureFields({ kind: 'empty' })).toEqual({});
   });
 });
 

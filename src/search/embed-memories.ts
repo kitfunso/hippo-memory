@@ -359,6 +359,12 @@ export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: s
   });
 }
 
+/** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's own handling is logged
+ * here, since nothing else holds it and an unhandled one ends the process. */
+export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
+  embedMemory(on, entry).catch((err) => log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)));
+}
+
 /** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is
  * left as-is.
  *  Failures surface on the explicit `hippo embed` / `embedAll` path. */

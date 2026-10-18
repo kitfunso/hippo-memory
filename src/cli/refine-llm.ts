@@ -9,7 +9,7 @@ import { memoryList, memoryListByIds, type TenantReach } from '../api/memories/m
 import { cliApiContext } from './api-context.js';
 import { chunked } from '../util/chunked.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
+import { failureFields, sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
 import { log } from '../util/log.js';
 
 const MAX_REFINE_SOURCES = 8;
@@ -84,7 +84,7 @@ ${sourceBlock}`;
     fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    log.warn(describeRefineFailure(reply.failure));
+    log.warn(describeRefineFailure(reply.failure), failureFields(reply.failure));
     return null;
   }
   if (reply.text.length < REFINE_MIN_CHARS) {

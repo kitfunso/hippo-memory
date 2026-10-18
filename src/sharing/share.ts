@@ -10,7 +10,7 @@ import type { FolderStore, LocalFiles } from '../store/port.js';
 import { isPersonalScope, isQuarantineScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { embedMemory, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
+import { embedMemoryDetached, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { chunked } from '../util/chunked.js';
 import { isReusable } from '../core/memory-quality.js';
@@ -151,7 +151,7 @@ export async function shareMemory(
   // the whole index per call.
   if (!options.skipEmbed) {
     const target = { hippoRoot: global.root, store: global.store, embeddings: global.config.embeddings };
-    void embedMemory(target, globalEntry);
+    embedMemoryDetached(target, globalEntry);
   }
 
   return globalEntry;
