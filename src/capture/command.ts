@@ -97,7 +97,7 @@ function cmdCaptureCore(
 
   const read = readCaptureTexts(options);
   if (read === null) return;
-  const { texts, userTexts } = read;
+  const { texts, userTexts, firstFollowUp } = read;
 
   if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
@@ -105,7 +105,7 @@ function cmdCaptureCore(
   }
 
   // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts);
+  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts, firstFollowUp);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -147,7 +147,7 @@ function printCaptureTally(options: CaptureOptions, { captured, skipped, rejecte
 
 /** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a last-session capture has nothing.
  *  Only a session says who spoke, so a piped or file capture counts no user texts. */
-function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
+function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts: number; firstFollowUp?: number } | null {
   switch (options.source) {
     case 'stdin': {
       try {
@@ -183,7 +183,10 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
         console.log('Transcript had no user/assistant messages to summarise.');
         return null;
       }
-      return { texts: [...users, ...assistants], userTexts: users.length };
+      // The session's first user turn is its request; a tail that cut it off holds only replies to the agent.
+      // SHORTCUT: a --turn capture's slice counts its first user turn as the request; carry the cursor here if that loses replies.
+      const opener = users.length === turns.filter((t) => t.role === 'user').length ? 1 : 0;
+      return { texts: [...users, ...assistants], userTexts: users.length, firstFollowUp: opener };
     }
   }
 }

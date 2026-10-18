@@ -146,27 +146,37 @@ function extractSpecSections(text: string): ExtractedItem[] {
     .map(content => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
 }
 
-function extractOne(text: string): ExtractedItem[] {
+// A reply to the agent's work states how the person wants it done, rule word or not; "Thanks, looks good" says nothing to keep.
+const ANY_STATEMENT = [/\S/];
+const MIN_FOLLOW_UP_WORDS = 4;
+
+function followUpRule(sentence: string): ExtractedItem | null {
+  const item = extractFromPatterns(sentence, ANY_STATEMENT, 'rule');
+  return item && item.content.split(/\s+/).length >= MIN_FOLLOW_UP_WORDS ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
+}
+
+function extractOne(text: string, followUp: boolean): ExtractedItem[] {
   const prose = proseOnly(text);
   const items = extractSpecSections(prose);
   for (const block of proseBlocks(prose)) {
     for (const sentence of completeSentences(block)) {
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
-      for (const [category, patterns] of CATEGORIES) {
-        const item = extractFromPatterns(sentence, patterns, category);
-        if (item) { items.push(item); break; }
-      }
+      const item = CATEGORIES.map(([category, patterns]) => extractFromPatterns(sentence, patterns, category)).find((found) => found !== null)
+        ?? (followUp ? followUpRule(sentence) : null);
+      if (item) items.push(item);
     }
   }
   return items;
 }
 
 /** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
- *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`. */
-export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
+ *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`.
+ *  From `firstFollowUp` on, those words answer the agent's work, so each statement in them is the person's rule. */
+export function extractFromTexts(texts: readonly string[], userTexts = 0, firstFollowUp = userTexts): ExtractedItem[] {
   const seen = new Set<string>();
-  return texts.flatMap((text, i) => extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item))).filter((item) => {
+  const extracted = texts.flatMap((text, i) => extractOne(text, i >= firstFollowUp && i < userTexts).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)));
+  return extracted.filter((item) => {
     const key = duplicateKey(item.content);
     if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
     seen.add(key);
