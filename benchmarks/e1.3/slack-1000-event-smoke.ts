@@ -18,6 +18,7 @@ import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { adminActor } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
 
 export interface SmokeOpts {
   hippoRoot: string;
@@ -38,6 +39,7 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
     tenantId: 'default',
     actor: adminActor('connector:slack'),
     store: sqliteStore(opts.hippoRoot),
+    config: loadConfig(opts.hippoRoot),
   };
   const start = Date.now();
   let calls = 0;

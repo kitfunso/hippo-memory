@@ -328,6 +328,6 @@ export function deriveOriginProject(
 
 /** The origin for a write that names none: NULL on a shared store, whose folder is no caller's project, else the
  * folder's project. */
-export function fallbackOrigin(hippoRoot: string): string | null {
-  return isSharedStore(hippoRoot) ? null : deriveOriginProject(path.dirname(path.resolve(hippoRoot)));
+export function fallbackOrigin(hippoRoot: string, shared = isSharedStore(hippoRoot)): string | null {
+  return shared ? null : deriveOriginProject(path.dirname(path.resolve(hippoRoot)));
 }

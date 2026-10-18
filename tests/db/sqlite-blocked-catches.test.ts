@@ -16,6 +16,7 @@ import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { handlesOf } from '../../src/store/open.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -30,7 +31,7 @@ const ROWS: readonly Row[] = [
     return 'returned';
   }, 'returned'],
   ['mcp/request.ts recordMcpTokens', /recordMcpTokens/, async (root) => {
-    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
+    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) });
     return 'returned';
   }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,

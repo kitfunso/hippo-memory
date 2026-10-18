@@ -9,7 +9,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { remember, getContext } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -34,7 +34,7 @@ describe('a deliberate stale tier survives being read', () => {
     expect(invalidated.confidence).toBe('stale');
     expect(invalidated.tags).toContain('invalidated');
 
-    await getContext(ctx(), { q: 'legacy pipeline deploys', budget: 2000 });
+    await getContext(ctx(), { currentProject: cwdProject(), q: 'legacy pipeline deploys', budget: 2000 });
 
     const afterRead = readEntry(home, id)!;
     expect(afterRead.retrieval_count).toBeGreaterThan(invalidated.retrieval_count);

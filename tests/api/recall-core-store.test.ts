@@ -74,7 +74,7 @@ describe('retrieve with the CLI ranking core', () => {
       },
     };
     const store: HippoStore = { ...inner, lastRecall: traced };
-    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
+    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store, config: loadConfig(hippoRoot) };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), lastRecall: traced } });
 
@@ -113,7 +113,7 @@ describe('retrieve with the CLI ranking core', () => {
     const globalStore: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
     const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
 
-    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), sources: { globalRoot: secondRoot, globalStore } } });
+    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) } } });
 
     expect(result.results.map((r) => r.id)).toContain('mem_second_0');
     expect(writes).toHaveLength(1);

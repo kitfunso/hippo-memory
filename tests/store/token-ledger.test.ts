@@ -20,6 +20,7 @@ import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/core/config.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -232,7 +233,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   it('records MCP recall', async () => {
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     // The tool's text holds the note itself inside headings whose wording the formatter owns.
     expect(surfaces().mcp_recall).toBeGreaterThanOrEqual(Math.ceil(NOTE.length / 4));

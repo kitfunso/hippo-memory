@@ -18,6 +18,7 @@ import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { sessionCookie } from '../_helpers/dashboard-fixture.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -310,7 +311,7 @@ describe('confidence facets', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
+      { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) },
     );
     expect(JSON.stringify(res)).toContain('[stale]');
   });

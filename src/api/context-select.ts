@@ -4,12 +4,11 @@ import { recallScopeFilter } from '../core/recall-scope.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { auditQueryFields } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
-import type { StoreReach } from '../store/port.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { searchByEngine } from '../search/engine.js';
-import { configuredVectorSource, vectorSourceOf } from '../search/hybrid.js';
+import { vectorSourceOf } from '../search/hybrid.js';
 import type { HybridVectorCandidates, VectorSource } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
@@ -28,7 +27,7 @@ import {
 import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
-import type { Context } from './types.js';
+import type { Context, GlobalInReach } from './types.js';
 import type { AmbientLoadResult } from '../store/port/context-reads.js';
 import type { AppendAuditOpts } from '../store/port/types.js';
 
@@ -519,7 +518,7 @@ export function globalStoreInReach(ctx: Context): HippoStore {
   return globalInReach(ctx).store;
 }
 
-function globalInReach(ctx: Context): NonNullable<StoreReach['global']> {
+function globalInReach(ctx: Context): GlobalInReach {
   const global = ctx.reach?.global;
   if (global === undefined) throw new Error('hasGlobal without a global store in reach');
   return global;
@@ -527,6 +526,6 @@ function globalInReach(ctx: Context): NonNullable<StoreReach['global']> {
 
 /** The global store's vectors, embedded by the model its own config.json names. */
 function globalVectorSource(ctx: Context): VectorSource {
-  const { root, store } = globalInReach(ctx);
-  return configuredVectorSource(store, root);
+  const { store, config } = globalInReach(ctx);
+  return vectorSourceOf({ store, config, onHippoDb: true });
 }

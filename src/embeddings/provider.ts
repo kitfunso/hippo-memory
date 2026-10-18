@@ -15,7 +15,7 @@ import {
   sharedLocalEmbedder,
   DEFAULT_EMBEDDING_MODEL,
 } from './local.js';
-import { type EmbeddingsConfig, loadConfig } from '../core/config.js';
+import type { EmbeddingsConfig } from '../core/config.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { fetchWithRetry } from '../util/http-retry.js';
@@ -378,9 +378,4 @@ export function resolveEmbeddingProvider(
       ? cfg.batchSize
       : DEFAULT_API_BATCH_SIZE;
   return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
-}
-
-/** The caller's embeddings config, else `hippoRoot`'s file: the fallback for the published embed and search entries. */
-export function embeddingsConfigOf(hippoRoot: string, given?: EmbeddingsConfig): EmbeddingsConfig {
-  return given ?? loadConfig(hippoRoot).embeddings;
 }

@@ -1,14 +1,17 @@
-// The store writes a session's end makes after sleep and capture (handoff, snapshot close, re-read count), and the
-// compact-resume read; the hook verbs keep stdin, spawning and the log file.
+// A session's end: which store it writes to, when it sleeps, which turns it captures, and the store writes after them
+// (handoff, snapshot close, re-read count); plus the compact-resume read. The hook verbs keep stdin, spawning and
+// the log file.
 
 import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
+import type { ProjectRef } from '../core/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { LocalFiles } from '../store/port.js';
 import { readApiCalls, type TranscriptCalls } from '../store/token-ledger.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
+import { autoSleepDue } from './sleep/auto-sleep.js';
 import type { Context } from './types.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
@@ -146,31 +149,115 @@ export async function compactResumeBlock(
   return compactResumeText(snapshot, events);
 }
 
-/** What one session-end run needs from its host; the host owns sleep, transcript reading and capture, this module owns
- * the order. */
-export interface SessionEndWork<Scan> {
+/** What one session-end run needs from its host: the transcript, the sleep and the capture it runs, and the log it
+ * writes. This module decides which store the run writes to, whether sleep runs and which turns are captured. */
+export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }> {
   mode: 'turn' | 'full';
-  hippoRoot: string;
-  tenantId: string;
   sessionId: string | null;
   transcriptPath: string | undefined;
-  /** Builds the call context for one store root. */
-  contextFor: (root: string) => Context;
-  /** The store the run captures into: the project store, else global; null when neither exists. */
-  storeRoot: () => string | null;
   /** One line to the session-end log; `startFresh` restarts the file. */
   log: (line: string, opts?: { startFresh?: boolean }) => void;
+  /** Sleeps the folder's own store; reports its own failure. */
   sleep: () => Promise<void>;
+  /** Imports the session's agent notes into the global store, for a folder that does not sleep here. */
+  importAgentNotes: () => void;
   readScan: (log: (line: string) => void) => Scan | null;
-  capture: (store: string, scan: Scan | null) => void;
-  digest: (scan: Scan | null, log: (line: string) => void) => void;
+  /** This session's saved place in its transcript: the turns after it, and moving it past `turns`. */
+  cursor: {
+    after: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => readonly Turn[];
+    save: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => void;
+  };
+  /** The project the session ran in. */
+  currentProject: () => ProjectRef;
+  /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it failed, having said why. */
+  capture: (into: Context, turns: readonly Turn[] | undefined, originProject: ProjectRef | undefined) => boolean;
+  digest: (scan: Scan | null, key: string, log: (line: string) => void) => void;
   workingState: (log: (line: string) => void) => ReturnType<SessionClose['workingState']>;
   evidence: () => HandoffEvidence;
 }
 
-/** Books re-reads, sleeps, captures, digests and closes one ended session, in that order. */
-export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<void> {
-  const rereadLog = await bookSessionRereads(w.contextFor(w.hippoRoot), w.transcriptPath, w.sessionId)
+/** A store that is not hippo.db is its own; hippo.db's reach says whether the folder has one. */
+function hasOwnStore(ctx: Context): boolean {
+  return ctx.reach?.hasLocal ?? true;
+}
+
+/** The store a session's end writes to: the folder's own, else the global one; null when neither exists. */
+function endStore(ctx: Context): Context | null {
+  if (hasOwnStore(ctx)) return ctx;
+  const global = ctx.reach?.global;
+  if (global === undefined) return null;
+  return {
+    hippoRoot: global.root, tenantId: ctx.tenantId, actor: ctx.actor, store: global.store, config: global.config,
+  };
+}
+
+/** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's end always. */
+async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
+  ctx: Context,
+  w: SessionEndWork<Turn, Scan>,
+): Promise<void> {
+  // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
+  if (!hasOwnStore(ctx)) {
+    w.log('skip sleep: this folder has no store of its own', { startFresh: true });
+    w.importAgentNotes();
+    return;
+  }
+  if (w.mode !== 'turn' || !w.sessionId) return w.sleep();
+  // Each line starts the log afresh, as a sleep does.
+  const prefix = `turn close, session ${w.sessionId}`;
+  try {
+    const { enabled, count, threshold, due } = await autoSleepDue(ctx.store, ctx.tenantId, ctx.config.autoSleep);
+    if (!due) {
+      const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
+      w.log(`${prefix}: skip sleep, ${why}`, { startFresh: true });
+      return;
+    }
+    await w.sleep();
+    w.log(`${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
+  } catch (err) {
+    w.log(`${prefix}: sleep check failed: ${errorMessage(err)}`, { startFresh: true });
+  }
+}
+
+/** Captures the session into `into`; a reply's close takes only the turns after the session's cursor, then moves it,
+ * so each reply is extracted once. */
+function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
+  ctx: Context,
+  into: Context,
+  scan: Scan | null,
+  w: SessionEndWork<Turn, Scan>,
+): void {
+  const capture = (turns: readonly Turn[] | undefined): boolean => {
+    // With no transcript of its own, capture would read this as a manual run and scan every project.
+    if (!w.transcriptPath) {
+      w.log('skip capture: no transcript for this session');
+      return false;
+    }
+    // In the global store, rows would otherwise read as user-global and show up in every project.
+    return w.capture(into, turns, hasOwnStore(ctx) ? undefined : w.currentProject());
+  };
+  if (w.mode !== 'turn') {
+    capture(scan?.turns);
+    return;
+  }
+  if (!w.transcriptPath || !w.sessionId || !scan) {
+    w.log('skip capture: no readable transcript for this session');
+    return;
+  }
+  const fresh = w.cursor.after(w.sessionId, w.transcriptPath, scan.turns);
+  if (fresh.length === 0) {
+    w.log('skip capture: no new turns since the last reply');
+    return;
+  }
+  if (capture(fresh)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
+}
+
+/** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx` names, in that order. */
+export async function sessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }>(
+  ctx: Context,
+  w: SessionEndWork<Turn, Scan>,
+): Promise<void> {
+  const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId)
     .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process. A
   // flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines
@@ -181,20 +268,20 @@ export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<voi
   };
   process.once('exit', flushRereadLog);
   // A folder with neither a project nor a global store must not get one made.
-  const store = w.storeRoot();
-  if (store === null) {
+  const into = endStore(ctx);
+  if (into === null) {
     w.log('skip: no hippo store for this folder or globally', { startFresh: true });
     flushRereadLog();
     return;
   }
-  await w.sleep();
+  await sleepStep(ctx, w);
   flushRereadLog();
   const scan = w.readScan((line) => w.log(line));
-  w.capture(store, scan);
-  w.digest(scan, (line) => w.log(line));
+  captureStep(ctx, into, scan, w);
+  w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) => w.log(line));
   // Only this session's snapshot, and only after sleep and capture.
   const closeLog = (line: string): void => w.log(line);
-  await closeEndedSession(w.contextFor(store), {
+  await closeEndedSession(into, {
     sessionId: w.sessionId,
     turn: w.mode === 'turn',
     workingState: () => (w.transcriptPath ? w.workingState(closeLog) : null),

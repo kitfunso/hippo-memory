@@ -23,7 +23,6 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
-import { configOf as realConfigOf } from '../../src/api/config-of.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 
@@ -155,15 +154,11 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
       autoShare: () => { throw err; },
     };
 
-    // Phase 4 only runs if config.autoShareOnSleep is true; bypass the gate
-    // by also stubbing configOf to force the flag on.
-    stubPhases.configOf = (ctx) => {
-      const cfg = realConfigOf(ctx);
-      return { ...cfg, autoShareOnSleep: true };
-    };
+    // Phase 4 only runs if config.autoShareOnSleep is true, so the Context turns the flag on.
+    const ctx = { ...testCtx.ctx, config: { ...testCtx.ctx.config, autoShareOnSleep: true } };
 
     await expect(
-      runSleep(testCtx.ctx, {}, stubPhases),
+      runSleep(ctx, {}, stubPhases),
     ).rejects.toThrow('phase 4 fault: autoShare threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);

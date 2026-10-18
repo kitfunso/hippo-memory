@@ -4,13 +4,12 @@ import { truncateWithEllipsis } from '../util/ellipsize.js';
 import * as path from 'path';
 import { unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import { loadConfig } from '../core/config.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories/memories.js';
 import * as client from './client.js';
-import { cliApiContext, cliStore } from './api-context.js';
+import { cliConfig, cliApiContext, cliStore } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -398,7 +397,7 @@ async function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: st
 function printDormantRows(rows: Awaited<ReturnType<typeof api.listDormant>>, hasQuery: boolean, root: string): void {
   if (rows.length === 0) {
     console.log(hasQuery ? 'No dormant memories match.' : 'No dormant memories.');
-    if (!loadConfig(root).dormant.enabled) {
+    if (!cliConfig(root).dormant.enabled) {
       console.log(
         `Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ${path.join(root, 'config.json')}.`,
       );

@@ -11,7 +11,6 @@ import {
   type MemoryKind,
   type TraceOutcome,
 } from '../../core/memory.js';
-import { configOf } from '../config-of.js';
 import { vetSecrets } from '../../util/secret-detect.js';
 import { assertCallerProject } from '../../core/project-identity.js';
 import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
@@ -132,7 +131,7 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
     artifactRef: opts.artifactRef ?? null,
     tags: opts.tags,
     tenantId: ctx.tenantId,
-    baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
+    baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
   });
   const entry = local.weaken ? weakened(created, local.weaken) : created;
   // Aliases only widen what a reader matches; a row has one origin.

@@ -2,11 +2,12 @@
 import type { CaptureTarget } from '../../src/capture/command.js';
 import { cliLocalFiles, cliSyncStore } from '../../src/cli/api-context.js';
 import type { EmbedTarget } from '../../src/search/embed-memories.js';
+import { loadConfig } from '../../src/core/config.js';
 import type { FolderFiles } from '../../src/store/port.js';
 import type { Diagnostics } from '../../src/store/port/diagnostics.js';
 
 export function captureTarget(root: string): CaptureTarget {
-  return { root, store: cliSyncStore(root) };
+  return { root, store: cliSyncStore(root), config: loadConfig(root) };
 }
 
 export function diagnosticsAt(root: string): Diagnostics {
@@ -20,7 +21,7 @@ export function folderFiles(root: string): FolderFiles {
 
 /** hippo.db's own vector index under `root`, as embedMemory and embedAll take it. */
 export function localIndex(root: string): EmbedTarget {
-  return { hippoRoot: root, embeddingIndex: cliLocalFiles(root).embeddingIndex };
+  return { hippoRoot: root, embeddingIndex: cliLocalFiles(root).embeddingIndex, embeddings: loadConfig(root).embeddings };
 }
 
 export { cliSyncStore as syncStore };

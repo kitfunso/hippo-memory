@@ -16,6 +16,7 @@ import { inMemoryKeyWritesStore, OWNER, seedOwnedKeys, type OwnedKeys } from '..
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyListItem } from '../../src/store/port/key-writes.js';
+import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;
@@ -85,7 +86,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
   it('mints through keyWrites, creates no hippo.db in hippoRoot, and stores only the hash', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryKeyWritesStore(copyOf());
-    const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store };
+    const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) };
     const minted = await authCreate(ctx, { label: 'ci', role: 'member' });
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
@@ -100,7 +101,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
   it('self-mints through keyWrites, and a key it replaces is refused at once despite the verified-key cache', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryKeyWritesStore(copyOf());
-    const ctx = { hippoRoot, tenantId: TENANT_A, actor: resolverMember, store: memory.store };
+    const ctx = { hippoRoot, tenantId: TENANT_A, actor: resolverMember, store: memory.store, config: loadConfig(hippoRoot) };
     const first = await authCreateSelf(ctx, { label: 'laptop', ttlDays: 30, perSubject: 3 });
     expect(first).toMatchObject({ tenantId: TENANT_A, role: 'member', expiresAt: expect.any(String) });
     expect(await verifyApiKeyCached(first.plaintext, memory.store)).toMatchObject({ keyId: first.keyId, ownerSubject: OWNER });
@@ -117,7 +118,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     breakAuditLog(root);
     const before = hippoDbState(root);
     const actor: Actor = { subject: `api_key:${fixture.keys.adminA}`, role: 'admin' };
-    await expect(authCreate({ hippoRoot: root, tenantId: TENANT_A, actor, store: sqliteStore(root) }, { label: 'x' })).rejects.toThrow(/audit table unwritable/);
+    await expect(authCreate({ hippoRoot: root, tenantId: TENANT_A, actor, store: sqliteStore(root), config: loadConfig(root) }, { label: 'x' })).rejects.toThrow(/audit table unwritable/);
     await expect(authCreate(apiCtx(root, TENANT_A, actor), { label: 'y' })).rejects.toThrow(/audit table unwritable/);
     expect(hippoDbState(root)).toEqual(before);
   });
@@ -139,7 +140,7 @@ describe('authListRows with ctx.store', () => {
     for (const active of [true, false]) {
       const onHippoDb = await authListRows(apiCtx(root, TENANT_A, actor), { active });
       expect(onHippoDb.length > 0).toBe(listsAny);
-      expect(await authListRows({ hippoRoot: markedFolder(), tenantId: TENANT_A, actor, store: memory.store }, { active })).toEqual(onHippoDb);
+      expect(await authListRows({ hippoRoot: markedFolder(), tenantId: TENANT_A, actor, store: memory.store, config: DEFAULT_CONFIG }, { active })).toEqual(onHippoDb);
     }
   });
 });

@@ -160,11 +160,11 @@ function positive(raw: string, where: string): number {
 /** Every micro fixture in run.py's order (file name), with its queries as stage lists. */
 export function loadMicroFixtures(): LoadedFixture[] {
   const dir = join(MICRO_DIR, 'fixtures');
-  const loaded = readdirSync(dir).filter((f) => f.endsWith('.json')).sort().map((file): LoadedFixture => {
+  const loaded = readdirSync(dir).filter((f: string) => f.endsWith('.json')).sort().map((file: string): LoadedFixture => {
     const fixture: MicroFixture = JSON.parse(readFileSync(join(dir, file), 'utf8'));
     return { fixture, queries: fixture.queries.map((q, i) => microQuery(fixture.name, q, i)) };
   });
-  const queries = loaded.reduce((n, f) => n + f.queries.length, 0);
+  const queries = loaded.reduce((n: number, f: LoadedFixture) => n + f.queries.length, 0);
   if (loaded.length !== MICRO_FIXTURE_COUNT || queries !== MICRO_QUERY_COUNT) {
     throw new Error(`the micro corpus is ${loaded.length} fixtures and ${queries} queries; the pre-registration fixes ${MICRO_FIXTURE_COUNT} and ${MICRO_QUERY_COUNT}`);
   }

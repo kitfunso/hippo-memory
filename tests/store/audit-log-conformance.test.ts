@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvent, listAuditEventsAfter } from '../../src/store/audit.js';
 import { createApiKey } from '../../src/store/auth.js';
-import { _resetSharedStoreCacheForTests, markSharedStore } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
@@ -187,8 +188,8 @@ async function runServed(makeStore?: (root: string) => HippoStore): Promise<Repl
     const root = join(home, 'store');
     cpSync(fixture.dir, root, { recursive: true });
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    // serve() marks another store's root shared, so the hippo.db pass is shared too to compare like with like.
-    markSharedStore(root);
+    // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
+    shareRoot(root);
     const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });
     const tokens = { adminA: fixture.tokens.adminA, memberA: fixture.tokens.memberA, host: hostAdminToken } satisfies Record<Asker, string>;

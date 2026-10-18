@@ -395,24 +395,36 @@ function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
   return false;
 }
 
+/** Reads the folder's config.json on every call; a root that loads often holds a configReader instead. */
 export function loadConfig(hippoRoot: string): HippoConfig {
   // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working
   // folder's config.json.
   if (hippoRoot === '') return { ...DEFAULT_CONFIG };
   const configPath = path.join(hippoRoot, 'config.json');
-  const key = path.resolve(configPath);
-  const stamp = fileStamp(configPath);
-  const hit = parsedConfigs.get(key);
-  if (hit !== undefined && hit.stamp === stamp) return { ...hit.config };
-  const config = stamp === null ? DEFAULT_CONFIG : parseConfigFile(configPath);
-  if (parsedConfigs.size >= PARSED_CONFIGS_MAX) parsedConfigs.clear();
-  parsedConfigs.set(key, { stamp, config });
-  return { ...config };
+  return fileStamp(configPath) === null ? { ...DEFAULT_CONFIG } : parseConfigFile(configPath);
 }
 
+export type ConfigReader = (hippoRoot: string) => HippoConfig;
+
 const PARSED_CONFIGS_MAX = 64;
-// Each path's parsed config with the stamp of the file it came from, so an unchanged file costs one stat and no parse.
-const parsedConfigs = new Map<string, { stamp: string | null; config: HippoConfig }>();
+
+/** A loadConfig whose parses belong to the root that made it, so two servers in one process never share one. */
+export function configReader(): ConfigReader {
+  // Keyed by the file's stamp, so an unchanged file costs one stat and no parse, and an edit shows on the next call.
+  const parsed = new Map<string, { stamp: string | null; config: HippoConfig }>();
+  return (hippoRoot) => {
+    if (hippoRoot === '') return { ...DEFAULT_CONFIG };
+    const configPath = path.join(hippoRoot, 'config.json');
+    const key = path.resolve(configPath);
+    const stamp = fileStamp(configPath);
+    const hit = parsed.get(key);
+    if (hit !== undefined && hit.stamp === stamp) return { ...hit.config };
+    const config = stamp === null ? DEFAULT_CONFIG : parseConfigFile(configPath);
+    if (parsed.size >= PARSED_CONFIGS_MAX) parsed.clear();
+    parsed.set(key, { stamp, config });
+    return { ...config };
+  };
+}
 
 /** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync
  * answers false. */
@@ -536,11 +548,6 @@ export function isSharedStore(hippoRoot: string): boolean {
   }
   sharedStoreRoots.add(key);
   return true;
-}
-
-/** Reads the root as shared for the rest of this process, whatever its config.json says. */
-export function markSharedStore(hippoRoot: string): void {
-  sharedStoreRoots.add(sharedStoreKey(hippoRoot));
 }
 
 /** Test seam: forget every root seen as shared. */

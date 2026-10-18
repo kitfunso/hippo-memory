@@ -27,6 +27,8 @@ const { initStore } = await load('store/open.js');
 const { writeEntry } = await load('store/entry-writes.js');
 const api = await load('api/index.js');
 const { sqliteStore } = await load('store/sqlite/store.js');
+const { loadConfig } = await load('core/config.js');
+const { resolveProjectIdentity } = await load('core/project-identity.js');
 const { contextCost } = await load('api/context-render.js');
 const { createDeliveryRecorder } = await load('store/delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
@@ -117,9 +119,11 @@ async function turn(store, mode, i) {
   const stdinText = JSON.stringify({ session_id: sessionId, prompt: `${PROMPT} ${i}`, hook_event_name: 'UserPromptSubmit' });
   const ctx = {
     hippoRoot: store.local, tenantId: 'default', actor: api.adminActor('cli'), store: sqliteStore(store.local),
+    config: loadConfig(store.local),
   };
   const opts = {
     q: '', budget: 1500, pinnedOnly: true, includeRecent: 5, currentSessionId: sessionId,
+    currentProject: resolveProjectIdentity(process.cwd()),
     prompt: `${PROMPT} ${i}`, cost: contextCost('additional-context', 'observe'),
   };
 

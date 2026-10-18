@@ -21,7 +21,7 @@ const SERVER_TYPES = [
 ];
 const STORE_KIT_VALUES = [
   'ambientRefusal', 'bufferToFloat32', 'decodeVector', 'descendantAdmits', 'EMBEDDING_MODEL_META_KEY', 'encodeVector', 'entryAfterOutcome', 'float32ToBuffer', 'ftsTermParts',
-  'hasGroup', 'heldTexts', 'isSharedStore', 'normalizeValueForRejection', 'OTHER_STORE_MARKER', 'ownScopeTouches', 'passesScopeFilterForRecall',
+  'hasGroup', 'heldTexts', 'isSharedStore', 'loadConfig', 'normalizeValueForRejection', 'OTHER_STORE_MARKER', 'ownScopeTouches', 'passesScopeFilterForRecall',
   'physicsSearch', 'PROTECTED_ROWS', 'rankVectorRows', 'rarestFtsQuery', 'repairKeeps',
   'RECALL_DEFAULT_DENY_SCOPES', 'RejectedValueError', 'rejectionDigest', 'replacesIndex', 'requireGroup', 'SECRET_TAGS', 'sqliteStore', 'StoreBusyError',
   'tallyAmbientEntries',
@@ -47,7 +47,7 @@ const STORE_KIT_TYPES = [
   'WorkingMemoryFilter', 'WorkingMemoryItem', 'WorkingMemoryPush',
   'AppliedRejection', 'LiftedRejection', 'Rejection', 'RejectionCheck', 'Rejections', 'RejectionSource', 'RejectedValueRow',
   'FailureEvent', 'FailureLog', 'FailureOutcome', 'LegacyStats', 'StatusCounts', 'RawRefRow',
-  'RepairProtection',
+  'RepairProtection', 'HippoConfig',
   'CallerItems', 'CallerItemsSaved', 'CompactionStart', 'Compactions',
 ];
 

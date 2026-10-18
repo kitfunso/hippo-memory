@@ -17,6 +17,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
 import { inMemoryConnectorEventsStore, type InMemoryConnectorEventsStore } from '../_helpers/in-memory-connector-events-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const slackActor: Actor = { subject: 'connector:slack', role: 'admin' };
@@ -82,7 +83,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryConnectorEventsStore(copyOf());
-    const slack: Context = { hippoRoot, tenantId: TENANT_A, actor: slackActor, store: memory.store };
+    const slack: Context = { hippoRoot, tenantId: TENANT_A, actor: slackActor, store: memory.store, config: loadConfig(hippoRoot) };
     const github: Context = { ...slack, actor: githubActor };
     const message = (eventId: string, text: string, ts: string) =>
       ingestMessage(slack, { teamId: 'T1', channel: { id: 'C1', is_private: false }, message: { type: 'message', channel: 'C1', user: 'U1', text, ts }, eventId });

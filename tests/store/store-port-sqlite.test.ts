@@ -12,7 +12,7 @@ import { detectForwardClaim } from '../../src/learn/forward-claim-detector.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/goals.js';
 import { boostByGoals } from '../../src/search/goal-boost.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/open.js';
 import { planningFallacyEvidenceAt } from '../../src/store/planning-fallacy-evidence.js';

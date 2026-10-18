@@ -29,6 +29,7 @@ import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadConfig } from '../../src/core/config.js';
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
 vi.setConfig({ testTimeout: 30_000 });
@@ -51,7 +52,7 @@ function callMcpTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+    { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
   );
 }
 

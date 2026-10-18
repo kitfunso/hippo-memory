@@ -8,6 +8,7 @@ import { initStore } from '../../src/store/open.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { DEFAULT_CONFIG } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -21,7 +22,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     // A number where a root path belongs, for the context and its store: path.join throws on it, which is the start-up
     // failure under test.
     const badRoot: string = JSON.parse('42');
-    const ctx = { hippoRoot: badRoot, store: sqliteStore(badRoot), tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false } };
+    const ctx = { hippoRoot: badRoot, store: sqliteStore(badRoot), tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false }, config: { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } } };
     expect(startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined })).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+ errorClass=\w+ stack=.*\n$/);

@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import type { VectorSource } from '../search/vector.js';
-import type { FolderStore } from '../store/port.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 
 // Generous so metrics are not truncated.
 const DEFAULT_EVAL_BUDGET = 100_000;
@@ -55,7 +55,7 @@ export interface RunEvalOptions {
   source?: VectorSource;
   /** When set, eval runs through searchBothHybrid so global memories are in scope. Otherwise only the `entries` list
    *  is searched. */
-  stores?: { local: FolderStore; global: FolderStore };
+  stores?: { local: ConfiguredFolder; global: ConfiguredFolder };
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now?: Date;

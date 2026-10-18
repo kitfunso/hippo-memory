@@ -4,6 +4,7 @@ import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import type { HippoStore } from '../store/index.js';
 import type { HippoConfig } from '../core/config.js';
 import type { OptionalGroup, StoreReach, StoreWith } from '../store/port.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -22,6 +23,19 @@ export interface Actor {
   owner?: string; // the person behind the key; task state keys on it
 }
 
+/** The operator's global store in reach, with the config.json that ranks its rows and governs its ledger. */
+export interface GlobalInReach {
+  readonly root: string;
+  readonly store: HippoStore;
+  readonly config: HippoConfig;
+}
+
+/** A store reach as a composition root sets it: each global store carries its own config, so the api reads no file. */
+export interface ContextReach extends StoreReach {
+  readonly global?: GlobalInReach;
+  readonly globalTarget?: ConfiguredFolder;
+}
+
 export interface Context {
   hippoRoot: string;
   tenantId: string;
@@ -29,9 +43,31 @@ export interface Context {
   /** Built by a composition root; every api function reads and writes storage only through it. */
   readonly store: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an integrator's store. */
-  reach?: StoreReach;
-  /** Set by a composition root per command or request; absent, the api reads the store's config.json. */
-  config?: HippoConfig;
+  reach?: ContextReach;
+  /** The store's config, loaded by the composition root once per command or request. */
+  readonly config: HippoConfig;
+}
+
+/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader. */
+export function contextReach(reach: StoreReach, configAt: (root: string) => HippoConfig): ContextReach {
+  const { global, globalTarget, ...rest } = reach;
+  // Both name the operator's global store, so one load serves both.
+  let last: { readonly root: string; readonly config: HippoConfig } | undefined;
+  const at = (root: string): HippoConfig => {
+    if (last?.root !== root) last = { root, config: configAt(root) };
+    return last.config;
+  };
+  let withConfig: ContextReach = rest;
+  if (global !== undefined) withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
+  if (globalTarget !== undefined) {
+    withConfig = { ...withConfig, globalTarget: { ...globalTarget, config: at(globalTarget.root) } };
+  }
+  return withConfig;
+}
+
+/** Whether the store serves many people: the root's reach says, else the store's config for an integrator's store. */
+export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
+  return ctx.reach ? ctx.reach.shared : ctx.config.sharedStore;
 }
 
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */

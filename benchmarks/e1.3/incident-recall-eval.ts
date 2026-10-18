@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { retrieve, adminActor, type Context } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/core/config.js';
 
 interface TranscriptMessage {
   user: string;
@@ -65,7 +66,7 @@ export async function runIncidentRecallEval(opts: {
     hippoRoot: opts.hippoRoot,
     tenantId: 'default',
     actor: adminActor('eval:slack'),
-    store: sqliteStore(opts.hippoRoot),
+    store: sqliteStore(opts.hippoRoot), config: loadConfig(opts.hippoRoot),
   };
   const results: ScenarioResult[] = [];
 

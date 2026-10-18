@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
-import { lastRecalledIds } from '../../src/mcp/session-state.js';
+import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import {

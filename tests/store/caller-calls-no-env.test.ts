@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
 import type { Context } from '../../src/api/types.js';
@@ -79,7 +79,7 @@ function origins(db: DatabaseSyncLike, table: string): string[] {
 
 describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", async () => {
-    const ctx: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' }, reach: { hasLocal: true, isGlobal: false, shared: true } };
+    const ctx: Context = { hippoRoot: root, store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' }, reach: { hasLocal: true, isGlobal: false, shared: true } };
     const base = { sessionId: SESSION, project: PROJECT };
 
     expect(await preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });

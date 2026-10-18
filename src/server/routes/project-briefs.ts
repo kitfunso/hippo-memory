@@ -6,7 +6,6 @@ import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody, getString, requiredString } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
-import { configOf } from '../../api/config-of.js';
 import {
   closeRoute,
   getRoute,
@@ -58,7 +57,7 @@ export async function handleRefreshProjectBrief(rr: AuthedRouteRequest): Promise
   }
   const brief = await refreshedBrief(
     objectsOf(ctx),
-    { baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject },
+    { baseHalfLifeDays: ctx.config.defaultHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject },
     repo,
   );
   sendJson(res, 200, { brief });

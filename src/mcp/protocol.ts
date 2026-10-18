@@ -7,13 +7,12 @@ import { INTERNAL_ERROR_MESSAGE } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { currentRequestId } from '../util/request-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { loadConfig } from '../core/config.js';
-import type { Actor as ApiActor } from '../api/index.js';
+import type { HippoConfig } from '../core/config.js';
+import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
-import type { StoreReach } from '../store/port.js';
 import type { AutoSleepRunner } from '../api/sleep/auto-sleep.js';
 
 // ── Find hippo root ──
@@ -98,9 +97,11 @@ export interface McpContext {
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   /** The store this transport's calls run on. */
   store: HippoStore;
+  /** The store's config, loaded by the transport's root for this call. */
+  config: HippoConfig;
   /** Set by the stdio host: the operator's own process, so no shared-store gate applies. */
   stdio?: true;
-  reach?: StoreReach;
+  reach?: ContextReach;
   autoSleep?: false;
   /** How an auto-sleep runs: the HTTP transport runs it off the server's event loop, stdio in its own process.
    * Without one, no auto-sleep starts. */
@@ -125,6 +126,18 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
   return actor;
 }
 
+/** The api Context a tool call runs as: the transport's store, reach and config under the caller's actor. */
+export function mcpApiContext(ctx: McpContext): ApiContext {
+  return {
+    hippoRoot: ctx.hippoRoot,
+    tenantId: ctx.tenantId,
+    actor: mcpActor(ctx),
+    store: ctx.store,
+    reach: ctx.reach,
+    config: ctx.config,
+  };
+}
+
 /** Stdio or a host admin: the only callers whose server cwd and git history are their own to read. */
 export function ownsServerCwd(ctx: McpContext | undefined): boolean {
   return mcpActor(ctx).hostAdmin === true;
@@ -145,7 +158,7 @@ export interface ToolCall {
   ctx: McpContext;
   hippoRoot: string;
   store: HippoStore;
-  config: ReturnType<typeof loadConfig>;
+  config: HippoConfig;
   tenantId: string;
 }
 

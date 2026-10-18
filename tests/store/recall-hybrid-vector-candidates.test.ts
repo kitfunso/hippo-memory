@@ -14,7 +14,7 @@ import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { retrieve, getContext } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -129,7 +129,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const s = track(seed());
     withEmbeddings(s);
     vi.stubEnv('HIPPO_HOME', join(s.global, 'absent'));
-    const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), { q: QUERY, budget: 100000 });
+    const res = await getContext(apiCtx(s.home, TENANT, { subject: 'cli', role: 'admin' }), { currentProject: cwdProject(), q: QUERY, budget: 100000 });
     expect(labels(s, res.entries.map((e) => e.entry.id))).toEqual(EXPECTED.contextLocal);
   });
 

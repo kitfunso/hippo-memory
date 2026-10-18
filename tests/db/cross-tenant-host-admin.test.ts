@@ -12,6 +12,7 @@ import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { autoSleepInFlight } from '../../src/mcp/session-state.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
+import { loadConfig } from '../../src/core/config.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -141,7 +142,7 @@ describe('hippo_learn needs a host admin', () => {
   it('runs for an in-process stdio caller', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_learn', arguments: { days: 1 } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
     );
     expect(res?.error).toBeUndefined();
   });

@@ -6,7 +6,6 @@ import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { objectsOf } from '../../api/objects/objects.js';
-import { configOf } from '../../api/config-of.js';
 import {
   closeRoute,
   getRoute,
@@ -52,7 +51,7 @@ export async function handleCreateIncident(rr: AuthedRouteRequest): Promise<void
     linkedMemoryIds: linkedMemoryIds(body),
   };
   try {
-    const { defaultHalfLifeDays } = configOf(ctx);
+    const { defaultHalfLifeDays } = ctx.config;
     const incident = await openIncident(objectsOf(ctx), defaultHalfLifeDays, ctx.tenantId, write, ctx.actor.subject);
     sendJson(res, 201, { incident });
   } catch (e) {

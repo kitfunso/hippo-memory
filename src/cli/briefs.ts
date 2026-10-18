@@ -1,11 +1,11 @@
 // The project brief verbs: one repo's brief, versioned by supersession and refreshable from the repo's receipts.
 
+import { cliConfig } from './api-context.js';
 import * as briefsModule from '../objects/project-briefs.js';
 import { errorMessage } from '../util/log.js';
 import { printError } from './output.js';
 import { boolFlag, stringFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';
-import { loadConfig } from '../core/config.js';
 import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 import { CLI_ACTOR } from '../core/actor.js';
@@ -34,7 +34,7 @@ async function briefRefresh(
       console.log(markdown);
       return;
     }
-    const { defaultHalfLifeDays: baseHalfLifeDays } = loadConfig(hippoRoot);
+    const { defaultHalfLifeDays: baseHalfLifeDays } = cliConfig(hippoRoot);
     const created = await briefsModule.refreshedBrief(
       objects,
       { baseHalfLifeDays, tenantId, actor: CLI_ACTOR },
@@ -69,7 +69,7 @@ const briefKind = (
   body: (flags) => requiredText(flags, 'summary'),
   keyOf: (b) => b.repo,
   save: (repo, summary, extraTags, from) =>
-    briefsModule.saveProjectBrief(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
+    briefsModule.saveProjectBrief(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
       repo,
       summary,
       extraTags,

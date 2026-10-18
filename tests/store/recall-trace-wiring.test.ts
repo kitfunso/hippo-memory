@@ -23,7 +23,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { remember, retrieve, getContext } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
@@ -194,7 +194,7 @@ describe('api.getContext — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-gamma' });
 
-      const result = await getContext(ctx, { q: 'context-trace-target', budget: 1000 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'context-trace-target', budget: 1000 });
       expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
@@ -216,7 +216,7 @@ describe('api.getContext — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       writeEntry(home, createMemory('pinned-context-trace-delta', { pinned: true }));
 
-      const result = await getContext(ctx, { pinnedOnly: true, budget: 1000 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 1000 });
       expect(result.entries).toHaveLength(1);
 
       expect(traceRows(home, 'context')).toHaveLength(0);
@@ -241,7 +241,7 @@ describe('api.getContext — trace wiring', () => {
       expect(before.last_trace_id).toBeNull();
       expect(before.last_retrieval_ids ?? []).toEqual([]);
 
-      const result = await getContext(ctx, { q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000 });
       expect(result.entries).toEqual([]);
 
       const traces = traceRows(home, 'context');
@@ -267,7 +267,7 @@ describe('api.getContext — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-caller-session' });
 
-      const result = await getContext(ctx, { q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
+      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
       expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
@@ -285,7 +285,7 @@ describe('api.getContext — trace wiring', () => {
       disableEmbeddings(home);
       await remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
 
-      const result = await getContext(ctx, { q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000, currentSessionId: 'sess-caller-2' });
+      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000, currentSessionId: 'sess-caller-2' });
       expect(result.entries).toEqual([]);
 
       const traces = traceRows(home, 'context');

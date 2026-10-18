@@ -37,16 +37,23 @@ describe('check-config-reads.mjs', () => {
     });
   });
 
-  it('passes at the baseline and ignores surface files, the allowed two, comments and type uses', () => {
+  it('passes at the baseline and ignores surface files, core/config.ts, comments and type uses', () => {
     const files = {
       'src/store/a.ts': READ,
       'src/cli/b.ts': READ,
       'src/core/config.ts': READ,
-      'src/api/config-of.ts': READ,
       'src/store/c.ts': "// loadConfig(root) is read by the caller\ntype T = typeof loadConfig;\n",
     };
     withFixture(files, { 'src/store/a.ts': 1 }, (run) => {
       expect(run().status).toBe(0);
+    });
+  });
+
+  it('fails on an api read, since api code takes ctx.config', () => {
+    withFixture({ 'src/api/a.ts': READ }, {}, (run) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/api/a.ts: new -> 1');
     });
   });
 

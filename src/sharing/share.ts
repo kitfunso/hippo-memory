@@ -10,7 +10,7 @@ import type { FolderStore, LocalFiles } from '../store/port.js';
 import { isPersonalScope, isQuarantineScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { embedMemory, embedAll, folderIndex } from '../search/embed-memories.js';
+import { embedMemory, embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
@@ -90,7 +90,7 @@ export function transferScore(entry: MemoryEntry): number {
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
   local: FolderStore,
-  global: FolderStore,
+  global: ConfiguredFolder,
   id: string,
   options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
 ): Promise<MemoryEntry | null> {
@@ -107,7 +107,8 @@ export async function shareMemory(
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
   // the whole index per call.
   if (!options.skipEmbed) {
-    void embedMemory({ hippoRoot: global.root, store: global.store }, globalEntry);
+    const target = { hippoRoot: global.root, store: global.store, embeddings: global.config.embeddings };
+    void embedMemory(target, globalEntry);
   }
 
   return globalEntry;
@@ -271,7 +272,7 @@ function shareCandidates(
  * rejection refusals (0 under `dryRun`). */
 export function autoShare(
   from: FolderStore,
-  global: FolderStore,
+  global: ConfiguredFolder,
   options: {
     minScore?: number;
     dryRun?: boolean;

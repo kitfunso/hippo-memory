@@ -14,7 +14,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { retrieve, RecallContractError, type RecallResult } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
@@ -54,7 +54,7 @@ type ToolArgs = Record<string, string | number | boolean>;
 function callTool(root: string, name: string, args: ToolArgs): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
+    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) },
   );
 }
 
@@ -361,7 +361,7 @@ describe('shared store recall, MCP vs HTTP', () => {
       writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
       const mcp = toolReply(await handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
-        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' }, store: sqliteStore(root) },
+        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' }, store: sqliteStore(root), config: loadConfig(root) },
       ));
       expect(mcp.isError, mcp.text).toBe(false);
       expect(mcp.text).toContain('the acme repo');

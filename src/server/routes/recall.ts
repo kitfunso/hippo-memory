@@ -1,7 +1,6 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
 import { dirname, resolve } from 'node:path';
 import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../core/project-identity.js';
-import { isSharedStore } from '../../core/config.js';
 import { assembleCost, contextCost, drillCost } from '../../api/context-render.js';
 import {
   assemble,
@@ -17,6 +16,7 @@ import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/r
 import { resetSessionRings } from '../../api/recall/finish.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
+import { sharedStoreOf, type Context } from '../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../util/limits.js';
 import { parseListLimit, validateIdSegment } from '../validation.js';
 
@@ -137,8 +137,8 @@ export async function handleDrillRecall(
  * A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none,
  * getContext refuses.
  */
-function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
-  if (!isSharedStore(hippoRoot)) return resolveProjectIdentity(dirname(resolve(hippoRoot)));
+function contextReader(ctx: Context, query: URLSearchParams): ProjectRef {
+  if (!sharedStoreOf(ctx)) return resolveProjectIdentity(dirname(resolve(ctx.hippoRoot)));
   const name = query.get('project');
   if (name === null) return '';
   const aliases = query.getAll('alias');
@@ -150,11 +150,11 @@ function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one
 // 'recall' row.
-export async function handleGetContext({ res, ctx, opts, query }: AuthedRouteRequest): Promise<void> {
+export async function handleGetContext({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await getContext(ctx, {
     ...parsed,
-    currentProject: contextReader(opts.hippoRoot, query),
+    currentProject: contextReader(ctx, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
   await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });

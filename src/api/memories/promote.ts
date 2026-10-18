@@ -3,12 +3,10 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../core/memory.js';
-import { isSharedStore } from '../../core/config.js';
 import { fallbackOrigin } from '../../core/project-identity.js';
 import { detectSecret } from '../../util/secret-detect.js';
-import { embedMemory } from '../../search/embed-memories.js';
-import { configOf } from '../config-of.js';
-import type { Context } from '../types.js';
+import { embedMemory, folderIndex } from '../../search/embed-memories.js';
+import { sharedStoreOf, type Context } from '../types.js';
 import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -29,25 +27,25 @@ export async function promote(ctx: Context, id: string): Promise<PromoteResult> 
 
   // The 'promote' row commits with the global copy, so no write
   // follows the commit and a busy store fails the whole promote.
-  const globalEntry = globalCopyOf(ctx.hippoRoot, entry);
+  const globalEntry = globalCopyOf(ctx.hippoRoot, entry, sharedStoreOf(ctx));
   await target.store.localFiles.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
     sourceId: id,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists; this never rejects.
-  void embedMemory({ hippoRoot: target.root, store: target.store }, globalEntry);
+  void embedMemory(folderIndex(target), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
 /** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL row gets its folder
  * back; a shared store's folder is no caller's project, so NULL stays and the label names no path. */
-function globalCopyOf(localRoot: string, entry: MemoryEntry): MemoryEntry {
+function globalCopyOf(localRoot: string, entry: MemoryEntry, shared: boolean): MemoryEntry {
   return {
     ...entry,
     id: generateId('g'),
-    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
-    origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
+    source: shared ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
+    origin_project: entry.origin_project ?? fallbackOrigin(localRoot, shared),
   };
 }
 
@@ -101,7 +99,7 @@ export async function supersede(
   const [old] = await store.entriesByIds([oldId], ctx.tenantId);
   const successor = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
     tenantId: ctx.tenantId,
-    baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
+    baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
     layer: overrides.layer,
     tags: overrides.tags,
     pinned: overrides.pinned,
