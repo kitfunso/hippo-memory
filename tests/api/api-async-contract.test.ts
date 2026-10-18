@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw,
+  rawArchive,
   authCreate,
   authCreateSelf,
   authListRows,
@@ -76,7 +76,7 @@ const CASES = {
   outcome: async (ctx) => () => outcome(ctx, ['mem_plain'], true),
   outcomeForLastRecall: async (ctx) => () => outcomeForLastRecall(ctx, true),
   supersede: async (ctx) => () => supersede(ctx, 'mem_second', 'the billing service freezes deploys on mondays'),
-  archiveRaw: async (ctx) => () => archiveRaw(ctx, 'mem_raw', 'user asked'),
+  rawArchive: async (ctx) => () => rawArchive(ctx, 'mem_raw', 'user asked'),
   remember: async (ctx) => () => remember(ctx, { content: 'the api gateway retries three times' }),
   // importVault takes no store and rememberLocally gets the folder's own: both write through its sqliteStore.
   rememberLocally: async (ctx) => () =>
@@ -99,7 +99,7 @@ const REPLIES = {
   outcome: { applied: 1, appliedIds: ['mem_plain'] },
   outcomeForLastRecall: { applied: 0, ids: [] },
   supersede: { ok: true, oldId: 'mem_second', newId: str },
-  archiveRaw: expect.objectContaining({ ok: true }),
+  rawArchive: expect.objectContaining({ ok: true }),
   remember: expect.objectContaining({ id: str, tenantId: ACME, tags: expect.any(Array) }),
   rememberLocally: expect.objectContaining({ status: 'stored' }),
   importVault: expect.objectContaining({ total: 1, imported: 1 }),

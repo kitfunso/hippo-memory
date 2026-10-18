@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
-import { remember, archiveRaw, isPrivateScope, type Context } from '../api/index.js';
+import { remember, rawArchive, isPrivateScope, type Context } from '../api/index.js';
 import type { HippoStore } from '../store/port.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -18,7 +18,7 @@ import { type JsonValue, isJsonString } from '../util/json.js';
 import type { RawRefRow } from '../store/port/context-reads.js';
 
 // K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
-// (src/connectors/slack|github). A changed note appends a new raw row after archiveRaw of the old one; NEVER
+// (src/connectors/slack|github). A changed note appends a new raw row after rawArchive of the old one; NEVER
 // `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 
 type VaultRow = RawRefRow;
@@ -54,7 +54,7 @@ function vaultContext(hippoRoot: string, tenantId: string, store: HippoStore): C
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
-    // a bearer-authed request. archiveRaw / remember thread this into audit.
+    // a bearer-authed request. rawArchive / remember thread this into audit.
     actor: { subject: 'connector:vault', role: 'admin' },
     store,
     config: loadConfig(hippoRoot),
@@ -106,12 +106,12 @@ async function syncVaultFolder(
 
 async function archiveVanishedNotes({ ctx, existing, seen, dryRun, tally }: VaultImportRun): Promise<void> {
   // Deletion-sync: an artifactRef in the Map but not seen this run vanished from the source, so archive its raw row.
-  // Per-file archiveRaw, no outer SAVEPOINT: there is no cross-file idempotency row to commit atomically.
+  // Per-file rawArchive, no outer SAVEPOINT: there is no cross-file idempotency row to commit atomically.
   for (const [artifactRef, rows] of existing) {
     if (seen.has(artifactRef)) continue;
     for (const row of rows) {
       tally.archived++; // count even in dryRun so the preview reflects destructive deletes
-      if (!dryRun) await archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
+      if (!dryRun) await rawArchive(ctx, row.id, `source_deleted:${artifactRef}`);
     }
   }
 }
@@ -233,7 +233,7 @@ async function writeChangedNote(
 ): Promise<void> {
   const { ctx, tally } = run;
   // Changed file: archive EVERY old raw row for this ref (>1 only after a concurrent double-insert), then append the
-  // new one; NEVER supersede. archiveRaw commits before remember() runs, so no double-live row; a crash between them
+  // new one; NEVER supersede. rawArchive commits before remember() runs, so no double-live row; a crash between them
   // self-heals on the next import.
   await archivePriors(run, priors, `changed:${artifactRef}`);
 
@@ -277,7 +277,7 @@ function readVaultNote(run: VaultImportRun, relpath: string): string | null {
 async function archivePriors(run: VaultImportRun, priors: readonly { id: string }[], reason: string): Promise<void> {
   for (const p of priors) {
     run.tally.archived++; // count the would-be archive even in dryRun (true preview)
-    if (!run.dryRun) await archiveRaw(run.ctx, p.id, reason);
+    if (!run.dryRun) await rawArchive(run.ctx, p.id, reason);
   }
 }
 

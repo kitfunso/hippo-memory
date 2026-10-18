@@ -28,7 +28,7 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
-  /** Id of the most recent recall_traces row written by getContext/cmdRecall, mirrored from the
+  /** Id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the
    *  `last_trace_id` meta key like last_retrieval_ids. null when none was written (api.recall never sets it). */
   last_trace_id: string | null;
 }

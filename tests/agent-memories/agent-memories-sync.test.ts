@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { restoreDormant } from '../../src/api/index.js';
+import { dormantRestore } from '../../src/api/index.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { consolidate } from '../../src/index.js';
 import {
@@ -130,7 +130,7 @@ describe('agent memory sync', () => {
     expect(dormant[0].tags).not.toContain('claude-code-memory');
     expect(auditCount(w.local, 'agent_memory_set_aside')).toBe(1);
 
-    expect((await restoreDormant(ctxFor(w.local), row.id)).id).toBe(row.id);
+    expect((await dormantRestore(ctxFor(w.local), row.id)).id).toBe(row.id);
     expect(liveRows(w.local).map((e) => e.id)).toEqual([row.id]);
   });
 

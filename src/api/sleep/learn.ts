@@ -237,7 +237,7 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 
 /** `hippo invalidate`: weakens the caller's tenant's memories that
  * reference `target.from`, or only the one `options.onlyId` names. */
-export function invalidateMemories(
+export function memoryInvalidate(
   ctx: ContextWith<'localFiles'>,
   target: InvalidationTarget,
   options: InvalidationOptions,

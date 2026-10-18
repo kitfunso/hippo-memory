@@ -8,7 +8,7 @@ import { readEntry } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
-import { remember, getContext } from '../../src/api/index.js';
+import { remember, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 describe('a deliberate stale tier survives being read', () => {
-  it('a recall through getContext leaves an invalidated memory invalidated', async () => {
+  it('a recall through contextGet leaves an invalidated memory invalidated', async () => {
     const { id } = await remember(ctx(), { content: 'deploys go through the legacy pipeline' });
 
     const result = invalidateMatching(sqliteSyncStore(home).localFiles.learning, {
@@ -38,7 +38,7 @@ describe('a deliberate stale tier survives being read', () => {
     expect(invalidated.confidence).toBe('stale');
     expect(invalidated.tags).toContain('invalidated');
 
-    await getContext(ctx(), { currentProject: cwdProject(), q: 'legacy pipeline deploys', budget: 2000 });
+    await contextGet(ctx(), { currentProject: cwdProject(), q: 'legacy pipeline deploys', budget: 2000 });
 
     const afterRead = readEntry(home, id)!;
     expect(afterRead.retrieval_count).toBeGreaterThan(invalidated.retrieval_count);

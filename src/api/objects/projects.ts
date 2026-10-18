@@ -30,7 +30,7 @@ function onProjects<T>(ctx: LocalContext, fn: (store: ProjectTagStore) => T): T 
 }
 
 /** Live rows per project name in the caller's tenant, newest write first. */
-export function listProjectNames(ctx: LocalContext): ProjectSummary[] {
+export function projectNameList(ctx: LocalContext): ProjectSummary[] {
   return onProjects(ctx, listProjects);
 }
 
@@ -38,16 +38,16 @@ export function listProjectNames(ctx: LocalContext): ProjectSummary[] {
  * Folds project `from` into `into`, backed up and audited as `ctx.actor`; throws on user-global, unknown or equal
  * names.
  */
-export function mergeProjectNames(ctx: LocalContext, opts: MergeProjectNamesOptions): MergeResult {
+export function projectNameMerge(ctx: LocalContext, opts: MergeProjectNamesOptions): MergeResult {
   return onProjects(ctx, (store) => mergeProjects(store, opts));
 }
 
 /** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a dry run only plans. */
-export function repairProjectNames(ctx: LocalContext, opts: { dryRun: boolean }): RepairResult {
+export function projectNameRepair(ctx: LocalContext, opts: { dryRun: boolean }): RepairResult {
   return onProjects(ctx, (store) => repairProjects(store, opts));
 }
 
 /** The repair sleep runs once per store; null when it already ran. */
-export function repairProjectNamesOnce(ctx: LocalContext): RepairResult | null {
+export function projectNameRepairOnce(ctx: LocalContext): RepairResult | null {
   return onProjects(ctx, repairOnceOnSleep);
 }

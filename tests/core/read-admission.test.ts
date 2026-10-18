@@ -1,4 +1,4 @@
-// Admission sent as data admits the rows the callbacks getContext and drillDown passed before 3.0 admitted, on a store
+// Admission sent as data admits the rows the callbacks contextGet and drillDown passed before 3.0 admitted, on a store
 // that mixes tenants, scopes, origins, secrets, compaction items and digests, in process and from a store worker.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/core/memory.js';
@@ -135,7 +135,7 @@ function dagRows(tenantId: string, p: string): MemoryEntry[] {
   ];
 }
 
-/** getContext's pinned-only admit and quality floor before 3.0, as api/context.ts composed them. */
+/** contextGet's pinned-only admit and quality floor before 3.0, as api/context.ts composed them. */
 function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: MemoryEntry) => boolean {
   const secretAdmit = (e: MemoryEntry): boolean => {
     if (!detectSecret(e).flagged) return true;

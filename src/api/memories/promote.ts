@@ -140,7 +140,7 @@ export interface ArchiveRawResult {
   ok: true;
   archivedAt: string;
 }
-export async function archiveRaw(
+export async function rawArchive(
   ctx: Context,
   id: string,
   reason: string,

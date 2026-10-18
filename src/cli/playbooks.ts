@@ -4,7 +4,7 @@ import { cliConfig } from './api-context.js';
 import * as processesModule from '../objects/processes.js';
 import * as policiesModule from '../objects/policies.js';
 import * as skillsModule from '../objects/skills.js';
-import { isStringFlag, nonEmptyStringFlag, type CliFlags } from './flag-values.js';
+import { nonEmptyStringFlag, repeatedFlag, type CliFlags } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
 import type { Objects } from '../store/port.js';
@@ -14,15 +14,12 @@ type Process = processesModule.Process;
 type Policy = policiesModule.Policy;
 type Skill = skillsModule.Skill;
 
-// --step is a repeatable flag (collected into an array by parseArgs). A single
-// --step yields a string; normalize both to string[]. A value-less --step errors.
-function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): string[] {
-  if (Array.isArray(stepRaw)) return stepRaw;
-  if (isStringFlag(stepRaw)) return [stepRaw];
-  if (stepRaw === true) {
+// A value-less --step errors; repeated and single values both come back as a list.
+function collectProcessSteps(flags: CliFlags): string[] {
+  if (flags['step'] === true) {
     fail('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
   }
-  return [];
+  return repeatedFlag(flags, 'step');
 }
 
 function printProcessRow(proc: Process): void {
@@ -57,7 +54,7 @@ const processKind = (
     'Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]',
   bodyRequired: 'at least one --step "<text>"',
   body: (flags, verb) => {
-    const steps = collectProcessSteps(flags['step']);
+    const steps = collectProcessSteps(flags);
     // A new process may start with no steps; a new version must say what its steps are.
     if (verb === 'supersede' && steps.length === 0) return undefined;
     return { steps, description: nonEmptyStringFlag(flags, 'description') };

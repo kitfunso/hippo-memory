@@ -198,7 +198,7 @@ describe('case 4: legacy-mirror resurrection pin', () => {
 
     await api.reject(ctx(home), { memoryId: rawEntry.id, reason: 'raw content rejected' });
     expect(readEntry(home, rawEntry.id)).toBeNull();
-    // Post-commit purge removed the mirror (reuses the api.archiveRaw pattern).
+    // Post-commit purge removed the mirror (reuses the api.rawArchive pattern).
     expect(existsSync(mirrorPath)).toBe(false);
 
     // Construct the resurrection precondition explicitly: a mirror the

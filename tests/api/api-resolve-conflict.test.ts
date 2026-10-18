@@ -1,7 +1,7 @@
 // MCP and the CLI resolve a conflict through one api function, so each refuses the same bad input the dashboard refuses.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, ConflictError, NotFoundError, resolveMemoryConflict } from '../../src/api/index.js';
+import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../../src/api/index.js';
 import { handleResolve } from '../../src/cli/curate.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
@@ -142,7 +142,7 @@ describe('CLI hippo resolve', () => {
   });
 });
 
-describe('resolveMemoryConflict', () => {
+describe('conflictResolve', () => {
   const ctxIn = (tenantId: string) => ({
     hippoRoot: root,
     tenantId,
@@ -153,16 +153,12 @@ describe('resolveMemoryConflict', () => {
 
   it("answers a resolved conflict with 409 and another tenant's with 404", async () => {
     const pair = seedPair();
-    await expect(resolveMemoryConflict(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(
-      NotFoundError,
-    );
-    expect(await resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({
+    await expect(conflictResolve(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(NotFoundError);
+    expect(await conflictResolve(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({
       conflictId: pair.conflictId,
       keptId: pair.a.id,
       loserId: pair.b.id,
     });
-    await expect(resolveMemoryConflict(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(
-      ConflictError,
-    );
+    await expect(conflictResolve(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(ConflictError);
   });
 });

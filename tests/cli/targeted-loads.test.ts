@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
-import { listMemories } from '../../src/api/memories/memories.js';
+import { memoryList } from '../../src/api/memories/memories.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry, writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -63,18 +63,18 @@ describe('loadEntryTextKeys', () => {
   });
 });
 
-describe('listMemories paging', () => {
+describe('memoryList paging', () => {
   it('pages the same rows in the same order as one whole read', async () => {
     await seed(7);
     const ctx = cliApiContext(root, 'default');
-    const { result, statements } = await recordStatementsAsync(() => listMemories(ctx, {}, { pageSize: 3 }));
+    const { result, statements } = await recordStatementsAsync(() => memoryList(ctx, {}, { pageSize: 3 }));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(3);
   });
 
   it('pages past ties on created, and an empty store gives no rows', async () => {
     const ctx = cliApiContext(root, 'default');
-    expect(await listMemories(ctx, {}, { pageSize: 2 })).toEqual([]);
+    expect(await memoryList(ctx, {}, { pageSize: 2 })).toEqual([]);
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 5; i++) {
         writeEntry(root, {
@@ -83,7 +83,7 @@ describe('listMemories paging', () => {
         });
       }
     });
-    expect((await listMemories(ctx, {}, { pageSize: 2 })).map((e) => e.id)).toEqual(
+    expect((await memoryList(ctx, {}, { pageSize: 2 })).map((e) => e.id)).toEqual(
       loadAllEntries(root, 'default').map((e) => e.id),
     );
   });
@@ -91,7 +91,7 @@ describe('listMemories paging', () => {
   it('reads every row across the default page boundary', async () => {
     await seed(1003);
     const ctx = cliApiContext(root, 'default');
-    const { result, statements } = await recordStatementsAsync(() => listMemories(ctx));
+    const { result, statements } = await recordStatementsAsync(() => memoryList(ctx));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(2);
   });

@@ -136,7 +136,7 @@ async function turn(store, mode, i) {
 
   const acc = { ms: 0 };
   const g0 = performance.now();
-  const result = await api.getContext(ctx, { ...opts, deliveryObserver: timedObserver(rec, acc) });
+  const result = await api.contextGet(ctx, { ...opts, deliveryObserver: timedObserver(rec, acc) });
   const contextMs = performance.now() - g0 - acc.ms;
 
   const emitted = result.entries.map((r) => r.entry.content).join('\n');

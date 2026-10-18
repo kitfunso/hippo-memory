@@ -1,4 +1,4 @@
-// A store other than hippo.db for the ContextReads group: it copies the rows getContext reads out of hippo.db, then answers
+// A store other than hippo.db for the ContextReads group: it copies the rows contextGet reads out of hippo.db, then answers
 // each read from memory with the rules hippo-memory/store-kit exports, so a test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -32,7 +32,7 @@ import type { StoreSide } from './store-conformance.js';
 
 export interface InMemoryContextStore extends StoreSide {
   readonly store: HippoStore & { readonly contextReads: ContextReads; readonly vectors: VectorReads };
-  /** The name of each store read getContext made, the vector reads included, in call order. */
+  /** The name of each store read contextGet made, the vector reads included, in call order. */
   readonly calls: readonly string[];
 }
 

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { auditQueryFields } from '../../src/core/audit-report.js';
-import { getContext, retrieve, remember } from '../../src/api/index.js';
+import { contextGet, retrieve, remember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
@@ -98,7 +98,7 @@ describe('auditQueryFields', () => {
 
 describe('recall audits store a query hash, never the text', () => {
   it('context recall row has no query key', async () => {
-    await getContext(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
+    await contextGet(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
     const rows = auditRows(localRoot).filter((r) => r.op === 'recall' && r.metadata.mode === 'context');
     expect(rows).toHaveLength(1);
     expectHashedOnly(rows[0], QUERY);
@@ -106,7 +106,7 @@ describe('recall audits store a query hash, never the text', () => {
 
   it('context recall writes the same hashed row into the global store it reached', async () => {
     initStore(globalRoot);
-    await getContext(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), {
+    await contextGet(apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' }), {
       currentProject: cwdProject(),
       q: QUERY,
       crossProject: true,
@@ -133,7 +133,7 @@ describe('recall audits store a query hash, never the text', () => {
 
 describe('census: a canary query reaches no audit metadata value', () => {
   it('context, CLI, MCP and HTTP recall', async () => {
-    await getContext(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
+    await contextGet(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
     await retrieve(ctx, { query: QUERY });
     execFileSync('node', [HIPPO_BIN, 'recall', QUERY], {
       cwd: home,

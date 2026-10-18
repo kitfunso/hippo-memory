@@ -3,7 +3,7 @@
 import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
 import { rejectValue, unrejectValue, type RejectFlowResult } from '../../trust/reject-flow.js';
 import { requireHostAdmin, type Context } from '../types.js';
-import { getMemory } from './memories.js';
+import { memoryGet } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Delete a memory by id. Reach is checked inside the delete's write scope, and a
@@ -47,7 +47,7 @@ export async function reject(ctx: Context, opts: RejectOptions): Promise<RejectR
   if (opts.memoryId !== undefined) {
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too, but pre-checking
     // keeps the error message consistent.
-    const entry = await getMemory(ctx, opts.memoryId);
+    const entry = await memoryGet(ctx, opts.memoryId);
     if (entry === null || !canTouchScope(ctx.actor, entry.scope)) {
       throw new NotFoundError(`memory not found: ${opts.memoryId}`);
     }

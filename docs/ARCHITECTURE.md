@@ -70,9 +70,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/auth/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
-- `pruneAuditLog`: Audit log retention pruning (v1.12.9), moved here from `src/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
-- `pruneAuditLog`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
-- `pruneAuditLog` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
+- `auditPrune`: Audit log retention pruning (v1.12.9), moved here from `src/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
+- `auditPrune`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
+- `auditPrune` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
 
 ### src/api/auth/auth.ts
 - `AuthCreateOpts.role`: v1.12.3: authorization role for the new key. Defaults to `'admin'` for back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also resolves to 'admin' if omitted from the INSERT).
@@ -81,7 +81,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `authGrant`: Grant `keyId` read access to one restricted `scope` (ROADMAP Part VIII EI2). Admin only.
 
 ### src/api/context-types.ts
-- `getContext` (section banner): getContext (extracted from cmdContext — Task 5 of the api.ts refactor)
+- `contextGet` (section banner): contextGet (extracted from cmdContext - Task 5 of the api.ts refactor)
 - `ContextOpts`: Extracted from `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
 - `ContextOpts`: Scope narrow (T5 execute decision): rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) are NOT included here. The print helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`, `printSessionEvents`) are shared with `cmdRecall` / `handleSnapshot` / `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire those commands. CLI handles rendering + auto-resolution. Episode B can add `api.renderContext` once a shared rendering need actually materializes.
 - `ContextOpts.includeRecent`: quality floor (`isWorthSurfacing`, DF3): rows hippo wrote meet the automatic check, a person's rows the older floor.
@@ -97,7 +97,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `loadAmbientEntries`: DF3's quality floor runs on the recent-N slice AFTER this load, so the load counts by it too, or it stops short of a store whose newest rows are junk.
 
 ### src/api/sleep/dormant.ts
-- `restoreDormant`: A restore is a labelled "forgot it, then needed it" event: the signal a learned lifecycle (ROADMAP LC3) trains on.
+- `dormantRestore`: A restore is a labelled "forgot it, then needed it" event: the signal a learned lifecycle (ROADMAP LC3) trains on.
 
 ### src/api/memories/forget.ts
 - `reject / unreject` (section banner): AT1: reject and unreject, docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
@@ -228,7 +228,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `readCompactResumePayload`: A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
 
 ### src/cli/curate.ts
-- `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only — a BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
+- `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only - a BEFORE-DELETE trigger aborts any delete. rawArchive is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
 - `handleResolve`: AT1: --reject-loser tombstones the loser's normalized digest so it cannot be re-asserted later, in addition to removing it (kind-aware). --reason defaults to a conflict-context string when omitted (resolve already has the conflict id + keepId; unlike `hippo reject`, a reason is not strictly required here).
 - `reject banner`: AT1: reject / rejections / unreject docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 - `handleReject`: --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no content, so reason is its only human-readable identity.
@@ -270,7 +270,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/cli/transfer.ts
 - `cmdWatch`: AT1 (plan §3 containment): mechanical content from a failed command — a rejection-guard refusal here must not crash the watcher. Skip silently (loud enough via the message below) and still exit with the wrapped command's real exit code.
-- `handleImport`: K1 vault import: a FOLDER importer that mirrors the connector pattern (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches separately from the single-file `importer` function-pointer slot below.
+- `handleImport`: K1 vault import: a FOLDER importer that mirrors the connector pattern (kind='raw' + tag provenance + rawArchive deletions), so it dispatches separately from the single-file `importer` function-pointer slot below.
 - `handlePeers`: D4 v1.12.10: tenant-scoped by default. --all-tenants restores the pre-D4 host-wide view for the rare operator who genuinely wants cross-tenant peer discovery.
 
 ### src/core/compare.ts
@@ -929,7 +929,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeSessionEndHandoff`: Auto-write a handoff at session-end (DF1 T3) from the session's active snapshot, else from `derived`, its transcript state.
 
 ### src/store/index-and-stats.ts
-- `saveIndex`: LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must land atomically — callers (getContext, cmdRecall) fold a freshly-written trace id into `index.last_trace_id` before calling this, relying on BOTH meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a mid-write failure can never advance one key without the other. index.json is left untouched; no hippo path writes it.
+- `saveIndex`: LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must land atomically - callers (contextGet, cmdRecall) fold a freshly-written trace id into `index.last_trace_id` before calling this, relying on BOTH meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a mid-write failure can never advance one key without the other. index.json is left untouched; no hippo path writes it.
 
 ### src/store/mirrors.ts
 - Outcome mirror writes stay synchronous on the write worker (`writeEntryMirrors` after the commit in `src/store/sqlite/entry-writes-group.ts:80`, `applyOutcome: 'write'` in `src/store/sqlite/worker-ops.ts:57`): an async mirror write could land after a `forget` purged that row's mirror and bring the forgotten file back.
@@ -941,7 +941,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `importLegacyIndexAndStats`: LC1: legacy index.json predates last_trace_id, so this is '' for every pre-v40 store — harmless, matches the ensureMetaDefaults default.
 
 ### src/store/rows.ts
-- `HippoIndex.last_trace_id`: LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): id of the most recent recall_traces row written by getContext/cmdRecall, mirrored from the `last_trace_id` meta key exactly like last_retrieval_ids. null when no trace has been written yet (fresh store, pre-v40 flow, or api.recall-only usage — api.recall never sets this).
+- `HippoIndex.last_trace_id`: LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the `last_trace_id` meta key exactly like last_retrieval_ids. null when no trace has been written yet (fresh store, pre-v40 flow, or api.recall-only usage - api.recall never sets this).
 - `MemoryRow.summary_dirty`: v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 DAG cache: included in MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count / earliest_at / latest_at.
 - `MemoryRow.bm25_score`: F1 (v1.7.0): present only on rows from MEMORY_SEARCH_COLUMNS (FTS path).
 - `MEMORY_SEARCH_COLUMNS`: F1 (v1.7.0): qualified-and-aliased columns for the FTS join in loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's unqualified field reads keep working unchanged. The trailing bm25(memories_fts) AS bm25_score adds the FTS rank as a result column. Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.

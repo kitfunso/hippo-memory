@@ -123,7 +123,7 @@ export function trailPiece(events: readonly SessionEvent[]): string {
   return ['## Recent Session Trail', ...trailLines(events), '', ''].join('\n');
 }
 
-// Sections print ahead of the memories in hippo_context, so getContext pays for each as printed before any memory.
+// Sections print ahead of the memories in hippo_context, so contextGet pays for each as printed before any memory.
 export const contextCost: ContextCost = {
   entry: memoryCost,
   fixed: (budget) => memoriesReserve(budget),

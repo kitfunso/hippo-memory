@@ -4,14 +4,15 @@ import { evalNow } from '../core/ablation.js';
 import { shareMemory, listPeers } from '../sharing/share.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { predictionBaserate } from '../api/objects/predictions.js';
-import { everyConflict, listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
-import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
+import { conflictListAll, conflictListOpen, conflictResolve } from '../api/memories/conflicts.js';
+import { memoryStatusGet, memoryGetTouchable } from '../api/memories/memories.js';
 import { mcpApiContext, type McpContext, type ToolCall } from './protocol.js';
 import { hasGroup } from '../store/port.js';
 import type { ConfiguredFolder } from '../search/embed-memories.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
+import { AT_RISK_BELOW } from '../core/strength-bands.js';
 
 const BASERATE_DECIMALS = 3;
 
@@ -46,12 +47,12 @@ export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<s
 
 export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = await getMemoryStatus(mcpApiContext(ctx), evalNow(), 0.1);
+  const tallies = await memoryStatusGet(mcpApiContext(ctx), evalNow(), AT_RISK_BELOW);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
     `Avg strength: ${avgStrength}`,
-    `At risk (<0.1): ${tallies.atRisk}`,
+    `At risk (<${AT_RISK_BELOW}): ${tallies.atRisk}`,
     `Open conflicts: ${tallies.openConflicts}`,
     `Half-life default: ${config.defaultHalfLifeDays}d`,
   ].join('\n');
@@ -60,7 +61,7 @@ export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> 
 export async function runConflictsTool(call: ToolCall): Promise<string> {
   const { ctx } = call;
   const apiCtx = mcpApiContext(ctx);
-  const conflicts = await everyConflict((page) => listOpenConflicts(apiCtx, { ...page, project: ctx?.project }));
+  const conflicts = await conflictListAll((page) => conflictListOpen(apiCtx, { ...page, project: ctx?.project }));
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts
     .map((c) => `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`)
@@ -77,7 +78,7 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   let loserId: string;
   try {
     const apiCtx = mcpApiContext(ctx);
-    ({ loserId } = await resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
+    ({ loserId } = await conflictResolve(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
     // A missing, unreachable or settled conflict answers alike, so
     // the reply says nothing of a pair the caller cannot touch.
@@ -93,7 +94,7 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  await getTouchableMemory(mcpApiContext(ctx), shareId);
+  await memoryGetTouchable(mcpApiContext(ctx), shareId);
   // Pass tenantId so shareMemory's read filters by tenant; otherwise a Bearer for tenant A could share tenant B's
   // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   if (!hasGroup(store, 'localFiles')) throw new StoreNotPortedError(store.kind, 'localFiles');

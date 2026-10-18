@@ -1,5 +1,5 @@
 /** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and
- * `recall_trace_outcomes`. One trace row per recall on api.recall, api.getContext and CLI cmdRecall: the (query, shown,
+ * `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and CLI cmdRecall: the (query, shown,
  * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
  * and swallowed, never breaking the surrounding call. */
 
@@ -33,7 +33,7 @@ function sanitizeRerankSteps(
 const RESULT_ROWS_PER_INSERT = 100;
 
 /** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
- * stderr and returns null on failure. api.recall/getContext reach this via `finishRecallAt` on their own handle. */
+ * stderr and returns null on failure. api.recall/contextGet reach this via `finishRecallAt` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
@@ -91,7 +91,7 @@ export interface RecordTraceOutcomeInput {
 
 /** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK `traceId`, never from
  * api.outcome (stale-trace mislink). Skips (log.warn) unless the trace is in `input.tenantId`; keeps only memoryIds it
- * returned. Own table so `pruneAuditLog` cannot erase training data. */
+ * returned. Own table so `auditPrune` cannot erase training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
     // SAFETY: row shape matches the single `tenant_id` column named in the

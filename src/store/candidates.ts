@@ -45,7 +45,7 @@ interface RecentRowsOptions {
   readonly origins?: RecentOrigins;
 }
 
-// `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
+// `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories'
 // cross-ingest-stable order: that would change what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 

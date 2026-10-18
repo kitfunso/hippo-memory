@@ -1,6 +1,6 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { graphEntityOf, graphRows } from '../../api/objects/graph.js';
-import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
+import { rawArchive, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
@@ -73,7 +73,7 @@ export async function handleArchiveMemory(
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
-  const result = await archiveRaw(ctx, archiveMatch.id!, reason);
+  const result = await rawArchive(ctx, archiveMatch.id!, reason);
   sendJson(res, 200, result);
   return;
 }
