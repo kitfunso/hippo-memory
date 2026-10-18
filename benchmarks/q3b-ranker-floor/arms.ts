@@ -5,7 +5,7 @@ import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/cli/flag-values.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { getReranker } from '../../dist/rerankers/index.js';
-import { detectScope } from '../../dist/sharing/scope.js';
+import { detectScope } from '../../dist/core/active-scope.js';
 import type { SearchResult } from '../../dist/core/search-types.js';
 import { getGlobalRoot } from '../../dist/sharing/global-store.js';
 import { getHippoRoot, isInitialized } from '../../dist/core/project-identity.js';
@@ -16,6 +16,9 @@ import { STAGE_LABEL, stagesNotRun, type Arm, type EvalQuery } from './queries.t
 export const SHOWN_ROWS = 10;
 // The CLI's default head for a registry reranker.
 const RERANKER_TOP_K = 50;
+
+// The CLI core keeps its shown list as the last recall, which a SQLite store always has.
+type SqliteContext = Context & { readonly store: ReturnType<typeof sqliteStore> };
 
 export interface Ranked {
   readonly texts: string[];
@@ -28,13 +31,19 @@ export async function rankWith(arm: Arm, q: EvalQuery): Promise<Ranked> {
   const missing = stagesNotRun(arm, q.stages);
   if (missing.length > 0) throw new Error(`arm ${arm} cannot run ${missing.map((s) => STAGE_LABEL[s]).join(', ')} for ${q.id}`);
   const hippoRoot = getHippoRoot();
-  const ctx: Context = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli'), store: sqliteStore(hippoRoot) };
+  const ctx: SqliteContext = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: adminActor('cli'),
+    store: sqliteStore(hippoRoot),
+    config: loadConfig(hippoRoot),
+  };
   if (arm === 'A') return cliCore(ctx, q);
   return arm === 'B' ? sqlBm25(ctx, q) : showRanked(ctx, q);
 }
 
 /** Arm A: the request `hippo recall` builds, less its rendering. The budget is priced on content tokens, not printed lines. */
-async function cliCore(ctx: Context, q: EvalQuery): Promise<Ranked> {
+async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const config = loadConfig(ctx.hippoRoot);
   const globalRoot = getGlobalRoot();
   const reranker = q.stages.reranker ? getReranker(q.stages.reranker) : null;
@@ -59,7 +68,10 @@ async function cliCore(ctx: Context, q: EvalQuery): Promise<Ranked> {
         salienceThreshold: q.stages.salienceThreshold,
       },
       // The CLI searches the global store as a second source whenever one exists beside the local store.
-      sources: { globalRoot: globalRoot !== ctx.hippoRoot && isInitialized(globalRoot) ? globalRoot : undefined },
+      sources: globalRoot !== ctx.hippoRoot && isInitialized(globalRoot)
+        ? { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) }
+        : undefined,
+      lastRecall: ctx.store.lastRecall,
       show: (ranking) => {
         shown = ranking.results;
         return { results: ranking.results, audit: [], tokens: ranking.results.reduce((n, r) => n + r.tokens, 0) };

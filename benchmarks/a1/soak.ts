@@ -38,6 +38,7 @@ import { tmpdir, platform } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadConfig } from '../../dist/core/config.js';
 import { initStore } from '../../dist/store/open.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { remember as apiRemember } from '../../dist/api/index.js';
@@ -87,10 +88,11 @@ const QUERIES = [
 ];
 
 function seedStore(home: string, count: number): void {
+  const config = loadConfig(home);
   for (let i = 0; i < count; i++) {
     const tag = SEED_TAGS[i % SEED_TAGS.length]!;
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' }, store: sqliteStore(home) },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' }, store: sqliteStore(home), config },
       {
         content: `seed-${i} ${tag} ${QUERIES[i % QUERIES.length]} payload number ${i}`,
         tags: [tag],

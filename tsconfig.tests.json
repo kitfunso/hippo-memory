@@ -6,12 +6,15 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
+    "allowImportingTsExtensions": true,
     "allowJs": true,
     "checkJs": false
   },
   "include": [
     "src/**/*",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "benchmarks/a1/**/*.ts",
+    "benchmarks/q3b-ranker-floor/**/*.ts"
   ],
   "exclude": [
     "node_modules",
