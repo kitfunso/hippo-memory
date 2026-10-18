@@ -4,8 +4,8 @@ import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, s
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { storeWith, type HippoStore, type StoreWith } from '../../store/port.js';
 import { sleepInChild } from '../sleep-offload.js';
+import { needGroup } from '../store-edge.js';
 import type { AuthedRouteRequest } from '../types.js';
 import {
   getCallerProject,
@@ -99,8 +99,8 @@ export async function handlePromoteMemory(
   promoteMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(promoteMatch.id!, 'memory id');
-  // The route table answered 501 already for a store without hippo.db's files; this types what it proved.
-  const result = promote({ ...ctx, store: storeWith(ctx.store, 'localFiles') }, promoteMatch.id!);
+  // The row's storeReady already answered 501 for a store without hippo.db's files; this types what it proved.
+  const result = promote(needGroup(ctx, 'localFiles'), promoteMatch.id!);
   sendJson(res, 200, result);
   return;
 }
@@ -150,17 +150,11 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    const { store } = ctx;
     // Its own 501 text: a client of such a store can still apply the outcome by sending the ids its recall returned.
-    if (!keepsLastRecall(store)) throw new HttpError(501, NO_LAST_RECALL);
-    const result = await outcomeForLastRecall({ ...ctx, store }, good);
+    const result = await outcomeForLastRecall(needGroup(ctx, 'lastRecall', NO_LAST_RECALL), good);
     sendJson(res, 200, result);
   }
   return;
-}
-
-function keepsLastRecall(store: HippoStore): store is StoreWith<'lastRecall'> {
-  return store.lastRecall !== undefined;
 }
 
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
