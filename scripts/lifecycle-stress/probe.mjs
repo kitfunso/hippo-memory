@@ -19,7 +19,7 @@ import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../..
 import { embedMemory } from '../../dist/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
-import { consolidate } from '../../dist/consolidate/sleep.js';
+import { consolidate } from '../../dist/index.js';
 import { resetAllPhysicsState, loadPhysicsState } from '../../dist/db/physics-state.js';
 import { openHippoDb, closeHippoDb } from '../../dist/db/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';
