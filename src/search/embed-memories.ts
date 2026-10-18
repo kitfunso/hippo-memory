@@ -7,9 +7,9 @@ import { randomUUID } from 'crypto';
 import type { MemoryEntry } from '../core/memory.js';
 import { initializeParticle } from '../core/physics.js';
 import {
-  embeddingsConfigOf, resolveEmbeddingProvider, type EmbeddingProvider,
+  resolveEmbeddingProvider, type EmbeddingProvider,
 } from '../embeddings/provider.js';
-import type { EmbeddingsConfig } from '../core/config.js';
+import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
 import {
   embeddingIndexIdentity, embeddingInputText, indexedModel, indexNeedsRebuild, replacesIndex,
 } from '../embeddings/index-identity.js';
@@ -315,15 +315,20 @@ const INLINE_REINDEX_MAX_ROWS = 256;
  * the vector index. */
 export type EmbedOutcome = 'indexed' | 'off' | 'failed';
 
-/** Where vectors go: hippo.db's own index under its folder lock, or a store's vector groups, with the folder whose
- * config names the provider. */
+/** Where vectors go: hippo.db's own index under its folder lock, or a store's vector groups, with the embeddings
+ * config that names the provider. */
 export type EmbedTarget =
-  | { readonly hippoRoot: string; readonly embeddingIndex: EmbeddingIndex }
-  | { readonly hippoRoot: string; readonly store: HippoStore };
+  | { readonly hippoRoot: string; readonly embeddingIndex: EmbeddingIndex; readonly embeddings: EmbeddingsConfig }
+  | { readonly hippoRoot: string; readonly store: HippoStore; readonly embeddings: EmbeddingsConfig };
+
+/** A hippo.db folder with the config its root loaded, so a write into it embeds with the provider that config names. */
+export interface ConfiguredFolder extends FolderStore {
+  readonly config: HippoConfig;
+}
 
 /** hippo.db's own index under its folder. */
-export function folderIndex({ root, store }: FolderStore): EmbedTarget {
-  return { hippoRoot: root, embeddingIndex: store.localFiles.embeddingIndex };
+export function folderIndex({ root, store, config }: ConfiguredFolder): EmbedTarget {
+  return { hippoRoot: root, embeddingIndex: store.localFiles.embeddingIndex, embeddings: config.embeddings };
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
@@ -333,12 +338,11 @@ export async function embedMemory(
   on: EmbedTarget,
   entry: MemoryEntry,
   model?: string,
-  embeddings?: EmbeddingsConfig,
 ): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
-    provider = resolveEmbeddingProvider(embeddingsConfigOf(on.hippoRoot, embeddings), { model });
+    provider = resolveEmbeddingProvider(on.embeddings, { model });
     available = provider.isAvailable();
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
@@ -497,9 +501,8 @@ export async function embedAll(
   on: EmbedTarget,
   model?: string,
   givenProvider?: EmbeddingProvider,
-  embeddings?: EmbeddingsConfig,
 ): Promise<number> {
-  const cfg = embeddingsConfigOf(on.hippoRoot, embeddings);
+  const cfg = on.embeddings;
   const provider = givenProvider ?? resolveEmbeddingProvider(cfg, { model });
   if (!provider.isAvailable()) {
     throwIfProviderKeyMissing(cfg, provider);

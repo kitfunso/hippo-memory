@@ -3,11 +3,10 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
 import type { ConnectorEvent, FolderStore } from '../../store/port.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../core/memory.js';
-import { isSharedStore } from '../../core/config.js';
 import { fallbackOrigin } from '../../core/project-identity.js';
 import { detectSecret } from '../../util/secret-detect.js';
 import { embedMemory, folderIndex } from '../../search/embed-memories.js';
-import type { Context, ContextWith } from '../types.js';
+import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import { canTouchScope, isPersonalScope, isQuarantineScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -37,6 +36,7 @@ export function promote(
     actor: ctx.actor.subject,
     tenantId: ctx.tenantId,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
+    shared: sharedStoreOf(ctx),
   });
   // A promote may create the global store, which only the write target names before it exists; this never rejects.
   void embedMemory(folderIndex(target), globalEntry);
@@ -47,6 +47,7 @@ interface PromoteOptions {
   readonly actor: string;
   readonly tenantId: string;
   readonly auditAs: { readonly tenantId: string; readonly actor: string };
+  readonly shared: boolean;
 }
 
 /** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide;
@@ -61,8 +62,8 @@ function copyToGlobal(local: FolderStore, global: FolderStore, id: string, opts:
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: isSharedStore(local.root) ? `shared::${new Date().toISOString()}` : `promoted:${local.root}`,
-    origin_project: entry.origin_project ?? fallbackOrigin(local.root),
+    source: opts.shared ? `shared::${new Date().toISOString()}` : `promoted:${local.root}`,
+    origin_project: entry.origin_project ?? fallbackOrigin(local.root, opts.shared),
   };
   const to = global.store.localFiles;
   to.ensureFiles();

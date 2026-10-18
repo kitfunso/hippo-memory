@@ -5,7 +5,8 @@ import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
 import type { FolderStore } from '../store/port.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter, recallScopeFilter } from '../core/recall-scope.js';
-import { configuredVectorSource, hybridSearch } from '../search/hybrid.js';
+import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 import { fitBudget } from '../search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from '../core/search-types.js';
 import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
@@ -68,8 +69,8 @@ export interface HybridSearchOptions extends SearchOptions {
  *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
-  local: FolderStore,
-  global: FolderStore,
+  local: ConfiguredFolder,
+  global: ConfiguredFolder,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
@@ -118,8 +119,8 @@ export async function searchBothHybrid(
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
-function folderVectorSource({ root, store }: FolderStore): VectorSource | undefined {
-  return root ? configuredVectorSource(store, root) : undefined;
+function folderVectorSource({ root, store, config }: ConfiguredFolder): VectorSource | undefined {
+  return root ? vectorSourceOf({ store, config, onHippoDb: true }) : undefined;
 }
 
 /** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */

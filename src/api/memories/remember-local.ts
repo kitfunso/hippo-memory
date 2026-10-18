@@ -86,8 +86,8 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 /** Best-effort and slow (a model load or a network call), so the
  * caller is not held for it; a row left out of the index is logged. */
 function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store });
-  return embedMemory(target, entry, undefined, ctx.config.embeddings).then((outcome) => {
+  const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store, config: ctx.config });
+  return embedMemory(target, entry).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
         `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,

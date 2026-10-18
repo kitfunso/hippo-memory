@@ -1,5 +1,6 @@
 import { adminActor } from '../api/index.js';
 import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../api/types.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 import type { Machine, SyncOptions } from '../agent-memories/sync.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
@@ -7,7 +8,7 @@ import { runConsolidation } from '../consolidate/sleep.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
-import type { FolderStore, LocalFiles, OptionalGroup } from '../store/port.js';
+import type { LocalFiles, OptionalGroup } from '../store/port.js';
 import {
   runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
 } from '../store/sqlite/store.js';
@@ -19,8 +20,8 @@ export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
 }
 
 /** A folder's hippo.db beside its folder, as sharing and sync take each side; the global one may not exist yet. */
-export function cliFolder(hippoRoot: string): FolderStore {
-  return { root: hippoRoot, store: cliStore(hippoRoot) };
+export function cliFolder(hippoRoot: string): ConfiguredFolder {
+  return { root: hippoRoot, store: cliStore(hippoRoot), config: loadConfig(hippoRoot) };
 }
 
 /** hippo.db whose calls answer at once, for a hook or verb that counts each statement against its own time. */

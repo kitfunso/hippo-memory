@@ -31,7 +31,7 @@ import { heldTexts, mergedText } from '../../src/util/same-text.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -446,7 +446,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('api context', async () => {
     const { root, row } = await mergedStore();
-    const got = await api.getContext(ctx(root), { q: QUERY, budget: 4000, crossProject: true });
+    const got = await api.getContext(ctx(root), { currentProject: cwdProject(), q: QUERY, budget: 4000, crossProject: true });
     expect(got.entries.map((r) => r.entry.id)).toEqual([row.id]);
   });
 
@@ -496,7 +496,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
   });
 
   const hookContext = async (root: string): Promise<string[]> =>
-    (await api.getContext(ctx(root), { pinnedOnly: true, includeRecent: 5, budget: 4000, crossProject: true })).entries.map((r) => r.entry.id);
+    (await api.getContext(ctx(root), { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 5, budget: 4000, crossProject: true })).entries.map((r) => r.entry.id);
 
   it('a pinned memory never merges, so the per-prompt block still shows it after a sleep', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));

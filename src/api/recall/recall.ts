@@ -16,7 +16,6 @@ import type { RerankStep } from '../../core/search-types.js';
 import type { PhysicsConfig } from '../../core/physics-config.js';
 import { compareEntryIdentity } from '../../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../util/same-text.js';
-import { isSharedStore } from '../../core/config.js';
 import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
@@ -33,7 +32,7 @@ import type {
   ContinuityBlock,
   StoreRanking,
 } from './types.js';
-import { type Context, ownerOrSubject, RecallContractError } from '../types.js';
+import { type Context, ownerOrSubject, RecallContractError, sharedStoreOf } from '../types.js';
 import {
   anchoringRows,
   availabilityRows,
@@ -443,7 +442,7 @@ async function readRecall(
 
 // On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
 function continuityKey(ctx: Context, opts: RecallOptions): ContinuityKey | null {
-  if (!(ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot))) return null;
+  if (!sharedStoreOf(ctx)) return null;
   return { owner: ownerOrSubject(ctx.actor), project: recallOrigin(opts) ?? [] };
 }
 

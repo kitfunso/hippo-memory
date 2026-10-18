@@ -25,7 +25,7 @@ import { getContext } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 function tmpHome() {
@@ -79,7 +79,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'clean memory number three with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:02.000Z' });
       seed(home, 'clean memory number four with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, budget: 2000 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 5, budget: 2000 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('clean memory number one with plenty of specific detail worth keeping');
@@ -115,7 +115,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'clean memory delta with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:02.000Z' });
       seed(home, 'clean memory echo with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, budget: 3000 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 5, budget: 3000 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('clean memory alpha with plenty of specific detail worth keeping');
@@ -143,7 +143,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       // every pinned entry unconditionally, untouched by this plan.
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 0, budget: 500 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 0, budget: 500 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('fixed signals');
@@ -178,7 +178,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'clean recent entry bravo with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'clean recent entry charlie with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 55 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 55 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('fixed signals');
@@ -200,7 +200,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       const fragment = 'fetches a quote → blank price';
       seed(home, fragment, { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 1, budget: 500 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 1, budget: 500 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain(fragment);
@@ -222,8 +222,8 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'pinned rule that always injects regardless of recent settings', { pinned: true, created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'fixed signals', { created: '2026-08-20T10:00:00.000Z' });
 
-      const resultAbsent = await getContext(ctx, { pinnedOnly: true, budget: 500 });
-      const resultExplicitZero = await getContext(ctx, { pinnedOnly: true, includeRecent: 0, budget: 500 });
+      const resultAbsent = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 500 });
+      const resultExplicitZero = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 0, budget: 500 });
 
       for (const result of [resultAbsent, resultExplicitZero]) {
         const contents = result.entries.map((e) => e.entry.content);
@@ -262,7 +262,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'clean recent entry charlx with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 55 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 55 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('fixed signals');
@@ -284,7 +284,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 5 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 5 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toEqual(['fixed signals']);
@@ -311,7 +311,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'clean recent entry charlx with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:00.000Z' });
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-19T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 2000 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 2000 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('fixed signals');
@@ -334,7 +334,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
       seed(home, 'globe view on by default', { created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'quick patch applied', { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, budget: 500 });
+      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 5, budget: 500 });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toEqual(['surviving pinned rule that must still appear even with all recent junk']);
@@ -445,7 +445,7 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     // A larger budget passes either way and proves nothing (verified: at 46
     // both branches leave room, which is why the first draft of this test was
     // green against the unfixed code).
-    const res = await getContext(ctx, {
+    const res = await getContext(ctx, { currentProject: cwdProject(),
       pinnedOnly: true,
       includeRecent: 3,
       budget: 35,

@@ -1,6 +1,7 @@
 import { adminActor, type Actor } from '../../src/api/index.js';
 import { contextReach, type ContextReach, type ContextWith } from '../../src/api/types.js';
 import { loadConfig } from '../../src/core/config.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../../src/core/project-identity.js';
 import type { HippoStore, OptionalGroup } from '../../src/store/port.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 
@@ -16,4 +17,9 @@ export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
 export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = adminActor('test')): FullContext {
   const store = sqliteStore(hippoRoot);
   return { hippoRoot, tenantId, actor, store, reach: testReach(hippoRoot, store), config: loadConfig(hippoRoot) };
+}
+
+/** The project this test process runs in, which getContext read for itself before the surface named it. */
+export function cwdProject(): ProjectIdentity {
+  return resolveProjectIdentity(process.cwd());
 }

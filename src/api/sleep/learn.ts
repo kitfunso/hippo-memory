@@ -116,9 +116,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   counts.added += landed.length;
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  const { embeddings } = ctx.config;
-  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store };
-  for (const entry of landed) void embedMemory(target, entry, undefined, embeddings);
+  const target = { hippoRoot: ctx.hippoRoot, store: ctx.store, embeddings: ctx.config.embeddings };
+  for (const entry of landed) void embedMemory(target, entry);
 }
 
 /** The keys of the rows holding a lesson's longest word, the only rows that can be its copy. */

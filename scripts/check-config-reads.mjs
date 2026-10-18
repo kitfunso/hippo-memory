@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// CI config-read gate. Only a surface-layer file (layers.json), src/api/config-of.ts and src/core/config.ts read config.json
-// through loadConfig; domain, store and base code takes the config from its caller. Files that still do sit in
+// CI config-read gate. Only a surface-layer file (layers.json) and src/core/config.ts read config.json through loadConfig;
+// api code reads ctx.config, and domain, store and base code takes the config from its caller. Files that still do sit in
 // .config-reads-baseline.json and may go, never grow.
 // Usage: check-config-reads.mjs [--list] [--update]. --update rewrites the baseline; run it only after removing reads.
 
@@ -10,7 +10,7 @@ import { readFacts } from './lib/ts-facts.mjs';
 
 const BASELINE = '.config-reads-baseline.json';
 const MAP = 'layers.json';
-const ALLOWED = new Set(['src/api/config-of.ts', 'src/core/config.ts']);
+const ALLOWED = new Set(['src/core/config.ts']);
 
 function tsFiles(dir, out = []) {
   if (!existsSync(dir)) return out;
@@ -61,7 +61,7 @@ const fell = Object.entries(baseline).filter(([file, n]) => (current[file] ?? 0)
 if (rose.length > 0) {
   console.error('Code outside the surface layer reads config.json (loadConfig) more than the baseline allows:');
   for (const [file, n] of rose) console.error(`  ${file}: ${baseline[file] ?? 'new'} -> ${n}`);
-  console.error('Take the config as a parameter from the caller (src/api code: configOf(ctx)).');
+  console.error('Take the config as a parameter from the caller (src/api code: ctx.config).');
   process.exit(1);
 }
 if (fell.length > 0) {

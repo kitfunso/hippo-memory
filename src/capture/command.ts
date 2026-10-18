@@ -244,12 +244,13 @@ export function captureExtractedItems(
   keys: Set<string>,
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
-  const baseHalfLifeDays = loadConfig(root).defaultHalfLifeDays;
+  const config = loadConfig(root);
+  const baseHalfLifeDays = config.defaultHalfLifeDays;
   const items = extracted.map((item) => ({
     content: item.content,
     makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
   }));
-  const index = { hippoRoot: root, embeddingIndex: files.embeddingIndex };
+  const index = { hippoRoot: root, embeddingIndex: files.embeddingIndex, embeddings: config.embeddings };
   const outcomes = files.captures.write(
     items,
     keys,

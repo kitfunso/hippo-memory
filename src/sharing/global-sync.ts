@@ -9,7 +9,7 @@ import { chunked } from '../util/chunked.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { embedAll, folderIndex } from '../search/embed-memories.js';
+import { embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 
@@ -18,7 +18,7 @@ import { logEmbedAllFailure } from './search-both.js';
  * share copy under a new ID). The caller's request scope keeps it to one open per store.
  *  Returns the count of newly copied entries. */
 export function syncGlobalToLocal(
-  into: FolderStore,
+  into: ConfiguredFolder,
   global: FolderStore,
   opts: { includeCrossProject?: boolean } = {},
 ): number {
@@ -36,7 +36,7 @@ export function syncGlobalToLocal(
 const textKey = (e: { tenant_id: string; content: string }): string => `${e.tenant_id}\n${e.content}`;
 
 /** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together. */
-function copyMissingRows(into: FolderStore, global: FolderStore, includeCrossProject: boolean): number {
+function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCrossProject: boolean): number {
   const local = into.store.localFiles;
   const from = global.store.localFiles;
   // Host-wide read: the global union is copied into a tenant-scoped local store, and each copy keeps its own tenant.
@@ -77,7 +77,7 @@ function copyMissingRows(into: FolderStore, global: FolderStore, includeCrossPro
   return count;
 }
 
-function finishSyncDown(into: FolderStore, count: number, rejected: number): void {
+function finishSyncDown(into: ConfiguredFolder, count: number, rejected: number): void {
   if (rejected > 0) {
     log.warn(
       `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,

@@ -9,11 +9,9 @@ import { markRetrieved, type MemoryEntry } from '../core/memory.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { isSharedStore } from '../core/config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import {
-  resolveProjectIdentity,
   classifyOriginProject,
   projectId,
   projectNames,
@@ -144,7 +142,7 @@ interface TaskSections {
  * events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
   ctx: Context,
-  opts: ContextOptions = {},
+  opts: ContextOptions,
 ): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
@@ -217,7 +215,7 @@ function warnIsolationIgnored(hippoRoot: string): void {
 function storesInReach(ctx: Context, opts: ContextOptions) {
   // No reach means an integrator's own store: one project, no global store beside it.
   const reach: StoreReach =
-    ctx.reach ?? { hasLocal: true, isGlobal: false, shared: isSharedStore(ctx.hippoRoot) };
+    ctx.reach ?? { hasLocal: true, isGlobal: false, shared: ctx.config.sharedStore };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
   // A store serving many people is not its operator's, so the operator's own global store stays out; the root sets
@@ -263,8 +261,7 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
   const config = ctx.config;
   const isolationEnabled = config.contextProjectIsolation !== false;
-  const currentProject =
-    opts.currentProject ?? resolveProjectIdentity(process.cwd());
+  const currentProject = opts.currentProject;
   // A caller with no project reads every row as its own; on a shared store those rows are other people's.
   if (sharedStore && projectId(currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");

@@ -7,7 +7,8 @@ import { predictionBaserate } from '../api/objects/predictions.js';
 import { everyConflict, listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
 import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
 import { mcpApiContext, type McpContext, type ToolCall } from './protocol.js';
-import { storeWith, type FolderStore } from '../store/port.js';
+import { storeWith } from '../store/port.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
@@ -108,7 +109,7 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
 }
 
 /** The global store the host's reach names; the tool table runs share and peers only where hippo.db sets one. */
-function globalTarget(ctx: McpContext): FolderStore {
+function globalTarget(ctx: McpContext): ConfiguredFolder {
   const target = ctx.reach?.globalTarget;
   if (target === undefined) throw new StoreNotPortedError(ctx.store.kind, 'localFiles');
   return target;

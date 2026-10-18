@@ -36,6 +36,8 @@ const { loadAmbientTallies } = await load('store/ambient.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/auth.js');
 const { getContext, adminActor } = await load('api/index.js');
+const { contextReach } = await load('api/types.js');
+const { loadConfig } = await load('core/config.js');
 const { handleMcpRequest } = await load('mcp/server.js');
 const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/store.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
@@ -119,10 +121,11 @@ const copyRoot = path.join(tmp, 'copy', '.hippo');
 fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const localStore = sqliteStore(localRoot);
-const reach = sqliteReach(localRoot, localStore);
-const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing'), store: localStore, reach };
+const reach = contextReach(sqliteReach(localRoot, localStore), loadConfig);
+const config = loadConfig(localRoot);
+const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing'), store: localStore, reach, config };
 const mcpCtx = {
-  hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true, store: localStore, reach,
+  hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true, store: localStore, reach, config,
 };
 // A transport runs each tool call inside its host's request scope (the server per request, stdio per frame).
 const tool = (name, args = {}) => async () => {
@@ -135,7 +138,7 @@ const tool = (name, args = {}) => async () => {
 const withoutGlobal = (run) => async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'no-global');
   try {
-    await run({ ...ctx, reach: sqliteReach(localRoot, localStore) });
+    await run({ ...ctx, reach: contextReach(sqliteReach(localRoot, localStore), loadConfig) });
   } finally {
     process.env.HIPPO_HOME = globalRoot;
   }

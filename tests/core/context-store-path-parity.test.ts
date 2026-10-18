@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { getContext, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
-import { _resetSharedStoreCacheForTests, markSharedStore, loadConfig } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
@@ -44,7 +44,7 @@ interface Expected {
 
 interface Case {
   readonly name: string;
-  readonly opts: ContextOptions;
+  readonly opts: Omit<ContextOptions, 'currentProject'> & Partial<Pick<ContextOptions, 'currentProject'>>;
   readonly expected: Expected;
   readonly actor?: Actor;
   readonly tenantId?: string;
@@ -275,6 +275,7 @@ interface PassOptions {
 interface PassConfig {
   embeddings?: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
   physics?: { readonly enabled: boolean };
+  sharedStore?: true;
 }
 
 /** One getContext on a fresh copy of the fixture. */
@@ -291,8 +292,9 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
   if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
   if (c.physicsOff) config.physics = { enabled: false };
   else if (c.physicsOn && embedded) config.physics = { enabled: true };
+  // The store's own flag, which the hippo.db reach and an in-memory store's ctx.config both read.
+  if (c.shared) config.sharedStore = true;
   if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
-  if (c.shared) markSharedStore(root);
   prepare?.(root, globalRoot);
   const store = makeStore?.(root);
   const served = store ?? sqliteStore(root);

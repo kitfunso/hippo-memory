@@ -4,6 +4,7 @@ import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import type { HippoStore } from '../store/index.js';
 import type { HippoConfig } from '../core/config.js';
 import type { OptionalGroup, StoreReach, StoreWith } from '../store/port.js';
+import type { ConfiguredFolder } from '../search/embed-memories.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -29,9 +30,10 @@ export interface GlobalInReach {
   readonly config: HippoConfig;
 }
 
-/** A store reach as a composition root sets it: the global store carries its own config, so the api reads no file. */
+/** A store reach as a composition root sets it: each global store carries its own config, so the api reads no file. */
 export interface ContextReach extends StoreReach {
   readonly global?: GlobalInReach;
+  readonly globalTarget?: ConfiguredFolder;
 }
 
 export interface Context {
@@ -48,8 +50,24 @@ export interface Context {
 
 /** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader. */
 export function contextReach(reach: StoreReach, configAt: (root: string) => HippoConfig): ContextReach {
-  const { global, ...rest } = reach;
-  return global === undefined ? rest : { ...rest, global: { ...global, config: configAt(global.root) } };
+  const { global, globalTarget, ...rest } = reach;
+  // Both name the operator's global store, so one load serves both.
+  let last: { readonly root: string; readonly config: HippoConfig } | undefined;
+  const at = (root: string): HippoConfig => {
+    if (last?.root !== root) last = { root, config: configAt(root) };
+    return last.config;
+  };
+  let withConfig: ContextReach = rest;
+  if (global !== undefined) withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
+  if (globalTarget !== undefined) {
+    withConfig = { ...withConfig, globalTarget: { ...globalTarget, config: at(globalTarget.root) } };
+  }
+  return withConfig;
+}
+
+/** Whether the store serves many people: the root's reach says, else the store's config for an integrator's store. */
+export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
+  return ctx.reach ? ctx.reach.shared : ctx.config.sharedStore;
 }
 
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */

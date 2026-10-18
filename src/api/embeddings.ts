@@ -10,8 +10,8 @@ type LocalContext = ContextWith<'localFiles'>;
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
 export async function embedMissingMemories(ctx: LocalContext, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
-  const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store });
-  return embedAll(target, undefined, provider, ctx.config.embeddings);
+  const target = folderIndex({ root: ctx.hippoRoot, store: ctx.store, config: ctx.config });
+  return embedAll(target, undefined, provider);
 }
 
 /** How many vectors the store holds, live memory or not. */

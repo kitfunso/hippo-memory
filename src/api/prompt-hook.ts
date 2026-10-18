@@ -2,8 +2,9 @@
 // hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
 // CLI parity case in tests/store/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
+import { sharedStoreOf } from './types.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { type HippoConfig, isSharedStore } from '../core/config.js';
+import type { HippoConfig } from '../core/config.js';
 import {
   contextBlockLines,
   contextCost,
@@ -360,8 +361,7 @@ export async function promptHookContext(
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
-  const sharedByReach = ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot);
-  if (sharedStore || sharedByReach) assertCallerProject(req.project);
+  if (sharedStore || sharedStoreOf(ctx)) assertCallerProject(req.project);
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
