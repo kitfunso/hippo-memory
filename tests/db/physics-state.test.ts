@@ -8,7 +8,12 @@ import type { PhysicsParticle } from '../../src/core/physics.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../_helpers/root-forms.js';
+import {
+  loadStoredParticles,
+  resetStoredParticles,
+  saveStoredVectors,
+  seedStoredParticle,
+} from '../_helpers/root-forms.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -694,7 +699,8 @@ describe('stored particles by store root', () => {
 
   it('resetStoredParticles drops stored state and keeps one particle per embedded id', () => {
     seed(['mem_t1', 'mem_t2'], ['mem_t2']);
-    expect(resetStoredParticles(tmpDir, ['mem_t1', 'mem_t2'], { mem_t1: [0.5, 0.5, 0.5] })).toBe(1);
+    saveStoredVectors(tmpDir, [['mem_t1', [0.5, 0.5, 0.5]]], 'test-model');
+    expect(resetStoredParticles(tmpDir)).toBe(1);
     const stored = loadStoredParticles(tmpDir);
     expect(stored.map((p) => p.memoryId)).toEqual(['mem_t1']);
     expect(stored[0]!.position[0]).toBeCloseTo(0.5, 5);

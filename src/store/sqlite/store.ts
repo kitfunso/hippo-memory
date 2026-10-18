@@ -50,7 +50,7 @@ import { sqliteQuarantine } from './quarantine.js';
 import { sqliteVectorReads } from './vector-reads.js';
 import { loadLatestHandoffAt } from './handoffs.js';
 import { updateStatsAt } from './index-and-stats.js';
-import { flushStatsMirrors } from './mirrors.js';
+import { flushHeldMirrors } from './mirrors.js';
 import { sqliteKeyAudit, sqliteKeyGrants, sqliteKeyWrites } from './keys.js';
 import type { Handles, OnHandle } from './open.js';
 import { handlesOf, openStore } from './handles.js';
@@ -118,7 +118,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     sharing: sqliteSharing(on),
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
-    embeddingIndex: sqliteEmbeddingIndex(on),
+    embeddingIndex: sqliteEmbeddingIndex(handles),
     ledger: sqliteLedger(on),
     dashboard: sqliteDashboardReads(handles),
   };
@@ -167,7 +167,7 @@ export function sqliteSyncStore(
     compactions: sqliteCompactions(on),
     close() {
       localFiles.dashboard.close();
-      flushStatsMirrors(hippoRoot);
+      flushHeldMirrors(hippoRoot);
     },
   };
 }

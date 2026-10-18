@@ -171,9 +171,8 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): void {
   let waiting: string;
   try {
-    const { memoryIds, vectorIds } = embedCoverage(ctx);
-    const embedded = new Set(vectorIds);
-    waiting = String(memoryIds.filter((id) => !embedded.has(id)).length);
+    const { memories, embedded } = embedCoverage(ctx);
+    waiting = String(memories - embedded);
   } catch (countErr) {
     waiting = `an unknown number of (count failed: ${errorMessage(countErr)})`;
   }

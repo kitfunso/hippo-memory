@@ -9,7 +9,7 @@ import { errorFields, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
-import { flushStatsMirrors } from './mirrors.js';
+import { flushHeldMirrors } from './mirrors.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
@@ -150,7 +150,7 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
   // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.
   const closeThread = (): void => {
     try {
-      flushStatsMirrors(init.hippoRoot);
+      flushHeldMirrors(init.hippoRoot);
     } finally {
       try {
         stores.close();

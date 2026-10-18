@@ -8,7 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/core/memory.js';
 import { initStore } from '../dist/entry/testing.js';
 import { upsertEntryRow } from '../dist/entry/testing.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
-import { consolidate } from '../dist/consolidate/sleep.js';
+import { consolidate } from '../dist/index.js';
 
 const LIMIT_MS = 150;
 const DAY = 86_400_000;

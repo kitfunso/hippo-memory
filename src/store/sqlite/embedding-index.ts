@@ -1,37 +1,49 @@
 // hippo.db's EmbeddingIndex. The model checks take the opener, since an unreadable index there reads as none.
-import { countAllEntriesAt, loadAllEntryIdsAt, loadEntriesByIdsAt } from './entry-reads.js';
-import type { EmbeddingIndex } from '../port/embedding-index.js';
+import { closeHippoDb } from '../../db/index.js';
+import { countAllEntriesAt, loadEntriesByIdsAt, loadEntryIdsPageAt } from './entry-reads.js';
+import type { EmbeddingIndex, VectorRebuild } from '../port/embedding-index.js';
 import {
+  beginVectorRebuildAt,
   embeddingModelRequiresReindex,
-  loadEmbeddingIndexAt,
   loadStoredParticlesAt,
   pendingVectorIdsAt,
   pruneOrphanVectorsAt,
   resetStoredParticlesAt,
-  saveEmbeddingIndexAt,
   saveStoredEmbeddingModel,
   saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
+  vectorCoverageAt,
 } from './vector-index.js';
-import type { OnHandle } from './open.js';
+import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 
-export function sqliteEmbeddingIndex(on: OnHandle): EmbeddingIndex {
+// The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild keeps one open.
+function beginRebuild(open: Handles['open']): VectorRebuild {
+  const db = open();
+  try {
+    return beginVectorRebuildAt(db, () => closeHippoDb(db));
+  } catch (err) {
+    closeHippoDb(db);
+    throw err;
+  }
+}
+
+export function sqliteEmbeddingIndex({ on, open }: Handles): EmbeddingIndex {
   return {
     requiresReindex: (providerId) => embeddingModelRequiresReindex(on, providerId),
     saveModel: (providerId) => saveStoredEmbeddingModel(on, providerId),
     entryCount: () => on((db) => countAllEntriesAt(db), openStore),
-    entryIds: () => on((db) => loadAllEntryIdsAt(db), openStore),
+    entryIdsPage: (page) => on((db) => loadEntryIdsPageAt(db, page), openStore),
     entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids), openStore),
-    vectors: () => on((db) => loadEmbeddingIndexAt(db)),
     summary: () => on((db) => storedVectorSummaryAt(db)),
+    coverage: () => on((db) => vectorCoverageAt(db), openStore),
     particles: () => on((db) => loadStoredParticlesAt(db)),
     saveVectors: (rows, model) => on((db) => saveStoredVectorsAt(db, rows, model)),
-    replaceVectors: (index, model) => on((db) => saveEmbeddingIndexAt(db, index, model)),
+    beginRebuild: () => beginRebuild(open),
     pruneOrphans: () => on((db) => pruneOrphanVectorsAt(db)),
     pendingIds: (page) => on((db) => pendingVectorIdsAt(db, page)),
-    resetParticles: (ids, index) => on((db) => resetStoredParticlesAt(db, ids, index)),
+    resetParticles: () => on((db) => resetStoredParticlesAt(db)),
     seedParticle: (entry, vector) => on((db) => seedStoredParticleAt(db, entry, vector)),
   };
 }

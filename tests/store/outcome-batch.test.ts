@@ -1,4 +1,5 @@
-// Outcome writes rows, audit rows and mirrors in set statements: pinned against the per-id path it replaced.
+// Outcome writes rows, audit rows and mirror marks in set statements, and the mirrors after: pinned against the per-id
+// path it replaced.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,6 +22,7 @@ import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
 import { applyOutcomeAt, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
 import type { OutcomeWrite } from '../../src/store/port/entry-writes.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace];
@@ -161,6 +163,7 @@ describe('outcome over 200 ids', () => {
     const after = seeded('outcome-pin-new', entries);
     const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
     const got = applyOutcomeAt(after.db, { hippoRoot: after.root }, outcomeOf(ids, good));
+    flushHeldMirrors(after.root);
     expect(got).toEqual(expected);
     expect(got.length).toBeGreaterThan(190);
     const want = snapshot(before.root, before.db);
@@ -181,7 +184,8 @@ describe('outcome statement count', () => {
       return statements.length;
     });
     expect(counts[0]).toBe(counts[1]);
-    expect(counts[0]).toBeLessThanOrEqual(6);
+    // One of them marks the mirrors due, in place of a file write per row on the job's path.
+    expect(counts[0]).toBeLessThanOrEqual(7);
   });
 });
 

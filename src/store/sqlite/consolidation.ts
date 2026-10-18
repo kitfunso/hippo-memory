@@ -31,9 +31,9 @@ import { conflictResolveAuditsAt, resolvedConflictsAt, replaceDetectedConflictsA
 import {
   iterateEveryTenantEntriesAt,
   objectMemoryRowsAt,
-  loadAllEntryIdsAt,
   loadCurrentDistilledEntriesAt,
   loadEntriesPageAt,
+  loadEntryIdsPageAt,
   selectEntriesByIds,
 } from './entry-reads.js';
 import { setHalfLivesAt, writeEntriesTogetherAt, writeEntryAt } from './entry-writes.js';
@@ -441,7 +441,7 @@ export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidati
   const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
   const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
   return {
-    entryIds: () => on((db) => loadAllEntryIdsAt(db), openStore),
+    entryIdsPage: (page) => on((db) => loadEntryIdsPageAt(db, page), openStore),
     entriesByIds: (ids) => (ids.length === 0 ? new Map() : on((db) => selectEntriesByIds(db, ids), openStore)),
     objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
     ftsDrift: (repair) => on((db) => ftsDriftAt(db, repair)),

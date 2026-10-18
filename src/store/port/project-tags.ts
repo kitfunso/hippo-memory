@@ -39,9 +39,10 @@ export interface OriginTally {
 export interface ProjectTagReads {
   /** Every project name with live rows, in the order its first row was written. */
   originTallies(sourcePrefix: string): OriginTally[];
-  /** The rows `rows` names, oldest first. */
-  entriesFromOrigin(rows: OriginRows): MemoryEntry[];
-  liveEntriesBySourcePrefix(prefix: string): MemoryEntry[];
+  /** The rows `rows` names, oldest first, read a page at a time as they are walked. */
+  entriesFromOrigin(rows: OriginRows): Iterable<MemoryEntry>;
+  /** The live rows whose source starts with `prefix`, oldest first, read a page at a time as they are walked. */
+  liveEntriesBySourcePrefix(prefix: string): Iterable<MemoryEntry>;
   entriesByIds(ids: readonly string[]): Map<string, MemoryEntry>;
   /** The readable dormant snapshots whose row carried project name `origin`. */
   dormantFromOrigin(origin: string): DormantSnapshot[];

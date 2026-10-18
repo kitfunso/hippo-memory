@@ -104,6 +104,9 @@ jobs:
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
+      # A module move breaks a script's dist/ import here, not only in the one shard or eval that runs the script.
+      - name: Every dist/ import in scripts, benchmarks, evals and tests resolves
+        run: node scripts/check-dist-imports.mjs
       # The committed API report must match the built declarations.
       - run: npm run check:dts
       # Tests are type-checked so a wrong-shaped call cannot pass.
