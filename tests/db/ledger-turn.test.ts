@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../../src/store/delivery-recorder.js';
-import { readDeliveryEvents } from '../../src/store/recall-trace.js';
+import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import type { TokenUse } from '../../src/store/token-ledger.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
