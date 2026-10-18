@@ -1,10 +1,13 @@
-// src/store/goals.ts
+// hippo.db's Goals group: the goal stack's writes and the every-status listing.
 import { randomUUID } from 'node:crypto';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { placeholders } from '../../util/sql.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../port/goals.js';
+import type { Goals } from '../port-groups.js';
+import type { Sync } from '../port.js';
+import type { OnHandle } from './open.js';
 
 export interface GoalRow {
   id: string;
@@ -40,7 +43,7 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-export function pushGoalAt(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
+function pushGoalAt(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
   return pushGoalWithDb(db, opts);
 }
 
@@ -168,7 +171,7 @@ export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveG
 }
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
-export function getSessionGoalsAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+function getSessionGoalsAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
   // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
   const rows = db
     .prepare(`
@@ -267,7 +270,7 @@ const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
 const STRENGTH_BOOST = 1.1;
 const STRENGTH_DECAY = 0.85;
 
-export function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: CompleteGoalOpts): void {
+function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: CompleteGoalOpts): void {
   const completedAt = new Date().toISOString();
   const score = opts.outcomeScore ?? null;
 
@@ -312,11 +315,11 @@ export function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: Compl
   });
 }
 
-export function suspendGoalAt(db: DatabaseSyncLike, goalId: string): void {
+function suspendGoalAt(db: DatabaseSyncLike, goalId: string): void {
   db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
 }
 
-export function resumeGoalAt(db: DatabaseSyncLike, goalId: string): void {
+function resumeGoalAt(db: DatabaseSyncLike, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
     // SAFETY: the row comes from the SELECT above, which projects exactly
     // the session_id, tenant_id, and status columns of goal_stack.
@@ -329,4 +332,15 @@ export function resumeGoalAt(db: DatabaseSyncLike, goalId: string): void {
 
     db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
   });
+}
+
+export function sqliteGoals(on: OnHandle): Sync<Goals> {
+  return {
+    push: (tenantId, goal) => on((db) => pushGoalAt(db, { ...goal, tenantId })),
+    sessionGoals: (tenantId, sessionId) => on((db) => getSessionGoalsAt(db, { sessionId, tenantId })),
+    // Goal ids are not tenant-scoped in hippo.db, so these ignore the tenant; the api checks the host admin.
+    complete: (_tenantId, goalId, opts) => on((db) => completeGoalAt(db, goalId, opts)),
+    suspend: (_tenantId, goalId) => on((db) => suspendGoalAt(db, goalId)),
+    resume: (_tenantId, goalId) => on((db) => resumeGoalAt(db, goalId)),
+  };
 }

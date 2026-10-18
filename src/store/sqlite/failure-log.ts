@@ -1,16 +1,19 @@
-/** Failure log: every failed tool call the capture-error hook sees, stored or not. */
-import { ConflictError } from '../core/api-errors.js';
-import type { DatabaseSyncLike } from '../db/index.js';
-import { DAY_MS } from '../util/time.js';
-import type { FailureEvent, FailureOutcome } from './port/failure-log.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../core/failure-log-retention.js';
-import type { FailureSummary } from './port/failure-log.js';
+// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a
+// handle of its own.
+import { ConflictError } from '../../core/api-errors.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
+import { DAY_MS } from '../../util/time.js';
+import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/failure-log.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../../core/failure-log-retention.js';
+import { failuresPerSession, type SessionFailures } from '../../core/failure-repeats.js';
+import type { OnHandle } from './open.js';
+import type { Sync } from '../port.js';
 
 /** Longest session id or tool name kept; the hook payload is not trusted to be short. */
 const MAX_FIELD = 128;
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
-export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
+function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   // Normalized, because the window and prune compare timestamps as strings.
   const now = new Date(event.now ?? Date.now()).toISOString();
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
@@ -59,7 +62,7 @@ export function requestOutcome(
 
 /** A retry that stored what the first try could not rewrites that row, since the request id allows one row per
  * tenant. */
-export function settleFailureOutcome(
+function settleFailureOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
   requestId: string,
@@ -72,17 +75,8 @@ export function settleFailureOutcome(
   );
 }
 
-/** Rated failures and repeats in one session, for {@link failuresBySession}. */
-export interface SessionFailures {
-  sessionId: string;
-  /** Failures hippo treats as lessons (stored, duplicate or store-failed) in the window. */
-  failures: number;
-  /** Of those, failures whose signature another session hit first. */
-  repeats: number;
-}
-
-/** Rated failures per session since `sinceIso`, the input for repeat-error rate per arm. */
-export function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
+/** The tenant's rated failures per session since `sinceIso`, under the rule in core/failure-repeats.ts. */
+function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionFailures[] {
   // SAFETY: the SELECT names exactly these three TEXT columns.
   const rows = db
     .prepare(
@@ -92,17 +86,8 @@ export function failuresBySession(db: DatabaseSyncLike, tenantId: string, sinceI
      ORDER BY id`,
     )
     .all(tenantId) as Array<{ ts: string; session_id: string; sig_hash: string }>;
-  const firstSession = new Map<string, string>();
-  const bySession = new Map<string, SessionFailures>();
-  for (const row of rows) {
-    if (!firstSession.has(row.sig_hash)) firstSession.set(row.sig_hash, row.session_id);
-    // Rows before the window are not counted but still decide which session hit a signature first.
-    if (row.ts < sinceIso) continue;
-    const repeat = firstSession.get(row.sig_hash) !== row.session_id;
-    const s = bySession.get(row.session_id) ?? { sessionId: row.session_id, failures: 0, repeats: 0 };
-    bySession.set(row.session_id, { ...s, failures: s.failures + 1, repeats: s.repeats + (repeat ? 1 : 0) });
-  }
-  return [...bySession.values()];
+  const rated = rows.map((r) => ({ ts: r.ts, sessionId: r.session_id, sigHash: r.sig_hash }));
+  return failuresPerSession(rated, sinceIso);
 }
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
@@ -137,5 +122,13 @@ export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceI
     rated: sessions.reduce((sum, s) => sum + s.failures, 0),
     repeats: sessions.reduce((sum, s) => sum + s.repeats, 0),
     sessions: sessions.length,
+  };
+}
+
+export function sqliteFailureLog(on: OnHandle): Sync<FailureLog> {
+  return {
+    record: (event) => on((db) => recordFailure(db, event)),
+    requestOutcome: (tenantId, requestId, sessionId) => on((db) => requestOutcome(db, tenantId, requestId, sessionId)),
+    settleOutcome: (tenantId, requestId, outcome) => on((db) => settleFailureOutcome(db, tenantId, requestId, outcome)),
   };
 }

@@ -1,17 +1,23 @@
-import { generateId } from '../core/memory.js';
-import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+// hippo.db's Cards group: the agent work board.
+import { generateId } from '../../core/memory.js';
+import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import {
   SessionHandoff,
   SessionHandoffRow,
   rowToSessionHandoff,
   isHandoffOutcome,
   HandoffOutcome,
-} from '../core/handoff.js';
-import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../core/card.js';
-import { assertTenantId } from '../core/tenant-id.js';
-import { chunked } from '../util/chunked.js';
-import { HANDOFF_COLUMNS } from './sqlite/handoffs.js';
-import { placeholders } from '../util/sql.js';
+} from '../../core/handoff.js';
+import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../../core/card.js';
+import { assertTenantId } from '../../core/tenant-id.js';
+import { chunked } from '../../util/chunked.js';
+import { HANDOFF_COLUMNS } from './handoffs.js';
+import { placeholders } from '../../util/sql.js';
+import type { CardDetail } from '../port/cards.js';
+import type { Cards } from '../port-groups.js';
+import type { Sync } from '../port.js';
+import type { OnHandle } from './open.js';
+import { openStore } from './handles.js';
 
 interface CardRow {
   id: string;
@@ -51,7 +57,7 @@ function rowToCard(row: CardRow): Card {
   };
 }
 
-export function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
+function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
   // SAFETY: row's shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
   const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
     | CardRow
@@ -147,7 +153,7 @@ function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, ou
 
 // The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one
 // runtime authority, so a hand-copied wrong `from` list fails fast here.
-export interface TransitionCardOptions {
+interface TransitionCardOptions {
   readonly from: CardStatus[];
   readonly to: CardStatus;
   readonly extra?: { setSql?: string; whereSql?: string; params?: unknown[] };
@@ -188,7 +194,7 @@ function transitionCards(
 
 /** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog.
  * An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
-export function createCardAt(
+function createCardAt(
   db: DatabaseSyncLike,
   tenantId: string,
   input: { title: string; repo?: string; contract?: string; budget?: number; dependsOn?: string[] },
@@ -256,13 +262,13 @@ function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: read
 }
 
 /** Returns the card row for id, or null if it does not exist under this tenant. */
-export function loadCardAt(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
+function loadCardAt(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
   assertTenantId('loadCard', tenantId);
   return loadCardRow(db, tenantId, id);
 }
 
 /** Lists cards for this tenant, optionally filtered to one status, newest-updated first. */
-export function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
+function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
   assertTenantId('listCards', tenantId);
   const conditions = ['tenant_id = ?'];
   const params: unknown[] = [tenantId];
@@ -279,7 +285,7 @@ export function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { stat
   return rows.map(rowToCard);
 }
 
-export function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
+function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
   // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
   const parents = (
     db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{
@@ -295,7 +301,7 @@ export function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: strin
   return { parents, children };
 }
 
-export function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
+function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
   // SAFETY: rows' shape matches CardRunRow.
   const rows = db
     .prepare(`
@@ -306,7 +312,7 @@ export function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: strin
   return rows.map(rowToCardRun);
 }
 
-export function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
+function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
   // SAFETY: rows' shape matches CardCommentRow.
   const rows = db
     .prepare(`
@@ -317,11 +323,7 @@ export function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: s
   return rows.map(rowToCardComment);
 }
 
-export function loadLatestHandoffForCardAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  cardId: string,
-): SessionHandoff | null {
+function loadLatestHandoffForCardAt(db: DatabaseSyncLike, tenantId: string, cardId: string): SessionHandoff | null {
   // SAFETY: row's shape matches HANDOFF_COLUMNS.
   const row = db
     .prepare(`
@@ -335,7 +337,7 @@ export function loadLatestHandoffForCardAt(
 /** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown
  * card id; returns null for a card not ready/blocked or already claimed. Sets a CARD_LEASE_MS lease and returns the new
  * run's id as runId. */
-export function claimCardAt(
+function claimCardAt(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
@@ -375,7 +377,7 @@ export function claimCardAt(
 /** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws
  * on an unknown card id or a run id that is not a positive integer; returns null unless the card is running and runId
  * is its live run. */
-export function heartbeatCardAt(db: DatabaseSyncLike, tenantId: string, id: string, runId: number): Card | null {
+function heartbeatCardAt(db: DatabaseSyncLike, tenantId: string, id: string, runId: number): Card | null {
   assertTenantId('heartbeatCard', tenantId);
   assertRunId(runId);
   const beat = withWriteScopeOr(db, 'heartbeat_card', (rollback) => {
@@ -400,13 +402,7 @@ export function heartbeatCardAt(db: DatabaseSyncLike, tenantId: string, id: stri
 
 /** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown
  * card id; returns null for a card not running. When runId is given, returns null unless it is the card's live run. */
-export function blockCardAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  id: string,
-  reason: string,
-  runId?: number,
-): Card | null {
+function blockCardAt(db: DatabaseSyncLike, tenantId: string, id: string, reason: string, runId?: number): Card | null {
   assertTenantId('blockCard', tenantId);
   if (reason.trim() === '') {
     throw new Error('reason must not be empty');
@@ -439,7 +435,7 @@ export function blockCardAt(
 /** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When
  * runId is given, returns null unless it is the card's live run. Throws on an unknown card id; returns null for a card
  * not running. */
-export function reviewCardAt(db: DatabaseSyncLike, tenantId: string, id: string, runId?: number): Card | null {
+function reviewCardAt(db: DatabaseSyncLike, tenantId: string, id: string, runId?: number): Card | null {
   assertTenantId('reviewCard', tenantId);
   if (runId !== undefined) assertRunId(runId);
   const moved = withWriteScopeOr(db, 'review_card', (rollback) => {
@@ -459,7 +455,7 @@ export function reviewCardAt(db: DatabaseSyncLike, tenantId: string, id: string,
 /** Closes the live run of a card in review: 'success' moves it to done and promotes children whose parents are all
  * done; 'failure'/'partial' shelves it. Throws on an unknown card id; returns null for a card not in review, or when
  * `runId` is given and is not the card's live run. */
-export function completeCardAt(
+function completeCardAt(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
@@ -520,7 +516,7 @@ function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parent
 /** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes
  * its live run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card
  * ids in id order. */
-export function reclaimExpiredCardsAt(db: DatabaseSyncLike, tenantId: string): string[] {
+function reclaimExpiredCardsAt(db: DatabaseSyncLike, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
   return withWriteScope(db, 'reclaim_expired_cards', () => {
     // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
@@ -548,7 +544,7 @@ export function reclaimExpiredCardsAt(db: DatabaseSyncLike, tenantId: string): s
 }
 
 /** Appends a comment to cardId in any card status; throws if cardId is not a card of this tenant. */
-export function addCardCommentAt(
+function addCardCommentAt(
   db: DatabaseSyncLike,
   tenantId: string,
   cardId: string,
@@ -560,4 +556,46 @@ export function addCardCommentAt(
     throw new Error('body must not be empty');
   }
   return insertCardComment(db, tenantId, cardId, author, body);
+}
+
+/** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card), the five
+ * reads on one snapshot. */
+function loadCardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
+  assertTenantId('loadCardDetail', tenantId);
+  return withReadSnapshot(db, () => cardDetailAt(db, tenantId, id));
+}
+
+function cardDetailAt(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
+  const card = loadCardRow(db, tenantId, id);
+  if (!card) return null;
+  return {
+    card,
+    deps: loadCardDepsAt(db, tenantId, id),
+    runs: loadCardRunsAt(db, tenantId, id),
+    comments: loadCardCommentsAt(db, tenantId, id),
+    handoff: loadLatestHandoffForCardAt(db, tenantId, id),
+  };
+}
+
+export function sqliteCards(on: OnHandle): Sync<Cards> {
+  return {
+    create: (tenantId, input) =>
+      on(
+        (db) => createCardAt(db, tenantId, { ...input, dependsOn: input.dependsOn ? [...input.dependsOn] : undefined }),
+        openStore,
+      ),
+    load: (tenantId, id) => on((db) => loadCardAt(db, tenantId, id), openStore),
+    detail: (tenantId, id) => on((db) => loadCardDetailAt(db, tenantId, id), openStore),
+    list: (tenantId, opts) => on((db) => listCardsAt(db, tenantId, opts), openStore),
+    runs: (tenantId, id) => on((db) => loadCardRunsAt(db, tenantId, id), openStore),
+    claim: (tenantId, id, runtime, sessionId) =>
+      on((db) => claimCardAt(db, tenantId, id, runtime, sessionId), openStore),
+    heartbeat: (tenantId, id, runId) => on((db) => heartbeatCardAt(db, tenantId, id, runId), openStore),
+    block: (tenantId, id, reason, runId) => on((db) => blockCardAt(db, tenantId, id, reason, runId), openStore),
+    review: (tenantId, id, runId) => on((db) => reviewCardAt(db, tenantId, id, runId), openStore),
+    complete: (tenantId, id, outcome, runId) => on((db) => completeCardAt(db, tenantId, id, outcome, runId), openStore),
+    reclaimExpired: (tenantId) => on((db) => reclaimExpiredCardsAt(db, tenantId), openStore),
+    comment: (tenantId, cardId, author, body) =>
+      on((db) => addCardCommentAt(db, tenantId, cardId, author, body), openStore),
+  };
 }

@@ -11,7 +11,7 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../core/tenant-id.js';
 import type { TaskSnapshot } from '../port/sessions.js';
 import type { StoreFiles } from './open.js';
-import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './sessions.js';
+import { continuityStamp, continuityWhere, loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import type { ContinuityKey } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 

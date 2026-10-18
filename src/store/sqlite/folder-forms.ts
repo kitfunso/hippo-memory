@@ -23,7 +23,8 @@ import type { Entity, EntityType, Relation } from '../port/graph-reads.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
 import type { ContinuityKey } from '../port/types.js';
-import { appendSessionEventAt, saveActiveTaskSnapshotAt } from './sessions.js';
+import { appendSessionEventAt } from './sessions.js';
+import { saveActiveTaskSnapshotAt } from './task-snapshots.js';
 import { loadEmbeddingIndexAt } from './vector-index.js';
 import { onHandle, openStore } from './handles.js';
 

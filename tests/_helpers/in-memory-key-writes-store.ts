@@ -3,7 +3,7 @@
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEventsAfter } from '../../src/store/sqlite/audit.js';
 import { createApiKey, grantScope, readApiKeyRecord, revokeApiKey } from '../../src/store/sqlite/auth.js';
-import { auditHighIdAt } from '../../src/store/key-audit.js';
+import { auditHighId } from './root-forms.js';
 import type {
   ApiKeyListRow,
   ApiKeyRecord,
@@ -74,7 +74,7 @@ function copyRows(hippoRoot: string): CopiedRows {
         },
       ]),
     );
-    return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighIdAt(db) };
+    return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighId(hippoRoot) };
   } finally {
     closeHippoDb(db);
   }

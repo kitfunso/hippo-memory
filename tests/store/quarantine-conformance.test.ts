@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
 import { sqliteStore } from '../../src/store/index.js';
-import { auditHighIdAt } from '../../src/store/key-audit.js';
+import { auditHighId } from '../_helpers/root-forms.js';
 import type {
   QuarantineApproval,
   QuarantineListQuery,
@@ -161,12 +161,7 @@ const STATE: readonly Call[] = [
 beforeAll(async () => {
   fixture = seedTwoTenants();
   seedQuarantineRecords(fixture.dir);
-  const db = openHippoDb(fixture.dir);
-  try {
-    nextAuditId = auditHighIdAt(db) + 1;
-  } finally {
-    closeHippoDb(db);
-  }
+  nextAuditId = auditHighId(fixture.dir) + 1;
   // Unasserted here, so a store that disagrees fails the test that reads the state and not the whole file.
   baseline = (await onBothStores(fixture, 'quarantine', inMemoryQuarantineStore, STATE)).sqlite;
 });
@@ -443,7 +438,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
         .get(TENANT_A, HELD.a1) as { status: string; decided_at: string | null; decided_by: string | null };
       // SAFETY: as above.
       const memory = db.prepare('SELECT scope FROM memories WHERE id = ?').get(HELD.a1) as { scope: string | null };
-      return { record, scope: memory.scope, auditId: auditHighIdAt(db) };
+      return { record, scope: memory.scope, auditId: auditHighId(root) };
     } finally {
       closeHippoDb(db);
     }

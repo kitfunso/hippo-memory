@@ -32,7 +32,8 @@ import {
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
 import { loadLatestHandoffAt } from '../../src/store/sqlite/handoffs.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
-import { listSessionEventsAt, loadActiveTaskSnapshotAt } from '../../src/store/sqlite/sessions.js';
+import { listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
+import { loadActiveTaskSnapshotAt } from '../../src/store/sqlite/task-snapshots.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';

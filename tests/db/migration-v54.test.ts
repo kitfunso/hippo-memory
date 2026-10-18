@@ -12,7 +12,7 @@ import { reproveStoreSchema } from '../../src/db/connect.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { v54 } from '../../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../../src/db/tables.js';
-import { recordFailure } from '../../src/store/failure-log.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
@@ -104,9 +104,13 @@ describe('schema v54', () => {
       session_id: 's1',
     });
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'half done', nextAction: 'finish' });
-    withDb((db) =>
-      recordFailure(db, { tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'abc' }),
-    );
+    sqliteSyncStore(home).failureLog.record({
+      tenantId: 'default',
+      sessionId: 's1',
+      tool: 'Bash',
+      outcome: 'stored',
+      sigHash: 'abc',
+    });
     rewindToV53('1.24.0');
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);

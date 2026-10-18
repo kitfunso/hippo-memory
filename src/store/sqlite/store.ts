@@ -1,9 +1,9 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTalliesAt } from './ambient.js';
 import { ambientRefusal } from '../../core/read-admission.js';
-import { listApiKeyRows, readApiKeyRecord } from './auth.js';
+import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
-import { appendAuditEventsAt, listAuditEventsAfter, queryAuditEvents } from './audit.js';
+import { appendAuditEventsAt, queryAuditEvents } from './audit.js';
 import { getHippoDbPath } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt } from './goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
@@ -16,18 +16,18 @@ import {
   rawRowsUnderRefAt,
 } from './entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
-import { sqliteCaptures } from './captures-group.js';
-import { sqliteCompactionHooks } from './compaction-hooks-group.js';
-import { sqliteCards } from './cards-group.js';
+import { sqliteCaptures } from './captures.js';
+import { sqliteCompactionHooks } from './compaction-hooks.js';
+import { sqliteCards } from './cards.js';
 import { sqliteConflicts } from './conflicts-group.js';
 import { sqliteDashboardReads } from './dashboard-reads-group.js';
 import { sqliteDormant } from './dormant-group.js';
-import { sqliteGoals } from './goals-group.js';
+import { sqliteGoals } from './goals.js';
 import { sqliteRejections } from './rejections-group.js';
-import { sqliteFailureLog } from './failure-log-group.js';
-import { sqliteCompactions } from './compactions-group.js';
-import { sqliteReports } from './reports-group.js';
-import { sqliteSessions } from './sessions-group.js';
+import { sqliteFailureLog } from './failure-log.js';
+import { sqliteCompactions } from './compactions.js';
+import { sqliteReports } from './reports.js';
+import { sqliteSessions } from './sessions.js';
 import { sqliteConnectorEvents } from './connector-events-group.js';
 import { sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteConsolidation } from './consolidation-group.js';
@@ -35,10 +35,10 @@ import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
 import { sqliteProjectTags } from './project-tags-group.js';
 import { sqliteSharing } from './sharing-group.js';
-import { sqliteDiagnostics } from './diagnostics-group.js';
+import { sqliteDiagnostics } from './diagnostics.js';
 import { sqliteEmbeddingIndex } from './embedding-index-group.js';
 import { sqliteGraphRebuild } from './graph-rebuild-group.js';
-import { sqliteLedger } from './ledger-group.js';
+import { sqliteLedger } from './ledger.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import { sqliteAuditMaintenance, sqliteLessonWrites } from './maintenance-groups.js';
@@ -51,8 +51,7 @@ import { sqliteVectorReads } from './vector-reads-group.js';
 import { loadLatestHandoffAt } from './handoffs.js';
 import { updateStatsAt } from './index-and-stats.js';
 import { flushStatsMirrors } from './mirrors.js';
-import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
-import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
+import { sqliteKeyAudit, sqliteKeyGrants, sqliteKeyWrites } from './keys.js';
 import type { Handles, OnHandle } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import {
@@ -92,7 +91,8 @@ import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
 import { loadRecallEntriesAt } from './search-rows.js';
-import { listSessionEventsAt, loadActiveTaskSnapshotAt } from './sessions.js';
+import { listSessionEventsAt } from './sessions.js';
+import { loadActiveTaskSnapshotAt } from './task-snapshots.js';
 import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
 
@@ -393,33 +393,6 @@ function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
     liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>
       on((db) => liveContentsBySourceAndTagAt(db, tenantId, source, tag, exceptSessionId), openStore),
     rawRowsUnderRef: (tenantId, refPrefix) => on((db) => rawRowsUnderRefAt(db, tenantId, refPrefix), openStore),
-  };
-}
-
-function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {
-  return {
-    createApiKey(mint) {
-      on((db) => createKeyAt(db, mint));
-    },
-    createSelfApiKey: (mint) => on((db) => createSelfKeyAt(db, mint)),
-    listApiKeys: ({ tenantId, ...query }) =>
-      on((db) => listApiKeyRows(db, { ...query, tenantId: tenantId ?? undefined })),
-  };
-}
-
-function sqliteKeyGrants(on: OnHandle): Sync<KeyGrants> {
-  return {
-    changeScopeGrant(change) {
-      on((db) => changeScopeGrantAt(db, change));
-    },
-  };
-}
-
-function sqliteKeyAudit(on: OnHandle): Sync<KeyAudit> {
-  return {
-    revokeApiKey: (revoke) => on((db) => revokeKeyAt(db, revoke)),
-    auditEventsAfter: (opts) => on((db) => listAuditEventsAfter(db, opts)),
-    auditHighId: () => on(auditHighIdAt),
   };
 }
 

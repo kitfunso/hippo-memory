@@ -1,157 +1,38 @@
+// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
 import { freshActiveSnapshot } from '../../core/session-snapshot.js';
-import { isSharedStore } from '../../core/config.js';
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
-import { originInSql } from '../../core/project-identity.js';
 import { assertTenantId } from '../../core/tenant-id.js';
-import { redactSecretsStrict } from '../../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../../util/version.js';
-import { type TaskSnapshotRow, rowToTaskSnapshot, type SessionEventRow, rowToSessionEvent } from './rows.js';
-import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
-import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
-import type { StoreFiles } from './open.js';
-import type { ContinuityKey } from '../port/types.js';
-import type { SessionEventInput, SnapshotInput } from '../port/sessions.js';
-
-export interface ContinuityFilter {
-  readonly sql: string;
-  readonly params: readonly string[];
-}
-
-export interface ContinuityStamp {
-  readonly owner: string;
-  readonly origin: string;
-}
-
-/** All or nothing: a key missing its owner or every project name matches no row, never the tenant's newest. */
-export function continuityWhere(key: ContinuityKey): ContinuityFilter {
-  const names = key.project.filter((n) => n !== '');
-  if (key.owner === '' || names.length === 0) return { sql: '0', params: [] };
-  return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
-}
-
-/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no reader. */
-export function continuityStamp(key: ContinuityKey): ContinuityStamp {
-  const origin = key.project.find((n) => n !== '');
-  if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
-  return { owner: key.owner, origin };
-}
-
-// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
-function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: ContinuityKey | undefined): void {
-  if (!key && isSharedStore(hippoRoot)) {
-    throw new Error(
-      `${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`,
-    );
-  }
-}
-
-function insertSnapshot(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  now: string,
-  stamp: ContinuityStamp | null,
-): number {
-  const result = db
-    .prepare(
-      `
-    INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at,
-    updated_at, owner_subject, origin_project)
-    VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    )
-    .run(
-      redactSecretsStrict(snapshot.task),
-      redactSecretsStrict(snapshot.summary),
-      redactSecretsStrict(snapshot.next_step),
-      snapshot.source ?? 'cli',
-      snapshot.session_id ?? null,
-      snapshot.scope ?? null,
-      tenantId,
-      now,
-      now,
-      stamp?.owner ?? null,
-      stamp?.origin ?? null,
-    );
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-export function saveActiveTaskSnapshotAt(
-  db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  key?: ContinuityKey,
-): TaskSnapshot {
-  assertTenantId('saveActiveTaskSnapshot', tenantId);
-  assertKeyedOnSharedStore('saveActiveTaskSnapshot', hippoRoot, key);
-  const stamp = key ? continuityStamp(key) : null;
-  const owned = key ? continuityWhere(key) : null;
-  const now = new Date().toISOString();
-  const id = withWriteScope(db, 'save_active_task', () => {
-    db.prepare(
-      `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
-        `?${owned ? ` AND ${owned.sql}` : ''}`,
-    ).run(now, tenantId, ...(owned?.params ?? []));
-    const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
-    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
-    if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-    return inserted;
-  });
-
-  // SAFETY: row's shape matches the ten columns named in the SELECT above.
-  const row = db
-    .prepare(`
-    SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
-    FROM task_snapshots
-    WHERE id = ?
-  `)
-    .get(id) as TaskSnapshotRow | undefined;
-
-  if (!row) {
-    throw new Error('Failed to reload saved active task snapshot');
-  }
-
-  const loaded = rowToTaskSnapshot(row);
-  // The mirror is one file per store, so only the local, unkeyed path writes it.
-  if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
-  return loaded;
-}
-
-export function loadActiveTaskSnapshotAt(
-  db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
-  tenantId: string,
-  key?: ContinuityKey,
-): TaskSnapshot | null {
-  assertTenantId('loadActiveTaskSnapshot', tenantId);
-  const owned = key ? continuityWhere(key) : null;
-  // SAFETY: row's shape matches the ten columns named in the SELECT above.
-  const row = db
-    .prepare(`
-    SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
-    FROM task_snapshots
-    WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}
-    ORDER BY updated_at DESC, id DESC
-    LIMIT 1
-  `)
-    .get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
-
-  if (!row) {
-    if (!key) removeActiveTaskMirror(hippoRoot, tenantId);
-    return null;
-  }
-
-  const loaded = rowToTaskSnapshot(row);
-  if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
-  return loaded;
-}
+import { type SessionEventRow, rowToSessionEvent } from './rows.js';
+import type { TaskSnapshot, SessionEvent, SessionEventInput, WorkingMemoryItem } from '../port/sessions.js';
+import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
+import type { StoreFiles, OnHandle } from './open.js';
+import type { ContinuityKey, JsonObject } from '../port/types.js';
+import { warnDamagedColumn } from '../../util/stored-json.js';
+import { resolveTenantId } from './tenant.js';
+import {
+  loadHandoffByIdAt,
+  loadLatestHandoffAt,
+  saveSessionHandoffAt,
+  stampHandoffOutcomeAt,
+  writeSessionEndHandoffAt,
+} from './handoffs.js';
+import type { Sessions } from '../port-groups.js';
+import type { Sync } from '../port.js';
+import { openStore } from './handles.js';
+import {
+  assertKeyedOnSharedStore,
+  continuityStamp,
+  continuityWhere,
+  loadActiveTaskSnapshotAt,
+  saveActiveTaskSnapshotAt,
+} from './task-snapshots.js';
 
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
  * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
-export function loadFreshActiveTaskSnapshotAt(
+function loadFreshActiveTaskSnapshotAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -161,7 +42,7 @@ export function loadFreshActiveTaskSnapshotAt(
   return freshActiveSnapshot(loadActiveTaskSnapshotAt(db, files, tenantId, key), opts);
 }
 
-export function clearActiveTaskSnapshotAt(
+function clearActiveTaskSnapshotAt(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,
@@ -194,7 +75,7 @@ export function clearActiveTaskSnapshotAt(
 
 /** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an
  * ending session can never close a newer session's snapshot. Returns the number of rows closed. */
-export function closeTaskSnapshotsForSessionAt(
+function closeTaskSnapshotsForSessionAt(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -393,7 +274,7 @@ function deleteSessionOwnersBeforeAt(db: DatabaseSyncLike, cutoffIso: string): v
 }
 
 /** One caller's claim on a session id. */
-export interface SessionOwnerBinding {
+interface SessionOwnerBinding {
   readonly tenantId: string;
   readonly sessionId: string;
   readonly owner: string;
@@ -421,7 +302,217 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
 }
 
 /** The owner stored for the session id, binding `binding.owner` first when none is stored. */
-export function sessionOwnerOrBindAt(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
+function sessionOwnerOrBindAt(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
   return selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding);
+}
+
+/** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked,
+ * evicted past WM_MAX_ENTRIES per scope. */
+
+const WM_MAX_ENTRIES = 20;
+
+interface WorkingMemoryRow {
+  id: number;
+  scope: string;
+  session_id: string | null;
+  task_id: string | null;
+  importance: number;
+  content: string;
+  metadata_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
+  let metadata: JsonObject = {};
+  try {
+    // SAFETY: metadata_json is always written by wmPush via JSON.stringify(opts.metadata ?? {}), so a successful parse
+    // yields a plain JSON object; malformed content falls through to the catch below.
+    metadata = JSON.parse(row.metadata_json) as JsonObject;
+  } catch {
+    // The item still lists with its content; only its metadata reads as empty.
+    warnDamagedColumn({ table: 'working_memory', id: row.id, column: 'metadata_json' }, 'not valid JSON');
+  }
+  return {
+    id: row.id,
+    scope: row.scope,
+    sessionId: row.session_id,
+    taskId: row.task_id,
+    importance: Number(row.importance),
+    content: row.content,
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
+ * oldest created_at). Returns the new row ID. */
+function wmPushAt(
+  db: DatabaseSyncLike,
+  opts: {
+    scope: string;
+    content: string;
+    importance?: number;
+    sessionId?: string;
+    taskId?: string;
+    metadata?: JsonObject;
+    tenantId?: string;
+  },
+): number {
+  const now = new Date().toISOString();
+  const importance = opts.importance ?? 0;
+  const tenantId = opts.tenantId ?? resolveTenantId({});
+
+  return withWriteScope(db, 'wm_push', () => {
+    const result = db
+      .prepare(
+        `
+      INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at,
+      updated_at, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+      )
+      .run(
+        opts.scope,
+        opts.sessionId ?? null,
+        opts.taskId ?? null,
+        importance,
+        opts.content,
+        JSON.stringify(opts.metadata ?? {}),
+        now,
+        now,
+        tenantId,
+      );
+
+    const id = Number(result.lastInsertRowid ?? 0);
+
+    evictOverCapacity(db, opts.scope, tenantId);
+
+    return id;
+  });
+}
+
+function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string): void {
+  // Evict if over capacity for this scope.
+  // SAFETY: `COUNT(*) AS cnt` always returns exactly one row { cnt }, so `.get()` never yields undefined.
+  const countRow = db
+    .prepare(`
+    SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
+  `)
+    .get(scope, tenantId) as { cnt: number } | undefined;
+
+  const count = Number(countRow?.cnt ?? 0);
+  if (count > WM_MAX_ENTRIES) {
+    const excess = count - WM_MAX_ENTRIES;
+    db.prepare(`
+      DELETE FROM working_memory
+      WHERE id IN (
+        SELECT id FROM working_memory
+        WHERE scope = ? AND tenant_id = ?
+        ORDER BY importance ASC, created_at ASC
+        LIMIT ?
+      )
+    `).run(scope, tenantId, excess);
+  }
+}
+
+/** Read working memory entries, sorted by importance DESC. */
+function wmReadAt(
+  db: DatabaseSyncLike,
+  opts?: {
+    scope?: string;
+    sessionId?: string;
+    limit?: number;
+    tenantId?: string;
+  },
+): WorkingMemoryItem[] {
+  const clauses: string[] = ['tenant_id = ?'];
+  const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
+
+  if (opts?.scope) {
+    clauses.push('scope = ?');
+    params.push(opts.scope);
+  }
+  if (opts?.sessionId) {
+    clauses.push('session_id = ?');
+    params.push(opts.sessionId);
+  }
+
+  const limit = Math.max(1, Math.trunc(opts?.limit ?? WM_MAX_ENTRIES));
+  params.push(limit);
+
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the
+  // same names, from the working_memory table this module owns.
+  const rows = db
+    .prepare(`
+    SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
+    FROM working_memory
+    ${where}
+    ORDER BY importance DESC, created_at DESC
+    LIMIT ?
+  `)
+    .all(...params) as WorkingMemoryRow[];
+
+  return rows.map(rowToItem);
+}
+
+/** Clear (delete) working memory entries. Returns the count deleted. */
+function wmClearAt(
+  db: DatabaseSyncLike,
+  opts?: {
+    scope?: string;
+    sessionId?: string;
+    tenantId?: string;
+  },
+): number {
+  const clauses: string[] = ['tenant_id = ?'];
+  const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
+
+  if (opts?.scope) {
+    clauses.push('scope = ?');
+    params.push(opts.scope);
+  }
+  if (opts?.sessionId) {
+    clauses.push('session_id = ?');
+    params.push(opts.sessionId);
+  }
+
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = db.prepare(`DELETE FROM working_memory ${where}`).run(...params);
+  return Number(result.changes ?? 0);
+}
+
+export function sqliteSessions(on: OnHandle): Sync<Sessions> {
+  return {
+    saveSnapshot: (tenantId, snapshot, key) =>
+      on((db, files) => saveActiveTaskSnapshotAt(db, files, tenantId, snapshot, key ?? undefined), openStore),
+    loadSnapshot: (tenantId, key) =>
+      on((db, files) => loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined), openStore),
+    loadFreshSnapshot: (tenantId, opts, key) =>
+      on((db, files) => loadFreshActiveTaskSnapshotAt(db, files, tenantId, opts, key ?? undefined), openStore),
+    clearSnapshot: (tenantId, clearedStatus) =>
+      on((db, files) => clearActiveTaskSnapshotAt(db, files, tenantId, clearedStatus), openStore),
+    closeSessionSnapshots: (tenantId, sessionId, status, key) =>
+      on((db) => closeTaskSnapshotsForSessionAt(db, tenantId, sessionId, status, key ?? undefined), openStore),
+    appendEvent: (tenantId, event) => on((db, files) => appendSessionEventAt(db, files, tenantId, event), openStore),
+    listEvents: (tenantId, { sessionId, task, limit }) =>
+      on((db) => listSessionEventsAt(db, tenantId, { session_id: sessionId, task, limit }), openStore),
+    saveHandoff: (tenantId, handoff, key) =>
+      on((db) => saveSessionHandoffAt(db, tenantId, handoff, key ?? undefined), openStore),
+    latestHandoff: (tenantId, sessionId, filter, key) =>
+      on((db) => loadLatestHandoffAt(db, tenantId, sessionId ?? undefined, filter, key ?? undefined), openStore),
+    handoffById: (tenantId, id) => on((db) => loadHandoffByIdAt(db, tenantId, id), openStore),
+    stampHandoffOutcome: (tenantId, sessionId, outcome) =>
+      on((db) => stampHandoffOutcomeAt(db, tenantId, sessionId, outcome), openStore),
+    writeSessionEndHandoff: (tenantId, request) =>
+      on((db, files) => writeSessionEndHandoffAt(db, files, { ...request, tenantId }), openStore),
+    pushWorkingMemory: (tenantId, item) => on((db) => wmPushAt(db, { ...item, tenantId }), openStore),
+    readWorkingMemory: (tenantId, filter) => on((db) => wmReadAt(db, { ...filter, tenantId }), openStore),
+    clearWorkingMemory: (tenantId, filter) => on((db) => wmClearAt(db, { ...filter, tenantId }), openStore),
+    bindSessionOwner: (tenantId, sessionId, owner, retentionMs) =>
+      on((db) => sessionOwnerOrBindAt(db, { tenantId, sessionId, owner, retentionMs })),
+  };
 }

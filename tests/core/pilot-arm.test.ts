@@ -12,8 +12,9 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
-import { ensurePilotArm, readPilotArm } from '../../src/store/pilot-arm.js';
-import { hashArm } from '../../src/core/pilot-arm.js';
+import { sqliteLedger } from '../../src/store/sqlite/ledger.js';
+import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
+import { hashArm, type PilotArm } from '../../src/core/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';
@@ -42,6 +43,20 @@ afterEach(() => {
 
 const writeConfig = (pilot: JsonValue): void =>
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ pilot }));
+/** Books the arm through the Ledger group on `handle`, so a test can hold the store's lock or fault that connection. */
+function ensurePilotArm(
+  handle: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  rateBp: number,
+  opts: { ownTenantOnly?: boolean } = {},
+): PilotArm {
+  const ledger = sqliteLedger((fn) => fn(handle, { hippoRoot: root }));
+  return ledger.pilotArm(tenantId, sessionId, rateBp, { write: true, ...opts });
+}
+
+const readPilotArm = (handle: DatabaseSyncLike, sessionId: string, tenantId?: string): string | null =>
+  firstPilotArmHash(handle, sessionId, tenantId)?.block_hash ?? null;
 // SAFETY: a single COUNT(*) aggregate aliased `n`.
 const armCount = (): number =>
   (db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as { n: number }).n;

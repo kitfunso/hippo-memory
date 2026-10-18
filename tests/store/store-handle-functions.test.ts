@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { latestCompactionRows } from '../../src/store/sqlite/compaction-rows.js';
-import { failuresBySession } from '../../src/store/failure-log.js';
+import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { Captures } from '../../src/store/port.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -52,9 +52,10 @@ describe('failure log functions', () => {
       sigHash: 'a',
       detailHash: 'b',
     });
-    expect(read((db) => failuresBySession(db, 'default', '1970-01-01T00:00:00.000Z')).map((r) => r.sessionId)).toEqual([
-      's1',
-    ]);
+    expect(read((db) => summarizeFailures(db, 'default', '1970-01-01T00:00:00.000Z'))).toMatchObject({
+      total: 1,
+      sessions: 1,
+    });
   });
 
   it('requestOutcome reads a request outcome and settleOutcome rewrites it', () => {

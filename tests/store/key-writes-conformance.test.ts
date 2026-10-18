@@ -2,8 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { mintApiKey } from '../../src/core/api-key.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { auditHighIdAt } from '../../src/store/key-audit.js';
+import { auditHighId } from '../_helpers/root-forms.js';
 import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../../src/entry/store-kit.js';
 import {
   inMemoryKeyWritesStore,
@@ -106,12 +105,7 @@ const valueOf = (side: Side, i: number): KeyWritesValue => {
 beforeAll(async () => {
   fixture = seedTwoTenants();
   owned = seedOwnedKeys(fixture);
-  const db = openHippoDb(fixture.dir);
-  try {
-    nextAuditId = auditHighIdAt(db) + 1;
-  } finally {
-    closeHippoDb(db);
-  }
+  nextAuditId = auditHighId(fixture.dir) + 1;
   baseline = await conforms([]);
 });
 
