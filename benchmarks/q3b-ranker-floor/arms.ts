@@ -1,6 +1,6 @@
-// The three arms: one request shape per ranker of `retrieve()`. Each returns the contents it showed, best first.
+// The three arms: one request shape per recall ranker (retrieveWithCliCore, retrieve, retrieveRanking). Each returns the contents it showed, best first.
 
-import { adminActor, retrieve, type Context } from '../../dist/api/index.js';
+import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Context } from '../../dist/api/index.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/cli/flag-values.js';
 import { loadConfig } from '../../dist/core/config.js';
@@ -48,10 +48,10 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const globalRoot = getGlobalRoot();
   const reranker = q.stages.reranker ? getReranker(q.stages.reranker) : null;
   let shown: readonly SearchResult[] = [];
-  const [, retrieveMs] = await timed(() => retrieve(ctx, {
-    query: q.text,
-    boost: { sessionId: q.stages.sessionId ?? '', goalTag: q.stages.goalTag ?? '' },
-    cliCore: {
+  const [, retrieveMs] = await timed(() => retrieveWithCliCore(
+    ctx,
+    { query: q.text, boost: { sessionId: q.stages.sessionId ?? '', goalTag: q.stages.goalTag ?? '' } },
+    {
       rank: {
         budget: q.budget,
         cost: (r) => r.tokens,
@@ -77,7 +77,7 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
         return { results: ranking.results, audit: [], tokens: ranking.results.reduce((n, r) => n + r.tokens, 0) };
       },
     },
-  }));
+  ));
   return { texts: shown.map((r) => r.entry.content), retrieveMs };
 }
 
@@ -93,18 +93,21 @@ async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
 async function showRanked(ctx: Context, q: EvalQuery): Promise<Ranked> {
   const mode = loadConfig(ctx.hippoRoot).physics?.enabled !== false ? 'physics' : 'hybrid';
   let shown: SearchResult[] = [];
-  const [, retrieveMs] = await timed(() => retrieve(ctx, {
-    query: q.text,
-    boost: session(q),
-    window: { limit: 50 },
-    mode,
-    hints: { suppressAvailabilityHint: true },
-    filter: { keepHeldCopies: true },
-    showRanked: ({ ranked }) => {
+  const [, retrieveMs] = await timed(() => retrieveRanking(
+    ctx,
+    {
+      query: q.text,
+      boost: session(q),
+      window: { limit: 50 },
+      mode,
+      hints: { suppressAvailabilityHint: true },
+      filter: { keepHeldCopies: true },
+    },
+    ({ ranked }) => {
       shown = ranked.slice(0, SHOWN_ROWS);
       return { ids: shown.map((r) => r.entry.id), audit: [] };
     },
-  }));
+  ));
   return { texts: shown.map((r) => r.entry.content), retrieveMs };
 }
 

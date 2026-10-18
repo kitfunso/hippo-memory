@@ -19,7 +19,7 @@ import {
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
 import { adminActor } from '../../src/api/index.js';
-import { retrieve } from '../../src/api/recall/recall.js';
+import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
@@ -102,7 +102,7 @@ describe('retrieve with the CLI ranking core', () => {
       config: loadConfig(hippoRoot),
     };
 
-    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), lastRecall: traced } });
+    const result = await retrieveWithCliCore(ctx, { query: 'deploy' }, { ...cliCore(), lastRecall: traced });
 
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);
@@ -115,11 +115,11 @@ describe('retrieve with the CLI ranking core', () => {
 
   it('leaves the last-recall marker on the previous recall when a later recall shows nothing', async () => {
     const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
-    await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
+    await retrieveWithCliCore(ctx, { query: 'deploy' }, cliCore());
     const marked = loadLastRecall(hippoRoot);
     expect([...marked.last_retrieval_ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
 
-    const empty = await retrieve(ctx, { query: 'zzqqxx nomatch', cliCore: cliCore() });
+    const empty = await retrieveWithCliCore(ctx, { query: 'zzqqxx nomatch' }, cliCore());
 
     expect(empty.results).toEqual([]);
     const after = loadLastRecall(hippoRoot);
@@ -149,10 +149,11 @@ describe('retrieve with the CLI ranking core', () => {
     };
     const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
 
-    const result = await retrieve(ctx, {
-      query: 'deploy',
-      cliCore: { ...cliCore(), sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) } },
-    });
+    const result = await retrieveWithCliCore(
+      ctx,
+      { query: 'deploy' },
+      { ...cliCore(), sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) } },
+    );
 
     expect(result.results.map((r) => r.id)).toContain('mem_second_0');
     expect(writes).toHaveLength(1);

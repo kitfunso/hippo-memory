@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fails when the CLI ranks or records a recall itself: `hippo recall` and `hippo explain` go through retrieve(),
+// Fails when the CLI ranks or records a recall itself: `hippo recall` and `hippo explain` go through retrieveWithCliCore(),
 // which owns the ranking core and every row a recall writes, so the three surfaces cannot drift apart again.
 // Also fails when a CLI file names a memory writer or the store opener: a verb's row change lives behind a function that takes the store root.
 
@@ -115,7 +115,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error(`\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
     console.error(
-      '\nFix: pass the input to retrieve() (src/api/recall/recall.ts) and let it rank and record; the CLI parses flags and prints.\n',
+      '\nFix: pass the input to retrieveWithCliCore() (src/api/recall/request.ts) and let it rank and record; the CLI parses flags and prints.\n',
     );
   }
   const writes = findCliStoreWrites(srcDir);
@@ -127,6 +127,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
   }
   if (hits.length + writes.length > 0) process.exit(1);
-  console.log('The CLI ranks and records recall only through retrieve(). OK.');
+  console.log('The CLI ranks and records recall only through retrieveWithCliCore(). OK.');
   console.log('The CLI writes memories and opens the store only through functions that take the root. OK.');
 }
