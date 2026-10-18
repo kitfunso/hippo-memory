@@ -459,20 +459,23 @@ export function configReader(runtime?: () => RuntimeSettings): ConfigReader {
   return runtime === undefined ? read : (hippoRoot) => ({ ...read(hippoRoot), runtime: runtime() });
 }
 
-/** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync
- * answers false. */
+/** A file's mtime and size, which an edit changes; null when it is missing. A permission refusal throws, as
+ * readConfigFile does: the file is there, and defaults would silently drop its settings. */
 function fileStamp(file: string): string | null {
   try {
     const stat = fs.statSync(file, { throwIfNoEntry: false });
     return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
   } catch (err) {
     const code = errorCode(err);
-    const message = `config: ${file} could not be reached, read as missing: ${errorMessage(err)}`;
     if (code === 'EACCES' || code === 'EPERM') {
-      log.warnThenDebug(`config-unreachable:${file}:${code}`, message, { path: file, code, ...errorFields(err) });
+      throw new Error(
+        `${file} could not be reached (${code}): ${errorMessage(err)}. ` +
+          `Fix the permissions on the file and its folder, or delete the file to use the defaults.`,
+        { cause: err },
+      );
     }
-    // Any other refusal (ENOTDIR, ELOOP) means the path is simply not there, so only a permission refusal is told.
-    else log.debug(message, errorFields(err));
+    // ENOTDIR and ELOOP mean the path is simply not there.
+    log.debug(`config: ${file} is not reachable, read as missing: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
