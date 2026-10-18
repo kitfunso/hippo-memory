@@ -12,14 +12,13 @@ import {
   type VectorRow,
 } from './vector-store.js';
 
-// From benchmarks/vector-index/bench.mjs at 100,000 vectors: efConstruction 200 took twice the build for 0.02 more
-// recall@10, and only on vectors whose neighbours barely stand out from the rest.
+// A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has the bench.
 const GRAPH_M = 16;
 const GRAPH_EF_CONSTRUCTION = 100;
 const GRAPH_SEED = 1;
 
-// The first walk asks for this many candidates per wanted row, at least EF_FLOOR, and doubles up to EF_CAP. Below 128
-// recall@10 fell under 0.98 on the bench's harder vectors; a walk of 128 still costs about 3 ms at 100,000.
+// The first walk asks for this many candidates per wanted row, at least EF_FLOOR, and doubles up to EF_CAP. A lower
+// floor lost recall where the nearest rows barely stand out, for little time saved.
 const EF_PER_ROW = 4;
 const EF_FLOOR = 128;
 const EF_CAP = 2048;

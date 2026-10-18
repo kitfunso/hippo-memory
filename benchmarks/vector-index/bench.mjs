@@ -1,13 +1,24 @@
-// By hand only: node benchmarks/vector-index/bench.mjs (after npm run build). Env: N, M, EFC, SEED.
-import { createVectorGraph, insertNode, searchGraph } from '../../dist/search/vector-graph.js';
+// By hand only, after npm run build: node --expose-gc benchmarks/vector-index/bench.mjs. Env: N (vectors, 20000),
+// MODE (store: the store worker's graph against the scan on a real store; graph: the bare graph, with M and EFC) and
+// NOISE (spread of each cluster, 2: two points of a cluster sit at cosine about 0.2, against 0 +- 0.05 for the rest).
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { createVectorGraph, insertNode, searchGraph } from '../../dist/db/vector-graph.js';
+import { VectorGraphs } from '../../dist/db/vector-graph-index.js';
+import { closeHippoDb, openHippoDb, setMeta } from '../../dist/db/index.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../dist/db/vector-store.js';
+import { createMemory } from '../../dist/core/memory.js';
+import { writeEntryDbOnly } from '../../dist/store/entry-writes.js';
+import { initStore } from '../../dist/store/open.js';
+import { loadVectorCandidateEntriesAt } from '../../dist/store/search-rows.js';
 
-const N = Number(process.env.N ?? 100000);
+const N = Number(process.env.N ?? 20000);
+const MODE = process.env.MODE ?? 'store';
 const DIM = 384;
-const M = Number(process.env.M ?? 16);
-const EFC = Number(process.env.EFC ?? 200);
-const SEED = Number(process.env.SEED ?? 42);
-const K = 50;
-const QUERIES = 30;
+const K = 10;
+const QUERIES = 50;
+const TENANTS = ['t0', 't1', 't2'];
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -18,7 +29,7 @@ function rng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const r = rng(SEED + 1);
+const r = rng(43);
 const gauss = () => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
 
 function unit(v) {
@@ -29,55 +40,109 @@ function unit(v) {
   return v;
 }
 
-// Centres are unit; noise norm 1.17 puts a point at cosine ~0.65 from its centre.
+// Random unit vectors around N / 100 random unit centres.
 const centres = Array.from({ length: N / 100 }, () => unit(Float32Array.from({ length: DIM }, gauss)));
-const noise = 1.17 / Math.sqrt(DIM);
+const NOISE = Number(process.env.NOISE ?? 2);
+const noise = NOISE / Math.sqrt(DIM);
 const point = (c) => unit(Float32Array.from(centres[c], (x) => x + gauss() * noise));
-const vecs = new Float32Array(N * DIM);
-for (let i = 0; i < N; i++) vecs.set(point(i % centres.length), i * DIM);
-const queries = Array.from({ length: QUERIES }, (_, i) => point((i * 37) % centres.length));
-const vecOf = (n) => vecs.subarray(n * DIM, (n + 1) * DIM);
+const vectors = Array.from({ length: N }, (_, i) => point(i % centres.length));
+const queries = Array.from({ length: QUERIES }, (_, i) => Array.from(point((i * 37) % centres.length)));
 
-const t0 = performance.now();
-const graph = createVectorGraph({ dim: DIM, m: M, efConstruction: EFC, seed: SEED });
-for (let i = 0; i < N; i++) {
-  insertNode(graph, i, vecOf(i));
-  if (i % 10000 === 9999) console.error(`built ${i + 1} in ${Math.round(performance.now() - t0)} ms`);
-}
-const buildMs = performance.now() - t0;
+const pct = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+const ms = (x) => x.toFixed(2);
 
-const dotq = (q, n) => {
-  let s = 0;
-  const o = n * DIM;
-  for (let i = 0; i < DIM; i++) s += q[i] * vecs[o + i];
-  return s;
-};
-const admitPct = (pct) => (id) => (Math.imul(id, 2654435761) >>> 0) % 100 < pct;
-
-function truth(q, admit) {
-  const all = [];
-  for (let n = 0; n < N; n++) if (admit(n)) all.push([dotq(q, n), n]);
-  all.sort((a, b) => b[0] - a[0] || a[1] - b[1]);
-  return new Set(all.slice(0, K).map((x) => x[1]));
+// V8 frees ArrayBuffer memory on a background thread after a collection, so the count settles a moment later.
+async function heapMb() {
+  globalThis.gc?.();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  globalThis.gc?.();
+  const { heapUsed, arrayBuffers } = process.memoryUsage();
+  return (heapUsed + arrayBuffers) / 2 ** 20;
 }
 
-function run(label, pct) {
-  const admit = admitPct(pct);
-  const ef = Math.min(Math.ceil(128 / (pct / 100)), 512);
-  const times = [];
-  let hit = 0;
-  for (const q of queries) {
-    const gt = truth(q, admit);
-    const s = performance.now();
-    const res = searchGraph(graph, q, { k: K, ef, admit, vectorOf: vecOf });
-    times.push(performance.now() - s);
-    if (res.aborted) continue;
-    hit += res.hits.filter((h) => gt.has(h.node)).length;
+function seedStore() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vector-bench-'));
+  initStore(root);
+  const db = openHippoDb(root);
+  db.exec('BEGIN');
+  for (let i = 0; i < N; i++) {
+    writeEntryDbOnly(db, { ...createMemory(`memory ${i}`, { tenantId: TENANTS[i % 3] }), id: `m${i}` });
   }
-  times.sort((a, b) => a - b);
-  console.log(`${label} N=${N} M=${M} efC=${EFC} ef=${ef} warm_p50_ms=${times[times.length >> 1].toFixed(2)} recall@${K}=${(hit / (QUERIES * K)).toFixed(3)}`);
+  upsertVectors(db, vectors.map((v, i) => [`m${i}`, Array.from(v)]), 'bench');
+  setMeta(db, EMBEDDING_MODEL_META_KEY, 'bench');
+  db.exec('COMMIT');
+  return { root, db };
 }
 
-console.log(`build N=${N} dim=${DIM} M=${M} efC=${EFC} build_ms=${Math.round(buildMs)}`);
-run('f100', 100);
-run('f30', 30);
+async function timed(fn) {
+  const start = performance.now();
+  const out = await fn();
+  return { out, took: performance.now() - start };
+}
+
+async function storeMode() {
+  const { root, db } = seedStore();
+  let graphs = new VectorGraphs(root, { threshold: N });
+  // No limit, as recall and context ask: the store's default of 50 rows, of which recall@10 scores the first 10.
+  const spec = (tenantId) => ({ tenantId, scope: { mode: 'default-deny' }, includeSuperseded: false });
+  const build = await timed(async () => {
+    await loadVectorCandidateEntriesAt(db, queries[0], spec(undefined), graphs);
+    await graphs.idle();
+  });
+  console.log(`build N=${N} dim=${DIM} noise=${NOISE} build_ms=${Math.round(build.took)}`);
+  for (const [label, tenant] of [['all rows', undefined], ['one tenant of three', 't0']]) {
+    const scanMs = [];
+    const graphMs = [];
+    let hit = 0;
+    for (const q of queries) {
+      const scan = await timed(() => loadVectorCandidateEntriesAt(db, q, spec(tenant)));
+      const graph = await timed(() => loadVectorCandidateEntriesAt(db, q, spec(tenant), graphs));
+      const truth = new Set(scan.out.slice(0, K).map((e) => e.id));
+      hit += graph.out.slice(0, K).filter((e) => truth.has(e.id)).length;
+      scanMs.push(scan.took);
+      graphMs.push(graph.took);
+    }
+    scanMs.sort((a, b) => a - b);
+    graphMs.sort((a, b) => a - b);
+    console.log(
+      `${label}: recall@${K}=${(hit / (QUERIES * K)).toFixed(3)} graph p50/p95 ms=${ms(pct(graphMs, 0.5))}/` +
+        `${ms(pct(graphMs, 0.95))} scan p50/p95 ms=${ms(pct(scanMs, 0.5))}/${ms(pct(scanMs, 0.95))}`,
+    );
+  }
+  // What the graph holds, measured as what dropping it frees.
+  const held = await heapMb();
+  graphs.close();
+  graphs = undefined;
+  console.log(`graph heap_mb=${Math.round(held - (await heapMb()))}`);
+  closeHippoDb(db);
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+async function graphMode() {
+  const M = Number(process.env.M ?? 16);
+  const EFC = Number(process.env.EFC ?? 100);
+  const before = await heapMb();
+  const start = performance.now();
+  const graph = createVectorGraph({ dim: DIM, m: M, efConstruction: EFC, seed: 1 });
+  vectors.forEach((v, i) => insertNode(graph, i, v));
+  const buildMs = performance.now() - start;
+  console.log(`build N=${N} M=${M} efC=${EFC} build_ms=${Math.round(buildMs)} heap_mb=${Math.round((await heapMb()) - before)}`);
+  const truths = queries.map((q) => {
+    const exact = vectors.map((v, i) => [v.reduce((s, x, j) => s + x * q[j], 0), i]).sort((a, b) => b[0] - a[0]);
+    return new Set(exact.slice(0, K).map((x) => x[1]));
+  });
+  for (const ef of (process.env.EFS ?? '64,128').split(',').map(Number)) {
+    let hit = 0;
+    const took = [];
+    queries.forEach((q, i) => {
+      const start = performance.now();
+      const found = searchGraph(graph, Float32Array.from(q), { k: K, ef });
+      took.push(performance.now() - start);
+      if (!found.aborted) hit += found.hits.filter((h) => truths[i].has(h.node)).length;
+    });
+    took.sort((a, b) => a - b);
+    console.log(`ef=${ef} recall@${K}=${(hit / (QUERIES * K)).toFixed(3)} p50 ms=${ms(pct(took, 0.5))}`);
+  }
+}
+
+await (MODE === 'graph' ? graphMode() : storeMode());
