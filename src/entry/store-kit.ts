@@ -20,7 +20,9 @@ export type { DormantSnapshot } from '../store/port/agent-import.js';
 export type { EntryCursor, EntryPage } from '../store/port/consolidation.js';
 export type {
   RawRefRow,
+  AmbientCandidates,
   AmbientLoadResult,
+  AmbientRefusal,
   AmbientRecallRequest,
   ContextCandidateFilter,
   RecentOrigins,
@@ -136,6 +138,14 @@ export { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 export { replacesIndex } from '../store/vector-index.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
 export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from '../core/recall-scope.js';
+// An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's rule.
+export {
+  ambientRefusal,
+  descendantAdmits,
+  type AmbientAdmission,
+  type AmbientRefusalReason,
+  type DescendantAdmission,
+} from '../core/read-admission.js';
 export { SECRET_TAGS } from '../util/secret-detect.js';
 export { tallyAmbientEntries } from '../core/ambient.js';
 export { ftsTermParts, rarestFtsQuery } from '../core/prompt-recall.js';

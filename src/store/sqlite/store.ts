@@ -1,5 +1,6 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTalliesAt } from '../ambient.js';
+import { ambientRefusal } from '../../core/read-admission.js';
 import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEventsAt, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
@@ -233,8 +234,14 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
 /** The composition roots reach the request scope through the adapter's one entry. */
 export { runDetachedSqliteRequest, runSqliteRequest } from './request-scope.js';
 
-/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag). */
-export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boolean): StoreReach {
+/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
+ * `openGlobal` builds the global store, which a server keeps on threads of its own. */
+export function sqliteReach(
+  hippoRoot: string,
+  store: HippoStore,
+  shared?: boolean,
+  openGlobal: (root: string) => HippoStore = sqliteStore,
+): StoreReach {
   const other = hasGroup(store, 'localFiles') ? undefined : store;
   const sharedStore = shared === true || isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
@@ -245,7 +252,7 @@ export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boole
     shared: sharedStore,
   };
   if (!canReadGlobal) return reach;
-  return { ...reach, global: { root: globalRoot, store: sqliteStore(globalRoot) } };
+  return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
 }
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
@@ -312,8 +319,10 @@ function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
         { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
         key ?? undefined,
       ), openStore),
-    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) =>
-      on((db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, admit, recall, origins), openStore),
+    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) => on(
+      (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => ambientRefusal(e, admit), recall, origins),
+      openStore,
+    ),
     contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
     ambientTallies: (tenantId, filter) => on((db) => loadAmbientTalliesAt(db, tenantId, filter), openStore),
     newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),

@@ -1,10 +1,10 @@
 // DAG drill-down from a summary to its children.
 
-import type { DescendantOrigin, SummaryDescendants } from '../../store/port.js';
+import type { SummaryDescendants } from '../../store/port.js';
 import { estimateTokens } from '../../util/token-text.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
-import { passesScopeFilterForRecall, personalScopeOf } from '../../core/recall-scope.js';
-import { classifyOriginProject } from '../../core/project-identity.js';
+import { personalScopeOf } from '../../core/recall-scope.js';
+import { descendantAdmits, type DescendantAdmission } from '../../core/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from '../types.js';
 
@@ -71,23 +71,21 @@ export async function drillDown(
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
   // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
-  const own = personalScopeOf(ctx.actor) ?? undefined;
-  const readable = (row: DescendantOrigin): boolean =>
-    passesScopeFilterForRecall(row.scope ?? null, undefined, own)
-    && (!opts.project || classifyOriginProject(row.origin_project, opts.project) !== 'cross-project');
+  const admit: DescendantAdmission = { ownScope: personalScopeOf(ctx.actor) ?? undefined, project: opts.project };
   const pastLimit = Math.floor(limit) + 1;
   const walked = await ctx.store.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
+    admit,
     // A leaf answers not_drillable, so nothing under it is read.
-    admit: (row) => readable(row) && (row.id !== summaryId || isDrillable(row)),
-    page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit, admit: readable } : undefined,
+    minSummaryLevel: DAG_LEVEL.topic,
+    page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit } : undefined,
   });
   // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant" alike,
   // because telling them apart would leak existence to unauthorised tenants.
   if (!walked) return { failure: 'not_found' };
   // A distinguishable "scope_blocked" would tell a no-scope caller "this row
   // exists, just not for you", the existence leak the HTTP 404 collapse prevents.
-  if (!readable(walked.summary)) return { failure: 'not_found' };
+  if (!descendantAdmits(walked.summary, admit)) return { failure: 'not_found' };
   if (!isDrillable(walked.summary)) return { failure: 'not_drillable' };
   return drillResult(walked, opts, limit);
 }

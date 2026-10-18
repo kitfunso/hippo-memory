@@ -216,8 +216,9 @@ describe('published runtime exports', () => {
       OTHER_STORE_MARKER
       RECALL_DEFAULT_DENY_SCOPES RejectedValueError
       SECRET_TAGS StoreBusyError
+      ambientRefusal
       bufferToFloat32
-      decodeVector
+      decodeVector descendantAdmits
       encodeVector entryAfterOutcome
       float32ToBuffer ftsTermParts
       hasGroup heldTexts

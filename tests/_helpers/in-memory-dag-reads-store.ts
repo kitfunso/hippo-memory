@@ -1,8 +1,8 @@
 // A store other than hippo.db for the DagReads group: it copies the memory rows out of hippo.db once, then answers each read
-// from memory with the scope rule hippo-memory/store-kit exports, so a conformance test shows another store can match hippo.db's SQL.
+// from memory with the scope and admission rules hippo-memory/store-kit exports, so a conformance test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { passesScopeFilterForRecall, type AuditEvent, type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
+import { descendantAdmits, passesScopeFilterForRecall, type AuditEvent, type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import type { DagReads, SessionRawQuery } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
@@ -50,19 +50,20 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
         .filter((r) => (exact ? r.scope === query.scope : passesScopeFilterForRecall(r.scope, undefined, query.ownScope)))
         .length;
     },
-    async summaryWithDescendants(tenantId, id, { depth, admit }) {
+    async summaryWithDescendants(tenantId, id, { depth, admit, minSummaryLevel }) {
       const mine = rows.filter((r) => r.tenant_id === tenantId);
       const found = mine.find((r) => r.id === id);
       if (!found) return null;
       const summary = rowToEntry(found);
       const levels: MemoryEntry[][] = [];
       const listed = new Set<string>([id]);
-      let above = admit(summary) ? [id] : [];
+      const walked = descendantAdmits(summary, admit) && (summary.dag_level ?? 0) >= (minSummaryLevel ?? 0);
+      let above = walked ? [id] : [];
       while (levels.length < depth && above.length > 0) {
         const level: MemoryEntry[] = [];
         for (const parentId of above) {
           for (const child of mine.filter((r) => r.dag_parent_id === parentId).sort(oldestFirst).map(rowToEntry)) {
-            if (listed.has(child.id) || !admit(child)) continue;
+            if (listed.has(child.id) || !descendantAdmits(child, admit)) continue;
             listed.add(child.id);
             level.push(child);
           }

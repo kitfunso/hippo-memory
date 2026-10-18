@@ -168,6 +168,16 @@ const httpRecall = (url, limit) => async () => {
   const body = await res.json();
   if (!res.ok || body.results.length === 0) throw new Error(`GET /v1/memories failed: ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
 };
+const httpContext = (url) => async () => {
+  const res = await fetch(`${url}/v1/context?q=${encodeURIComponent('kafka redis')}`);
+  if (!res.ok) throw new Error(`GET /v1/context failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+};
+const httpTool = (url, name, args = {}) => async () => {
+  const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
+  const res = await fetch(`${url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call) });
+  const body = await res.json();
+  if (!res.ok || body.error || body.result?.isError) throw new Error(`POST /mcp ${name} failed: ${JSON.stringify(body).slice(0, 200)}`);
+};
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
@@ -191,6 +201,10 @@ const cases = [
   // As serve() answers by default: a statement or an open on the server thread during a recall fails here.
   ['served http recall, limit 10', httpRecall(server.url, 10), [0, 0, 0]],
   ['served http recall, limit 50', httpRecall(server.url, 50), [0, 0, 0]],
+  // Context reaches the global store too, which serve() also answers from worker threads.
+  ['served http context', httpContext(server.url), [0, 0, 0]],
+  ['served mcp hippo_context', httpTool(server.url, 'hippo_context'), [0, 0, 0]],
+  ['served mcp hippo_recall', httpTool(server.url, 'hippo_recall', { query: 'kafka redis' }), [0, 0, 0]],
 ];
 
 let overworked = false;

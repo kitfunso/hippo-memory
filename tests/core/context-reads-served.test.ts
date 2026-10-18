@@ -79,6 +79,8 @@ beforeEach(() => {
   for (const k of CLEARED_ENV) vi.stubEnv(k, '');
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   vi.stubEnv('HIPPO_V1_RPS', '0');
+  // A fake Date stays on this thread; the store worker that strengthens the recalled rows reads this clock instead.
+  vi.stubEnv('HIPPO_FAKE_NOW', CONTEXT_NOW);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(CONTEXT_NOW));
 });

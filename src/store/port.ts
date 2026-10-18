@@ -62,7 +62,13 @@ export type {
 } from './port/vector-writes.js';
 export type { VectorViews } from './port/vector-views.js';
 export type { KeyRevoke, KeyAudit } from './port/key-audit.js';
-export type { AmbientCandidateRequest, ContextReads } from './port/context-reads.js';
+export type {
+  AmbientAdmission,
+  AmbientCandidateRequest,
+  AmbientCandidates,
+  AmbientRefusal,
+  ContextReads,
+} from './port/context-reads.js';
 export type {
   EntryWrite,
   EntryTarget,
@@ -95,6 +101,7 @@ export type {
   SessionRawQuery,
   SessionRawWindow,
   SessionRawCount,
+  DescendantAdmission,
   DescendantOrigin,
   DescendantPage,
   DescendantWalk,

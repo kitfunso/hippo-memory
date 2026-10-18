@@ -122,7 +122,7 @@ export {
 } from './auth/audit.js';
 export type { AuditListOptions, AuditPass, PruneAuditOptions, PruneAuditResult } from './auth/audit.js';
 export type { ContextCost, ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
-export { DEFAULT_CONTEXT_BUDGET, NO_QUERY, ambientSecretAdmit, getContext, oneCopyPerMemory } from './context.js';
+export { DEFAULT_CONTEXT_BUDGET, NO_QUERY, getContext, oneCopyPerMemory } from './context.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { forgetDormant, isDormant, listDormant, restoreDormant } from './sleep/dormant.js';
 export { quarantineApprove, quarantineList, quarantineReject } from './auth/quarantine.js';
