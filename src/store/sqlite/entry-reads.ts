@@ -224,15 +224,6 @@ export function loadAllEntriesAt(db: DatabaseSyncLike, tenantId: string): Memory
   return selectAllRows(db, tenantId).map(rowToEntry);
 }
 
-/** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of
- * holding them all. */
-export function loadAllEntryIdsAt(db: DatabaseSyncLike): string[] {
-  // SAFETY: the SELECT names exactly the one column read.
-  return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map(
-    (row) => row.id,
-  );
-}
-
 /** Up to `page.limit` of every tenant's memory ids in loadAllEntries' order, after `page.after`. Two short columns per
  * row: no index orders memories by created then id across tenants, so each page sorts the ids again. */
 export function loadEntryIdsPageAt(

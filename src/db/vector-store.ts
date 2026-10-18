@@ -57,16 +57,56 @@ export function upsertVectors(
   return written;
 }
 
-/** Replace the whole table with `index` in one transaction, as a full rebuild does. */
-export function replaceAllVectors(
-  db: DatabaseSyncLike,
-  index: Readonly<Record<string, readonly number[]>>,
-  model: string,
-): void {
+// A TEMP table: only the handle that made it sees it, and it goes with that handle, so a crash leaves nothing staged.
+const STAGED_VECTORS_DDL =
+  'CREATE TEMP TABLE IF NOT EXISTS staged_vectors ' +
+  '(memory_id TEXT PRIMARY KEY, dim INTEGER NOT NULL, vector BLOB NOT NULL)';
+
+/** An empty staging table on `db` for a full rebuild's vectors; writing it takes no lock on hippo.db. */
+export function openVectorStaging(db: DatabaseSyncLike): void {
+  db.exec(STAGED_VECTORS_DDL);
+  db.exec('DELETE FROM temp.staged_vectors');
+}
+
+/** Stages `rows` on the handle openVectorStaging ran on, skipping empty or non-finite vectors; answers how many. */
+export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [string, readonly number[]]>): number {
+  const stmt = db.prepare('INSERT OR REPLACE INTO temp.staged_vectors (memory_id, dim, vector) VALUES (?, ?, ?)');
+  let staged = 0;
+  for (const [id, vector] of rows) {
+    if (vector.length === 0 || !vector.every(Number.isFinite)) continue;
+    stmt.run(id, vector.length, encodeVector(vector));
+    staged++;
+  }
+  return staged;
+}
+
+/** Replaces the whole table with the staged vectors under `model` in one transaction, as a full rebuild does. */
+export function replaceVectorsWithStaged(db: DatabaseSyncLike, model: string): void {
   withWriteScope(db, 'replace_all_vectors', () => {
     db.exec('DELETE FROM memory_vectors');
-    upsertVectors(db, Object.entries(index), model);
+    db.prepare(
+      'INSERT INTO memory_vectors (memory_id, model, dim, vector) ' +
+        'SELECT memory_id, ?, dim, vector FROM temp.staged_vectors',
+    ).run(model);
   });
+}
+
+export interface VectorCounts {
+  readonly vectors: number;
+  /** Vectors whose memory row still exists. */
+  readonly embedded: number;
+}
+
+export function countVectors(db: DatabaseSyncLike): VectorCounts {
+  // SAFETY: the SELECT names exactly the two counts read.
+  const row = db
+    .prepare(
+      'SELECT COUNT(*) AS vectors, ' +
+        'COALESCE(SUM(EXISTS (SELECT 1 FROM memories m WHERE m.id = v.memory_id)), 0) AS embedded ' +
+        'FROM memory_vectors v',
+    )
+    .get() as VectorCounts;
+  return { vectors: Number(row.vectors), embedded: Number(row.embedded) };
 }
 
 /** Drop vectors whose memory row is gone; returns how many went. */

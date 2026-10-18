@@ -18,6 +18,13 @@ import { apiCtx } from './api-ctx.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
+import { getMeta } from '../../src/db/index.js';
+import {
+  EMBEDDING_MODEL_META_KEY,
+  openVectorStaging,
+  replaceVectorsWithStaged,
+  stageVectors,
+} from '../../src/db/vector-store.js';
 import {
   loadAmbientCandidatesAt,
   loadContextCandidatesAt,
@@ -34,7 +41,6 @@ import type { DormantMemory, ListDormantOpts } from '../../src/store/port/dorman
 import { EVERY_SCOPE, listDormantRows } from '../../src/store/sqlite/dormant-rows.js';
 import {
   countSessionRawMemoriesAt,
-  loadAllEntryIdsAt,
   loadEntriesByIdsAt,
   loadEntryTextKeysPageAt,
   loadFreshRawMemoriesAt,
@@ -110,7 +116,6 @@ import {
   loadStoredParticlesAt,
   loadStoredVectorsAt,
   resetStoredParticlesAt,
-  saveEmbeddingIndexAt,
   saveStoredVectorsAt,
   seedStoredParticleAt,
   storedVectorSummaryAt,
@@ -369,10 +374,6 @@ export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => [...iterateEveryTenantEntriesAt(db)], openStore);
 }
 
-export function loadAllEntryIds(hippoRoot: string): string[] {
-  return onHandle(hippoRoot, (db) => loadAllEntryIdsAt(db), openStore);
-}
-
 /** Every page of loadEntryTextKeysPageAt, `pageRows` at a time. */
 export function loadEntryTextKeys(hippoRoot: string, tenantId?: string, pageRows = 500): EntryTextKey[] {
   return onHandle(
@@ -629,8 +630,13 @@ export function storedVectorSummary(hippoRoot: string): StoredVectorSummary {
   return onHandle(hippoRoot, (db) => storedVectorSummaryAt(db));
 }
 
+/** Replaces every stored vector with `index`, as a rebuild's commit does; `model` defaults to the stored identity. */
 export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
-  return onHandle(hippoRoot, (db) => saveEmbeddingIndexAt(db, index, model));
+  return onHandle(hippoRoot, (db) => {
+    openVectorStaging(db);
+    stageVectors(db, Object.entries(index));
+    replaceVectorsWithStaged(db, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, ''));
+  });
 }
 
 export function saveStoredVectors(
@@ -645,12 +651,8 @@ export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
   return onHandle(hippoRoot, (db) => loadStoredParticlesAt(db));
 }
 
-export function resetStoredParticles(
-  hippoRoot: string,
-  ids: readonly string[],
-  embeddingIndex: Record<string, number[]>,
-): number {
-  return onHandle(hippoRoot, (db) => resetStoredParticlesAt(db, ids, embeddingIndex));
+export function resetStoredParticles(hippoRoot: string): number {
+  return onHandle(hippoRoot, (db) => resetStoredParticlesAt(db));
 }
 
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {

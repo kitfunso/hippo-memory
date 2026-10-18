@@ -3,6 +3,7 @@
 
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { embedAll, folderIndex } from '../search/embed-memories.js';
+import type { VectorCoverage } from '../store/port/embedding-index.js';
 import { requireHostAdmin, type ContextWith } from './types.js';
 
 type LocalContext = ContextWith<'localFiles'>;
@@ -16,27 +17,17 @@ export async function memoryEmbedMissing(ctx: LocalContext, provider?: Embedding
 
 /** How many vectors the store holds, live memory or not. */
 export function storedVectorCount(ctx: LocalContext): number {
-  requireHostAdmin(ctx, 'Reading the vector index');
-  return ctx.store.localFiles.embeddingIndex.summary().ids.size;
+  return embedCoverage(ctx).vectors;
 }
 
-export interface EmbedCoverage {
-  /** Every memory id in the store. */
-  memoryIds: string[];
-  /** Every id with a stored vector, including orphans whose memory is gone. */
-  vectorIds: string[];
-}
-
-/** Memory ids against vector ids, for the embed status and backfill lines. */
-export function embedCoverage(ctx: LocalContext): EmbedCoverage {
+/** Memories against vectors, counted in the store, for the embed status and backfill lines. */
+export function embedCoverage(ctx: LocalContext): VectorCoverage {
   requireHostAdmin(ctx, 'Reading the vector index');
-  const index = ctx.store.localFiles.embeddingIndex;
-  return { memoryIds: index.entryIds(), vectorIds: [...index.summary().ids] };
+  return ctx.store.localFiles.embeddingIndex.coverage();
 }
 
 /** Re-seed every memory's physics particle from its vector; returns how many it reset. */
 export function resetPhysicsFromVectors(ctx: LocalContext): number {
   requireHostAdmin(ctx, 'Resetting physics');
-  const index = ctx.store.localFiles.embeddingIndex;
-  return index.resetParticles(index.entryIds(), index.vectors());
+  return ctx.store.localFiles.embeddingIndex.resetParticles();
 }

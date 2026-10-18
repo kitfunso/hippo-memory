@@ -10,27 +10,35 @@ import {
 } from '../../embeddings/index-identity.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import type { PhysicsParticle } from '../../core/physics.js';
-import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../db/physics-state.js';
+import {
+  loadPhysicsState,
+  resetPhysicsFromSeeds,
+  savePhysicsState,
+  type ParticleSeed,
+} from '../../db/physics-state.js';
 import { initializeParticle } from '../../core/physics.js';
 import { float32ToBuffer } from '../../util/vector-codec.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../port.js';
 import {
   EMBEDDING_MODEL_META_KEY,
+  countVectors,
   deleteOrphanVectors,
   hasStoredVectors,
   loadVectors,
   loadVectorViews,
-  replaceAllVectors,
+  openVectorStaging,
+  replaceVectorsWithStaged,
+  stageVectors,
   storedVectorDims,
   storedVectorIds,
   upsertVectors,
 } from '../../db/vector-store.js';
-import { selectEntriesByIds } from './entry-reads.js';
+import { countAllEntriesAt, loadEntryIdsPageAt, selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../../util/sql.js';
-import type { PendingIdsPage, StoredVectorSummary } from '../port/embedding-index.js';
-import type { EntryCursor } from '../port/consolidation.js';
+import type { StoredVectorSummary, VectorCoverage, VectorRebuild } from '../port/embedding-index.js';
+import type { EntryCursor, EntryIdPage } from '../port/consolidation.js';
 import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
@@ -107,9 +115,23 @@ export function loadStoredVectorViewsAt(db: DatabaseSyncLike, ids: readonly stri
   return loadVectorViews(db, ids);
 }
 
-/** Replace every stored vector with `index`; `model` defaults to the stored index identity. */
-export function saveEmbeddingIndexAt(db: DatabaseSyncLike, index: Record<string, number[]>, model?: string): void {
-  replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, ''));
+/** A rebuild staged on `db`, a handle of its own that `release` closes, which drops the staging table with it. */
+export function beginVectorRebuildAt(db: DatabaseSyncLike, release: () => void): VectorRebuild {
+  openVectorStaging(db);
+  return {
+    stage: (rows) => stageVectors(db, rows),
+    commit: (model) =>
+      withWriteScope(db, 'rebuild_vectors', () => {
+        replaceVectorsWithStaged(db, model);
+        saveIndexIdentityAt(db, model);
+      }),
+    close: release,
+  };
+}
+
+/** How many memories and vectors hippo.db holds, and how many memories have a vector. */
+export function vectorCoverageAt(db: DatabaseSyncLike): VectorCoverage {
+  return { memories: countAllEntriesAt(db), ...countVectors(db) };
 }
 
 /** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how
@@ -131,7 +153,7 @@ export function pruneOrphanVectorsAt(db: DatabaseSyncLike): void {
 export function pendingVectorIdsAt(
   db: DatabaseSyncLike,
   page: { readonly limit: number; readonly after?: EntryCursor },
-): PendingIdsPage {
+): EntryIdPage {
   const after = page.after === undefined ? '' : ' AND (created > ? OR (created = ? AND id > ?))';
   const afterArgs = page.after === undefined ? [] : [page.after.created, page.after.created, page.after.id];
   // SAFETY: the SELECT names exactly the two columns read.
@@ -249,25 +271,30 @@ export function saveStoredParticlesAt(db: DatabaseSyncLike, particles: PhysicsPa
 }
 
 const PARTICLE_PAGE = 64;
+// Each keyset read sorts every memory, as no index covers (created, id) across tenants, so it fetches many ids at once.
+const RESET_ID_PAGE = 1000;
 
-function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generator<MemoryEntry> {
-  for (const page of chunked(ids, PARTICLE_PAGE)) {
-    const rows = selectEntriesByIds(db, page);
-    for (const id of page) {
-      const entry = rows.get(id);
-      if (entry) yield entry;
+/** Every memory with a stored vector, paired with it, in created then id order; only one page of each is held. */
+function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
+  let after: EntryCursor | undefined;
+  do {
+    const page = loadEntryIdsPageAt(db, { limit: RESET_ID_PAGE, after });
+    for (const ids of chunked(page.ids, PARTICLE_PAGE)) {
+      const vectors = loadVectors(db, ids);
+      const rows = selectEntriesByIds(db, [...vectors.keys()]);
+      for (const id of ids) {
+        const entry = rows.get(id);
+        const vector = vectors.get(id);
+        if (entry && vector) yield [entry, vector];
+      }
     }
-  }
+    after = page.next ?? undefined;
+  } while (after);
 }
 
-/** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how
- * many. Rows are read a page at a time. */
-export function resetStoredParticlesAt(
-  db: DatabaseSyncLike,
-  ids: readonly string[],
-  embeddingIndex: Record<string, number[]>,
-): number {
-  return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
+/** Replaces every particle with a fresh one per memory that has a stored vector; returns how many. */
+export function resetStoredParticlesAt(db: DatabaseSyncLike): number {
+  return resetPhysicsFromSeeds(db, storedSeeds(db));
 }
 
 /** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */

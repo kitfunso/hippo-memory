@@ -133,16 +133,28 @@ export function savePhysicsState(db: DatabaseSyncLike, particles: PhysicsParticl
 
 const RESET_BATCH = 64;
 
-/**
- * Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is
- * written before the next is read.
- */
+/** resetPhysicsFromSeeds for each of `entries` that has a vector in `embeddingIndex`. */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
   now: Date = evalNow(),
 ): number {
+  return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), now);
+}
+
+function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string, number[]>): Generator<ParticleSeed> {
+  for (const entry of entries) {
+    const embedding = embeddingIndex[entry.id];
+    if (embedding && embedding.length > 0) yield [entry, embedding];
+  }
+}
+
+/** A memory and the vector its fresh particle starts at. */
+export type ParticleSeed = readonly [MemoryEntry, number[]];
+
+/** Drops every particle, then seeds one per pair in `seeds`, which may be read lazily, a batch at a time. */
+export function resetPhysicsFromSeeds(db: DatabaseSyncLike, seeds: Iterable<ParticleSeed>, now = evalNow()): number {
   db.exec('DELETE FROM memory_physics');
 
   // One transaction for every batch, so a failure part way leaves no particles rather than some.
@@ -154,9 +166,8 @@ export function resetAllPhysicsState(
       count += batch.length;
       batch = [];
     };
-    for (const entry of entries) {
-      const embedding = embeddingIndex[entry.id];
-      if (!embedding || embedding.length === 0) continue;
+    for (const [entry, embedding] of seeds) {
+      if (embedding.length === 0) continue;
       if (batch.push(initializeParticle(entry, embedding, now)) === RESET_BATCH) flush();
     }
     flush();

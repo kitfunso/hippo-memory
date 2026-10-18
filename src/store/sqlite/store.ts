@@ -118,7 +118,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
     sharing: sqliteSharing(on),
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
-    embeddingIndex: sqliteEmbeddingIndex(on),
+    embeddingIndex: sqliteEmbeddingIndex(handles),
     ledger: sqliteLedger(on),
     dashboard: sqliteDashboardReads(handles),
   };
