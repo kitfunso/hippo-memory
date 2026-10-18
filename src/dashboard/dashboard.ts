@@ -14,11 +14,13 @@ import { loadConfig } from '../core/config.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
 import { envTenant } from '../util/env.js';
 import {
-  bodyDeadlineMs,
   BodyTimeoutError,
+  BodyTooLargeError,
   closeAfterReply,
   isCrossSite,
   LOOPBACK_HOST_HEADER,
+  readBody,
+  sendJson,
 } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
@@ -77,21 +79,13 @@ function isStaticFileExtension(ext: string): ext is StaticFileExtension {
   return Object.hasOwn(MIME_TYPES, ext);
 }
 
-function jsonResponse<T>(res: http.ServerResponse, data: T, status: number = 200): void {
-  const body = JSON.stringify(data);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-  });
-  res.end(body);
-}
-
 function forbidden(res: http.ServerResponse): void {
   res.writeHead(403, { 'Content-Type': 'text/plain' });
   res.end('Forbidden');
 }
 
 function notFoundJson(res: http.ServerResponse): void {
-  jsonResponse(res, { error: 'Not found' }, 404);
+  sendJson(res, 404, { error: 'Not found' });
 }
 
 function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
@@ -115,39 +109,16 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
 class BodyDrainExceeded extends ParamError {}
 
 // Past the cap it keeps draining so the socket stays usable, up to a ceiling, then refuses.
-function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    const deadlineMs = bodyDeadlineMs();
-    const fail = (err: Error): void => {
-      clearTimeout(timer);
-      reject(err);
-    };
-    const timer = setTimeout(
-      () => fail(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)),
-      deadlineMs,
-    );
-    req.on('data', (chunk: Buffer) => {
-      size += chunk.length;
-      if (size <= BODY_MAX_BYTES) chunks.push(chunk);
-      if (size > BODY_DRAIN_MAX_BYTES) {
-        fail(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
-      }
-    });
-    req.on('error', fail);
-    // A client that hangs up mid-body sends no 'end'; after a whole body this reject is a no-op.
-    req.on('close', () => fail(new ParamError('Request body was cut off')));
-    req.on('end', () => {
-      clearTimeout(timer);
-      if (size > BODY_MAX_BYTES) return reject(new ParamError(`Body must be at most ${BODY_MAX_BYTES} bytes`));
-      try {
-        resolve(parseActionBody(Buffer.concat(chunks).toString('utf8').trim()));
-      } catch (err) {
-        reject(err);
-      }
-    });
-  });
+async function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
+  let text: string;
+  try {
+    text = await readBody(req, { maxBytes: BODY_DRAIN_MAX_BYTES });
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) throw new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`);
+    throw err;
+  }
+  if (Buffer.byteLength(text) > BODY_MAX_BYTES) throw new ParamError(`Body must be at most ${BODY_MAX_BYTES} bytes`);
+  return parseActionBody(text.trim());
 }
 
 /** What every request shares; built once in openDashboardRoot. */
@@ -169,7 +140,7 @@ interface RouteContext extends DashboardRoot {
 
 function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | null): true {
   if (body === null) notFoundJson(res);
-  else jsonResponse(res, body);
+  else sendJson(res, 200, body);
   return true;
 }
 
@@ -238,7 +209,7 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
     return true;
   }
   if (!JSON_CONTENT_TYPE.test(req.headers['content-type'] ?? '')) {
-    jsonResponse(res, { error: 'Content-Type must be application/json' }, 415);
+    sendJson(res, 415, { error: 'Content-Type must be application/json' });
     req.resume();
     return true;
   }
@@ -252,9 +223,9 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
     const embedded = snapshots.isEmbedded(result.entry.id);
     const options = { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded };
     const detail = await buildMemoryDetail(store, tenantId, result.entry, options);
-    jsonResponse(res, detail, result.status);
+    sendJson(res, result.status, detail);
   } else {
-    jsonResponse(res, result.body, result.status);
+    sendJson(res, result.status, result.body);
   }
   return true;
 }
@@ -404,9 +375,9 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
     res.end(JSON.stringify({ error: err.message }), () => closeAfterReply(req));
     return;
   }
-  if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);
-  if (err instanceof URIError) return jsonResponse(res, { error: 'Malformed URL path' }, 400);
-  jsonResponse(res, { error: 'Internal error' }, 500);
+  if (err instanceof ParamError) return sendJson(res, 400, { error: err.message });
+  if (err instanceof URIError) return sendJson(res, 400, { error: 'Malformed URL path' });
+  sendJson(res, 500, { error: 'Internal error' });
 }
 
 const DASHBOARD_URL_FILE = 'dashboard.url';
