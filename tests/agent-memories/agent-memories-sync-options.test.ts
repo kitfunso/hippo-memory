@@ -80,7 +80,10 @@ describe('agent memory sync: options, time and reporting', () => {
       machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }),
     });
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([1, 1]);
-    expect(report.warnings.filter((line) => line.includes('"nosuchtool"'))).toHaveLength(2);
+    expect(report.warnings.filter((line) => line.startsWith('HIPPO_AGENT_MEMORY_TOOLS: 1 unknown agent'))).toHaveLength(
+      2,
+    );
+    expect(report.warnings.join('\n')).not.toContain('nosuchtool');
   });
 
   it('agentMemories.tools: [] in a project store stops its project pass and its user pass', () => {

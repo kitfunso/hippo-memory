@@ -15,6 +15,7 @@ const LOOKALIKES = [
   'say hippo sleep',
   'notify-send "Turn done (hippo sleep runs at exit)"',
   'echo "a; hippo sleep later"',
+  'echo "a\\" (hippo sleep"',
   './backup.sh && hippo sleep',
   'echo hi; hippo sleep',
 ];

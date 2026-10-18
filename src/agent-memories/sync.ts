@@ -3,6 +3,7 @@
 import { processEnv } from '../util/env.js';
 import os from 'node:os';
 import path from 'node:path';
+import { plural } from '../util/format.js';
 import { errorMessage } from '../util/log.js';
 import type { HippoConfig } from '../core/config.js';
 import type { MemoryEntry } from '../core/memory.js';
@@ -212,7 +213,11 @@ export function allowedTools(
             .split(',')
             .map((t) => t.trim())
             .filter((t) => t !== '');
-    return knownTools(listed, TOOLS_ENV, warnings);
+    // The value is never echoed: a secret set in this variable by mistake would reach the log.
+    let unknown = 0;
+    const known = knownTools(listed, () => unknown++);
+    if (unknown > 0) warnings.push(unknownToolsIgnored(TOOLS_ENV, plural(unknown, 'unknown agent memory tool')));
+    return known;
   }
   const mine = configuredTools(opts, invoking, warnings);
   const theirs = configuredTools(opts, target, warnings);
@@ -225,20 +230,21 @@ export function allowedTools(
 
 function configuredTools(opts: Pick<SyncOptions, 'configAt'>, root: string, warnings: string[]): Set<ToolId> | null {
   const tools = opts.configAt(root).agentMemories.tools;
-  return tools === null ? null : knownTools(tools, 'config agentMemories.tools', warnings);
+  if (tools === null) return null;
+  return knownTools(tools, (id) =>
+    warnings.push(unknownToolsIgnored('config agentMemories.tools', `unknown agent memory tool "${id}"`)),
+  );
 }
 
-function knownTools(ids: readonly string[], where: string, warnings: string[]): Set<ToolId> {
+function unknownToolsIgnored(where: string, what: string): string {
+  return `${where}: ${what} ignored (known: ${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`;
+}
+
+function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Set<ToolId> {
   const out = new Set<ToolId>();
   for (const id of ids) {
-    if (isToolId(id)) {
-      out.add(id);
-    } else {
-      warnings.push(
-        `${where}: unknown agent memory tool "${id}" ignored (known: ` +
-          `${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`,
-      );
-    }
+    if (isToolId(id)) out.add(id);
+    else onUnknown(id);
   }
   return out;
 }

@@ -232,7 +232,7 @@ describe('dormant snapshot', () => {
 describe('graph page script', () => {
   it('reports a model that will not parse instead of swallowing it', () => {
     const html = renderGraphHtml({ nodes: [], edges: [], truncated: false });
-    expect(html).toContain('catch(e){console.error(');
-    expect(html).not.toContain('catch(_){}');
+    expect(html).toMatch(/catch\s*\(e\)\s*\{\s*console\.error\(/);
+    expect(html).not.toMatch(/catch\s*\(\w*\)\s*\{\s*\}/);
   });
 });

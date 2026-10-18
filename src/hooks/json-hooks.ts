@@ -81,7 +81,7 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
 }
 
 // An unterminated quote runs to the end, as in a shell, which also keeps the scan linear.
-const QUOTED_SPAN = /'[^']*(?:'|$)|"(?:[^"\\]|\\[\s\S]?)*(?:"|$)/g;
+const QUOTED_SPAN = /'[^']*(?:'|$)|"(?:[^"\\]|\\(?:[\s\S]|$))*(?:"|$)/g;
 
 /** Hippo's command only at string start or after `(`, past env assignments and an install path, with quoted
  * text ignored: `say hippo sleep`, `echo "a; hippo sleep"` and `./backup.sh && hippo sleep` stay a user's. */
