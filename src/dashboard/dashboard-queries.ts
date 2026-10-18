@@ -56,6 +56,20 @@ function orderedProjects(snap: Snapshot): ProjectAgg[] {
   );
 }
 
+function healthKpis(snap: Snapshot, total: number, withConflicts: number): Kpi[] {
+  const embedded = snap.embeddingCoverage === null ? 0 : Math.round(snap.embeddingCoverage * total);
+  return [
+    {
+      id: 'openConflicts', label: 'Open conflicts', value: snap.openConflicts, series: null,
+      delta: `in ${plural(withConflicts, 'project', 'projects')}`,
+    },
+    {
+      id: 'embeddingCoverage', label: 'Embedding coverage', value: snap.embeddingCoverage ?? 0, series: null,
+      delta: snap.embeddingCoverage === null ? 'no vector table yet' : `${total - embedded} not embedded`,
+    },
+  ];
+}
+
 function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
   const total = snap.facts.length;
   const named = projects.filter((p) => p.summary.kind === 'project');
@@ -64,7 +78,6 @@ function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
   const atRisk = projects.reduce((sum, p) => sum + p.summary.atRisk, 0);
   const weakNow = snap.facts.reduce((sum, f) => sum + (f.strength < 0.2 ? 1 : 0), 0);
   const withConflicts = projects.filter((p) => p.summary.openConflicts > 0).length;
-  const embedded = snap.embeddingCoverage === null ? 0 : Math.round(snap.embeddingCoverage * total);
   return [
     {
       id: 'total', label: 'Total memories', value: total, series: totalSeries,
@@ -78,14 +91,7 @@ function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
       id: 'atRiskShare', label: 'At-risk share, 30d', value: total > 0 ? atRisk / total : 0, series: null,
       delta: `${pct(total > 0 ? weakNow / total : 0)} now at strength under 0.2`,
     },
-    {
-      id: 'openConflicts', label: 'Open conflicts', value: snap.openConflicts, series: null,
-      delta: `in ${plural(withConflicts, 'project', 'projects')}`,
-    },
-    {
-      id: 'embeddingCoverage', label: 'Embedding coverage', value: snap.embeddingCoverage ?? 0, series: null,
-      delta: snap.embeddingCoverage === null ? 'no vector table yet' : `${total - embedded} not embedded`,
-    },
+    ...healthKpis(snap, total, withConflicts),
   ];
 }
 

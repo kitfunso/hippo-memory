@@ -64,14 +64,18 @@ export async function runConsolidation(
     units: [],
   };
 
+  await runAndFlush(run, options);
+  return result;
+}
+
+async function runAndFlush(run: SleepRun, options: ConsolidateOptions): Promise<void> {
   const decay = decayPass(run);
   await runPassesAfterDecay(run, options.fetcher);
 
   const budget = options.budget ?? WRITE_BUDGET;
   await flushPending(run, budget);
   await expireDormant(run, budget);
-  if (!dryRun) logRun(run, decay);
-  return result;
+  if (!run.dryRun) logRun(run, decay);
 }
 
 // Load decay options from config + session context

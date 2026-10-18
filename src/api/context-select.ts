@@ -299,18 +299,23 @@ function promptRecallCandidates(
     'eligible',
     'duplicate',
   );
+  return promptCandidateItems(localCandidates, globalCandidates, primaryIsGlobal);
+}
+
+function promptCandidateItems(
+  localCandidates: MemoryEntry[],
+  globalCandidates: MemoryEntry[],
+  primaryIsGlobal: boolean,
+): PromptCandidate[] {
   const seenCandidateIds = new Set<string>();
   const candidateItems: PromptCandidate[] = [];
   // Local wins the id collision (a global row synced into the local store).
-  for (const e of localCandidates) {
-    if (seenCandidateIds.has(e.id)) continue;
-    seenCandidateIds.add(e.id);
-    candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: primaryIsGlobal });
-  }
-  for (const e of globalCandidates) {
-    if (seenCandidateIds.has(e.id)) continue;
-    seenCandidateIds.add(e.id);
-    candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: true });
+  for (const [entries, isGlobal] of [[localCandidates, primaryIsGlobal], [globalCandidates, true]] as const) {
+    for (const e of entries) {
+      if (seenCandidateIds.has(e.id)) continue;
+      seenCandidateIds.add(e.id);
+      candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal });
+    }
   }
   return candidateItems;
 }

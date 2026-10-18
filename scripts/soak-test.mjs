@@ -243,6 +243,20 @@ function printSummary(rows, config, started) {
   console.error(`  CSV written to:  ${OUT}`);
 }
 
+function tickRow(tick, wallMs, stats, energy) {
+  return [
+    tick,
+    wallMs,
+    stats.particleCount,
+    energy.kinetic.toFixed(6),
+    energy.potential.toFixed(6),
+    energy.total.toFixed(6),
+    stats.avgVelocityMagnitude.toFixed(6),
+    stats.maxVelocityMagnitude.toFixed(6),
+    stats.substepsRun,
+  ];
+}
+
 function run() {
   if (!PROFILES[PROFILE]) {
     console.error(`Unknown profile: ${PROFILE}. Available: ${Object.keys(PROFILES).join(', ')}`);
@@ -264,10 +278,8 @@ function run() {
   const started = Date.now();
 
   // Record t=0 state before any simulation
-  {
-    const e = computeSystemEnergy(state.particles, config.G_memory);
-    rows.push([0, 0, state.particles.length, e.kinetic, e.potential, e.total, 0, 0, 0]);
-  }
+  const e0 = computeSystemEnergy(state.particles, config.G_memory);
+  rows.push([0, 0, state.particles.length, e0.kinetic, e0.potential, e0.total, 0, 0, 0]);
 
   for (let tick = 1; tick <= TICKS; tick++) {
     // Apply workload mutation
@@ -284,17 +296,7 @@ function run() {
     const tickMs = Date.now() - t0;
     const energy = computeSystemEnergy(state.particles, config.G_memory);
 
-    rows.push([
-      tick,
-      Date.now() - started,
-      stats.particleCount,
-      energy.kinetic.toFixed(6),
-      energy.potential.toFixed(6),
-      energy.total.toFixed(6),
-      stats.avgVelocityMagnitude.toFixed(6),
-      stats.maxVelocityMagnitude.toFixed(6),
-      stats.substepsRun,
-    ]);
+    rows.push(tickRow(tick, Date.now() - started, stats, energy));
 
     if (VERBOSE || tick % Math.max(1, Math.floor(TICKS / 20)) === 0) {
       console.error(`  tick ${tick}/${TICKS}: n=${stats.particleCount}, E=${energy.total.toFixed(3)} (K ${energy.kinetic.toFixed(3)}, P ${energy.potential.toFixed(3)}), |v|_max=${stats.maxVelocityMagnitude.toFixed(4)} [${tickMs}ms]`);

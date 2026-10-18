@@ -45,6 +45,11 @@ function skipRegexLiteral(src, start) {
   return i + 1;
 }
 
+function opensRegex(src, i, prev) {
+  if (prev === '' || PRECEDES_REGEX.includes(prev)) return true;
+  return /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i));
+}
+
 /** Returns [lineNumber, text] for every comment line: `//` tails and each line of a block comment. */
 function commentLines(src) {
   const out = [];
@@ -103,7 +108,7 @@ function commentLines(src) {
       i++;
       continue;
     }
-    if (c === '/' && (prev === '' || PRECEDES_REGEX.includes(prev) || /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i)))) {
+    if (c === '/' && opensRegex(src, i, prev)) {
       i = skipRegexLiteral(src, i);
       prev = ')';
       continue;

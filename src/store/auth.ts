@@ -377,8 +377,12 @@ function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
   return rows.map((r) => r.scope);
 }
 
-/** Keys newest first, with their row ids, filtered and limited in SQL. */
-export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
+interface ApiKeyFilter {
+  where: string[];
+  params: Array<string | number>;
+}
+
+function apiKeyFilter(opts: ListApiKeysOpts): ApiKeyFilter {
   const where: string[] = ['1 = 1'];
   const params: Array<string | number> = [];
   if (opts.active) {
@@ -398,6 +402,12 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
     where.push('key_id = ?');
     params.push(opts.keyId);
   }
+  return { where, params };
+}
+
+/** Keys newest first, with their row ids, filtered and limited in SQL. */
+export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
+  const { where, params } = apiKeyFilter(opts);
   const after = keysetAfter('id', 'id', opts.after);
   params.push(...after.params);
   const limitSql = opts.limit === undefined ? '' : ' LIMIT ?';

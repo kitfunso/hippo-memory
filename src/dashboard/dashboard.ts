@@ -461,23 +461,17 @@ function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): Dashboard
   };
 }
 
-/** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
-export function serveDashboard(
-  hippoRoot: string,
-  port: number = 3333,
-  token: string = randomBytes(32).toString('base64url'),
-  opts?: DashboardOptions,
-): http.Server {
-  const distUiDir = path.join(PACKAGE_ROOT, 'dist-ui');
-  const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
-  const root = openDashboardRoot(hippoRoot, opts ?? {});
-
-  const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
+function dashboardRequestHandler(
+  root: ReturnType<typeof openDashboardRoot>,
+  spa: { distUiDir: string; hasDistUi: boolean },
+  auth: { token: string; port: number },
+): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
+  return async (req, res) => {
     const host = req.headers.host;
     if (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) return forbidden(res);
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
-    if (!admitDashboardRequest(req, res, url, { token, port })) return;
+    if (!admitDashboardRequest(req, res, url, auth)) return;
 
     if (url.pathname.startsWith('/api/')) {
       // A malformed % sequence throws URIError here; the caller answers 400.
@@ -490,9 +484,23 @@ export function serveDashboard(
       return;
     }
 
-    if (hasDistUi) return serveSpa(res, distUiDir, url.pathname);
+    if (spa.hasDistUi) return serveSpa(res, spa.distUiDir, url.pathname);
     notBuilt(res);
   };
+}
+
+/** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
+export function serveDashboard(
+  hippoRoot: string,
+  port: number = 3333,
+  token: string = randomBytes(32).toString('base64url'),
+  opts?: DashboardOptions,
+): http.Server {
+  const distUiDir = path.join(PACKAGE_ROOT, 'dist-ui');
+  const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
+  const root = openDashboardRoot(hippoRoot, opts ?? {});
+
+  const handleRequest = dashboardRequestHandler(root, { distUiDir, hasDistUi }, { token, port });
 
   const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
