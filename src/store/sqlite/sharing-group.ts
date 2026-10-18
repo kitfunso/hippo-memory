@@ -5,6 +5,8 @@ import {
   loadEntriesPageAt,
   loadEntriesWithSignalsAt,
   loadEntryTextKeysPageAt,
+  selectTakenIdsAt,
+  selectTextKeysHoldingAt,
 } from '../entry-reads.js';
 import { writeEntriesSkippingRejectedAt } from '../entry-writes.js';
 import type { OnHandle } from '../open.js';
@@ -18,6 +20,8 @@ export function sqliteSharing(on: OnHandle): Sharing {
     entriesWithSignals: (signals, tenantId, page) =>
       on((db) => loadEntriesWithSignalsAt(db, signals, tenantId, page), openStore),
     textKeysPage: (tenantId, page) => on((db) => loadEntryTextKeysPageAt(db, tenantId, page), openStore),
+    textKeysHolding: (tenantId, texts) => on((db) => selectTextKeysHoldingAt(db, tenantId, texts), openStore),
+    takenIds: (ids) => on((db) => selectTakenIdsAt(db, ids), openStore),
     entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids), openStore),
     writeSkippingRejected: (fill) => on((db, files) => writeEntriesSkippingRejectedAt(db, files, fill), openStore),
     sourceTallies: async (tenantId) => on((db) => tallySourcesAt(db, tenantId), openStore),

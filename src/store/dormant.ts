@@ -154,18 +154,6 @@ export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: 
   return row ? toSnapshot(row) : null;
 }
 
-/** Every dormant memory of a tenant whose snapshot still reads back. */
-export function listDormantSnapshots(db: DatabaseSyncLike, tenantId: string): DormantSnapshot[] {
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
-  const rows = db
-    .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-       FROM dormant_memories WHERE tenant_id = ?`,
-    )
-    .all(tenantId) as DormantRow[];
-  return rows.flatMap((row) => toSnapshot(row) ?? []);
-}
-
 /** Readable snapshots whose entry's source starts with `prefix`; a malformed snapshot is passed over, not an error. */
 export function dormantSnapshotsBySourcePrefix(
   db: DatabaseSyncLike,
@@ -182,6 +170,19 @@ export function dormantSnapshotsBySourcePrefix(
     )
     .all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
   return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
+}
+
+/** Readable snapshots of a tenant whose entry carries project name `origin`. */
+export function dormantSnapshotsFromOrigin(db: DatabaseSyncLike, tenantId: string, origin: string): DormantSnapshot[] {
+  // SAFETY: rows' shape matches the seven columns named in the SELECT.
+  const rows = cachedStatement(
+    db,
+    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+       FROM dormant_memories
+      WHERE tenant_id = ?
+        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.origin_project') END = ?`,
+  ).all(tenantId, origin) as DormantRow[];
+  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => s.entry.origin_project === origin);
 }
 
 function toSnapshot(row: DormantRow): DormantSnapshot | null {

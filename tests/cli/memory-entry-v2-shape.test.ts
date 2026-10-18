@@ -6,7 +6,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { listDormantSnapshots } from '../../src/store/dormant.js';
+import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 

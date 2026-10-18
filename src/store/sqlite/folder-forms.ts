@@ -8,7 +8,7 @@ import { closeHippoDb, type DatabaseSyncLike, openHippoDb } from '../../db/index
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 import { loadAmbientTalliesAt } from '../ambient.js';
 import { batchWriteAndDeleteAt } from '../delete-and-batch.js';
-import { loadAllEntriesAt, readEntryAt, selectAllEntries } from '../entry-reads.js';
+import { loadAllEntriesAt, loadEntriesPageAt, readEntryAt } from '../entry-reads.js';
 import {
   strengthenRetrievedInOwnTx,
   warnStrengthenFailed,
@@ -17,7 +17,7 @@ import {
 } from '../entry-writes.js';
 import { loadEntitiesAt, loadRelationsAt } from '../graph-reads.js';
 import { saveSessionHandoffAt } from '../handoffs.js';
-import type { DormantMove } from '../port/consolidation.js';
+import type { DormantMove, EntryCursor } from '../port/consolidation.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import type { Entity, EntityType, Relation } from '../port/graph-reads.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
@@ -34,7 +34,21 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEn
 
 /** Every tenant's entries, oldest first: an eval reads the whole folder it seeded. */
 export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => selectAllEntries(db), openStore);
+  return onHandle(hippoRoot, everyTenantEntriesAt, openStore);
+}
+
+/** Rows per read while an eval loads the whole folder, so no one statement returns every row. */
+const EVAL_PAGE_ROWS = 500;
+
+function everyTenantEntriesAt(db: DatabaseSyncLike): MemoryEntry[] {
+  const entries: MemoryEntry[] = [];
+  let after: EntryCursor | null = null;
+  do {
+    const page = loadEntriesPageAt(db, undefined, { limit: EVAL_PAGE_ROWS, after: after ?? undefined });
+    entries.push(...page.entries);
+    after = page.next;
+  } while (after !== null);
+  return entries;
 }
 
 /** One tenant's entries, oldest first. */

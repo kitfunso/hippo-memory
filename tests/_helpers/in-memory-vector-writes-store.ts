@@ -19,7 +19,7 @@ import {
   type VectorReads,
   type VectorWrites,
 } from '../../src/entry/store-kit.js';
-import { selectAllEntries } from '../../src/store/entry-reads.js';
+import { iterateEveryTenantEntriesAt } from '../../src/store/entry-reads.js';
 import { passesSpec, type FilterRow } from './in-memory-vector-store.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
@@ -56,7 +56,7 @@ function copyRows(hippoRoot: string): Copied {
       .prepare('SELECT id, tenant_id, kind, scope, superseded_by, origin_project FROM memories')
       .all() as (FilterRow & { id: string })[];
     return {
-      entries: new Map(selectAllEntries(db).map((e) => [e.id, e])),
+      entries: new Map([...iterateEveryTenantEntriesAt(db)].map((e) => [e.id, e])),
       filters: new Map(filterRows.map((r) => [r.id, r])),
       vectors: new Map(vectorRows.map((r) => [r.memory_id, { model: r.model, bytes: new Uint8Array(r.vector) }])),
       particles: loadPhysicsState(db),
