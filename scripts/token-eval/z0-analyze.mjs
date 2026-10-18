@@ -89,6 +89,7 @@ function readJson(cwd, file) {
 
 const isNames = (v) => Array.isArray(v) && v.every(isString);
 const isCount = (v) => Number.isInteger(v) && v >= 0;
+const isPosition = (v) => v !== null && isString(v.sequence) && isCount(v.seed) && isCount(v.position);
 const isRate = (v) => v === null || Number.isFinite(v);
 const isUnit = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
 const isCi = (v) => v === null || (Array.isArray(v) && v.length === 2 && v.every(isUnit) && v[0] <= v[1]);
@@ -124,6 +125,9 @@ export function loadInputs(args, cwd) {
   if (dropList !== null && !(isNames(dropList.droppedLessons) && isNames(dropList.droppedFamilies))) {
     throw new Error(`${args.dropList}: needs droppedLessons and droppedFamilies (strings)`);
   }
+  if (dropList?.hookVoids !== undefined && !(Array.isArray(dropList.hookVoids) && dropList.hookVoids.every(isPosition))) {
+    throw new Error(`${args.dropList}: hookVoids needs { sequence (string), seed and position (integers) } entries`);
+  }
   return { records, warnings, planCells, prices, grading, dropList };
 }
 
@@ -140,7 +144,7 @@ export function buildReport(analysis, inputs, args, codes, hashes) {
   return {
     schema: 'z0-report/1', mode: blind ? 'blind' : 'unblinded', status: analysis.status, ofRecord, iterations: args.iterations ?? ITERATIONS, seed: args.seed ?? SEED,
     abandoned: analysis.filtered.abandoned, designNotRun: analysis.unplanned, unchecked: analysis.unchecked,
-    untaughtApplyDrops: analysis.filtered.untaughtApplyDrops, warnings: inputs.warnings,
+    untaughtApplyDrops: analysis.filtered.untaughtApplyDrops, hookVoided: analysis.filtered.hookVoided, warnings: inputs.warnings,
     counts: view.perCode, voids, gates: view.gates, invalid: abandoned ? null : analysis.gates.failed,
     hypotheses, reported: abandoned ? NOT_ANALYSED : blind ? SEALED : analysis.reported, hashes,
     storedSample: inputs.grading?.storedSample ?? null,
@@ -226,6 +230,7 @@ export function renderText(r) {
   const first3 = (xs) => `${xs.slice(0, 3).join(', ')}${xs.length > 3 ? ', ...' : ''}`;
   lines.push(`unchecked apply records (teach cell missing or invalid): ${r.unchecked.length === 0 ? 'none' : `${r.unchecked.length} (${first3(r.unchecked)})`}`);
   lines.push(`untaught-apply drops: ${r.untaughtApplyDrops} positions`);
+  lines.push(`hook-voided: ${r.hookVoided} positions`);
   const grouped = new Map();
   for (const w of r.warnings) {
     const [where, message] = [w.slice(0, w.indexOf(': ')), w.slice(w.indexOf(': ') + 2)];

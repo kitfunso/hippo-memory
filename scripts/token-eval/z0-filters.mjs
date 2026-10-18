@@ -85,7 +85,9 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
   const plannedRuns = new Set(planCells.map((c) => runKey(c.sequence, c.seed)));
   const abandoned = abandonedRuns(records, planCells, tail);
   const retryFrom = retryVoids(records);
-  const voided = new Set(records.filter((r) => r.void !== null).map(positionKey));
+  // A failed hippo start or prompt hook (hook-check.mjs reads it from the transcripts) left its arm without hippo's text there.
+  const hookVoided = new Set((dropList?.hookVoids ?? []).map(positionKey));
+  const voided = new Set([...records.filter((r) => r.void !== null).map(positionKey), ...hookVoided]);
   const untaught = new Set(untaughtApplies(records, planCells).map(positionKey));
   const retried = (r) => r.position >= (retryFrom.get(runKey(r.sequence, r.seed)) ?? Infinity);
   const leaked = new Map(records.filter(isLeak).map((r) => [runKey(r.sequence, r.seed), label(r.sequence, r.seed)]));
@@ -106,6 +108,7 @@ export function filterRecords(records, planCells, { grading = null, dropList = n
     leaked: [...leaked.values()].sort(),
     retryVoided: { positions: retryVoided, share: plannedPositions.size === 0 ? 0 : retryVoided / plannedPositions.size },
     untaughtApplyDrops: untaught.size,
+    hookVoided: hookVoided.size,
     carryUnion,
     scored: scored.sort(canonical),
   };
