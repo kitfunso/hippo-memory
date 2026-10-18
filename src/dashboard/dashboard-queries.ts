@@ -126,7 +126,7 @@ function buildKpis(snap: Snapshot, projects: ProjectAgg[]): Kpi[] {
       label: 'At-risk share, 30d',
       value: total > 0 ? atRisk / total : 0,
       series: null,
-      delta: `${pct(total > 0 ? weakNow / total : 0)} now at strength under 0.2`,
+      delta: `${pct(total > 0 ? weakNow / total : 0)} now at strength under ${AT_RISK_BELOW}`,
     },
     ...healthKpis(snap, total, withConflicts),
   ];
