@@ -116,6 +116,7 @@ const EVAL_KIT = [
   'initStore',
   'loadAllEntries',
   'loadEmbeddingIndex',
+  'loadRecallSearchEntries',
   'loadVectorCandidateEntriesAt',
   'recordTokenUse',
   'resolveTenantId',
@@ -273,7 +274,7 @@ describe('published runtime exports', () => {
       buildIndexFromDb
       embedMemory
       initStore
-      loadAllEntries loadEmbeddingIndex loadVectorCandidateEntriesAt
+      loadAllEntries loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
       recordTokenUse resolveTenantId
       tokensBySession
       upsertEntryRow

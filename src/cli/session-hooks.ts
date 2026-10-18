@@ -419,19 +419,22 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
   });
 
   child.on('exit', async (code, signal) => {
-    await launchCodexSessionEndWorker(hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile);
+    await launchCodexSessionEndWorker({ hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile });
     exitLikeChild(code, signal);
   });
 }
 
-async function launchCodexSessionEndWorker(
-  hippoRoot: string,
-  tenantId: string,
-  historyPath: string,
-  startOffsetBytes: number,
-  startedAtMs: number,
-  logFile: string,
-): Promise<void> {
+interface CodexSessionEndWorkerOptions {
+  hippoRoot: string;
+  tenantId: string;
+  historyPath: string;
+  startOffsetBytes: number;
+  startedAtMs: number;
+  logFile: string;
+}
+
+async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions): Promise<void> {
+  const { hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile } = options;
   const workerArgs = [
     process.argv[1],
     '__codex-session-end-worker',

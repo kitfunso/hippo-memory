@@ -5,6 +5,7 @@ import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as testing from '../../src/entry/testing.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
+import type { TenantId } from '../../src/util/tenant.js';
 
 describe('hippo-memory/testing entry types', () => {
   it('the reset helpers take no arguments and return nothing', () => {
@@ -29,9 +30,22 @@ describe('hippo-memory/testing entry types', () => {
     expectTypeOf(testing.writeEntry).parameters.toEqualTypeOf<
       [hippoRoot: string, entry: MemoryEntry, opts?: testing.WriteEntryOptions]
     >();
+    expectTypeOf(testing.loadRecallSearchEntries).parameters.toEqualTypeOf<
+      [
+        hippoRoot: string,
+        query: string,
+        limit: number | undefined,
+        tenantId: TenantId,
+        requestedScope?: string,
+        explicitScopeMode?: 'exact' | 'additive',
+        includeSuperseded?: boolean,
+        originProjects?: string | readonly string[],
+        ownScope?: string,
+      ]
+    >();
   });
 
-  it('the entry exports exactly the nine published seams, the six eval-kit functions and nine handle helpers', () => {
+  it('the entry exports exactly the nine published seams, the seven eval-kit functions and nine handle helpers', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
       | '_resetAblationCacheForTests'
       | '_setDigestExistsProbeForTests'
@@ -47,6 +61,7 @@ describe('hippo-memory/testing entry types', () => {
       | 'embedMemory'
       | 'loadAllEntries'
       | 'loadEmbeddingIndex'
+      | 'loadRecallSearchEntries'
       | 'writeEntry'
       | 'resolveTenantId'
       | 'upsertEntryRow'
@@ -58,6 +73,6 @@ describe('hippo-memory/testing entry types', () => {
       | 'recordTokenUse'
       | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(24);
+    expect(Object.keys(testing)).toHaveLength(25);
   });
 });

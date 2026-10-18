@@ -93,14 +93,17 @@ function redactedTarget(url: string | URL): string {
   }
 }
 
-function logRetry(
-  init: RequestInit,
-  url: string | URL,
-  reason: string,
-  attempt: number,
-  attempts: number,
-  delayMs: number,
-): void {
+interface RetryLogEntry {
+  init: RequestInit;
+  url: string | URL;
+  reason: string;
+  attempt: number;
+  attempts: number;
+  delayMs: number;
+}
+
+function logRetry(entry: RetryLogEntry): void {
+  const { init, url, reason, attempt, attempts, delayMs } = entry;
   // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
   log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(),
@@ -171,7 +174,8 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
       if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
       const delay = backoffMs(attempt);
       if (!fitsBudget(delay)) throw err;
-      logRetry(init, url, errorCode(err) || (err instanceof Error ? err.name : 'transport'), attempt, attempts, delay);
+      const reason = errorCode(err) || (err instanceof Error ? err.name : 'transport');
+      logRetry({ init, url, reason, attempt, attempts, delayMs: delay });
       await backoffWait(delay, policy.sleep, init.signal);
       continue;
     }
@@ -188,7 +192,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
       // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to idle out.
       log.debug('http retry: body cancel failed', errorFields(err));
     }
-    logRetry(init, url, `status ${res.status}`, attempt, attempts, delay);
+    logRetry({ init, url, reason: `status ${res.status}`, attempt, attempts, delayMs: delay });
     await backoffWait(delay, policy.sleep, init.signal);
   }
 }

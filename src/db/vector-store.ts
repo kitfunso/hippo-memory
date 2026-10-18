@@ -261,16 +261,22 @@ export function admittedVectorsSql(where: string, idCount = 0): string {
     WHERE ${among}v.dim = ?${where}`;
 }
 
+/** What the nearest-vector reads ask: `k` rows closest to `query` among `memories m` rows passing `where`. */
+export interface VectorMatchQuery {
+  query: readonly number[];
+  k: number;
+  where: string;
+  params: readonly (string | number)[];
+}
+
+export interface TopVectorMatchesOptions extends VectorMatchQuery {
+  index?: VectorIndex;
+}
+
 /** The `k` stored vectors closest to `query` among `memories m` rows passing `where` (SQL starting with ` AND`).
  *  Filters run before the cut, so rows a caller may not see can never push admitted rows out of the top k. */
-export async function topVectorMatches(
-  db: DatabaseSyncLike,
-  query: readonly number[],
-  k: number,
-  where: string,
-  params: readonly (string | number)[],
-  index?: VectorIndex,
-): Promise<VectorMatch[]> {
+export async function topVectorMatches(db: DatabaseSyncLike, options: TopVectorMatchesOptions): Promise<VectorMatch[]> {
+  const { query, k, where, params, index } = options;
   const best = bestMatches(query, k);
   if (!best) return [];
   // A served store of 20,000 or more vectors answers from the HNSW graph its store worker holds. The CLI, hooks and the

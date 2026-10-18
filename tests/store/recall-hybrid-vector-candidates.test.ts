@@ -178,7 +178,11 @@ describe('hybrid recall candidates with stored vectors', () => {
   it('without a vector spec, hybridSearch ranks only the pool it was given', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const pool = loadRecallSearchEntries(s.home, QUERY, undefined, TENANT, undefined, 'additive', false);
+    const pool = loadRecallSearchEntries(s.home, QUERY, {
+      tenantId: TENANT,
+      explicitScopeMode: 'additive',
+      includeSuperseded: false,
+    });
     const res = await hybridSearch(QUERY, pool, { budget: 100000, hippoRoot: s.home, scope: null });
     expect(
       labels(

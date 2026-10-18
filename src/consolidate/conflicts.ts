@@ -122,17 +122,22 @@ const CONFLICT_STOPWORDS = new Set([
 /** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
 type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]>;
 
+export interface DetectConflictsOptions {
+  decayOpts?: DecayOptions;
+  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
+  // without this bypass rescued entries would be silently re-excluded from conflict detection.
+  rescuedIds?: Set<string>;
+  pagesOf?: PagesOf;
+}
+
 /** Pairs of live non-semantic memories that contradict each other, in survivor order. With `pagesOf`, the rows are read
  * back one tenant at a time, as a pair never spans tenants, so only that tenant's profiles are held. */
 export function detectConflicts(
   entries: Iterable<MemoryEntry>,
   now: Date,
-  decayOpts: DecayOptions = {},
-  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
-  // without this bypass rescued entries would be silently re-excluded from conflict detection.
-  rescuedIds: Set<string> = new Set(),
-  pagesOf?: PagesOf,
+  options: DetectConflictsOptions = {},
 ): DetectedConflict[] {
+  const { decayOpts = {}, rescuedIds = new Set<string>(), pagesOf } = options;
   const held: MemoryEntry[] = [];
   const byTenant = new Map<string, number[]>();
   const ids: string[] = [];

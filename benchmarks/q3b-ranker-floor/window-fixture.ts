@@ -9,7 +9,7 @@ import { adminActor, goalPush, outcome } from '../../dist/api/index.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { createMemory } from '../../dist/core/memory.js';
 import { writeEntry } from '../../dist/entry/testing.js';
-import { loadRecallSearchEntries } from '../../dist/store/search-rows.js';
+import { loadRecallSearchEntries } from '../../dist/entry/testing.js';
 import { resolveTenantId } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { WINDOW_QUERY_COUNT, type EvalQuery } from './queries.ts';

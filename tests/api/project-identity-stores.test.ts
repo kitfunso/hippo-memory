@@ -184,16 +184,12 @@ describe('two repos named api in one global store', () => {
   });
 
   it('recall still takes one project name as a string, the shape published callers pass', () => {
-    const rows = loadRecallSearchEntries(
-      w.global,
-      'api',
-      undefined,
-      T,
-      undefined,
-      'exact',
-      true,
-      resolveProjectIdentity(a).name,
-    );
+    const rows = loadRecallSearchEntries(w.global, 'api', {
+      tenantId: T,
+      explicitScopeMode: 'exact',
+      includeSuperseded: true,
+      originProjects: resolveProjectIdentity(a).name,
+    });
     expect(rows.map((e) => e.content)).toContain(NEW_A);
     expect(rows.map((e) => e.content)).not.toContain(NEW_B);
   });
