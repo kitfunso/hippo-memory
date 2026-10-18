@@ -40,14 +40,12 @@ describe('automatic assertion quality', () => {
     expect(isContentWorthStoring(content)).toBe(false);
   });
 
-  // Each input took the old trailing-mark and aside regexes over a second: they rescanned to the end from every start.
+  // At this length the old regexes, which rescanned to the end from every start, ran past the test timeout.
   it.each([
-    ['a long run of marks before a word', `Deploy the build${' \t.'.repeat(20_000)}x`],
-    ['many unclosed asides after an outcome', `returned ${'('.repeat(60_000)}`],
-  ])('reads %s in one pass', (_, content) => {
-    const started = performance.now();
-    assessAutomaticMemory(content);
-    expect(performance.now() - started).toBeLessThan(250);
+    ['a long run of marks before a word', (n: number) => `Deploy the build${' \t.'.repeat(n)}x`],
+    ['many unclosed asides after an outcome', (n: number) => `returned ${'('.repeat(3 * n)}`],
+  ])('judges %s in one pass, as it judges a short one', (_, hostile) => {
+    expect(assessAutomaticMemory(hostile(70_000))).toEqual(assessAutomaticMemory(hostile(3)));
   });
 
   it.each([
