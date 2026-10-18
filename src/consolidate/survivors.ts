@@ -1,6 +1,7 @@
 // Sleep holds ids, strengths and the few rows a pass changed; every other row is read back a page at a time by id.
 import type { MemoryEntry } from '../core/memory.js';
 import type { Consolidation } from '../store/port.js';
+import type { EntryCursor } from '../store/port/consolidation.js';
 import { chunked } from '../util/chunked.js';
 
 /** Rows per read: one id-list query's worth, so a page is one statement and about a megabyte of rows. */
@@ -8,14 +9,16 @@ export const SLEEP_PAGE_ROWS = 500;
 
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life preview applied. */
 export class SleepRows {
+  /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs an integer. */
+  private readonly idPage: number;
+
   constructor(
-    private readonly store: Pick<Consolidation, 'entriesByIds'>,
-    /** Every memory id when the run began. Ids, not a LIMIT keyset: no index orders memories by created then id
-     * across tenants, so each keyset page would sort the table again. */
-    readonly ids: readonly string[],
+    private readonly store: Pick<Consolidation, 'entriesByIds' | 'entryIdsPage'>,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
-  ) {}
+  ) {
+    this.idPage = Math.min(pageRows, Number.MAX_SAFE_INTEGER - 1);
+  }
 
   /** The rows for `ids` in that order; an id deleted since it was listed is skipped. */
   read(ids: readonly string[]): MemoryEntry[] {
@@ -30,9 +33,14 @@ export class SleepRows {
     return out;
   }
 
-  /** Every row of the run, a page at a time. */
-  pages(): Generator<MemoryEntry[]> {
-    return this.pagesOf(this.ids);
+  /** Every row of the run, one keyset page of ids and then their rows at a time. */
+  *pages(): Generator<MemoryEntry[]> {
+    let after: EntryCursor | undefined;
+    do {
+      const page = this.store.entryIdsPage({ limit: this.idPage, after });
+      yield this.read(page.ids);
+      after = page.next ?? undefined;
+    } while (after);
   }
 
   /** The rows for `ids`, a page at a time. */

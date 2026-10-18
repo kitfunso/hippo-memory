@@ -50,12 +50,7 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   const { learning, consolidation: store } = sqliteSyncStore(root).localFiles;
-  const rows = new SleepRows(
-    store,
-    entries.map((e) => e.id),
-    new Map(),
-    SLEEP_PAGE_ROWS,
-  );
+  const rows = new SleepRows(store, new Map(), SLEEP_PAGE_ROWS);
   const survivors = new Survivors(rows);
   for (const e of entries) survivors.keep(e.id, e.strength);
   return {

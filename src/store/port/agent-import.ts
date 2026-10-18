@@ -7,7 +7,8 @@ import type { AppendAuditOpts } from './types.js';
 
 /** The calls one container's sync makes inside its transaction, bound to the target store's handle and root. */
 export interface ContainerTx {
-  liveBySourcePrefix(tenantId: string, prefix: string): MemoryEntry[];
+  /** The tenant's live rows under source `prefix`, oldest first, read a page at a time as they are walked. */
+  liveBySourcePrefix(tenantId: string, prefix: string): Iterable<MemoryEntry>;
   dormantBySourcePrefix(tenantId: string, prefix: string): DormantSnapshot[];
   readDormant(tenantId: string, id: string): DormantSnapshot | null;
   deleteDormant(tenantId: string, id: string): void;
@@ -32,6 +33,7 @@ export interface ImportTarget {
   readonly root: string;
   /** The tenant the import writes as. */
   readonly tenantId: string;
+  /** The live rows whose source starts with `prefix`, oldest first, read a page at a time. */
   liveBySourcePrefix(prefix: string): MemoryEntry[];
   rowsOutsideSourcePrefix(
     prefix: string,

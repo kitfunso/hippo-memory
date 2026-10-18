@@ -4,6 +4,7 @@ import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike
 import { withBackup } from '../../db/backup.js';
 import { calculateStrength } from '../../core/memory.js';
 import { MAX_AUDIT_LIMIT } from '../../util/limits.js';
+import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import {
   compactionOriginsWithCwd,
@@ -40,6 +41,7 @@ import type {
   TagRewrite,
   ProjectTags,
 } from '../port/project-tags.js';
+import type { EntryCursor } from '../port/consolidation.js';
 
 const TX_LABEL = 'merge_projects';
 const AUTO_REPAIR_META_KEY = 'project_repair_auto';
@@ -48,8 +50,14 @@ const AUTO_REPAIR_META_KEY = 'project_repair_auto';
 export function projectTagReads(db: DatabaseSyncLike, tenantId: string): ProjectTagReads {
   return {
     originTallies: (sourcePrefix) => selectOriginTalliesAt(db, tenantId, sourcePrefix),
-    entriesFromOrigin: (rows) => selectEntriesFromOriginAt(db, tenantId, rows),
-    liveEntriesBySourcePrefix: (prefix) => selectLiveEntriesBySourcePrefix(db, tenantId, prefix),
+    entriesFromOrigin: (rows) =>
+      rowsInPages((after?: EntryCursor) =>
+        selectEntriesFromOriginAt(db, tenantId, rows, { limit: READ_PAGE_ROWS, after }),
+      ),
+    liveEntriesBySourcePrefix: (prefix) =>
+      rowsInPages((after?: EntryCursor) =>
+        selectLiveEntriesBySourcePrefix(db, tenantId, prefix, { limit: READ_PAGE_ROWS, after }),
+      ),
     entriesByIds: (ids) => selectEntriesByIds(db, ids, tenantId),
     dormantFromOrigin: (origin) => dormantSnapshotsFromOrigin(db, tenantId, origin),
     dormantByIds: (ids) => dormantSnapshotsByIds(db, tenantId, ids),
