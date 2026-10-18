@@ -42,7 +42,7 @@ describe('sampleForReplay', () => {
     ];
     const s1 = sampleForReplay(entries, 2, new Date(), 42);
     const s2 = sampleForReplay(entries, 2, new Date(), 42);
-    expect(s1.map(e => e.id)).toEqual(s2.map(e => e.id));
+    expect(s1).toEqual(s2);
   });
 
   it('prefers high-reward memories over neutral peers', () => {
@@ -63,7 +63,7 @@ describe('sampleForReplay', () => {
     const counts = new Map<string, number>();
     for (let seed = 0; seed < 100; seed++) {
       const sample = sampleForReplay(entries, 1, new Date(), seed);
-      for (const s of sample) counts.set(s.id, (counts.get(s.id) ?? 0) + 1);
+      for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const heroHits = counts.get(hero.id) ?? 0;
     // Most common neutral memory's count
@@ -84,7 +84,7 @@ describe('sampleForReplay', () => {
     const counts = new Map<string, number>();
     for (let seed = 0; seed < TRIALS; seed++) {
       const sample = sampleForReplay(entries, 1, new Date(), seed);
-      for (const s of sample) counts.set(s.id, (counts.get(s.id) ?? 0) + 1);
+      for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const criticalHits = counts.get(critical.id) ?? 0;
     // Neutral = weight 1.0, critical = weight 2.0. Expected critical rate = 2/(10+2) = 1/6.
@@ -105,7 +105,7 @@ describe('sampleForReplay', () => {
     const counts = new Map<string, number>();
     for (let seed = 0; seed < 100; seed++) {
       const sample = sampleForReplay(entries, 1, new Date(), seed);
-      for (const s of sample) counts.set(s.id, (counts.get(s.id) ?? 0) + 1);
+      for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const freshHits = counts.get(fresh.id) ?? 0;
     const peerMax = Math.max(
@@ -122,8 +122,7 @@ describe('sampleForReplay', () => {
       fakeEntry({ content: 'c' }),
     ];
     const sample = sampleForReplay(entries, 3, new Date(), 42);
-    const ids = sample.map(e => e.id);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(sample).size).toBe(sample.length);
   });
 });
 

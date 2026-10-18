@@ -1,7 +1,9 @@
 import { MemoryEntry, calculateStrength } from '../core/memory.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
+import { chunked } from '../util/chunked.js';
+import {
+  mvCandidate, rankCandidates, rescueSet, validateWeights, type MvCandidate, type MvRankInfo,
+} from './memory-value.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 import { plural } from '../util/format.js';
 
@@ -12,7 +14,8 @@ export const DECAY_THRESHOLD = 0.05;
 /** What the decay pass hands to the conflict check and the rescue audit at the end of the run. */
 export interface DecayOutcome {
   rescuedIds: Set<string>;
-  rescuedEntries: MemoryEntry[];
+  rescuedEntries: Array<Pick<MemoryEntry, 'id' | 'tenant_id'>>;
+  /** The rank of each condemned row and of each row whose score is not finite. */
   rankById: Map<string, MvRankInfo>;
 }
 
@@ -41,14 +44,16 @@ function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void 
 }
 
 /** Keeps an entry with its live strength cached; only strength is a cached computation, confidence stays as stored. */
-function keepSurvivor(run: SleepRun, entry: MemoryEntry, strength: number): MemoryEntry {
-  const updated = { ...entry, strength };
-  run.survivors.push(updated);
-  if (!run.dryRun && strength !== entry.strength) {
-    run.pendingWrites.push(updated);
-  }
+function keepSurvivor(run: SleepRun, entry: Pick<MemoryEntry, 'id' | 'strength'>, strength: number): void {
+  run.survivors.keep(entry.id, strength);
+  if (!run.dryRun && strength !== entry.strength) run.pendingRefreshes.push({ id: entry.id, strength });
   run.result.decayed++;
-  return updated;
+}
+
+/** Notes the row's DAG parent for the flush's family units, then returns its live strength. */
+function liveStrength(run: SleepRun, entry: MemoryEntry): number {
+  if (entry.dag_parent_id) run.parentOf.set(entry.id, entry.dag_parent_id);
+  return calculateStrength(entry, run.now, run.decayOpts);
 }
 
 // 1. Decay pass. Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits,
@@ -56,13 +61,14 @@ function keepSurvivor(run: SleepRun, entry: MemoryEntry, strength: number): Memo
 // Rescued entries stay full survivors for this cycle's later passes.
 export function decayPass(run: SleepRun): DecayOutcome {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
-  for (const entry of run.all) {
-    const strength = calculateStrength(entry, run.now, run.decayOpts);
-
-    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
-      retireFaded(run, entry, strength);
-    } else {
-      keepSurvivor(run, entry, strength);
+  for (const page of run.rows.pages()) {
+    for (const entry of page) {
+      const strength = liveStrength(run, entry);
+      if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
+        retireFaded(run, entry, strength);
+      } else {
+        keepSurvivor(run, entry, strength);
+      }
     }
   }
   return { rescuedIds: new Set(), rescuedEntries: [], rankById: new Map() };
@@ -82,78 +88,86 @@ function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string
   }
 }
 
-// --- Phase 1: classify (zero commits) ---
-function classifyByStrength(run: SleepRun) {
-  const condemned: MemoryEntry[] = [];
-  const strengthById = new Map<string, number>();
-  for (const entry of run.all) {
-    const strength = calculateStrength(entry, run.now, run.decayOpts);
-    strengthById.set(entry.id, strength);
-    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
-      condemned.push(entry);
-    }
-  }
-  return { strengthById, condemnedIds: new Set(condemned.map((e) => e.id)) };
+/** One loaded row's decay verdict: all the commit phase keeps of a row it does not retire. */
+interface Verdict {
+  id: string;
+  tenant_id: string;
+  strength: number;
+  live: number;
+  condemned: boolean;
 }
 
-function reportRescue(
-  result: ConsolidationResult,
-  entry: MemoryEntry,
-  strength: number,
-  rank: MvRankInfo | undefined,
-): void {
+// --- Phase 1: classify (zero commits) ---
+function classifyByStrength(run: SleepRun) {
+  const verdicts: Verdict[] = [];
+  const candidates: MvCandidate[] = [];
+  for (const page of run.rows.pages()) {
+    for (const entry of page) {
+      const live = liveStrength(run, entry);
+      const condemned = run.retirable(entry) && live < DECAY_THRESHOLD;
+      verdicts.push({ id: entry.id, tenant_id: entry.tenant_id, strength: entry.strength, live, condemned });
+      if (!entry.pinned) candidates.push(mvCandidate(entry, run.now));
+    }
+  }
+  return { verdicts, candidates };
+}
+
+function reportRescue(result: ConsolidationResult, id: string, strength: number, rank: MvRankInfo | undefined): void {
   const rankNote = rank
     ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
     : ' - rescued';
   result.details.push(
-    `  🛟 ${entry.id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`,
+    `  🛟 ${id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`,
   );
 }
 
 function decayWithMemoryValue(run: SleepRun): DecayOutcome {
-  const { all, now, result } = run;
-  // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here, before
-  // batchWriteAndDelete, would assert rescues whose effects might never land if a later phase throws.
-  const rescuedEntries: MemoryEntry[] = [];
-  let rescuedIds: Set<string> = new Set();
-  let rankById: Map<string, MvRankInfo> = new Map();
-
-  const { strengthById, condemnedIds } = classifyByStrength(run);
-
+  const { verdicts, candidates } = classifyByStrength(run);
+  const condemnedIds = new Set(verdicts.filter((v) => v.condemned).map((v) => v.id));
   // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes flush and the logRun
   // audit write are !dryRun-gated).
 
   // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when nothing is condemned.
   validateWeights();
+  let rankById: Map<string, MvRankInfo> = new Map();
+  let rescuedIds = new Set<string>();
   if (condemnedIds.size > 0) {
-    // Rank per tenant ONCE: rankById feeds both rescueSet (via precomputedRanks) and the detail/audit
-    // context below, so the whole-store ranking runs once per sleep and only when something is condemned.
-    rankById = rankNonPinnedByTenant(all, now);
-    rescuedIds = rescueSet(all, condemnedIds, now, {
-      weights: MEMORY_VALUE_WEIGHTS,
-      digest: SOURCE_ARTIFACT_SHA256,
-      precomputedRanks: rankById,
-    });
-    reportNonFiniteScores(result, rankById);
+    // Ranks only the rows a rescue or the warning reads, so ranking a tenant holds no row's text but a tie's.
+    rankById = rankCandidates(candidates, (id) => condemnedIds.has(id), (ids) => run.rows.pagesOf(ids));
+    // The precomputed ranks are all rescueSet reads, so it is handed no rows.
+    rescuedIds = rescueSet([], condemnedIds, run.now, { precomputedRanks: rankById });
+    reportNonFiniteScores(run.result, rankById);
   }
+  return { rescuedIds, rescuedEntries: commitVerdicts(run, verdicts, rescuedIds, rankById), rankById };
+}
 
-  // --- Phase 2b: commit, one pass over `all` in ITS ORIGINAL ORDER ---
-  // Rescued entries appended at the tail would be starved by order-sensitive passes like extraction's slice(0,20).
-  for (const entry of all) {
-    const strength = strengthById.get(entry.id)!;
-    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
-      if (rescuedIds.has(entry.id)) {
-        // Rescued: standard survivor stored-strength refresh. Confidence is left alone: it is an epistemic tier, not a
-        // cached
-        // computation, so resolveConfidence derives it on read.
-        rescuedEntries.push(keepSurvivor(run, entry, strength));
-        reportRescue(result, entry, strength, rankById.get(entry.id));
+// --- Phase 2b: commit in run order ---
+// Rescued entries appended at the tail would be starved by order-sensitive passes like extraction's slice(0,20).
+function commitVerdicts(
+  run: SleepRun,
+  verdicts: readonly Verdict[],
+  rescuedIds: ReadonlySet<string>,
+  rankById: ReadonlyMap<string, MvRankInfo>,
+): DecayOutcome['rescuedEntries'] {
+  // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here, before
+  // batchWriteAndDelete, would assert rescues whose effects might never land if a later phase throws.
+  const rescuedEntries: DecayOutcome['rescuedEntries'] = [];
+  for (const page of chunked(verdicts, run.rows.pageRows)) {
+    const faded = page.filter((v) => v.condemned && !rescuedIds.has(v.id)).map((v) => v.id);
+    const fadedRows = new Map(run.rows.read(faded).map((row) => [row.id, row]));
+    for (const v of page) {
+      if (!v.condemned) {
+        keepSurvivor(run, v, v.live);
+      } else if (rescuedIds.has(v.id)) {
+        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a cached computation.
+        keepSurvivor(run, v, v.live);
+        rescuedEntries.push({ id: v.id, tenant_id: v.tenant_id });
+        reportRescue(run.result, v.id, v.live, rankById.get(v.id));
       } else {
-        retireFaded(run, entry, strength);
+        const row = fadedRows.get(v.id);
+        if (row) retireFaded(run, row, v.live);
       }
-    } else {
-      keepSurvivor(run, entry, strength);
     }
   }
-  return { rescuedIds, rescuedEntries, rankById };
+  return rescuedEntries;
 }

@@ -11,8 +11,10 @@ import type { AuditOp } from './audit-ops.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
-  /** Every memory of every tenant, with a by-id lookup of each as loaded for the flush to compare against. */
-  entriesWithBase(): EntriesWithBase;
+  /** Every memory id of every tenant, by created then id. */
+  entryIds(): string[];
+  /** The rows for `ids` by id; an id deleted since it was listed is absent. */
+  entriesByIds(ids: readonly string[]): Map<string, MemoryEntry>;
   /** The ids of every memory a typed object row names; sleep never retires one. */
   objectBackedIds(): Set<string>;
   /** The full-text index counts when they drift from `memories` (re-synced when `repair`), else null. */
@@ -35,8 +37,10 @@ export interface Consolidation {
   traceExists(tenantId: string, sessionId: string): boolean;
   /** The tenant's session events, filtered as `listSessionEvents` filters them. */
   sessionEvents(tenantId: string, opts: { session_id?: string; limit?: number }): SessionEvent[];
-  /** Every stored physics particle, in load order. */
-  storedParticles(): PhysicsParticle[];
+  /** The memory id of every stored physics particle, in load order. */
+  particleIds(): string[];
+  /** The stored particles for `ids`, in that order; an id with no particle is skipped. */
+  particlesByIds(ids: readonly string[]): PhysicsParticle[];
   /** Writes the particles over their stored state, as one batch. */
   saveParticles(particles: PhysicsParticle[]): void;
   /** Commits each component whole, in chunks the budget paces, under sleep's own lock wait; resolves to the ids it
@@ -96,9 +100,17 @@ export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reaso
 
 /** Ops that must commit in one transaction, so a flush split across several never lands part of one. */
 export interface FlushComponent {
+  /** Decay's new strengths, each set on the row as it stands at commit; they go before `writes`. */
+  refreshes: readonly StrengthRefresh[];
   writes: readonly MemoryEntry[];
   deletes: readonly string[];
   dormant: readonly DormantMove[];
+}
+
+/** A stored strength decay recomputed; a row gone by the flush is skipped. */
+export interface StrengthRefresh {
+  id: string;
+  strength: number;
 }
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
@@ -119,11 +131,6 @@ export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'qua
 
 /** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
 export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
-
-export interface EntriesWithBase {
-  entries: MemoryEntry[];
-  base: { get(id: string): MemoryEntry | undefined };
-}
 
 /** Where a page stopped: the `created`, `id` of its last row, in loadAllEntries' order. */
 export interface EntryCursor {

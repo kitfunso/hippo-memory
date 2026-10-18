@@ -9,7 +9,7 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { chunked } from '../util/chunked.js';
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { placeholders } from '../util/sql.js';
-import type { EntriesWithBase, EntryCursor, EntryPage } from './port/consolidation.js';
+import type { EntryCursor, EntryPage } from './port/consolidation.js';
 import type { RawRefRow } from './port/context-reads.js';
 import type { EntrySignals, EntryTextKey } from './port/sharing.js';
 
@@ -348,19 +348,12 @@ export function loadEntryTextKeysAt(db: DatabaseSyncLike, tenantId?: string): En
   }));
 }
 
-/** Every entry plus a by-id lookup of each as loaded, rebuilt from its row on first use, so no deep copy of the
- * store is kept. */
-export function loadAllEntriesWithBaseAt(db: DatabaseSyncLike): EntriesWithBase {
-  const rows = selectAllRows(db);
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const built = new Map<string, MemoryEntry>();
-  const get = (id: string): MemoryEntry | undefined => {
-    let entry = built.get(id);
-    const row = byId.get(id);
-    if (!entry && row) built.set(id, (entry = rowToEntry(row)));
-    return entry;
-  };
-  return { entries: rows.map(rowToEntry), base: { get } };
+/** Every tenant's rows in loadAllEntries' order through one cursor, so the caller holds one row at a time. */
+export function* iterateEveryTenantEntriesAt(db: DatabaseSyncLike): Generator<MemoryEntry> {
+  // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+  const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`)
+    .iterate() as Iterable<MemoryRow>;
+  for (const row of rows) yield rowToEntry(row);
 }
 
 function selectAllRows(db: DatabaseSyncLike, tenantId?: string): MemoryRow[] {

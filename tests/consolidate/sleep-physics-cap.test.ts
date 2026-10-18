@@ -4,6 +4,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { particlesToSimulate, physicsPass } from '../../src/consolidate/physics-pass.js';
 import { newConsolidationResult, type SleepRun } from '../../src/consolidate/run.js';
+import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from '../../src/consolidate/survivors.js';
 import { loadConfig } from '../../src/core/config.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
@@ -41,10 +42,14 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   const { learning, consolidation: store } = sqliteSyncStore(root).localFiles;
+  const rows = new SleepRows(store, entries.map((e) => e.id), new Map(), SLEEP_PAGE_ROWS);
+  const survivors = new Survivors(rows);
+  for (const e of entries) survivors.keep(e.id, e.strength);
   return {
     learning, store, now: new Date('2026-01-03T00:00:00.000Z'), dryRun: false, config: loadConfig(root), decayOpts: {},
-    result: newConsolidationResult(false), all: entries, retirable: () => false, tombstones: store.tombstoneChecks(false),
-    survivors: entries, pendingWrites: [], pendingDeletes: [], pendingDormant: [], units: [],
+    result: newConsolidationResult(false), rows, retirable: () => false, tombstones: store.tombstoneChecks(false),
+    survivors, pendingRefreshes: [], pendingWrites: [], pendingDeletes: [], pendingDormant: [], parentOf: new Map(),
+    units: [],
   };
 }
 
@@ -85,18 +90,18 @@ describe('sleep physics cap', () => {
   });
 
   it('defaults to 1000 particles', () => {
-    const stored = Array.from({ length: 1001 }, (_, i) => particle(`m${String(i).padStart(4, '0')}`, i));
+    const stored = Array.from({ length: 1001 }, (_, i) => `m${String(i).padStart(4, '0')}`);
     expect(particlesToSimulate(stored, new Map())).toHaveLength(1000);
   });
 
   it('keeps load order and every particle under the cap, and breaks recall ties by memory id past it', () => {
-    const stored = ['c', 'a', 'd', 'b'].map((id, i) => particle(id, i));
-    const at = (id: string, lastRetrieved: string) => [id, { ...createMemory(`memory ${id}`), last_retrieved: lastRetrieved }] as const;
+    const stored = ['c', 'a', 'd', 'b'];
+    const at = (id: string, lastRetrieved: string) => [id, { last_retrieved: lastRetrieved }] as const;
     const entries = new Map([at('a', '2026-01-01'), at('b', '2026-01-03'), at('c', '2026-01-01')]);
 
     expect(particlesToSimulate(stored, entries, 4)).toBe(stored);
     // b is the latest; a and c tie and a wins on id; d has no survivor row, so it is dropped first.
-    expect(particlesToSimulate(stored, entries, 2).map((p) => p.memoryId)).toEqual(['a', 'b']);
-    expect(particlesToSimulate(stored, entries, 3).map((p) => p.memoryId)).toEqual(['c', 'a', 'b']);
+    expect(particlesToSimulate(stored, entries, 2)).toEqual(['a', 'b']);
+    expect(particlesToSimulate(stored, entries, 3)).toEqual(['c', 'a', 'b']);
   });
 });

@@ -37,7 +37,6 @@ import type { DormantMemory, ListDormantOpts } from '../../src/store/dormant.js'
 import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
 import {
   countSessionRawMemoriesAt,
-  loadAllEntriesWithBaseAt,
   loadAllEntryIdsAt,
   loadEntriesByIdsAt,
   loadEntryTextKeysAt,
@@ -141,7 +140,6 @@ import type {
   DetectedConflict,
   FlushComponent,
   LoadedRows,
-  EntriesWithBase,
   SessionDecayContext,
   RebuildPatch,
 } from '../../src/store/port/consolidation.js';
@@ -672,10 +670,6 @@ export function commitInChunks(
     (db, files) => commitInChunksAt(db, files, components, opts),
     waitingOpener(opts.busyWaitMs, openStore),
   );
-}
-
-export function loadAllEntriesWithBase(hippoRoot: string): EntriesWithBase {
-  return onHandle(hippoRoot, loadAllEntriesWithBaseAt, openStore);
 }
 
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {

@@ -81,7 +81,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     const picked = sampleForReplay(traces, 5, new Date(), 42);
     expect(picked.length).toBeGreaterThanOrEqual(1);
     // Every picked entry should be a trace (the only thing in the pool).
-    for (const p of picked) expect(p.layer).toBe(Layer.Trace);
+    for (const id of picked) expect(traces.find((t) => t.id === id)?.layer).toBe(Layer.Trace);
   });
 
   it('physics state is created for traces on first consolidate', async () => {

@@ -3,7 +3,7 @@ import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/i
 import type { MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './conflicts.js';
-import { objectMemoryRowsAt, selectAllEntries } from './entry-reads.js';
+import { iterateEveryTenantEntriesAt, objectMemoryRowsAt } from './entry-reads.js';
 import { setHalfLivesAt } from './entry-writes.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './open.js';
 
@@ -16,17 +16,26 @@ export interface HalfLifeRows {
   from: number;
   /** True until the store has moved its object memories off their old flat half-life. */
   typedPending: boolean;
-  all: MemoryEntry[];
+  /** Every row once, by created then id, through one cursor: the plan keeps only what a move needs. */
+  rows: Iterable<MemoryEntry>;
   objectRows: ReturnType<typeof objectMemoryRowsAt>;
   conflictAudits: ReturnType<typeof conflictResolveAuditsAt>;
   resolvedConflicts: ReturnType<typeof resolvedConflictsAt>;
 }
 
-/** Copies carrying their new half-life, and the bases their audit rows name. */
+/** One memory's half-life before and after a move. */
+export interface HalfLifeChange {
+  id: string;
+  tenantId: string;
+  halfLifeDays: number;
+  oldHalfLifeDays: number;
+}
+
+/** The changes of one move, and the bases their audit rows name. */
 export interface HalfLifeMove {
   from: number;
   to: number;
-  entries: readonly MemoryEntry[];
+  entries: readonly HalfLifeChange[];
 }
 
 function readBase(db: DatabaseSyncLike): number {
@@ -40,26 +49,25 @@ export function recordedHalfLifeBaseAt(db: DatabaseSyncLike): number {
 }
 
 function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
-  const all = selectAllEntries(db);
   return {
     from,
     typedPending,
-    all,
     objectRows: typedPending ? objectMemoryRowsAt(db) : [],
     conflictAudits: typedPending ? conflictResolveAuditsAt(db) : [],
     resolvedConflicts: typedPending ? resolvedConflictsAt(db) : [],
+    rows: iterateEveryTenantEntriesAt(db),
   };
 }
 
 /** Writes the move, then one audit event per tenant with each id's old half-life, so the move can be undone. */
-function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, old: ReadonlyMap<string, number>, actor: string): void {
-  setHalfLivesAt(db, move.entries.map((e) => ({ id: e.id, halfLifeDays: e.half_life_days })));
+function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): void {
+  setHalfLivesAt(db, move.entries.map((e) => ({ id: e.id, halfLifeDays: e.halfLifeDays })));
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of move.entries) {
     // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
-    let record = byTenant.get(e.tenant_id);
-    if (!record) byTenant.set(e.tenant_id, (record = {}));
-    record[e.id] = old.get(e.id)!;
+    let record = byTenant.get(e.tenantId);
+    if (!record) byTenant.set(e.tenantId, (record = {}));
+    record[e.id] = e.oldHalfLifeDays;
   }
   for (const [tenantId, oldHalfLives] of byTenant) {
     appendAuditEvent(db, {
@@ -87,8 +95,7 @@ export function moveHalfLivesAt<R>(
     const { moves, outcome } = plan(rows);
     if (opts.dryRun) return { from, outcome };
 
-    const old = new Map(rows.all.map((e) => [e.id, e.half_life_days]));
-    for (const move of moves) writeMove(db, move, old, opts.actor);
+    for (const move of moves) writeMove(db, move, opts.actor);
     setMeta(db, HALF_LIFE_BASE_META_KEY, String(to));
     setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
     return { from, outcome };

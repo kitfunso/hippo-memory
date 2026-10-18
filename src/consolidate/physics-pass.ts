@@ -1,5 +1,5 @@
 import { refreshParticleProperties } from '../core/particle-refresh.js';
-import { simulate, type ForceContext, type PhysicsParticle } from '../core/physics.js';
+import { simulate, type ForceContext } from '../core/physics.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { SleepRun } from './run.js';
 import { errorMessage } from '../util/log.js';
@@ -25,65 +25,66 @@ export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_
 
 function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
   const { result, survivors } = run;
-  const stored = run.store.storedParticles();
-  if (stored.length === 0) return;
+  const storedIds = run.store.particleIds();
+  if (storedIds.length === 0) return;
 
-  // Build entry lookup for property refresh
-  const entryMap = new Map(survivors.map(e => [e.id, e]));
-  const particles = particlesToSimulate(stored, entryMap, maxParticles);
+  const ids = particlesToSimulate(storedIds, recallTimes(run, storedIds.length > maxParticles), maxParticles);
+  const particles = run.store.particlesByIds(ids);
+  // Only the simulated particles' rows: the refresh and every force lookup read no other id.
+  const entryMap = new Map(survivors.get(particles.map((p) => p.memoryId)).map((e) => [e.id, e]));
   refreshParticleProperties(particles, entryMap, run.now);
 
-  const stats = simulate(particles, survivorForces(run));
+  const stats = simulate(particles, survivorForces(run, entryMap));
   run.store.saveParticles(particles);
 
   result.physicsSimulated = stats.particleCount;
   const capped =
-    particles.length < stored.length ? ` (the ${particles.length} most recently recalled of ${stored.length})` : '';
+    particles.length < storedIds.length
+      ? ` (the ${particles.length} most recently recalled of ${storedIds.length})`
+      : '';
   result.details.push(
     `  ⚛️  physics: ${stats.particleCount} particles${capped}, ` +
     `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}`
   );
 }
 
+/** Each survivor's last recall, read only when the cap applies. */
+function recallTimes(run: SleepRun, capped: boolean): Map<string, Pick<MemoryEntry, 'last_retrieved'>> {
+  const times = new Map<string, Pick<MemoryEntry, 'last_retrieved'>>();
+  if (!capped) return times;
+  for (const e of run.survivors.rows()) times.set(e.id, { last_retrieved: e.last_retrieved });
+  return times;
+}
+
 /**
- * Every stored particle in load order up to the cap; past it, the most recently recalled survivors (memory id breaks
- * ties),
- * then particles with no survivor. */
+ * Every stored particle id in load order up to the cap; past it, the most recently recalled survivors (memory id
+ * breaks ties), then particles with no survivor. */
 export function particlesToSimulate(
-  stored: PhysicsParticle[],
-  entries: ReadonlyMap<string, MemoryEntry>,
+  stored: readonly string[],
+  entries: ReadonlyMap<string, Pick<MemoryEntry, 'last_retrieved'>>,
   max: number = SLEEP_PHYSICS_MAX_PARTICLES,
-): PhysicsParticle[] {
+): readonly string[] {
   if (stored.length <= max) return stored;
-  const recalled = (p: PhysicsParticle): string => entries.get(p.memoryId)?.last_retrieved ?? '';
+  const recalled = (id: string): string => entries.get(id)?.last_retrieved ?? '';
   const ranked = [...stored].sort((a, b) => {
     const [ra, rb] = [recalled(a), recalled(b)];
     if (ra !== rb) return ra < rb ? 1 : -1;
-    return a.memoryId < b.memoryId ? -1 : a.memoryId > b.memoryId ? 1 : 0;
+    return a < b ? -1 : a > b ? 1 : 0;
   });
   const kept = new Set(ranked.slice(0, max));
   // Load order, not rank order: the force sums run in this order, so a capped run matches an uncapped one over the same
   // set.
-  return stored.filter((p) => kept.has(p));
+  return stored.filter((id) => kept.has(id));
 }
 
-function survivorForces(run: SleepRun): ForceContext {
-  // Build conflict pairs from survivors
+/** The forces among `entries`, the survivors behind the simulated particles: the simulation looks up no other id. */
+function survivorForces(run: SleepRun, entries: ReadonlyMap<string, MemoryEntry>): ForceContext {
   const conflictPairs = new Map<string, Set<string>>();
-  for (const entry of run.survivors) {
-    if (entry.conflicts_with.length > 0) {
-      const set = conflictPairs.get(entry.id) ?? new Set<string>();
-      for (const cid of entry.conflicts_with) set.add(cid);
-      conflictPairs.set(entry.id, set);
-    }
-  }
-
-  // Build half-life lookup
   const halfLives = new Map<string, number>();
-  for (const entry of run.survivors) {
+  for (const entry of entries.values()) {
+    if (entry.conflicts_with.length > 0) conflictPairs.set(entry.id, new Set(entry.conflicts_with));
     halfLives.set(entry.id, entry.half_life_days);
   }
-
   return {
     conflictPairs,
     halfLives,

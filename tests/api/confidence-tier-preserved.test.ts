@@ -70,7 +70,7 @@ describe('confidence tier survives sleep', () => {
     const fresh = { ...agedEntry({ confidence: 'observed' }), last_retrieved: now.toISOString() };
 
     const picked = sampleForReplay([aged, marked, fresh], 3, now, 42);
-    expect(picked.map((e) => e.id)).toEqual([fresh.id]);
+    expect(picked).toEqual([fresh.id]);
   });
 
   it('verified and pinned memories are exempt from staleness regardless of age', async () => {
