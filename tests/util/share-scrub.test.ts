@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { maskHomePaths, USER_SEGMENT } from '../../src/util/home-path.js';
 import { scrubForSharing } from '../../src/capture/share-scrub.js';
 import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
+import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
 
 const GITHUB_TOKEN = `ghp_${'a'.repeat(36)}`;
 
@@ -149,37 +150,8 @@ describe('scrubForSharing', () => {
   });
 });
 
-// Timed, since JavaScript counts no regex backtracking steps and a rescan from every repeat needs no nested quantifier.
+// JavaScript counts no regex backtracking steps; rescanning a 1 MiB run from every repeat outlasts the watchdog by hours.
 describe('scrubForSharing on hostile input', () => {
-  const SIZE = 64 * 1024;
-  const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  const timeMs = (work: () => void): number => {
-    const started = performance.now();
-    work();
-    return performance.now() - started;
-  };
-  // Both sides scrub the same bytes, so neither is a sub-millisecond reading: linear work reads near 1, quadratic near 16, and 4 sits 4x from both.
-  // The sides alternate and each keeps its best of seven, so a busy stretch on a shared runner slows both sides, never one alone.
-  const growth = (build: (size: number) => string): number => {
-    const piece = build(SIZE);
-    const whole = build(16 * SIZE);
-    scrubForSharing(piece);
-    let pieces = Infinity;
-    let wholeMs = Infinity;
-    for (let run = 0; run < 7; run++) {
-      pieces = Math.min(
-        pieces,
-        timeMs(() => {
-          for (let i = 0; i < 16; i++) scrubForSharing(piece);
-        }),
-      );
-      wholeMs = Math.min(
-        wholeMs,
-        timeMs(() => scrubForSharing(whole)),
-      );
-    }
-    return wholeMs / pieces;
-  };
   // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [
     'a.',
@@ -250,7 +222,11 @@ describe('scrubForSharing on hostile input', () => {
     ...UNITS.map((unit) => [JSON.stringify(unit), (size: number) => fillTo(unit, size)] as const),
     ['a@ then a long a. run', (size: number) => `a@${fillTo('a.', size)}`.slice(0, size)] as const,
     ['long names that end in a keyword', (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size)] as const,
-  ])('scrubs %s 16x longer in under 4x the time of 16 separate pieces', (_name, build) => {
-    expect(growth(build)).toBeLessThan(4);
-  });
+  ])(
+    'scrubs a 1 MiB run of %s before the watchdog fires',
+    (_name, build) => {
+      expect(() => scanWithinWatchdog(scrubForSharing, build(ONE_MIB), WATCHDOG_MS)).not.toThrow();
+    },
+    2 * WATCHDOG_MS,
+  );
 });

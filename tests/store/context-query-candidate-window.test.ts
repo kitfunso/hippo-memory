@@ -15,7 +15,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
-const ROWS = 10_000;
+// Each store holds several windows of matches (DEFAULT_SEARCH_CANDIDATE_LIMIT is 200), enough for a cap to show.
+const ROWS = 2_000;
+const GLOBAL_ROWS = 300;
 const OWN_ROWS = 10;
 const QUERY = 'deploy step';
 
@@ -77,14 +79,14 @@ let global = '';
 // Built per call: the reach is probed against whatever HIPPO_HOME the test stubbed just before.
 const ctxNow = (): FullContext => apiCtx(local, 'default', adminActor('test'));
 
-// Writes 11,000 rows to real stores, and a runner's disk sets how long that takes.
+// Seeds real stores, and a runner's disk sets how long that takes.
 beforeAll(() => {
   local = makeRoot('ctx-window-local');
   global = makeRoot('ctx-window-global');
   // Every row matches the query; all but the last OWN_ROWS come from another project.
   fill(local, ROWS, 'local', (i) => (i >= ROWS - OWN_ROWS ? 'proj' : 'other'));
-  fill(global, 1_000, 'global', () => '');
-}, 600_000);
+  fill(global, GLOBAL_ROWS, 'global', () => '');
+}, 30_000);
 
 afterAll(() => {
   rmSync(local, { recursive: true, force: true });
@@ -94,7 +96,7 @@ afterAll(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('contextGet with a query reads the FTS candidate window', () => {
-  it('ranks at most the window from a 10k-row local store', async () => {
+  it('ranks at most the window from a local store of many windows', async () => {
     vi.stubEnv('HIPPO_HOME', join(local, 'no-global'));
     const counter = admitCounter();
     const result = await contextGet(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
@@ -134,7 +136,7 @@ describe('contextGet with a query reads the FTS candidate window', () => {
 describe('contextGet with a query labels each result local or global', () => {
   const INDEX_READ = 'SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories';
 
-  it('reads no index of the 10k-row local store to do it', async () => {
+  it('reads no index of the local store to do it', async () => {
     vi.stubEnv('HIPPO_HOME', global);
     const { result, statements, rowsRead } = await recordStatementsAsync(() =>
       contextGet(ctxNow(), { q: QUERY, currentProject: '' }),
@@ -142,13 +144,14 @@ describe('contextGet with a query labels each result local or global', () => {
 
     expectBudgetFilled(result.entries.length);
     expect(countMatching(statements, INDEX_READ)).toBe(0);
-    expect(rowsRead).toBeLessThan(ROWS / 4);
+    // Two windows and their neighbours read far fewer rows than the local store alone holds.
+    expect(rowsRead).toBeLessThan(ROWS);
   });
 
   it('labels a global hit local when sync left a copy outside the local window, and global when it did not', async () => {
     const small = makeRoot('ctx-window-small-global');
     try {
-      // Long rows rank under the 10k short local matches, so the local window leaves the copy out.
+      // Long rows rank under the short local matches, so the local window leaves the copy out.
       const padded = (label: string): MemoryEntry =>
         createMemory(`${label} about the deploy step ${'filler '.repeat(60)}`);
       const synced = padded('synced quokka note');

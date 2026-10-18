@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { getHippoDbPath, getMeta } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -98,35 +97,21 @@ describe('markdown that appears on a still empty store after the setup', () => {
 });
 
 describe('a setup still waiting for the write lock', () => {
-  it('holds the read sent with it, which answers once the setup has written', async () => {
-    // Positive control: with no lock held, how long a first read takes on a second executor over a second fresh store.
-    const freeRoot = newRoot('setup-first');
-    execOn(freeRoot, `DELETE FROM meta WHERE key = '${HALF_LIFE_BASE_META_KEY}'`);
-    const free = createSqliteExecutor(freeRoot, { busyWaitMs: 60_000 });
-    cleanups.push(() => free.close());
-    const started = performance.now();
-    await free.call('readiness.ping', [], { mode: 'read', requestId: undefined });
-    const unlockedMs = performance.now() - started;
-    // A read that was not held would have answered within the unlocked time, so a window of several times it (floor 1 s) proves the hold.
-    const windowMs = Math.max(1_000, unlockedMs * 5);
-
+  it('holds the read sent with it, so the read fails with the busy error of the setup and the next call runs it', async () => {
     const root = newRoot('setup-first');
     // An empty store with no recorded base: the setup has one row to write, and the lock below makes it wait.
     execOn(root, `DELETE FROM meta WHERE key = '${HALF_LIFE_BASE_META_KEY}'`);
-    const executor = createSqliteExecutor(root, { busyWaitMs: 60_000 });
+    // A short wait ends the setup in its busy error. A read that was not held would answer from a reader meanwhile.
+    const executor = createSqliteExecutor(root, { busyWaitMs: 100 });
     cleanups.push(() => executor.close());
+    const read = (): Promise<void> => executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
     // Taken after the executor, so a failed run gives the lock up before it waits for the threads to exit.
     const lock = holdWriteLock(root);
-    let answered = false;
-    const read = executor.call('readiness.ping', [], { mode: 'read', requestId: undefined }).then(() => {
-      answered = true;
-    });
 
-    await delay(windowMs);
-
-    expect(answered).toBe(false);
+    await expect(read()).rejects.toThrow(/database is locked/);
     lock.release();
-    await read;
+
+    await expect(read()).resolves.toBeUndefined();
     expect(halfLifeBase(root)).toBe(String(DEFAULT_HALF_LIFE_DAYS));
   });
 });

@@ -110,7 +110,7 @@ describe('resolveConflict', () => {
       closeHippoDb(db);
     }
 
-    await expect(resolve(conflictId, aId)).resolves.toBeDefined();
+    await expect(resolve(conflictId, aId)).resolves.toEqual({ conflictId, keptId: aId, loserId: bId });
 
     expect(readEntry(tmpDir, bId)!.conflicts_with).not.toContain(aId);
     expect(readEntry(tmpDir, aId)!.conflicts_with).toEqual([]);

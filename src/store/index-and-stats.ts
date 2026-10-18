@@ -6,7 +6,7 @@ import {
   pruneConsolidationRuns,
   getMeta,
 } from '../db/index.js';
-import { log } from '../util/log.js';
+import { errorFields, log } from '../util/log.js';
 import type { HippoIndex } from './rows.js';
 import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
@@ -86,7 +86,11 @@ export function updateStatsUnlessBusyAt(
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
     pendingStats.set(files.hippoRoot, addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta));
-    log.warnThenDebug('stats-busy', `${committed}, but the store was busy; the stats wait for the next update`);
+    log.warnThenDebug(
+      'stats-busy',
+      `${committed}, but the store was busy; the stats wait for the next update`,
+      errorFields(err),
+    );
   }
 }
 

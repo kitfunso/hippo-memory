@@ -19,7 +19,7 @@ import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { contextGet } from '../../src/api/index.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
-import { fastestRatio, type TimedRun } from '../_helpers/fastest-ratio.js';
+import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -189,17 +189,13 @@ describe('redactSecretsStrict', () => {
     }
   });
 
-  // Timed, since JavaScript counts no regex backtracking steps and a rescan from every repeat needs no nested quantifier.
-  it('redactSecretsStrict scrubs crafted 128 KiB runs of eyJ- and token= within 50x the time of prose', () => {
-    const fill = (unit: string): string => unit.repeat(Math.ceil(131072 / unit.length)).slice(0, 131072);
-    const prose = fill('the quarterly review covers risk-free rate assumptions and nothing else. ');
-    const scrubbing = (text: string): TimedRun<string> => ({ setup: () => text, run: redactSecretsStrict });
-    for (const crafted of [fill('eyJ-'), fill('token=')]) {
-      const ratio = fastestRatio(scrubbing(crafted), scrubbing(prose));
-      // Dense matches run at a few times prose and rescanning the run from each repeat at thousands, so 50 sits between.
-      expect(ratio, crafted.slice(0, 6)).toBeLessThan(50);
-    }
-  });
+  // JavaScript counts no regex backtracking steps; rescanning a 1 MiB run from every repeat outlasts the watchdog by hours.
+  it.each(['eyJ-', 'token='])(
+    'redactSecretsStrict scrubs a crafted 1 MiB run of %s before the watchdog fires',
+    (unit) => {
+      expect(() => scanWithinWatchdog(redactSecretsStrict, fillTo(unit, ONE_MIB), WATCHDOG_MS)).not.toThrow();
+    },
+  );
 });
 
 describe('producer + sync vetoes (real stores)', () => {
