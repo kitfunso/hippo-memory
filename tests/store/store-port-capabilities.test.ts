@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality,
+  repairMemoryQualityOnce,
 } from '../../src/api/index.js';
 import { sleep } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
@@ -17,6 +18,7 @@ import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
 
@@ -66,6 +68,29 @@ describe.each([
       const learned = await learn(ctx, { repoPath: repoWithOneFix(root), days: 7, profile: CLI_LEARN });
       expect(learned).toMatchObject({ status: 'scanned', added: 1 });
       expect(loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source)).toHaveLength(1);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('quality repair sets aside a certain defect, keeps a pinned one by the api protection, then runs once', async () => {
+    const root = rootWithConfig('capability-repair');
+    const store = make(root);
+    try {
+      const ctx = ctxOn(root, store);
+      const automatic = { source: 'capture', confidence: 'observed', layer: Layer.Episodic } as const;
+      const bad = createMemory('Found local migration files to be', automatic);
+      const pinned = createMemory('Found local migration files to be', { ...automatic, pinned: true });
+      for (const entry of [bad, pinned]) writeEntry(root, entry);
+
+      expect((await repairMemoryQuality(ctx, false)).issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: bad.id, disposition: 'set-aside' }),
+        expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
+      ]));
+      expect((await repairMemoryQuality(ctx, true)).appliedIds).toEqual([bad.id]);
+      expect(loadAllEntries(root, 'default').map((e) => e.id)).toEqual([pinned.id]);
+      expect(await repairMemoryQualityOnce(ctx)).toMatchObject({ supported: true, appliedIds: [] });
+      expect(await repairMemoryQualityOnce(ctx)).toBeNull();
     } finally {
       await store.close();
     }

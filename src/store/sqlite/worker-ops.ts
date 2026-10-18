@@ -149,9 +149,8 @@ export const WORKER_OPS = {
     objectBackedIds: 'read',
     deleteAutomatically: 'write',
     pruneAuditRows: 'write',
-    // Both take the caller's protection rule.
-    repairQuality: 'server',
-    repairQualityOnce: 'server',
+    repairQuality: 'write',
+    repairQualityOnce: 'write',
   },
   lessonWrites: {
     textsHoldingWords: 'read',

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repairAutomaticMemories, repairQualityOnce as repairStoreOnce } from '../../src/store/quality-repair.js';
-import { repairProtection as protect } from '../../src/api/auth/audit.js';
+import { PROTECTED_ROWS as protect } from '../../src/core/memory-audit.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
