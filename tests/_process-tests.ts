@@ -83,6 +83,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'core/embed-writes-through-store.test.ts',
   'core/http-recall-mode.test.ts',
   'core/pre-compact-e2e.test.ts',
+  'core/read-admission.test.ts',
   'core/recall-scope-personal.test.ts',
   'core/rejections-conformance.test.ts',
   'core/reports-conformance.test.ts',

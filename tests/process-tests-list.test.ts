@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { PROCESS_TESTS } from './_process-tests.js';
 
 // Built from pieces so this file does not match its own pattern and land in the slow class.
-const STARTS_A_PROCESS = new RegExp(String.raw`\bchild_` + 'process\\b|' + String.raw`\bworker_` + 'threads\\b|' + String.raw`\bserve\(`);
+// The worker store starts its threads inside src, so a test that builds one never imports the thread module itself.
+const STARTS_A_PROCESS = new RegExp(
+  String.raw`\bchild_` + 'process\\b|' + String.raw`\bworker_` + 'threads\\b|' + String.raw`\bserve\(|` + String.raw`\bworkerSqlite` + 'Store\\(',
+);
 const tests = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(tests, file), 'utf8');
 
