@@ -121,6 +121,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'db/server-shutdown-bound.test.ts',
   'db/trial-and-busy-scope.test.ts',
   'db/vector-writes-conformance.test.ts',
+  'db/wal-checkpointer-stop.test.ts',
   'embeddings/local-cache.test.ts',
   'entry/compactions-conformance.test.ts',
   'entry/entry-writes-conformance.test.ts',
