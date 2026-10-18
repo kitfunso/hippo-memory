@@ -38,7 +38,7 @@ export interface VectorBackfillQuery {
 
 /** The writes behind embed on write and the backfill: core computes each vector,
  * the store only keeps it. A store deletes a memory's vector and particle when
- * the memory is deleted (hippo.db does it by trigger and foreign-key cascade). */
+ * the memory is deleted (hippo.db does it itself). */
 export interface VectorWrites {
   /** Memories of any kind with no vector stored under `query.model`, by id ascending in byte order. */
   entriesWithoutVector(query: VectorBackfillQuery): Promise<MemoryEntry[]>;

@@ -7,7 +7,7 @@
  * fused-score effect.
  */
 import type { MemoryEntry } from '../core/memory.js';
-import type { Relation } from '../store/graph-rows.js';
+import type { Relation } from '../store/port/graph-reads.js';
 import type { HippoStore } from '../store/index.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
 

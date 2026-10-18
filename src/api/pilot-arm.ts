@@ -1,6 +1,7 @@
 // Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from its Ledger.
 import { ledgerFiles, onLedger, type LedgerReach } from './ledger-db.js';
-import { hashArm, type PilotArm } from '../store/pilot-arm.js';
+import { hashArm } from '../core/pilot-arm.js';
+import type { PilotArm } from '../core/pilot-arm.js';
 
 export interface SessionArmOptions {
   readonly reach: LedgerReach;

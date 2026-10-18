@@ -5,7 +5,7 @@ import { evalNow, strengthAblation } from '../core/ablation.js';
 import { estimateTokens } from '../util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../core/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
-import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type {
   AssembleCost,
   AssembleResult,

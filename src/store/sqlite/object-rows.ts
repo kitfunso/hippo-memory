@@ -3,7 +3,7 @@
 // kind's status union.
 import { isJsonString } from '../../util/json.js';
 import { warnDamagedColumn } from '../../util/stored-json.js';
-import type { SourceObjectType } from '../graph-rows.js';
+import type { SourceObjectType } from '../port/graph-reads.js';
 import type {
   BriefStatus,
   CustomerNote,

@@ -2,7 +2,7 @@
 // so the merge and repair rules in src/sharing/project-merge.ts decide without holding the handle.
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { withBackup } from '../db/backup.js';
-import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { calculateStrength } from '../core/memory.js';
 import { MAX_AUDIT_LIMIT } from '../util/limits.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import {
@@ -21,59 +21,14 @@ import {
 } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import type { StoreFiles } from './open.js';
-import { setAsideRow, type SetAsideResult, type SetAsideWhy } from './set-aside.js';
-import type { AppendAuditOpts, AuditEvent } from './port/types.js';
-import type { DormantReason } from './port/consolidation.js';
-import type { DormantSnapshot } from './port/agent-import.js';
-
-export type ProjectTagOp = 'project_merge' | 'project_repair';
-
-export interface ProjectTagReads {
-  entries(): MemoryEntry[];
-  liveEntriesBySourcePrefix(prefix: string): MemoryEntry[];
-  entriesByIds(ids: readonly string[]): Map<string, MemoryEntry>;
-  dormant(): DormantSnapshot[];
-  auditEvents(op: ProjectTagOp): AuditEvent[];
-  compactionTranscripts(): Array<{ transcript: string; cwd: string | null }>;
-  compactionOriginsWithCwd(): Array<{ origin: string; cwd: string }>;
-  holdsOrigin(table: 'memories' | 'compactions', name: string): boolean;
-}
-
-export interface ProjectTagWrites extends ProjectTagReads {
-  setAside(tag: string, row: MemoryEntry, why: SetAsideWhy): SetAsideResult;
-  restampOrigin(from: string, into: string): void;
-  restampCompactions(from: string, into: string): number;
-  replaceDormant(id: string, entry: MemoryEntry): void;
-  stampOrigins(rows: ReadonlyArray<{ readonly id: string; readonly origin: string }>): void;
-  /** A live row to dormant storage, restorable, as sleep's dormant move does. */
-  retire(row: MemoryEntry, reason: DormantReason, now: Date): void;
-  audit(op: ProjectTagOp, metadata: AppendAuditOpts['metadata']): void;
-}
-
-/** A rewrite's answer plus the ids whose mirrors are rewritten, and those whose mirrors go, once it commits. */
-export interface TagRewrite<T> {
-  readonly result: T;
-  readonly rewrite: readonly string[];
-  readonly purge: readonly string[];
-}
-
-export interface ProjectTagStore extends ProjectTagReads {
-  readonly hippoRoot: string;
-  /** One transaction; a dry run rolls back with no backup, else the store is backed up first and mirrors follow the
-   * commit. */
-  rewrite<T>(
-    opts: { readonly dryRun: boolean; readonly backupLabel: string },
-    body: (tx: ProjectTagWrites, backup: string | null) => TagRewrite<T>,
-  ): T;
-  repairedOnce(): boolean;
-  markRepairedOnce(): void;
-}
-
-export interface ProjectTagScope {
-  readonly tenantId: string;
-  /** Who the audit rows name. */
-  readonly actor: string;
-}
+import { setAsideRow } from './set-aside.js';
+import type {
+  ProjectTagReads,
+  ProjectTagScope,
+  ProjectTagStore,
+  ProjectTagWrites,
+  TagRewrite,
+} from './port/project-tags.js';
 
 const TX_LABEL = 'merge_projects';
 const AUTO_REPAIR_META_KEY = 'project_repair_auto';

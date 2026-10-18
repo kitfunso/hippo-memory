@@ -21,28 +21,7 @@ import { stampOriginProject } from './entry-row.js';
 import { cachedStatement } from './statement-cache.js';
 import type { DormantSnapshot } from './port/agent-import.js';
 import type { DormantMove } from './port/consolidation.js';
-
-/** A dormant memory as listed to a user. */
-export interface DormantMemory {
-  id: string;
-  tenantId: string;
-  content: string;
-  tags: string[];
-  /** Live strength when it went dormant. */
-  strength: number;
-  /** Why it went dormant: one of the {@link DormantReason} values. */
-  reason: string;
-  /** ISO time it went dormant. */
-  dormantAt: string;
-}
-
-/** Options for {@link listDormantRows}. */
-export interface ListDormantOpts {
-  /** Whitespace-separated terms; a row must contain every term (case-insensitive substring). */
-  query?: string;
-  /** Maximum rows returned, newest first. Default 20. */
-  limit?: number;
-}
+import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
 
 interface DormantRow {
   tenant_id: string;
@@ -386,12 +365,6 @@ export interface DormantRestore {
   /** The live memory the snapshot comes back as at `now`; a throw refuses before any write. */
   readonly revive: (snapshot: DormantSnapshot, now: Date) => MemoryEntry;
 }
-
-/** The restored memory, or why nothing was written: no dormant copy in reach, or a live memory already holds the id. */
-export type DormantRestoreOutcome =
-  | { readonly status: 'restored'; readonly entry: MemoryEntry }
-  | { readonly status: 'missing' }
-  | { readonly status: 'active' };
 
 function auditDormantRestore(
   db: DatabaseSyncLike,

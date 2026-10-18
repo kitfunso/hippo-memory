@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { applyGraphOpsAt } from '../../src/store/graph-apply.js';
 import { loadRelations } from '../../src/store/graph-reads.js';
-import type { GraphOp, NaturalKey } from '../../src/store/graph-rows.js';
+import type { GraphOp, NaturalKey } from '../../src/store/port/graph-rebuild.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

@@ -26,9 +26,12 @@ describe('hippo-memory/store-kit entry types', () => {
     typeOnly(() => sqliteStore({ hippoRoot: '/tmp/root' }));
   });
 
-  it('hasGroup and requireGroup take the store first and a group name second', () => {
-    expectTypeOf(hasGroup).parameters.toEqualTypeOf<[store: HippoStore, group: StoreGroup]>();
-    expectTypeOf(hasGroup).returns.toEqualTypeOf<boolean>();
+  it('hasGroup narrows an optional group; hasGroup and requireGroup take the store first and a group name second', () => {
+    typeOnly(() => {
+      if (hasGroup(store, 'lastRecall')) expectTypeOf(store.lastRecall).toEqualTypeOf<StoreGroups['lastRecall']>();
+      expectTypeOf(hasGroup(store, 'base')).toEqualTypeOf<boolean>();
+      expectTypeOf(hasGroup(store, 'sessions' satisfies StoreGroup)).toEqualTypeOf<boolean>();
+    });
     expectTypeOf(requireGroup<'lastRecall'>).returns.toEqualTypeOf<StoreGroups['lastRecall']>();
     // @ts-expect-error the group comes after the store
     typeOnly(() => hasGroup('base', store));

@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
-import { predictionMirror } from '../../src/store/predictions.js';
+import { predictionMirror } from '../../src/core/prediction.js';
 import { inMemoryPredictionsStore } from '../_helpers/in-memory-predictions-store.js';
 import {
   onBothStores,

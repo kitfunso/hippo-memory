@@ -3,20 +3,21 @@
 import type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { CardDetail } from './card-detail.js';
-import type { StatusCounts, StrengthTallies } from './candidates.js';
-import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './dormant.js';
-import type { FailureSummary } from './failure-log.js';
-import type { CompleteGoalOpts, PushGoalOpts } from './goals.js';
-import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
+import type { CardDetail } from './port/cards.js';
+import type { StatusCounts, StrengthTallies } from './port/reports.js';
+import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
+import type { FailureSummary } from './port/failure-log.js';
+import type { CompleteGoalOpts, PushGoalOpts } from './port/goals.js';
+import type { HandoffFilter, SessionEndHandoffRequest } from './port/sessions.js';
 import type { FailureLog } from './port/failure-log.js';
 import type { Compactions } from './port/compactions.js';
 import type { Rejections } from './port/rejections.js';
 import type { ConflictListQuery, ConflictResolution, ConflictRow, ConflictRowPage } from './port/conflicts.js';
-import type { LegacyStats, SessionEvent, TaskSnapshot } from './rows.js';
-import type { SessionEventInput, SnapshotInput } from './sessions.js';
-import type { TokenSummary } from './token-ledger.js';
-import type { WorkingMemoryItem } from './working-memory.js';
+import type { LegacyStats } from './port/reports.js';
+import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
+import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
+import type { TokenSummary } from './port/token-ledger.js';
+import type { WorkingMemoryItem } from './port/sessions.js';
 import type { DormantSnapshot } from './port/agent-import.js';
 import type { EntryCursor, EntryPage } from './port/consolidation.js';
 import type { Goal, ContinuityKey, JsonObject } from './port/types.js';
@@ -122,7 +123,7 @@ export interface Goals {
   push(tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Promise<Goal>;
   /** Every status, for `hippo goal list --all`; active-only reads use base `activeGoals`. */
   sessionGoals(tenantId: string, sessionId: string): Promise<Goal[]>;
-  /** By id. Goal ids are not tenant-scoped in hippo.db, so the SQLite store ignores `tenantId` and the api keeps the
+  /** By id. Goal ids are not tenant-scoped in hippo.db, so that store ignores `tenantId` and the api keeps the
    * host-admin check; a tenant-keyed store filters on it. */
   complete(tenantId: string, goalId: string, opts: CompleteGoalOpts): Promise<void>;
   suspend(tenantId: string, goalId: string): Promise<void>;
@@ -146,7 +147,7 @@ export interface DormantRestoreRequest {
   readonly revive: (snapshot: DormantSnapshot, now: Date) => MemoryEntry;
 }
 
-/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no SQL crosses the port. */
+/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
 export interface Dormant {
   list(tenantId: string, ownScope: string | null, opts: ListDormantOpts): Promise<DormantMemory[]>;
   holds(tenantId: string, ownScope: string | null, id: string): Promise<boolean>;

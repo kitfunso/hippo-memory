@@ -7,13 +7,8 @@ import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { originInSql } from '../core/project-identity.js';
 import { topVectorMatches, type VectorIndex } from '../db/vector-store.js';
-import {
-  type MemoryRow,
-  MEMORY_SELECT_COLUMNS,
-  MEMORY_SEARCH_COLUMNS,
-  DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  rowToEntry,
-} from './rows.js';
+import { type MemoryRow, MEMORY_SELECT_COLUMNS, MEMORY_SEARCH_COLUMNS, rowToEntry } from './rows.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../core/search-types.js';
 import { onHandle, openStore } from './open.js';
 import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../util/escape.js';

@@ -10,7 +10,7 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/dormant.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
-import type { Rejection } from '../../src/store/rejected-values.js';
+import type { Rejection } from '../../src/store/port/rejections.js';
 import { rejectionDigest } from '../../src/store/rejection.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/util/same-text.js';

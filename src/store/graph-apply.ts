@@ -2,7 +2,8 @@
 import type { DatabaseSyncLike } from '../db/index.js';
 import { clock } from '../util/write-budget.js';
 import { storedGraphOn } from './graph-reads.js';
-import type { DesiredRelation, GraphOp, StoredGraph } from './graph-rows.js';
+import type { DesiredRelation, GraphOp } from './port/graph-rebuild.js';
+import type { StoredGraph } from './port/graph-reads.js';
 import {
   deleteEntityRow,
   deleteRelationRow,
@@ -14,6 +15,7 @@ import {
   runGraphRebuildTransaction,
   updateEntityRow,
 } from './graph-writes.js';
+import type { ApplyGraphOpsOptions, ApplyGraphOpsResult } from './port/graph-rebuild.js';
 
 function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
@@ -57,17 +59,6 @@ function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): bool
     case 'insertRelation':
       return insertDesiredRelation(db, tenantId, op.relation);
   }
-}
-
-export interface ApplyGraphOpsResult {
-  readonly next: number;
-  readonly skipped: number;
-}
-
-export interface ApplyGraphOpsOptions {
-  readonly from: number;
-  readonly holdMs: number;
-  readonly clock?: () => number;
 }
 
 function applyGraphOpsOn(

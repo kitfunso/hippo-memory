@@ -11,14 +11,12 @@
   "storeImportsInCli": 0,
   "storeImportsInDomain": 0,
   "handleHoldersOutside": 0,
-  "storeFilesWithoutSql": 1,
+  "storeFilesWithoutSql": 0,
   "portImportsFromSql": 0,
   "buildsOutsideRoots": 0,
   "groupChecksInApi": 0,
   "portFunctionParams": 21,
-  "storeFilesWithoutSqlList": [
-    "src/store/delivery-recorder.ts"
-  ],
+  "storeFilesWithoutSqlList": [],
   "openersOutsideByFile": {},
   "sqlOutsideByFile": {},
   "handleHoldersOutsideByFile": {},

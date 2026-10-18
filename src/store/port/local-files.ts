@@ -1,4 +1,4 @@
-// The LocalFiles group, kept apart from port.ts so each SQLite-only member lands here.
+// The LocalFiles group, kept apart from port.ts so each member only hippo.db has lands here.
 import type { AgentImport } from './agent-import.js';
 import type { Captures } from './captures.js';
 import type { CompactionHooks } from './compaction-hooks.js';

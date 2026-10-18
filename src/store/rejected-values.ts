@@ -27,51 +27,10 @@ import {
   rejectionDigest,
 } from './rejection.js';
 import type { EntryCursor } from './port/consolidation.js';
-import type { RejectedValueRow } from './port/rejections.js';
-
-type HoldsValue = (text: string) => boolean;
+import type { AppliedRejection, HoldsValue, LiftedRejection, Rejection } from './port/rejections.js';
 
 /** Rows a rejection reads per page while it looks for the rows that hold its text. */
 const HOLDER_PAGE_ROWS = 500;
-
-/** The text, tenant and scope of the memory a rejection names. */
-export type RejectionSource = NonNullable<ReturnType<typeof entryRejectRowAt>>;
-
-/** One rejection as the store applies it. The three functions are the caller's policy over plain rows; none is handed
- * the handle. */
-export interface Rejection {
-  readonly tenantId: string;
-  readonly actor: string;
-  readonly reason: string;
-  /** The memory whose row `textOf` is given; unset when the caller supplies the text itself. */
-  readonly memoryId?: string;
-  /** The text to reject. `source` is undefined when `memoryId` is unset or names no row; a throw refuses before any
-   * write. */
-  readonly textOf: (source: RejectionSource | undefined) => string;
-  /** False for a row this caller may not remove. */
-  readonly inReach: (scope: string | null | undefined) => boolean;
-  /** What replaces a merged row once the rejected text leaves it: undefined when it holds none, null when nothing else
-   * is left. */
-  readonly successorOf: (
-    row: MemoryEntry,
-    holdsValue: HoldsValue,
-    removedIds: ReadonlySet<string>,
-  ) => MemoryEntry | null | undefined;
-}
-
-export interface AppliedRejection {
-  digest: string;
-  /** The rejected text: the stored row keeps only its digest, so no later read can return it. */
-  content: string;
-  /** Every row removed, live or dormant: each whose digest matched, duplicates included, and each sleep-merged row
-   * holding the text. */
-  removedIds: string[];
-  /** The removedIds of kind 'raw', archived instead of deleted. */
-  removedRawIds: string[];
-  /** The rows that carry a live merged row's other texts; dormantSuccessorIds is the same for a dormant one. */
-  successorIds: string[];
-  dormantSuccessorIds: string[];
-}
 
 /** What one rejection removed and wrote, gathered across the live and dormant passes. */
 interface Removal {
@@ -278,11 +237,6 @@ export function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, reject
     dormantSuccessorIds,
   };
 }
-
-export type LiftedRejection =
-  | { status: 'ok'; digest: string; reason: string | null }
-  | { status: 'not_found' }
-  | { status: 'ambiguous'; candidates: RejectedValueRow[] };
 
 /** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes its unreject_value audit
  * row. No match, or more than one, writes nothing. */

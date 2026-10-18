@@ -6,7 +6,7 @@ import { initStore, handlesOf } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
-import { isStoreBusy } from '../../src/store/busy.js';
+import { isStoreBusy } from '../../src/store/port.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';

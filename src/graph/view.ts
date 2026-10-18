@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import type { ScopeActor } from '../core/recall-scope.js';
 import type { GraphReads, GraphRows } from '../store/port.js';
-import type { EntityType, RelationType } from '../store/graph-rows.js';
+import type { EntityType, RelationType } from '../store/port/graph-reads.js';
 
 const DEFAULT_LAYOUT_ITERATIONS = 300;
 const NODE_LABEL_MAX_CHARS = 22;

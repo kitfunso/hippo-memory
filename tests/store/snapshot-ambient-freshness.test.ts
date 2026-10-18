@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { initStore } from '../../src/store/open.js';
-import { saveActiveTaskSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../src/store/sessions.js';
+import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
+import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../src/core/session-snapshot.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {

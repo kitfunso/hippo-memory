@@ -9,7 +9,7 @@ import { saveDecision } from '../../src/objects/decisions.js';
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { extractGraph } from '../../src/graph/extract.js';
 import { savePolicy } from '../../src/objects/policies.js';
-import { mintApiKey } from '../../src/store/auth.js';
+import { mintApiKey } from '../../src/core/api-key.js';
 import { hashedVector } from './hashed-embedding-server.js';
 import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
 import { keyFor, onDb } from './store-worker-server.js';

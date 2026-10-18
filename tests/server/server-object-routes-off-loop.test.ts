@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
-import { mintApiKey } from '../../src/store/auth.js';
+import { mintApiKey } from '../../src/core/api-key.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
 import type { ServerHandle } from '../../src/server.js';

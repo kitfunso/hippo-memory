@@ -12,17 +12,11 @@ import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import {
-  carryingCalls,
-  lastSentState,
-  readApiCalls,
-  recordTokenUse,
-  shouldSkipUnchanged,
-  type ApiCall,
-  type TokenEvent,
-  type TokenSummary,
-  type TokenSurface,
-} from '../../src/store/token-ledger.js';
+import { carryingCalls, lastSentState, recordTokenUse } from '../../src/store/token-ledger.js';
+import { shouldSkipUnchanged } from '../../src/core/skip-unchanged.js';
+import { readApiCalls } from '../../src/core/transcript-calls.js';
+import type { TokenEvent, TokenSummary, TokenSurface } from '../../src/store/port/token-ledger.js';
+import type { ApiCall } from '../../src/core/transcript-calls.js';
 import { isSubagentPayload } from '../../src/util/hook-payload.js';
 import { estimateTokens } from '../../src/util/token-text.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
