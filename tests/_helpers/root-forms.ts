@@ -86,7 +86,7 @@ import {
   loadPredictionByIdAt,
   loadPredictionsByClassAt,
 } from '../../src/store/predictions.js';
-import type { HippoIndex, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
+import type { HippoIndex, MemoryConflict, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
 import type { SqlFragment } from '../../src/store/rule-sql.js';
 import { loadRecallEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
 import {
@@ -118,6 +118,7 @@ import {
 import type { WorkingMemoryItem } from '../../src/store/working-memory.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../../src/store/working-memory.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
+import { MAX_LIST_LIMIT } from '../../src/util/limits.js';
 import type {
   AppendAuditOpts,
   HeldText,
@@ -256,6 +257,19 @@ export function replaceDetectedConflicts(
   detectedAt?: string,
 ): void {
   onHandle(hippoRoot, (db) => replaceDetectedConflictsAt(db, { hippoRoot }, detected, detectedAt), openStore);
+}
+
+/** Every conflict with `status` (no tenant: every tenant's), read through the store port a page at a time. */
+export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
+  const { conflicts } = sqliteSyncStore(hippoRoot);
+  const out: MemoryConflict[] = [];
+  let after: KeysetPosition | undefined;
+  do {
+    const page = conflicts.list({ tenantId: tenantId ?? null, status, limit: MAX_LIST_LIMIT, after });
+    out.push(...page.rows.map((row) => row.conflict));
+    after = page.next ?? undefined;
+  } while (after);
+  return out;
 }
 
 /** Keeps `keepId` and weakens the other member through the store port, as a plain `hippo resolve` does; for a

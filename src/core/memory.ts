@@ -361,9 +361,6 @@ export function confidenceFacets(entry: ConfidenceInputs, now: Date = evalNow())
   return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
 }
 
-// SHORTCUT: alias only for src/dashboard (another session's file); delete when it calls confidenceFacets.
-export { confidenceFacets as facetsOf };
-
 // An aged-out row warns on its own, since its stored tier alone would hide it.
 export function confidenceLabel(entry: MemoryEntry, now: Date = evalNow()) {
   const { tier, agedOut } = confidenceFacets(entry, now);

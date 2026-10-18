@@ -8,7 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
-import { DASHBOARD_TOKEN } from './_helpers/dashboard-fixture.js';
+import { DASHBOARD_TOKEN, sessionCookie } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 import { makeStore } from './_helpers/make-root.js';
 
@@ -23,7 +23,7 @@ function post(
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json', cookie: `hippo_dashboard_${port}=${DASHBOARD_TOKEN}` } },
+      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json', cookie: sessionCookie(port) } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');

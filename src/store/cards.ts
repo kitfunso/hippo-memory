@@ -9,7 +9,6 @@ import {
 } from '../core/handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../core/card.js';
 import { assertTenantId } from '../core/tenant-id.js';
-import { onHandle, openStore } from './open.js';
 import { chunked } from '../util/chunked.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 import { placeholders } from '../util/sql.js';
@@ -275,10 +274,6 @@ export function listCardsAt(db: DatabaseSyncLike, tenantId: string, opts: { stat
     SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
   `).all(...params) as CardRow[];
   return rows.map(rowToCard);
-}
-
-export function listCards(hippoRoot: string, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
-  return onHandle(hippoRoot, (db) => listCardsAt(db, tenantId, opts), openStore);
 }
 
 export function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {

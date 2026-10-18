@@ -5,7 +5,7 @@ import { consolidate } from '../../src/index.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';

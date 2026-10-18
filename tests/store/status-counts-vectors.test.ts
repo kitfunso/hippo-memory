@@ -6,7 +6,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { updateStats } from '../../src/store/index-and-stats.js';
 import { DAY_MS } from '../../src/util/time.js';
 import { handleStatus } from '../../src/cli/status.js';

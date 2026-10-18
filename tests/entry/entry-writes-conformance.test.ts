@@ -19,7 +19,7 @@ const ACTOR = 'api_key:caller';
 
 /** The columns these writes change, so a row compares across stores without the fields each store fills its own way. */
 type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind' | 'scope' | 'content' | 'tags' | 'strength' | 'outcome_score' | 'outcome_positive'
-  | 'outcome_negative' | 'superseded_by' | 'dag_parent_id' | 'summary_dirty' | 'origin_project'>;
+  | 'outcome_negative' | 'superseded_by' | 'dag_parent_id' | 'summary_dirty' | 'origin_project' | 'pinned'>;
 type Value = string | string[] | Row[] | void;
 type Call = GroupCall<'entryWrites', Value>;
 type Side = SideResult<Value>;
@@ -63,6 +63,7 @@ const project = (entries: MemoryEntry[]): Row[] => entries.map((e) => ({
   id: e.id, tenant_id: e.tenant_id, kind: e.kind, scope: e.scope, content: e.content, tags: e.tags, strength: e.strength,
   outcome_score: e.outcome_score, outcome_positive: e.outcome_positive, outcome_negative: e.outcome_negative,
   superseded_by: e.superseded_by, dag_parent_id: e.dag_parent_id, summary_dirty: e.summary_dirty, origin_project: e.origin_project,
+  pinned: e.pinned,
 }));
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
@@ -174,6 +175,31 @@ describe('EntryWrites.applyOutcome', () => {
     const tagsAt = (i: number) => (side.outcomes[i] as { value: Row[] }).value[0]?.tags;
     expect([tagsAt(1), tagsAt(3)]).toEqual([[CHURN_STALE_TAG, 'build'], ['build']]);
     expect(added(side).filter((r) => r.op === 'summary_marked_dirty')).toEqual([dirtied(summary)]);
+  });
+});
+
+describe('EntryWrites.setPinned', () => {
+  const pin = (id: string, pinned: boolean, ownScope: string | null = null): Call => async (g) =>
+    project([await g.setPinned({ ...target(id, ownScope), pinned })]);
+  const pinRow = (id: string, pinned: boolean) => ({ tenantId: TENANT_A, actor: ACTOR, op: 'pin', targetId: id, metadata: { pinned } });
+
+  it('pins then unpins with a remember and a pin row each, marking the summary of a child once', async () => {
+    const { child, summary } = seeded;
+    const side = await conforms([pin(child.id, true), pin(child.id, false), readBack(TENANT_A, child.id)]);
+    // SAFETY: every call here resolves to Row[].
+    expect(side.outcomes.map((o) => (o as { value: Row[] }).value.map((r) => r.pinned))).toEqual([[true], [false], [false]]);
+    expect(added(side)).toEqual([remembered(child), dirtied(summary), pinRow(child.id, true), remembered(child), pinRow(child.id, false)]);
+  });
+
+  it('answers a row out of reach as not found and writes nothing for it', async () => {
+    const { personal, noteB } = seeded;
+    const side = await conforms([pin(noteB.id, true), pin(personal.id, true), pin('mem_missing', true), pin(personal.id, true, ALICE)]);
+    expect(side.outcomes.slice(0, 3)).toEqual([
+      { error: `NotFoundError: memory not found: ${noteB.id}` },
+      { error: `NotFoundError: memory not found: ${personal.id}` },
+      { error: 'NotFoundError: memory not found: mem_missing' },
+    ]);
+    expect(added(side)).toEqual([remembered(personal), pinRow(personal.id, true)]);
   });
 });
 

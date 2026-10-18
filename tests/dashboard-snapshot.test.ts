@@ -2,16 +2,17 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/core/memory.js';
-import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
-import { buildSnapshot, createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
+import { buildSnapshot } from '../src/dashboard/dashboard-snapshot.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { storedVectorIds } from '../src/db/vector-store.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
-import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
+import {
+  asDashboardRow, embed, isoAgo, makeStore, NOW, seed, snapshotsOf, type TmpStore,
+} from './_helpers/dashboard-fixture.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
-import { replaceDetectedConflicts, resolveConflictKeeping } from './_helpers/root-forms.js';
+import { listMemoryConflicts, replaceDetectedConflicts, resolveConflictKeeping } from './_helpers/root-forms.js';
 
 let store: TmpStore;
 
@@ -24,7 +25,7 @@ afterEach(() => {
 });
 
 function snapshot() {
-  const service = createSnapshotService(store.hippoRoot, () => NOW);
+  const service = snapshotsOf(store.hippoRoot, () => NOW);
   try {
     return service.get('default');
   } finally {
@@ -150,7 +151,12 @@ describe('dashboard snapshot', () => {
       closeHippoDb(db);
     }
     const fromWholeRows = buildSnapshot({
-      id: snap.id, tenantId: 'default', nowMs: NOW, entries: loadAllEntries(root, 'default'), openConflicts: listMemoryConflicts(root, 'open', 'default'), embeddedIds,
+      id: snap.id,
+      tenantId: 'default',
+      nowMs: NOW,
+      entries: loadAllEntries(root, 'default').map((e) => asDashboardRow(e, embeddedIds.has(e.id))),
+      openConflicts: listMemoryConflicts(root, 'open', 'default'),
+      scanText: () => {},
     });
 
     expect(snap.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
@@ -165,7 +171,7 @@ describe('dashboard snapshot', () => {
     seed(root, 'not embedded');
     embed(root, [one.id]);
     const rowsRead = (): number => {
-      const service = createSnapshotService(root, () => NOW);
+      const service = snapshotsOf(root, () => NOW);
       try {
         const log = recordStatements(() => service.get('default'));
         expect(log.result.embeddingCoverage).toBe(0.5);
@@ -188,7 +194,7 @@ describe('dashboard snapshot', () => {
     const replaced = seed(root, 'embedded but replaced', { superseded_by: live.id });
     embed(root, [live.id, replaced.id, 'orphan-id']);
     const ids = [live.id, plain.id, replaced.id];
-    const service = createSnapshotService(root, () => NOW);
+    const service = snapshotsOf(root, () => NOW);
     try {
       expect([...ids, 'orphan-id'].map((id) => service.isEmbedded(id))).toEqual([true, false, true, true]);
       service.get('default');

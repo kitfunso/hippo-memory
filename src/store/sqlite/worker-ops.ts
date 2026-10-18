@@ -55,6 +55,7 @@ export const WORKER_OPS = {
   entryWrites: {
     writeEntry: 'write',
     applyOutcome: 'write',
+    setPinned: 'write',
     supersede: 'write',
     archiveRaw: 'write',
     forget: 'write',
