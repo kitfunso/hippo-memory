@@ -32,14 +32,69 @@ function store(config: Partial<HippoConfig> | undefined): string {
 }
 
 const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][] = [
-  ['decision', async (root) => await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', async (root) => await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
-  ['process', async (root) => await saveProcess(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
-  ['policy', async (root) => await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
-  ['skill', async (root) => await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
-  ['project brief', async (root) => await saveProjectBrief(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
-  ['customer note', async (root) => await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
-  ['prediction', async (root) => savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
+  [
+    'decision',
+    async (root) =>
+      await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        decisionText: 'we release on Tuesdays after the staging soak',
+      }),
+  ],
+  [
+    'incident',
+    async (root) =>
+      await openIncident(
+        objectsAt(root),
+        loadConfig(root).defaultHalfLifeDays,
+        'default',
+        { incidentText: 'the billing cron charged twice on the 1st' },
+        'cli',
+      ),
+  ],
+  [
+    'process',
+    async (root) =>
+      await saveProcess(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        processName: 'Release',
+        steps: ['tag', 'publish'],
+      }),
+  ],
+  [
+    'policy',
+    async (root) =>
+      await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        policyName: 'RetryPolicy',
+        policyText: 'retry up to 3x',
+      }),
+  ],
+  [
+    'skill',
+    async (root) =>
+      await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        skillName: 'Run tests',
+        instructions: 'npm test before commit',
+      }),
+  ],
+  [
+    'project brief',
+    async (root) =>
+      await saveProjectBrief(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        repo: 'acme/billing',
+        summary: 'billing service for Acme',
+      }),
+  ],
+  [
+    'customer note',
+    async (root) =>
+      await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+        customer: 'Acme',
+        note: 'renewal is due in March',
+      }),
+  ],
+  [
+    'prediction',
+    async (root) =>
+      savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' }),
+  ],
 ];
 
 const defaults: [string, Partial<HippoConfig> | undefined, number][] = [

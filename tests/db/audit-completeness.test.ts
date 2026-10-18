@@ -51,10 +51,7 @@ describe('audit log captures every mutation', () => {
     const env = { ...process.env, HIPPO_HOME: home };
     execSync(`node "${cli}" init`, { env, cwd: home });
     execSync(`node "${cli}" init --global`, { env, cwd: home });
-    execSync(
-      `node "${cli}" remember "audit-promote-canary-55 distinguishing token"`,
-      { env, cwd: home },
-    );
+    execSync(`node "${cli}" remember "audit-promote-canary-55 distinguishing token"`, { env, cwd: home });
     const localRoot = join(home, '.hippo');
     const dbLocal = openHippoDb(localRoot);
     let localId: string | undefined;
@@ -90,10 +87,7 @@ describe('audit log captures every mutation', () => {
     const home = makeRoot('audit-supersede', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
     execSync(`node "${cli}" init`, { env, cwd: home });
-    execSync(
-      `node "${cli}" remember "audit-supersede-canary-33 old content"`,
-      { env, cwd: home },
-    );
+    execSync(`node "${cli}" remember "audit-supersede-canary-33 old content"`, { env, cwd: home });
     const localRoot = join(home, '.hippo');
     const db = openHippoDb(localRoot);
     let oldId: string | undefined;
@@ -108,10 +102,7 @@ describe('audit log captures every mutation', () => {
     }
     expect(oldId, 'expected to find old row id').toBeTruthy();
 
-    execSync(
-      `node "${cli}" supersede ${oldId} "audit-supersede-canary-33 new content"`,
-      { env, cwd: home },
-    );
+    execSync(`node "${cli}" supersede ${oldId} "audit-supersede-canary-33 new content"`, { env, cwd: home });
 
     const db2 = openHippoDb(localRoot);
     try {
@@ -162,10 +153,7 @@ describe('audit log captures every mutation', () => {
     // Local store flow (cmdForget is local-store only). Remember + forget
     // both target the local .hippo dir under cwd=home.
     execSync(`node "${cli}" init`, { env, cwd: home });
-    execSync(
-      `node "${cli}" remember "audit-forget-canary-77 distinguishing token"`,
-      { env, cwd: home },
-    );
+    execSync(`node "${cli}" remember "audit-forget-canary-77 distinguishing token"`, { env, cwd: home });
     const localRoot = join(home, '.hippo');
     const db = openHippoDb(localRoot);
     let rememberedId: string | undefined;

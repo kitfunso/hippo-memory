@@ -22,10 +22,10 @@ export interface HippoConfig {
   autoShareOnSleep: boolean;
   autoSleep: {
     enabled: boolean;
-    threshold: number;  // trigger sleep after this many new memories
+    threshold: number; // trigger sleep after this many new memories
   };
   embeddings: {
-    enabled: boolean | 'auto';  // 'auto' = use if dependency installed (local) / key present (api)
+    enabled: boolean | 'auto'; // 'auto' = use if dependency installed (local) / key present (api)
     model: string;
     hybridWeight: number;
     /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in
@@ -182,8 +182,17 @@ export const DEFAULT_CONFIG: HippoConfig = {
     enabled: true,
   },
   gitLearnPatterns: [
-    'fix', 'revert', 'bug', 'error', 'hotfix', 'bugfix',
-    'refactor', 'perf', 'chore', 'breaking', 'deprecate',
+    'fix',
+    'revert',
+    'bug',
+    'error',
+    'hotfix',
+    'bugfix',
+    'refactor',
+    'perf',
+    'chore',
+    'breaking',
+    'deprecate',
   ],
   physics: { ...DEFAULT_PHYSICS_CONFIG },
   mmr: {
@@ -262,7 +271,7 @@ function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined)
   if (isObject && enabled === undefined) return false;
   log.warn(
     `config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
-    `(got ${JSON.stringify(value)}) - using false.`,
+      `(got ${JSON.stringify(value)}) - using false.`,
   );
   return false;
 }
@@ -275,7 +284,7 @@ function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
   if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
   log.warn(
     `config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
-    `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
+      `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
   );
   return 0;
 }
@@ -287,7 +296,7 @@ function projectIdentityRemote(value: HippoConfig['projectIdentity'] | undefined
   if (value === undefined || (remote === undefined && value !== null && value.constructor === Object)) return true;
   log.warn(
     `config.json's "projectIdentity" must be an object like {"remote": false} ` +
-    `(got ${JSON.stringify(value)}) - using true (projects named by their origin remote).`,
+      `(got ${JSON.stringify(value)}) - using true (projects named by their origin remote).`,
   );
   return true;
 }
@@ -297,7 +306,7 @@ function agentMemoryTools(value: string[] | null | undefined): string[] | null {
   if (Array.isArray(value) && value.every((t) => String(t) === t)) return value;
   log.warn(
     `config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
-    `(got ${JSON.stringify(value)}) - importing none.`,
+      `(got ${JSON.stringify(value)}) - importing none.`,
   );
   return [];
 }
@@ -310,7 +319,7 @@ function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['me
   if (!validMemoryValueConfig) {
     log.warn(
       `config.json's "memoryValue" must be an object like {"enabled": true} ` +
-      `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
+        `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
     );
   }
   return memoryValueRaw !== undefined && isJsonObject(memoryValueRaw) ? memoryValueRaw : {};
@@ -324,7 +333,7 @@ function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
   if (dormantRaw !== undefined && !isJsonObject(dormantRaw)) {
     log.warn(
       `config.json's "dormant" must be an object like {"enabled": false} ` +
-      `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
+        `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
     );
   }
   const dormantOverride: Partial<HippoConfig['dormant']> =
@@ -334,7 +343,7 @@ function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
   if (dormantEnabled !== true && dormantEnabled !== false) {
     log.warn(
       `config.json's "dormant.enabled" must be true or false ` +
-      `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
+        `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
     );
     dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
   }
@@ -342,7 +351,7 @@ function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
   if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
     log.warn(
       `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
-      `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
+        `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
     );
     dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
   }
@@ -356,7 +365,7 @@ function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
   if (!validChurnStalenessConfig) {
     log.warn(
       `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
-      `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
+        `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
     );
   }
   const enabled =
@@ -366,7 +375,7 @@ function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
   if (enabled !== true && enabled !== false) {
     log.warn(
       `config.json's "churnStaleness.enabled" must be true or false ` +
-      `(got ${JSON.stringify(enabled)}) - using false.`,
+        `(got ${JSON.stringify(enabled)}) - using false.`,
     );
     return false;
   }
@@ -380,7 +389,7 @@ function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
   if (!Number.isFinite(days) || days <= 0) {
     log.warn(
       `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
-      `(got ${JSON.stringify(days)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
+        `(got ${JSON.stringify(days)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
     );
     return DEFAULT_CONFIG.defaultHalfLifeDays;
   }

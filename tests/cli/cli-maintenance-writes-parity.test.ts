@@ -132,8 +132,19 @@ describe('hippo audit --fix (built CLI, no server)', () => {
 /** Rows under two project names, two the sleep audit removes, one pinned and one warning, all older than the fixed clock. */
 function seedForSleep(s: Store): void {
   s.env['HIPPO_FAKE_NOW'] = FAKE_NOW;
-  s.seedAged('mem_sleep_app', '2026-01-20T00:00:00.000Z', 'deploy rollback needs the database migration reverted before the api restarts', { tags: ['deploy'] });
-  s.seedAged('mem_sleep_web', '2026-01-21T00:00:00.000Z', 'the checkout page caches the cart total for sixty seconds', { tags: ['web'] }, { origin_project: 'web' });
+  s.seedAged(
+    'mem_sleep_app',
+    '2026-01-20T00:00:00.000Z',
+    'deploy rollback needs the database migration reverted before the api restarts',
+    { tags: ['deploy'] },
+  );
+  s.seedAged(
+    'mem_sleep_web',
+    '2026-01-21T00:00:00.000Z',
+    'the checkout page caches the cart total for sixty seconds',
+    { tags: ['web'] },
+    { origin_project: 'web' },
+  );
   s.seedAged('mem_sleep_short', '2026-01-22T00:00:00.000Z', 'too small');
   s.seedAged('mem_sleep_noise', '2026-01-23T00:00:00.000Z', 'Merge branch feature/billing into main');
   s.seedAged('mem_sleep_pinned', '2026-01-24T00:00:00.000Z', 'pinned ok', { pinned: true });
@@ -166,12 +177,22 @@ describe('hippo sleep (built CLI, no server)', () => {
 
 describe('hippo refine (verb function, injected fetcher, no model)', () => {
   const MERGED = '[Consolidated from 2 related memories]\n\n';
-  const answering = (text: string, status = 200): typeof fetch => async () => new Response(JSON.stringify({ content: [{ text }] }), { status });
-  const refine = (s: Store, opts: Omit<RefineOptions, 'apiKey' | 'tenantId'>): Promise<Refined> => refineStore(s.root, { apiKey: 'no-key', tenantId: 'default', ...opts });
+  const answering =
+    (text: string, status = 200): typeof fetch =>
+    async () =>
+      new Response(JSON.stringify({ content: [{ text }] }), { status });
+  const refine = (s: Store, opts: Omit<RefineOptions, 'apiKey' | 'tenantId'>): Promise<Refined> =>
+    refineStore(s.root, { apiKey: 'no-key', tenantId: 'default', ...opts });
 
   function seedForRefine(s: Store): void {
-    s.seed(`${MERGED}the billing service retries a failed charge, three times in a row`, { layer: Layer.Semantic, tags: ['billing'] });
-    s.seed(`${MERGED}the invoice worker sends a receipt after each charge`, { layer: Layer.Semantic, tags: ['llm-refined', 'billing'] });
+    s.seed(`${MERGED}the billing service retries a failed charge, three times in a row`, {
+      layer: Layer.Semantic,
+      tags: ['billing'],
+    });
+    s.seed(`${MERGED}the invoice worker sends a receipt after each charge`, {
+      layer: Layer.Semantic,
+      tags: ['llm-refined', 'billing'],
+    });
     s.seed(CLEAN, { layer: Layer.Semantic });
     s.settle();
   }
@@ -180,7 +201,9 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
     const s = new Store();
     seedForRefine(s);
     await s.call('refineStore', () => refine(s, { fetcher: answering('Failed charges are retried three times.') }));
-    await s.call('refineStore all', () => refine(s, { fetcher: answering('Each charge is retried, then a receipt is sent.'), all: true }));
+    await s.call('refineStore all', () =>
+      refine(s, { fetcher: answering('Each charge is retried, then a receipt is sent.'), all: true }),
+    );
     s.expectPinned();
   });
 
@@ -194,13 +217,19 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
   it('dryRun writes nothing', async () => {
     const s = new Store();
     seedForRefine(s);
-    await s.call('refineStore dryRun', () => refine(s, { fetcher: answering('Failed charges are retried three times.'), dryRun: true }));
+    await s.call('refineStore dryRun', () =>
+      refine(s, { fetcher: answering('Failed charges are retried three times.'), dryRun: true }),
+    );
     s.expectPinned();
   });
 });
 
 describe('hippo decide --supersedes (built CLI, no server)', () => {
-  const decisions = (s: Store): Row[] => query(s.root, 'SELECT id, memory_id, decision_text, context, status, superseded_by, superseded_at, closed_at FROM decisions ORDER BY id');
+  const decisions = (s: Store): Row[] =>
+    query(
+      s.root,
+      'SELECT id, memory_id, decision_text, context, status, superseded_by, superseded_at, closed_at FROM decisions ORDER BY id',
+    );
 
   it('weakens the memory of an earlier decision, and again on a second supersede', async () => {
     const s = new Store({ spawned: true });
@@ -230,7 +259,10 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     const s = new Store();
     const oldId = s.seed(CLEAN, { tags: ['billing'] });
     for (const event of ['INSERT', 'UPDATE']) {
-      exec(s.root, `CREATE TRIGGER refuse_weaken_${event} BEFORE ${event} ON memories WHEN NEW.id = '${oldId}' AND NEW.confidence = 'stale' BEGIN SELECT RAISE(ABORT, 'refused'); END`);
+      exec(
+        s.root,
+        `CREATE TRIGGER refuse_weaken_${event} BEFORE ${event} ON memories WHEN NEW.id = '${oldId}' AND NEW.confidence = 'stale' BEGIN SELECT RAISE(ABORT, 'refused'); END`,
+      );
     }
     s.settle();
     await s.run('decide', 'the billing service retries a failed charge five times', '--supersedes', oldId);
@@ -269,14 +301,29 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
   function book(root: string, surface: TokenSurface, tokens: number): void {
     const db = openHippoDb(root);
     try {
-      recordTokenUse(db, { tenantId: 'default', sessionId: SESSION, surface, event: 'inject', items: 1, tokens, hash: 'h1', now: iso(NOON) });
+      recordTokenUse(db, {
+        tenantId: 'default',
+        sessionId: SESSION,
+        surface,
+        event: 'inject',
+        items: 1,
+        tokens,
+        hash: 'h1',
+        now: iso(NOON),
+      });
     } finally {
       closeHippoDb(db);
     }
   }
 
   function callLine(n: number): string {
-    const message = { id: `m${n}`, model: 'claude-test', role: 'assistant', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 10, output_tokens: 2 } };
+    const message = {
+      id: `m${n}`,
+      model: 'claude-test',
+      role: 'assistant',
+      content: [{ type: 'text', text: 'done' }],
+      usage: { input_tokens: 10, output_tokens: 2 },
+    };
     return JSON.stringify({ type: 'assistant', isSidechain: false, timestamp: iso(NOON + n * 10_000), message });
   }
 
@@ -286,8 +333,16 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
     writeFileSync(transcript, `${[1, 2, 3].map(callLine).join('\n')}\n`);
     const log = join(s.base, 'session-end.log');
     await s.run('__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION);
-    const ledger = (root: string): Row[] => query(root, "SELECT tenant_id, session_id, surface, event, items, tokens FROM token_ledger WHERE event IN ('inject', 'reread') ORDER BY id");
-    const rereadLog = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter((line) => line.includes('re-read')) : [];
+    const ledger = (root: string): Row[] =>
+      query(
+        root,
+        "SELECT tenant_id, session_id, surface, event, items, tokens FROM token_ledger WHERE event IN ('inject', 'reread') ORDER BY id",
+      );
+    const rereadLog = existsSync(log)
+      ? readFileSync(log, 'utf8')
+          .split('\n')
+          .filter((line) => line.includes('re-read'))
+      : [];
     return { rereadLog, ledger: { local: ledger(s.root), global: ledger(s.home) } };
   }
 
@@ -304,7 +359,10 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
     const s = new Store({ global: true });
     book(s.root, 'hook', 100);
     book(s.home, 'hook_recall', 30);
-    exec(s.root, "CREATE TRIGGER refuse_reread BEFORE INSERT ON token_ledger WHEN NEW.event = 'reread' BEGIN SELECT RAISE(ABORT, 'refused'); END");
+    exec(
+      s.root,
+      "CREATE TRIGGER refuse_reread BEFORE INSERT ON token_ledger WHEN NEW.event = 'reread' BEGIN SELECT RAISE(ABORT, 'refused'); END",
+    );
     s.expectPinned(await endSession(s));
   });
 

@@ -88,7 +88,9 @@ function resultRowsFor(home: string, traceId: number): SqliteRow[] {
     // SAFETY: sql is a literal SELECT against the known recall_trace_results
     // schema; the SqliteRow value type already reflects what node:sqlite can
     // return.
-    return db.prepare(`SELECT * FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank ASC`).all(traceId) as SqliteRow[];
+    return db
+      .prepare(`SELECT * FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank ASC`)
+      .all(traceId) as SqliteRow[];
   } finally {
     closeHippoDb(db);
   }
@@ -177,7 +179,11 @@ describe('api.recall — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'suppressed-trace-target' });
 
-      const result = await retrieve(ctx, { query: 'suppressed-trace-target', window: { limit: 5 }, trace: { suppressRecallTrace: true } });
+      const result = await retrieve(ctx, {
+        query: 'suppressed-trace-target',
+        window: { limit: 5 },
+        trace: { suppressRecallTrace: true },
+      });
       expect(result.results).toHaveLength(1);
 
       expect(traceRows(home, 'api')).toHaveLength(0);
@@ -241,7 +247,11 @@ describe('api.getContext — trace wiring', () => {
       expect(before.last_trace_id).toBeNull();
       expect(before.last_retrieval_ids ?? []).toEqual([]);
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000 });
+      const result = await getContext(ctx, {
+        currentProject: cwdProject(),
+        q: 'zzz-query-matches-absolutely-nothing-xyzzy',
+        budget: 1000,
+      });
       expect(result.entries).toEqual([]);
 
       const traces = traceRows(home, 'context');
@@ -267,7 +277,12 @@ describe('api.getContext — trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-caller-session' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
+      const result = await getContext(ctx, {
+        currentProject: cwdProject(),
+        q: 'context-trace-target-caller',
+        budget: 1000,
+        currentSessionId: 'sess-caller-1',
+      });
       expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
@@ -285,7 +300,12 @@ describe('api.getContext — trace wiring', () => {
       disableEmbeddings(home);
       await remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000, currentSessionId: 'sess-caller-2' });
+      const result = await getContext(ctx, {
+        currentProject: cwdProject(),
+        q: 'zzz-query-matches-absolutely-nothing-xyzzy',
+        budget: 1000,
+        currentSessionId: 'sess-caller-2',
+      });
       expect(result.entries).toEqual([]);
 
       const traces = traceRows(home, 'context');
@@ -360,8 +380,18 @@ describe('CLI cmdRecall — trace wiring', () => {
   });
 
   it.each([
-    { name: 'falls back to CLAUDE_CODE_SESSION_ID when HIPPO_SESSION_ID is absent', own: '', host: 'sess-host-1', want: 'sess-host-1' },
-    { name: 'HIPPO_SESSION_ID wins over CLAUDE_CODE_SESSION_ID when both are set', own: 'own-1', host: 'sess-host-1', want: 'own-1' },
+    {
+      name: 'falls back to CLAUDE_CODE_SESSION_ID when HIPPO_SESSION_ID is absent',
+      own: '',
+      host: 'sess-host-1',
+      want: 'sess-host-1',
+    },
+    {
+      name: 'HIPPO_SESSION_ID wins over CLAUDE_CODE_SESSION_ID when both are set',
+      own: 'own-1',
+      host: 'sess-host-1',
+      want: 'own-1',
+    },
     { name: 'session_id is null when neither var is set', own: '', host: '', want: null },
   ])('hostSessionId(): $name', async ({ own, host, want }) => {
     vi.stubEnv('HIPPO_SESSION_ID', own);

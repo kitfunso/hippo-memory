@@ -52,7 +52,11 @@ const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';
 const NOW = new Date();
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -148,7 +152,20 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
     // back to ratio=1.0. The historical "deliberate disable" cases (0,
     // negatives) and the codex-flagged "small positive" cases (0.01, 0.1,
     // 0.25, 0.49) are all rejected together.
-    const invalidValues = ['', 'abc', '0', '0.1', '0.25', '0.49', '-1', '-0.5', 'NaN', 'Infinity', '-Infinity', '1e1000'];
+    const invalidValues = [
+      '',
+      'abc',
+      '0',
+      '0.1',
+      '0.25',
+      '0.49',
+      '-1',
+      '-0.5',
+      'NaN',
+      'Infinity',
+      '-Infinity',
+      '1e1000',
+    ];
     for (const v of invalidValues) {
       it(`5.${v || '(empty)'}: invalid value "${v}" falls back to ratio=1.0`, () => {
         vi.stubEnv(ENV_KEY, v);
@@ -306,8 +323,7 @@ describe('behavioral: env=0 ranking effect', () => {
     // NOT assert ranking position because recall combines BM25 + embedding +
     // strength + recency, and strength is one factor among several; the env
     // var's job is to control the multiplier value, not to dominate ranking.
-    const findStrength = (v: string) =>
-      result.results.find((r) => r.content.includes(`variant ${v} test`))?.strength;
+    const findStrength = (v: string) => result.results.find((r) => r.content.includes(`variant ${v} test`))?.strength;
     const negStrength = findStrength('negative')!;
     expect(negStrength).toBeGreaterThan(0.05); // safely above DECAY_THRESHOLD
 

@@ -10,7 +10,15 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
 import { runDoctor } from '../../src/doctor.js';
 import { diagnosticsAt } from '../_helpers/cli-stores.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, ftsRowCounts, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getMeta,
+  setMeta,
+  ftsRowCounts,
+  getCurrentSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
@@ -28,14 +36,18 @@ const { DatabaseSync } = require('node:sqlite') as {
 
 const CURRENT = getCurrentSchemaVersion();
 const DDL = /\b(CREATE|ALTER|DROP)\s/i;
-const ANY_CREATE = /CREATE\s+(?:TEMP\w*\s+)?(?:UNIQUE\s+)?(?:VIRTUAL\s+)?(?:TABLE|INDEX|TRIGGER|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)/gi;
+const ANY_CREATE =
+  /CREATE\s+(?:TEMP\w*\s+)?(?:UNIQUE\s+)?(?:VIRTUAL\s+)?(?:TABLE|INDEX|TRIGGER|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.]+)/gi;
 
 let root: string;
 let cwd: string;
 
 beforeEach(() => {
   ({ base: cwd, root } = makeStore('open-fast-path'));
-  writeEntry(root, createMemory('the quokka deploy key rotates every ninety days', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+  writeEntry(
+    root,
+    createMemory('the quokka deploy key rotates every ninety days', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+  );
 });
 
 /** Every SQL string sent through exec or prepare while `fn` runs. */
@@ -43,11 +55,17 @@ function captureStatements(fn: () => void): string[] {
   const statements: string[] = [];
   const originalPrepare = DatabaseSync.prototype.prepare;
   const originalExec = DatabaseSync.prototype.exec;
-  const prepareSpy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSyncLike, ...args: [string]) {
+  const prepareSpy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+    this: DatabaseSyncLike,
+    ...args: [string]
+  ) {
     statements.push(args[0]);
     return originalPrepare.apply(this, args);
   });
-  const execSpy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, ...args: [string]) {
+  const execSpy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+    this: DatabaseSyncLike,
+    ...args: [string]
+  ) {
     statements.push(args[0]);
     return originalExec.apply(this, args);
   });
@@ -226,8 +244,12 @@ describe('full-text drift repair moved off the open path', () => {
 
   it('doctor warns on drift and points at sleep', () => {
     vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'pass' });
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts'),
+    ).toMatchObject({ status: 'pass' });
     desyncFts();
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts'),
+    ).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
   });
 });

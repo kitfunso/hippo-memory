@@ -91,8 +91,11 @@ export interface CompactionStore {
 function snapshotJustSaved(sessions: Sync<Sessions>, sessionId: string | null): boolean {
   if (sessionId === null || sessionId === '') return false;
   const active = sessions.loadSnapshot(resolveTenantId({}), null);
-  return active?.session_id === sessionId && active.source === 'pre-compact' &&
-    Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
+  return (
+    active?.session_id === sessionId &&
+    active.source === 'pre-compact' &&
+    Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS
+  );
 }
 
 /** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves a working-state

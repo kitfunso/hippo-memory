@@ -22,10 +22,15 @@ describe('hippo-memory/testing entry types', () => {
 
   it('the entry exports exactly the nine published seams', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
-      | '_resetAblationCacheForTests' | '_setDigestExistsProbeForTests' | '_resetSharedStoreCacheForTests'
-      | '_resetLossAversionRatioCacheForTests' | '_resetProjectIdentityCacheForTests'
-      | '_resetSessionRecallHistoryMcpForTests' | '__resetSessionRecallHistoryHttp'
-      | '_readApiKeyVerifyStatsForTests' | '_resetLogOnceForTests'
+      | '_resetAblationCacheForTests'
+      | '_setDigestExistsProbeForTests'
+      | '_resetSharedStoreCacheForTests'
+      | '_resetLossAversionRatioCacheForTests'
+      | '_resetProjectIdentityCacheForTests'
+      | '_resetSessionRecallHistoryMcpForTests'
+      | '__resetSessionRecallHistoryHttp'
+      | '_readApiKeyVerifyStatsForTests'
+      | '_resetLogOnceForTests'
     >();
     expect(Object.keys(testing)).toHaveLength(9);
   });

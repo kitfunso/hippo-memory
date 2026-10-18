@@ -4,9 +4,23 @@ import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
 import {
-  ambientRefusal, ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries,
-  type AmbientCandidateRequest, type AmbientCandidates, type AmbientRefusal, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore, type MemoryEntry,
-  type RecentOrigins, type SessionHandoff, type VectorReads,
+  ambientRefusal,
+  ftsTermParts,
+  passesScopeFilterForRecall,
+  rarestFtsQuery,
+  SECRET_TAGS,
+  tallyAmbientEntries,
+  type AmbientCandidateRequest,
+  type AmbientCandidates,
+  type AmbientRefusal,
+  type AuditEvent,
+  type ContextReads,
+  type ContinuityKey,
+  type HippoStore,
+  type MemoryEntry,
+  type RecentOrigins,
+  type SessionHandoff,
+  type VectorReads,
 } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
@@ -39,7 +53,9 @@ interface CopiedRows {
 function countDocs(fts: readonly { content: string | null; tags: string | null }[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const { content, tags } of fts) {
-    for (const term of new Set(ftsTermParts(`${content ?? ''} ${tags ?? ''}`.toLowerCase()))) counts.set(term, (counts.get(term) ?? 0) + 1);
+    for (const term of new Set(ftsTermParts(`${content ?? ''} ${tags ?? ''}`.toLowerCase()))) {
+      counts.set(term, (counts.get(term) ?? 0) + 1);
+    }
   }
   return counts;
 }
@@ -51,9 +67,14 @@ function copyRows(hippoRoot: string): CopiedRows {
       // SAFETY: each SELECT below names its row type's columns, plus the tenant and key columns the type adds.
       const memories = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`).all() as MemoryRow[];
       // SAFETY: as above.
-      const handoffs = db.prepare(`SELECT ${HANDOFF_COLUMNS}, tenant_id, owner_subject, origin_project FROM session_handoffs`).all() as (SessionHandoffRow & Keyed)[];
+      const handoffs = db
+        .prepare(`SELECT ${HANDOFF_COLUMNS}, tenant_id, owner_subject, origin_project FROM session_handoffs`)
+        .all() as (SessionHandoffRow & Keyed)[];
       // SAFETY: as above.
-      const fts = db.prepare('SELECT content, tags FROM memories_fts').all() as { content: string | null; tags: string | null }[];
+      const fts = db.prepare('SELECT content, tags FROM memories_fts').all() as {
+        content: string | null;
+        tags: string | null;
+      }[];
       return { memories, handoffs, docCounts: countDocs(fts) };
     } finally {
       closeHippoDb(db);
@@ -75,7 +96,12 @@ function sqliteMs(text: string | null): number | null {
 function ownedBy(row: Keyed, key: ContinuityKey | null): boolean {
   if (key === null) return true;
   const names = key.project.filter((n) => n !== '');
-  return key.owner !== '' && row.owner_subject === key.owner && row.origin_project !== null && names.includes(row.origin_project);
+  return (
+    key.owner !== '' &&
+    row.owner_subject === key.owner &&
+    row.origin_project !== null &&
+    names.includes(row.origin_project)
+  );
 }
 
 function newestHandoff(rows: readonly (SessionHandoffRow & Keyed)[]): SessionHandoff | null {
@@ -91,7 +117,9 @@ interface Envelope {
 
 function inEnvelope(row: MemoryRow, tenantId: string, filter: Envelope): boolean {
   if (row.tenant_id !== tenantId || (row.superseded_by ?? '') !== '') return false;
-  const scoped = filter.exactScope ? row.scope === filter.exactScope : passesScopeFilterForRecall(row.scope, undefined, filter.ownScope);
+  const scoped = filter.exactScope
+    ? row.scope === filter.exactScope
+    : passesScopeFilterForRecall(row.scope, undefined, filter.ownScope);
   if (!scoped) return false;
   const origin = row.origin_project;
   return filter.project === undefined || (origin !== null && (origin === '' || filter.project.includes(origin)));
@@ -106,12 +134,14 @@ function decayKey(row: MemoryRow, nowMs: number): number | null {
   return (nowMs - last) / 86_400_000 / (row.half_life_days * (1 + (0.5 * (pos - neg)) / (pos + neg + 1)));
 }
 
-const byCreated = <R extends MemoryRow>(list: readonly R[]): R[] => [...list].sort((a, b) => bytes(a.created, b.created) || bytes(a.id, b.id));
+const byCreated = <R extends MemoryRow>(list: readonly R[]): R[] =>
+  [...list].sort((a, b) => bytes(a.created, b.created) || bytes(a.id, b.id));
 
 /** schemaFitAt's window: the tenant's newest rows that move the fit. */
 const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
-const nullsLast = (a: number | null, b: number | null): number => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : a - b);
+const nullsLast = (a: number | null, b: number | null): number =>
+  a === null ? (b === null ? 0 : 1) : b === null ? -1 : a - b;
 
 function secretAdmitted(row: MemoryRow, currentProject: readonly string[]): boolean {
   const origin = row.origin_project;
@@ -134,12 +164,21 @@ function inOrigins(e: MemoryEntry, origins: RecentOrigins): boolean {
 }
 
 /** loadAmbientCandidates' recent rows: the same windows, read in the same order, so `admit` sees the same rows. */
-function recentRows(live: readonly MemoryRow[], needed: number, admit: (e: MemoryEntry) => boolean, origins?: RecentOrigins): MemoryEntry[] {
+function recentRows(
+  live: readonly MemoryRow[],
+  needed: number,
+  admit: (e: MemoryEntry) => boolean,
+  origins?: RecentOrigins,
+): MemoryEntry[] {
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
   const newest = [...live].sort((a, b) => bytes(b.created, a.created) || bytes(b.id, a.id));
   // The SQL origin filter differs from inOrigins: a '' name in the list admits '' rows even without userGlobal.
   const own = origins
-    ? newest.filter((r) => r.origin_project !== null && ((origins.userGlobal && r.origin_project === '') || origins.names.includes(r.origin_project)))
+    ? newest.filter(
+        (r) =>
+          r.origin_project !== null &&
+          ((origins.userGlobal && r.origin_project === '') || origins.names.includes(r.origin_project)),
+      )
     : newest;
   const window = Math.max(needed * 4, 32);
   const drifted = live.some((r) => [...r.created].length !== 24 || !/z$/i.test(r.created));
@@ -164,18 +203,25 @@ function recentRows(live: readonly MemoryRow[], needed: number, admit: (e: Memor
 export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
   const { store: base, calls } = withSqliteAllowed(() => inMemoryVectorStore(hippoRoot));
   let rows = copyRows(hippoRoot);
-  const logged = <A extends unknown[], R>(name: string, fn: (...args: A) => R) => (...args: A): R => {
-    calls.push(name);
-    return fn(...args);
-  };
+  const logged =
+    <A extends unknown[], R>(name: string, fn: (...args: A) => R) =>
+    (...args: A): R => {
+      calls.push(name);
+      return fn(...args);
+    };
 
   /** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as SQLite's LIMIT reads it. */
   function newestRows(tenantId: string, limit: number): MemoryRow[] {
-    const newest = rows.memories.filter((r) => r.tenant_id === tenantId).sort((a, b) => bytes(b.created, a.created) || bytes(b.id, a.id));
+    const newest = rows.memories
+      .filter((r) => r.tenant_id === tenantId)
+      .sort((a, b) => bytes(b.created, a.created) || bytes(b.id, a.id));
     return (limit < 0 ? newest : newest.slice(0, limit)).reverse();
   }
 
-  async function ambientCandidates(tenantId: string, { recentNeeded, admit: admission, recall, origins }: AmbientCandidateRequest): Promise<AmbientCandidates> {
+  async function ambientCandidates(
+    tenantId: string,
+    { recentNeeded, admit: admission, recall, origins }: AmbientCandidateRequest,
+  ): Promise<AmbientCandidates> {
     const refused: AmbientRefusal[] = [];
     const admit = (e: MemoryEntry): boolean => {
       const reason = ambientRefusal(e, admission);
@@ -185,7 +231,10 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
     const needed = Math.trunc(recentNeeded);
     const live = rows.memories.filter((r) => r.superseded_by === null && r.tenant_id === tenantId);
     const byId = new Map<string, MemoryEntry>();
-    const pins = live.filter((r) => r.pinned === 1).sort((a, b) => bytes(a.created, b.created) || bytes(a.id, b.id)).map(rowToEntry);
+    const pins = live
+      .filter((r) => r.pinned === 1)
+      .sort((a, b) => bytes(a.created, b.created) || bytes(a.id, b.id))
+      .map(rowToEntry);
     for (const e of pins) if (admit(e)) byId.set(e.id, e);
     if (needed > 0) for (const e of recentRows(live, needed, admit, origins)) byId.set(e.id, e);
     const entries = [...byId.values()].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id));
@@ -193,7 +242,13 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
     const query = rarestFtsQuery(recall.terms, (part) => rows.docCounts.get(part) ?? 0);
     const found = query
       ? await base.searchRecallEntries(query, {
-          limit: recall.limit, tenantId, requestedScope: undefined, explicitScopeMode: 'exact', includeSuperseded: false, originProjects: undefined, ownScope: recall.ownScope,
+          limit: recall.limit,
+          tenantId,
+          requestedScope: undefined,
+          explicitScopeMode: 'exact',
+          includeSuperseded: false,
+          originProjects: undefined,
+          ownScope: recall.ownScope,
         })
       : [];
     return { entries, recall: found, refused };
@@ -206,10 +261,15 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
       const newestId = new Map<string, number>();
       for (const r of mine) newestId.set(r.session_id, Math.max(newestId.get(r.session_id) ?? 0, r.id));
       const since = new Date(Date.now() - maxAgeMs).toISOString();
-      return newestHandoff(mine.filter((r) => newestId.get(r.session_id) === r.id
-        && (r.outcome === null || r.outcome === 'partial' || r.outcome === 'failure')
-        && bytes(r.created_at, since) >= 0
-        && passesScopeFilterForRecall(r.scope, undefined)));
+      return newestHandoff(
+        mine.filter(
+          (r) =>
+            newestId.get(r.session_id) === r.id &&
+            (r.outcome === null || r.outcome === 'partial' || r.outcome === 'failure') &&
+            bytes(r.created_at, since) >= 0 &&
+            passesScopeFilterForRecall(r.scope, undefined),
+        ),
+      );
     },
     ambientCandidates,
     async contextCandidates(tenantId, filter) {
@@ -225,8 +285,14 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
         .map(rowToEntry);
     },
     async ambientTallies(tenantId, filter) {
-      const kept = rows.memories.filter((r) => inEnvelope(r, tenantId, filter) && (r.kind ?? '') !== 'archived' && secretAdmitted(r, filter.currentProject));
-      return tallyAmbientEntries(kept.map((r) => utcDates(rowToEntry(r))), filter.now);
+      const kept = rows.memories.filter(
+        (r) =>
+          inEnvelope(r, tenantId, filter) && (r.kind ?? '') !== 'archived' && secretAdmitted(r, filter.currentProject),
+      );
+      return tallyAmbientEntries(
+        kept.map((r) => utcDates(rowToEntry(r))),
+        filter.now,
+      );
     },
     async newestEntries(tenantId, limit) {
       return newestRows(tenantId, limit).map(rowToEntry);
@@ -235,14 +301,31 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
       return computeSchemaFit(content, [...tags], newestRows(tenantId, SCHEMA_FIT_WINDOW_ROWS).map(rowToEntry));
     },
     async liveContentsBySourceAndTag(tenantId, source, tag, exceptSessionId) {
-      const live = rows.memories.filter((r) => r.tenant_id === tenantId && r.source === source && (r.extracted_from ?? '') === ''
-        && (r.superseded_by ?? '') === '' && r.source_session_id !== exceptSessionId && rowToEntry(r).tags.includes(tag));
+      const live = rows.memories.filter(
+        (r) =>
+          r.tenant_id === tenantId &&
+          r.source === source &&
+          (r.extracted_from ?? '') === '' &&
+          (r.superseded_by ?? '') === '' &&
+          r.source_session_id !== exceptSessionId &&
+          rowToEntry(r).tags.includes(tag),
+      );
       return byCreated(live).map((r) => r.content);
     },
     async rawRowsUnderRef(tenantId, refPrefix) {
-      const under = rows.memories.filter((r): r is MemoryRow & { artifact_ref: string } =>
-        r.tenant_id === tenantId && r.kind === 'raw' && r.artifact_ref !== null && r.artifact_ref.startsWith(refPrefix));
-      return byCreated(under).map((r) => ({ id: r.id, artifact_ref: r.artifact_ref, tags_json: r.tags_json, scope: r.scope }));
+      const under = rows.memories.filter(
+        (r): r is MemoryRow & { artifact_ref: string } =>
+          r.tenant_id === tenantId &&
+          r.kind === 'raw' &&
+          r.artifact_ref !== null &&
+          r.artifact_ref.startsWith(refPrefix),
+      );
+      return byCreated(under).map((r) => ({
+        id: r.id,
+        artifact_ref: r.artifact_ref,
+        tags_json: r.tags_json,
+        scope: r.scope,
+      }));
     },
   };
 
@@ -266,13 +349,14 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
       rawRowsUnderRef: logged('rawRowsUnderRef', reads.rawRowsUnderRef),
     },
   };
-  const auditRows = (): readonly AuditEvent[] => withSqliteAllowed(() => {
-    const db = openHippoDb(hippoRoot);
-    try {
-      return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
-    } finally {
-      closeHippoDb(db);
-    }
-  });
+  const auditRows = (): readonly AuditEvent[] =>
+    withSqliteAllowed(() => {
+      const db = openHippoDb(hippoRoot);
+      try {
+        return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+      } finally {
+        closeHippoDb(db);
+      }
+    });
   return { store, auditRows, calls };
 }

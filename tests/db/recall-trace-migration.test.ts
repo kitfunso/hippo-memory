@@ -4,17 +4,22 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: the query selects only the `name` column from sqlite_master, so every
   // row is shaped { name: string }.
-  return (db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
-    .all() as Array<{ name: string }>)
-    .map((r) => r.name);
+  return (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`).all() as Array<{ name: string }>
+  ).map((r) => r.name);
 }
 
 function getMeta(db: DatabaseSyncLike, key: string): string | undefined {
@@ -51,12 +56,25 @@ describe('schema migration v40', () => {
       // SAFETY: PRAGMA table_info always returns rows with a `name` text column
       // per SQLite's fixed pragma schema.
       const cols = (db.prepare(`PRAGMA table_info(recall_traces)`).all() as Array<{ name: string }>).map((c) => c.name);
-      for (const c of ['id', 'ts', 'tenant_id', 'session_id', 'pipeline', 'query_hash', 'query_length', 'result_count', 'explain_mode']) {
+      for (const c of [
+        'id',
+        'ts',
+        'tenant_id',
+        'session_id',
+        'pipeline',
+        'query_hash',
+        'query_length',
+        'result_count',
+        'explain_mode',
+      ]) {
         expect(cols, `recall_traces.${c} missing`).toContain(c);
       }
-      const insert = () => db.prepare(
-        `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(new Date().toISOString(), 'default', 'bogus_pipeline', 'abc123', 5, 0);
+      const insert = () =>
+        db
+          .prepare(
+            `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(new Date().toISOString(), 'default', 'bogus_pipeline', 'abc123', 5, 0);
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
@@ -68,9 +86,11 @@ describe('schema migration v40', () => {
     const db = openHippoDb(home);
     try {
       const traceId = Number(
-        db.prepare(
-          `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
-        ).run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
+        db
+          .prepare(
+            `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
       );
       // memory_id references a memory that never existed — must succeed (no FK).
       expect(() => {
@@ -88,9 +108,11 @@ describe('schema migration v40', () => {
     const db = openHippoDb(home);
     try {
       const traceId = Number(
-        db.prepare(
-          `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
-        ).run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
+        db
+          .prepare(
+            `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
       );
       db.prepare(
         `INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score) VALUES (?, ?, ?, ?, ?)`,
@@ -110,9 +132,11 @@ describe('schema migration v40', () => {
     const db = openHippoDb(home);
     try {
       const traceId = Number(
-        db.prepare(
-          `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
-        ).run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
+        db
+          .prepare(
+            `INSERT INTO recall_traces (ts, tenant_id, pipeline, query_hash, query_length, result_count) VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
       );
       db.prepare(
         `INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score) VALUES (?, ?, ?, ?, ?)`,

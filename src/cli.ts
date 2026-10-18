@@ -30,9 +30,8 @@ import { CliExit, fail } from './cli/exit.js';
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
   const only = spec?.dryRun;
-  const honoured = only === undefined
-    ? spec?.flags.switches?.includes('dry-run')
-    : only !== false && only.honoured(args, flags);
+  const honoured =
+    only === undefined ? spec?.flags.switches?.includes('dry-run') : only !== false && only.honoured(args, flags);
   if (honoured) return null;
   const where = only ? ` outside \`hippo ${command} ${only.form}\`` : '';
   return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
@@ -132,7 +131,8 @@ const ROWS: readonly VerbSpec[] = Object.values(COMMANDS);
 
 const COMMAND_INDEX: ReadonlyMap<string, VerbSpec> = new Map(
   Object.entries<VerbSpec>(COMMANDS).flatMap(([verb, spec]) =>
-    [verb, ...(spec.aliases ?? [])].map((name): [string, VerbSpec] => [name, spec])),
+    [verb, ...(spec.aliases ?? [])].map((name): [string, VerbSpec] => [name, spec]),
+  ),
 );
 
 export function usageText(): string {
@@ -221,12 +221,7 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   }
 }
 
-async function main(
-  command: string,
-  args: string[],
-  flags: CliFlags,
-  hippoRoot: string,
-): Promise<void> {
+async function main(command: string, args: string[], flags: CliFlags, hippoRoot: string): Promise<void> {
   if (command === '--version' || command === '-v' || flags['version']) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();

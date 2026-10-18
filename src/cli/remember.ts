@@ -52,10 +52,7 @@ interface RememberTags {
 }
 
 // Shared by the direct write and the routed request so both store the same tags.
-function rememberTags(
-  flags: CliFlags,
-  cwd: string,
-): RememberTags {
+function rememberTags(flags: CliFlags, cwd: string): RememberTags {
   const requested: string[] = Array.isArray(flags['tag']) ? [...flags['tag']] : [];
   if (flags['error']) requested.push('error');
   const all = [...requested];
@@ -118,12 +115,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   return { kind, owner, artifactRef, scope };
 }
 
-async function cmdRemember(
-  hippoRoot: string,
-  tenantId: string,
-  text: string,
-  flags: CliFlags
-): Promise<void> {
+async function cmdRemember(hippoRoot: string, tenantId: string, text: string, flags: CliFlags): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
@@ -251,11 +243,7 @@ function traceTags(flags: CliFlags): string[] {
   return stringListFlag(flags, 'tag') ?? [];
 }
 
-async function cmdTraceRecord(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function cmdTraceRecord(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   const task = stringFlagOrExit(flags, 'task') ?? '';
@@ -298,12 +286,7 @@ async function cmdTraceRecord(
   console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
-async function cmdTrace(
-  hippoRoot: string,
-  tenantId: string,
-  id: string,
-  flags: CliFlags,
-): Promise<void> {
+async function cmdTrace(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
@@ -320,7 +303,9 @@ async function cmdTrace(
   }
 
   const t: TraceView = {
-    entry, id, sourceLabel,
+    entry,
+    id,
+    sourceLabel,
     ...traceStats(entry),
     ...(await traceLineage(hippoRoot, globalRoot, entry, id, tenantId)),
   };
@@ -331,11 +316,12 @@ async function cmdTrace(
   printTraceText(t);
 }
 
-type TraceView = ReturnType<typeof traceStats> & Awaited<ReturnType<typeof traceLineage>> & {
-  entry: MemoryEntry;
-  id: string;
-  sourceLabel: 'local' | 'global';
-};
+type TraceView = ReturnType<typeof traceStats> &
+  Awaited<ReturnType<typeof traceLineage>> & {
+    entry: MemoryEntry;
+    id: string;
+    sourceLabel: 'local' | 'global';
+  };
 
 function traceStats(entry: MemoryEntry) {
   const now = evalNow();
@@ -373,42 +359,45 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
   // Open conflicts involving this memory.
   const openIn = (root: string) =>
     api.everyConflict((page) => api.listConflicts(cliApiContext(root, tenantId), 'open', {}, page));
-  const allConflicts = [
-    ...(await openIn(hippoRoot)),
-    ...(isInitialized(globalRoot) ? await openIn(globalRoot) : []),
-  ];
+  const allConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
   return { parentPreviews, myConflicts };
 }
 
 function printTraceJson(t: TraceView): void {
   const { entry, facets } = t;
-  console.log(JSON.stringify({
-    id: entry.id,
-    source: t.sourceLabel,
-    layer: entry.layer,
-    confidence: facets.tier,
-    aged_out: facets.agedOut,
-    pinned: entry.pinned,
-    starred: entry.starred,
-    tags: entry.tags,
-    content: entry.content,
-    created: entry.created,
-    age_days: t.ageDays,
-    last_retrieved: entry.last_retrieved,
-    days_since_last_retrieval: t.sinceLast,
-    retrieval_count: entry.retrieval_count,
-    strength_now: t.strength,
-    half_life_days: t.halfLife,
-    reward_factor: t.rewardFactor,
-    effective_half_life_days: t.effHalfLife,
-    projected_strength_30d: t.projectedAt(30),
-    projected_strength_90d: t.projectedAt(90),
-    outcome_positive: entry.outcome_positive,
-    outcome_negative: entry.outcome_negative,
-    parents: t.parentPreviews,
-    open_conflicts: t.myConflicts,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        id: entry.id,
+        source: t.sourceLabel,
+        layer: entry.layer,
+        confidence: facets.tier,
+        aged_out: facets.agedOut,
+        pinned: entry.pinned,
+        starred: entry.starred,
+        tags: entry.tags,
+        content: entry.content,
+        created: entry.created,
+        age_days: t.ageDays,
+        last_retrieved: entry.last_retrieved,
+        days_since_last_retrieval: t.sinceLast,
+        retrieval_count: entry.retrieval_count,
+        strength_now: t.strength,
+        half_life_days: t.halfLife,
+        reward_factor: t.rewardFactor,
+        effective_half_life_days: t.effHalfLife,
+        projected_strength_30d: t.projectedAt(30),
+        projected_strength_90d: t.projectedAt(90),
+        outcome_positive: entry.outcome_positive,
+        outcome_negative: entry.outcome_negative,
+        parents: t.parentPreviews,
+        open_conflicts: t.myConflicts,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 function printTraceText(t: TraceView): void {
@@ -469,10 +458,15 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
   // the direct path. The salience gate is not in richFlag and the route does not apply it, so a routed remember stores
   // what a direct one would skip.
   const richFlag =
-    flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
-    flags['observed'] || flags['inferred'] || flags['verified'] ||
+    flags['pin'] ||
+    flags['global'] ||
+    flags['extract'] ||
+    flags['force'] ||
+    flags['observed'] ||
+    flags['inferred'] ||
+    flags['verified'] ||
     flags['layer'] !== undefined;
-  if (!richFlag && await rememberViaThinClient(hippoRoot, text, flags)) return;
+  if (!richFlag && (await rememberViaThinClient(hippoRoot, text, flags))) return;
   await cmdRemember(hippoRoot, tenantId, text, flags);
 }
 

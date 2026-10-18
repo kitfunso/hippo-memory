@@ -70,7 +70,16 @@ describe('package entry re-exports sleep', () => {
     vi.stubEnv('HIPPO_HOME', home);
     try {
       initStore(home);
-      const result = await entry.sleep({ hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
+      const result = await entry.sleep(
+        {
+          hippoRoot: home,
+          store: sqliteStore(home),
+          config: loadConfig(home),
+          tenantId: 'default',
+          actor: { subject: 'test', role: 'admin' },
+        },
+        { dryRun: true },
+      );
       expect(result.dryRun).toBe(true);
       expect(result.active).toBe(0);
     } finally {
@@ -110,7 +119,9 @@ describe('hippo-memory/testing', () => {
     const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
     // The seam name rule of scripts/check-test-only-exports.mjs, which also admits a reader or a setter.
-    expect(out.names.every((n) => /^_[a-z][A-Za-z0-9]*ForTests$/.test(n) || n === '__resetSessionRecallHistoryHttp')).toBe(true);
+    expect(
+      out.names.every((n) => /^_[a-z][A-Za-z0-9]*ForTests$/.test(n) || n === '__resetSessionRecallHistoryHttp'),
+    ).toBe(true);
     expect(out.names).toContain('__resetSessionRecallHistoryHttp');
     expect(out.onServer).toBe(false);
     expect(existsSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.d.ts'))).toBe(true);
@@ -122,7 +133,8 @@ function runtimeReexports(source: string): string[] {
   const modules: string[] = [];
   for (const m of source.matchAll(/^export\s+(type\s+)?(\*(?:\s+as\s+\w+)?|\{([^}]*)\})\s+from\s+'([^']+)'/gm)) {
     const [, typeOnly, , names, module] = m;
-    const hasValue = names === undefined || names.split(',').some((n) => n.trim() !== '' && !n.trim().startsWith('type '));
+    const hasValue =
+      names === undefined || names.split(',').some((n) => n.trim() !== '' && !n.trim().startsWith('type '));
     if (!typeOnly && hasValue) modules.push(module);
   }
   return modules;
@@ -166,7 +178,8 @@ describe('published runtime exports', () => {
       'console.log(JSON.stringify(names));',
     ].join('\n');
     const names = importBuiltEntry<Record<string, string[]>>(script);
-    expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)]))).toMatchInlineSnapshot(`
+    expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)])))
+      .toMatchInlineSnapshot(`
       {
         ".": "CARD_LEASE_MS CARD_TRANSITIONS
       DEFAULT_MAX_NEIGHBORS

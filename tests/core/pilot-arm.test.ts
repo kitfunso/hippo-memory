@@ -3,7 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loadConfig, DEFAULT_CONFIG } from '../../src/core/config.js';
-import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  HOOK_DB_WAIT_MS,
+  runWithRequestStores,
+  SERVER_DB_WAIT_MS,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../../src/store/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/token-ledger.js';
@@ -32,7 +39,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const writeConfig = (pilot: JsonValue): void => fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ pilot }));
+const writeConfig = (pilot: JsonValue): void =>
+  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ pilot }));
 // SAFETY: a single COUNT(*) aggregate aliased `n`.
 const armCount = (): number =>
   (db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as { n: number }).n;
@@ -114,7 +122,9 @@ describe('pilot arm helpers', () => {
   });
 
   it('a failing database returns the hash arm and never throws', () => {
-    vi.spyOn(db, 'exec').mockImplementation(() => { throw new Error('locked'); });
+    vi.spyOn(db, 'exec').mockImplementation(() => {
+      throw new Error('locked');
+    });
     expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
     expect(ensurePilotArm(db, 'default', 's1', 0)).toBe('hippo');
   });
@@ -125,7 +135,9 @@ describe('pilot arm helpers', () => {
       holder.exec('BEGIN IMMEDIATE');
       const reader = openHippoDb(root, { busyWaitMs: HOOK_DB_WAIT_MS });
       try {
-        const waited = waitOnSteppedClock(reader, () => expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'));
+        const waited = waitOnSteppedClock(reader, () =>
+          expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'),
+        );
         expect(waited).toBe(HOOK_DB_WAIT_MS);
       } finally {
         closeHippoDb(reader);
@@ -141,16 +153,21 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      await runWithRequestStores(() => {
-        const reader = openHippoDb(root);
-        try {
-          const waited = waitOnSteppedClock(reader, () => expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'));
-          expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
-          expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
-        } finally {
-          closeHippoDb(reader);
-        }
-      }, { busyWaitMs: SERVER_DB_WAIT_MS });
+      await runWithRequestStores(
+        () => {
+          const reader = openHippoDb(root);
+          try {
+            const waited = waitOnSteppedClock(reader, () =>
+              expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'),
+            );
+            expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
+            expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
+          } finally {
+            closeHippoDb(reader);
+          }
+        },
+        { busyWaitMs: SERVER_DB_WAIT_MS },
+      );
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);
@@ -158,7 +175,7 @@ describe('pilot arm helpers', () => {
     expect(armCount()).toBe(0);
   });
 
-  it('a tenant-scoped read ignores another tenant\'s row for the same session', () => {
+  it("a tenant-scoped read ignores another tenant's row for the same session", () => {
     ensurePilotArm(db, 'tenant-a', 's1', 10000);
     expect(readPilotArm(db, 's1', 'tenant-b')).toBeNull();
     expect(ensurePilotArm(db, 'tenant-b', 's1', 0, { ownTenantOnly: true })).toBe('hippo');
@@ -193,7 +210,10 @@ describe('pilot arm helpers', () => {
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: { ...folderFiles(root), config: DEFAULT_CONFIG } });
+      bookTokenUse(
+        { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 },
+        { local: { ...folderFiles(root), config: DEFAULT_CONFIG } },
+      );
     } finally {
       vi.stubEnv('HIPPO_LOG', undefined);
     }
@@ -204,19 +224,35 @@ describe('pilot arm helpers', () => {
 });
 
 // The enterprise reader (hippo-enterprise src/pilot/store.ts, merged in 3463cd5) selects these columns.
-interface ArmSql { session_id: string; tenant_id: string; event: string; block_hash: string; items: number; tokens: number; surface: string }
+interface ArmSql {
+  session_id: string;
+  tenant_id: string;
+  event: string;
+  block_hash: string;
+  items: number;
+  tokens: number;
+  surface: string;
+}
 
 describe('the consumer contract', () => {
   it('one arm, one rate, one tenant, exact row shape', () => {
     ensurePilotArm(db, 'default', 'c1', 2500);
     // SAFETY: the SELECT names exactly the columns of ArmSql.
-    const rows = db.prepare(
-      `SELECT session_id, tenant_id, event, block_hash, items, tokens, surface FROM token_ledger
+    const rows = db
+      .prepare(
+        `SELECT session_id, tenant_id, event, block_hash, items, tokens, surface FROM token_ledger
        WHERE session_id IS NOT NULL AND event = 'arm' ORDER BY id`,
-    ).all() as ArmSql[];
+      )
+      .all() as ArmSql[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({
-      session_id: 'c1', tenant_id: 'default', event: 'arm', block_hash: hashArm('c1', 2500), items: 2500, tokens: 0, surface: 'pilot',
+      session_id: 'c1',
+      tenant_id: 'default',
+      event: 'arm',
+      block_hash: hashArm('c1', 2500),
+      items: 2500,
+      tokens: 0,
+      surface: 'pilot',
     });
     expect(Number.isInteger(rows[0].items)).toBe(true);
   });
@@ -225,7 +261,14 @@ describe('the consumer contract', () => {
 describe('ledger readers skip arm rows', () => {
   it('summarizeTokenUse and tokensBySession ignore an arm-only session', () => {
     ensurePilotArm(db, 'default', 'arm-only', 10000);
-    recordTokenUse(db, { tenantId: 'default', sessionId: 'real', surface: 'hook', event: 'inject', items: 1, tokens: 40 });
+    recordTokenUse(db, {
+      tenantId: 'default',
+      sessionId: 'real',
+      surface: 'hook',
+      event: 'inject',
+      items: 1,
+      tokens: 40,
+    });
     const summary = summarizeTokenUse(db, 'default', SINCE);
     expect(summary.sessions).toBe(1);
     expect(summary.surfaces.map((s) => s.surface)).toEqual(['hook']);

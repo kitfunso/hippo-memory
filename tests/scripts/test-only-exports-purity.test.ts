@@ -50,7 +50,8 @@ export function viaBarrel(): number { return 4; }
 export function onlyNamed(): number { return 5; }
 `;
 
-const TEST_NAMES = 'double half orphan LIMIT Meter readCounter readRuns seenCount tableSize shadowed describeRows firstLine shout home ping pong RATE viaNamed viaNamespace viaLoader viaBarrel onlyNamed';
+const TEST_NAMES =
+  'double half orphan LIMIT Meter readCounter readRuns seenCount tableSize shadowed describeRows firstLine shout home ping pong RATE viaNamed viaNamespace viaLoader viaBarrel onlyNamed';
 
 describe('check-test-only-exports.mjs: script callers and the purity rule', () => {
   let dir: string;
@@ -63,13 +64,18 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
     file('src/state.ts', STATE);
     file('src/grow.ts', `import { table } from './state.js';\nexport function grow(): void { table.push(2); }\n`);
     file('src/db/rows.ts', 'export function rowCount(): number { return 1; }\n');
-    file('src/disk.ts', `import { readFileSync } from 'node:fs';\nexport function slurp(path: string): string { return readFileSync(path, 'utf8'); }\n`);
+    file(
+      'src/disk.ts',
+      `import { readFileSync } from 'node:fs';\nexport function slurp(path: string): string { return readFileSync(path, 'utf8'); }\n`,
+    );
     file('src/report.ts', REPORT);
     file('src/rates.ts', RATES);
     file('src/barrel.ts', `export * from './rates.js';\n`);
     file('tests/names.test.ts', `// ${TEST_NAMES}\n`);
   });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);
@@ -90,8 +96,16 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
 
   it('counts a pure function with no caller, and a constant even though its module reads it', () => {
     const rows = judgeExports(dir);
-    expect(rows.find((r: { key: string }) => r.key === 'src/calc.ts:orphan')).toEqual({ key: 'src/calc.ts:orphan', counted: true, why: 'no caller in its own module' });
-    expect(rows.find((r: { key: string }) => r.key === 'src/calc.ts:LIMIT')).toEqual({ key: 'src/calc.ts:LIMIT', counted: true, why: 'not a function or class' });
+    expect(rows.find((r: { key: string }) => r.key === 'src/calc.ts:orphan')).toEqual({
+      key: 'src/calc.ts:orphan',
+      counted: true,
+      why: 'no caller in its own module',
+    });
+    expect(rows.find((r: { key: string }) => r.key === 'src/calc.ts:LIMIT')).toEqual({
+      key: 'src/calc.ts:LIMIT',
+      counted: true,
+      why: 'not a function or class',
+    });
   });
 
   it('counts a function that reads a reassigned let, and not one whose parameter shares the name', () => {
@@ -116,10 +130,19 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
   });
 
   it('takes a script or benchmark that imports the module as a caller, and ignores one that only shares the identifier', () => {
-    file('scripts/eval.mjs', `import { RATE, viaNamed } from '../dist/rates.js';\nimport { viaBarrel } from '../dist/barrel.js';\nconsole.log(RATE, viaNamed(), viaBarrel());\n`);
+    file(
+      'scripts/eval.mjs',
+      `import { RATE, viaNamed } from '../dist/rates.js';\nimport { viaBarrel } from '../dist/barrel.js';\nconsole.log(RATE, viaNamed(), viaBarrel());\n`,
+    );
     file('benchmarks/run.mjs', `import * as rates from '../dist/rates.js';\nconsole.log(rates.viaNamespace());\n`);
-    file('scripts/loader.mjs', `const load = (f) => import(new URL('../dist/' + f, import.meta.url));\nconst { viaLoader } = await load('rates.js');\nviaLoader();\n`);
-    file('scripts/unrelated.mjs', `import { slurp } from '../dist/disk.js';\nconst onlyNamed = slurp;\nconsole.log(onlyNamed);\n`);
+    file(
+      'scripts/loader.mjs',
+      `const load = (f) => import(new URL('../dist/' + f, import.meta.url));\nconst { viaLoader } = await load('rates.js');\nviaLoader();\n`,
+    );
+    file(
+      'scripts/unrelated.mjs',
+      `import { slurp } from '../dist/disk.js';\nconst onlyNamed = slurp;\nconsole.log(onlyNamed);\n`,
+    );
     expect(counted('rates.ts')).toEqual(['onlyNamed']);
   });
 });

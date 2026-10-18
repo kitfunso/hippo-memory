@@ -6,7 +6,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { backfillRepo } from '../../src/connectors/github/backfill.js';
 import type { GitHubFetcher } from '../../src/connectors/github/octokit-client.js';
-import { closeHippoDb, openHippoDb, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  openHippoDb,
+  withReadSnapshot,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { resolveCodexSessionTranscript } from '../../src/hooks/codex-session.js';
 import { importChatGPT, importClaude } from '../../src/entry/importers.js';
 import { detectServer } from '../../src/server/server-detect.js';
@@ -30,7 +36,7 @@ afterEach(() => {
 });
 
 describe('GitHub backfill rate-limit bound', () => {
-  const ctx = (): FullContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
+  const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 
   it('stops after five attempts and names the reset time', async () => {
     let calls = 0;
@@ -40,17 +46,35 @@ describe('GitHub backfill rate-limit bound', () => {
     };
     const sleeps: number[] = [];
     await expect(
-      backfillRepo(ctx(), { repoFullName: 'acme/demo', fetcher, token: 't', sleepMs: async (ms) => { sleeps.push(ms); } }),
+      backfillRepo(ctx(), {
+        repoFullName: 'acme/demo',
+        fetcher,
+        token: 't',
+        sleepMs: async (ms) => {
+          sleeps.push(ms);
+        },
+      }),
     ).rejects.toThrow(/still active after 5 attempts.*resets at \d{4}-\d{2}-\d{2}T/);
     expect(calls).toBe(5);
     expect(sleeps).toEqual([1000, 1000, 1000, 1000]);
   });
 
   it('refuses a single wait longer than the total cap without sleeping', async () => {
-    const fetcher: GitHubFetcher = async () => ({ items: [], next: null, rateLimit: { sleepSeconds: 3600, reason: 'primary' } });
+    const fetcher: GitHubFetcher = async () => ({
+      items: [],
+      next: null,
+      rateLimit: { sleepSeconds: 3600, reason: 'primary' },
+    });
     const sleeps: number[] = [];
     await expect(
-      backfillRepo(ctx(), { repoFullName: 'acme/demo', fetcher, token: 't', sleepMs: async (ms) => { sleeps.push(ms); } }),
+      backfillRepo(ctx(), {
+        repoFullName: 'acme/demo',
+        fetcher,
+        token: 't',
+        sleepMs: async (ms) => {
+          sleeps.push(ms);
+        },
+      }),
     ).rejects.toThrow(/resets at/);
     expect(sleeps).toEqual([]);
   });
@@ -66,7 +90,9 @@ describe('write scope rollback failure', () => {
       },
       prepare: (sql) => db.prepare(sql),
       close: () => db.close(),
-      get isTransaction() { return db.isTransaction; },
+      get isTransaction() {
+        return db.isTransaction;
+      },
     };
   }
 
@@ -74,7 +100,11 @@ describe('write scope rollback failure', () => {
     const db = openHippoDb(root);
     try {
       const wrapped = failingOn(db, 'ROLLBACK', 'disk I/O error on rollback');
-      expect(() => withWriteScope(wrapped, 'r2', () => { throw new Error('original failure'); })).toThrow('original failure');
+      expect(() =>
+        withWriteScope(wrapped, 'r2', () => {
+          throw new Error('original failure');
+        }),
+      ).toThrow('original failure');
       expect(stderr).toMatch(/error: rollback of write scope r2 failed: disk I\/O error on rollback/);
       db.exec('ROLLBACK');
     } finally {
@@ -86,7 +116,11 @@ describe('write scope rollback failure', () => {
     const db = openHippoDb(root);
     try {
       const wrapped = failingOn(db, 'COMMIT', 'commit refused');
-      expect(() => withReadSnapshot(wrapped, () => { throw new Error('read failed'); })).toThrow('read failed');
+      expect(() =>
+        withReadSnapshot(wrapped, () => {
+          throw new Error('read failed');
+        }),
+      ).toThrow('read failed');
       expect(stderr).toMatch(/error: ending read snapshot failed: commit refused/);
       db.exec('ROLLBACK');
     } finally {
@@ -97,7 +131,12 @@ describe('write scope rollback failure', () => {
   it('stays quiet when SQLite already unwound the scope', () => {
     const db = openHippoDb(root);
     try {
-      expect(() => withWriteScope(db, 'r2', () => { db.exec('ROLLBACK'); throw new Error('boom'); })).toThrow('boom');
+      expect(() =>
+        withWriteScope(db, 'r2', () => {
+          db.exec('ROLLBACK');
+          throw new Error('boom');
+        }),
+      ).toThrow('boom');
       expect(stderr).toBe('');
     } finally {
       closeHippoDb(db);

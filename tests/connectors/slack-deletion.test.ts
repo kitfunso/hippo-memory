@@ -7,11 +7,13 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('handleMessageDeleted', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('slack-del');  });
+  beforeEach(() => {
+    root = makeRoot('slack-del');
+  });
 
   it('archives the matching kind=raw row via archiveRawMemory', async () => {
     const ingested = await ingestMessage(ctx(root), {
@@ -38,17 +40,22 @@ describe('handleMessageDeleted', () => {
     try {
       // SAFETY: literal SELECT of these two known columns from the
       // raw_archive row archiveRawMemory just wrote for this memory.
-      const arch = db.prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as
-        | { memory_id: string; reason: string }
-        | undefined;
+      const arch = db
+        .prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`)
+        .get(ingested.memoryId!) as { memory_id: string; reason: string } | undefined;
       expect(arch).toBeDefined();
       expect(arch!.reason).toContain('source_deleted');
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('returns not_found for unknown artifact_ref (idempotent on replay)', async () => {
     const r = await handleMessageDeleted(ctx(root), {
-      teamId: 'T1', channelId: 'C1', deletedTs: '9999.9999', eventId: 'EvDel2',
+      teamId: 'T1',
+      channelId: 'C1',
+      deletedTs: '9999.9999',
+      eventId: 'EvDel2',
     });
     expect(r.status).toBe('not_found');
   });
@@ -67,7 +74,10 @@ describe('handleMessageDeleted', () => {
     // Fire deletion under tenant 'default' for the same artifact_ref.
     const defaultCtx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
     const r = await handleMessageDeleted(defaultCtx, {
-      teamId: 'T1', channelId: 'C1', deletedTs: '1700.0001', eventId: 'EvDelCross',
+      teamId: 'T1',
+      channelId: 'C1',
+      deletedTs: '1700.0001',
+      eventId: 'EvDelCross',
     });
     expect(r.status).toBe('not_found');
 
@@ -78,8 +88,12 @@ describe('handleMessageDeleted', () => {
     try {
       // SAFETY: literal COUNT(*) query against the known raw_archive schema
       // always returns a single { c } row.
-      const archCount = db.prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as { c: number };
+      const archCount = db
+        .prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`)
+        .get(ingested.memoryId!) as { c: number };
       expect(Number(archCount.c)).toBe(0);
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

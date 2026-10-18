@@ -4,7 +4,11 @@ import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { normalizeHookPayload } from '../../src/cli/stdin.js';
 import { hookPayloadSessionId } from '../../src/util/hook-payload.js';
-import { createDeliveryRecorder, type DeliveryEventInput, type DeliveryRuntime } from '../../src/store/delivery-recorder.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryEventInput,
+  type DeliveryRuntime,
+} from '../../src/store/delivery-recorder.js';
 import { readClaudeCodePreCompact } from '../../src/core/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../../src/capture/failure-reading.js';
 import type { JsonValue } from '../../src/util/json.js';
@@ -23,9 +27,19 @@ function normalized(text: string): JsonValue {
 }
 
 function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime): DeliveryEventInput {
-  const rec = createDeliveryRecorder({ ledger: sqliteSyncStore(CWD).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText, runtime });
+  const rec = createDeliveryRecorder({
+    ledger: sqliteSyncStore(CWD).localFiles.ledger,
+    storeHash: 'aaaaaaaaaaaaaaaa',
+    writeStore: 'local',
+    tenantId: 'default',
+    stdinText,
+    runtime,
+  });
   let input: DeliveryEventInput | null = null;
-  rec.flush((i) => { input = i; return 1; });
+  rec.flush((i) => {
+    input = i;
+    return 1;
+  });
   if (input === null) throw new Error('recorder wrote nothing');
   return input;
 }
@@ -48,31 +62,53 @@ describe('normalizeHookPayload on Copilot camelCase payloads', () => {
 
   it('maps preCompact transcriptPath and customInstructions', () => {
     const p = normalized(copilotPayload('preCompact', CWD, TRANSCRIPT));
-    expect(p).toMatchObject({ session_id: 'copilot-sess-1', transcript_path: TRANSCRIPT, custom_instructions: '', trigger: 'auto' });
+    expect(p).toMatchObject({
+      session_id: 'copilot-sess-1',
+      transcript_path: TRANSCRIPT,
+      custom_instructions: '',
+      trigger: 'auto',
+    });
   });
 
   it('maps hookEventName', () => {
-    expect(normalized(JSON.stringify({ sessionId: 's', hookEventName: 'SessionStart' }))).toMatchObject({ hook_event_name: 'SessionStart' });
+    expect(normalized(JSON.stringify({ sessionId: 's', hookEventName: 'SessionStart' }))).toMatchObject({
+      hook_event_name: 'SessionStart',
+    });
   });
 
   it('keeps toolArgs that are not JSON as the string the model wrote', () => {
-    expect(normalized(JSON.stringify({ sessionId: 's', toolName: 'bash', toolArgs: 'ls -la' }))).toMatchObject({ tool_input: 'ls -la' });
+    expect(normalized(JSON.stringify({ sessionId: 's', toolName: 'bash', toolArgs: 'ls -la' }))).toMatchObject({
+      tool_input: 'ls -la',
+    });
   });
 
   it('keeps toolArgs that are already an object', () => {
-    expect(normalized(JSON.stringify({ sessionId: 's', toolArgs: { command: 'ls' } }))).toMatchObject({ tool_input: { command: 'ls' } });
+    expect(normalized(JSON.stringify({ sessionId: 's', toolArgs: { command: 'ls' } }))).toMatchObject({
+      tool_input: { command: 'ls' },
+    });
   });
 
   it('gives an error object its message, as errorOccurred sends one', () => {
-    expect(normalized(copilotPayload('errorOccurred', CWD))).toMatchObject({ error: 'Model request timed out after 60s' });
+    expect(normalized(copilotPayload('errorOccurred', CWD))).toMatchObject({
+      error: 'Model request timed out after 60s',
+    });
   });
 
   it('keeps a string error as it is', () => {
-    expect(normalized(copilotPayload('postToolUseFailureGrep', CWD))).toMatchObject({ error: 'rg: src/auth: IO error for operation on src/auth' });
+    expect(normalized(copilotPayload('postToolUseFailureGrep', CWD))).toMatchObject({
+      error: 'rg: src/auth: IO error for operation on src/auth',
+    });
   });
 
   it('lets a snake_case key already present win over its camelCase twin', () => {
-    const text = JSON.stringify({ sessionId: 'camel', session_id: 'snake', toolArgs: '{"a":1}', tool_input: { b: 2 }, toolName: 'x', tool_name: 'y' });
+    const text = JSON.stringify({
+      sessionId: 'camel',
+      session_id: 'snake',
+      toolArgs: '{"a":1}',
+      tool_input: { b: 2 },
+      toolName: 'x',
+      tool_name: 'y',
+    });
     expect(normalized(text)).toMatchObject({ session_id: 'snake', tool_input: { b: 2 }, tool_name: 'y' });
   });
 });
@@ -82,13 +118,21 @@ describe('normalizeHookPayload leaves other payloads untouched', () => {
   it('returns each Claude Code payload byte for byte', () => {
     const lines = fs.readFileSync(CLAUDE_FIXTURE, 'utf8').split('\n').filter(Boolean);
     expect(lines).toHaveLength(5);
-    for (const line of [...lines, claudeCodePayload('PostToolUseFailure', CWD, TRANSCRIPT)]) expect(normalizeHookPayload(line)).toBe(line);
+    for (const line of [...lines, claudeCodePayload('PostToolUseFailure', CWD, TRANSCRIPT)]) {
+      expect(normalizeHookPayload(line)).toBe(line);
+    }
   });
 
   it('returns a Codex UserPromptSubmit payload byte for byte', () => {
     const text = JSON.stringify({
-      session_id: 'codex-sess-1', transcript_path: null, cwd: CWD, model: 'gpt-5-codex', permission_mode: 'default',
-      hook_event_name: 'UserPromptSubmit', turn_id: 't1', prompt: 'why does the login test flake?',
+      session_id: 'codex-sess-1',
+      transcript_path: null,
+      cwd: CWD,
+      model: 'gpt-5-codex',
+      permission_mode: 'default',
+      hook_event_name: 'UserPromptSubmit',
+      turn_id: 't1',
+      prompt: 'why does the login test flake?',
     });
     expect(normalizeHookPayload(text)).toBe(text);
   });
@@ -122,10 +166,22 @@ describe('every payload reader sees session_id and the copilot runtime (critic t
   });
 
   it('the PreCompact reader takes the Copilot payload with runtime copilot', () => {
-    const receipt = readClaudeCodePreCompact(normalizeHookPayload(copilotPayload('preCompact', CWD, TRANSCRIPT)), false, 'copilot');
+    const receipt = readClaudeCodePreCompact(
+      normalizeHookPayload(copilotPayload('preCompact', CWD, TRANSCRIPT)),
+      false,
+      'copilot',
+    );
     expect(receipt).toEqual({
       status: 'received',
-      input: { runtime: 'copilot', event: 'pre-compact', manual: false, sessionId: 'copilot-sess-1', cwd: CWD, transcriptPath: TRANSCRIPT, trigger: 'auto' },
+      input: {
+        runtime: 'copilot',
+        event: 'pre-compact',
+        manual: false,
+        sessionId: 'copilot-sess-1',
+        cwd: CWD,
+        transcriptPath: TRANSCRIPT,
+        trigger: 'auto',
+      },
     });
   });
 
@@ -133,6 +189,10 @@ describe('every payload reader sees session_id and the copilot runtime (critic t
     const payload = normalized(copilotPayload('postToolUseFailureBash', CWD));
     expect(payloadString(payload, 'session_id')).toBe('copilot-sess-1');
     expect(payloadString(payload, 'tool_name')).toBe('bash');
-    expect(lessonFromFailure(payload)).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit', detail: 'bash grep -rn: Command failed with exit code 1' });
+    expect(lessonFromFailure(payload)).toMatchObject({
+      skip: 'skipped-routine',
+      rule: 'quiet-exit',
+      detail: 'bash grep -rn: Command failed with exit code 1',
+    });
   });
 });

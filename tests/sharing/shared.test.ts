@@ -35,7 +35,6 @@ function cleanUp(...dirs: string[]): void {
 // ---------------------------------------------------------------------------
 
 describe('getGlobalRoot', () => {
-
   it('falls back to ~/.hippo when neither env var is set', () => {
     vi.stubEnv('HIPPO_HOME', undefined);
     vi.stubEnv('XDG_DATA_HOME', undefined);

@@ -16,7 +16,9 @@ fs.renameSync = function faultedRename(from, to) {
       process.exit(1);
     }
     // hold: until the test writes the release file; capped so a failed test leaves no worker behind.
-    for (let waited = 0; waited < HOLD_CAP_MS && !fs.existsSync(process.env.CURSOR_SAVE_RELEASE); waited += 50) Atomics.wait(cell, 0, 0, 50);
+    for (let waited = 0; waited < HOLD_CAP_MS && !fs.existsSync(process.env.CURSOR_SAVE_RELEASE); waited += 50) {
+      Atomics.wait(cell, 0, 0, 50);
+    }
   }
   return rename.apply(this, arguments);
 };

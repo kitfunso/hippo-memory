@@ -38,15 +38,13 @@ export function promoteSessionTraces(run: SleepRun): void {
     run.pendingWrites.push(trace);
     run.survivors.push(trace);
     result.promotedTraces++;
-    result.details.push(
-      `  🧬 promoted trace ${trace.id} from session ${session.session_id} (${outcome})`
-    );
+    result.details.push(`  🧬 promoted trace ${trace.id} from session ${session.session_id} (${outcome})`);
   }
 
   if (result.promotedTraces > 0) {
     result.details.push(
       `  🧬 promoted ${plural(result.promotedTraces, 'trace')} from completed ` +
-      `session${result.promotedTraces === 1 ? '' : 's'}`,
+        `session${result.promotedTraces === 1 ? '' : 's'}`,
     );
   }
   if (tracesSkippedRejected > 0) {
@@ -88,28 +86,23 @@ function sessionTrace(
     .filter((e) => e.event_type !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
 
-  const trace = createMemory(
-    renderTraceContent({ task: summary, steps, outcome }),
-    {
-      layer: Layer.Trace,
-      traceOutcome: outcome,
-      sourceSessionId: sessionId,
-      tags: ['auto-promoted'],
-      source: 'auto-promote',
-      scope: sessionScope.scope,
-      // Same tenant as the traceExistsForSession check above, or a
-      // non-default tenant's trace regenerates every sleep.
-      tenantId: consolidationTenant,
-      baseHalfLifeDays: run.config.defaultHalfLifeDays,
-    },
-  );
+  const trace = createMemory(renderTraceContent({ task: summary, steps, outcome }), {
+    layer: Layer.Trace,
+    traceOutcome: outcome,
+    sourceSessionId: sessionId,
+    tags: ['auto-promoted'],
+    source: 'auto-promote',
+    scope: sessionScope.scope,
+    // Same tenant as the traceExistsForSession check above, or a
+    // non-default tenant's trace regenerates every sleep.
+    tenantId: consolidationTenant,
+    baseHalfLifeDays: run.config.defaultHalfLifeDays,
+  });
   return { trace, outcome };
 }
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
-function sessionEnding(
-  events: readonly SessionEvent[],
-): { outcome: TraceOutcome; summary: string } | null {
+function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.event_type === 'session_complete');
   if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
 
@@ -164,8 +157,7 @@ export function replayPass(run: SleepRun): void {
   survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;
   run.result.details.push(
-    `  💭 replayed ${plural(rehearsed.length, 'memory', 'memories')}: ` +
-    rehearsed.map((e) => e.id).join(', ')
+    `  💭 replayed ${plural(rehearsed.length, 'memory', 'memories')}: ` + rehearsed.map((e) => e.id).join(', '),
   );
   if (!run.dryRun) {
     for (const r of rehearsed) run.pendingWrites.push(r);

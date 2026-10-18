@@ -6,8 +6,12 @@ import { envReadLines, findEnvReads } from '../../scripts/check-env-reads.mjs';
 
 describe('check-env-reads', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'env-reads-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'env-reads-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);

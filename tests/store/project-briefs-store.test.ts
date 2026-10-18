@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import {
@@ -37,7 +37,11 @@ const MAX_BRIEF_SUMMARY_LEN = 8192;
 const MAX_RECEIPT_HEADLINE_LEN = 200;
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 /** The repo's newest active brief, read the way refreshBrief reads it. */
 async function activeBrief(home: string, tenantId: string, repo: string) {
@@ -49,8 +53,9 @@ function countRows(home: string, table: string): number {
     // SAFETY: the query always selects a single COUNT(*) aggregate as c, so the
     // driver always returns one row shaped { c: number }.
     return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
+  } finally {
+    closeHippoDb(db);
   }
-  finally { closeHippoDb(db); }
 }
 /** Write a non-brief memory tagged path:<repo> so it counts as a receipt. */
 function addReceipt(home: string, tenant: string, repo: string, content: string, source = 'manual'): string {
@@ -67,17 +72,25 @@ function addReceipt(home: string, tenant: string, repo: string, content: string,
 /** Force a memory's created timestamp for deterministic ordering tests. */
 function setCreated(home: string, memoryId: string, isoCreated: string): void {
   const db = openHippoDb(home);
-  try { db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(isoCreated, memoryId); }
-  finally { closeHippoDb(db); }
+  try {
+    db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(isoCreated, memoryId);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 describe('project_briefs store (repo-scoped / auto-refreshes first-class object)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('project-briefs'); });
+  beforeEach(() => {
+    home = makeRoot('project-briefs');
+  });
   afterEach(() => safeRmSync(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
-    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
+    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'hippo',
+      summary: 'agent-memory lib',
+    });
     // The first row in a fresh store's AUTOINCREMENT table.
     expect(b.id).toBe(1);
     expect(b.memoryId).not.toBeNull();
@@ -90,16 +103,20 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     try {
       // SAFETY: the query selects content/source/tags_json from memories, whose
       // schema types those columns TEXT/TEXT/TEXT (tags_json JSON-encoded).
-      const memRow = db.prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`)
-        .get(b.memoryId!) as { content: string; source: string; tags_json: string };
+      const memRow = db.prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`).get(b.memoryId!) as {
+        content: string;
+        source: string;
+        tags_json: string;
+      };
       expect(memRow.content).toContain('hippo');
       expect(memRow.content).toContain('agent-memory lib');
       expect(memRow.source).toBe('project_brief');
       // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
       // writeEntry/saveProjectBrief in this codebase.
-      expect((JSON.parse(memRow.tags_json) as string[])).toContain('project_brief');
+      expect(JSON.parse(memRow.tags_json) as string[]).toContain('project_brief');
       // SAFETY: the query selects only metadata_json (TEXT) from audit_log.
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
+      const rows = db
+        .prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
         .all(String(b.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: project_brief_create audit metadata is always the flat object built
@@ -107,29 +124,67 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       const meta = JSON.parse(rows[0].metadata_json) as { repo: string; refreshed: boolean };
       expect(meta.repo).toBe('hippo');
       expect(meta.refreshed).toBe(false);
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('status + repo filters; loadActiveBriefForRepo', async () => {
-    const a = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'alpha', summary: 'x' });
-    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'beta', summary: 'x' });
-    const c = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'gamma', summary: 'x' });
-    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'beta', summary: 'x2', supersedesBriefId: b.id });
+    const a = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'alpha',
+      summary: 'x',
+    });
+    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'beta',
+      summary: 'x',
+    });
+    const c = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'gamma',
+      summary: 'x',
+    });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'beta',
+      summary: 'x2',
+      supersedesBriefId: b.id,
+    });
     await closeProjectBrief(objectsAt(home), 'default', c.id);
     expect((await activeBrief(home, 'default', 'alpha'))!.id).toBe(a.id);
     expect(await activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
-    expect((await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
+    expect((await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
+      c.id,
+    ]);
     expect((await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta' })).length).toBe(2); // v1 superseded + v2 active
     expect((await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta', status: 'active' })).length).toBe(1);
     expect((await loadProjectBriefs(objectsAt(home), 'default')).length).toBe(4);
   });
 
   it('validation: missing repo/summary; single-line repo; caps', async () => {
-    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: '   ', summary: 'x' })).rejects.toThrow(/repo is required/);
-    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: '  ' })).rejects.toThrow(/summary is required/);
-    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'bad\nrepo', summary: 'x' })).rejects.toThrow(/single line/);
-    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'big', summary: 'y'.repeat(MAX_BRIEF_SUMMARY_LEN + 1) })).rejects.toThrow(/summary exceeds/);
-    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: 'ok', changeSummary: 'z'.repeat(4097), supersedesBriefId: 1 })).rejects.toThrow(/changeSummary exceeds/);
+    await expect(
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: '   ', summary: 'x' }),
+    ).rejects.toThrow(/repo is required/);
+    await expect(
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: '  ' }),
+    ).rejects.toThrow(/summary is required/);
+    await expect(
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        repo: 'bad\nrepo',
+        summary: 'x',
+      }),
+    ).rejects.toThrow(/single line/);
+    await expect(
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        repo: 'big',
+        summary: 'y'.repeat(MAX_BRIEF_SUMMARY_LEN + 1),
+      }),
+    ).rejects.toThrow(/summary exceeds/);
+    await expect(
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        repo: 'r',
+        summary: 'ok',
+        changeSummary: 'z'.repeat(4097),
+        supersedesBriefId: 1,
+      }),
+    ).rejects.toThrow(/changeSummary exceeds/);
   });
 
   it('assembleBriefFromReceipts: tenant-isolated path tag match, excludes own brief mirror, DESC order, truncation', async () => {
@@ -144,7 +199,11 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     addReceipt(home, 'tenant-b', 'hippo', 'cross-tenant receipt');
     // the brief's OWN mirror (source='project_brief') must be excluded even though
     // it carries the repo path tag
-    const brief = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'the brief body', extraTags: ['path:hippo'] });
+    const brief = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'hippo',
+      summary: 'the brief body',
+      extraTags: ['path:hippo'],
+    });
     void brief;
 
     const { markdown, receiptCount } = await briefFromReceipts(objectsAt(home), 'default', 'hippo');
@@ -203,7 +262,11 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(countRows(home, 'project_briefs')).toBe(b0);
 
     // first refresh creates v1
-    const v1 = await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'hippo');
+    const v1 = await refreshedBrief(
+      objectsAt(home),
+      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      'hippo',
+    );
     expect(v1.version).toBe(1);
     expect(v1.status).toBe('active');
     expect(v1.summary).toContain('receipt one');
@@ -214,12 +277,15 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     try {
       // SAFETY: the query selects only tags_json (TEXT, JSON-encoded array) from
       // memories for a single row by primary key.
-      const tagsJson = (dbTag.prepare(`SELECT tags_json FROM memories WHERE id = ?`)
-        .get(v1.memoryId!) as { tags_json: string }).tags_json;
+      const tagsJson = (
+        dbTag.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(v1.memoryId!) as { tags_json: string }
+      ).tags_json;
       // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
       // writeEntry/refreshBrief in this codebase.
       expect(JSON.parse(tagsJson) as string[]).toContain('path:hippo');
-    } finally { closeHippoDb(dbTag); }
+    } finally {
+      closeHippoDb(dbTag);
+    }
     // a subsequent refresh must STILL exclude the brief's own mirror (source guard),
     // i.e. the path-tagged brief mirror does not inflate the receipt count
     const reAssemble = await briefFromReceipts(objectsAt(home), 'default', 'hippo');
@@ -228,15 +294,26 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     try {
       // SAFETY: the query selects only metadata_json (TEXT) from audit_log for a
       // single row; project_brief_create metadata is always this flat object.
-      const meta = JSON.parse((db.prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
-        .get(String(v1.id)) as { metadata_json: string }).metadata_json) as { refreshed: boolean; receipt_count: number };
+      const meta = JSON.parse(
+        (
+          db
+            .prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
+            .get(String(v1.id)) as { metadata_json: string }
+        ).metadata_json,
+      ) as { refreshed: boolean; receipt_count: number };
       expect(meta.refreshed).toBe(true);
       expect(meta.receipt_count).toBe(1);
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
 
     // a new receipt + a second refresh supersedes v1
     addReceipt(home, 'default', 'hippo', 'receipt two');
-    const v2 = await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'hippo');
+    const v2 = await refreshedBrief(
+      objectsAt(home),
+      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      'hippo',
+    );
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('auto-refresh from 2 receipt(s)');
     expect((await loadProjectBriefById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
@@ -245,11 +322,18 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     try {
       // SAFETY: the query selects only metadata_json (TEXT) from audit_log for a
       // single row; project_brief_supersede metadata is always this flat object.
-      const meta = JSON.parse((db2.prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`)
-        .get(String(v1.id)) as { metadata_json: string }).metadata_json) as { refreshed: boolean; receipt_count: number };
+      const meta = JSON.parse(
+        (
+          db2
+            .prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`)
+            .get(String(v1.id)) as { metadata_json: string }
+        ).metadata_json,
+      ) as { refreshed: boolean; receipt_count: number };
       expect(meta.refreshed).toBe(true);
       expect(meta.receipt_count).toBe(2);
-    } finally { closeHippoDb(db2); }
+    } finally {
+      closeHippoDb(db2);
+    }
   });
 
   it('refresh stays within the summary cap with many long receipts', async () => {
@@ -270,9 +354,15 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(assembled.markdown).toContain(`_Auto-assembled from ${kept} of 50 receipt(s)._`);
     expect(assembled.markdown).toContain(`_... ${50 - kept} more receipt(s) omitted (summary cap)._`);
     // refresh must SUCCEED (not throw) and store a valid brief under the cap
-    const b = await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'big');
+    const b = await refreshedBrief(
+      objectsAt(home),
+      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      'big',
+    );
     expect(b.version).toBe(1);
     expect(b.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
-    expect((await loadProjectBriefById(objectsAt(home), 'default', b.id))!.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
+    expect((await loadProjectBriefById(objectsAt(home), 'default', b.id))!.summary.length).toBeLessThanOrEqual(
+      MAX_BRIEF_SUMMARY_LEN,
+    );
   });
 });

@@ -130,7 +130,13 @@ describe('gatePromptRecall', () => {
 
 describe('rarestPromptTerms', () => {
   it('picks the lowest-doc-count terms first, ties by term asc', () => {
-    const counts = new Map([['common', 500], ['mid', 40], ['rare', 3], ['rarest', 1], ['tie', 3]]);
+    const counts = new Map([
+      ['common', 500],
+      ['mid', 40],
+      ['rare', 3],
+      ['rarest', 1],
+      ['tie', 3],
+    ]);
     const out = rarestPromptTerms(['common', 'mid', 'rare', 'rarest', 'tie'], (t) => counts.get(t) ?? 0, 3);
     expect(out).toEqual(['rarest', 'rare', 'tie']);
   });
@@ -158,7 +164,11 @@ describe('ftsTermParts', () => {
 
 describe('rarestFtsQuery', () => {
   it('counts a split term as its rarest part and asks docCount about parts only', () => {
-    const counts = new Map([['journal', 9], ['mode', 2], ['wal', 5]]);
+    const counts = new Map([
+      ['journal', 9],
+      ['mode', 2],
+      ['wal', 5],
+    ]);
     const asked: string[] = [];
     const out = rarestFtsQuery(['wal', 'journal_mode'], (part) => {
       asked.push(part);
@@ -169,7 +179,10 @@ describe('rarestFtsQuery', () => {
   });
 
   it('drops a term with an unindexed part or no part at all', () => {
-    const counts = new Map([['journal', 9], ['wal', 5]]);
+    const counts = new Map([
+      ['journal', 9],
+      ['wal', 5],
+    ]);
     expect(rarestFtsQuery(['journal_nothing', '__', 'wal'], (part) => counts.get(part) ?? 0)).toBe('wal');
   });
 

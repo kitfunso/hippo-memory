@@ -34,7 +34,19 @@ describe('hippo recall --why exposes envelope', () => {
   });
 
   it('text output includes kind, scope, owner, artifact_ref', async () => {
-    await hippo('remember', 'envelope-canary-marker uniq42 distinguishing token', '--kind', 'distilled', '--scope', 'team:eng', '--owner', 'user:42', '--artifact-ref', 'gh://owner/repo/pr/123', '--global');
+    await hippo(
+      'remember',
+      'envelope-canary-marker uniq42 distinguishing token',
+      '--kind',
+      'distilled',
+      '--scope',
+      'team:eng',
+      '--owner',
+      'user:42',
+      '--artifact-ref',
+      'gh://owner/repo/pr/123',
+      '--global',
+    );
     const out = await hippo('recall', 'envelope-canary-marker uniq42', '--why');
     expect(out).toContain('kind: distilled');
     expect(out).toContain('scope: team:eng');
@@ -47,7 +59,9 @@ describe('hippo recall --why exposes envelope', () => {
     const saved = process.cwd();
     process.chdir(home);
     try {
-      const r = await runInProcess(() => runCli(['node', 'hippo', 'remember', 'should fail', '--kind', 'raw', '--global']));
+      const r = await runInProcess(() =>
+        runCli(['node', 'hippo', 'remember', 'should fail', '--kind', 'raw', '--global']),
+      );
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('Invalid --kind: "raw"');
       expect(r.stderr).toContain('reserved for ingestion connectors');
@@ -57,7 +71,17 @@ describe('hippo recall --why exposes envelope', () => {
   });
 
   it('JSON output includes envelope object when --why is set', async () => {
-    await hippo('remember', 'envelope-json-marker rollback-uniq43 token', '--kind', 'distilled', '--owner', 'agent:claude', '--artifact-ref', 'slack://team/channel/1700.123', '--global');
+    await hippo(
+      'remember',
+      'envelope-json-marker rollback-uniq43 token',
+      '--kind',
+      'distilled',
+      '--owner',
+      'agent:claude',
+      '--artifact-ref',
+      'slack://team/channel/1700.123',
+      '--global',
+    );
     const parsed = JSON.parse(await hippo('recall', 'envelope-json-marker rollback-uniq43', '--why', '--json'));
     // Both stores together hold only the one memory this test remembered.
     expect(parsed.results).toHaveLength(1);

@@ -72,19 +72,19 @@ const TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE = `
         `;
 
 export const v30: Migration = {
-    version: 30,
-    up: (db) => {
-      // Decision first-class object, the source of truth for `hippo decide`; the memory mirror serves recall only,
-      // memory_id NULLABLE ON DELETE SET NULL.
-      // status active|superseded|closed (closed = retired without successor); a same-tenant trigger on superseded_by
-      // blocks cross-tenant supersession.
-      if (!tableExists(db, 'decisions')) {
-        db.exec(DECISIONS_TABLE);
-        db.exec(IDX_DECISIONS_TENANT_STATUS);
-        db.exec(IDX_DECISIONS_MEMORY);
-        db.exec(TRG_DECISIONS_TENANT_MATCH_INSERT);
-        db.exec(TRG_DECISIONS_TENANT_MATCH_UPDATE);
-        db.exec(TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE);
-      }
-    },
+  version: 30,
+  up: (db) => {
+    // Decision first-class object, the source of truth for `hippo decide`; the memory mirror serves recall only,
+    // memory_id NULLABLE ON DELETE SET NULL.
+    // status active|superseded|closed (closed = retired without successor); a same-tenant trigger on superseded_by
+    // blocks cross-tenant supersession.
+    if (!tableExists(db, 'decisions')) {
+      db.exec(DECISIONS_TABLE);
+      db.exec(IDX_DECISIONS_TENANT_STATUS);
+      db.exec(IDX_DECISIONS_MEMORY);
+      db.exec(TRG_DECISIONS_TENANT_MATCH_INSERT);
+      db.exec(TRG_DECISIONS_TENANT_MATCH_UPDATE);
+      db.exec(TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE);
+    }
+  },
 };

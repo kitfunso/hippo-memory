@@ -37,7 +37,11 @@ describe('child-write dirty-flag propagation', () => {
 
   it('test #1: invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', () => {
     // Setup: summary + child fact whose content matches an invalidation target.
-    const summary = createMemory('python deployment runbook', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('python deployment runbook', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     const fact = createMemory('use FRED cache for tips_10y series', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -57,13 +61,21 @@ describe('child-write dirty-flag propagation', () => {
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     db.close();
     // Act: invalidateMatching writes the fact back through writeEntry (L97).
-    invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, { from: 'FRED cache', to: null, type: 'removal' }, 'default');
+    invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      { from: 'FRED cache', to: null, type: 'removal' },
+      'default',
+    );
     // Assert: parent dirty again.
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });
 
   it('test #2: supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', async () => {
-    const summary = createMemory('test summary 2', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('test summary 2', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     const oldFact = createMemory('old fact', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -77,9 +89,11 @@ describe('child-write dirty-flag propagation', () => {
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     // Count audit rows BEFORE supersede so we can assert delta (1) not total.
     // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
-    const beforeCount = (db.prepare(
-      `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).get(summary.id) as { n: number }).n;
+    const beforeCount = (
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+        .get(summary.id) as { n: number }
+    ).n;
     db.close();
     // Act: supersede the old fact. createMemory inside supersede passes
     // layer/tags/pinned/source/confidence/tenantId but NOT dag_parent_id,
@@ -89,15 +103,21 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
     const db2 = openHippoDb(hippoRoot);
     // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
-    const afterCount = (db2.prepare(
-      `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).get(summary.id) as { n: number }).n;
+    const afterCount = (
+      db2
+        .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+        .get(summary.id) as { n: number }
+    ).n;
     db2.close();
     expect(afterCount - beforeCount).toBe(1); // exactly 1 new transition 0→1 from supersede
   });
 
   it('test #3: deleteEntry on fact with dag_parent_id → parent marked dirty', () => {
-    const summary = createMemory('test summary 3', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('test summary 3', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     const fact = createMemory('to be deleted', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -117,7 +137,11 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #4: archiveRawMemory on raw row with dag_parent_id → parent marked dirty', () => {
-    const summary = createMemory('test summary 4', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('test summary 4', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     const rawChild = createMemory('raw child to archive', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -138,13 +162,21 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #5: writeEntry on fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)', () => {
-    const orphan = createMemory('no parent fact', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1 });
+    const orphan = createMemory('no parent fact', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      dagLevel: 1,
+    });
     writeEntry(hippoRoot, orphan); // dag_parent_id defaults to null
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
   });
 
   it('test #6: cross-tenant safety — child tenant mismatched with parent tenant → no dirty-mark', () => {
-    const summary = createMemory('tenant1 summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('tenant1 summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     // Manually move summary to tenant1.
     const db = openHippoDb(hippoRoot);
@@ -165,15 +197,19 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     // No audit row written either.
     const db2 = openHippoDb(hippoRoot);
-    const auditRows = db2.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).all(summary.id);
+    const auditRows = db2
+      .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+      .all(summary.id);
     db2.close();
     expect(auditRows).toEqual([]);
   });
 
   it('test #7: idempotency — 5 child writes under same parent → 1 audit row + parent stays dirty', () => {
-    const summary = createMemory('summary 7', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('summary 7', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     // Write 5 children under the same parent.
     for (let i = 0; i < 5; i++) {
@@ -187,9 +223,9 @@ describe('child-write dirty-flag propagation', () => {
     }
     // Assert: exactly 1 audit row for the 0→1 transition; parent stays dirty=1.
     const db = openHippoDb(hippoRoot);
-    const auditRows = db.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).all(summary.id);
+    const auditRows = db
+      .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+      .all(summary.id);
     // SAFETY: `summary` was just written via writeEntry above, so the row for
     // its id exists and always has a summary_dirty column value.
     const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(summary.id) as {
@@ -204,7 +240,11 @@ describe('child-write dirty-flag propagation', () => {
     // Independent-review-critic R1 HIGH catch: consolidate.ts/sleep flushes
     // pendingWrites + pendingDeletes through batchWriteAndDelete every cycle.
     // Without this hook the dominant mutation source bypasses E2 entirely.
-    const summary = createMemory('batch test summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('batch test summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     // Clear initial dirty flag from the writeEntry above.
     const db0 = openHippoDb(hippoRoot);
@@ -239,15 +279,19 @@ describe('child-write dirty-flag propagation', () => {
     // collects unique parent ids; 1 parent → 1 markSummaryDirtyInTx call →
     // 1 audit row from the 0→1 transition).
     const db2 = openHippoDb(hippoRoot);
-    const auditRows = db2.prepare(
-      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
-    ).all(summary.id);
+    const auditRows = db2
+      .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+      .all(summary.id);
     db2.close();
     expect(auditRows.length).toBeGreaterThanOrEqual(1);
   });
 
   it('test #8: orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', () => {
-    const summary = createMemory('to be deleted parent', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
+    const summary = createMemory('to be deleted parent', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      dagLevel: 2,
+    });
     writeEntry(hippoRoot, summary);
     // Delete the summary. Now the parent id is dangling.
     deleteEntry(hippoRoot, summary.id, { actor: 'test' });

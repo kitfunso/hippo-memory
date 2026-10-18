@@ -4,13 +4,7 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody, MAX_DATE_LEN, getString, requiredString } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
-import {
-  closeRoute,
-  getRoute,
-  listRoute,
-  supersedeRoute,
-  type VersionedRouteConfig,
-} from './object-routes.js';
+import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 // The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before
 // it reaches the Date parser.

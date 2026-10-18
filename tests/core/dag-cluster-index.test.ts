@@ -24,7 +24,11 @@ function allPairsClusters(facts: MemoryEntry[]) {
     }
     const sharedTags = entityTags[cluster[0]].filter((t) => cluster.every((idx) => entityTags[idx].includes(t)));
     const members = cluster.map((idx) => facts[idx]);
-    clusters.push({ label: sharedTags.map((t) => t.split(':')[1]).join(': ') || members[0].content.slice(0, 40), members, entityTags: sharedTags });
+    clusters.push({
+      label: sharedTags.map((t) => t.split(':')[1]).join(': ') || members[0].content.slice(0, 40),
+      members,
+      entityTags: sharedTags,
+    });
   }
   return clusters;
 }
@@ -36,7 +40,16 @@ function randomFacts(seed: number, n: number): MemoryEntry[] {
     state = (state * 1103515245 + 12345) % 2147483648;
     return state % k;
   };
-  const pool = ['speaker:alice', 'speaker:bob', 'speaker:cara', 'topic:deploy', 'topic:billing', 'topic:hiring', 'topic:cache', 'misc:x'];
+  const pool = [
+    'speaker:alice',
+    'speaker:bob',
+    'speaker:cara',
+    'topic:deploy',
+    'topic:billing',
+    'topic:hiring',
+    'topic:cache',
+    'misc:x',
+  ];
   return Array.from({ length: n }, (_, i) => {
     const tags = Array.from({ length: next(4) }, () => pool[next(pool.length)]);
     return createMemory(`fact number ${i} for the cluster check`, { tags });
@@ -50,7 +63,8 @@ afterEach(() => {
 /** Set.has and Array.includes calls one clusterFacts run makes over `n` facts in disjoint pairs, each pair one cluster. */
 function membershipChecks(n: number): number {
   const facts = Array.from({ length: n }, (_, i) =>
-    createMemory(`fact ${i} about group ${Math.floor(i / 2)}`, { tags: [`topic:group${Math.floor(i / 2)}`] }));
+    createMemory(`fact ${i} about group ${Math.floor(i / 2)}`, { tags: [`topic:group${Math.floor(i / 2)}`] }),
+  );
   const has = vi.spyOn(Set.prototype, 'has');
   const includes = vi.spyOn(Array.prototype, 'includes');
   const clusters = clusterFacts(facts);

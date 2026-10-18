@@ -74,7 +74,9 @@ describe('loopback fallback behind a reverse proxy', () => {
   it('logs one warn line with the request id and the fix', async () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      expect(await send('/v1/memories?q=deploy', { 'x-forwarded-for': '203.0.113.7', 'x-request-id': 'proxied-1' })).toBe(401);
+      expect(
+        await send('/v1/memories?q=deploy', { 'x-forwarded-for': '203.0.113.7', 'x-request-id': 'proxied-1' }),
+      ).toBe(401);
       const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[hippo] warn:'));
       // The refused request's 401 also warns, so count the proxy line by its text.
       const proxied = warned.filter((l) => /proxied loopback request refused/i.test(l));

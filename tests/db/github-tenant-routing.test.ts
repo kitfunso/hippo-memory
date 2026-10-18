@@ -10,9 +10,11 @@ afterEach(() => {
 });
 
 function insertInstallation(db: DatabaseSyncLike, id: string, tenant: string): void {
-  db.prepare(
-    `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-  ).run(id, tenant, new Date().toISOString());
+  db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+    id,
+    tenant,
+    new Date().toISOString(),
+  );
 }
 
 function insertRepository(
@@ -21,9 +23,11 @@ function insertRepository(
   tenant: string,
   addedAt: string = new Date().toISOString(),
 ): void {
-  db.prepare(
-    `INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`,
-  ).run(repoFullName, tenant, addedAt);
+  db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+    repoFullName,
+    tenant,
+    addedAt,
+  );
 }
 
 describe('resolveTenantForGitHub', () => {

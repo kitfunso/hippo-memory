@@ -106,7 +106,13 @@ export type { CardDetail } from '../store/card-detail.js';
 export type { CompleteGoalOpts, PushGoalOpts } from '../store/goals.js';
 export type { HandoffFilter, SessionEndHandoffRequest } from '../store/handoffs.js';
 export type {
-  ConflictListQuery, ConflictMember, ConflictResolution, ConflictRow, ConflictRowPage, ConflictSide, LoserFate,
+  ConflictListQuery,
+  ConflictMember,
+  ConflictResolution,
+  ConflictRow,
+  ConflictRowPage,
+  ConflictSide,
+  LoserFate,
 } from '../store/port/conflicts.js';
 export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../store/dormant.js';
 export type { FailureSummary } from '../store/failure-log.js';

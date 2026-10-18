@@ -7,7 +7,12 @@ import { join } from 'node:path';
 import { initStore, handlesOf } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
-import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import {
+  handleMcpRequest,
+  _resetSessionRecallHistoryMcpForTests,
+  type McpContext,
+  type McpResponse,
+} from '../../src/mcp/server.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
@@ -70,7 +75,9 @@ function seed(config?: StoreConfig): Seeded {
   add(s, 'D1', 'decision: freeze deploy on fridays', { tags: ['decision'] });
   add(s, 'P1', 'deploy keys are rotated monthly', { pinned: true });
   add(s, 'C1', 'stale deploy pipeline note from the old cluster', { tags: ['churn-stale'] });
-  add(s, 'G1', 'goal work notes mention the pipeline once among many other unrelated words here', { tags: ['ship-goal'] });
+  add(s, 'G1', 'goal work notes mention the pipeline once among many other unrelated words here', {
+    tags: ['ship-goal'],
+  });
   add(s, 'SC1', 'deploy pipeline for team alpha only', { scope: 'team:alpha' });
   add(s, 'SC2', 'team alpha pipeline secrets live in vault', { scope: 'team:alpha' });
   add(s, 'PR1', 'deploy pipeline private channel notes', { scope: 'slack:private:c1' });
@@ -79,10 +86,23 @@ function seed(config?: StoreConfig): Seeded {
   return s;
 }
 
-function call(home: string, args: Record<string, string | number | boolean>, ctx?: Partial<McpContext>): Promise<McpResponse | null> {
+function call(
+  home: string,
+  args: Record<string, string | number | boolean>,
+  ctx?: Partial<McpContext>,
+): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
-    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx, store: sqliteStore(home), config: loadConfig(home) },
+    {
+      hippoRoot: home,
+      tenantId: TENANT,
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      ...ctx,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    },
   );
 }
 
@@ -109,9 +129,12 @@ function observe(s: Seeded, text: string): Observed {
     .filter((r) => r.at >= 0)
     .sort((a, b) => a.at - b.at)
     .map((r) => r.label);
-  const tail = tailAt < 0
-    ? []
-    : [...text.slice(tailAt).matchAll(/^- \[(?:tail|summary)\] (\S+?)(?: \(covers \d+ rows\))?:/gm)].map((m) => s.labelById.get(m[1]) ?? m[1]);
+  const tail =
+    tailAt < 0
+      ? []
+      : [...text.slice(tailAt).matchAll(/^- \[(?:tail|summary)\] (\S+?)(?: \(covers \d+ rows\))?:/gm)].map(
+          (m) => s.labelById.get(m[1]) ?? m[1],
+        );
   const cutoff = /^Showing .*$/m.exec(text)?.[0] ?? null;
   return { ranked, tail, cutoff };
 }
@@ -121,8 +144,13 @@ function retrievalCounts(s: Seeded): Map<string, number> {
   const db = openHippoDb(s.home);
   try {
     // SAFETY: the SELECT names exactly the two columns read below.
-    const rows = db.prepare('SELECT id, retrieval_count FROM memories').all() as Array<{ id: string; retrieval_count: number }>;
-    return new Map(rows.filter((r) => r.retrieval_count > 0).map((r) => [s.labelById.get(r.id) ?? r.id, r.retrieval_count]));
+    const rows = db.prepare('SELECT id, retrieval_count FROM memories').all() as Array<{
+      id: string;
+      retrieval_count: number;
+    }>;
+    return new Map(
+      rows.filter((r) => r.retrieval_count > 0).map((r) => [s.labelById.get(r.id) ?? r.id, r.retrieval_count]),
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -137,18 +165,24 @@ function withEmbeddings(s: Seeded): void {
   }
   saveEmbeddingIndex(s.home, index);
   saveStoredEmbeddingModel(handlesOf(s.home).on, id);
-  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
-    // SAFETY: body is the OpenAI embeddings request this provider just serialised.
-    const body = JSON.parse(init.body) as { input: string[] };
-    return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: { body: string }) => {
+      // SAFETY: body is the OpenAI embeddings request this provider just serialised.
+      const body = JSON.parse(init.body) as { input: string[] };
+      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
+    }),
+  );
 }
 
 const EMBED_CONFIG = { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
 
 describe('MCP hippo_recall ranking', () => {
   const homes: string[] = [];
-  const track = (s: Seeded): Seeded => { homes.push(s.home); return s; };
+  const track = (s: Seeded): Seeded => {
+    homes.push(s.home);
+    return s;
+  };
 
   beforeEach(() => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
@@ -176,13 +210,26 @@ describe('MCP hippo_recall ranking', () => {
 
   it('an explicit scope returns that scope only', async () => {
     const s = track(seed());
-    expect(observe(s, textOf(await call(s.home, { query: QUERY, scope: 'team:alpha' })))).toEqual(EXPECTED.explicitScope);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY, scope: 'team:alpha' })))).toEqual(
+      EXPECTED.explicitScope,
+    );
   });
 
   it('include_continuity appends the continuity block after the list and pays for it from the budget', async () => {
     const s = track(seed());
-    saveActiveTaskSnapshot(s.home, 'default', { task: 'Ship the deploy pipeline', summary: 'blue green rollout in flight', next_step: 'flip traffic', session_id: 'sess-x', source: 'test' });
-    appendSessionEvent(s.home, 'default', { session_id: 'sess-x', event_type: 'note', content: 'rollout paused at 50 percent', source: 'test' });
+    saveActiveTaskSnapshot(s.home, 'default', {
+      task: 'Ship the deploy pipeline',
+      summary: 'blue green rollout in flight',
+      next_step: 'flip traffic',
+      session_id: 'sess-x',
+      source: 'test',
+    });
+    appendSessionEvent(s.home, 'default', {
+      session_id: 'sess-x',
+      event_type: 'note',
+      content: 'rollout paused at 50 percent',
+      source: 'test',
+    });
     const args = { query: QUERY, budget: 250 };
     expect(observe(s, textOf(await call(s.home, args))).ranked).toEqual(EXPECTED.defaultHybrid.ranked);
     const text = textOf(await call(s.home, { ...args, include_continuity: true }));
@@ -213,12 +260,16 @@ describe('MCP hippo_recall ranking', () => {
   it('session goals boost by score, not by position', async () => {
     const s = track(seed());
     pushGoal(s.home, { sessionId: 'sess-rank', tenantId: TENANT, goalName: 'ship-goal' });
-    expect(observe(s, textOf(await call(s.home, { query: QUERY, session_id: 'sess-rank' })))).toEqual(EXPECTED.goalBoost);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY, session_id: 'sess-rank' })))).toEqual(
+      EXPECTED.goalBoost,
+    );
   });
 
   it('fresh tail and scorer_window: tail rows follow the list, and only the listed rows are strengthened', async () => {
     const s = track(seed());
-    for (const n of ['one', 'two', 'three']) add(s, `T-${n}`, `standup chatter ${n}`, { layer: Layer.Buffer, kind: 'raw' });
+    for (const n of ['one', 'two', 'three']) {
+      add(s, `T-${n}`, `standup chatter ${n}`, { layer: Layer.Buffer, kind: 'raw' });
+    }
     const seen = observe(s, textOf(await call(s.home, { query: QUERY, scorer_window: 2, fresh_tail_count: 3 })));
     expect(seen).toEqual(EXPECTED.freshTail);
     expect(retrievalCounts(s)).toEqual(new Map(seen.ranked.map((l) => [l, 1])));
@@ -252,10 +303,19 @@ describe('MCP hippo_recall ranking', () => {
     const db = openHippoDb(s.home);
     try {
       // SAFETY: each SELECT names exactly the columns read below.
-      const traces = db.prepare('SELECT id, pipeline, session_id, result_count FROM recall_traces').all() as Array<{ id: number; pipeline: string; session_id: string; result_count: number }>;
-      expect(traces).toEqual([{ id: traces[0]?.id, pipeline: 'mcp', session_id: 'sess-trace', result_count: seen.ranked.length }]);
+      const traces = db.prepare('SELECT id, pipeline, session_id, result_count FROM recall_traces').all() as Array<{
+        id: number;
+        pipeline: string;
+        session_id: string;
+        result_count: number;
+      }>;
+      expect(traces).toEqual([
+        { id: traces[0]?.id, pipeline: 'mcp', session_id: 'sess-trace', result_count: seen.ranked.length },
+      ]);
       // SAFETY: the SELECT names the one column read below.
-      const rows = db.prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank').all(traces[0]?.id) as Array<{ memory_id: string }>;
+      const rows = db
+        .prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank')
+        .all(traces[0]?.id) as Array<{ memory_id: string }>;
       expect(rows.map((r) => s.labelById.get(r.memory_id))).toEqual(seen.ranked);
     } finally {
       closeHippoDb(db);
@@ -311,7 +371,33 @@ const EXPECTED = {
     cutoff: 'Showing 11 of 11 candidates; 3 fresh-tail added.',
   },
   windowEdge: {
-    ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110', 'F111'],
+    ranked: [
+      'F0',
+      'F1',
+      'F2',
+      'F3',
+      'F4',
+      'F5',
+      'F6',
+      'F7',
+      'F8',
+      'F9',
+      'W1',
+      'F10',
+      'F100',
+      'F101',
+      'F102',
+      'F103',
+      'F104',
+      'F105',
+      'F106',
+      'F107',
+      'F108',
+      'F109',
+      'F11',
+      'F110',
+      'F111',
+    ],
     tail: [],
     cutoff: 'Showing 25 of 213 candidates; 188 not shown (rank, budget or limit).',
   },

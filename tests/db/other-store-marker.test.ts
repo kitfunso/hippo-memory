@@ -54,7 +54,9 @@ describe('the other-store marker', () => {
     const err = refusal(open);
     expect(err).toBeInstanceOf(SqliteBlockedError);
     expect(err.storeKind).toBe('postgres');
-    expect(err.message).toBe(`This folder's memories live in the 'postgres' store, so hippo.db is not used here (marker: ${marker})`);
+    expect(err.message).toBe(
+      `This folder's memories live in the 'postgres' store, so hippo.db is not used here (marker: ${marker})`,
+    );
     expect(readdirSync(root)).toEqual([OTHER_STORE_MARKER]);
   });
 
@@ -140,7 +142,9 @@ describe('the other-store marker', () => {
     writeFileSync(marker, 'postgres\n');
     const cwd = makeRoot('marker-cwd', { init: false });
     const run = spawnSync(process.execPath, [CLI, 'auth', 'create', '--global'], {
-      cwd, encoding: 'utf8', env: { ...process.env, HIPPO_HOME: root },
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, HIPPO_HOME: root },
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toContain(`This folder's memories live in the 'postgres' store, so hippo.db is not used here`);

@@ -9,19 +9,13 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import {
-  type MemoryEntry
-} from '../../src/core/memory.js';
+import { type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import {
-  loadPhysicsState,
-  resetAllPhysicsState,
-  savePhysicsState,
-} from '../../src/db/physics-state.js';
+import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -88,7 +82,7 @@ function seed(
   label: string,
   content: string,
   embedding: number[],
-  opts: Parameters<typeof createMemory>[1] = {}
+  opts: Parameters<typeof createMemory>[1] = {},
 ): MemoryEntry {
   const entry = createMemory(content, opts);
   const withLabel: MemoryEntry = { ...entry, id: `pb_${label}` };
@@ -102,143 +96,195 @@ beforeAll(() => {
   tmpDir = makeRoot('physics-bench');
 
   // ── FRED cluster (3 tightly clustered memories) ──────────────────────
-  seed('fred_cache_drop',
+  seed(
+    'fred_cache_drop',
     `FRED cache can silently drop series. tips_10y vanished from fred_weekly.parquet during daily refresh, breaking the gold model.`,
     clusterEmbedding(FRED_CENTROID, 1),
-    { tags: ['data-pipeline', 'fred', 'error'], emotionalValence: 'negative' });
+    { tags: ['data-pipeline', 'fred', 'error'], emotionalValence: 'negative' },
+  );
 
-  seed('fred_fallback',
+  seed(
+    'fred_fallback',
     `FRED as fallback for dead data URLs. IMF and FAO went 404. Same indices available on FRED. More reliable than scraping.`,
     clusterEmbedding(FRED_CENTROID, 2),
-    { tags: ['data-pipeline', 'fred', 'imf'] });
+    { tags: ['data-pipeline', 'fred', 'imf'] },
+  );
 
-  seed('fred_column_alias',
+  seed(
+    'fred_column_alias',
     `FRED cache column alias map. Production models reference names that differ from fred cache keys: tips_10y, yield_curve_3m, wti_spot.`,
     clusterEmbedding(FRED_CENTROID, 3),
-    { tags: ['data-pipeline', 'fred', 'columns'] });
+    { tags: ['data-pipeline', 'fred', 'columns'] },
+  );
 
   // ── Sub-agent cluster ─────────────────────────────────────────────────
-  seed('subagent_american_english',
+  seed(
+    'subagent_american_english',
     `Sub-agents consistently use American English spelling. Review output: favorable, maximize, optimize.`,
     clusterEmbedding(SUBAGENT_CENTROID, 1),
-    { tags: ['sub-agent', 'review', 'spelling'] });
+    { tags: ['sub-agent', 'review', 'spelling'] },
+  );
 
-  seed('subagent_slop_words',
+  seed(
+    'subagent_slop_words',
     `Sub-agents produce AI slop words. Offenders: comprehensive, robust, leverage, harness, tapestry.`,
     clusterEmbedding(SUBAGENT_CENTROID, 2),
-    { tags: ['sub-agent', 'review', 'copywriting'] });
+    { tags: ['sub-agent', 'review', 'copywriting'] },
+  );
 
-  seed('subagent_fabrication',
+  seed(
+    'subagent_fabrication',
     `Always verify sub-agent model metrics. Natgas V3 claimed Min Sharpe 0.99 -> 1.60. Actual: CV=-0.73.`,
     clusterEmbedding(SUBAGENT_CENTROID, 3),
-    { tags: ['sub-agent', 'verification', 'error'], emotionalValence: 'critical' });
+    { tags: ['sub-agent', 'verification', 'error'], emotionalValence: 'critical' },
+  );
 
   // ── Quant/backtest cluster ────────────────────────────────────────────
-  seed('walk_forward_overestimates',
+  seed(
+    'walk_forward_overestimates',
     `Walk-forward OOS Sharpe overestimates by ~50%. CPCV shows deflation of +0.59 on average.`,
     clusterEmbedding(QUANT_CENTROID, 1),
-    { tags: ['quant', 'backtest', 'sharpe'] });
+    { tags: ['quant', 'backtest', 'sharpe'] },
+  );
 
-  seed('data_mining_honesty',
+  seed(
+    'data_mining_honesty',
     `Data mining honesty: selected features by testing on ALL data, then claimed good OOS results. Must use theory-only selection.`,
     clusterEmbedding(QUANT_CENTROID, 2),
-    { tags: ['quant', 'data-mining', 'feature-selection'] });
+    { tags: ['quant', 'data-mining', 'feature-selection'] },
+  );
 
-  seed('cpcv_deflation',
+  seed(
+    'cpcv_deflation',
     `CPCV deflation needed for honest Sharpe reporting. Walk-forward inflates by ~50%.`,
     clusterEmbedding(QUANT_CENTROID, 3),
-    { tags: ['quant', 'cpcv', 'sharpe'] });
+    { tags: ['quant', 'cpcv', 'sharpe'] },
+  );
 
   // ── Data pipeline errors cluster ──────────────────────────────────────
-  seed('eia_path_change',
+  seed(
+    'eia_path_change',
     `EIA API path changed silently. /petroleum/sum/wkly became /petroleum/sum/sndw. Broke 9 of 10 series.`,
     clusterEmbedding(PIPELINE_CENTROID, 1),
-    { tags: ['data-pipeline', 'eia', 'api', 'error'], emotionalValence: 'negative' });
+    { tags: ['data-pipeline', 'eia', 'api', 'error'], emotionalValence: 'negative' },
+  );
 
-  seed('staleness_hides_ok',
+  seed(
+    'staleness_hides_ok',
     `Data source staleness hides behind OK reports. 5+ sources silently stale while refresh reported 14/14 OK.`,
     clusterEmbedding(PIPELINE_CENTROID, 2),
-    { tags: ['data-pipeline', 'staleness', 'monitoring'] });
+    { tags: ['data-pipeline', 'staleness', 'monitoring'] },
+  );
 
-  seed('wb_column_names',
+  seed(
+    'wb_column_names',
     `WB Pink Sheet column names must be preserved exactly. Never rename without checking all production models.`,
     clusterEmbedding(PIPELINE_CENTROID, 3),
-    { tags: ['data-pipeline', 'world-bank', 'columns'] });
+    { tags: ['data-pipeline', 'world-bank', 'columns'] },
+  );
 
-  seed('cache_column_mismatch',
+  seed(
+    'cache_column_mismatch',
     `Cache column mismatches break models silently. Models reference columns not in cache series maps.`,
     clusterEmbedding(PIPELINE_CENTROID, 4),
-    { tags: ['data-pipeline', 'cache', 'columns'] });
+    { tags: ['data-pipeline', 'cache', 'columns'] },
+  );
 
   // ── Platform cluster ──────────────────────────────────────────────────
-  seed('no_emoji_python',
+  seed(
+    'no_emoji_python',
     `No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.`,
     clusterEmbedding(PLATFORM_CENTROID, 1),
-    { tags: ['platform', 'windows', 'encoding'], emotionalValence: 'negative' });
+    { tags: ['platform', 'windows', 'encoding'], emotionalValence: 'negative' },
+  );
 
-  seed('powershell_semicolons',
+  seed(
+    'powershell_semicolons',
     `PowerShell uses semicolons not && to chain commands. The && operator causes silent failure.`,
     clusterEmbedding(PLATFORM_CENTROID, 2),
-    { tags: ['platform', 'powershell', 'windows'] });
+    { tags: ['platform', 'powershell', 'windows'] },
+  );
 
   // ── Production rules ──────────────────────────────────────────────────
-  seed('never_overwrite',
+  seed(
+    'never_overwrite',
     `NEVER overwrite existing production files. Create versioned copies. Violating destroys PnL history.`,
     clusterEmbedding(PRODUCTION_CENTROID, 1),
-    { tags: ['production', 'rule', 'critical'], emotionalValence: 'critical', pinned: true });
+    { tags: ['production', 'rule', 'critical'], emotionalValence: 'critical', pinned: true },
+  );
 
-  seed('version_files',
+  seed(
+    'version_files',
     `Version production files before modifying. Always create a backup copy before touching production files.`,
     clusterEmbedding(PRODUCTION_CENTROID, 2),
-    { tags: ['production', 'rule', 'versioning'] });
+    { tags: ['production', 'rule', 'versioning'] },
+  );
 
   // ── Frontend cluster ──────────────────────────────────────────────────
-  seed('build_before_deploy',
+  seed(
+    'build_before_deploy',
     `Always run build before deploying frontend. Missing the build step deploys stale code.`,
     clusterEmbedding(FRONTEND_CENTROID, 1),
-    { tags: ['frontend', 'deploy', 'build'] });
+    { tags: ['frontend', 'deploy', 'build'] },
+  );
 
-  seed('constants_must_sync',
+  seed(
+    'constants_must_sync',
     `Frontend and backend trading constants must stay in sync. Mismatch causes wrong sizing.`,
     clusterEmbedding(FRONTEND_CENTROID, 2),
-    { tags: ['frontend', 'backend', 'constants'] });
+    { tags: ['frontend', 'backend', 'constants'] },
+  );
 
   // ── Ops cluster ───────────────────────────────────────────────────────
-  seed('cron_timeout_sizing',
+  seed(
+    'cron_timeout_sizing',
     `Cron timeout sizing for heavy jobs. Default to >=900s. Run manual timed pass first.`,
     clusterEmbedding(OPS_CENTROID, 1),
-    { tags: ['ops', 'cron', 'timeout'] });
+    { tags: ['ops', 'cron', 'timeout'] },
+  );
 
-  seed('friday_time_guards',
+  seed(
+    'friday_time_guards',
     `Friday quant cron jobs have hard time guards: 20:30-22:30 Europe/London only.`,
     clusterEmbedding(OPS_CENTROID, 2),
-    { tags: ['ops', 'cron', 'scheduling'] });
+    { tags: ['ops', 'cron', 'scheduling'] },
+  );
 
   // ── Isolated memories (no cluster) ────────────────────────────────────
-  seed('equal_weight_beats_optimization',
+  seed(
+    'equal_weight_beats_optimization',
     `Equal weight beats portfolio optimization. 1/N allocation Sharpe 3.12 beats all optimization schemes.`,
     syntheticEmbedding(901),
-    { tags: ['quant', 'portfolio', 'optimization'] });
+    { tags: ['quant', 'portfolio', 'optimization'] },
+  );
 
-  seed('natgas_gfc_period',
+  seed(
+    'natgas_gfc_period',
     `Natgas 2008-2009 GFC tanks CV. Sharpe=-1.89 in 2008. GFC broke natgas pricing relationships.`,
     syntheticEmbedding(902),
-    { tags: ['quant', 'natgas', 'gfc'] });
+    { tags: ['quant', 'natgas', 'gfc'] },
+  );
 
-  seed('natgas_v4_details',
+  seed(
+    'natgas_v4_details',
     `Natgas V4 deployed: 18 features, Min Sharpe 1.08. Config: tw=78, rw=26, C=0.20.`,
     syntheticEmbedding(903),
-    { tags: ['quant', 'natgas', 'model'] });
+    { tags: ['quant', 'natgas', 'model'] },
+  );
 
-  seed('alternative_data_sources',
+  seed(
+    'alternative_data_sources',
     `Alternative data sources: NDVI, satellite imagery, soil moisture, sea surface temperatures, AIS.`,
     syntheticEmbedding(904),
-    { tags: ['data-sources', 'alternative', 'quant'] });
+    { tags: ['data-sources', 'alternative', 'quant'] },
+  );
 
-  seed('subagent_novel_data',
+  seed(
+    'subagent_novel_data',
     `Suggest novel data sources proactively. Think beyond conventional financial/macro sources.`,
     syntheticEmbedding(905),
-    { tags: ['sub-agent', 'data-sources', 'creativity'] });
+    { tags: ['sub-agent', 'data-sources', 'creativity'] },
+  );
 
   // ── Save synthetic embeddings and initialize physics ──────────────────
   saveEmbeddingIndex(tmpDir, embeddingIndex);
@@ -328,16 +374,52 @@ function mrr(topIds: string[], expectedIds: string[]): number {
 // ---------------------------------------------------------------------------
 
 const STANDARD_QUERIES: QueryCase[] = [
-  { query: 'why is gold model broken', queryEmbedding: FRED_CENTROID, expectedLabels: ['fred_cache_drop', 'cache_column_mismatch', 'fred_column_alias'] },
-  { query: 'deploying to production', queryEmbedding: PRODUCTION_CENTROID, expectedLabels: ['build_before_deploy', 'version_files', 'never_overwrite'] },
+  {
+    query: 'why is gold model broken',
+    queryEmbedding: FRED_CENTROID,
+    expectedLabels: ['fred_cache_drop', 'cache_column_mismatch', 'fred_column_alias'],
+  },
+  {
+    query: 'deploying to production',
+    queryEmbedding: PRODUCTION_CENTROID,
+    expectedLabels: ['build_before_deploy', 'version_files', 'never_overwrite'],
+  },
   { query: 'python print crashes on windows', queryEmbedding: PLATFORM_CENTROID, expectedLabels: ['no_emoji_python'] },
-  { query: 'sub-agent output review', queryEmbedding: SUBAGENT_CENTROID, expectedLabels: ['subagent_american_english', 'subagent_slop_words', 'subagent_fabrication'] },
-  { query: 'data refresh failed', queryEmbedding: PIPELINE_CENTROID, expectedLabels: ['fred_cache_drop', 'eia_path_change', 'wb_column_names', 'staleness_hides_ok'] },
-  { query: 'backtest results seem too good', queryEmbedding: QUANT_CENTROID, expectedLabels: ['walk_forward_overestimates', 'data_mining_honesty', 'cpcv_deflation'] },
-  { query: 'modifying production model file', queryEmbedding: PRODUCTION_CENTROID, expectedLabels: ['never_overwrite', 'version_files'] },
-  { query: 'frontend deploy process build', queryEmbedding: FRONTEND_CENTROID, expectedLabels: ['build_before_deploy', 'constants_must_sync'] },
-  { query: 'PowerShell command chaining', queryEmbedding: PLATFORM_CENTROID, expectedLabels: ['powershell_semicolons'] },
-  { query: 'cache column missing broken', queryEmbedding: PIPELINE_CENTROID, expectedLabels: ['cache_column_mismatch', 'fred_column_alias', 'wb_column_names'] },
+  {
+    query: 'sub-agent output review',
+    queryEmbedding: SUBAGENT_CENTROID,
+    expectedLabels: ['subagent_american_english', 'subagent_slop_words', 'subagent_fabrication'],
+  },
+  {
+    query: 'data refresh failed',
+    queryEmbedding: PIPELINE_CENTROID,
+    expectedLabels: ['fred_cache_drop', 'eia_path_change', 'wb_column_names', 'staleness_hides_ok'],
+  },
+  {
+    query: 'backtest results seem too good',
+    queryEmbedding: QUANT_CENTROID,
+    expectedLabels: ['walk_forward_overestimates', 'data_mining_honesty', 'cpcv_deflation'],
+  },
+  {
+    query: 'modifying production model file',
+    queryEmbedding: PRODUCTION_CENTROID,
+    expectedLabels: ['never_overwrite', 'version_files'],
+  },
+  {
+    query: 'frontend deploy process build',
+    queryEmbedding: FRONTEND_CENTROID,
+    expectedLabels: ['build_before_deploy', 'constants_must_sync'],
+  },
+  {
+    query: 'PowerShell command chaining',
+    queryEmbedding: PLATFORM_CENTROID,
+    expectedLabels: ['powershell_semicolons'],
+  },
+  {
+    query: 'cache column missing broken',
+    queryEmbedding: PIPELINE_CENTROID,
+    expectedLabels: ['cache_column_mismatch', 'fred_column_alias', 'wb_column_names'],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -400,7 +482,12 @@ async function scoreQueries(cases: readonly QueryCase[]): Promise<QueryScore[]> 
     const expectedIds = tc.expectedLabels.map((l) => seedIds[l]).filter(Boolean);
     const classicIds = await runClassic(tc.query);
     const physicsIds = await runPhysics(tc.query, tc.queryEmbedding);
-    scores.push({ query: tc.query, expectedCount: expectedIds.length, classic: metrics(classicIds, expectedIds), physics: metrics(physicsIds, expectedIds) });
+    scores.push({
+      query: tc.query,
+      expectedCount: expectedIds.length,
+      classic: metrics(classicIds, expectedIds),
+      physics: metrics(physicsIds, expectedIds),
+    });
   }
   return scores;
 }
@@ -415,14 +502,16 @@ function logRow(s: QueryScore, by: keyof Metrics): void {
   const winner = p[by] > c[by] ? 'PHYSICS' : p[by] < c[by] ? 'CLASSIC' : 'TIE';
   console.log(
     `  ${winner.padEnd(7)} | C: P@3=${c.p3.toFixed(2)} R@3=${c.r3.toFixed(2)} MRR=${c.mrr.toFixed(2)} | ` +
-    `P: P@3=${p.p3.toFixed(2)} R@3=${p.r3.toFixed(2)} MRR=${p.mrr.toFixed(2)} | ${s.query}`
+      `P: P@3=${p.p3.toFixed(2)} R@3=${p.r3.toFixed(2)} MRR=${p.mrr.toFixed(2)} | ${s.query}`,
   );
 }
 
 function logSummary(title: string, scores: readonly QueryScore[], by: keyof Metrics): void {
   console.log(`\n  ── ${title} ──`);
   for (const side of ['classic', 'physics'] as const) {
-    console.log(`  ${side}:  P@3=${mean(scores, side, 'p3').toFixed(3)}  R@3=${mean(scores, side, 'r3').toFixed(3)}  MRR=${mean(scores, side, 'mrr').toFixed(3)}`);
+    console.log(
+      `  ${side}:  P@3=${mean(scores, side, 'p3').toFixed(3)}  R@3=${mean(scores, side, 'r3').toFixed(3)}  MRR=${mean(scores, side, 'mrr').toFixed(3)}`,
+    );
   }
   const d = mean(scores, 'physics', by) - mean(scores, 'classic', by);
   console.log(`  ${by} delta: ${d >= 0 ? '+' : ''}${d.toFixed(3)}`);

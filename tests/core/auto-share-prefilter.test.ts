@@ -23,7 +23,9 @@ afterEach(() => {
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
 /** loadAllEntries' statements: every full row of the store, or of one tenant. */
-const WHOLE_READ = new RegExp(`^SELECT ${MEMORY_SELECT_COLUMNS} FROM memories (WHERE tenant_id = \\? )?ORDER BY created ASC, id ASC$`);
+const WHOLE_READ = new RegExp(
+  `^SELECT ${MEMORY_SELECT_COLUMNS} FROM memories (WHERE tenant_id = \\? )?ORDER BY created ASC, id ASC$`,
+);
 
 let tmp: string;
 let root: string;
@@ -44,7 +46,14 @@ afterEach(() => {
 });
 
 function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [], tenantId = 'default'): string {
-  const entry = { ...createMemory(`${label}: the step needs its flag or the command silently does nothing`, { tags, emotionalValence: 'neutral', tenantId }), ...extra };
+  const entry = {
+    ...createMemory(`${label}: the step needs its flag or the command silently does nothing`, {
+      tags,
+      emotionalValence: 'neutral',
+      tenantId,
+    }),
+    ...extra,
+  };
   writeEntry(root, entry);
   return entry.id;
 }
@@ -81,11 +90,49 @@ function seedSignalRows(): Map<string, string> {
 }
 
 const PICKED: ReadonlyArray<[number, string[]]> = [
-  [0.3, ['plain 0.5', 'negative 0.55', 'critical 0.55', 'retrieved twice 0.5', 'retrieved thrice 0.6', 'pinned 0.6', 'error 0.6',
-    'error deploy 0.45', 'config 0.35', 'pinned config 0.45', 'python shell 0.7', 'escaped error 0.6']],
-  [0.5, ['plain 0.5', 'negative 0.55', 'critical 0.55', 'retrieved twice 0.5', 'retrieved thrice 0.6', 'pinned 0.6', 'error 0.6',
-    'python shell 0.7', 'escaped error 0.6']],
-  [0.52, ['negative 0.55', 'critical 0.55', 'retrieved thrice 0.6', 'pinned 0.6', 'error 0.6', 'python shell 0.7', 'escaped error 0.6']],
+  [
+    0.3,
+    [
+      'plain 0.5',
+      'negative 0.55',
+      'critical 0.55',
+      'retrieved twice 0.5',
+      'retrieved thrice 0.6',
+      'pinned 0.6',
+      'error 0.6',
+      'error deploy 0.45',
+      'config 0.35',
+      'pinned config 0.45',
+      'python shell 0.7',
+      'escaped error 0.6',
+    ],
+  ],
+  [
+    0.5,
+    [
+      'plain 0.5',
+      'negative 0.55',
+      'critical 0.55',
+      'retrieved twice 0.5',
+      'retrieved thrice 0.6',
+      'pinned 0.6',
+      'error 0.6',
+      'python shell 0.7',
+      'escaped error 0.6',
+    ],
+  ],
+  [
+    0.52,
+    [
+      'negative 0.55',
+      'critical 0.55',
+      'retrieved thrice 0.6',
+      'pinned 0.6',
+      'error 0.6',
+      'python shell 0.7',
+      'escaped error 0.6',
+    ],
+  ],
   [0.6, ['retrieved thrice 0.6', 'pinned 0.6', 'error 0.6', 'python shell 0.7', 'escaped error 0.6']],
   [0.65, ['python shell 0.7']],
   [0.75, []],
@@ -100,8 +147,13 @@ describe('autoShare prefilter', () => {
         if (tenantId === undefined && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
         const stats: AutoShareStats = { secretSkipped: 0 };
         const picked = autoShare(...sharingStores(root), { minScore, dryRun: true, tenantId, stats });
-        const inOrder = (tenantId === undefined ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)).filter((e) => wanted.has(e.id));
-        expect(picked.map((e) => e.id), `minScore ${minScore} tenant ${tenantId}`).toEqual(inOrder.map((e) => e.id));
+        const inOrder = (tenantId === undefined ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)).filter(
+          (e) => wanted.has(e.id),
+        );
+        expect(
+          picked.map((e) => e.id),
+          `minScore ${minScore} tenant ${tenantId}`,
+        ).toEqual(inOrder.map((e) => e.id));
         expect(picked).toEqual(inOrder);
         expect(stats.neverAutoShareSkipped).toBe(tenantId === undefined ? 4 : 3);
       }
@@ -112,7 +164,9 @@ describe('autoShare prefilter', () => {
     for (let i = 0; i < 60; i++) put(`plain ${i}`);
     const errorId = put('error', {}, ['error']);
     for (const tenantId of ['default', undefined]) {
-      const { result, statements, rowsRead } = recordStatements(() => autoShare(...sharingStores(root), { dryRun: true, tenantId }));
+      const { result, statements, rowsRead } = recordStatements(() =>
+        autoShare(...sharingStores(root), { dryRun: true, tenantId }),
+      );
       expect(result.map((e) => e.id)).toEqual([errorId]);
       expect(countMatching(statements, WHOLE_READ)).toBe(0);
       expect(rowsRead).toBeLessThan(10);

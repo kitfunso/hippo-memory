@@ -50,9 +50,7 @@ describe('Transformers.js backend safety', () => {
     // supported opt-in); the SHIPPED graph must contain none, and the
     // resolve-before-import logic in src/store/embeddings/index.ts guarantees a single
     // native runtime per process even when both are installed manually.
-    const nativeOrtPaths = installedPaths.filter((name) =>
-      name.endsWith('/onnxruntime-node'),
-    );
+    const nativeOrtPaths = installedPaths.filter((name) => name.endsWith('/onnxruntime-node'));
     expect(nativeOrtPaths).toHaveLength(0);
   });
 });

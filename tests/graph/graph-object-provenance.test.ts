@@ -32,25 +32,40 @@ const T = 'default';
 function addMemory(home: string, kind: 'distilled' | 'superseded' | 'raw'): string {
   const mem = createMemory('graph e2-provenance test memory', {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T,
+    tags: [],
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'test',
+    tenantId: T,
   });
   writeEntry(home, mem, { actor: 'test' });
   if (kind !== 'distilled') {
     const db = openHippoDb(home);
-    try { db.prepare(`UPDATE memories SET kind = ? WHERE id = ?`).run(kind, mem.id); }
-    finally { closeHippoDb(db); }
+    try {
+      db.prepare(`UPDATE memories SET kind = ? WHERE id = ?`).run(kind, mem.id);
+    } finally {
+      closeHippoDb(db);
+    }
   }
   return mem.id;
 }
 
 type EntityRow = {
-  id: number; name: string; memory_id: string | null;
-  source_object_type: string | null; source_object_id: number | null;
+  id: number;
+  name: string;
+  memory_id: string | null;
+  source_object_type: string | null;
+  source_object_id: number | null;
 };
 
 type RelationRow = {
-  id: number; from_entity_id: number; to_entity_id: number; rel_type: string;
-  memory_id: string | null; source_object_type: string | null; source_object_id: number | null;
+  id: number;
+  from_entity_id: number;
+  to_entity_id: number;
+  rel_type: string;
+  memory_id: string | null;
+  source_object_type: string | null;
+  source_object_id: number | null;
 };
 
 /** Raw rows straight out of the entities table (the success criterion is a TABLE query). */
@@ -60,10 +75,12 @@ function entityRows(home: string): EntityRow[] {
     // SAFETY: db.prepare().all() is typed `unknown[]` (node:sqlite has no
     // generic overload); the SELECT column list above matches EntityRow
     // field-for-field.
-    return db.prepare(
-      `SELECT id, name, memory_id, source_object_type, source_object_id FROM entities ORDER BY id`,
-    ).all() as EntityRow[];
-  } finally { closeHippoDb(db); }
+    return db
+      .prepare(`SELECT id, name, memory_id, source_object_type, source_object_id FROM entities ORDER BY id`)
+      .all() as EntityRow[];
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function relationRows(home: string): RelationRow[] {
@@ -72,16 +89,28 @@ function relationRows(home: string): RelationRow[] {
     // SAFETY: db.prepare().all() is typed `unknown[]` (node:sqlite has no
     // generic overload); the SELECT column list above matches RelationRow
     // field-for-field.
-    return db.prepare(
-      `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_object_type, source_object_id FROM relations ORDER BY id`,
-    ).all() as RelationRow[];
-  } finally { closeHippoDb(db); }
+    return db
+      .prepare(
+        `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_object_type, source_object_id FROM relations ORDER BY id`,
+      )
+      .all() as RelationRow[];
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 describe('graph provenance is anchored to the first-class object, not its memory mirror', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('graph-e2-prov'); });
-  afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
+  beforeEach(() => {
+    home = makeRoot('graph-e2-prov');
+  });
+  afterEach(() => {
+    try {
+      rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  });
 
   it('extract: a policy + a decision that mentions it produce entities + a references arc', async () => {
     const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
@@ -135,17 +164,17 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const ents = entityRows(home);
     const decisionEnt = ents.find((e) => e.source_object_type === 'decision')!;
     expect(decisionEnt).toBeDefined();
-    expect(decisionEnt.memory_id).toBeNull();           // mirror gone
+    expect(decisionEnt.memory_id).toBeNull(); // mirror gone
     expect(decisionEnt.source_object_id).toBe(decision.id); // anchored to the object
 
     const policyEnt = ents.find((e) => e.source_object_type === 'policy')!;
-    expect(policyEnt.memory_id).not.toBeNull();          // policy mirror still live
+    expect(policyEnt.memory_id).not.toBeNull(); // policy mirror still live
 
     const rels = relationRows(home);
     expect(rels.length).toBe(1);
     expect(rels[0].rel_type).toBe('references');
     expect(rels[0].from_entity_id).toBe(decisionEnt.id);
-    expect(rels[0].memory_id).toBeNull();               // edge mirror gone, anchored to object
+    expect(rels[0].memory_id).toBeNull(); // edge mirror gone, anchored to object
     expect(rels[0].source_object_type).toBe('decision');
     expect(rels[0].source_object_id).toBe(decision.id);
 
@@ -156,8 +185,12 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
 
   it('a closed E2 object is excluded from the graph (status, not mirror presence, drives exclusion)', async () => {
-    const keep = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Keep this active decision' });
-    const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Retire this one' });
+    const keep = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Keep this active decision',
+    });
+    const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Retire this one',
+    });
     await closeDecision(objectsAt(home), T, gone.id);
 
     await extractGraph(sqliteStore(home), T);
@@ -169,30 +202,44 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
   it('the no-raw invariant holds: inserting an entity that references a raw memory still ABORTs', () => {
     const raw = addMemory(home, 'raw');
-    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: raw }))
-      .toThrow(/raw|consolidated/i);
+    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: raw })).toThrow(
+      /raw|consolidated/i,
+    );
     // and via a direct raw SQL INSERT claiming distilled -> the trigger ABORTs.
     const db = openHippoDb(home);
     try {
-      expect(() => db.prepare(
-        `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, created_at)
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, created_at)
          VALUES (?, 'system', 'x', ?, 'distilled', ?)`,
-      ).run(T, raw, new Date().toISOString())).toThrow(/source_kind must equal|raw|consolidated/i);
-    } finally { closeHippoDb(db); }
+          )
+          .run(T, raw, new Date().toISOString()),
+      ).toThrow(/source_kind must equal|raw|consolidated/i);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('the all-null guard: inserting an entity with neither memory nor source_object ABORTs', () => {
     // helper-level rejection.
-    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x' }))
-      .toThrow(/needs a memory or a source object/i);
+    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x' })).toThrow(
+      /needs a memory or a source object/i,
+    );
     // direct raw SQL with both null -> the BEFORE INSERT trigger ABORTs.
     const db = openHippoDb(home);
     try {
-      expect(() => db.prepare(
-        `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
          VALUES (?, 'system', 'x', NULL, 'distilled', NULL, NULL, ?)`,
-      ).run(T, new Date().toISOString())).toThrow(/needs a memory or a (complete )?source object/i);
-    } finally { closeHippoDb(db); }
+          )
+          .run(T, new Date().toISOString()),
+      ).toThrow(/needs a memory or a (complete )?source object/i);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('guard: memory NULL + source_object_id set + source_object_type NULL ABORTs (incomplete object provenance)', () => {
@@ -201,24 +248,37 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // false on a NULL type, accepting a provenance-less row).
     const db = openHippoDb(home);
     try {
-      expect(() => db.prepare(
-        `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
          VALUES (?, 'decision', 'x', NULL, 'distilled', NULL, 7, ?)`,
-      ).run(T, new Date().toISOString())).toThrow(/set together|all-or-none/i);
-    } finally { closeHippoDb(db); }
+          )
+          .run(T, new Date().toISOString()),
+      ).toThrow(/set together|all-or-none/i);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('object-path guard: inserting an entity pointing at a non-existent / wrong-tenant E2 row ABORTs', () => {
     // memory-null + a source_object that does not exist -> ABORT (helper + trigger).
-    expect(() => insertEntityAt(home, T, { entityType: 'decision', name: 'ghost', sourceObject: { type: 'decision', id: 99999 } }))
-      .toThrow(/not found|active\/superseded|active|superseded/i);
+    expect(() =>
+      insertEntityAt(home, T, { entityType: 'decision', name: 'ghost', sourceObject: { type: 'decision', id: 99999 } }),
+    ).toThrow(/not found|active\/superseded|active|superseded/i);
     const db = openHippoDb(home);
     try {
-      expect(() => db.prepare(
-        `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
          VALUES (?, 'decision', 'ghost', NULL, 'distilled', 'decision', 99999, ?)`,
-      ).run(T, new Date().toISOString())).toThrow(/source_object must reference|active|superseded/i);
-    } finally { closeHippoDb(db); }
+          )
+          .run(T, new Date().toISOString()),
+      ).toThrow(/source_object must reference|active|superseded/i);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('mirror forget on a memory-only entity succeeds and leaves an all-null row (UPDATE trigger tolerates the FK SET NULL)', () => {
@@ -280,7 +340,9 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(ref.source_object_id).toBe(decision.id);
 
     // The referenced policy entity is still there with a live mirror.
-    const policyEnt = entityRows(home).find((e) => e.source_object_id === policy.id && e.source_object_type === 'policy')!;
+    const policyEnt = entityRows(home).find(
+      (e) => e.source_object_id === policy.id && e.source_object_type === 'policy',
+    )!;
     expect(policyEnt).toBeDefined();
   });
 
@@ -289,83 +351,131 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // memory is null - so a wrong/closed/nonexistent object cannot ride along with a live
     // memory and become a forget-blocking landmine after ON DELETE SET NULL.
     const md = addMemory(home, 'distilled');
-    expect(() => insertEntityAt(home, T, {
-      entityType: 'decision', name: 'x', memoryId: md, sourceObject: { type: 'decision', id: 99999 },
-    })).toThrow(/not found|active|superseded/i);
+    expect(() =>
+      insertEntityAt(home, T, {
+        entityType: 'decision',
+        name: 'x',
+        memoryId: md,
+        sourceObject: { type: 'decision', id: 99999 },
+      }),
+    ).toThrow(/not found|active|superseded/i);
 
     // raw SQL: live distilled memory + bad object -> the INSERT trigger validates the object too.
     const md2 = addMemory(home, 'distilled');
     const db = openHippoDb(home);
     try {
-      expect(() => db.prepare(
-        `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
          VALUES (?, 'decision', 'x', ?, 'distilled', 'decision', 99999, ?)`,
-      ).run(T, md2, new Date().toISOString())).toThrow(/source_object must reference|active|superseded/i);
-    } finally { closeHippoDb(db); }
+          )
+          .run(T, md2, new Date().toISOString()),
+      ).toThrow(/source_object must reference|active|superseded/i);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('a stale-missing mirror is tolerated when a valid object is present (rebuild not rolled back)', async () => {
     // The extraction race: a memory id that no longer exists (forgotten mid-rebuild) but a valid
     // source object. insertEntity must anchor to the object (memory_id null), NOT throw - else a
     // mirror forgotten during a rebuild would roll back the WHOLE tenant rebuild.
-    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
-    const ent = insertEntityAt(home, T, {
-      entityType: 'policy', name: 'Retention', memoryId: 'sem_doesnotexist', sourceObject: { type: 'policy', id: policy.id },
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'Retention',
+      policyText: 'p',
     });
-    expect(ent.memoryId).toBeNull();            // dead mirror pointer dropped
+    const ent = insertEntityAt(home, T, {
+      entityType: 'policy',
+      name: 'Retention',
+      memoryId: 'sem_doesnotexist',
+      sourceObject: { type: 'policy', id: policy.id },
+    });
+    expect(ent.memoryId).toBeNull(); // dead mirror pointer dropped
     expect(ent.sourceObjectId).toBe(policy.id); // anchored to the object
     // a stale-missing mirror with NO object still throws (no provenance to fall back on).
-    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: 'sem_doesnotexist' }))
-      .toThrow(/not found/i);
+    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: 'sem_doesnotexist' })).toThrow(
+      /not found/i,
+    );
   });
 
   it('an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', async () => {
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'Retention',
+      policyText: 'p',
+    });
     await extractGraph(sqliteStore(home), T);
     const polEnt = entityRows(home).find((e) => e.source_object_type === 'policy')!;
     const db = openHippoDb(home);
     try {
       // explicit re-point to a nonexistent object -> object cols changed -> object path validated -> ABORT.
-      expect(() => db.prepare(`UPDATE entities SET source_object_id = 99999 WHERE id = ?`).run(polEnt.id))
-        .toThrow(/source_object must reference|active|superseded/i);
+      expect(() => db.prepare(`UPDATE entities SET source_object_id = 99999 WHERE id = ?`).run(polEnt.id)).toThrow(
+        /source_object must reference|active|superseded/i,
+      );
       // half-set via UPDATE -> all-or-none ABORT.
-      expect(() => db.prepare(`UPDATE entities SET source_object_type = NULL WHERE id = ?`).run(polEnt.id))
-        .toThrow(/set together|all-or-none/i);
-    } finally { closeHippoDb(db); }
+      expect(() => db.prepare(`UPDATE entities SET source_object_type = NULL WHERE id = ?`).run(polEnt.id)).toThrow(
+        /set together|all-or-none/i,
+      );
+    } finally {
+      closeHippoDb(db);
+    }
     // (the memory-only SET NULL not-blocked case is covered by the memory-only forget test above.)
   });
 
   it('a tenant-only move of an object-backed (mirrorless) row revalidates the object and ABORTs', async () => {
-    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'Retention',
+      policyText: 'p',
+    });
     // object-only (mirrorless) entity in tenant T - the memory-path tenant check does not apply.
-    const ent = insertEntityAt(home, T, { entityType: 'policy', name: 'Retention', sourceObject: { type: 'policy', id: policy.id } });
+    const ent = insertEntityAt(home, T, {
+      entityType: 'policy',
+      name: 'Retention',
+      sourceObject: { type: 'policy', id: policy.id },
+    });
     expect(ent.memoryId).toBeNull();
     const db = openHippoDb(home);
     try {
       // moving it to another tenant: the object-validation gate now includes tenant change, so the
       // object is re-checked against the NEW tenant (policy is in T, not 'other-tenant') -> ABORT.
-      expect(() => db.prepare(`UPDATE entities SET tenant_id = 'other-tenant' WHERE id = ?`).run(ent.id))
-        .toThrow(/source_object must reference|active|superseded/i);
-    } finally { closeHippoDb(db); }
+      expect(() => db.prepare(`UPDATE entities SET tenant_id = 'other-tenant' WHERE id = ?`).run(ent.id)).toThrow(
+        /source_object must reference|active|superseded/i,
+      );
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('close lifecycle: closing a MIRRORLESS object removes its graph rows directly (no rebuild)', async () => {
-    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Data Retention Policy', policyText: 'Delete logs after 90 days' });
-    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the Data Retention Policy widely' });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'Data Retention Policy',
+      policyText: 'Delete logs after 90 days',
+    });
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt the Data Retention Policy widely',
+    });
     // Forget the decision mirror, then extract -> the decision is in the graph, mirrorless.
     deleteEntry(home, decision.memoryId!);
     await extractGraph(sqliteStore(home), T);
-    expect(entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id)).toBe(true);
+    expect(
+      entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id),
+    ).toBe(true);
     expect(relationRows(home).length).toBe(1); // decision -> policy references arc
 
     // Close the mirrorless decision. close* cannot enqueue a rebuild (no mirror to key the
     // queue), so it must drop the decision's graph rows DIRECTLY. NO extractGraph after close.
     await closeDecision(objectsAt(home), T, decision.id);
 
-    expect(entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id)).toBe(false); // gone
-    expect(relationRows(home).some((r) => r.source_object_type === 'decision' && r.source_object_id === decision.id)).toBe(false); // edge gone
+    expect(
+      entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id),
+    ).toBe(false); // gone
+    expect(
+      relationRows(home).some((r) => r.source_object_type === 'decision' && r.source_object_id === decision.id),
+    ).toBe(false); // edge gone
     // the policy entity (untouched, live mirror) remains.
-    expect(entityRows(home).some((e) => e.source_object_type === 'policy' && e.source_object_id === policy.id)).toBe(true);
+    expect(entityRows(home).some((e) => e.source_object_type === 'policy' && e.source_object_id === policy.id)).toBe(
+      true,
+    );
   });
 
   it('forgetting the mirror of a CLOSED-but-not-yet-rebuilt object does NOT block the delete (core sleep/forget safe)', async () => {
@@ -373,7 +483,9 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // now-closed object until that rebuild runs. If the mirror is then forgotten or pruned
     // (sleep deletes memories BEFORE the graph drain), the FK ON DELETE SET NULL fires the
     // BEFORE UPDATE trigger - which must NOT abort the delete on the object's (closed) status.
-    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the retention rule for logs' });
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt the retention rule for logs',
+    });
     await extractGraph(sqliteStore(home), T);
     expect(entityRows(home).length).toBe(1); // entity created with a live mirror + object (active)
 
@@ -389,8 +501,12 @@ describe('graph provenance is anchored to the first-class object, not its memory
     try {
       expect(db.prepare(`SELECT id FROM memories WHERE id = ?`).get(decision.memoryId!)).toBeUndefined();
       // The closed decision outlives its mirror: the FK set its memory_id to NULL instead of blocking the delete.
-      expect(db.prepare(`SELECT memory_id, status FROM decisions WHERE id = ?`).get(decision.id))
-        .toEqual({ memory_id: null, status: 'closed' });
-    } finally { closeHippoDb(db); }
+      expect(db.prepare(`SELECT memory_id, status FROM decisions WHERE id = ?`).get(decision.id)).toEqual({
+        memory_id: null,
+        status: 'closed',
+      });
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

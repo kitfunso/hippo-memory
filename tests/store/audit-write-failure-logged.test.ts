@@ -21,7 +21,9 @@ afterEach(() => {
 function breakAuditTable(): void {
   const db = openHippoDb(root);
   try {
-    db.exec(`CREATE TRIGGER audit_log_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`);
+    db.exec(
+      `CREATE TRIGGER audit_log_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
+    );
   } finally {
     closeHippoDb(db);
   }

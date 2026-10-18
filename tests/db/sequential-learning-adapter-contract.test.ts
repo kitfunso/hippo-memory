@@ -68,7 +68,9 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
     // We use the public adapter so any wiring bug surfaces. The adapter
     // creates its own temp HIPPO_HOME and sets HIPPO_SESSION_ID for us.
     await hippoAdapter.init();
-    if (!hippoAdapter.pushGoal || !hippoAdapter.completeGoal) throw new Error('the hippo adapter must supply the goal hooks');
+    if (!hippoAdapter.pushGoal || !hippoAdapter.completeGoal) {
+      throw new Error('the hippo adapter must supply the goal hooks');
+    }
     try {
       // Push a goal whose name MATCHES a tag we will store.
       const goalId = await hippoAdapter.pushGoal('bare_except');
@@ -77,10 +79,13 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       // Store a memory tagged with the goal name (this is the boost-firing
       // tag-fix that simulate() applies). recall() must see the memory under
       // the active goal so goal_recall_log gets a row.
-      await hippoAdapter.store(
-        'Never use bare except: pass. It swallows all errors silently.',
-        ['bare_except', 'error-handling', 'exception', 'python', 'error'],
-      );
+      await hippoAdapter.store('Never use bare except: pass. It swallows all errors silently.', [
+        'bare_except',
+        'error-handling',
+        'exception',
+        'python',
+        'error',
+      ]);
 
       const recalled = await hippoAdapter.recall('handling errors in data pipeline');
       expect(Array.isArray(recalled)).toBe(true);
@@ -113,9 +118,7 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       try {
         // SAFETY: query is a fixed `COUNT(*) AS n` aggregate, which always
         // returns exactly one row shaped { n: number }.
-        const row = db
-          .prepare('SELECT COUNT(*) AS n FROM goal_recall_log')
-          .get() as { n: number };
+        const row = db.prepare('SELECT COUNT(*) AS n FROM goal_recall_log').get() as { n: number };
         expect(row.n).toBe(1);
       } finally {
         db.close();

@@ -9,13 +9,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall/request.js';
 import { recordTokens } from '../api/tokens.js';
-import {
-  mcpApiContext,
-  type McpContext,
-  type McpRequest,
-  type McpResponse,
-  type ToolHandler,
-} from './protocol.js';
+import { mcpApiContext, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
@@ -115,11 +109,7 @@ async function runTool(toolName: string, args: Record<string, JsonValue>, ctx: M
   return text;
 }
 
-async function callTool(
-  id: McpRequest['id'],
-  params: McpRequest['params'],
-  ctx: McpContext,
-): Promise<McpResponse> {
+async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx: McpContext): Promise<McpResponse> {
   const nameValue = params?.name;
   const toolName = isJsonString(nameValue) ? nameValue : '';
   const tool = TOOLS_BY_NAME.get(toolName);

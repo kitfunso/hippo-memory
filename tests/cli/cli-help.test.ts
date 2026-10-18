@@ -15,51 +15,75 @@ import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.j
 
 // Read from the dispatch table so a verb added later is covered without editing this file.
 const VERBS = Object.entries(COMMANDS).flatMap(([verb, spec]) => [verb, ...(spec.aliases ?? [])]);
-const SUBCOMMANDS = [['audit', 'prune'], ['slack', 'backfill'], ['slack', 'workspaces'], ['github', 'backfill']];
+const SUBCOMMANDS = [
+  ['audit', 'prune'],
+  ['slack', 'backfill'],
+  ['slack', 'workspaces'],
+  ['github', 'backfill'],
+];
 const OWN_FLAG = new Map([
-  ['audit prune', '--older-than'], ['slack backfill', '--channel'], ['slack workspaces', '--tenant'], ['github backfill', '--repo'],
+  ['audit prune', '--older-than'],
+  ['slack backfill', '--channel'],
+  ['slack workspaces', '--tenant'],
+  ['github backfill', '--repo'],
 ]);
 const CLI = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 // No PATH, so a spawned verb that ignored --help could not reach schtasks, crontab or codex.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
 
 // No-op spies, so a verb that ignored --help is caught without running.
-const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS)
-  .map(([verb, spec]) => [verb, vi.spyOn(spec, 'run').mockImplementation(() => undefined)] as const);
+const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS).map(
+  ([verb, spec]) => [verb, vi.spyOn(spec, 'run').mockImplementation(() => undefined)] as const,
+);
 
-interface CommandRow { readonly flags: VerbFlags }
+interface CommandRow {
+  readonly flags: VerbFlags;
+}
 // Pinned rather than read from the rows, so a row that gains or loses --dry-run fails here first.
 const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'refine', 'setup', 'sleep'];
 // Declared flags the help does not name yet: document one, then delete it here; the list may only shrink.
-const UNDOCUMENTED = new Map(Object.entries({
-  remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
-  recall: ['classic', 'equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'physics', 'scope'],
-  drill: ['depth'],
-  explain: ['as-of', 'equal-sources', 'include-superseded', 'local-bump', 'scope'],
-  eval: ['baseline', 'save-baseline', 'suite'],
-  trace: ['outcome', 'session', 'source', 'steps', 'tag', 'task'],
-  sleep: ['log-file'],
-  'session-end': ['dry-run', 'format', 'no-learn', 'no-share', 'session-id', 'transcript'],
-  'pre-compact': ['format'],
-  'capture-error': ['format'],
-  snapshot: ['id'],
-  session: ['outcome', 'session', 'summary'],
-  handoff: ['id'],
-  forget: ['dry-run'],
-  context: ['cross-project', 'limit', 'runtime', 'scope'],
-  embed: ['global', 'reset-physics'],
-  sync: ['cross-project'],
-  peers: ['all-tenants'],
-  graph: ['entity', 'format', 'json', 'open', 'out'],
-}));
-const namesOf = (flags: VerbFlags): string[] =>
-  [...(flags.switches ?? []), ...(flags.values ?? []), ...(flags.numbers ?? []), ...(flags.lists ?? [])];
-interface HelpDirs { readonly cwd: string; readonly home: string; readonly store: string }
+const UNDOCUMENTED = new Map(
+  Object.entries({
+    remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
+    recall: ['classic', 'equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'physics', 'scope'],
+    drill: ['depth'],
+    explain: ['as-of', 'equal-sources', 'include-superseded', 'local-bump', 'scope'],
+    eval: ['baseline', 'save-baseline', 'suite'],
+    trace: ['outcome', 'session', 'source', 'steps', 'tag', 'task'],
+    sleep: ['log-file'],
+    'session-end': ['dry-run', 'format', 'no-learn', 'no-share', 'session-id', 'transcript'],
+    'pre-compact': ['format'],
+    'capture-error': ['format'],
+    snapshot: ['id'],
+    session: ['outcome', 'session', 'summary'],
+    handoff: ['id'],
+    forget: ['dry-run'],
+    context: ['cross-project', 'limit', 'runtime', 'scope'],
+    embed: ['global', 'reset-physics'],
+    sync: ['cross-project'],
+    peers: ['all-tenants'],
+    graph: ['entity', 'format', 'json', 'open', 'out'],
+  }),
+);
+const namesOf = (flags: VerbFlags): string[] => [
+  ...(flags.switches ?? []),
+  ...(flags.values ?? []),
+  ...(flags.numbers ?? []),
+  ...(flags.lists ?? []),
+];
+interface HelpDirs {
+  readonly cwd: string;
+  readonly home: string;
+  readonly store: string;
+}
 let dirs: HelpDirs;
 let full: InProcessResult;
 const savedCwd = process.cwd();
 
-interface HelpRun extends InProcessResult { readonly ran: string[]; readonly written: string[] }
+interface HelpRun extends InProcessResult {
+  readonly ran: string[];
+  readonly written: string[];
+}
 
 function written(): string[] {
   const paths = Object.values(dirs).flatMap((dir) => readdirSync(dir).map((name) => join(dir, name)));
@@ -76,10 +100,17 @@ async function run(args: string[]): Promise<HelpRun> {
 
 const pick = ({ status, stdout, stderr }: InProcessResult): InProcessResult => ({ status, stdout, stderr });
 // The full listing is pinned once, under hippo --help; every other snapshot names it instead of repeating it.
-const pinned = (res: InProcessResult): InProcessResult => ({ ...pick(res), stdout: res.stdout === full.stdout ? '<full usage>' : res.stdout });
+const pinned = (res: InProcessResult): InProcessResult => ({
+  ...pick(res),
+  stdout: res.stdout === full.stdout ? '<full usage>' : res.stdout,
+});
 
 beforeAll(async () => {
-  dirs = { cwd: mkdtempSync(join(tmpdir(), 'hippo-help-cwd-')), home: mkdtempSync(join(tmpdir(), 'hippo-help-home-')), store: mkdtempSync(join(tmpdir(), 'hippo-help-store-')) };
+  dirs = {
+    cwd: mkdtempSync(join(tmpdir(), 'hippo-help-cwd-')),
+    home: mkdtempSync(join(tmpdir(), 'hippo-help-home-')),
+    store: mkdtempSync(join(tmpdir(), 'hippo-help-store-')),
+  };
   vi.stubEnv('HOME', dirs.home);
   vi.stubEnv('USERPROFILE', dirs.home);
   vi.stubEnv('HIPPO_HOME', dirs.store);
@@ -104,12 +135,15 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect([...VERBS].sort()).toMatchSnapshot();
   });
 
-  it.for([{ args: [] }, { args: ['-h'] }, { args: ['help'] }, { args: ['--help'] }])('hippo $args prints the same full usage', async ({ args }) => {
-    const res = await run(args);
-    expect(pick(res)).toEqual(full);
-    expect(res.stdout).toBe(`${usageText()}\n`);
-    expect([res.ran, res.written]).toEqual([[], []]);
-  });
+  it.for([{ args: [] }, { args: ['-h'] }, { args: ['help'] }, { args: ['--help'] }])(
+    'hippo $args prints the same full usage',
+    async ({ args }) => {
+      const res = await run(args);
+      expect(pick(res)).toEqual(full);
+      expect(res.stdout).toBe(`${usageText()}\n`);
+      expect([res.ran, res.written]).toEqual([[], []]);
+    },
+  );
 
   it.for(VERBS)('hippo help %s prints the full usage', async (verb) => {
     const res = await run(['help', verb]);
@@ -129,7 +163,9 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     // Read from source: the spies above replaced each run function.
     const dir = resolve(__dirname, '..', '..', 'src', 'cli', 'verbs');
     const rowCall = /\bverb\(\(\) => import\('[^']+'\), '(\w+)'/g;
-    const names = readdirSync(dir).flatMap((file) => [...readFileSync(join(dir, file), 'utf8').matchAll(rowCall)].map((m) => m[1]));
+    const names = readdirSync(dir).flatMap((file) =>
+      [...readFileSync(join(dir, file), 'utf8').matchAll(rowCall)].map((m) => m[1]),
+    );
     expect(names).toHaveLength(Object.keys(COMMANDS).length);
     expect(names.filter((name) => !/^handle[A-Z]/.test(name))).toEqual([]);
   });
@@ -137,7 +173,9 @@ describe('CLI help output is byte-identical and runs nothing', () => {
   it.for(VERBS)('hippo %s --dry-run runs the verb only where its row honours the flag', async (verb) => {
     const res = await run([verb, '--dry-run']);
     expect([res.ran, res.written]).toEqual([DRY_RUN_VERBS.includes(verb) ? [verb] : [], []]);
-    if (res.ran.length === 0) expect([res.status, res.stderr]).toEqual([2, expect.stringContaining(`hippo ${verb} has no --dry-run`)]);
+    if (res.ran.length === 0) {
+      expect([res.status, res.stderr]).toEqual([2, expect.stringContaining(`hippo ${verb} has no --dry-run`)]);
+    }
   });
 
   it('hippo init -h prints the init block and installs nothing', async () => {
@@ -154,20 +192,28 @@ describe('CLI help output is byte-identical and runs nothing', () => {
   });
 
   it('hippo slack workspaces add --help prints the workspaces usage and runs nothing', async () => {
-    const [res, workspaces] = [await run(['slack', 'workspaces', 'add', '--help']), await run(['slack', 'workspaces', '--help'])];
+    const [res, workspaces] = [
+      await run(['slack', 'workspaces', 'add', '--help']),
+      await run(['slack', 'workspaces', '--help']),
+    ];
     expect(pick(res)).toEqual(pick(workspaces));
     expect([res.ran, res.written]).toEqual([[], []]);
   });
 
-  it.for([{ args: ['frobnicate'] }, { args: ['frobnicate', '--help'] }, { args: ['frobnicate', '--zzz'] }])('unknown verb: hippo $args', async ({ args }) => {
-    const res = await run(args);
-    expect([res.ran, res.written]).toEqual([[], []]);
-    expect(pinned(res)).toMatchSnapshot();
-  });
+  it.for([{ args: ['frobnicate'] }, { args: ['frobnicate', '--help'] }, { args: ['frobnicate', '--zzz'] }])(
+    'unknown verb: hippo $args',
+    async ({ args }) => {
+      const res = await run(args);
+      expect([res.ran, res.written]).toEqual([[], []]);
+      expect(pinned(res)).toMatchSnapshot();
+    },
+  );
 
   it.each(['--version', '-v'])('hippo %s prints the package version', async (flag) => {
     // SAFETY: package.json always carries a string version.
-    const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { version: string };
+    const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+      version: string;
+    };
     expect(pick(await run([flag]))).toEqual({ status: 0, stdout: `${version}\n`, stderr: '' });
   });
 });
@@ -176,7 +222,13 @@ describe('built CLI', () => {
   it('bin/hippo.js --help prints the same full usage and writes nothing', () => {
     const res = spawnSync(process.execPath, [CLI, '--help'], {
       cwd: dirs.cwd,
-      env: { ...ENV, HOME: dirs.home, USERPROFILE: dirs.home, HIPPO_HOME: dirs.store, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+      env: {
+        ...ENV,
+        HOME: dirs.home,
+        USERPROFILE: dirs.home,
+        HIPPO_HOME: dirs.store,
+        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+      },
       encoding: 'utf8',
       timeout: 10_000,
     });
@@ -186,12 +238,22 @@ describe('built CLI', () => {
 
   it('importing dist/cli.js runs nothing; only bin/hippo.js and a direct run do', () => {
     const url = pathToFileURL(resolve(__dirname, '..', '..', 'dist', 'cli.js')).href;
-    const res = spawnSync(process.execPath, ['-e', `import(${JSON.stringify(url)}).then(() => console.log('imported'))`], {
-      cwd: dirs.cwd,
-      env: { ...ENV, HOME: dirs.home, USERPROFILE: dirs.home, HIPPO_HOME: dirs.store, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
-      encoding: 'utf8',
-      timeout: 10_000,
-    });
+    const res = spawnSync(
+      process.execPath,
+      ['-e', `import(${JSON.stringify(url)}).then(() => console.log('imported'))`],
+      {
+        cwd: dirs.cwd,
+        env: {
+          ...ENV,
+          HOME: dirs.home,
+          USERPROFILE: dirs.home,
+          HIPPO_HOME: dirs.store,
+          HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+        },
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    );
     expect(res.stdout.trim()).toBe('imported');
   });
 });
@@ -201,15 +263,24 @@ describe('usage blocks', () => {
     expect(VERBS.filter((verb) => !verb.startsWith('__') && verbUsage(verb) === null)).toEqual([]);
   });
 
-  it.for(Object.entries<CommandRow>(COMMANDS).filter(([verb]) => !verb.startsWith('__')))('%s help names every flag the verb declares and no other', async ([verb, spec]) => {
-    const subHelp: string[] = [];
-    // One at a time: each run captures the process's stdout.
-    for (const sub of SUBCOMMANDS.filter(([own]) => own === verb)) subHelp.push((await run([...sub, '--help'])).stdout);
-    const named = new Set([...[verbUsage(verb), ...subHelp].join('\n').matchAll(/--([a-z][a-z0-9-]*)/g)].map((m) => m[1]));
-    const declared = namesOf(spec.flags);
-    expect({ missing: declared.filter((name) => !named.has(name)).sort(), undeclared: [...named].filter((name) => !declared.includes(name)) })
-      .toEqual({ missing: UNDOCUMENTED.get(verb) ?? [], undeclared: [] });
-  });
+  it.for(Object.entries<CommandRow>(COMMANDS).filter(([verb]) => !verb.startsWith('__')))(
+    '%s help names every flag the verb declares and no other',
+    async ([verb, spec]) => {
+      const subHelp: string[] = [];
+      // One at a time: each run captures the process's stdout.
+      for (const sub of SUBCOMMANDS.filter(([own]) => own === verb)) {
+        subHelp.push((await run([...sub, '--help'])).stdout);
+      }
+      const named = new Set(
+        [...[verbUsage(verb), ...subHelp].join('\n').matchAll(/--([a-z][a-z0-9-]*)/g)].map((m) => m[1]),
+      );
+      const declared = namesOf(spec.flags);
+      expect({
+        missing: declared.filter((name) => !named.has(name)).sort(),
+        undeclared: [...named].filter((name) => !declared.includes(name)),
+      }).toEqual({ missing: UNDOCUMENTED.get(verb) ?? [], undeclared: [] });
+    },
+  );
 
   it('a block holds only its verb, and an alias prints its verb block', () => {
     expect(verbUsage('init')).toMatch(/^ {2}init .*\n {4}--scan/);

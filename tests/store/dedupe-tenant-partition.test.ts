@@ -47,13 +47,11 @@ function setStrength(home: string, id: string, strength: number): void {
 
 // Same probe pair as tests/store/dedupe-survivor-determinism.test.ts: one sentence,
 // B with a double space, so the two differ in bytes but match apart from spacing.
-const CONTENT_A =
-  'The quarterly finance report shows revenue grew steadily across all four regions this year';
+const CONTENT_A = 'The quarterly finance report shows revenue grew steadily across all four regions this year';
 const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
 // Byte-identical content used across two tenants for the zero-removal case.
-const SHARED_CONTENT =
-  'This exact sentence is shared by two different tenants in the store on purpose';
+const SHARED_CONTENT = 'This exact sentence is shared by two different tenants in the store on purpose';
 
 describe('deduplicateStore tenant partition', () => {
   it('(a) byte-identical content in tenant-a and tenant-b removes nothing; both rows survive', async () => {
@@ -77,7 +75,7 @@ describe('deduplicateStore tenant partition', () => {
   it('(b) duplicates within EACH of two tenants: exactly one removal per tenant, survivor per the total order in each', async () => {
     const home = makeRoot('dedupe-tenant-b');
     // tenant-a: CONTENT_A weak, CONTENT_B strong -> CONTENT_B survives.
-    const aWeak =await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
+    const aWeak = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
     const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
     setStrength(home, aWeak.id, 0.5);
     setStrength(home, aStrong.id, 1.0);
@@ -131,11 +129,8 @@ describe('deduplicateStore tenant partition', () => {
     expect(dry.removed).toBe(2);
     expect(real.removed).toBe(2);
 
-    const sortByRemoved = (p: DedupPair[]) =>
-      [...p].sort((x, y) => x.removed.localeCompare(y.removed));
-    expect(sortByRemoved(dry.pairs).map((p) => p.removed)).toEqual(
-      sortByRemoved(real.pairs).map((p) => p.removed),
-    );
+    const sortByRemoved = (p: DedupPair[]) => [...p].sort((x, y) => x.removed.localeCompare(y.removed));
+    expect(sortByRemoved(dry.pairs).map((p) => p.removed)).toEqual(sortByRemoved(real.pairs).map((p) => p.removed));
     expect(sortByRemoved(dry.pairs).map((p) => p.removedContent)).toEqual(
       sortByRemoved(real.pairs).map((p) => p.removedContent),
     );

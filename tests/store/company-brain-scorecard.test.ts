@@ -44,12 +44,10 @@ function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScore
   const covered = Object.values(signals).filter(Boolean).length;
   const coverage = covered / Object.keys(signals).length;
 
-  const eventTrail = events
-    .slice(-1)
-    .map((event) => {
-      const preview = event.content.split(/\s+/).slice(0, 4).join(' ');
-      return `${event.event_type}: ${preview}`;
-    });
+  const eventTrail = events.slice(-1).map((event) => {
+    const preview = event.content.split(/\s+/).slice(0, 4).join(' ');
+    return `${event.event_type}: ${preview}`;
+  });
 
   const parts: string[] = [];
 
@@ -162,17 +160,16 @@ describe('Company Brain continuity scorecard scaffold', () => {
       artifacts: ['docs/plans/2026-05-03-continuity-first-recall.md'],
     });
 
-    const baseline = await retrieve(
-      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'continuity' },
-    );
+    const baseline = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
+      query: 'continuity',
+    });
     expect(baseline.continuity).toBeUndefined();
     expect(baseline.continuityTokens).toBeUndefined();
 
-    const onResult = await retrieve(
-      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
-      { query: 'continuity', window: { includeContinuity: true } },
-    );
+    const onResult = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
+      query: 'continuity',
+      window: { includeContinuity: true },
+    });
     expect(onResult.continuity).toBeDefined();
     const block = onResult.continuity!;
 
@@ -444,10 +441,11 @@ describe('Company Brain correction-latency scorecard', () => {
       const oldFact = createMemory(`belief ${i} v1`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       oldFact.created = '2026-03-01T00:00:00.000Z';
 
-      const newFact = createMemory(`belief ${i} v2`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extractedFrom: raw.id });
-      newFact.created = new Date(
-        new Date(baseRaw).getTime() + lagMin * 60 * 1000,
-      ).toISOString();
+      const newFact = createMemory(`belief ${i} v2`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        extractedFrom: raw.id,
+      });
+      newFact.created = new Date(new Date(baseRaw).getTime() + lagMin * 60 * 1000).toISOString();
       oldFact.superseded_by = newFact.id;
 
       entries.push(raw, oldFact, newFact);

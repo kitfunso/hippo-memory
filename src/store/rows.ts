@@ -161,12 +161,46 @@ export interface SessionEvent {
 
 export const INDEX_VERSION = 3;
 const MEMORY_COLUMN_NAMES = [
-  'id', 'created', 'last_retrieved', 'retrieval_count', 'strength', 'half_life_days', 'layer', 'tags_json',
-  'emotional_valence', 'schema_fit', 'source', 'outcome_score', 'outcome_positive', 'outcome_negative',
-  'conflicts_with_json', 'pinned', 'confidence', 'content', 'parents_json', 'starred', 'trace_outcome',
-  'source_session_id', 'valid_from', 'superseded_by', 'extracted_from', 'dag_level', 'dag_parent_id', 'kind', 'scope',
-  'owner', 'artifact_ref', 'tenant_id', 'origin_project', 'descendant_count', 'earliest_at', 'latest_at',
-  'summary_dirty', 'last_rebuilt_at', 'rebuild_count', 'dag_level_3_built_at',
+  'id',
+  'created',
+  'last_retrieved',
+  'retrieval_count',
+  'strength',
+  'half_life_days',
+  'layer',
+  'tags_json',
+  'emotional_valence',
+  'schema_fit',
+  'source',
+  'outcome_score',
+  'outcome_positive',
+  'outcome_negative',
+  'conflicts_with_json',
+  'pinned',
+  'confidence',
+  'content',
+  'parents_json',
+  'starred',
+  'trace_outcome',
+  'source_session_id',
+  'valid_from',
+  'superseded_by',
+  'extracted_from',
+  'dag_level',
+  'dag_parent_id',
+  'kind',
+  'scope',
+  'owner',
+  'artifact_ref',
+  'tenant_id',
+  'origin_project',
+  'descendant_count',
+  'earliest_at',
+  'latest_at',
+  'summary_dirty',
+  'last_rebuilt_at',
+  'rebuild_count',
+  'dag_level_3_built_at',
 ] as const;
 
 // FTS-join columns for loadSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
@@ -181,15 +215,49 @@ export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 type RetrievalFields = Pick<
   MemoryEntry,
-  'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'strength' | 'half_life_days' | 'layer' | 'tags' |
-  'emotional_valence' | 'schema_fit' | 'source' | 'outcome_score' | 'outcome_positive' | 'outcome_negative' |
-  'conflicts_with' | 'pinned' | 'confidence' | 'content' | 'parents' | 'starred' | 'trace_outcome'
+  | 'id'
+  | 'created'
+  | 'last_retrieved'
+  | 'retrieval_count'
+  | 'strength'
+  | 'half_life_days'
+  | 'layer'
+  | 'tags'
+  | 'emotional_valence'
+  | 'schema_fit'
+  | 'source'
+  | 'outcome_score'
+  | 'outcome_positive'
+  | 'outcome_negative'
+  | 'conflicts_with'
+  | 'pinned'
+  | 'confidence'
+  | 'content'
+  | 'parents'
+  | 'starred'
+  | 'trace_outcome'
 >;
 type PlacementFields = Pick<
   MemoryEntry,
-  'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' |
-  'scope' | 'owner' | 'artifact_ref' | 'tenant_id' | 'origin_project' | 'descendant_count' | 'earliest_at' |
-  'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'
+  | 'source_session_id'
+  | 'valid_from'
+  | 'superseded_by'
+  | 'extracted_from'
+  | 'dag_level'
+  | 'dag_parent_id'
+  | 'kind'
+  | 'scope'
+  | 'owner'
+  | 'artifact_ref'
+  | 'tenant_id'
+  | 'origin_project'
+  | 'descendant_count'
+  | 'earliest_at'
+  | 'latest_at'
+  | 'summary_dirty'
+  | 'last_rebuilt_at'
+  | 'rebuild_count'
+  | 'dag_level_3_built_at'
 >;
 
 function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
@@ -234,7 +302,7 @@ function rowToPlacementFields(row: MemoryRow): PlacementFields {
     extracted_from: row.extracted_from ?? null,
     dag_level: Number(row.dag_level ?? 0),
     dag_parent_id: row.dag_parent_id ?? null,
-    kind: ((row.kind ?? 'distilled') as MemoryKind),
+    kind: (row.kind ?? 'distilled') as MemoryKind,
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,

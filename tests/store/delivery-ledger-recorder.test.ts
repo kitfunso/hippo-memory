@@ -11,7 +11,11 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
 import {
-  createDeliveryRecorder, type DeliveryEventInput, type DeliveryFault, type DeliveryEventType, type DeliveryRecorder,
+  createDeliveryRecorder,
+  type DeliveryEventInput,
+  type DeliveryFault,
+  type DeliveryEventType,
+  type DeliveryRecorder,
 } from '../../src/store/delivery-recorder.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/prompt-hook.js';
@@ -32,15 +36,22 @@ let globalRoot: string;
 let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
+  const entry = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    origin_project: PROJECT,
+    ...extra,
+  };
   writeEntry(root, entry);
   return entry;
 }
 
 function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
-  fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({
-    pinnedInject: { promptRecallThreshold: 0.1, promptRecallMinShared: 1, ...pinnedInject },
-  }));
+  fs.writeFileSync(
+    path.join(local, 'config.json'),
+    JSON.stringify({
+      pinnedInject: { promptRecallThreshold: 0.1, promptRecallMinShared: 1, ...pinnedInject },
+    }),
+  );
   // The root loads config once per command, so the next call sees the file through a reloaded ctx.config.
   ctx = { ...ctx, config: loadConfig(local) };
 }
@@ -48,19 +59,31 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
 function recorder(fault?: DeliveryFault): DeliveryRecorder {
   return createDeliveryRecorder({
     fault,
-    ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
+    ledger: sqliteSyncStore(local).localFiles.ledger,
+    storeHash: 'aaaaaaaaaaaaaaaa',
+    writeStore: 'local',
+    tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
   });
 }
 
 function eventOf(rec: DeliveryRecorder): DeliveryEventInput {
   let input: DeliveryEventInput | null = null;
-  rec.flush((i) => { input = i; return 1; });
+  rec.flush((i) => {
+    input = i;
+    return 1;
+  });
   if (input === null) throw new Error('recorder wrote nothing');
   return input;
 }
 
-const baseOpts: ContextOptions = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT, prompt: PROMPT, currentSessionId: 's1' };
+const baseOpts: ContextOptions = {
+  pinnedOnly: true,
+  includeRecent: 5,
+  currentProject: PROJECT,
+  prompt: PROMPT,
+  currentSessionId: 's1',
+};
 
 /** Runs getContext without and then with an observer, asserts both results match, and returns the event. */
 async function observed(opts: ContextOptions = baseOpts): Promise<DeliveryEventInput> {
@@ -75,8 +98,12 @@ async function observed(opts: ContextOptions = baseOpts): Promise<DeliveryEventI
 function seedMixedStore(): void {
   seed(local, 'pinned rule: always run the postgres migration tests before merging', { pinned: true });
   seed(local, 'pinned rule: the deploy script lives in the ops folder for every release', { pinned: true });
-  seed(local, 'the postgres migration script needs a rollback plan before deploy', { created: '2026-05-01T00:00:00.000Z' });
-  seed(local, 'a migration rollback plan should name the owner and the restore point', { created: '2026-05-02T00:00:00.000Z' });
+  seed(local, 'the postgres migration script needs a rollback plan before deploy', {
+    created: '2026-05-01T00:00:00.000Z',
+  });
+  seed(local, 'a migration rollback plan should name the owner and the restore point', {
+    created: '2026-05-02T00:00:00.000Z',
+  });
   for (let i = 0; i < 6; i++) {
     seed(local, `office note ${i}: the coffee machine schedule changes for team lunch on friday`, {
       created: `2026-06-0${i + 1}T00:00:00.000Z`,
@@ -162,8 +189,14 @@ describe('the observer never changes getContext', () => {
 
   it("lets admit's own throw through and counts a rejected row once however often it is admitted", () => {
     const rec = recorder();
-    const entry = createMemory('a memory the admit predicate will see twice', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    expect(() => rec.watchAdmit(() => { throw new Error('admit failed'); })(entry)).toThrow('admit failed');
+    const entry = createMemory('a memory the admit predicate will see twice', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
+    expect(() =>
+      rec.watchAdmit(() => {
+        throw new Error('admit failed');
+      })(entry),
+    ).toThrow('admit failed');
     const refuse = rec.watchAdmit(() => false);
     expect([refuse(entry), refuse(entry)]).toEqual([false, false]);
     expect(eventOf(rec).filteredCount).toBe(1);
@@ -176,7 +209,9 @@ describe('rejection reasons', () => {
   it('budget, with the score and price that missed', async () => {
     configure({ promptRecall: false });
     seed(local, 'pinned rule: always run the postgres migration tests before merging', { pinned: true });
-    const big = seed(local, `pinned rule: ${'the deploy checklist covers every service and region '.repeat(8)}`, { pinned: true });
+    const big = seed(local, `pinned rule: ${'the deploy checklist covers every service and region '.repeat(8)}`, {
+      pinned: true,
+    });
     const event = await observed({ ...baseOpts, budget: 40 });
     const row = rowsOf(event).find((c) => c.memoryId === big.id);
     expect([row?.stage, row?.reason, row?.pool]).toEqual(['budget', 'budget', 'pin']);
@@ -193,14 +228,20 @@ describe('rejection reasons', () => {
     const event = await observed();
     const rows = new Map(rowsOf(event).map((c) => [c.memoryId, c]));
     expect([rows.get(second.id)?.stage, rows.get(second.id)?.reason]).toEqual(['gate', 'gate-max-items']);
-    expect([rows.get(weak.id)?.stage, rows.get(weak.id)?.reason, rows.get(weak.id)?.pool]).toEqual(['gate', 'gate-below-threshold', 'prompt-recall']);
+    expect([rows.get(weak.id)?.stage, rows.get(weak.id)?.reason, rows.get(weak.id)?.pool]).toEqual([
+      'gate',
+      'gate-below-threshold',
+      'prompt-recall',
+    ]);
     // Jaccard over content words: 'postgres' is the one word shared by the prompt's six and the memory's eight.
     expect(rows.get(weak.id)?.score).toBeCloseTo(1 / 13, 10);
   });
 
   it('scope and quality at eligibility, for prompt-recall candidates the loader returned', async () => {
     configure({ promptRecall: true });
-    const foreign = seed(local, 'the postgres migration rollback plan for the billing service', { origin_project: 'proj-b' });
+    const foreign = seed(local, 'the postgres migration rollback plan for the billing service', {
+      origin_project: 'proj-b',
+    });
     const junk = seed(local, 'postgres');
     const event = await observed();
     const rows = new Map(rowsOf(event).map((c) => [c.memoryId, c]));
@@ -210,7 +251,9 @@ describe('rejection reasons', () => {
 
   it('quality at load for a low-quality recent row the loader skipped, with prompt recall off', async () => {
     configure({ promptRecall: false });
-    seed(local, 'office note 1: the coffee machine schedule changes for team lunch on friday', { created: '2026-06-01T00:00:00.000Z' });
+    seed(local, 'office note 1: the coffee machine schedule changes for team lunch on friday', {
+      created: '2026-06-01T00:00:00.000Z',
+    });
     const junk = seed(local, 'postgres', { created: '2026-06-02T00:00:00.000Z' });
     const event = await observed();
     const row = rowsOf(event).find((c) => c.memoryId === junk.id);
@@ -223,7 +266,9 @@ describe('rejection reasons', () => {
     const text = 'pinned rule: always run the postgres migration tests before merging';
     const pin = seed(local, text, { pinned: true });
     const copy = seed(local, text);
-    const other = seed(local, 'pinned rule: the deploy script lives in the ops folder for every release', { pinned: true });
+    const other = seed(local, 'pinned rule: the deploy script lives in the ops folder for every release', {
+      pinned: true,
+    });
     const event = await observed({ ...baseOpts, limit: 1 });
     const kept = (await getContext(ctx, { ...baseOpts, limit: 1 })).entries.map((e) => e.entry.id);
     const cut = [pin.id, other.id].filter((id) => !kept.includes(id));
@@ -240,9 +285,13 @@ describe('rejection reasons', () => {
         created: `2026-06-0${i + 1}T00:00:00.000Z`,
       });
     }
-    for (let i = 0; i < 3; i++) seed(local, `other project note ${i}: the billing export runs every night at two`, { origin_project: 'proj-b' });
+    for (let i = 0; i < 3; i++) {
+      seed(local, `other project note ${i}: the billing export runs every night at two`, { origin_project: 'proj-b' });
+    }
     const event = await observed({ ...baseOpts, includeRecent: 2 });
-    expect([event.consideredCount, event.selectedCount, event.rejectedCount, event.rejectedUnlisted]).toEqual([6, 2, 4, 4]);
+    expect([event.consideredCount, event.selectedCount, event.rejectedCount, event.rejectedUnlisted]).toEqual([
+      6, 2, 4, 4,
+    ]);
     expect(rowsOf(event)).toEqual([]);
     expect(event.filteredCount).toBe(3);
   });
@@ -251,7 +300,11 @@ describe('rejection reasons', () => {
 describe('the event type of a recorder', () => {
   it('R1 takes eventType over a UserPromptSubmit payload', () => {
     const rec = createDeliveryRecorder({
-      ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType: 'pre-compact',
+      ledger: sqliteSyncStore(local).localFiles.ledger,
+      storeHash: 'aaaaaaaaaaaaaaaa',
+      writeStore: 'local',
+      tenantId: 'default',
+      eventType: 'pre-compact',
       stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
     });
     expect(eventOf(rec).eventType).toBe('pre-compact');
@@ -260,17 +313,26 @@ describe('the event type of a recorder', () => {
   it('R2 without eventType keeps the payload inference', () => {
     expect(eventOf(recorder()).eventType).toBe('prompt-submit');
     const manual = createDeliveryRecorder({
-      ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText: JSON.stringify({ session_id: 's1' }),
+      ledger: sqliteSyncStore(local).localFiles.ledger,
+      storeHash: 'aaaaaaaaaaaaaaaa',
+      writeStore: 'local',
+      tenantId: 'default',
+      stdinText: JSON.stringify({ session_id: 's1' }),
     });
     expect(eventOf(manual).eventType).toBe('pinned-manual');
   });
 });
 
 describe('prompt facts on a boundary or context row', () => {
-  const withPrompt = (eventType?: DeliveryEventType) => createDeliveryRecorder({
-    ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
-    stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
-  });
+  const withPrompt = (eventType?: DeliveryEventType) =>
+    createDeliveryRecorder({
+      ledger: sqliteSyncStore(local).localFiles.ledger,
+      storeHash: 'aaaaaaaaaaaaaaaa',
+      writeStore: 'local',
+      tenantId: 'default',
+      eventType,
+      stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
+    });
 
   for (const type of ['pre-compact', 'compact-resume', 'session-end', 'context'] as const) {
     it(`R3 a ${type} row keeps no prompt hash or length although the payload carries a prompt`, () => {
@@ -298,10 +360,16 @@ describe('prompt facts on a boundary or context row', () => {
 });
 
 describe('the tool-failure recorder', () => {
-  const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) => createDeliveryRecorder({
-    fault, ledger: sqliteSyncStore(local).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
-    stdinText: JSON.stringify({ session_id: 's', hook_event_name: 'PostToolUseFailure', ...payload }),
-  });
+  const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) =>
+    createDeliveryRecorder({
+      fault,
+      ledger: sqliteSyncStore(local).localFiles.ledger,
+      storeHash: 'aaaaaaaaaaaaaaaa',
+      writeStore: 'local',
+      tenantId: 'default',
+      eventType,
+      stdinText: JSON.stringify({ session_id: 's', hook_event_name: 'PostToolUseFailure', ...payload }),
+    });
 
   it('reads tool_use_id trimmed and cut to 128 characters, and a blank one as null', () => {
     expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '  toolu_1  ' })).toolUseId).toBe('toolu_1');
@@ -314,8 +382,16 @@ describe('the tool-failure recorder', () => {
     const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' });
     rec.logged(42);
     const input = eventOf(rec);
-    expect([input.eventType, input.surface, input.blockState, input.toolUseId, input.failureId]).toEqual(['tool-failure', 'hook', 'empty', 'toolu_1', 42]);
-    expect([input.candidates, input.consideredCount, input.emittedCount, input.promptHash, input.promptLength]).toEqual([[], 0, 0, null, 0]);
+    expect([input.eventType, input.surface, input.blockState, input.toolUseId, input.failureId]).toEqual([
+      'tool-failure',
+      'hook',
+      'empty',
+      'toolu_1',
+      42,
+    ]);
+    expect([input.candidates, input.consideredCount, input.emittedCount, input.promptHash, input.promptLength]).toEqual(
+      [[], 0, 0, null, 0],
+    );
     const other = failureRecorder('prompt-submit', { tool_use_id: 'toolu_1', prompt: 'hello' });
     other.logged(42);
     const o = eventOf(other);
@@ -338,18 +414,17 @@ describe('the tool-failure recorder', () => {
 });
 
 describe('a recorder fault at the flush boundary', () => {
-  it.each<[DeliveryFault]>([
-    ['observe'],
-    ['build'],
-    ['flush'],
-  ])('%s: flushDeliveryRecorder returns, writes nothing and logs one ledger line', (fault) => {
-    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const rec = recorder(fault);
-    rec.queried('a query');
-    const write = vi.fn(() => 1);
-    expect(() => flushDeliveryRecorder(rec, write)).not.toThrow();
-    expect(write).not.toHaveBeenCalled();
-    const lines = err.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('delivery ledger'));
-    expect(lines).toHaveLength(1);
-  });
+  it.each<[DeliveryFault]>([['observe'], ['build'], ['flush']])(
+    '%s: flushDeliveryRecorder returns, writes nothing and logs one ledger line',
+    (fault) => {
+      const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const rec = recorder(fault);
+      rec.queried('a query');
+      const write = vi.fn(() => 1);
+      expect(() => flushDeliveryRecorder(rec, write)).not.toThrow();
+      expect(write).not.toHaveBeenCalled();
+      const lines = err.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('delivery ledger'));
+      expect(lines).toHaveLength(1);
+    },
+  );
 });

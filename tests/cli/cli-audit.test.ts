@@ -4,7 +4,6 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-
 const savedCwd = process.cwd();
 let home = '';
 

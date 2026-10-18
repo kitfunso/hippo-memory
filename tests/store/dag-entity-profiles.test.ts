@@ -14,10 +14,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import {
-  buildEntityProfiles,
-  rebuildDirtySummaries,
-} from '../../src/consolidate/dag.js';
+import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/consolidate/dag.js';
 import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../../src/api/index.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { isDagSummary } from '../../src/search/boosts.js';
@@ -29,18 +26,14 @@ import { handlesOf } from '../../src/store/open.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {
-    return new Response(
-      JSON.stringify({ content: [{ text: content }] }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
+    return new Response(JSON.stringify({ content: [{ text: content }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
   });
 }
 
-function makeL2Summary(
-  content: string,
-  speaker: string = 'alice',
-  parentId?: string | null,
-): MemoryEntry {
+function makeL2Summary(content: string, speaker: string = 'alice', parentId?: string | null): MemoryEntry {
   const s = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
@@ -106,7 +99,8 @@ describe('level-3 entity profiles + drillDown depth', () => {
     [l2a, l2b, l2c].forEach((e) => writeEntry(hippoRoot, e));
 
     const fetcher = makeOkFetcher('synthetic-alice-entity-profile-content-zzz');
-    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2a, l2b, l2c], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2a, l2b, l2c], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test-key',
       fetcher,
     });
@@ -120,10 +114,12 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT id, content, dag_level, ...` projection above, and buildEntityProfiles
       // was awaited just before this block so exactly one L3 profile row exists.
-      const profile = db.prepare(`
+      const profile = db
+        .prepare(`
         SELECT id, content, dag_level, dag_level_3_built_at, descendant_count, earliest_at, latest_at
           FROM memories WHERE dag_level = 3
-      `).get() as {
+      `)
+        .get() as {
         id: string;
         content: string;
         dag_level: number;
@@ -142,7 +138,9 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // All 3 L2s now have dag_parent_id pointing to profile
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT id` projection above.
-      const linkedRows = db.prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`).all(profile.id) as Array<{ id: string }>;
+      const linkedRows = db.prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`).all(profile.id) as Array<{
+        id: string;
+      }>;
       expect(linkedRows.length).toBe(3);
     } finally {
       db.close();
@@ -152,7 +150,8 @@ describe('level-3 entity profiles + drillDown depth', () => {
   it('test #2: no clustering below threshold — 1 L2 summary -> 0 profiles', async () => {
     const l2 = makeL2Summary('alone fact content', 'alice');
     writeEntry(hippoRoot, l2);
-    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'k',
       fetcher: makeOkFetcher(),
     });
@@ -168,10 +167,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const unparented2 = makeL2Summary('unlinked alice topic two', 'alice');
     [parented, unparented1, unparented2].forEach((e) => writeEntry(hippoRoot, e));
 
-    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [parented, unparented1, unparented2], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      apiKey: 'k',
-      fetcher: makeOkFetcher(),
-    });
+    const result = await buildEntityProfiles(
+      sqliteSyncStore(hippoRoot).localFiles,
+      [parented, unparented1, unparented2],
+      { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'k', fetcher: makeOkFetcher() },
+    );
     // Only the 2 unparented ones cluster
     expect(result.l2sLinked).toBe(2);
     // M2 fold: confirm the parented L2 STILL points at `existing`, not the new L3.
@@ -180,7 +180,9 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT dag_parent_id` projection above, and `parented` was written
       // to this store just above so a matching row exists.
-      const row = db.prepare(`SELECT dag_parent_id FROM memories WHERE id = ?`).get(parented.id) as { dag_parent_id: string | null };
+      const row = db.prepare(`SELECT dag_parent_id FROM memories WHERE id = ?`).get(parented.id) as {
+        dag_parent_id: string | null;
+      };
       expect(row.dag_parent_id).toBe(existing.id);
     } finally {
       db.close();
@@ -193,7 +195,8 @@ describe('level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, l2a);
     writeEntry(hippoRoot, l2b);
 
-    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2a, l2b], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2a, l2b], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'k',
       fetcher: makeOkFetcher('alice-clean-profile-content-zzz'),
     });
@@ -203,14 +206,19 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT id, summary_dirty` projection above, and buildEntityProfiles
       // was awaited just above so exactly one L3 profile row exists.
-      const profile = db.prepare(`SELECT id, summary_dirty FROM memories WHERE dag_level = 3`).get() as { id: string; summary_dirty: number };
+      const profile = db.prepare(`SELECT id, summary_dirty FROM memories WHERE dag_level = 3`).get() as {
+        id: string;
+        summary_dirty: number;
+      };
       expect(profile.summary_dirty).toBe(0);
 
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT metadata_json` projection above.
-      const cleanRows = db.prepare(`
+      const cleanRows = db
+        .prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean' AND target_id = ?
-      `).all(profile.id) as Array<{ metadata_json: string }>;
+      `)
+        .all(profile.id) as Array<{ metadata_json: string }>;
       expect(cleanRows).toHaveLength(1);
       const meta = JSON.parse(cleanRows[0].metadata_json);
       expect(meta.source).toBe('buildEntityProfiles-clean');
@@ -241,9 +249,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT metadata_json` projection above.
-      const auditRows = db.prepare(`
+      const auditRows = db
+        .prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?
-      `).all(l3.id) as Array<{ metadata_json: string }>;
+      `)
+        .all(l3.id) as Array<{ metadata_json: string }>;
       expect(auditRows).toHaveLength(1); // only the 0 to 1 flip audits, and the raw UPDATE above wrote none
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.dag_level).toBe(3); // H1 fold: actual level
@@ -268,10 +278,9 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // below, which always sends `body: JSON.stringify({...})` (src/consolidate/dag.ts).
       const body = init?.body ? JSON.parse(init.body as string) : {};
       capturedPrompt = body?.messages?.[0]?.content ?? '';
-      return new Response(
-        JSON.stringify({ content: [{ text: 'rebuilt-alice-profile-content-yyy' }] }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ content: [{ text: 'rebuilt-alice-profile-content-yyy' }] }), {
+        status: 200,
+      });
     });
 
     const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
@@ -286,10 +295,12 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT content, rebuild_count, ...` projection above, and `l3` was
       // written to this store and rebuilt just above so a matching row exists.
-      const row = db.prepare(`
+      const row = db
+        .prepare(`
         SELECT content, rebuild_count, last_rebuilt_at, summary_dirty, dag_level_3_built_at
           FROM memories WHERE id = ?
-      `).get(l3.id) as {
+      `)
+        .get(l3.id) as {
         content: string;
         rebuild_count: number;
         last_rebuilt_at: string | null;
@@ -306,9 +317,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // Audit row has dag_level: 3 in metadata (NOT hardcoded 2)
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT metadata_json` projection above (undefined if no audit row).
-      const auditRow = db.prepare(`
+      const auditRow = db
+        .prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `).get(l3.id) as { metadata_json: string } | undefined;
+      `)
+        .get(l3.id) as { metadata_json: string } | undefined;
       expect(auditRow).toBeTruthy();
       const meta = JSON.parse(auditRow!.metadata_json);
       expect(meta.dag_level).toBe(3);
@@ -378,7 +391,10 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const l2 = makeL2Summary('alice topic for budget test xxxxx', 'alice', l3.id);
     writeEntry(hippoRoot, l2);
     for (let i = 0; i < 5; i++) {
-      writeEntry(hippoRoot, makeL1Fact(l2.id, `fact-${i} with substantial content here for budget test xxxxx yyyy zzzz`));
+      writeEntry(
+        hippoRoot,
+        makeL1Fact(l2.id, `fact-${i} with substantial content here for budget test xxxxx yyyy zzzz`),
+      );
     }
 
     // Very tight budget — should truncate
@@ -449,11 +465,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
     });
     [...tenantAL2s, ...tenantBL2s].forEach((e) => writeEntry(hippoRoot, e));
 
-    const result = await buildEntityProfiles(
-      sqliteSyncStore(hippoRoot).localFiles,
-      [...tenantAL2s, ...tenantBL2s],
-      { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'k', fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz') },
-    );
+    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [...tenantAL2s, ...tenantBL2s], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'k',
+      fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz'),
+    });
     // 2 L3s expected — one per tenant cluster (NOT one merged L3 in 'default')
     expect(result.profilesCreated).toBe(2);
     expect(result.l2sLinked).toBe(6);
@@ -462,7 +478,10 @@ describe('level-3 entity profiles + drillDown depth', () => {
     try {
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT id, tenant_id` projection above.
-      const profiles = db.prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 3`).all() as Array<{ id: string; tenant_id: string }>;
+      const profiles = db.prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 3`).all() as Array<{
+        id: string;
+        tenant_id: string;
+      }>;
       expect(profiles.length).toBe(2);
       const tenants = new Set(profiles.map((p) => p.tenant_id));
       expect(tenants.has('tenant-a')).toBe(true);

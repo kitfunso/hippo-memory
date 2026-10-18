@@ -193,8 +193,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
 async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
   // Attribute the parse failure to the originating workspace via the regex-extracted
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
-  const parseFailTenant =
-    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw) : null;
+  const parseFailTenant = teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw) : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,

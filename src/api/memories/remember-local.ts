@@ -99,10 +99,7 @@ function indexInBackground(ctx: LocalContext, entry: MemoryEntry): Promise<Embed
 
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
  * refused value throws as `remember` does. */
-export async function rememberLocally(
-  ctx: LocalContext,
-  input: LocalRememberInput,
-): Promise<LocalRememberOutcome> {
+export async function rememberLocally(ctx: LocalContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
   const schemaFit = await ctx.store.contextReads.schemaFit(ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = await salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };

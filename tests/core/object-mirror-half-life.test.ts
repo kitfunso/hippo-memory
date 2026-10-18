@@ -44,13 +44,55 @@ function storeWith(migrated: boolean): string {
 }
 
 async function saveOneOfEach(root: string): Promise<void> {
-  await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: 'ship on fridays', context: 'release train' }, ACTOR);
-  await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] }, ACTOR);
-  await saveProcess(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' }, ACTOR);
-  await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' }, ACTOR);
-  await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' }, ACTOR);
-  await saveProjectBrief(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { repo: 'acme/web', summary: 'storefront', extraTags: ['path:acme/web'] }, ACTOR);
-  await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { customer: 'initech', note: 'prefers email' }, ACTOR);
+  await saveDecision(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { decisionText: 'ship on fridays', context: 'release train' },
+    ACTOR,
+  );
+  await openIncident(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] },
+    ACTOR,
+  );
+  await saveProcess(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' },
+    ACTOR,
+  );
+  await savePolicy(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' },
+    ACTOR,
+  );
+  await saveSkill(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' },
+    ACTOR,
+  );
+  await saveProjectBrief(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { repo: 'acme/web', summary: 'storefront', extraTags: ['path:acme/web'] },
+    ACTOR,
+  );
+  await saveCustomerNote(
+    objectsAt(root),
+    loadConfig(root).defaultHalfLifeDays,
+    TENANT,
+    { customer: 'initech', note: 'prefers email' },
+    ACTOR,
+  );
 }
 
 type Column = string | number | null;
@@ -69,22 +111,100 @@ function mirrorRows(root: string): Record<string, Column>[] {
 
 // The rows below were read from a store written by the commit before the group, under the same frozen clock and the same seven saves.
 const SHARED = {
-  created: '2026-03-01T12:00:00.000Z', last_retrieved: '2026-03-01T12:00:00.000Z', retrieval_count: 0, strength: 1, layer: 'semantic', schema_fit: 0.5,
-  outcome_score: null, conflicts_with_json: '[]', pinned: 0, confidence: 'verified', outcome_positive: 0, outcome_negative: 0, parents_json: '[]', starred: 0,
-  trace_outcome: null, source_session_id: null, valid_from: '2026-03-01T12:00:00.000Z', superseded_by: null, extracted_from: null, dag_level: 0, dag_parent_id: null,
-  kind: 'distilled', scope: null, owner: null, artifact_ref: null, tenant_id: 'acme', descendant_count: 0, earliest_at: null, latest_at: null, summary_dirty: 0,
-  last_rebuilt_at: null, rebuild_count: 0, dag_level_3_built_at: null, origin_project: '',
+  created: '2026-03-01T12:00:00.000Z',
+  last_retrieved: '2026-03-01T12:00:00.000Z',
+  retrieval_count: 0,
+  strength: 1,
+  layer: 'semantic',
+  schema_fit: 0.5,
+  outcome_score: null,
+  conflicts_with_json: '[]',
+  pinned: 0,
+  confidence: 'verified',
+  outcome_positive: 0,
+  outcome_negative: 0,
+  parents_json: '[]',
+  starred: 0,
+  trace_outcome: null,
+  source_session_id: null,
+  valid_from: '2026-03-01T12:00:00.000Z',
+  superseded_by: null,
+  extracted_from: null,
+  dag_level: 0,
+  dag_parent_id: null,
+  kind: 'distilled',
+  scope: null,
+  owner: null,
+  artifact_ref: null,
+  tenant_id: 'acme',
+  descendant_count: 0,
+  earliest_at: null,
+  latest_at: null,
+  summary_dirty: 0,
+  last_rebuilt_at: null,
+  rebuild_count: 0,
+  dag_level_3_built_at: null,
+  origin_project: '',
 } as const;
 
 /** What differs from row to row, in source order; `flat` is the half-life before the typed migration and `onDefault` the one after. */
 const OWN = [
-  { source: 'customer_note', tags_json: '["customer_note","customer:initech"]', emotional_valence: 'neutral', content: 'initech\n\nprefers email', flat: 90, onDefault: 365 },
-  { source: 'decision', tags_json: '["decision"]', emotional_valence: 'neutral', content: 'ship on fridays\n\nContext: release train', flat: 90, onDefault: 365 },
-  { source: 'incident', tags_json: '["incident","error"]', emotional_valence: 'negative', content: 'checkout latency\n\nContext: eu-west', flat: 180, onDefault: 730 },
-  { source: 'policy', tags_json: '["policy"]', emotional_valence: 'neutral', content: 'retention\n\nkeep ninety days\n\nEffective: 2026-01-01T00:00:00.000Z onward', flat: 90, onDefault: 365 },
-  { source: 'process', tags_json: '["process"]', emotional_valence: 'neutral', content: 'deploy\n\n1. build\n2. ship\n\nDescription: weekly', flat: 90, onDefault: 365 },
-  { source: 'project_brief', tags_json: '["project_brief","path:acme/web"]', emotional_valence: 'neutral', content: 'acme/web\n\nstorefront', flat: 90, onDefault: 365 },
-  { source: 'skill', tags_json: '["skill"]', emotional_valence: 'neutral', content: 'triage\n\nWhen: on page\n\nread the log first', flat: 90, onDefault: 365 },
+  {
+    source: 'customer_note',
+    tags_json: '["customer_note","customer:initech"]',
+    emotional_valence: 'neutral',
+    content: 'initech\n\nprefers email',
+    flat: 90,
+    onDefault: 365,
+  },
+  {
+    source: 'decision',
+    tags_json: '["decision"]',
+    emotional_valence: 'neutral',
+    content: 'ship on fridays\n\nContext: release train',
+    flat: 90,
+    onDefault: 365,
+  },
+  {
+    source: 'incident',
+    tags_json: '["incident","error"]',
+    emotional_valence: 'negative',
+    content: 'checkout latency\n\nContext: eu-west',
+    flat: 180,
+    onDefault: 730,
+  },
+  {
+    source: 'policy',
+    tags_json: '["policy"]',
+    emotional_valence: 'neutral',
+    content: 'retention\n\nkeep ninety days\n\nEffective: 2026-01-01T00:00:00.000Z onward',
+    flat: 90,
+    onDefault: 365,
+  },
+  {
+    source: 'process',
+    tags_json: '["process"]',
+    emotional_valence: 'neutral',
+    content: 'deploy\n\n1. build\n2. ship\n\nDescription: weekly',
+    flat: 90,
+    onDefault: 365,
+  },
+  {
+    source: 'project_brief',
+    tags_json: '["project_brief","path:acme/web"]',
+    emotional_valence: 'neutral',
+    content: 'acme/web\n\nstorefront',
+    flat: 90,
+    onDefault: 365,
+  },
+  {
+    source: 'skill',
+    tags_json: '["skill"]',
+    emotional_valence: 'neutral',
+    content: 'triage\n\nWhen: on page\n\nread the log first',
+    flat: 90,
+    onDefault: 365,
+  },
 ] as const;
 
 function rowsBeforeTheGroup(migrated: boolean): Record<string, Column>[] {
@@ -100,7 +220,10 @@ function stubTickingClock(): number[] {
   };
   // The proxy reads `now` off the real Date, so the spy covers both ways of asking the time.
   vi.spyOn(Date, 'now').mockImplementation(next);
-  const ticking = new Proxy(Date, { construct: (target, args: unknown[]): Date => (args.length === 0 ? new target(next()) : Reflect.construct(target, args)) });
+  const ticking = new Proxy(Date, {
+    construct: (target, args: unknown[]): Date =>
+      args.length === 0 ? new target(next()) : Reflect.construct(target, args),
+  });
   vi.stubGlobal('Date', ticking);
   return ticks;
 }
@@ -127,28 +250,53 @@ describe.each([
   { flag: 'unset', migrated: false },
   { flag: 'set', migrated: true },
 ])('a typed object saved with the typed half-life flag $flag', ({ migrated }) => {
-  it('stores each kind\'s mirror column for column as the commit before the store group did', async () => {
+  it("stores each kind's mirror column for column as the commit before the store group did", async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: FROZEN });
     const root = storeWith(migrated);
     await saveOneOfEach(root);
     expect(mirrorRows(root)).toEqual(rowsBeforeTheGroup(migrated));
   });
 
-  it('under a clock that ticks, stores the strength the decay function gives the stored row at one of the save\'s own clock reads', async () => {
+  it("under a clock that ticks, stores the strength the decay function gives the stored row at one of the save's own clock reads", async () => {
     const root = storeWith(migrated);
     const base = migrated ? loadConfig(root).defaultHalfLifeDays : LEGACY_TYPED_HALF_LIFE;
     const ticks = stubTickingClock();
     const saves = [
-      await ticked(ticks, () => openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { incidentText: 'checkout latency' }, ACTOR)),
-      await ticked(ticks, () => saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: 'ship on fridays' }, ACTOR)),
-      await ticked(ticks, () => openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { incidentText: 'login errors', extraTags: ['error'] }, ACTOR)),
+      await ticked(ticks, () =>
+        openIncident(
+          objectsAt(root),
+          loadConfig(root).defaultHalfLifeDays,
+          TENANT,
+          { incidentText: 'checkout latency' },
+          ACTOR,
+        ),
+      ),
+      await ticked(ticks, () =>
+        saveDecision(
+          objectsAt(root),
+          loadConfig(root).defaultHalfLifeDays,
+          TENANT,
+          { decisionText: 'ship on fridays' },
+          ACTOR,
+        ),
+      ),
+      await ticked(ticks, () =>
+        openIncident(
+          objectsAt(root),
+          loadConfig(root).defaultHalfLifeDays,
+          TENANT,
+          { incidentText: 'login errors', extraTags: ['error'] },
+          ACTOR,
+        ),
+      ),
     ];
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
 
     const mirrors = saves.map((save) => storedMirror(root, save));
     expect(mirrors.map((m) => m.half_life_days)).toEqual([base, base, base * 2]);
-    const readsGiving = (i: number): number[] => saves[i].reads.filter((at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength);
+    const readsGiving = (i: number): number[] =>
+      saves[i].reads.filter((at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength);
     for (const [i, stored] of mirrors.entries()) {
       expect(stored.half_life_days).toBe(deriveHalfLife(base, stored));
       // The row's stamp is one of the save's own reads, so the exact counts below never pass on an empty list.

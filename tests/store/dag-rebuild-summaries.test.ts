@@ -33,10 +33,13 @@ afterEach(() => {
  * to match fetch exactly.
  */
 function makeOkFetcher(content: string = 'synthetic-summary-from-fetcher-X'): typeof fetch {
-  return vi.fn<typeof fetch>(async () => new Response(
-    JSON.stringify({ content: [{ text: content }] }),
-    { status: 200, headers: { 'content-type': 'application/json' } },
-  ));
+  return vi.fn<typeof fetch>(
+    async () =>
+      new Response(JSON.stringify({ content: [{ text: content }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  );
 }
 
 /**
@@ -161,10 +164,14 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         descendant_count: number | null;
         earliest_at: string | null;
         latest_at: string | null;
-      }>(db, `
+      }>(
+        db,
+        `
         SELECT content, summary_dirty, rebuild_count, last_rebuilt_at, descendant_count, earliest_at, latest_at
           FROM memories WHERE id = ?
-      `, summary.id);
+      `,
+        summary.id,
+      );
       expect(row.content).toBe('newly-generated-summary-content-X');
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count).toBe(1);
@@ -174,9 +181,13 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.latest_at).toBe(child3.created);
 
       // Audit row emitted
-      const auditRow = getRow<{ op: string; metadata_json: string }>(db, `
+      const auditRow = getRow<{ op: string; metadata_json: string }>(
+        db,
+        `
         SELECT op, metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `, summary.id);
+      `,
+        summary.id,
+      );
       expect(auditRow).toBeTruthy();
       const meta = JSON.parse(auditRow.metadata_json);
       expect(meta.source).toBe('E3-rebuild');
@@ -204,7 +215,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
 
     // Second call — should be no-op
-    const result2 = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
+    const result2 = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+      apiKey: 'k',
+      fetcher,
+      cap: 20,
+    });
     expect(result2.attempted).toBe(0);
     expect(result2.rebuilt).toBe(0);
     expect(result2.failed).toBe(0);
@@ -215,7 +230,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const db = openHippoDb(hippoRoot);
     try {
       const row = getRow<{ summary_dirty: number; rebuild_count: number | null }>(
-        db, `SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?`, summary.id,
+        db,
+        `SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?`,
+        summary.id,
       );
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count).toBe(1);
@@ -243,10 +260,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       const body = init?.body ? JSON.parse(init.body as string) : {};
       const prompt = body?.messages?.[0]?.content ?? '';
       seenPayloads.push(prompt);
-      return new Response(
-        JSON.stringify({ content: [{ text: 'rebuilt-tenant-content-XX' }] }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ content: [{ text: 'rebuilt-tenant-content-XX' }] }), { status: 200 });
     });
 
     const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
@@ -328,10 +342,14 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         earliest_at: string | null;
         latest_at: string | null;
         rebuild_count: number | null;
-      }>(db, `
+      }>(
+        db,
+        `
         SELECT summary_dirty, descendant_count, earliest_at, latest_at, rebuild_count
           FROM memories WHERE id = ?
-      `, summary.id);
+      `,
+        summary.id,
+      );
       expect(row.summary_dirty).toBe(0);
       expect(row.descendant_count).toBe(0);
       expect(row.earliest_at).toBeNull();
@@ -340,9 +358,13 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.rebuild_count ?? 0).toBe(0);
 
       // Audit row with zero_children=true
-      const auditRow = getRow<{ metadata_json: string }>(db, `
+      const auditRow = getRow<{ metadata_json: string }>(
+        db,
+        `
         SELECT metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `, summary.id);
+      `,
+        summary.id,
+      );
       expect(auditRow).toBeTruthy();
       const meta = JSON.parse(auditRow.metadata_json);
       expect(meta.zero_children).toBe(true);
@@ -372,7 +394,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'second-summary-ok-content-XX' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+      apiKey: 'k',
+      fetcher,
+      cap: 20,
+    });
 
     expect(result.attempted).toBe(2);
     expect(result.failed).toBe(1);
@@ -401,7 +427,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), { apiKey: 'k', fetcher, cap: 20 });
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
+      apiKey: 'k',
+      fetcher,
+      cap: 20,
+    });
     expect(result.failed).toBe(1);
     expect(result.rebuilt).toBe(1);
     expect(loadAllDirtySummaries(hippoRoot).length).toBe(1);
@@ -458,7 +488,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const db = openHippoDb(hippoRoot);
     try {
       const row = getRow<{ content: string; rebuild_count: number | null; summary_dirty: number }>(
-        db, `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`, summary.id,
+        db,
+        `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`,
+        summary.id,
       );
       expect(row.content).toBe('one-shot-content-xyzabc');
       expect(row.rebuild_count).toBe(1);
@@ -487,9 +519,24 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
   it('test #10: REGRESSION LOCK: buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
-    const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
-    const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
-    const factC = createMemory('alice noted Z', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
+    const factA = createMemory('alice did X', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      dagLevel: 1,
+      tags: ['extracted', 'speaker:alice'],
+    });
+    const factB = createMemory('alice said Y', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      dagLevel: 1,
+      tags: ['extracted', 'speaker:alice'],
+    });
+    const factC = createMemory('alice noted Z', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      dagLevel: 1,
+      tags: ['extracted', 'speaker:alice'],
+    });
     writeEntry(hippoRoot, factA);
     writeEntry(hippoRoot, factB);
     writeEntry(hippoRoot, factC);
@@ -497,11 +544,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const fetcher = makeOkFetcher('synthetic-summary-X-from-fetcher-mocked-out');
 
     // Invoke buildDag with injected fetcher
-    const buildResult = await buildDag(
-      sqliteSyncStore(hippoRoot).localFiles,
-      [factA, factB, factC],
-      { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test-key', fetcher },
-    );
+    const buildResult = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [factA, factB, factC], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'test-key',
+      fetcher,
+    });
     expect(buildResult.summariesCreated).toBe(1);
 
     // The created summary MUST NOT be dirty (the clearSummaryDirtyAfterBuild
@@ -514,9 +561,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     try {
       // SAFETY: metadata_json is a NOT NULL TEXT column on audit_log; .all()
       // rows always match the queried SELECT's single column.
-      const auditRows = db.prepare(`
+      const auditRows = db
+        .prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean'
-      `).all() as Array<{ metadata_json: string }>;
+      `)
+        .all() as Array<{ metadata_json: string }>;
       // One summary was built, and its dirty flag cleared once.
       expect(auditRows).toHaveLength(1);
       const meta = JSON.parse(auditRows[0].metadata_json);
@@ -568,7 +617,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Host-wide input, exactly like consolidate.ts:543's `extractedFacts`
     // (survivors filtered host-wide, no tenant slicing by the caller) —
     // buildDag itself must do the tenant separation, not its caller.
-    const result = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [...aFacts, ...bFacts], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    const result = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [...aFacts, ...bFacts], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test-key',
       fetcher,
     });
@@ -582,9 +632,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     try {
       // SAFETY: summaries' shape matches the two columns named in the
       // SELECT above.
-      const summaries = db.prepare(
-        `SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`,
-      ).all() as Array<{ id: string; tenant_id: string }>;
+      const summaries = db
+        .prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`)
+        .all() as Array<{ id: string; tenant_id: string }>;
       expect(summaries).toHaveLength(2);
       const tenants = summaries.map((s) => s.tenant_id).sort();
       expect(tenants).toEqual(['tenant-a', 'tenant-b']);
@@ -593,12 +643,15 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       // Each tenant's 3 members must be re-parented under THAT tenant's own
       // summary — no member crossed into the other tenant's cluster.
       const summaryByTenant = new Map(summaries.map((s) => [s.tenant_id, s.id]));
-      for (const [tenantId, facts] of [['tenant-a', aFacts], ['tenant-b', bFacts]] as const) {
+      for (const [tenantId, facts] of [
+        ['tenant-a', aFacts],
+        ['tenant-b', bFacts],
+      ] as const) {
         // SAFETY: rows' shape matches the single `dag_parent_id` column
         // named in the SELECT above.
-        const rows = db.prepare(
-          `SELECT dag_parent_id FROM memories WHERE tenant_id = ? AND dag_level = 1`,
-        ).all(tenantId) as Array<{ dag_parent_id: string }>;
+        const rows = db
+          .prepare(`SELECT dag_parent_id FROM memories WHERE tenant_id = ? AND dag_level = 1`)
+          .all(tenantId) as Array<{ dag_parent_id: string }>;
         expect(rows).toHaveLength(facts.length);
         for (const row of rows) {
           expect(row.dag_parent_id).toBe(summaryByTenant.get(tenantId));
@@ -629,7 +682,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const db = openHippoDb(hippoRoot);
     try {
       const row = getRow<{ content: string; rebuild_count: number | null; summary_dirty: number }>(
-        db, `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`, summary.id,
+        db,
+        `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`,
+        summary.id,
       );
       // Content unchanged
       expect(row.content).toBe('s11-summary-content');
@@ -638,9 +693,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
       // No summary_rebuilt audit row for this summary
       // SAFETY: COUNT(*) always returns exactly one row shaped { n: number }.
-      const auditRow = db.prepare(`
+      const auditRow = db
+        .prepare(`
         SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `).get(summary.id) as { n: number };
+      `)
+        .get(summary.id) as { n: number };
       expect(auditRow.n).toBe(0);
     } finally {
       db.close();
@@ -663,7 +720,13 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       vi.stubEnv('ANTHROPIC_API_KEY', 'k');
 
       const table: Array<[string, number]> = [
-        ['99999', 1000], ['1001', 1000], ['1000', 1000], ['50', 50], ['0', 20], ['-5', 20], ['abc', 20],
+        ['99999', 1000],
+        ['1001', 1000],
+        ['1000', 1000],
+        ['50', 50],
+        ['0', 20],
+        ['-5', 20],
+        ['abc', 20],
       ];
       for (const [index, [raw, expected]] of table.entries()) {
         vi.stubEnv('HIPPO_DAG_REBUILD_CAP', raw);
@@ -715,9 +778,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     try {
       // SAFETY: row's shape matches the four columns named in the SELECT
       // above (store.ts's SummaryRow types these the same way).
-      const row = db.prepare(`
+      const row = db
+        .prepare(`
         SELECT content, summary_dirty, rebuild_count, descendant_count FROM memories WHERE id = ?
-      `).get(summary.id) as {
+      `)
+        .get(summary.id) as {
         content: string;
         summary_dirty: number | null;
         rebuild_count: number | null;
@@ -734,9 +799,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
       // SAFETY: this get() result's shape matches the single aliased `n`
       // column named in the SELECT above.
-      const refusalAudit = db.prepare(`
+      const refusalAudit = db
+        .prepare(`
         SELECT COUNT(*) AS n FROM audit_log WHERE op = 'reject_refusal' AND target_id = ?
-      `).get(summary.id) as { n: number };
+      `)
+        .get(summary.id) as { n: number };
       expect(refusalAudit.n).toBe(1);
     } finally {
       db.close();

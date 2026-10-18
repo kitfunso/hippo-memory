@@ -21,8 +21,13 @@ export const ago = (hours: number): string => new Date(Date.parse(CONTEXT_NOW) -
 type SeedOptions = Parameters<typeof seeded>[4];
 
 function inTenant(tenantId: string, origin: string | null) {
-  return (content: string, id: string, hours: number, extra: Partial<MemoryEntry> = {}, opts: SeedOptions = {}): MemoryEntry =>
-    seeded(content, id, ago(hours), { tenant_id: tenantId, origin_project: origin, ...extra }, opts);
+  return (
+    content: string,
+    id: string,
+    hours: number,
+    extra: Partial<MemoryEntry> = {},
+    opts: SeedOptions = {},
+  ): MemoryEntry => seeded(content, id, ago(hours), { tenant_id: tenantId, origin_project: origin, ...extra }, opts);
 }
 
 function memoryRows(): MemoryEntry[] {
@@ -30,12 +35,36 @@ function memoryRows(): MemoryEntry[] {
   const b = inTenant(TENANT_B, PROJECT);
   return [
     a('pinned rule: no deploys to the billing service on fridays', 'mem_a_pin', 500, {}, { pinned: true }),
-    a('pinned rule from the other project about its release train', 'mem_a_pin_other', 400, { origin_project: 'other' }, { pinned: true }),
-    a('pinned private note about the billing escalation channel', 'mem_a_pin_private', 300, {}, { pinned: true, scope: 'slack:private:C1' }),
+    a(
+      'pinned rule from the other project about its release train',
+      'mem_a_pin_other',
+      400,
+      { origin_project: 'other' },
+      { pinned: true },
+    ),
+    a(
+      'pinned private note about the billing escalation channel',
+      'mem_a_pin_private',
+      300,
+      {},
+      { pinned: true, scope: 'slack:private:C1' },
+    ),
     ...Array.from({ length: 40 }, (_, i) =>
-      a(`other project status update ${i} for the warehouse sync`, `mem_a_other_${String(i).padStart(2, '0')}`, 0.5 + i / 10, { origin_project: 'other' })),
-    ...Array.from({ length: 6 }, (_, i) => a(`own project rollout step ${i} moved the queue workers`, `mem_a_own_${i}`, 10 + i)),
-    ...Array.from({ length: 3 }, (_, i) => a(`user global preference ${i}: keep commits small for review`, `mem_a_global_${i}`, 20 + i, { origin_project: '' })),
+      a(
+        `other project status update ${i} for the warehouse sync`,
+        `mem_a_other_${String(i).padStart(2, '0')}`,
+        0.5 + i / 10,
+        { origin_project: 'other' },
+      ),
+    ),
+    ...Array.from({ length: 6 }, (_, i) =>
+      a(`own project rollout step ${i} moved the queue workers`, `mem_a_own_${i}`, 10 + i),
+    ),
+    ...Array.from({ length: 3 }, (_, i) =>
+      a(`user global preference ${i}: keep commits small for review`, `mem_a_global_${i}`, 20 + i, {
+        origin_project: '',
+      }),
+    ),
     a('team rota covers the rollout pager this week', 'mem_a_team', 30, {}, { scope: 'team:eng' }),
     a('alice reminder to renew the rollout certificate', 'mem_a_alice', 31, {}, { scope: OWN_SCOPE }),
     a('bob reminder to rotate the rollout dashboards', 'mem_a_bob', 32, {}, { scope: 'personal:private:bob' }),
@@ -45,18 +74,44 @@ function memoryRows(): MemoryEntry[] {
     a('rollout note whose supersede link was blanked', 'mem_a_blank', 42, { superseded_by: '' }),
     a('archived rollout plan from last quarter', 'mem_a_archived', 43, { kind: 'archived' }),
     a('own project vault path lives in the ops runbook', 'mem_a_secret_own', 44, {}, { tags: ['secret'] }),
-    a('other project vault path lives in its runbook', 'mem_a_secret_other', 45, { origin_project: 'other' }, { tags: ['Token'] }),
-    a('user global vault path lives in the home runbook', 'mem_a_secret_global', 46, { origin_project: '' }, { tags: ['password'] }),
-    a('build failed when the zebra cache was cold', 'mem_a_error', 47, { conflicts_with: ['mem_a_own_1'] }, {
-      tags: ['error:build'], layer: Layer.Semantic, emotionalValence: 'negative', schemaFit: 0.9, extractedFrom: 'mem_a_own_0', dagLevel: 2,
-    }),
+    a(
+      'other project vault path lives in its runbook',
+      'mem_a_secret_other',
+      45,
+      { origin_project: 'other' },
+      { tags: ['Token'] },
+    ),
+    a(
+      'user global vault path lives in the home runbook',
+      'mem_a_secret_global',
+      46,
+      { origin_project: '' },
+      { tags: ['password'] },
+    ),
+    a(
+      'build failed when the zebra cache was cold',
+      'mem_a_error',
+      47,
+      { conflicts_with: ['mem_a_own_1'] },
+      {
+        tags: ['error:build'],
+        layer: Layer.Semantic,
+        emotionalValence: 'negative',
+        schemaFit: 0.9,
+        extractedFrom: 'mem_a_own_0',
+        dagLevel: 2,
+      },
+    ),
     a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, { origin_project: null }),
     a('rollout lesson that decays within a day', 'mem_a_decayed', 200, { half_life_days: 1 }),
     a('rollout lesson that kept paying off', 'mem_a_liked', 100, { outcome_positive: 3, last_retrieved: ago(2) }),
     a('rollout lesson with no half life', 'mem_a_flat', 49, { half_life_days: 0 }),
     b('globex pinned rule about the deploy window', 'mem_b_pin', 50, {}, { pinned: true }),
     ...Array.from({ length: 5 }, (_, i) => b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i)),
-    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', { tenant_id: TENANT_B, origin_project: PROJECT }),
+    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', {
+      tenant_id: TENANT_B,
+      origin_project: PROJECT,
+    }),
   ];
 }
 
@@ -106,23 +161,54 @@ const hours = (v: string | number | null): number => Number(v);
 function insertTaskState(dir: string): void {
   const db = openHippoDb(dir);
   try {
-    const snapshot = db.prepare(`INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at, owner_subject, origin_project)
+    const snapshot =
+      db.prepare(`INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at, owner_subject, origin_project)
       VALUES (?, ?, ?, ?, 'cli', ?, ?, ?, ?, ?, ?, ?)`);
     for (const [tenant, task, status, session, scope, h, owner, origin] of SNAPSHOTS) {
-      snapshot.run(task, `summary of ${task}`, `next step of ${task}`, status, session, scope, tenant, ago(hours(h) + 1), ago(hours(h)), owner, origin);
+      snapshot.run(
+        task,
+        `summary of ${task}`,
+        `next step of ${task}`,
+        status,
+        session,
+        scope,
+        tenant,
+        ago(hours(h) + 1),
+        ago(hours(h)),
+        owner,
+        origin,
+      );
     }
-    const handoff = db.prepare(`INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at,
+    const handoff =
+      db.prepare(`INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at,
       constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const [tenant, session, summary, outcome, scope, h, owner, origin] of HANDOFFS) {
       const full = summary === 'second handoff for session a';
       handoff.run(
-        session, full ? '/repo' : null, full ? 'task-1' : null, summary, full ? 'ship it' : null, full ? '["a.ts","b.ts"]' : '[]', scope, tenant, ago(hours(h)),
-        full ? '["no force push"]' : null, full ? '{"gitRef":"abc123","dirtyTree":false}' : null, outcome, full ? 'claude-code' : null, null, owner, origin,
+        session,
+        full ? '/repo' : null,
+        full ? 'task-1' : null,
+        summary,
+        full ? 'ship it' : null,
+        full ? '["a.ts","b.ts"]' : '[]',
+        scope,
+        tenant,
+        ago(hours(h)),
+        full ? '["no force push"]' : null,
+        full ? '{"gitRef":"abc123","dirtyTree":false}' : null,
+        outcome,
+        full ? 'claude-code' : null,
+        null,
+        owner,
+        origin,
       );
     }
-    const event = db.prepare(`INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id, created_at)
+    const event =
+      db.prepare(`INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id, created_at)
       VALUES (?, NULL, 'note', ?, 'cli', ?, ?, ?, ?)`);
-    for (const [tenant, session, content, scope, h, metadata] of EVENTS) event.run(session, content, scope, metadata, tenant, ago(hours(h)));
+    for (const [tenant, session, content, scope, h, metadata] of EVENTS) {
+      event.run(session, content, scope, metadata, tenant, ago(hours(h)));
+    }
   } finally {
     closeHippoDb(db);
   }
@@ -149,7 +235,10 @@ export function seedContextRows(dir: string): void {
 export function seedContextGlobal(dir: string): void {
   initStore(dir);
   const a = inTenant(TENANT_A, '');
-  writeEntry(dir, a('global pinned rule: rollout notes go in the team channel', 'mem_g_pin', 600, {}, { pinned: true }));
+  writeEntry(
+    dir,
+    a('global pinned rule: rollout notes go in the team channel', 'mem_g_pin', 600, {}, { pinned: true }),
+  );
   writeEntry(dir, a('global rollout note from the home store', 'mem_g_note', 12));
   pinUpdatedAt(dir);
 }
@@ -162,7 +251,13 @@ export function contextRowsOf(root: string) {
     // The audit row is written by the store, and a worker-thread store stamps the real clock, not the faked Date.
     // SAFETY: rowsOf selects ts, tenant_id, actor, op, target_id and metadata_json for the audit rows.
     const audit = (rows.audit as Array<{ ts: string; op: string }>).map((row) => ({ ...row, ts: 'stamped' }));
-    return { ...rows, audit, strengthened: db.prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id').all() };
+    return {
+      ...rows,
+      audit,
+      strengthened: db
+        .prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id')
+        .all(),
+    };
   } finally {
     closeHippoDb(db);
   }
@@ -170,7 +265,9 @@ export function contextRowsOf(root: string) {
 
 /** Each store sums ambient strength in its own order, so non-integers compare to nine places. */
 export function rounded<T>(value: T): T {
-  const text = JSON.stringify(value, (_k: string, v: JsonValue): JsonValue => (Number.isFinite(v) && !Number.isInteger(v) ? Math.round(Number(v) * 1e9) / 1e9 : v));
+  const text = JSON.stringify(value, (_k: string, v: JsonValue): JsonValue =>
+    Number.isFinite(v) && !Number.isInteger(v) ? Math.round(Number(v) * 1e9) / 1e9 : v,
+  );
   // SAFETY: only numbers changed, so the JSON parses back to the shape it was written from.
   return JSON.parse(text) as T;
 }

@@ -66,7 +66,7 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
   } catch (renameErr) {
     log.warn(
       `workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside ` +
-      `(${errorMessage(renameErr)}); ` +
+        `(${errorMessage(renameErr)}); ` +
         `starting with no workspaces`,
       errorFields(renameErr),
     );
@@ -107,10 +107,7 @@ export function hasUnsafeRunnerPathChars(runnerDir: string, platform: NodeJS.Pla
   return UNSAFE_RUNNER_PATH_CHARS.test(runnerDir) || (platform !== 'win32' && runnerDir.includes('\\'));
 }
 
-export function buildDailyRunnerCommand(
-  projectDir: string,
-  platform: NodeJS.Platform = process.platform,
-): string {
+export function buildDailyRunnerCommand(projectDir: string, platform: NodeJS.Platform = process.platform): string {
   if (platform === 'win32') {
     const resolved = path.win32.resolve(projectDir).replace(/\\/g, '/');
     return `cd /d "${resolved}" && hippo daily-runner`;

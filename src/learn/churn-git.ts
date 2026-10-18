@@ -52,7 +52,12 @@ function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
 // ls-tree, not ls-files: the index can hold staged adds/deletes that HEAD does not.
 export function gitLsFilesAtHead(repoRoot: string): Set<string> {
   const raw = runGit(['ls-tree', '-r', '--name-only', 'HEAD'], repoRoot);
-  return new Set(raw.split('\n').map((l) => l.trim()).filter(Boolean));
+  return new Set(
+    raw
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean),
+  );
 }
 
 export interface ChurnCommitFile {

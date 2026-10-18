@@ -4,8 +4,7 @@
 import { processEnv } from '../util/env.js';
 
 const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
-export const OWNER_CONTRACT_HINT =
-  'Must match ^(user|agent):[A-Za-z0-9_-]+$ (e.g. user:alice, agent:capture-bot).';
+export const OWNER_CONTRACT_HINT = 'Must match ^(user|agent):[A-Za-z0-9_-]+$ (e.g. user:alice, agent:capture-bot).';
 
 export interface OwnerValidation {
   ok: boolean;
@@ -17,10 +16,7 @@ export interface OwnerValidation {
 
 /** Pure validator returning `{ ok, value, message }`; never prints or exits, so it is unit-testable.
  * A non-matching owner is accepted with a warning unless strict, where ok=false with an error message. */
-export function validateOwner(
-  owner: string | null | undefined,
-  opts: { strict?: boolean } = {},
-): OwnerValidation {
+export function validateOwner(owner: string | null | undefined, opts: { strict?: boolean } = {}): OwnerValidation {
   if (owner === undefined || owner === null || owner === '') {
     return { ok: true, value: undefined, message: '' };
   }

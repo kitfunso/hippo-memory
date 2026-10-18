@@ -16,7 +16,13 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadSessionRawMemories } from '../_helpers/root-forms.js';
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:assemble-v161', role: 'admin' });
 }
@@ -36,7 +42,9 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
 
 describe('loadSessionRawMemories row cap', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v161-cap'); });
+  beforeEach(() => {
+    root = makeRoot('v161-cap');
+  });
   afterEach(() => safeRmSync(root));
 
   it('cap=undefined returns every row (legacy behaviour)', () => {
@@ -51,7 +59,9 @@ describe('loadSessionRawMemories row cap', () => {
 
 describe('totalRaw is post-scope', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v161-total'); });
+  beforeEach(() => {
+    root = makeRoot('v161-total');
+  });
   afterEach(() => safeRmSync(root));
 
   it('all-private session: totalRaw=0, items=[], no false positive', async () => {
@@ -81,7 +91,9 @@ describe('totalRaw is post-scope', () => {
 
 describe('assemble scope opt parity with recall', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v161-scope'); });
+  beforeEach(() => {
+    root = makeRoot('v161-scope');
+  });
   afterEach(() => safeRmSync(root));
 
   it('explicit scope match unlocks a private session', async () => {

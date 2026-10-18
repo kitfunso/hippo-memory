@@ -41,20 +41,33 @@ let root: string;
 beforeEach(() => {
   root = makeRoot('physics-asof', { config: { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } } });
   vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
-    // SAFETY: body is the OpenAI embeddings request the provider just serialised.
-    const body = JSON.parse(init.body) as { input: string[] };
-    return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: QUERY_VECTOR })) }), { status: 200 });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: { body: string }) => {
+      // SAFETY: body is the OpenAI embeddings request the provider just serialised.
+      const body = JSON.parse(init.body) as { input: string[] };
+      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: QUERY_VECTOR })) }), {
+        status: 200,
+      });
+    }),
+  );
   for (const e of [PRE1, PRE2, POST]) writeEntry(root, { ...e, tags: [...e.tags] });
   saveEmbeddingIndex(root, VECTORS);
   saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const db = openHippoDb(root);
   try {
-    savePhysicsState(db, Object.entries(VECTORS).map(([id, position]) => ({
-      memoryId: id, position, velocity: [0, 0, 0], mass: id === 'post' ? 5 : 1, charge: 0, temperature: 0.5,
-      lastSimulation: NOW.toISOString(),
-    })));
+    savePhysicsState(
+      db,
+      Object.entries(VECTORS).map(([id, position]) => ({
+        memoryId: id,
+        position,
+        velocity: [0, 0, 0],
+        mass: id === 'post' ? 5 : 1,
+        charge: 0,
+        temperature: 0.5,
+        lastSimulation: NOW.toISOString(),
+      })),
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -73,7 +86,10 @@ describe('physicsSearch with asOf', () => {
   const base = () => ({ now: NOW, budget: 100_000, hippoRoot: root, explain: true, scope: null, asOf: CUT });
 
   it('drops a row written after the cut and ranks exactly as the hybrid path does', async () => {
-    const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2, POST), { ...base(), queryEmbedding: QUERY_VECTOR });
+    const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2, POST), {
+      ...base(),
+      queryEmbedding: QUERY_VECTOR,
+    });
     const hybrid = await hybridSearch('deploy pipeline', pool(PRE1, PRE2, POST), base());
     expect(ids(physics)).not.toContain('post');
     expect(ids(physics)).toEqual(ids(hybrid));
@@ -84,23 +100,40 @@ describe('physicsSearch with asOf', () => {
 
   it('does not let the vector arm add a row written after the cut', async () => {
     const vectorCandidates = { tenantId: TENANT, includeSuperseded: true, limit: 5 };
-    const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2), { ...base(), queryEmbedding: QUERY_VECTOR, vectorCandidates });
+    const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2), {
+      ...base(),
+      queryEmbedding: QUERY_VECTOR,
+      vectorCandidates,
+    });
     expect(ids(physics)).not.toContain('post');
-    expect(ids(physics)).toEqual(ids(await hybridSearch('deploy pipeline', pool(PRE1, PRE2), { ...base(), vectorCandidates })));
+    expect(ids(physics)).toEqual(
+      ids(await hybridSearch('deploy pipeline', pool(PRE1, PRE2), { ...base(), vectorCandidates })),
+    );
   });
 
   it('still ranks by physics when no asOf is given', async () => {
-    const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2, POST), { ...base(), asOf: undefined, queryEmbedding: QUERY_VECTOR });
+    const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2, POST), {
+      ...base(),
+      asOf: undefined,
+      queryEmbedding: QUERY_VECTOR,
+    });
     expect(ids(physics)[0]).toBe('post');
     expect(physics[0].breakdown?.mode).toBe('physics');
   });
 
   it('drops a superseded row from the physics pool unless includeSuperseded is set', async () => {
     const superseded = { ...PRE1, superseded_by: 'post', tags: [...PRE1.tags] };
-    const current = await physicsSearch('deploy pipeline', [superseded, ...pool(PRE2, POST)], { ...base(), asOf: undefined, queryEmbedding: QUERY_VECTOR });
+    const current = await physicsSearch('deploy pipeline', [superseded, ...pool(PRE2, POST)], {
+      ...base(),
+      asOf: undefined,
+      queryEmbedding: QUERY_VECTOR,
+    });
     expect(ids(current)).not.toContain('pre1');
     const all = await physicsSearch('deploy pipeline', [superseded, ...pool(PRE2, POST)], {
-      ...base(), asOf: undefined, includeSuperseded: true, queryEmbedding: QUERY_VECTOR,
+      ...base(),
+      asOf: undefined,
+      includeSuperseded: true,
+      queryEmbedding: QUERY_VECTOR,
     });
     expect(ids(all)).toContain('pre1');
   });
@@ -116,10 +149,23 @@ describe('rankRecall in physics mode with asOf', () => {
     asOf: CUT,
     explicitScope: null,
     activeScope: null,
-    search: { usePhysics, physicsConfig: loadConfig(root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain },
+    search: {
+      usePhysics,
+      physicsConfig: loadConfig(root).physics,
+      multihop: false,
+      mmr: false,
+      mmrLambda: 0.7,
+      localBump: 1.2,
+      explain,
+    },
   });
   const rank = async (explain: boolean, usePhysics: boolean): Promise<string[]> =>
-    (await rankRecall({ store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT }, opts(explain, usePhysics))).results.map((r) => r.entry.id);
+    (
+      await rankRecall(
+        { store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT },
+        opts(explain, usePhysics),
+      )
+    ).results.map((r) => r.entry.id);
 
   for (const explain of [false, true]) {
     it(`returns the same rows as the non-physics path${explain ? ' under explain' : ''}`, async () => {

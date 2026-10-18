@@ -6,7 +6,12 @@ describe('generateDagSummary', () => {
     const mockFetcher = async () =>
       new Response(
         JSON.stringify({
-          content: [{ type: 'text', text: 'John is a dedicated basketball player who trains daily and aims to improve his shooting percentage and win a championship.' }],
+          content: [
+            {
+              type: 'text',
+              text: 'John is a dedicated basketball player who trains daily and aims to improve his shooting percentage and win a championship.',
+            },
+          ],
         }),
         { status: 200 },
       );
@@ -36,10 +41,7 @@ describe('generateDagSummary', () => {
 
   it('returns null when response text is too short', async () => {
     const mockFetcher = async () =>
-      new Response(
-        JSON.stringify({ content: [{ type: 'text', text: 'too short' }] }),
-        { status: 200 },
-      );
+      new Response(JSON.stringify({ content: [{ type: 'text', text: 'too short' }] }), { status: 200 });
     const summary = await generateDagSummary('label', ['fact'], {
       apiKey: 'test',
       fetcher: mockFetcher,

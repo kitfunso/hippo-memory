@@ -12,10 +12,7 @@ export interface ResolveArgs {
  * repository.full_name; the HIPPO_TENANT fallback applies only if both tables are
  * empty. An unknown installation or repo on a multi-tenant deployment returns
  * null (fail closed); GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK=1 escapes. */
-export async function resolveTenantForGitHub(
-  store: HippoStore,
-  args: ResolveArgs,
-): Promise<string | null> {
+export async function resolveTenantForGitHub(store: HippoStore, args: ResolveArgs): Promise<string | null> {
   const envFallback = (): string => envTenant();
   const escapeHatch = envGitHubAllowUnknownInstallationFallback();
 

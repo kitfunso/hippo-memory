@@ -22,7 +22,7 @@ import {
   rowToEntity,
   rowToRelation,
   ENTITY_COLS,
-  RELATION_COLS
+  RELATION_COLS,
 } from './graph-rows.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
@@ -128,7 +128,7 @@ function assertSourceObjectUsable(
     if (row.status !== 'active' && row.status !== 'superseded') {
       throw new Error(
         `${label}: source ${sourceObject.type} ${sourceObject.id} has status '${row.status}' (must be ` +
-        `active|superseded)`,
+          `active|superseded)`,
       );
     }
   }
@@ -200,7 +200,8 @@ export function updateEntityRow(
   const name = checkedName('updateEntity', opts.name);
   // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
   const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
-    EntityRow | undefined;
+    | EntityRow
+    | undefined;
   if (!row) return null;
   const entity = rowToEntity(row);
   const sourceObject =
@@ -219,7 +220,10 @@ export function updateEntityRow(
 }
 
 function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): void {
-  for (const [eid, role] of [[opts.fromEntityId, 'from'], [opts.toEntityId, 'to']] as const) {
+  for (const [eid, role] of [
+    [opts.fromEntityId, 'from'],
+    [opts.toEntityId, 'to'],
+  ] as const) {
     // SAFETY: ent's shape matches the single `tenant_id` column named in
     // the SELECT above.
     const ent = db.prepare(`SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as { tenant_id: string } | undefined;
@@ -283,7 +287,8 @@ export function objectInForce(db: DatabaseSyncLike, tenantId: string, ref: Sourc
   const table = SOURCE_OBJECT_TABLE[ref.type];
   // SAFETY: row's shape matches the single `status` column named in the SELECT.
   const row = db.prepare(`SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(ref.id, tenantId) as
-    { status: string } | undefined;
+    | { status: string }
+    | undefined;
   return row?.status === 'active' || row?.status === 'superseded';
 }
 
@@ -298,7 +303,7 @@ export function entityIdBySource(
   const row = db
     .prepare(
       `SELECT id FROM entities WHERE tenant_id = ? AND entity_type = ? AND source_object_type = ? AND ` +
-      `source_object_id = ? ORDER BY id LIMIT 1`,
+        `source_object_id = ? ORDER BY id LIMIT 1`,
     )
     .get(tenantId, entityType, sourceObject.type, sourceObject.id) as { id: number } | undefined;
   return row?.id;
@@ -315,7 +320,7 @@ export function relationPresent(
   const present = db
     .prepare(
       `SELECT 1 AS hit FROM relations WHERE tenant_id = ? AND from_entity_id = ? AND to_entity_id = ? AND rel_type = ` +
-      `? LIMIT 1`,
+        `? LIMIT 1`,
     )
     .get(tenantId, fromEntityId, toEntityId, relType) as { hit: number } | undefined;
   return present !== undefined;
@@ -353,15 +358,21 @@ export function removeGraphEntitiesForObjectAt(
   try {
     assertTenantId('removeGraphEntitiesForObject', tenantId);
     withWriteScope(db, 'remove_graph_entities', () => {
-      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-        .run(tenantId, sourceObjectType, sourceObjectId);
-      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-        .run(tenantId, sourceObjectType, sourceObjectId);
+      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`).run(
+        tenantId,
+        sourceObjectType,
+        sourceObjectId,
+      );
+      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`).run(
+        tenantId,
+        sourceObjectType,
+        sourceObjectId,
+      );
     });
   } catch (err) {
     log.warn(
       `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ` +
-      `${errorMessage(err)}`,
+        `${errorMessage(err)}`,
       errorFields(err),
     );
   }

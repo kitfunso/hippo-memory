@@ -6,12 +6,7 @@ import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { objectsOf } from '../../api/objects/objects.js';
-import {
-  closeRoute,
-  getRoute,
-  listRoute,
-  type ObjectRouteConfig,
-} from './object-routes.js';
+import { closeRoute, getRoute, listRoute, type ObjectRouteConfig } from './object-routes.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;
 

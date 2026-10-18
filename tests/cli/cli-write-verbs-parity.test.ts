@@ -14,7 +14,16 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session or a server for the child, so the developer's shell cannot change a row.
-const DROPPED_ENV = ['HIPPO_TENANT', 'HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL', 'HIPPO_SESSION_ID', 'HIPPO_API_KEY', 'HIPPO_REQUIRE_SERVER', 'HIPPO_STRICT_OWNER'];
+const DROPPED_ENV = [
+  'HIPPO_TENANT',
+  'HIPPO_SCOPE',
+  'GSTACK_SKILL',
+  'OPENCLAW_SKILL',
+  'HIPPO_SESSION_ID',
+  'HIPPO_API_KEY',
+  'HIPPO_REQUIRE_SERVER',
+  'HIPPO_STRICT_OWNER',
+];
 const VOLATILE_COLUMNS = ['created', 'last_retrieved', 'valid_from', 'updated_at'];
 const SALIENCE_ON: StoreConfig = { salience: { enabled: true } };
 // Node's own notice about node:sqlite carries the child's pid and differs by Node version.
@@ -91,7 +100,9 @@ class Store {
 
   async run(...args: string[]): Promise<void> {
     const r = await this.exec(args);
-    this.transcript.push(`$ hippo ${args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr.replace(NODE_WARNING, '')}`);
+    this.transcript.push(
+      `$ hippo ${args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr.replace(NODE_WARNING, '')}`,
+    );
   }
 
   /** The newest row's id, which a supersede names. */
@@ -121,9 +132,17 @@ class Store {
   /** Three snapshots, so a change to the audit rows alone shows as that and nothing else. */
   expectPinned(): void {
     expect(this.mask(this.transcript.join('\n'))).toMatchSnapshot('output');
-    expect(this.mask(JSON.stringify({ local: this.memories(this.root), global: this.memories(this.home) }, null, 1))).toMatchSnapshot('memory rows');
-    const audit = query(this.root, 'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE id > ? ORDER BY id', this.auditMark);
-    const globalAudit = existsSync(this.home) ? query(this.home, 'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id') : [];
+    expect(
+      this.mask(JSON.stringify({ local: this.memories(this.root), global: this.memories(this.home) }, null, 1)),
+    ).toMatchSnapshot('memory rows');
+    const audit = query(
+      this.root,
+      'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE id > ? ORDER BY id',
+      this.auditMark,
+    );
+    const globalAudit = existsSync(this.home)
+      ? query(this.home, 'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id')
+      : [];
     expect(this.mask(JSON.stringify({ local: audit, global: globalAudit }, null, 1))).toMatchSnapshot('audit rows');
   }
 }
@@ -140,7 +159,24 @@ const REMEMBER_FLAGS: ReadonlyArray<[string, string[]]> = [
   ['--artifact-ref', ['--artifact-ref', 'gh://acme/billing/pull/12']],
   ['--kind superseded', ['--kind', 'superseded']],
   ['--global', ['--global']],
-  ['every row flag at once', ['--tag', 'billing', '--error', '--pin', '--inferred', '--scope', 'team:eng', '--owner', 'user:alice', '--artifact-ref', 'gh://acme/billing/pull/12', '--kind', 'superseded']],
+  [
+    'every row flag at once',
+    [
+      '--tag',
+      'billing',
+      '--error',
+      '--pin',
+      '--inferred',
+      '--scope',
+      'team:eng',
+      '--owner',
+      'user:alice',
+      '--artifact-ref',
+      'gh://acme/billing/pull/12',
+      '--kind',
+      'superseded',
+    ],
+  ],
 ];
 
 describe('hippo remember (built CLI, no server)', () => {
@@ -168,7 +204,13 @@ describe('hippo remember (built CLI, no server)', () => {
   it('the salience gate weakens a repeated error', async () => {
     const s = await Store.open(SALIENCE_ON);
     for (let n = 1; n <= 4; n++) {
-      writeEntry(s.root, createMemory(`connection timeout on database shard ${n}`, { tags: ['error'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+      writeEntry(
+        s.root,
+        createMemory(`connection timeout on database shard ${n}`, {
+          tags: ['error'],
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        }),
+      );
     }
     s.settle();
     await s.run('remember', 'connection timeout on database shard 5', '--error');
@@ -177,7 +219,10 @@ describe('hippo remember (built CLI, no server)', () => {
 
   it('a rejected value is refused', async () => {
     const s = await Store.open();
-    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), {
+      value: 'the billing service retries a failed charge nine times',
+      reason: 'wrong',
+    });
     s.settle();
     await s.run('remember', 'the billing service retries a failed charge nine times');
     s.expectPinned();
@@ -190,7 +235,11 @@ const SUPERSEDE_FLAGS: ReadonlyArray<[string, string[], string[]]> = [
   ['--tag', ['--tag', 'billing'], ['--tag', 'paging']],
   ['--pin', [], ['--pin']],
   ['a pinned old row', ['--pin', '--tag', 'billing'], []],
-  ['every flag at once on a tagged, scoped old row', ['--tag', 'billing', '--scope', 'team:eng', '--observed'], ['--layer', 'semantic', '--tag', 'paging', '--tag', 'oncall', '--pin']],
+  [
+    'every flag at once on a tagged, scoped old row',
+    ['--tag', 'billing', '--scope', 'team:eng', '--observed'],
+    ['--layer', 'semantic', '--tag', 'paging', '--tag', 'oncall', '--pin'],
+  ],
 ];
 
 describe('hippo supersede (built CLI, no server)', () => {
@@ -218,7 +267,10 @@ describe('hippo supersede (built CLI, no server)', () => {
 
   it('new content that is a rejected value', async () => {
     const s = await Store.open();
-    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), {
+      value: 'the billing service retries a failed charge nine times',
+      reason: 'wrong',
+    });
     s.settle();
     await s.run('remember', 'the billing service retries a failed charge three times');
     await s.run('supersede', s.lastId(), 'the billing service retries a failed charge nine times');
@@ -228,7 +280,10 @@ describe('hippo supersede (built CLI, no server)', () => {
   it("another person's personal row", async () => {
     const s = await Store.open();
     const owner = { subject: 'api_key:hk_a', role: 'member', owner: 'a' } as const;
-    const { id } = await remember(apiCtx(s.root, 'default', owner), { content: 'my own note about the billing retry count', personal: true });
+    const { id } = await remember(apiCtx(s.root, 'default', owner), {
+      content: 'my own note about the billing retry count',
+      personal: true,
+    });
     s.settle();
     await s.run('supersede', id, 'a newer note about the billing retry count');
     s.expectPinned();
@@ -236,7 +291,10 @@ describe('hippo supersede (built CLI, no server)', () => {
 });
 
 describe('hippo trace record (built CLI, no server)', () => {
-  const steps = JSON.stringify([{ action: 'ran the migration', observation: 'two tables changed' }, { action: 'ran the tests', observation: 'all passed' }]);
+  const steps = JSON.stringify([
+    { action: 'ran the migration', observation: 'two tables changed' },
+    { action: 'ran the tests', observation: 'all passed' },
+  ]);
 
   it('the required flags alone', async () => {
     const s = await Store.open(undefined, true);
@@ -246,7 +304,22 @@ describe('hippo trace record (built CLI, no server)', () => {
 
   it('--session, --tag and --source', async () => {
     const s = await Store.open();
-    await s.run('trace', 'record', '--task', 'migrate the billing tables', '--steps', steps, '--outcome', 'partial', '--session', 'sess-1', '--tag', 'deploy', '--source', 'agent');
+    await s.run(
+      'trace',
+      'record',
+      '--task',
+      'migrate the billing tables',
+      '--steps',
+      steps,
+      '--outcome',
+      'partial',
+      '--session',
+      'sess-1',
+      '--tag',
+      'deploy',
+      '--source',
+      'agent',
+    );
     s.expectPinned();
   });
 

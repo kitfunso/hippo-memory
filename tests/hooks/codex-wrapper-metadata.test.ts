@@ -33,7 +33,10 @@ afterEach(() => {
 function writeMetadata(fields: Record<string, string>): string {
   const { metadataPath } = resolveCodexWrapperPaths();
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
-  fs.writeFileSync(metadataPath, JSON.stringify({ installMode: 'same-path', logFile: 'x', installedAt: 'x', ...fields }));
+  fs.writeFileSync(
+    metadataPath,
+    JSON.stringify({ installMode: 'same-path', logFile: 'x', installedAt: 'x', ...fields }),
+  );
   return metadataPath;
 }
 

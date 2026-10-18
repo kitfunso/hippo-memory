@@ -204,20 +204,20 @@ const clientScript = (): string =>
   (clientJs ??= readFileSync(new URL('./view-client.js', import.meta.url), 'utf8').trimEnd());
 
 const STYLE = [
-  "html,body{margin:0;height:100%;background:#0b1020;font-family:ui-sans-serif,system-ui,sans-serif}",
-  "#g{width:100vw;height:100vh;cursor:grab}",
-  "#g:active{cursor:grabbing}",
-  ".edge{stroke:#475569;stroke-width:1}",
-  ".node circle{stroke:#0b1020;stroke-width:1.5}",
-  ".node text{fill:#e2e8f0;font-size:11px;pointer-events:none}",
-  ".node{cursor:pointer}",
-  "#g.focused .node{opacity:.18}",
-  "#g.focused .edge{opacity:.07}",
-  "#g.focused .node.hi{opacity:1}",
-  "#g.focused .edge.hi{opacity:1;stroke:#e2e8f0}",
-  ".legend{position:fixed;top:10px;left:12px;color:#94a3b8;font-size:12px;line-height:1.6}",
-  ".legend b{color:#e2e8f0}",
-].join("\n");
+  'html,body{margin:0;height:100%;background:#0b1020;font-family:ui-sans-serif,system-ui,sans-serif}',
+  '#g{width:100vw;height:100vh;cursor:grab}',
+  '#g:active{cursor:grabbing}',
+  '.edge{stroke:#475569;stroke-width:1}',
+  '.node circle{stroke:#0b1020;stroke-width:1.5}',
+  '.node text{fill:#e2e8f0;font-size:11px;pointer-events:none}',
+  '.node{cursor:pointer}',
+  '#g.focused .node{opacity:.18}',
+  '#g.focused .edge{opacity:.07}',
+  '#g.focused .node.hi{opacity:1}',
+  '#g.focused .edge.hi{opacity:1;stroke:#e2e8f0}',
+  '.legend{position:fixed;top:10px;left:12px;color:#94a3b8;font-size:12px;line-height:1.6}',
+  '.legend b{color:#e2e8f0}',
+].join('\n');
 
 const nodeColor = (t: string): string => NODE_COLORS[t] ?? '#64748b';
 
@@ -256,17 +256,12 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
 // Safe inline JSON for the client: unicode-escape the HTML-significant chars so
 // the content cannot terminate the <script> block; JSON.parse restores them.
 function inlineModelJson(model: GraphModel): string {
-  return JSON.stringify(model)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026');
+  return JSON.stringify(model).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 }
 
 function renderLegend(model: GraphModel): string {
   const types = [...new Set(model.nodes.map((nd) => nd.type))];
-  return types
-    .map((t) => `<span style="color:${nodeColor(t)}">●</span> ${escapeHtml(t)}`)
-    .join('  ');
+  return types.map((t) => `<span style="color:${nodeColor(t)}">●</span> ${escapeHtml(t)}`).join('  ');
 }
 
 /**

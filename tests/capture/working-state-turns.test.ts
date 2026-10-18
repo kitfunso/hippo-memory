@@ -36,8 +36,10 @@ function derive(lines: readonly string[]) {
   return transcriptWorkingState(file, () => {});
 }
 
-const user = (content: string | Block[], flags: Flags = {}) => JSON.stringify({ type: 'user', message: { role: 'user', content }, ...flags });
-const assistant = (content: Block[], flags: Flags = {}) => JSON.stringify({ type: 'assistant', message: { role: 'assistant', content }, ...flags });
+const user = (content: string | Block[], flags: Flags = {}) =>
+  JSON.stringify({ type: 'user', message: { role: 'user', content }, ...flags });
+const assistant = (content: Block[], flags: Flags = {}) =>
+  JSON.stringify({ type: 'assistant', message: { role: 'assistant', content }, ...flags });
 const text = (t: string): Block => ({ type: 'text', text: t });
 
 describe('transcriptWorkingState turn selection', () => {
@@ -60,7 +62,10 @@ describe('transcriptWorkingState turn selection', () => {
   });
 
   it('gives an empty task when no human turn exists and an empty next step when no assistant text exists', () => {
-    expect(derive([assistant([text('only the agent spoke')])])).toMatchObject({ task: '', next_step: 'only the agent spoke' });
+    expect(derive([assistant([text('only the agent spoke')])])).toMatchObject({
+      task: '',
+      next_step: 'only the agent spoke',
+    });
     expect(derive([user('only the human spoke')])).toMatchObject({ task: 'only the human spoke', next_step: '' });
   });
 });

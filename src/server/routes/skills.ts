@@ -10,13 +10,7 @@ import {
   type RequiredStringRule,
 } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
-import {
-  closeRoute,
-  getRoute,
-  listRoute,
-  supersedeRoute,
-  type VersionedRouteConfig,
-} from './object-routes.js';
+import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
 

@@ -112,8 +112,7 @@ function searchPredicates(
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
   // Tenant-only path: with no tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and '
   // WHERE' by caller context.
-  const archivedClauseTenantOnly =
-    tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
+  const archivedClauseTenantOnly = tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
   const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects);
   const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProjects);
@@ -122,15 +121,23 @@ function searchPredicates(
   const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const currentNoAlias = includeSuperseded ? '' : ' AND superseded_by IS NULL';
   return {
-    tenantPredicate, tenantOnlyPredicate, tenantParams,
-    archivedClauseAlias, archivedClauseTenantOnly,
-    aliasScope, plainScope, scopeParams, currentAlias, currentNoAlias,
+    tenantPredicate,
+    tenantOnlyPredicate,
+    tenantParams,
+    archivedClauseAlias,
+    archivedClauseTenantOnly,
+    aliasScope,
+    plainScope,
+    scopeParams,
+    currentAlias,
+    currentNoAlias,
   };
 }
 
 /** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */
 function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
-  const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
+  const sql =
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
     `${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
   // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
   // matches MemoryRow's field set.
@@ -144,14 +151,17 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
     // memories_fts has no tenant_id column; filter via the joined memories row (cheap with
     // idx_memories_tenant_created). SAFETY: MEMORY_SEARCH_COLUMNS aliases every column like MEMORY_SELECT_COLUMNS (plus
     // bm25_score), matching MemoryRow.
-    return cachedStatement(db, `
+    return cachedStatement(
+      db,
+      `
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
         WHERE memories_fts MATCH ?${p.tenantPredicate}${p.archivedClauseAlias}${p.aliasScope.sql}${p.currentAlias}
         ORDER BY bm25(memories_fts), m.updated_at DESC, m.content ASC, m.id ASC
         LIMIT ?
-      `).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
+      `,
+    ).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
   } catch (err) {
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
     const message = errorMessage(err);
@@ -182,7 +192,9 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
 
   // SHORTCUT: no index serves a substring, so a match older than the window is missed; an FTS5 trigram index is the
   // upgrade. SAFETY: the outer query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  return cachedStatement(db, `
+  return cachedStatement(
+    db,
+    `
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM (
       SELECT ${MEMORY_SELECT_COLUMNS}, updated_at
@@ -193,7 +205,8 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
     WHERE (${where})
     ORDER BY updated_at DESC, created DESC, content ASC, id ASC
     LIMIT ?
-  `).all(...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...params, limit) as MemoryRow[];
+  `,
+  ).all(...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...params, limit) as MemoryRow[];
 }
 
 /** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. With `tenantId` every

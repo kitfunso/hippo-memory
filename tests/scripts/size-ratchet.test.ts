@@ -8,9 +8,17 @@ const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-size-ratc
 const BASELINE = '.size-baseline.json';
 
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
-type Baseline = { files?: Record<string, number>; functions?: Record<string, number>; longLines?: Record<string, number> };
+type Baseline = {
+  files?: Record<string, number>;
+  functions?: Record<string, number>;
+  longLines?: Record<string, number>;
+};
 
-function withFixture(files: Record<string, string>, baseline: Baseline, body: (f: { run: Run; baseline: () => Baseline }) => void) {
+function withFixture(
+  files: Record<string, string>,
+  baseline: Baseline,
+  body: (f: { run: Run; baseline: () => Baseline }) => void,
+) {
   const root = mkdtempSync(join(tmpdir(), 'hippo-size-ratchet-'));
   const write = (p: string, text: string) => {
     mkdirSync(dirname(join(root, p)), { recursive: true });
@@ -73,14 +81,18 @@ describe('check-size-ratchet.mjs', () => {
   });
 
   it('passes when a baselined function shrinks, and --update lowers the baseline', () => {
-    withFixture({ 'src/a.ts': fn('big', 85) + fn('gone', 20) }, { functions: { 'src/a.ts:big': 90, 'src/a.ts:gone': 100 } }, ({ run, baseline }) => {
-      const before = run();
-      expect(before.status).toBe(0);
-      expect(before.stdout).toContain('2 offenders shrank or went');
-      expect(run('--update').status).toBe(0);
-      expect(baseline()).toEqual({ files: {}, functions: { 'src/a.ts:big': 85 }, longLines: {} });
-      expect(run().stdout).not.toContain('shrank');
-    });
+    withFixture(
+      { 'src/a.ts': fn('big', 85) + fn('gone', 20) },
+      { functions: { 'src/a.ts:big': 90, 'src/a.ts:gone': 100 } },
+      ({ run, baseline }) => {
+        const before = run();
+        expect(before.status).toBe(0);
+        expect(before.stdout).toContain('2 offenders shrank or went');
+        expect(run('--update').status).toBe(0);
+        expect(baseline()).toEqual({ files: {}, functions: { 'src/a.ts:big': 85 }, longLines: {} });
+        expect(run().stdout).not.toContain('shrank');
+      },
+    );
   });
 
   it('fails on an 801-line file and skips .d.ts files', () => {

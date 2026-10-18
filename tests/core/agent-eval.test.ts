@@ -16,10 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { search } from '../../src/search/bm25-search.js';
@@ -42,7 +39,7 @@ interface Task {
   id: number;
   description: string;
   trapCategory: string | null; // null = clean task (no trap)
-  recallQuery: string;         // what the agent would search for before starting
+  recallQuery: string; // what the agent would search for before starting
 }
 
 const TRAP_CATEGORIES: TrapCategory[] = [
@@ -96,7 +93,8 @@ const TRAP_CATEGORIES: TrapCategory[] = [
   },
   {
     id: 'data_mining',
-    lesson: 'Selecting features on the full dataset then reporting OOS results is data mining. Use theory-only selection.',
+    lesson:
+      'Selecting features on the full dataset then reporting OOS results is data mining. Use theory-only selection.',
     tags: ['feature-selection', 'data-mining', 'backtest'],
     recallQueries: ['selecting features for model', 'feature engineering OOS testing'],
   },
@@ -119,15 +117,15 @@ function generateTasks(): Task[] {
   // This tests whether the agent learns from early encounters
   const trapPlacements: Array<{ category: string; positions: number[] }> = [
     { category: 'overwrite_production', positions: [2, 22, 42] },
-    { category: 'bare_except',          positions: [4, 28, 46] },
-    { category: 'emoji_windows',        positions: [6, 24, 38] },
-    { category: 'powershell_chain',     positions: [8, 30] },
-    { category: 'sharpe_inflation',     positions: [10, 32, 44] },
-    { category: 'constants_sync',       positions: [12, 34] },
-    { category: 'slop_words',           positions: [14, 36, 48] },
-    { category: 'exit_code_trust',      positions: [16, 26] },
-    { category: 'data_mining',          positions: [18, 40] },
-    { category: 'unverified_metrics',   positions: [20, 50] },
+    { category: 'bare_except', positions: [4, 28, 46] },
+    { category: 'emoji_windows', positions: [6, 24, 38] },
+    { category: 'powershell_chain', positions: [8, 30] },
+    { category: 'sharpe_inflation', positions: [10, 32, 44] },
+    { category: 'constants_sync', positions: [12, 34] },
+    { category: 'slop_words', positions: [14, 36, 48] },
+    { category: 'exit_code_trust', positions: [16, 26] },
+    { category: 'data_mining', positions: [18, 40] },
+    { category: 'unverified_metrics', positions: [20, 50] },
   ];
 
   // Build a map: position -> trap category
@@ -169,7 +167,7 @@ function generateTasks(): Task[] {
       const cat = TRAP_CATEGORIES.find((c) => c.id === trapCat)!;
       const queryIdx = Math.min(
         cat.recallQueries.length - 1,
-        Math.floor((pos - 1) / 20) // vary queries across encounters
+        Math.floor((pos - 1) / 20), // vary queries across encounters
       );
       tasks.push({
         id: pos,
@@ -198,7 +196,7 @@ function generateTasks(): Task[] {
 interface SimResult {
   taskId: number;
   trapCategory: string | null;
-  trapHit: boolean;     // true = agent hit the trap (failed to avoid it)
+  trapHit: boolean; // true = agent hit the trap (failed to avoid it)
   memoryRecalled: boolean; // true = relevant memory was in top-5 results
 }
 
@@ -246,9 +244,10 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
     const recalled = topIds.some((r) => {
       // Check if the result's content matches the lesson or tags overlap
       const contentMatch = cat.tags.some((tag) => r.entry.tags.includes(tag));
-      const textMatch = cat.lesson.split(' ').slice(0, 5).some((word) =>
-        word.length > 4 && r.entry.content.toLowerCase().includes(word.toLowerCase())
-      );
+      const textMatch = cat.lesson
+        .split(' ')
+        .slice(0, 5)
+        .some((word) => word.length > 4 && r.entry.content.toLowerCase().includes(word.toLowerCase()));
       return contentMatch || textMatch;
     });
 
@@ -404,6 +403,6 @@ describe('Condition: hippo (learns from mistakes)', () => {
   it('improvement is >= 30 percentage points from early to late', () => {
     const phases = hitRateByPhase(results);
     const improvement = phases.early - phases.late;
-    expect(improvement).toBeGreaterThanOrEqual(0.30);
+    expect(improvement).toBeGreaterThanOrEqual(0.3);
   });
 });

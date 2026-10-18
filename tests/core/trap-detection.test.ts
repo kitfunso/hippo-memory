@@ -42,9 +42,7 @@ interface TrapDefinition {
 
 // SAFETY: trap-definitions.json is this repo's own fixture file, hand-
 // authored to match the TrapDefinition shape declared above.
-const trapDefs: TrapDefinition[] = JSON.parse(
-  fs.readFileSync(TRAP_DEFS_PATH, 'utf8')
-).traps as TrapDefinition[];
+const trapDefs: TrapDefinition[] = JSON.parse(fs.readFileSync(TRAP_DEFS_PATH, 'utf8')).traps as TrapDefinition[];
 
 // ---------------------------------------------------------------------------
 // Setup: seed the store with the exact memories that prevent each trap
@@ -107,7 +105,10 @@ Sharpe as the final OOS number without this caveat.`,
 Shared constants: production/shared_constants.py <-> website/frontend/src/lib/trading-constants.ts
 Any change to RISK_PER_TRADE, position sizing, or signal thresholds must be updated in BOTH files.
 Mismatch causes silent wrong position sizing on the frontend dashboard.`,
-      opts: { tags: ['frontend', 'backend', 'constants', 'sync', 'risk', 'position-sizing'], emotionalValence: 'negative' },
+      opts: {
+        tags: ['frontend', 'backend', 'constants', 'sync', 'risk', 'position-sizing'],
+        emotionalValence: 'negative',
+      },
     },
     {
       label: 'subagent_slop_words',
@@ -192,7 +193,7 @@ describe('Trap repo files contain expected issues', () => {
 
   it('data_refresh.py has bare except: pass', () => {
     const code = fs.readFileSync(path.join(repoDir, 'data_refresh.py'), 'utf8');
-    expect(code).toMatch(/except\s*:/);  // bare except
+    expect(code).toMatch(/except\s*:/); // bare except
     expect(code).toContain('pass');
   });
 
@@ -220,7 +221,7 @@ describe('Trap repo files contain expected issues', () => {
   it('config.ts has RISK_PER_TRADE mismatch (0.02 vs 0.015)', () => {
     const code = fs.readFileSync(path.join(repoDir, 'config.ts'), 'utf8');
     expect(code).toContain('RISK_PER_TRADE = 0.02');
-    expect(code).toContain('0.015');  // commented reference to the correct value
+    expect(code).toContain('0.015'); // commented reference to the correct value
   });
 
   it('agent_output.py contains slop words', () => {
@@ -268,14 +269,17 @@ describe('Memory recall catches traps (with memory)', () => {
       if (!caught) {
         console.warn(
           `  MISSED trap: ${trap.id}\n` +
-          `  Query: "${trap.recall_query}"\n` +
-          `  Expected: ${trap.memory_id}\n` +
-          `  Got top-5: ${topIds.join(', ')}`
+            `  Query: "${trap.recall_query}"\n` +
+            `  Expected: ${trap.memory_id}\n` +
+            `  Got top-5: ${topIds.join(', ')}`,
         );
       }
 
       // Each trap should be caught (correct memory in top-5)
-      expect(caught, `Trap ${trap.id} not caught. Memory "${trap.memory_id}" not in top-5 for query "${trap.recall_query}"`).toBe(true);
+      expect(
+        caught,
+        `Trap ${trap.id} not caught. Memory "${trap.memory_id}" not in top-5 for query "${trap.recall_query}"`,
+      ).toBe(true);
     });
   }
 });
@@ -323,6 +327,9 @@ describe('Trap detection score summary', () => {
     console.log(`  Baseline (no memory): 0%`);
     console.log(`  ───────────────────────────────────────────────────`);
 
-    expect(score, `Only caught ${caught}/${trapDefs.length} traps (${(score * 100).toFixed(0)}%)`).toBeGreaterThanOrEqual(0.8);
+    expect(
+      score,
+      `Only caught ${caught}/${trapDefs.length} traps (${(score * 100).toFixed(0)}%)`,
+    ).toBeGreaterThanOrEqual(0.8);
   });
 });

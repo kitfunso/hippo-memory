@@ -195,10 +195,14 @@ export function recordCompactionStart(
   log: Log,
 ): string | null {
   try {
-    return on((db, files) => startCompaction(db, resolveTenantId({}), {
-      ...start,
-      originProject: compactionOrigin(files.hippoRoot, start.cwd),
-    }), waitingOpener(COMPACTION_DB_WAIT_MS));
+    return on(
+      (db, files) =>
+        startCompaction(db, resolveTenantId({}), {
+          ...start,
+          originProject: compactionOrigin(files.hippoRoot, start.cwd),
+        }),
+      waitingOpener(COMPACTION_DB_WAIT_MS),
+    );
   } catch (err) {
     log(`compaction record not started: ${errorMessage(err)}`);
     return null;
@@ -212,7 +216,9 @@ export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, record
 
 export function recordSnapshotSaved(on: OnHandle, tenantId: string, recordId: string, log: Log): void {
   try {
-    on((db) => { markSnapshotSaved(db, tenantId, recordId); }, waitingOpener(COMPACTION_DB_WAIT_MS));
+    on((db) => {
+      markSnapshotSaved(db, tenantId, recordId);
+    }, waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
     log(`compaction record not marked with its snapshot: ${errorMessage(err)}`);
   }
@@ -387,7 +393,11 @@ function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text.
  * Mirrors after commit. */
 export function saveItems(
-  db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log, baseHalfLifeDays: number,
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  ctx: ItemContext,
+  log: Log,
+  baseHalfLifeDays: number,
 ): number {
   const rows = writableItemRows(ctx.items, log);
 
@@ -464,14 +474,20 @@ function recordStep(step: SaveStep): CompactionRecord | null {
 function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
   const { meta, hippoRoot, log } = step;
   try {
-    step.result.written = saveItems(step.db, hippoRoot, {
-      tenantId: step.tenantId,
-      recordId: record?.id ?? null,
-      sessionId: meta.sessionId,
-      originProject: record?.originProject ?? compactionOrigin(hippoRoot, meta.cwd),
-      cwd: meta.cwd,
-      items: step.text.items,
-    }, log, step.baseHalfLifeDays);
+    step.result.written = saveItems(
+      step.db,
+      hippoRoot,
+      {
+        tenantId: step.tenantId,
+        recordId: record?.id ?? null,
+        sessionId: meta.sessionId,
+        originProject: record?.originProject ?? compactionOrigin(hippoRoot, meta.cwd),
+        cwd: meta.cwd,
+        items: step.text.items,
+      },
+      log,
+      step.baseHalfLifeDays,
+    );
   } catch (err) {
     if (!isSqliteBusy(err) || record === null) throw err;
     // The record already holds the items; sleep finishes them.
@@ -497,7 +513,15 @@ export function saveCompactionAt(
       opened = true;
       const tenantId = resolveTenantId({});
       const step: SaveStep = {
-        db, hippoRoot: files.hippoRoot, tenantId, meta, text, at, result, log, baseHalfLifeDays,
+        db,
+        hippoRoot: files.hippoRoot,
+        tenantId,
+        meta,
+        text,
+        at,
+        result,
+        log,
+        baseHalfLifeDays,
       };
       itemsStep(step, recordStep(step));
     }, waitingOpener(COMPACTION_DB_WAIT_MS));
@@ -667,7 +691,14 @@ function replayCompactions(
   baseHalfLifeDays: number,
 ): number {
   const run: ReplayRun = {
-    db, hippoRoot, tenantId: resolveTenantId({}), now: Date.now(), sources, log, deadline, baseHalfLifeDays,
+    db,
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    now: Date.now(),
+    sources,
+    log,
+    deadline,
+    baseHalfLifeDays,
   };
   return replayStalled(run) + replaySpool(run) + replayOpen(run);
 }
@@ -680,12 +711,7 @@ export interface ReplayOptions {
 }
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */
-export function replayStoredCompactions(
-  on: OnHandle,
-  sources: ReplaySources,
-  log: Log,
-  opts: ReplayOptions,
-): number {
+export function replayStoredCompactions(on: OnHandle, sources: ReplaySources, log: Log, opts: ReplayOptions): number {
   try {
     const deadline = opts.deadline ?? Number.POSITIVE_INFINITY;
     return on(

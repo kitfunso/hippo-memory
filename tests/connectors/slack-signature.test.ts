@@ -16,23 +16,31 @@ describe('verifySlackSignature', () => {
     const body = '{"hello":"world"}';
     const ts = String(now);
     const sig = sign(ts, body);
-    expect(verifySlackSignature({ rawBody: body, timestamp: ts, signature: sig, signingSecret: SECRET, now })).toBe(true);
+    expect(verifySlackSignature({ rawBody: body, timestamp: ts, signature: sig, signingSecret: SECRET, now })).toBe(
+      true,
+    );
   });
 
   it('rejects a tampered body', () => {
     const ts = String(now);
     const sig = sign(ts, '{"hello":"world"}');
-    expect(verifySlackSignature({ rawBody: '{"hello":"evil"}', timestamp: ts, signature: sig, signingSecret: SECRET, now })).toBe(false);
+    expect(
+      verifySlackSignature({ rawBody: '{"hello":"evil"}', timestamp: ts, signature: sig, signingSecret: SECRET, now }),
+    ).toBe(false);
   });
 
   it('rejects a stale timestamp (>5min skew)', () => {
     const stale = String(now - 6 * 60);
     const body = '{}';
     const sig = sign(stale, body);
-    expect(verifySlackSignature({ rawBody: body, timestamp: stale, signature: sig, signingSecret: SECRET, now })).toBe(false);
+    expect(verifySlackSignature({ rawBody: body, timestamp: stale, signature: sig, signingSecret: SECRET, now })).toBe(
+      false,
+    );
   });
 
   it('rejects a malformed signature header', () => {
-    expect(verifySlackSignature({ rawBody: '{}', timestamp: String(now), signature: 'garbage', signingSecret: SECRET, now })).toBe(false);
+    expect(
+      verifySlackSignature({ rawBody: '{}', timestamp: String(now), signature: 'garbage', signingSecret: SECRET, now }),
+    ).toBe(false);
   });
 });

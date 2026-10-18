@@ -25,10 +25,15 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { appendSessionEvent } from '../../src/store/sessions.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
-import { rejectionDigest, normalizeValueForRejection, insertRejectedValue, findRejectedValue } from '../../src/store/rejection.js';
+import {
+  rejectionDigest,
+  normalizeValueForRejection,
+  insertRejectedValue,
+  findRejectedValue,
+} from '../../src/store/rejection.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { cmdCapture } from '../../src/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
@@ -347,7 +352,10 @@ describe('consolidation-loop fix: merge tombstone check', () => {
     // sort deterministically puts it first in the 2-entry merge.
     const shortText = 'migrate the billing database before the next release window';
     const longText = 'migrate the billing database before the next release window with full backups enabled';
-    const e1 = { ...createMemory(shortText, { layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
+    const e1 = {
+      ...createMemory(shortText, { layer: Layer.Episodic }),
+      created: new Date(Date.now() - 60_000).toISOString(),
+    };
     const e2 = createMemory(longText, { layer: Layer.Episodic });
     writeEntry(home, e1);
     writeEntry(home, e2);
@@ -443,7 +451,12 @@ describe('import dry-run tombstone accuracy', () => {
       expect(dryResult.imported).toBe(1);
       expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
-      const realResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
+      const realResult = await importVault(vault, {
+        hippoRoot: home,
+        tenantId: 'default',
+        name: 'notes',
+        dryRun: false,
+      });
       expect(realResult.rejected).toBe(1);
       expect(realResult.imported).toBe(1);
       const contents = loadEveryTenantEntries(home).map((e) => e.content);
@@ -467,10 +480,7 @@ describe('capture dry-run tombstone accuracy', () => {
     const fixturePath = join(home, 'capture-dryrun-fixture.txt');
     writeFileSync(
       fixturePath,
-      [
-        `decision: ${rejectedContent}`,
-        'decision: rotate deploy keys every 90 days',
-      ].join('\n'),
+      [`decision: ${rejectedContent}`, 'decision: rotate deploy keys every 90 days'].join('\n'),
       'utf8',
     );
 
@@ -495,7 +505,10 @@ describe('auto-promoted trace tombstone check', () => {
     const home = makeRoot('rejection-acceptance-trace');
     const sid = 'test-session-rejected-trace';
     appendSessionEvent(home, 'default', {
-      session_id: sid, event_type: 'action', content: 'read config.ts', source: 'agent',
+      session_id: sid,
+      event_type: 'action',
+      content: 'read config.ts',
+      source: 'agent',
     });
     appendSessionEvent(home, 'default', {
       session_id: sid,
@@ -516,9 +529,7 @@ describe('auto-promoted trace tombstone check', () => {
 
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const secondResult = await consolidate(home, { now: new Date() });
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('skipped 1 auto-promoted trace'),
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 auto-promoted trace'));
     errorSpy.mockRestore();
 
     // Not recreated, and not counted as promoted.
@@ -549,7 +560,10 @@ describe('merge tombstone check uses the destination tenant', () => {
 
     const shortText = 'rotate the staging tls certificates before expiry';
     const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
-    const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
+    const e1 = {
+      ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }),
+      created: new Date(Date.now() - 60_000).toISOString(),
+    };
     const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
     writeEntry(home, e1);
     writeEntry(home, e2);
@@ -599,7 +613,10 @@ describe('merge tombstone check uses the destination tenant', () => {
 
     const shortText = 'archive the quarterly billing export before cleanup';
     const longText = 'archive the quarterly billing export before cleanup and confirm checksum';
-    const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
+    const e1 = {
+      ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }),
+      created: new Date(Date.now() - 60_000).toISOString(),
+    };
     const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
     writeEntry(home, e1);
     writeEntry(home, e2);
@@ -657,9 +674,7 @@ describe('autoShare per-candidate rejection containment', () => {
     const stats = { secretSkipped: 0, rejectedSkipped: 0 };
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const shared = autoShare(...sharingStores(localRoot), { minScore: 0, stats });
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('skipped 1 candidate(s) refused'),
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 candidate(s) refused'));
     errorSpy.mockRestore();
 
     // The clean candidate shared; the rejected one did not abort the batch.

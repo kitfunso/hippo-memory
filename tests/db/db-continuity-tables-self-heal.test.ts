@@ -13,21 +13,27 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 const REPO_ROOT = join(__dirname, '..', '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
-const CONTINUITY_TABLES = ['task_snapshots', 'session_events', 'session_handoffs', 'cards', 'card_deps', 'card_runs', 'card_comments', 'memory_quarantine'] as const;
+const CONTINUITY_TABLES = [
+  'task_snapshots',
+  'session_events',
+  'session_handoffs',
+  'cards',
+  'card_deps',
+  'card_runs',
+  'card_comments',
+  'memory_quarantine',
+] as const;
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: row shape guaranteed by the `SELECT name FROM sqlite_master` projection.
-  return (db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
-    .all() as Array<{ name: string }>)
-    .map((r) => r.name);
+  return (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`).all() as Array<{ name: string }>
+  ).map((r) => r.name);
 }
 
 function getMeta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: row shape guaranteed by the `SELECT value FROM meta` projection.
-  const row = db
-    .prepare(`SELECT value FROM meta WHERE key = ?`)
-    .get(key) as { value?: string } | undefined;
+  const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value;
 }
 
@@ -46,11 +52,7 @@ function columns(db: DatabaseSyncLike, table: string): ColumnInfo[] {
 
 function indexNames(db: DatabaseSyncLike, table: string): string[] {
   // SAFETY: PRAGMA index_list always yields rows with a `name` column.
-  return (db
-    .prepare(`PRAGMA index_list(${table})`)
-    .all() as Array<{ name: string }>)
-    .map((r) => r.name)
-    .sort();
+  return (db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>).map((r) => r.name).sort();
 }
 
 describe('continuity tables self-heal, missing table after schema stamp', () => {
@@ -288,12 +290,13 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
 
     const env = { ...process.env, HIPPO_SESSION_ID: 'sess-heal' };
 
-    const runContext = (...args: string[]): string => execFileSync(process.execPath, [CLI_PATH, 'context', ...args, '--budget', '1500'], {
-      cwd: projectDir,
-      env,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const runContext = (...args: string[]): string =>
+      execFileSync(process.execPath, [CLI_PATH, 'context', ...args, '--budget', '1500'], {
+        cwd: projectDir,
+        env,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
     const pinned = runContext('--pinned-only');
     const auto = runContext('--auto');
 

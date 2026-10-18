@@ -34,7 +34,8 @@ export function copilotScratch(): CopilotScratch {
 
 /** One payload from hook-payloads.json as hook stdin text, with `<CWD>` and `<TRANSCRIPT>` set to real paths. */
 export function copilotPayload(name: CopilotPayloadName, cwd: string, transcript = ''): string {
-  const raw = fs.readFileSync(path.join(FIXTURES, 'hook-payloads.json'), 'utf8')
+  const raw = fs
+    .readFileSync(path.join(FIXTURES, 'hook-payloads.json'), 'utf8')
     .replaceAll('"<CWD>"', JSON.stringify(cwd))
     .replaceAll('"<TRANSCRIPT>"', JSON.stringify(transcript));
   // SAFETY: hook-payloads.json is an object keyed by every CopilotPayloadName.
@@ -45,8 +46,18 @@ export function copilotPayload(name: CopilotPayloadName, cwd: string, transcript
 export const CLAUDE_SESSION = 'claude-sess-1';
 
 /** A Claude Code hook payload in its documented snake_case fields, for the tests that keep Copilot handling off it. */
-export function claudeCodePayload(event: 'PostToolUseFailure' | 'PreCompact' | 'SessionEnd', cwd: string, transcript: string): string {
-  const common = { session_id: CLAUDE_SESSION, transcript_path: transcript, cwd, permission_mode: 'default', hook_event_name: event };
+export function claudeCodePayload(
+  event: 'PostToolUseFailure' | 'PreCompact' | 'SessionEnd',
+  cwd: string,
+  transcript: string,
+): string {
+  const common = {
+    session_id: CLAUDE_SESSION,
+    transcript_path: transcript,
+    cwd,
+    permission_mode: 'default',
+    hook_event_name: event,
+  };
   if (event === 'PreCompact') return JSON.stringify({ ...common, trigger: 'auto', custom_instructions: '' });
   if (event === 'SessionEnd') return JSON.stringify({ ...common, reason: 'other' });
   return JSON.stringify({
@@ -64,7 +75,10 @@ export function writeClaudeTranscript(dir: string): string {
   const file = path.join(dir, `${CLAUDE_SESSION}.jsonl`);
   const lines = [
     { type: 'user', message: { role: 'user', content: 'fix the flaky login test in auth.spec.ts' } },
-    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'The retry is fixed; the test run is next.' }] } },
+    {
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'The retry is fixed; the test run is next.' }] },
+    },
   ];
   fs.writeFileSync(file, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
   return file;

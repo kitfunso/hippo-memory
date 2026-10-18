@@ -13,9 +13,9 @@ const MAX_WARN_LOGS = 5;
 export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): boolean {
   // SAFETY: the SELECT above names exactly one column, memory_id (raw_archive.memory_id
   // is NOT NULL TEXT), so the row shape matches this assertion.
-  const rows = db
-    .prepare(`SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
-    .all() as Array<{ memory_id: string }>;
+  const rows = db.prepare(`SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL`).all() as Array<{
+    memory_id: string;
+  }>;
 
   if (rows.length === 0) return true;
 

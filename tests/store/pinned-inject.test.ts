@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
@@ -47,8 +47,14 @@ function runHippo(args: string[]): Promise<string> {
 describe('hippo context --pinned-only', () => {
   it('returns only pinned entries in plain text', async () => {
     initStore(hippoDir);
-    const pinned = createMemory('NEVER skip the pre-commit hook because it caused three incidents', { pinned: true, layer: Layer.Episodic });
-    const unpinned = createMemory('random note not pinned nor critical to this test', { pinned: false, layer: Layer.Episodic });
+    const pinned = createMemory('NEVER skip the pre-commit hook because it caused three incidents', {
+      pinned: true,
+      layer: Layer.Episodic,
+    });
+    const unpinned = createMemory('random note not pinned nor critical to this test', {
+      pinned: false,
+      layer: Layer.Episodic,
+    });
     writeEntry(hippoDir, pinned);
     writeEntry(hippoDir, unpinned);
 
@@ -102,7 +108,16 @@ describe('hippo context --pinned-only', () => {
     writeEntry(hippoDir, recentA);
     writeEntry(hippoDir, recentB);
 
-    const raw = await runHippo(['context', '--pinned-only', '--include-recent', '2', '--format', 'additional-context', '--budget', '500']);
+    const raw = await runHippo([
+      'context',
+      '--pinned-only',
+      '--include-recent',
+      '2',
+      '--format',
+      'additional-context',
+      '--budget',
+      '500',
+    ]);
     const parsed = JSON.parse(raw);
     const context = parsed.hookSpecificOutput.additionalContext;
     expect(context).toContain('PINNED RULE: always verify the hook output');
@@ -116,7 +131,16 @@ describe('hippo context --pinned-only', () => {
     const recent = createMemory('fresh unpinned lesson must not be invisible until next session', { pinned: false });
     writeEntry(hippoDir, recent);
 
-    const raw = await runHippo(['context', '--pinned-only', '--include-recent', '1', '--format', 'additional-context', '--budget', '500']);
+    const raw = await runHippo([
+      'context',
+      '--pinned-only',
+      '--include-recent',
+      '1',
+      '--format',
+      'additional-context',
+      '--budget',
+      '500',
+    ]);
     const parsed = JSON.parse(raw);
     expect(parsed.hookSpecificOutput.additionalContext).toContain('fresh unpinned lesson must not be invisible');
   });
@@ -177,10 +201,19 @@ describe('hippo context --pinned-only', () => {
     const globalDir = makeRoot('global');
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fresh-cwd-'));
     try {
-      const pinned = createMemory('REGRESSION GUARD: no local hippo should still deliver pinned content', { pinned: true });
+      const pinned = createMemory('REGRESSION GUARD: no local hippo should still deliver pinned content', {
+        pinned: true,
+      });
       writeEntry(globalDir, pinned);
 
-      const out = await hippoIn(freshCwd, globalDir, ['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+      const out = await hippoIn(freshCwd, globalDir, [
+        'context',
+        '--pinned-only',
+        '--format',
+        'additional-context',
+        '--budget',
+        '500',
+      ]);
 
       // Must NOT throw, must NOT print to stderr, must contain the pinned memory.
       expect(out.trim()).not.toBe('');
@@ -201,7 +234,14 @@ describe('hippo context --pinned-only', () => {
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cwd-'));
     try {
       // Do NOT init globalDir — it's just an empty path.
-      const out = await hippoIn(freshCwd, globalDir, ['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+      const out = await hippoIn(freshCwd, globalDir, [
+        'context',
+        '--pinned-only',
+        '--format',
+        'additional-context',
+        '--budget',
+        '500',
+      ]);
       expect(out.trim()).toBe('');
       expect(fs.existsSync(path.join(freshCwd, '.hippo'))).toBe(false);
     } finally {

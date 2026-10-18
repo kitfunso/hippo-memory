@@ -39,7 +39,10 @@ function parseChatGPTFile(filePath: string): string[] {
     }
   }
 
-  return raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  return raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 }
 
 export function importChatGPT(filePath: string, options: TargetedImport): ImportResult {
@@ -215,10 +218,16 @@ function parseGenericFile(filePath: string): string[] {
     return splitMarkdown(raw);
   }
 
-  const byParagraph = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const byParagraph = raw
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (byParagraph.length > 1) return byParagraph;
 
-  return raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  return raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 }
 
 export function importGenericFile(filePath: string, options: TargetedImport): ImportResult {

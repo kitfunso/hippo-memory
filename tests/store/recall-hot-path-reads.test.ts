@@ -18,7 +18,10 @@ import { finishRecallAt } from '../../src/store/sqlite/last-recall-group.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
-  pushGoal, activeGoalsWithPolicies, appendConsolidationRun, loadAmbientCandidates,
+  pushGoal,
+  activeGoalsWithPolicies,
+  appendConsolidationRun,
+  loadAmbientCandidates,
 } from '../_helpers/root-forms.js';
 
 const roots: string[] = [];
@@ -57,15 +60,32 @@ function onDb(root: string, write: (db: ReturnType<typeof openHippoDb>) => void)
 describe('rankRecall with a global store', () => {
   function recallOpts(root: string): RankRecallOptions {
     return {
-      query: 'zephyrine cache', budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
-      search: { usePhysics: false, physicsConfig: loadConfig(root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
+      query: 'zephyrine cache',
+      budget: 4000,
+      cost: (r) => r.tokens,
+      window: { limit: 10 },
+      includeSuperseded: false,
+      explicitScope: null,
+      activeScope: null,
+      search: {
+        usePhysics: false,
+        physicsConfig: loadConfig(root).physics,
+        multihop: false,
+        mmr: false,
+        mmrLambda: 0.7,
+        localBump: 1.2,
+        explain: false,
+      },
     };
   }
 
   it('loads each store once and ranks as searchBothHybrid does', async () => {
     const local = freshRoot('hp-local');
     const global = freshRoot('hp-global');
-    seed(local, Array.from({ length: 6 }, (_, i) => memory(`local note ${i} on the zephyrine cache eviction`)));
+    seed(
+      local,
+      Array.from({ length: 6 }, (_, i) => memory(`local note ${i} on the zephyrine cache eviction`)),
+    );
     seed(global, [
       ...Array.from({ length: 6 }, (_, i) => memory(`global note ${i} on the zephyrine cache warmup`)),
       memory('local note 0 on the zephyrine cache eviction'),
@@ -78,8 +98,16 @@ describe('rankRecall with a global store', () => {
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
     const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {
-      budget: 4000, cost: (r) => r.tokens, explain: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, scope: null, tenantId: 'default',
-      includeSuperseded: false, recallScope: {},
+      budget: 4000,
+      cost: (r) => r.tokens,
+      explain: false,
+      mmr: false,
+      mmrLambda: 0.7,
+      localBump: 1.2,
+      scope: null,
+      tenantId: 'default',
+      includeSuperseded: false,
+      recallScope: {},
     });
     const ranking = (rs: typeof reloaded): Array<[string, number]> => rs.map((r) => [r.entry.id, r.score]);
     expect(result.results.length).toBeGreaterThan(6);
@@ -91,28 +119,50 @@ describe('activeGoalsWithPolicies', () => {
   it('reads every active goal policy in one query', () => {
     const root = freshRoot('hp-goals');
     const goals = ['ship', 'test', 'deploy'].map((goalName) =>
-      pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName, policy: { policyType: 'hybrid', weightRecency: 1.5 } }));
-    const { result, statements } = recordStatements(() => activeGoalsWithPolicies(root, { sessionId: 's1', tenantId: 'default' }));
+      pushGoal(root, {
+        sessionId: 's1',
+        tenantId: 'default',
+        goalName,
+        policy: { policyType: 'hybrid', weightRecency: 1.5 },
+      }),
+    );
+    const { result, statements } = recordStatements(() =>
+      activeGoalsWithPolicies(root, { sessionId: 's1', tenantId: 'default' }),
+    );
     expect(countMatching(statements, 'FROM retrieval_policy')).toBe(1);
     expect([...result.policies.keys()].sort()).toEqual(goals.map((g) => g.id).sort());
     expect([...result.policies.values()].every((p) => p.weightRecency === 1.5)).toBe(true);
   });
 });
 
-interface SleepRun { timestamp: string; decayed: number; merged: number; removed: number }
+interface SleepRun {
+  timestamp: string;
+  decayed: number;
+  merged: number;
+  removed: number;
+}
 
-interface StatsFile { total_recalled: number; consolidation_runs: SleepRun[] }
+interface StatsFile {
+  total_recalled: number;
+  consolidation_runs: SleepRun[];
+}
 
 describe('updateStats', () => {
-  const run = (i: number): SleepRun =>
-    ({ timestamp: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(), decayed: i, merged: 0, removed: 0 });
+  const run = (i: number): SleepRun => ({
+    timestamp: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+    decayed: i,
+    merged: 0,
+    removed: 0,
+  });
 
   it('reads the same rows on every recall however many sleep runs the table holds', () => {
     const read = [50, 300].map((n) => {
       const root = freshRoot('hp-stats');
       // No writer leaves more rows than the kept cap, so the surplus goes straight into the table.
       onDb(root, (db) => {
-        const insert = db.prepare('INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)');
+        const insert = db.prepare(
+          'INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)',
+        );
         for (let i = 0; i < n; i++) insert.run(run(i).timestamp, i, 0, 0);
       });
       return recordStatements(() => updateStats(root, { recalled: 1 })).rowsRead;
@@ -138,12 +188,21 @@ describe('finishRecallAt', () => {
     const entries = [memory('first zephyrine cache row'), memory('second zephyrine cache row')];
     seed(root, entries);
     const ids = entries.map((e) => e.id);
-    const { result, statements } = recordStatements(() => handlesOf(root).on((db) => finishRecallAt(db, {
-      goalLog: [],
-      audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],
-      trace: { tenantId: 'default', pipeline: 'api', query: 'zephyrine', results: ids.map((memoryId) => ({ memoryId, score: 1 })) },
-      strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
-    })));
+    const { result, statements } = recordStatements(() =>
+      handlesOf(root).on((db) =>
+        finishRecallAt(db, {
+          goalLog: [],
+          audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],
+          trace: {
+            tenantId: 'default',
+            pipeline: 'api',
+            query: 'zephyrine',
+            results: ids.map((memoryId) => ({ memoryId, score: 1 })),
+          },
+          strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
+        }),
+      ),
+    );
     expect(countMatching(statements, /^BEGIN/)).toBe(1);
     expect(result.traceId).not.toBeNull();
     expect([...result.strengthened].sort()).toEqual([...ids].sort());
@@ -159,11 +218,18 @@ describe('loadAmbientCandidates', () => {
     const read = [130, 260].map((older) => {
       const root = freshRoot('hp-ambient');
       const kept = Array.from({ length: older }, (_, i) => memory(`kept zephyrine row ${i}`, { created: at(i) }));
-      const refused = Array.from({ length: 40 }, (_, i) => memory(`refused zephyrine row ${i}`, { created: at(older + i) }));
+      const refused = Array.from({ length: 40 }, (_, i) =>
+        memory(`refused zephyrine row ${i}`, { created: at(older + i) }),
+      );
       seed(root, [...kept, ...refused]);
       const { result, rowsRead } = recordStatements(() => loadAmbientCandidates(root, 'default', 3, admit));
       const newest = [...result.entries].sort((a, b) => b.created.localeCompare(a.created)).slice(0, 3);
-      expect(newest.map((e) => e.id)).toEqual(kept.slice(-3).reverse().map((e) => e.id));
+      expect(newest.map((e) => e.id)).toEqual(
+        kept
+          .slice(-3)
+          .reverse()
+          .map((e) => e.id),
+      );
       return rowsRead;
     });
     expect(read[1]).toBe(read[0]);

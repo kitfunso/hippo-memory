@@ -3,15 +3,33 @@
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { ConflictError } from '../../src/server.js';
 import {
-  RECALL_DEFAULT_DENY_SCOPES, rejectionDigest, type CallerItems, type CompactionStart, type Compactions, type HippoStore,
+  RECALL_DEFAULT_DENY_SCOPES,
+  rejectionDigest,
+  type CallerItems,
+  type CompactionStart,
+  type Compactions,
+  type HippoStore,
   type MemoryEntry,
 } from '../../src/entry/store-kit.js';
-import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, createMemory, generateId, Layer, markRetrieved } from '../../src/core/memory.js';
+import {
+  COMPACTION_MEMORY_TAG,
+  COMPACTION_SOURCE_PREFIX,
+  createMemory,
+  generateId,
+  Layer,
+  markRetrieved,
+} from '../../src/core/memory.js';
 import { isContentWorthStoring } from '../../src/core/memory-quality.js';
 import { REPLAY_AFTER_MS } from '../../src/core/compaction-timing.js';
 import { itemWords, restates, writableItemRows } from '../../src/util/compaction-items.js';
 import { detectSecret } from '../../src/util/secret-detect.js';
-import { inMemoryEntryWritesStore, tombstoneKey, type InMemoryEntryWritesStore, type Tombstone, type Tx } from './in-memory-entry-writes-store.js';
+import {
+  inMemoryEntryWritesStore,
+  tombstoneKey,
+  type InMemoryEntryWritesStore,
+  type Tombstone,
+  type Tx,
+} from './in-memory-entry-writes-store.js';
 import type { StoreSide } from './store-conformance.js';
 
 export interface InMemoryCompactionsStore extends StoreSide {
@@ -38,16 +56,23 @@ interface Held {
 }
 
 const deny: readonly string[] = RECALL_DEFAULT_DENY_SCOPES;
-const admitted = (scope: string | null | undefined): boolean => scope == null || (!deny.includes(scope) && !/:private:/i.test(scope));
+const admitted = (scope: string | null | undefined): boolean =>
+  scope == null || (!deny.includes(scope) && !/:private:/i.test(scope));
 
 function copyRecords(hippoRoot: string): Rec[] {
   const db = openHippoDb(hippoRoot);
   try {
     // SAFETY: the SELECT aliases each column to a Rec field; items_json is parsed below.
-    const rows = db.prepare(`SELECT tenant_id AS tenantId, id, session_id AS sessionId, origin_project AS originProject,
+    const rows = db
+      .prepare(`SELECT tenant_id AS tenantId, id, session_id AS sessionId, origin_project AS originProject,
       started_at AS startedAt, snapshot_saved AS saved, status, items_json AS itemsJson, items_written AS itemsWritten,
-      request_id AS requestId FROM compactions ORDER BY started_at, id`).all() as Array<Omit<Rec, 'snapshotSaved' | 'items'> & { saved: number; itemsJson: string | null }>;
-    return rows.map(({ saved, itemsJson, ...r }) => ({ ...r, snapshotSaved: saved === 1, items: itemsJson === null ? [] : JSON.parse(itemsJson) }));
+      request_id AS requestId FROM compactions ORDER BY started_at, id`)
+      .all() as Array<Omit<Rec, 'snapshotSaved' | 'items'> & { saved: number; itemsJson: string | null }>;
+    return rows.map(({ saved, itemsJson, ...r }) => ({
+      ...r,
+      snapshotSaved: saved === 1,
+      items: itemsJson === null ? [] : JSON.parse(itemsJson),
+    }));
   } finally {
     closeHippoDb(db);
   }
@@ -58,11 +83,26 @@ function summarize(records: Rec[], tenantId: string, req: CallerItems): Rec {
   const now = new Date().toISOString();
   const floor = new Date(Date.now() - REPLAY_AFTER_MS).toISOString();
   const started = records
-    .filter((r) => r.tenantId === tenantId && r.sessionId === req.sessionId && r.status === 'started' && r.startedAt <= now && r.startedAt >= floor)
+    .filter(
+      (r) =>
+        r.tenantId === tenantId &&
+        r.sessionId === req.sessionId &&
+        r.status === 'started' &&
+        r.startedAt <= now &&
+        r.startedAt >= floor,
+    )
     .sort((a, b) => (a.startedAt === b.startedAt ? (a.id < b.id ? 1 : -1) : a.startedAt < b.startedAt ? 1 : -1))[0];
   const record: Rec = started ?? {
-    tenantId, id: generateId('cmp'), sessionId: req.sessionId, originProject: req.project, startedAt: now, snapshotSaved: false,
-    status: 'summarised', items: [], itemsWritten: 0, requestId: null,
+    tenantId,
+    id: generateId('cmp'),
+    sessionId: req.sessionId,
+    originProject: req.project,
+    startedAt: now,
+    snapshotSaved: false,
+    status: 'summarised',
+    items: [],
+    itemsWritten: 0,
+    requestId: null,
   };
   if (started === undefined) records.push(record);
   Object.assign(record, { status: 'summarised', items: [...req.items], requestId: req.requestId });
@@ -100,10 +140,22 @@ function writeItem(batch: Batch, entry: MemoryEntry, actor: string): void {
     tally.refused++;
   } else if (tombstone) {
     tally.refused++;
-    tx.audit.push({ tenantId: entry.tenant_id, actor, op: 'reject_refusal', targetId: entry.id, metadata: { digest, reason: tombstone.reason } });
+    tx.audit.push({
+      tenantId: entry.tenant_id,
+      actor,
+      op: 'reject_refusal',
+      targetId: entry.id,
+      metadata: { digest, reason: tombstone.reason },
+    });
   } else {
     tx.rows.set(entry.id, { ...structuredClone(entry), summary_dirty: false });
-    tx.audit.push({ tenantId: entry.tenant_id, actor, op: 'remember', targetId: entry.id, metadata: { kind: 'distilled', scope: null } });
+    tx.audit.push({
+      tenantId: entry.tenant_id,
+      actor,
+      op: 'remember',
+      targetId: entry.id,
+      metadata: { kind: 'distilled', scope: null },
+    });
     tally.written++;
     held.push({ id: null, sessionId: entry.source_session_id ?? null, words });
   }
@@ -112,15 +164,32 @@ function writeItem(batch: Batch, entry: MemoryEntry, actor: string): void {
 function compactionsOn(base: InMemoryEntryWritesStore, records: Rec[]): Compactions {
   const entryFor = (text: string, tenantId: string, req: CallerItems, origin: string): MemoryEntry => ({
     ...createMemory(text, {
-      layer: Layer.Episodic, tags: [COMPACTION_MEMORY_TAG], source: `${COMPACTION_SOURCE_PREFIX}${req.sessionId}`, confidence: 'observed',
-      kind: 'distilled', sourceSessionId: req.sessionId, tenantId, baseHalfLifeDays: req.baseHalfLifeDays,
+      layer: Layer.Episodic,
+      tags: [COMPACTION_MEMORY_TAG],
+      source: `${COMPACTION_SOURCE_PREFIX}${req.sessionId}`,
+      confidence: 'observed',
+      kind: 'distilled',
+      sourceSessionId: req.sessionId,
+      tenantId,
+      baseHalfLifeDays: req.baseHalfLifeDays,
     }),
     origin_project: origin,
   });
   return {
     async start(tenantId: string, start: CompactionStart) {
       const id = generateId('cmp');
-      records.push({ tenantId, id, sessionId: start.sessionId, originProject: start.originProject, startedAt: new Date().toISOString(), snapshotSaved: false, status: 'started', items: [], itemsWritten: 0, requestId: null });
+      records.push({
+        tenantId,
+        id,
+        sessionId: start.sessionId,
+        originProject: start.originProject,
+        startedAt: new Date().toISOString(),
+        snapshotSaved: false,
+        status: 'started',
+        items: [],
+        itemsWritten: 0,
+        requestId: null,
+      });
       return id;
     },
     async markSnapshotSaved(tenantId, recordId) {
@@ -130,14 +199,24 @@ function compactionsOn(base: InMemoryEntryWritesStore, records: Rec[]): Compacti
     async saveCallerItems(tenantId, req) {
       const notes: string[] = [];
       const earlier = records.find((r) => r.tenantId === tenantId && r.requestId === req.requestId);
-      if (earlier && earlier.sessionId !== req.sessionId) throw new ConflictError('request id belongs to another session');
+      if (earlier && earlier.sessionId !== req.sessionId) {
+        throw new ConflictError('request id belongs to another session');
+      }
       if (earlier && earlier.status !== 'summarised') return { written: earlier.itemsWritten, notes };
       const record = earlier ?? summarize(records, tenantId, req);
       const rows = writableItemRows(record.items, (m) => notes.push(m));
       const tally: Tally = { written: 0, repeats: 0, refused: 0, restated: new Set() };
       await base.stage(req.owner, (tx) => {
         const held: Held[] = [...tx.rows.values()]
-          .filter((e) => e.tenant_id === tenantId && e.origin_project != null && req.origins.includes(e.origin_project) && (e.superseded_by ?? null) === null && e.kind !== 'raw' && admitted(e.scope))
+          .filter(
+            (e) =>
+              e.tenant_id === tenantId &&
+              e.origin_project != null &&
+              req.origins.includes(e.origin_project) &&
+              (e.superseded_by ?? null) === null &&
+              e.kind !== 'raw' &&
+              admitted(e.scope),
+          )
           .map((e) => ({ id: e.id, sessionId: e.source_session_id ?? null, words: itemWords(e.content) }));
         const batch: Batch = { tx, held, tally, tombstones: base.tombstones };
         for (const text of rows) {
@@ -159,5 +238,8 @@ function compactionsOn(base: InMemoryEntryWritesStore, records: Rec[]): Compacti
 
 export function inMemoryCompactionsStore(hippoRoot: string): InMemoryCompactionsStore {
   const base = inMemoryEntryWritesStore(hippoRoot);
-  return { store: { ...base.store, compactions: compactionsOn(base, copyRecords(hippoRoot)) }, auditRows: base.auditRows };
+  return {
+    store: { ...base.store, compactions: compactionsOn(base, copyRecords(hippoRoot)) },
+    auditRows: base.auditRows,
+  };
 }

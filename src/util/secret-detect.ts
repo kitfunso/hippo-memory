@@ -13,8 +13,14 @@ export interface SecretDetection {
 
 /** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before the lookup. */
 export const SECRET_TAGS: ReadonlySet<string> = new Set([
-  'secret', 'api-key', 'apikey', 'credential', 'credentials',
-  'token', 'password', 'private-key',
+  'secret',
+  'api-key',
+  'apikey',
+  'credential',
+  'credentials',
+  'token',
+  'password',
+  'private-key',
 ]);
 
 const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [

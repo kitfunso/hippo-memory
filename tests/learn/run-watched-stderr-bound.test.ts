@@ -42,7 +42,12 @@ describe('runWatched', () => {
   });
 
   it('hands every argument to the program literally, with no shell to read ; & or $()', async () => {
-    const { exitCode, stderr } = await stderrOf([process.execPath, '-e', 'process.stderr.write(JSON.stringify(process.argv.slice(1)))', ...SHELL_META]);
+    const { exitCode, stderr } = await stderrOf([
+      process.execPath,
+      '-e',
+      'process.stderr.write(JSON.stringify(process.argv.slice(1)))',
+      ...SHELL_META,
+    ]);
     expect(exitCode).toBe(0);
     expect(JSON.parse(stderr)).toEqual(SHELL_META);
   });

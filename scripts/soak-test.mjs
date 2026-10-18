@@ -21,11 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import {
-  simulate,
-  computeSystemEnergy,
-  vecNormalize,
-} from '../dist/core/physics.js';
+import { simulate, computeSystemEnergy, vecNormalize } from '../dist/core/physics.js';
 import { mergePhysicsConfig } from '../dist/core/physics-config.js';
 
 // ---- flags ----
@@ -49,9 +45,11 @@ const VERBOSE = process.argv.includes('--verbose');
 // ---- deterministic RNG ----
 
 class Mulberry32 {
-  constructor(seed) { this.s = seed >>> 0; }
+  constructor(seed) {
+    this.s = seed >>> 0;
+  }
   next() {
-    let t = (this.s += 0x6D2B79F5);
+    let t = (this.s += 0x6d2b79f5);
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -62,7 +60,9 @@ class Mulberry32 {
     const v = this.next();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
-  int(a, b) { return a + Math.floor(this.next() * (b - a)); }
+  int(a, b) {
+    return a + Math.floor(this.next() * (b - a));
+  }
 }
 
 const rng = new Mulberry32(SEED);
@@ -228,8 +228,8 @@ function printSummary(rows, config, started) {
   const lastRow = rows[rows.length - 1];
   const totalEnergy = Number(lastRow[5]);
   const firstEnergy = Number(rows[1]?.[5] ?? rows[0][5]);
-  const maxEnergyAbs = Math.max(...rows.slice(1).map(r => Math.abs(Number(r[5]))));
-  const maxVel = Math.max(...rows.slice(1).map(r => Number(r[7])));
+  const maxEnergyAbs = Math.max(...rows.slice(1).map((r) => Math.abs(Number(r[5]))));
+  const maxVel = Math.max(...rows.slice(1).map((r) => Number(r[7])));
   console.error('\n=== Summary ===');
   console.error(`  profile:         ${PROFILE}`);
   console.error(`  ticks completed: ${rows.length - 1} / ${TICKS}`);
@@ -239,7 +239,9 @@ function printSummary(rows, config, started) {
   console.error(`  final energy:    ${totalEnergy.toFixed(4)}`);
   console.error(`  |max energy|:    ${maxEnergyAbs.toFixed(4)}`);
   console.error(`  max |velocity|:  ${maxVel.toFixed(4)} (config cap: ${config.max_velocity})`);
-  console.error(`  bounded:         ${Number.isFinite(totalEnergy) && maxVel <= config.max_velocity * 10 ? 'YES' : 'NO'}`);
+  console.error(
+    `  bounded:         ${Number.isFinite(totalEnergy) && maxVel <= config.max_velocity * 10 ? 'YES' : 'NO'}`,
+  );
   console.error(`  CSV written to:  ${OUT}`);
 }
 
@@ -272,9 +274,21 @@ function run() {
   };
 
   const rows = [];
-  const header = ['tick', 'wall_ms', 'particles', 'kinetic', 'potential', 'total_energy', 'avg_vel', 'max_vel', 'substeps'];
+  const header = [
+    'tick',
+    'wall_ms',
+    'particles',
+    'kinetic',
+    'potential',
+    'total_energy',
+    'avg_vel',
+    'max_vel',
+    'substeps',
+  ];
 
-  console.error(`Soak test: profile=${PROFILE}, ticks=${TICKS}, start=${STARTING_PARTICLES} particles, dim=${DIM}, seed=${SEED}`);
+  console.error(
+    `Soak test: profile=${PROFILE}, ticks=${TICKS}, start=${STARTING_PARTICLES} particles, dim=${DIM}, seed=${SEED}`,
+  );
   const started = Date.now();
 
   // Record t=0 state before any simulation
@@ -299,7 +313,9 @@ function run() {
     rows.push(tickRow(tick, Date.now() - started, stats, energy));
 
     if (VERBOSE || tick % Math.max(1, Math.floor(TICKS / 20)) === 0) {
-      console.error(`  tick ${tick}/${TICKS}: n=${stats.particleCount}, E=${energy.total.toFixed(3)} (K ${energy.kinetic.toFixed(3)}, P ${energy.potential.toFixed(3)}), |v|_max=${stats.maxVelocityMagnitude.toFixed(4)} [${tickMs}ms]`);
+      console.error(
+        `  tick ${tick}/${TICKS}: n=${stats.particleCount}, E=${energy.total.toFixed(3)} (K ${energy.kinetic.toFixed(3)}, P ${energy.potential.toFixed(3)}), |v|_max=${stats.maxVelocityMagnitude.toFixed(4)} [${tickMs}ms]`,
+      );
     }
 
     // Detect divergence early
@@ -315,7 +331,7 @@ function run() {
 
   // ---- write CSV ----
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
   fs.writeFileSync(OUT, csv);
 
   printSummary(rows, config, started);

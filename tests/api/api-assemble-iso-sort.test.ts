@@ -56,9 +56,7 @@ describe('assemble ISO sort: byte compare equivalence', () => {
     }
     const cmpIso = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
     const byteSorted = [...samples].sort(cmpIso);
-    const numericSorted = [...samples].sort(
-      (a, b) => Date.parse(a) - Date.parse(b),
-    );
+    const numericSorted = [...samples].sort((a, b) => Date.parse(a) - Date.parse(b));
     expect(byteSorted, `HIPPO_TEST_SEED=${seed}`).toEqual(numericSorted);
   });
 });

@@ -100,22 +100,29 @@ describe('hippo serve store connection', () => {
     dirs.push(root);
     // Another process holds an exclusive lock for 6 s; in rollback-journal mode that blocks the journal-mode switch every open makes.
     const script = join(root, 'hold-lock.mjs');
-    writeFileSync(script, [
-      "import { DatabaseSync } from 'node:sqlite';",
-      'const db = new DatabaseSync(process.argv[2]);',
-      "db.exec('PRAGMA journal_mode = DELETE');",
-      "db.exec('BEGIN EXCLUSIVE');",
-      "console.log('locked');",
-      "setTimeout(() => { db.exec('COMMIT'); db.close(); }, 6000);",
-    ].join('\n'));
-    const holder = spawn(process.execPath, ['--no-warnings', script, join(root, 'hippo.db')], { stdio: ['ignore', 'pipe', 'inherit'] });
+    writeFileSync(
+      script,
+      [
+        "import { DatabaseSync } from 'node:sqlite';",
+        'const db = new DatabaseSync(process.argv[2]);',
+        "db.exec('PRAGMA journal_mode = DELETE');",
+        "db.exec('BEGIN EXCLUSIVE');",
+        "console.log('locked');",
+        "setTimeout(() => { db.exec('COMMIT'); db.close(); }, 6000);",
+      ].join('\n'),
+    );
+    const holder = spawn(process.execPath, ['--no-warnings', script, join(root, 'hippo.db')], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let handle: ServerHandle | undefined;
     try {
       await new Promise<void>((ok) => holder.stdout.once('data', () => ok()));
       handle = await serve({ hippoRoot: root, port: 0 });
       // The lock is still held, so only an open that gave up early can have logged this by now.
-      const gaveUp = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('could not hold a store connection'));
+      const gaveUp = stderrSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes('could not hold a store connection'));
       expect(gaveUp).toHaveLength(1);
       expect(holder.exitCode).toBeNull();
     } finally {
@@ -157,7 +164,16 @@ describe('GET /ready', () => {
     const WINDOW_MS = 1000;
     let reads = 0;
     let clock = 5_000;
-    const probe = readyProbeFor(store, { ping: () => { reads += 1; return real.ping(); } }, () => clock);
+    const probe = readyProbeFor(
+      store,
+      {
+        ping: () => {
+          reads += 1;
+          return real.ping();
+        },
+      },
+      () => clock,
+    );
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       const first = await Promise.all(Array.from({ length: 50 }, () => probe()));
@@ -197,7 +213,9 @@ describe('GET /ready', () => {
       expect(await ready(handle)).toEqual({ status: 503, body: '{"ok":false,"error":"store_unavailable"}' });
       const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('GET /ready'));
       expect(warned).toHaveLength(1);
-      expect(warned[0]).toMatch(/^\[hippo\] warn: GET \/ready: the store did not answer: .* ts=\S+ requestId=\S+ errorClass=\w+ stack=\S/);
+      expect(warned[0]).toMatch(
+        /^\[hippo\] warn: GET \/ready: the store did not answer: .* ts=\S+ requestId=\S+ errorClass=\w+ stack=\S/,
+      );
       expect((await fetch(`${handle.url}/health`)).status).toBe(200);
     } finally {
       stderrSpy.mockRestore();

@@ -53,7 +53,7 @@ export async function parkInDlq<Own, Bucket extends string>(
     rawPayload,
     error: redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
     bucket: opts.bucket ?? DEFAULT_BUCKET,
-    signature: redacted ? null : opts.signature ?? null,
+    signature: redacted ? null : (opts.signature ?? null),
   });
   return store.connectorEvents.parkDeadLetter(letter);
 }

@@ -106,7 +106,7 @@ export function saveActiveTaskSnapshotAt(
   const id = withWriteScope(db, 'save_active_task', () => {
     db.prepare(
       `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
-      `?${owned ? ` AND ${owned.sql}` : ''}`,
+        `?${owned ? ` AND ${owned.sql}` : ''}`,
     ).run(now, tenantId, ...(owned?.params ?? []));
     const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
     // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
@@ -115,11 +115,13 @@ export function saveActiveTaskSnapshotAt(
   });
 
   // SAFETY: row's shape matches the ten columns named in the SELECT above.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
     FROM task_snapshots
     WHERE id = ?
-  `).get(id) as TaskSnapshotRow | undefined;
+  `)
+    .get(id) as TaskSnapshotRow | undefined;
 
   if (!row) {
     throw new Error('Failed to reload saved active task snapshot');
@@ -149,13 +151,15 @@ export function loadActiveTaskSnapshotAt(
   assertTenantId('loadActiveTaskSnapshot', tenantId);
   const owned = key ? continuityWhere(key) : null;
   // SAFETY: row's shape matches the ten columns named in the SELECT above.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
     FROM task_snapshots
     WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
-  `).get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
+  `)
+    .get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
 
   if (!row) {
     if (!key) removeActiveTaskMirror(hippoRoot, tenantId);
@@ -223,7 +227,7 @@ export function clearActiveTaskSnapshotAt(
   const active = db
     .prepare(
       `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
-      `LIMIT 1`,
+        `LIMIT 1`,
     )
     .get(tenantId) as { id?: number } | undefined;
   if (!active?.id) {
@@ -252,13 +256,13 @@ export function closeTaskSnapshotsForSessionAt(
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
   if (key) continuityStamp(key);
- // a partial key is a caller bug, so fail loud rather than close nothing
+  // a partial key is a caller bug, so fail loud rather than close nothing
   const owned = key ? continuityWhere(key) : null;
   const now = new Date().toISOString();
   const result = db
     .prepare(
       `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
-      `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
+        `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
     )
     .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
   return Number(result.changes ?? 0);
@@ -299,11 +303,13 @@ function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: Se
 
 function reloadSessionEvent(db: DatabaseSyncLike, id: number): SessionEvent {
   // SAFETY: row's shape matches the nine columns named in the SELECT below.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
       SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
       WHERE id = ?
-    `).get(id) as SessionEventRow | undefined;
+    `)
+    .get(id) as SessionEventRow | undefined;
 
   if (!row) {
     throw new Error('Failed to reload saved session event');
@@ -377,13 +383,15 @@ export function listSessionEventsAt(
   const where = `WHERE ${clauses.join(' AND ')}`;
   // SAFETY: rows' shape matches the nine columns named in the SELECT
   // above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
     FROM session_events
     ${where}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `).all(...params) as SessionEventRow[];
+  `)
+    .all(...params) as SessionEventRow[];
 
   return rows.map(rowToSessionEvent).reverse();
 }
@@ -398,30 +406,34 @@ export function findPromotableSessionsAt(
   assertTenantId('findPromotableSessions', tenantId);
   // SAFETY: rows' shape matches the single `session_id` column selected
   // above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT DISTINCT session_id FROM session_events
     WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
-  `).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
+  `)
+    .all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
   return rows;
 }
 
 /** Idempotency guard: true if a trace-layer memory with this source_session_id already exists. */
 export function traceExistsForSessionAt(db: DatabaseSyncLike, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT 1 FROM memories
     WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
     LIMIT 1
-  `).get(session_id, tenantId);
+  `)
+    .get(session_id, tenantId);
   return !!row;
 }
 
 /** The owner a session id is bound to, or null. */
 function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   // SAFETY: the SELECT names exactly this one TEXT column.
-  const row = db.prepare(
-    `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
-  ).get(tenantId, sessionId) as { owner_subject: string } | undefined;
+  const row = db
+    .prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`)
+    .get(tenantId, sessionId) as { owner_subject: string } | undefined;
   return row?.owner_subject ?? null;
 }
 
@@ -459,13 +471,18 @@ export interface SessionOwnerBinding {
 /** Binds under the write lock and returns the stored owner, which is not `owner` when a concurrent first bind won. */
 function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
   const { tenantId, sessionId, owner, retentionMs } = binding;
-  withWriteScope(db, 'bind_session_owner', () => {
-    const bound = insertSessionOwnerAt(db, tenantId, sessionId, owner, new Date().toISOString());
-    // An older binary supersedes across owners, so the first binding shuts it out in the same transaction.
-    if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-    // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
-    deleteSessionOwnersBeforeAt(db, new Date(Date.now() - retentionMs).toISOString());
-  }, { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS });
+  withWriteScope(
+    db,
+    'bind_session_owner',
+    () => {
+      const bound = insertSessionOwnerAt(db, tenantId, sessionId, owner, new Date().toISOString());
+      // An older binary supersedes across owners, so the first binding shuts it out in the same transaction.
+      if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
+      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
+      deleteSessionOwnersBeforeAt(db, new Date(Date.now() - retentionMs).toISOString());
+    },
+    { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
+  );
   // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
   return selectSessionOwnerAt(db, tenantId, sessionId);
 }

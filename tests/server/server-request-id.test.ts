@@ -17,14 +17,21 @@ afterEach(() => {
 let home: string;
 let handle: ServerHandle;
 
-function send(path: string, headers: Record<string, string> = {}): Promise<{ status: number; requestId: string | undefined; sniffing: string | undefined }> {
+function send(
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; requestId: string | undefined; sniffing: string | undefined }> {
   return new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port: handle.port, method: 'GET', path, headers }, (res) => {
       res.resume();
       res.on('end', () => {
         const id = res.headers['x-request-id'];
         const sniffing = res.headers['x-content-type-options'];
-        resolve({ status: res.statusCode ?? 0, requestId: Array.isArray(id) ? id[0] : id, sniffing: Array.isArray(sniffing) ? sniffing[0] : sniffing });
+        resolve({
+          status: res.statusCode ?? 0,
+          requestId: Array.isArray(id) ? id[0] : id,
+          sniffing: Array.isArray(sniffing) ? sniffing[0] : sniffing,
+        });
       });
     });
     req.on('error', reject);
@@ -43,8 +50,16 @@ afterEach(async () => {
 
 describe('X-Content-Type-Options', () => {
   it('is nosniff on data, refused and unknown-route replies, since memory text is caller-written', async () => {
-    const replies = [await send('/v1/memories?q=x'), await send('/v1/memories?q=x', { authorization: 'Bearer hk_not_a_real_key' }), await send('/nope')];
-    expect(replies.map((r) => [r.status, r.sniffing])).toEqual([[200, 'nosniff'], [401, 'nosniff'], [404, 'nosniff']]);
+    const replies = [
+      await send('/v1/memories?q=x'),
+      await send('/v1/memories?q=x', { authorization: 'Bearer hk_not_a_real_key' }),
+      await send('/nope'),
+    ];
+    expect(replies.map((r) => [r.status, r.sniffing])).toEqual([
+      [200, 'nosniff'],
+      [401, 'nosniff'],
+      [404, 'nosniff'],
+    ]);
   });
 });
 
@@ -79,7 +94,9 @@ describe('X-Request-Id', () => {
       const res = await send('/v1/memories/a%2Fb', { 'x-request-id': 'req-err-1' });
       expect(res.status).toBe(400);
       expect(res.requestId).toBe('req-err-1');
-      const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
+      const logged = stderrSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
       expect(logged).toHaveLength(1);
       // Refused before any route matched, so the line names no route and never repeats the path sent.
       expect(logged[0]).toMatch(/^\[hippo\] info: GET unmatched failed: .* requestId=req-err-1 status=400\n$/);
@@ -95,7 +112,9 @@ describe('X-Request-Id', () => {
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-deep-1' });
       const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot"'));
-      expect(warned.join('')).toMatch(/^\[hippo\] warn: .* ts=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z requestId=req-deep-1\n/);
+      expect(warned.join('')).toMatch(
+        /^\[hippo\] warn: .* ts=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z requestId=req-deep-1\n/,
+      );
     } finally {
       stderrSpy.mockRestore();
     }
@@ -121,7 +140,9 @@ describe('the access line', () => {
       }).then((res) => res.text());
       // The line is written when the response finishes, which the client can see first.
       await vi.waitFor(() => expect(accessLines(stderrSpy)).toHaveLength(5), { timeout: 5000 });
-      const lines = accessLines(stderrSpy).map((l) => l.replace(/ ts=\S+/, '').replace(/durationMs=\d+/, 'durationMs=N'));
+      const lines = accessLines(stderrSpy).map((l) =>
+        l.replace(/ ts=\S+/, '').replace(/durationMs=\d+/, 'durationMs=N'),
+      );
       expect(lines).toEqual([
         '[hippo] info: request requestId=acc-1 method=GET route=/v1/recall/drill/:id status=404 durationMs=N\n',
         '[hippo] info: request requestId=acc-5 method=GET route=/v1/predictions/:id status=404 durationMs=N\n',
@@ -144,7 +165,10 @@ describe('the access line', () => {
       // Positive control: a warn that IS written at this level, through the same logger and stream, marks the point the access lines would have been captured by.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-marker-1' });
-      await vi.waitFor(() => expect(stderrSpy.mock.calls.some((c) => String(c[0]).includes('requestId=req-marker-1'))).toBe(true), { timeout: 5000 });
+      await vi.waitFor(
+        () => expect(stderrSpy.mock.calls.some((c) => String(c[0]).includes('requestId=req-marker-1'))).toBe(true),
+        { timeout: 5000 },
+      );
       const markerAt = stderrSpy.mock.calls.findIndex((c) => String(c[0]).includes('requestId=req-marker-1'));
       expect(accessLines({ mock: { calls: stderrSpy.mock.calls.slice(0, markerAt) } })).toEqual([]);
     } finally {
@@ -157,18 +181,38 @@ describe('a request still unanswered past the slow threshold', () => {
   it('logs one warn with its id, route and elapsed time, and the reply is the one it would have had', async () => {
     let asked!: () => void;
     let release!: () => void;
-    const held = new Promise<void>((ok) => { asked = ok; });
-    let gate = new Promise<void>((ok) => { release = ok; });
-    const resolver: AuthResolver = async () => { asked(); await gate; return { tenantId: 'default', subject: 'slow-test', role: 'admin' }; };
+    const held = new Promise<void>((ok) => {
+      asked = ok;
+    });
+    let gate = new Promise<void>((ok) => {
+      release = ok;
+    });
+    const resolver: AuthResolver = async () => {
+      asked();
+      await gate;
+      return { tenantId: 'default', subject: 'slow-test', role: 'admin' };
+    };
     const slowHome = makeRoot('request-slow');
-    const slow = await serve({ hippoRoot: slowHome, port: 0, host: '127.0.0.1', authResolver: resolver, authResolverTimeoutMs: 60_000, slowRequestWarnMs: 40 });
+    const slow = await serve({
+      hippoRoot: slowHome,
+      port: 0,
+      host: '127.0.0.1',
+      authResolver: resolver,
+      authResolverTimeoutMs: 60_000,
+      slowRequestWarnMs: 40,
+    });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const warned = (): string[] => stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('is still running'));
+    const warned = (): string[] =>
+      stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('is still running'));
     try {
-      const pending = fetch(`${slow.url}/v1/memories?q=private-query`, { headers: { authorization: 'Bearer slow-idp-token', 'x-request-id': 'req-slow-1' } });
+      const pending = fetch(`${slow.url}/v1/memories?q=private-query`, {
+        headers: { authorization: 'Bearer slow-idp-token', 'x-request-id': 'req-slow-1' },
+      });
       await held;
       await vi.waitFor(() => expect(warned()).toHaveLength(1), { timeout: 5000 });
-      expect(warned()[0]).toMatch(/^\[hippo\] warn: GET \/v1\/memories is still running ts=\S+ requestId=req-slow-1 elapsedMs=\d+\n$/);
+      expect(warned()[0]).toMatch(
+        /^\[hippo\] warn: GET \/v1\/memories is still running ts=\S+ requestId=req-slow-1 elapsedMs=\d+\n$/,
+      );
 
       release();
       const res = await pending;
@@ -179,8 +223,12 @@ describe('a request still unanswered past the slow threshold', () => {
       const quick = await fetch(`${slow.url}/health`, { headers: { 'x-request-id': 'req-quick-1' } });
       expect(quick.status).toBe(200);
       // Positive control: a second held request warns later than the quick one's timer would have, so its warn proves the quick one stayed silent.
-      gate = new Promise<void>((ok) => { release = ok; });
-      const second = fetch(`${slow.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer slow-idp-token', 'x-request-id': 'req-slow-2' } });
+      gate = new Promise<void>((ok) => {
+        release = ok;
+      });
+      const second = fetch(`${slow.url}/v1/memories?q=x`, {
+        headers: { authorization: 'Bearer slow-idp-token', 'x-request-id': 'req-slow-2' },
+      });
       await vi.waitFor(() => expect(warned()).toHaveLength(2), { timeout: 5000 });
       release();
       expect((await second).status).toBe(200);

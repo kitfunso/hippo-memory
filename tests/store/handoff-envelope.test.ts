@@ -8,14 +8,23 @@ import { execFileSync, execSync } from 'node:child_process';
 import { initStore } from '../../src/store/open.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { getContext, adminActor } from '../../src/api/index.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  closeTaskSnapshotsForSession, loadHandoffById, loadLatestHandoff, stampHandoffOutcome,
+  closeTaskSnapshotsForSession,
+  loadHandoffById,
+  loadLatestHandoff,
+  stampHandoffOutcome,
   writeSessionEndHandoff,
 } from '../_helpers/root-forms.js';
 
@@ -73,7 +82,9 @@ describe('test 1: fresh store, single open', () => {
     const db = openHippoDb(root);
     try {
       const cols = columns(db, 'session_handoffs').map((c) => c.name);
-      expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
+      expect(cols).toEqual(
+        expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']),
+      );
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_outcome');
       expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
@@ -91,10 +102,12 @@ describe('test 2: v41 store upgrades to v42', () => {
     try {
       db1.exec('DROP TABLE session_handoffs');
       db1.exec(PRE_W1_SESSION_HANDOFFS_DDL);
-      db1.prepare(`
+      db1
+        .prepare(`
         INSERT INTO session_handoffs(session_id, summary, artifacts_json, created_at, tenant_id)
         VALUES ('sess-old', 'pre-w1 summary', '[]', '2026-01-01T00:00:00.000Z', 'default')
-      `).run();
+      `)
+        .run();
       setMeta(db1, 'schema_version', '41');
     } finally {
       closeHippoDb(db1);
@@ -104,7 +117,9 @@ describe('test 2: v41 store upgrades to v42', () => {
     try {
       expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
-      expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
+      expect(cols).toEqual(
+        expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']),
+      );
     } finally {
       closeHippoDb(db2);
     }
@@ -130,7 +145,9 @@ describe('test 2: v41 store upgrades to v42', () => {
     try {
       expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
-      expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
+      expect(cols).toEqual(
+        expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']),
+      );
     } finally {
       closeHippoDb(db2);
     }
@@ -173,7 +190,9 @@ describe('test 3: round trip of new fields', () => {
 
     const db = openHippoDb(root);
     try {
-      db.prepare(`UPDATE session_handoffs SET constraints_json = 'not-json', evidence_json = 'also-not-json' WHERE session_id = 'sess-malformed'`).run();
+      db.prepare(
+        `UPDATE session_handoffs SET constraints_json = 'not-json', evidence_json = 'also-not-json' WHERE session_id = 'sess-malformed'`,
+      ).run();
     } finally {
       closeHippoDb(db);
     }
@@ -185,11 +204,18 @@ describe('test 3: round trip of new fields', () => {
 
   it('a damaged or wrong-shaped JSON column reads as empty and logs the table, row and column, never the text', () => {
     initStore(root);
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-damaged', summary: 'Damaged columns', artifacts: ['kept.md'] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-damaged',
+      summary: 'Damaged columns',
+      artifacts: ['kept.md'],
+    });
     const db = openHippoDb(root);
     let id: number;
     try {
-      db.prepare(`UPDATE session_handoffs SET artifacts_json = '{private-artifact', constraints_json = '[private-constraint', evidence_json = '{"gitRef":42,"note":"private-evidence"}' WHERE session_id = 'sess-damaged'`).run();
+      db.prepare(
+        `UPDATE session_handoffs SET artifacts_json = '{private-artifact', constraints_json = '[private-constraint', evidence_json = '{"gitRef":42,"note":"private-evidence"}' WHERE session_id = 'sess-damaged'`,
+      ).run();
       // SAFETY: the row was saved above, so the id column is there.
       id = (db.prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-damaged'`).get() as { id: number }).id;
     } finally {
@@ -207,9 +233,17 @@ describe('test 3: round trip of new fields', () => {
     } finally {
       stderr.mockRestore();
     }
-    expect(logged).toMatch(new RegExp(`warn: store: session_handoffs\\.artifacts_json is not valid JSON; read as empty .*table=session_handoffs id=${id} column=artifacts_json`));
-    expect(logged).toMatch(new RegExp(`session_handoffs\\.constraints_json is not valid JSON.* id=${id} column=constraints_json`));
-    expect(logged).toMatch(new RegExp(`session_handoffs\\.evidence_json is wrong shape.* id=${id} column=evidence_json`));
+    expect(logged).toMatch(
+      new RegExp(
+        `warn: store: session_handoffs\\.artifacts_json is not valid JSON; read as empty .*table=session_handoffs id=${id} column=artifacts_json`,
+      ),
+    );
+    expect(logged).toMatch(
+      new RegExp(`session_handoffs\\.constraints_json is not valid JSON.* id=${id} column=constraints_json`),
+    );
+    expect(logged).toMatch(
+      new RegExp(`session_handoffs\\.evidence_json is wrong shape.* id=${id} column=evidence_json`),
+    );
     expect(logged).not.toContain('private-');
   });
 });
@@ -217,8 +251,20 @@ describe('test 3: round trip of new fields', () => {
 describe('test 4: loadLatestHandoff opts', () => {
   it('unfinishedOnly skips success rows; maxAgeMs excludes stale rows; no-opts call is unchanged', () => {
     initStore(root);
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-multi', summary: 'first', artifacts: [], outcome: 'success' });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-multi', summary: 'second (newest)', artifacts: [], outcome: null });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-multi',
+      summary: 'first',
+      artifacts: [],
+      outcome: 'success',
+    });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-multi',
+      summary: 'second (newest)',
+      artifacts: [],
+      outcome: null,
+    });
 
     // No opts: existing behaviour, newest row regardless of outcome.
     const newest = loadLatestHandoff(root, 'default', 'sess-multi');
@@ -226,14 +272,22 @@ describe('test 4: loadLatestHandoff opts', () => {
 
     const db = openHippoDb(root);
     try {
-      db.prepare(`UPDATE session_handoffs SET outcome = 'success' WHERE session_id = 'sess-multi' AND summary = 'second (newest)'`).run();
+      db.prepare(
+        `UPDATE session_handoffs SET outcome = 'success' WHERE session_id = 'sess-multi' AND summary = 'second (newest)'`,
+      ).run();
     } finally {
       closeHippoDb(db);
     }
     // Both rows are now 'success'; unfinishedOnly must find none.
     expect(loadLatestHandoff(root, 'default', 'sess-multi', { unfinishedOnly: true })).toBeNull();
 
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-multi', summary: 'third partial', artifacts: [], outcome: 'partial' });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-multi',
+      summary: 'third partial',
+      artifacts: [],
+      outcome: 'partial',
+    });
     const unfinished = loadLatestHandoff(root, 'default', 'sess-multi', { unfinishedOnly: true });
     expect(unfinished!.summary).toBe('third partial');
 
@@ -241,7 +295,9 @@ describe('test 4: loadLatestHandoff opts', () => {
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-age', summary: 'stale', artifacts: [] });
     const db2 = openHippoDb(root);
     try {
-      db2.prepare(`UPDATE session_handoffs SET created_at = '2000-01-01T00:00:00.000Z' WHERE session_id = 'sess-age'`).run();
+      db2
+        .prepare(`UPDATE session_handoffs SET created_at = '2000-01-01T00:00:00.000Z' WHERE session_id = 'sess-age'`)
+        .run();
     } finally {
       closeHippoDb(db2);
     }
@@ -280,7 +336,11 @@ describe('test 6: writeSessionEndHandoff', () => {
       scope: null,
     });
 
-    const handoff = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-a', evidence: { gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' } });
+    const handoff = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-a',
+      evidence: { gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' },
+    });
     expect(handoff).not.toBeNull();
     expect(handoff!.taskId).toBe('ship W1');
     expect(handoff!.summary).toBe('writing the envelope');
@@ -288,7 +348,7 @@ describe('test 6: writeSessionEndHandoff', () => {
     expect(handoff!.evidence).toEqual({ gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' });
   });
 
-  it('6b: returns null for another session\'s snapshot', () => {
+  it("6b: returns null for another session's snapshot", () => {
     initStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'owned by sess-a',
@@ -313,12 +373,19 @@ describe('test 6: writeSessionEndHandoff', () => {
       next_step: 'next',
       session_id: 'sess-d',
     });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-d', summary: 'already wrote one', artifacts: [] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-d',
+      summary: 'already wrote one',
+      artifacts: [],
+    });
 
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE task_snapshots SET updated_at = '2026-01-01T00:00:00.000Z' WHERE session_id = 'sess-d'`).run();
-      db.prepare(`UPDATE session_handoffs SET created_at = '2026-01-01T00:00:00.001Z' WHERE session_id = 'sess-d'`).run();
+      db.prepare(
+        `UPDATE session_handoffs SET created_at = '2026-01-01T00:00:00.001Z' WHERE session_id = 'sess-d'`,
+      ).run();
     } finally {
       closeHippoDb(db);
     }
@@ -342,7 +409,9 @@ describe('test 6: writeSessionEndHandoff', () => {
       db.prepare(`UPDATE task_snapshots SET updated_at = ? WHERE session_id = 'sess-e'`).run(tie);
       db.prepare(`UPDATE session_handoffs SET created_at = ? WHERE session_id = 'sess-e'`).run(tie);
       // SAFETY: row's shape matches the single `c` column selected below.
-      const before = (db.prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`).get() as { c: number }).c;
+      const before = (
+        db.prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`).get() as { c: number }
+      ).c;
       expect(before).toBe(1);
     } finally {
       closeHippoDb(db);
@@ -354,7 +423,9 @@ describe('test 6: writeSessionEndHandoff', () => {
     const db2 = openHippoDb(root);
     try {
       // SAFETY: row's shape matches the single `c` column selected below.
-      const after = (db2.prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`).get() as { c: number }).c;
+      const after = (
+        db2.prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`).get() as { c: number }
+      ).c;
       expect(after).toBe(2);
     } finally {
       closeHippoDb(db2);
@@ -379,7 +450,11 @@ describe('test 6: writeSessionEndHandoff', () => {
       next_step: 'next',
       session_id: 'sess-f2',
     });
-    appendSessionEvent(root, 'default', { session_id: 'sess-f2', event_type: 'session_complete', content: 'not-a-real-outcome' });
+    appendSessionEvent(root, 'default', {
+      session_id: 'sess-f2',
+      event_type: 'session_complete',
+      content: 'not-a-real-outcome',
+    });
     const withoutOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f2', evidence: null });
     expect(withoutOutcome!.outcome).toBeNull();
   });
@@ -398,7 +473,11 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
         next_step: `next ${i}`,
         session_id: sessionId,
       });
-      writeSessionEndHandoff(root, { tenantId: 'default', sessionId, evidence: { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' } });
+      writeSessionEndHandoff(root, {
+        tenantId: 'default',
+        sessionId,
+        evidence: { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' },
+      });
       closeTaskSnapshotsForSession(root, 'default', sessionId);
     }
 
@@ -421,7 +500,11 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   it('8a: ambient fallback does not surface a private-scoped unfinished handoff', async () => {
     initStore(root);
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-priv', summary: 'private', artifacts: [], scope: 'slack:private:C1',
+      version: 1,
+      sessionId: 'sess-priv',
+      summary: 'private',
+      artifacts: [],
+      scope: 'slack:private:C1',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
@@ -431,7 +514,11 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   it('8b: ambient fallback does not surface an unknown:legacy scoped unfinished handoff', async () => {
     initStore(root);
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-legacy', summary: 'legacy', artifacts: [], scope: 'unknown:legacy',
+      version: 1,
+      sessionId: 'sess-legacy',
+      summary: 'legacy',
+      artifacts: [],
+      scope: 'unknown:legacy',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
@@ -441,7 +528,11 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   it('8c: ambient fallback surfaces a null-scoped unfinished handoff', async () => {
     initStore(root);
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-pub', summary: 'public', artifacts: [], scope: null,
+      version: 1,
+      sessionId: 'sess-pub',
+      summary: 'public',
+      artifacts: [],
+      scope: null,
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
@@ -451,11 +542,18 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   it('8d: session-keyed path does not inject a private-scoped active snapshot or handoff', async () => {
     initStore(root);
     saveActiveTaskSnapshot(root, 'default', {
-      task: 'private task', summary: 'summary', next_step: 'next',
-      session_id: 'sess-priv-active', scope: 'slack:private:C1',
+      task: 'private task',
+      summary: 'summary',
+      next_step: 'next',
+      session_id: 'sess-priv-active',
+      scope: 'slack:private:C1',
     });
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-priv-active', summary: 'private handoff', artifacts: [], scope: 'slack:private:C1',
+      version: 1,
+      sessionId: 'sess-priv-active',
+      summary: 'private handoff',
+      artifacts: [],
+      scope: 'slack:private:C1',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-priv-active' });
@@ -463,14 +561,20 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     expect(result.sessionHandoff).toBeUndefined();
   });
 
-  it('8e: session-keyed path does not fall through to another session\'s unfinished handoff', async () => {
+  it("8e: session-keyed path does not fall through to another session's unfinished handoff", async () => {
     initStore(root);
     saveActiveTaskSnapshot(root, 'default', {
-      task: 'private task', summary: 'summary', next_step: 'next',
-      session_id: 'sess-a', scope: 'slack:private:C1',
+      task: 'private task',
+      summary: 'summary',
+      next_step: 'next',
+      session_id: 'sess-a',
+      scope: 'slack:private:C1',
     });
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-b', summary: 'unrelated handoff', artifacts: [],
+      version: 1,
+      sessionId: 'sess-b',
+      summary: 'unrelated handoff',
+      artifacts: [],
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-a' });
@@ -482,14 +586,22 @@ describe('test 8: scope filtering on the continuity read paths', () => {
   it('8f: recentEvents admits each event on its own scope, keyed on the raw snapshot', async () => {
     initStore(root);
     saveActiveTaskSnapshot(root, 'default', {
-      task: 'private task', summary: 'summary', next_step: 'next',
-      session_id: 'sess-mix', scope: 'proj:private:x',
+      task: 'private task',
+      summary: 'summary',
+      next_step: 'next',
+      session_id: 'sess-mix',
+      scope: 'proj:private:x',
     });
     appendSessionEvent(root, 'default', {
-      session_id: 'sess-mix', event_type: 'note', content: 'public event',
+      session_id: 'sess-mix',
+      event_type: 'note',
+      content: 'public event',
     });
     appendSessionEvent(root, 'default', {
-      session_id: 'sess-mix', event_type: 'note', content: 'private event', scope: 'proj:private:x',
+      session_id: 'sess-mix',
+      event_type: 'note',
+      content: 'private event',
+      scope: 'proj:private:x',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-mix' });
@@ -519,19 +631,49 @@ describe('fix 1: unfinishedOnly selects the newest revision per session', () => 
 describe('fix 2: scopeFilter default-deny admits scope before LIMIT 1', () => {
   it('skips a newer private-scoped row to return an older public one', () => {
     initStore(root);
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-pub', summary: 'public', artifacts: [], scope: null });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-priv', summary: 'private', artifacts: [], scope: 'proj:private:x' });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-pub',
+      summary: 'public',
+      artifacts: [],
+      scope: null,
+    });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-priv',
+      summary: 'private',
+      artifacts: [],
+      scope: 'proj:private:x',
+    });
 
-    const admitted = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true, scopeFilter: 'default-deny' });
+    const admitted = loadLatestHandoff(root, 'default', undefined, {
+      unfinishedOnly: true,
+      scopeFilter: 'default-deny',
+    });
     expect(admitted!.sessionId).toBe('sess-pub');
   });
 
   it('skips an unknown:legacy scoped row', () => {
     initStore(root);
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-pub2', summary: 'public', artifacts: [], scope: null });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-legacy', summary: 'legacy', artifacts: [], scope: 'unknown:legacy' });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-pub2',
+      summary: 'public',
+      artifacts: [],
+      scope: null,
+    });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-legacy',
+      summary: 'legacy',
+      artifacts: [],
+      scope: 'unknown:legacy',
+    });
 
-    const admitted = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true, scopeFilter: 'default-deny' });
+    const admitted = loadLatestHandoff(root, 'default', undefined, {
+      unfinishedOnly: true,
+      scopeFilter: 'default-deny',
+    });
     expect(admitted!.sessionId).toBe('sess-pub2');
   });
 });
@@ -610,7 +752,11 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-scope-mismatch',
     });
-    const handoff = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-scope-mismatch', evidence: null });
+    const handoff = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-scope-mismatch',
+      evidence: null,
+    });
     expect(handoff!.artifacts).toEqual([]);
     expect(handoff!.constraints).toEqual([]);
     expect(handoff!.cardId).toBeNull();
@@ -626,18 +772,24 @@ describe('fix 4: v42 migration backfills outcome from session_complete events', 
     try {
       db1.exec('DROP TABLE session_handoffs');
       db1.exec(PRE_W1_SESSION_HANDOFFS_DDL);
-      db1.prepare(`
+      db1
+        .prepare(`
         INSERT INTO session_handoffs(session_id, summary, artifacts_json, created_at, tenant_id)
         VALUES ('sess-done', 'done work', '[]', '2026-01-01T00:00:00.000Z', 'default')
-      `).run();
-      db1.prepare(`
+      `)
+        .run();
+      db1
+        .prepare(`
         INSERT INTO session_handoffs(session_id, summary, artifacts_json, created_at, tenant_id)
         VALUES ('sess-noevent', 'no event', '[]', '2026-01-01T00:00:00.000Z', 'default')
-      `).run();
-      db1.prepare(`
+      `)
+        .run();
+      db1
+        .prepare(`
         INSERT INTO session_events(session_id, event_type, content, source, metadata_json, created_at, tenant_id)
         VALUES ('sess-done', 'session_complete', 'success', 'test', '{}', '2026-01-01T00:01:00.000Z', 'default')
-      `).run();
+      `)
+        .run();
       setMeta(db1, 'schema_version', '41');
     } finally {
       closeHippoDb(db1);
@@ -675,7 +827,10 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
   function runCli(cwd: string, env: Record<string, string>, ...args: string[]) {
     try {
       const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
-        cwd, env: { ...process.env, ...env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+        cwd,
+        env: { ...process.env, ...env },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       return { out: stdout, status: 0 };
     } catch (e) {
@@ -704,14 +859,24 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(
-        home, env, 'handoff', 'create',
-        '--summary', 's',
-        '--constraint', 'a',
-        '--constraint', 'b',
-        '--outcome', 'partial',
-        '--target-runtime', 'codex',
-        '--card-id', 'c1',
-        '--tests', 'pass',
+        home,
+        env,
+        'handoff',
+        'create',
+        '--summary',
+        's',
+        '--constraint',
+        'a',
+        '--constraint',
+        'b',
+        '--outcome',
+        'partial',
+        '--target-runtime',
+        'codex',
+        '--card-id',
+        'c1',
+        '--tests',
+        'pass',
       );
       expect(create.status, create.out).toBe(0);
 

@@ -74,15 +74,13 @@ export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
 
 export function slackTeamRouteAt(db: DatabaseSyncLike, teamId: string): SlackTeamRoute {
   // SAFETY: the SELECT names only `tenant_id`; .get() returns undefined when no row matches.
-  const row = db
-    .prepare(`SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`)
-    .get(teamId) as { tenant_id?: string } | undefined;
+  const row = db.prepare(`SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(teamId) as
+    | { tenant_id?: string }
+    | undefined;
   if (row?.tenant_id) return { tenantId: row.tenant_id };
 
   // SAFETY: `COUNT(*) AS c` always returns one row shaped { c }, as a number or a bigint.
-  const total = (db
-    .prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`)
-    .get() as { c: number | bigint }).c;
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`).get() as { c: number | bigint }).c;
   return { tenantId: null, workspaceCount: Number(total) };
 }
 
@@ -101,11 +99,11 @@ export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, ten
 
 export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
   // SAFETY: the SELECT names team_id, tenant_id and added_at, all NOT NULL text columns of slack_workspaces.
-  const rows = db
-    .prepare(
-      `SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`,
-    )
-    .all() as Array<{ team_id: string; tenant_id: string; added_at: string }>;
+  const rows = db.prepare(`SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`).all() as Array<{
+    team_id: string;
+    tenant_id: string;
+    added_at: string;
+  }>;
   return rows.map((r) => ({
     teamId: r.team_id,
     tenantId: r.tenant_id,
@@ -115,8 +113,6 @@ export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
 
 /** True when a row was deleted, so the caller can report not-found without a second lookup. */
 export function removeSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string): boolean {
-  const result = db
-    .prepare(`DELETE FROM slack_workspaces WHERE team_id = ?`)
-    .run(teamId);
+  const result = db.prepare(`DELETE FROM slack_workspaces WHERE team_id = ?`).run(teamId);
   return Number(result.changes) > 0;
 }

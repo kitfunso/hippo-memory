@@ -84,7 +84,9 @@ describe('E1 generator', () => {
     expect(v1.meta.lookalikeWindow).toBe('v1');
     const floor = Math.floor(TINY.numSessions * 0.6);
     const strip = (p: any, keep: (m: any) => boolean) =>
-      JSON.stringify(p.memories.filter(keep).map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })));
+      JSON.stringify(
+        p.memories.filter(keep).map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })),
+      );
     expect(strip(v1, () => true)).toBe(strip(base, () => true));
     const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
     expect(negs).toHaveLength(TINY.numFacts * TINY.distractorMultiple);

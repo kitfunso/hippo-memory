@@ -26,7 +26,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:v164', role: 'admin' });
 }
@@ -44,7 +50,9 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
 
 describe('drillDown discriminated outcome', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('v164-task1'); });
+  beforeEach(() => {
+    root = makeRoot('v164-task1');
+  });
   afterEach(() => safeRmSync(root));
 
   it('failure=not_found for unknown id', async () => {
@@ -129,7 +137,7 @@ describe('HTTP /v1/recall/drill status mapping', () => {
     // Regression guard: body must contain "leaf" so a future "fix" that
     // collapses the message back to a generic "not found" is caught.
     // SAFETY: HTTP error responses are always { error: message } (src/server.ts sendJson error handler).
-    const body = await res.json() as { error?: string };
+    const body = (await res.json()) as { error?: string };
     expect((body.error ?? '').toLowerCase()).toContain('leaf');
   });
 

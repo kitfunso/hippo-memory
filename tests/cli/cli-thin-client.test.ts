@@ -58,28 +58,33 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
   });
   let stdoutBuf = '';
   let stderrBuf = '';
-  child.stdout.on('data', (chunk: Buffer) => { stdoutBuf += chunk.toString('utf8'); });
-  child.stderr.on('data', (chunk: Buffer) => { stderrBuf += chunk.toString('utf8'); });
+  child.stdout.on('data', (chunk: Buffer) => {
+    stdoutBuf += chunk.toString('utf8');
+  });
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderrBuf += chunk.toString('utf8');
+  });
 
   // Wait for the pidfile to appear AND /health to respond. The pidfile-only
   // gate is racy because writePidfile fires synchronously before the listen
   // ack returns to userland; combine with a real health probe to be safe.
   const pidfilePath = join(workspace, '.hippo', 'server.pid');
   let port = 0;
-  await waitFor(async () => {
-    if (child.exitCode !== null) {
-      throw new Error(
-        `hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`,
-      );
-    }
-    if (!existsSync(pidfilePath)) return false;
-    port = pidfilePort(pidfilePath);
-    try {
-      return (await fetch(`http://127.0.0.1:${port}/health`)).status === 200;
-    } catch {
-      return false; // server not up yet
-    }
-  }, { timeoutMs: 10_000, intervalMs: 100, what: 'server ready' }).catch((err: Error) => {
+  await waitFor(
+    async () => {
+      if (child.exitCode !== null) {
+        throw new Error(`hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`);
+      }
+      if (!existsSync(pidfilePath)) return false;
+      port = pidfilePort(pidfilePath);
+      try {
+        return (await fetch(`http://127.0.0.1:${port}/health`)).status === 200;
+      } catch {
+        return false; // server not up yet
+      }
+    },
+    { timeoutMs: 10_000, intervalMs: 100, what: 'server ready' },
+  ).catch((err: Error) => {
     child.kill('SIGKILL');
     throw new Error(`${err.message}. stdout=${stdoutBuf} stderr=${stderrBuf}`);
   });
@@ -94,7 +99,11 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
     // best-effort wipe so the next spawn starts clean.
     await waitFor(() => !existsSync(pidfilePath), { timeoutMs: 2_000, intervalMs: 50 }).catch(() => undefined);
     if (existsSync(pidfilePath)) {
-      try { rmSync(pidfilePath); } catch { /* ignore */ }
+      try {
+        rmSync(pidfilePath);
+      } catch {
+        /* ignore */
+      }
     }
   };
 
@@ -142,8 +151,12 @@ function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult
     });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (c: Buffer) => { stdout += c.toString('utf8'); });
-    child.stderr.on('data', (c: Buffer) => { stderr += c.toString('utf8'); });
+    child.stdout.on('data', (c: Buffer) => {
+      stdout += c.toString('utf8');
+    });
+    child.stderr.on('data', (c: Buffer) => {
+      stderr += c.toString('utf8');
+    });
     child.on('close', () => resolve({ stdout, stderr }));
   });
 }
@@ -194,9 +207,9 @@ function getRowForContent(workspace: string, contentNeedle: string): StoredRow |
   const db = openHippoDb(join(workspace, '.hippo'));
   try {
     // SAFETY: literal SELECT of known columns against the memories schema.
-    const row = db.prepare(
-      `SELECT tags_json, half_life_days, emotional_valence FROM memories WHERE content LIKE ?`,
-    ).get(`%${contentNeedle}%`) as
+    const row = db
+      .prepare(`SELECT tags_json, half_life_days, emotional_valence FROM memories WHERE content LIKE ?`)
+      .get(`%${contentNeedle}%`) as
       | { tags_json: string; half_life_days: number; emotional_valence: string }
       | undefined;
     if (!row) return null;
@@ -301,12 +314,15 @@ describe('cli thin-client mode', () => {
       const stalePid = 99_999_999;
       const stalePort = 31_111; // arbitrary; any real listener would be coincidental
       const pidfilePath = join(workspace, '.hippo', 'server.pid');
-      writeFileSync(pidfilePath, JSON.stringify({
-        pid: stalePid,
-        port: stalePort,
-        url: `http://127.0.0.1:${stalePort}`,
-        started_at: new Date().toISOString(),
-      }));
+      writeFileSync(
+        pidfilePath,
+        JSON.stringify({
+          pid: stalePid,
+          port: stalePort,
+          url: `http://127.0.0.1:${stalePort}`,
+          started_at: new Date().toISOString(),
+        }),
+      );
 
       const run = runCli(workspace, 'remember', 'stale-pidfile-canary-77');
       expect(run.stdout + run.stderr).toMatch(/Remembered|stale|fallback/i);
@@ -350,10 +366,10 @@ describe('cli thin-client mode', () => {
       try {
         db.prepare(
           `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
-          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
-          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
-          `('mem_rawthin', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
-          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'connector raw content', 'raw')`,
+            `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+            `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+            `('mem_rawthin', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+            `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'connector raw content', 'raw')`,
         ).run();
       } finally {
         closeHippoDb(db);
@@ -394,10 +410,10 @@ describe('cli thin-client mode', () => {
       try {
         db.prepare(
           `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
-          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
-          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
-          `('mem_rsarchive', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
-          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'require-server raw content', 'raw')`,
+            `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+            `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+            `('mem_rsarchive', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+            `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'require-server raw content', 'raw')`,
         ).run();
       } finally {
         closeHippoDb(db);
@@ -430,10 +446,10 @@ describe('cli thin-client mode', () => {
       try {
         db.prepare(
           `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
-          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
-          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
-          `('mem_notraw', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
-          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'not a raw memory', 'distilled')`,
+            `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+            `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+            `('mem_notraw', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+            `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'not a raw memory', 'distilled')`,
         ).run();
       } finally {
         closeHippoDb(db);
@@ -466,9 +482,14 @@ describe('cli thin-client mode', () => {
       if (req.url === '/health') {
         // connection: close, so the command request opens a fresh socket and is refused instead of reusing a dying one.
         res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
-        res.end(JSON.stringify({
-          ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
-        }));
+        res.end(
+          JSON.stringify({
+            ok: true,
+            version: '0.0.0',
+            started_at: startedAt,
+            pid: process.pid,
+          }),
+        );
         res.on('finish', () => stub.close());
         return;
       }
@@ -481,10 +502,16 @@ describe('cli thin-client mode', () => {
     try {
       // Pidfile names this stub: pid is the (alive) test process so
       // detectServer's liveness check passes, started_at matches /health.
-      writeFileSync(pidfilePath, JSON.stringify({
-        schema: 1, pid: process.pid, port,
-        url: `http://127.0.0.1:${port}`, started_at: startedAt,
-      }));
+      writeFileSync(
+        pidfilePath,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port,
+          url: `http://127.0.0.1:${port}`,
+          started_at: startedAt,
+        }),
+      );
 
       const run = await runCliAsync(workspace, 'remember', 'conn-refused-canary-55');
       expect(run.stdout + run.stderr).toMatch(/Remembered|fallback/i);
@@ -538,9 +565,14 @@ describe('cli thin-client mode', () => {
     const stub = createServer((req, res) => {
       if (req.url === '/health') {
         res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
-        res.end(JSON.stringify({
-          ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
-        }));
+        res.end(
+          JSON.stringify({
+            ok: true,
+            version: '0.0.0',
+            started_at: startedAt,
+            pid: process.pid,
+          }),
+        );
         res.on('finish', () => stub.close());
         return;
       }
@@ -555,21 +587,34 @@ describe('cli thin-client mode', () => {
       try {
         db.prepare(
           `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
-          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
-          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
-          `('mem_racearchive', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
-          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'connector raw content', 'raw')`,
+            `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+            `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+            `('mem_racearchive', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+            `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'connector raw content', 'raw')`,
         ).run();
       } finally {
         closeHippoDb(db);
       }
 
-      writeFileSync(pidfilePath, JSON.stringify({
-        schema: 1, pid: process.pid, port,
-        url: `http://127.0.0.1:${port}`, started_at: startedAt,
-      }));
+      writeFileSync(
+        pidfilePath,
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port,
+          url: `http://127.0.0.1:${port}`,
+          started_at: startedAt,
+        }),
+      );
 
-      const run = await runCliAsync(workspace, 'forget', 'mem_racearchive', '--archive', '--reason', 'race fallback test');
+      const run = await runCliAsync(
+        workspace,
+        'forget',
+        'mem_racearchive',
+        '--archive',
+        '--reason',
+        'race fallback test',
+      );
       expect(run.stdout, `stderr: ${run.stderr}`).toMatch(/Archived mem_racearchive/);
       expect(existsSync(pidfilePath)).toBe(false);
 
@@ -647,15 +692,21 @@ describe('cli thin-client mode', () => {
     const handle: ServerHandle = await serve({ hippoRoot, port: 0 });
     vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
     try {
-      const { stdout, stderr } = await runCliAsync(workspace, 'remember', 'thin client scope canary content', '--scope', 'slack:private:CX');
+      const { stdout, stderr } = await runCliAsync(
+        workspace,
+        'remember',
+        'thin client scope canary content',
+        '--scope',
+        'slack:private:CX',
+      );
       expect(stdout, `stderr: ${stderr}`).toMatch(/Remembered/);
       expect(stdout).toContain(handle.url);
       const db = openHippoDb(hippoRoot);
       try {
         // SAFETY: names one column of the canary row remembered above; undefined only if the row did not land.
-        const row = db.prepare('SELECT scope FROM memories WHERE content = ?').get('thin client scope canary content') as
-          | { scope: string | null }
-          | undefined;
+        const row = db
+          .prepare('SELECT scope FROM memories WHERE content = ?')
+          .get('thin client scope canary content') as { scope: string | null } | undefined;
         expect(row?.scope).toBe('slack:private:CX');
       } finally {
         closeHippoDb(db);

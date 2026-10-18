@@ -29,9 +29,7 @@ describe('parseArgs boolean-flag allowlist', () => {
   });
 
   it('--dry-run composes with a value flag', () => {
-    const { args, flags } = parseArgs(
-      argv('invalidate', '--dry-run', '--id', 'mem_abc123'),
-    );
+    const { args, flags } = parseArgs(argv('invalidate', '--dry-run', '--id', 'mem_abc123'));
     expect(flags['dry-run']).toBe(true);
     expect(flags['id']).toBe('mem_abc123');
     expect(args).toEqual([]);

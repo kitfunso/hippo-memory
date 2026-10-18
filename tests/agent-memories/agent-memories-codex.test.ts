@@ -14,7 +14,11 @@ const tmp = () => {
 };
 const lines = (...l: string[]) => l.join('\n');
 const sha12 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 12);
-const ctxOf = (home: string, env: Record<string, string> = {}): AdapterContext => ({ home, env, platform: process.platform });
+const ctxOf = (home: string, env: Record<string, string> = {}): AdapterContext => ({
+  home,
+  env,
+  platform: process.platform,
+});
 const summaryIn = (codexHome: string) => path.join(codexHome, 'memories', 'memory_summary.md');
 
 function writeSummary(codexHome: string, content: string | Buffer): string {
@@ -69,7 +73,10 @@ describe('codexAdapter home', () => {
   it('uses CODEX_HOME instead when set, and ignores the default folder', () => {
     const home = tmp();
     const codexHome = path.join(tmp(), 'codex-home');
-    writeSummary(path.join(home, '.codex'), FIXTURE.replace('Works on a trading desk.', 'Decoy in the default folder.'));
+    writeSummary(
+      path.join(home, '.codex'),
+      FIXTURE.replace('Works on a trading desk.', 'Decoy in the default folder.'),
+    );
     const file = writeSummary(codexHome, FIXTURE);
 
     const listing = userList(home, { CODEX_HOME: codexHome });
@@ -102,7 +109,14 @@ describe('codexAdapter items', () => {
     fs.utimesSync(file, mtime, mtime);
 
     const [container] = userList(home).containers;
-    expect(container).toMatchObject({ scope: 'user', path: file, readable: true, skipped: [], warnings: [], textKeyed: true });
+    expect(container).toMatchObject({
+      scope: 'user',
+      path: file,
+      readable: true,
+      skipped: [],
+      warnings: [],
+      textKeyed: true,
+    });
     const stored = (heading: string, text: string) => `${heading}: ${text}`;
     const expected = [
       ['user-profile', stored('User Profile', 'Works on a trading desk.')],
@@ -116,7 +130,7 @@ describe('codexAdapter items', () => {
     );
   });
 
-  it('skips What\'s in Memory and any other heading', () => {
+  it("skips What's in Memory and any other heading", () => {
     const home = tmp();
     writeSummary(path.join(home, '.codex'), lines(FIXTURE, '## Scratch', '- not a kept section', ''));
     const texts = userList(home).containers[0].items.map((i) => i.text);
@@ -127,7 +141,10 @@ describe('codexAdapter items', () => {
 
   it('matches kept headings case-insensitively and stores the heading as written', () => {
     const home = tmp();
-    writeSummary(path.join(home, '.codex'), lines('v1', '', '## user profile', '', 'Works alone.', '', '## GENERAL TIPS', '- Be brief', ''));
+    writeSummary(
+      path.join(home, '.codex'),
+      lines('v1', '', '## user profile', '', 'Works alone.', '', '## GENERAL TIPS', '- Be brief', ''),
+    );
     const container = userList(home).containers[0];
     expect(container.items.map((i) => i.text)).toEqual(['user profile: Works alone.', 'GENERAL TIPS: Be brief']);
     expect(container.items.map((i) => i.key)).toEqual([
@@ -144,7 +161,10 @@ describe('codexAdapter items', () => {
 
   it('gives a repeated bullet under one heading a ~2 key', () => {
     const home = tmp();
-    writeSummary(path.join(home, '.codex'), lines('v1', '', '## User Profile', '', 'Works alone.', '', '## User preferences', '- Be brief', '- Be brief', ''));
+    writeSummary(
+      path.join(home, '.codex'),
+      lines('v1', '', '## User Profile', '', 'Works alone.', '', '## User preferences', '- Be brief', '- Be brief', ''),
+    );
     const keys = userList(home).containers[0].items.map((i) => i.key);
     const base = `user-preferences/${sha12('User preferences: Be brief')}`;
     expect(keys.slice(1)).toEqual([base, `${base}~2`]);

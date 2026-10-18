@@ -94,7 +94,11 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
     id: r.rowId,
   }));
   setNextCursorHeader(res, page.nextCursor);
-  sendJson(res, 200, page.items.map((r) => r.key));
+  sendJson(
+    res,
+    200,
+    page.items.map((r) => r.key),
+  );
   return;
 }
 

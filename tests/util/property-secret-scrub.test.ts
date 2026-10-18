@@ -26,8 +26,17 @@ interface Secret {
 }
 
 /** A body of `min` to `max` characters over `alphabet`, hyphen endings included; `last` narrows the final one for a shape that needs it. */
-function secret(wrap: (body: string) => string, alphabet: string, min: number, max: number, last = alphabet): Gen<Secret> {
-  return map(both(str(alphabet, min - 1, max - 1), str(last, 1, 1)), ([inner, end]) => ({ text: wrap(inner + end), body: inner + end }));
+function secret(
+  wrap: (body: string) => string,
+  alphabet: string,
+  min: number,
+  max: number,
+  last = alphabet,
+): Gen<Secret> {
+  return map(both(str(alphabet, min - 1, max - 1), str(last, 1, 1)), ([inner, end]) => ({
+    text: wrap(inner + end),
+    body: inner + end,
+  }));
 }
 
 const KINDS: readonly Gen<Secret>[] = [
@@ -42,11 +51,23 @@ const KINDS: readonly Gen<Secret>[] = [
   secret((b) => `hf_${b}`, UPPER + LOWER, 34, 34),
   secret((b) => `glpat-${b}`, `${ALNUM}_-`, 20, 30),
   secret((b) => `ya29.${b}`, `${ALNUM}_-`, 20, 60),
-  oneOf(['services', 'workflows', 'triggers'].map((kind) => secret((b) => `https://hooks.slack.com/${kind}/${b}`, `${ALNUM}+/`, 43, 56))),
-  oneOf(PEM_KINDS.map((kind) => secret((b) => `${pemLine('BEGIN', kind)}\n${b}\n${pemLine('END', kind)}`, `${ALNUM}+/`, 40, 120))),
+  oneOf(
+    ['services', 'workflows', 'triggers'].map((kind) =>
+      secret((b) => `https://hooks.slack.com/${kind}/${b}`, `${ALNUM}+/`, 43, 56),
+    ),
+  ),
+  oneOf(
+    PEM_KINDS.map((kind) =>
+      secret((b) => `${pemLine('BEGIN', kind)}\n${b}\n${pemLine('END', kind)}`, `${ALNUM}+/`, 40, 120),
+    ),
+  ),
   secret((b) => `${SK}-${b}`, `${ALNUM}_-`, 20, 48),
   secret((b) => `${SK}_proj_${b}`, `${ALNUM}_`, 12, 30),
-  oneOf(ASSIGNED_SECRET_LINES.map((line) => secret((b) => line.replaceAll(ASSIGNED_SECRET, b), `${ALNUM}_-`, 12, 40, DIGITS))),
+  oneOf(
+    ASSIGNED_SECRET_LINES.map((line) =>
+      secret((b) => line.replaceAll(ASSIGNED_SECRET, b), `${ALNUM}_-`, 12, 40, DIGITS),
+    ),
+  ),
   secret((b) => `postgres://app:${b}@db.internal:5432/main`, ALNUM, 8, 24),
   secret((b) => `Authorization: Bearer ${b}`, `${ALNUM}._~+/-`, 16, 60),
   secret((b) => `authorization: basic ${b}`, `${ALNUM}+/`, 12, 40),
@@ -55,8 +76,34 @@ const KINDS: readonly Gen<Secret>[] = [
 
 // Ordinary words, with the near misses a careless pattern would take: key nouns, bare prefixes, package and image names holding an @.
 const WORDS = [
-  'deploy', 'the', 'cache', 'before', 'release', 'token', 'password', 'secret', 'key', 'bearer', 'basic', 'Authorization', 'bypass', 'compass',
-  SK, 'AKIA', 'ghp', 'npm', 'eyJ', 'user', 'logo@2x.png', 'react@18.2.0', 'v1.2.3', '2024-06-01', '42', 'caf\u00e9', '\u6771\u4eac', '\u043f\u0440\u0438\u0432\u0435\u0442',
+  'deploy',
+  'the',
+  'cache',
+  'before',
+  'release',
+  'token',
+  'password',
+  'secret',
+  'key',
+  'bearer',
+  'basic',
+  'Authorization',
+  'bypass',
+  'compass',
+  SK,
+  'AKIA',
+  'ghp',
+  'npm',
+  'eyJ',
+  'user',
+  'logo@2x.png',
+  'react@18.2.0',
+  'v1.2.3',
+  '2024-06-01',
+  '42',
+  'caf\u00e9',
+  '\u6771\u4eac',
+  '\u043f\u0440\u0438\u0432\u0435\u0442',
 ];
 
 const SCRUBS: readonly { name: string; scrub: (text: string) => string }[] = [
@@ -83,23 +130,59 @@ const LEAKY_TEXT: Gen<{ text: string; secrets: Secret[] }> = map(
 
 // Markers the scrubs write, and openings of secret shapes with nothing after them.
 const LOOSE_PIECES = [
-  '[REDACTED]', '[email]', '[home]', 'password=', 'token: ', 'Bearer ', 'authorization: basic ', 'https://', 'bob@example.com', '@', ':', '=',
-  pemLine('BEGIN', ''), pemLine('END', ''), 'eyJ', 'AKIA', `${SK}-`, 'hooks.slack.com/services/',
+  '[REDACTED]',
+  '[email]',
+  '[home]',
+  'password=',
+  'token: ',
+  'Bearer ',
+  'authorization: basic ',
+  'https://',
+  'bob@example.com',
+  '@',
+  ':',
+  '=',
+  pemLine('BEGIN', ''),
+  pemLine('END', ''),
+  'eyJ',
+  'AKIA',
+  `${SK}-`,
+  'hooks.slack.com/services/',
 ];
-const HOME_PATHS = ['/home/kit', '/root', '/Users/alice', 'C:\\Users\\kit', '/mnt/c/Users/kit', '/var/home/kit', '/KITSO~1', 'KITSO~1/', '\\\\srv\\homes\\kit'];
+const HOME_PATHS = [
+  '/home/kit',
+  '/root',
+  '/Users/alice',
+  'C:\\Users\\kit',
+  '/mnt/c/Users/kit',
+  '/var/home/kit',
+  '/KITSO~1',
+  'KITSO~1/',
+  '\\\\srv\\homes\\kit',
+];
 
 // Two secrets of one kind on a line, as in a pasted list of keys: a scrub that stops at the first leaves the second for the next pass.
 const TWINS = oneOf(KINDS.map((kind) => map(both(kind, kind), ([a, b]) => `${a.text} ${b.text}`)));
 
 /** Words, whole secrets, ordinary config lines and loose pieces of secret shapes, glued with or without a gap. */
 const SOUP: Gen<string> = map(
-  arr(both(oneOf([pick(WORDS), map(oneOf(KINDS), (s) => s.text), TWINS, pick(ORDINARY_CONFIG_LINES), pick(LOOSE_PIECES)]), pick(['', ' ', '\n', '/'])), 0, 10),
+  arr(
+    both(
+      oneOf([pick(WORDS), map(oneOf(KINDS), (s) => s.text), TWINS, pick(ORDINARY_CONFIG_LINES), pick(LOOSE_PIECES)]),
+      pick(['', ' ', '\n', '/']),
+    ),
+    0,
+    10,
+  ),
   (parts) => parts.map(([text, gap]) => text + gap).join(''),
 );
 
 /** `head` and then `length` characters over `alphabet`, the last one to three of them hyphens. */
 function hyphenEnded(head: string, alphabet: string, length: number): Gen<string> {
-  return map(both(str(alphabet, length, length), int(1, 3)), ([body, hyphens]) => head + body.slice(0, length - hyphens) + '-'.repeat(hyphens));
+  return map(
+    both(str(alphabet, length, length), int(1, 3)),
+    ([body, hyphens]) => head + body.slice(0, length - hyphens) + '-'.repeat(hyphens),
+  );
 }
 
 // The shapes whose alphabet holds a hyphen and whose pattern once closed on a word boundary.
@@ -114,7 +197,10 @@ describe('secret scrubbing properties', () => {
     await forAll(0x5ec1, 400, LEAKY_TEXT, ({ text, secrets }) => {
       for (const { name, scrub } of SCRUBS) {
         const out = scrub(text);
-        expect(secrets.filter((s) => leaked(out, s)).map((s) => s.text), `${name} left a secret in: ${out}`).toEqual([]);
+        expect(
+          secrets.filter((s) => leaked(out, s)).map((s) => s.text),
+          `${name} left a secret in: ${out}`,
+        ).toEqual([]);
       }
     });
   });
@@ -128,7 +214,9 @@ describe('secret scrubbing properties', () => {
 
   // A home path glued after another, or after a short name, is uncovered only once the text before it is masked, so masking each shape once is not enough.
   it('scrubForSharing changes nothing on a second pass over home paths, nested or not', async () => {
-    const paths = map(both(WORD_RUN, arr(pick(HOME_PATHS), 1, 3)), ([words, nested]) => [...words, nested.join('')].join(' '));
+    const paths = map(both(WORD_RUN, arr(pick(HOME_PATHS), 1, 3)), ([words, nested]) =>
+      [...words, nested.join('')].join(' '),
+    );
     await forAll(0x1de1, 200, paths, (text) => {
       const once = scrubForSharing(text);
       expect(scrubForSharing(once)).toBe(once);
@@ -138,16 +226,23 @@ describe('secret scrubbing properties', () => {
   it('sentences of ordinary words and ordinary config lines come back unchanged', async () => {
     // A sentence ends in a full stop, so a word never runs on into the config line under it.
     const sentence = map(arr(pick(WORDS), 1, 8), (words) => `${words.join(' ')}.`);
-    const benign = map(arr(oneOf([sentence, sentence, pick(ORDINARY_CONFIG_LINES)]), 1, 8), (lines) => lines.join('\n'));
+    const benign = map(arr(oneOf([sentence, sentence, pick(ORDINARY_CONFIG_LINES)]), 1, 8), (lines) =>
+      lines.join('\n'),
+    );
     await forAll(0xbe9, 400, benign, (text) => {
       expect(redactSecretsStrict(text)).toBe(text);
     });
   });
 
   it('text made of ordinary words comes back unchanged from the share scrub', async () => {
-    await forAll(0xbea, 400, map(arr(pick(WORDS), 1, 12), (parts) => parts.join(' ')), (text) => {
-      expect(scrubForSharing(text)).toBe(text);
-    });
+    await forAll(
+      0xbea,
+      400,
+      map(arr(pick(WORDS), 1, 12), (parts) => parts.join(' ')),
+      (text) => {
+        expect(scrubForSharing(text)).toBe(text);
+      },
+    );
   });
 
   // A word boundary does not close a token that ends in a hyphen before a space, so the key or its closing hyphens would stay.

@@ -4,8 +4,16 @@ import { BadRequestError } from '../../src/core/api-errors.js';
 import { HttpError } from '../../src/util/http-util.js';
 import { MAX_ID_LEN } from '../../src/util/limits.js';
 import {
-  assertClientScope, assertScopeRequestAllowed, canReadScope, canTouchScope, isPersonalScope, passesCliRecallScopeFilter,
-  passesScopeFilterForRecall, personalScopeOf, ScopeForbiddenError, type ScopeActor,
+  assertClientScope,
+  assertScopeRequestAllowed,
+  canReadScope,
+  canTouchScope,
+  isPersonalScope,
+  passesCliRecallScopeFilter,
+  passesScopeFilterForRecall,
+  personalScopeOf,
+  ScopeForbiddenError,
+  type ScopeActor,
 } from '../../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -38,13 +46,13 @@ describe('canReadScope decides a personal scope before role and grants', () => {
     expect(canReadScope(ownerA, 'Personal:private:a')).toBe(false);
   });
 
-  it('leaves connector scopes on today\'s rule', () => {
+  it("leaves connector scopes on today's rule", () => {
     expect(canReadScope({ role: 'member', scopes: [SLACK] }, SLACK)).toBe(true);
     expect(canReadScope(ownerA, SLACK)).toBe(false);
     expect(canReadScope(unownedAdmin, SLACK)).toBe(true);
   });
 
-  it('a request for another person\'s scope is a 403', () => {
+  it("a request for another person's scope is a 403", () => {
     expect(() => assertScopeRequestAllowed(ownerB, A_SCOPE)).toThrow(ScopeForbiddenError);
     expect(() => assertScopeRequestAllowed(ownerA, A_SCOPE)).not.toThrow();
   });
@@ -90,7 +98,7 @@ describe('assertClientScope, isPersonalScope and canTouchScope', () => {
 });
 
 describe('recall filters', () => {
-  it('admits the caller\'s own personal scope on an empty request, and nobody else\'s', () => {
+  it("admits the caller's own personal scope on an empty request, and nobody else's", () => {
     expect(passesScopeFilterForRecall(A_SCOPE, undefined)).toBe(false);
     expect(passesScopeFilterForRecall(A_SCOPE, undefined, A_SCOPE)).toBe(true);
     expect(passesScopeFilterForRecall(B_SCOPE, '', A_SCOPE)).toBe(false);
@@ -112,9 +120,22 @@ describe('HttpError Retry-After', () => {
   beforeAll(async () => {
     root = makeRoot('retry-after');
     handle = await serve({
-      hippoRoot: root, host: '127.0.0.1', port: 0, routes: [
-        { path: '/v1/x-slow', handler: async () => { throw new HttpError(429, 'slow down', 7); } },
-        { path: '/v1/x-gone', handler: async () => { throw new HttpError(404, 'gone'); } },
+      hippoRoot: root,
+      host: '127.0.0.1',
+      port: 0,
+      routes: [
+        {
+          path: '/v1/x-slow',
+          handler: async () => {
+            throw new HttpError(429, 'slow down', 7);
+          },
+        },
+        {
+          path: '/v1/x-gone',
+          handler: async () => {
+            throw new HttpError(404, 'gone');
+          },
+        },
       ],
     });
   });
@@ -124,7 +145,11 @@ describe('HttpError Retry-After', () => {
   });
 
   async function post(path: string): Promise<Response> {
-    return fetch(`${handle.url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    return fetch(`${handle.url}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
   }
 
   it('a 429 that carries a retry value sends it as Retry-After', async () => {

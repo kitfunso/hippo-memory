@@ -58,12 +58,7 @@ async function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliF
   }
 }
 
-async function cmdSlackDlqReplay(
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cmdSlackDlqReplay(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const idArg = args[2];
   if (!idArg) {
     fail('Usage: hippo slack dlq replay <id> [--force]');
@@ -73,14 +68,10 @@ async function cmdSlackDlqReplay(
     fail(`replay: invalid id ${idArg}`);
   }
   const force = flags.force === true;
-  const result = await replayDlqEntry(
-    cliApiContext(hippoRoot, tenantId),
-    id,
-    {
-      force,
-      signingSecret: envSlackSigningSecret(),
-    },
-  );
+  const result = await replayDlqEntry(cliApiContext(hippoRoot, tenantId), id, {
+    force,
+    signingSecret: envSlackSigningSecret(),
+  });
   if (!result.ok) {
     fail(
       `replay failed: status=${result.status} retry_count=${result.retryCount}${result.reason ? ` reason=${result.reason}` : ''}`,
@@ -91,10 +82,7 @@ async function cmdSlackDlqReplay(
   );
 }
 
-async function cmdSlackWorkspacesAdd(
-  hippoRoot: string,
-  flags: CliFlags,
-): Promise<void> {
+async function cmdSlackWorkspacesAdd(hippoRoot: string, flags: CliFlags): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
@@ -115,10 +103,7 @@ async function cmdSlackWorkspacesList(hippoRoot: string): Promise<void> {
   }
 }
 
-async function cmdSlackWorkspacesRemove(
-  hippoRoot: string,
-  flags: CliFlags,
-): Promise<void> {
+async function cmdSlackWorkspacesRemove(hippoRoot: string, flags: CliFlags): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     fail('Usage: hippo slack workspaces remove --team <T>');

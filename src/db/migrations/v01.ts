@@ -1,9 +1,9 @@
 import type { Migration } from './types.js';
 
 export const v01: Migration = {
-    version: 1,
-    up: (db) => {
-      db.exec(`
+  version: 1,
+  up: (db) => {
+    db.exec(`
         CREATE TABLE IF NOT EXISTS memories (
           id TEXT PRIMARY KEY,
           created TEXT NOT NULL,
@@ -35,5 +35,5 @@ export const v01: Migration = {
           removed INTEGER NOT NULL
         );
       `);
-    },
+  },
 };

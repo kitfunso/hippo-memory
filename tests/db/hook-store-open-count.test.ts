@@ -47,7 +47,10 @@ function seed(root: string, content: string, created: string, extra: Partial<Mem
 // Stamped by hand: derived from the temp dir, the origin is whichever project marker sits above it on this machine.
 function seedGlobalPin(): void {
   initStore(globalRoot);
-  seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', { pinned: true, origin_project: '' });
+  seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', {
+    pinned: true,
+    origin_project: '',
+  });
 }
 
 interface HookRun {
@@ -57,13 +60,24 @@ interface HookRun {
 }
 
 function runHook(args: string[], input: string): HookRun {
-  const stdout = execFileSync(process.execPath, ['--no-warnings', '--import', pathToFileURL(preloadPath).href, HIPPO_JS, ...args], {
-    // Home is the test dir, so the project walk from cwd stops there instead of finding a marker above the temp root.
-    env: { ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: globalRoot, HIPPO_FAKE_NOW: FAKE_NOW, P2_OPEN_LOG: logPath },
-    cwd: projectDir,
-    input,
-    encoding: 'utf8',
-  });
+  const stdout = execFileSync(
+    process.execPath,
+    ['--no-warnings', '--import', pathToFileURL(preloadPath).href, HIPPO_JS, ...args],
+    {
+      // Home is the test dir, so the project walk from cwd stops there instead of finding a marker above the temp root.
+      env: {
+        ...process.env,
+        HOME: tmp,
+        USERPROFILE: tmp,
+        HIPPO_HOME: globalRoot,
+        HIPPO_FAKE_NOW: FAKE_NOW,
+        P2_OPEN_LOG: logPath,
+      },
+      cwd: projectDir,
+      input,
+      encoding: 'utf8',
+    },
+  );
   // SAFETY: the preload above writes exactly this file-to-count object.
   const raw = JSON.parse(fs.readFileSync(logPath, 'utf8')) as Record<string, number>;
   const opens: Record<string, number> = {};
@@ -113,11 +127,15 @@ beforeEach(() => {
 describe('per-prompt context hook', () => {
   it('opens the local store once and prints the same block on a new and a repeat turn', () => {
     const first = runHook(PROMPT_HOOK, promptPayload('sess-open-1'));
-    expect(first.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 28 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
+    expect(first.stdout).toMatchInlineSnapshot(
+      `"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 28 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`,
+    );
     expect(first.opens).toEqual({ local: 1 });
 
     const repeat = runHook(PROMPT_HOOK, promptPayload('sess-open-1'));
-    expect(repeat.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
+    expect(repeat.stdout).toMatchInlineSnapshot(
+      `"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`,
+    );
     expect(repeat.opens).toEqual({ local: 1 });
   });
 
@@ -125,7 +143,9 @@ describe('per-prompt context hook', () => {
     seedGlobalPin();
 
     const run = runHook(PROMPT_HOOK, promptPayload('sess-open-2'));
-    expect(run.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (2 entries, 45 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n- **[verified] [global] PINNED: never force-push the main branch**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
+    expect(run.stdout).toMatchInlineSnapshot(
+      `"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (2 entries, 45 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n- **[verified] [global] PINNED: never force-push the main branch**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`,
+    );
     expect(run.opens).toEqual({ local: 1, global: 1 });
   });
 
@@ -134,7 +154,9 @@ describe('per-prompt context hook', () => {
     seedGlobalPin();
 
     const run = runHook(PROMPT_HOOK, promptPayload('sess-open-3'));
-    expect(run.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 27 tokens)\\n\\n- **[verified] [global] PINNED: never force-push the main branch**"}}"`);
+    expect(run.stdout).toMatchInlineSnapshot(
+      `"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 27 tokens)\\n\\n- **[verified] [global] PINNED: never force-push the main branch**"}}"`,
+    );
     expect(run.opens).toEqual({ global: 1 });
   });
 });
@@ -162,7 +184,12 @@ describe('session and tool-failure hooks', () => {
 
   it('pre-compact opens the store as often with the delivery ledger on as with it off', () => {
     const payload = (id: string): string =>
-      JSON.stringify({ session_id: id, transcript_path: path.join(tmp, 'none.jsonl'), hook_event_name: 'PreCompact', trigger: 'auto' });
+      JSON.stringify({
+        session_id: id,
+        transcript_path: path.join(tmp, 'none.jsonl'),
+        hook_event_name: 'PreCompact',
+        trigger: 'auto',
+      });
     const off = runHook(['pre-compact'], payload('sess-open-8'));
     setLedger(true);
     const on = runHook(['pre-compact'], payload('sess-open-9'));
@@ -172,7 +199,11 @@ describe('session and tool-failure hooks', () => {
   });
 
   it('post-compact opens the store once', () => {
-    const payload = { session_id: 'sess-open-6', trigger: 'manual', compact_summary: 'Rolled back the postgres migration and wrote the deploy plan.' };
+    const payload = {
+      session_id: 'sess-open-6',
+      trigger: 'manual',
+      compact_summary: 'Rolled back the postgres migration and wrote the deploy plan.',
+    };
     const run = runHook(['post-compact', '--log-file', path.join(tmp, 'compact.log')], JSON.stringify(payload));
     expect(run.stdout).toMatchInlineSnapshot(`
       "Hippo kept this compaction's summary; it listed no new memories.
@@ -182,17 +213,27 @@ describe('session and tool-failure hooks', () => {
   });
 
   it('capture-error opens the store once', () => {
-    const payload = { session_id: 'sess-open-5', tool_name: 'Bash', tool_input: { command: 'npm test' }, error: 'Command failed: npm test exited 1' };
+    const payload = {
+      session_id: 'sess-open-5',
+      tool_name: 'Bash',
+      tool_input: { command: 'npm test' },
+      error: 'Command failed: npm test exited 1',
+    };
     const run = runHook(['capture-error'], JSON.stringify(payload));
     expect(run.stdout).toBe('');
     expect(run.opens).toEqual({ local: 1 });
   });
 
   it('capture-error opens the store once with the delivery ledger on, as with it off, and writes one row', () => {
-    const payload = (id: string): string => JSON.stringify({
-      session_id: id, tool_name: 'Bash', tool_use_id: 'toolu_open', tool_input: { command: 'npm test' }, error: 'Command failed: npm test exited 1',
-      hook_event_name: 'PostToolUseFailure',
-    });
+    const payload = (id: string): string =>
+      JSON.stringify({
+        session_id: id,
+        tool_name: 'Bash',
+        tool_use_id: 'toolu_open',
+        tool_input: { command: 'npm test' },
+        error: 'Command failed: npm test exited 1',
+        hook_event_name: 'PostToolUseFailure',
+      });
     const off = runHook(['capture-error'], payload('sess-open-10'));
     setLedger(true);
     const on = runHook(['capture-error'], payload('sess-open-11'));

@@ -42,9 +42,12 @@ describe('POST /v1/sleep admin-role gate', () => {
   });
 
   const keyless = (path: string, method = 'POST'): Promise<Response> =>
-    fetch(`${handle.url}${path}`, method === 'GET'
-      ? { method }
-      : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dry_run: true }) });
+    fetch(
+      `${handle.url}${path}`,
+      method === 'GET'
+        ? { method }
+        : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dry_run: true }) },
+    );
 
   it('loopback no-Bearer is a member: 403 on sleep and the quarantine routes, 200 on a member route', async () => {
     expect(process.env.HIPPO_KEYLESS_LOCAL_ROLE).toBeUndefined();
@@ -75,14 +78,14 @@ describe('POST /v1/sleep admin-role gate', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': `Bearer ${memberKey}`,
+        authorization: `Bearer ${memberKey}`,
       },
       body: JSON.stringify({ dry_run: true }),
     });
     expect(res.status).toBe(403);
     // SAFETY: this route's 403 handler always returns a JSON body shaped
     // { error: string } (src/server.ts admin-role gate on POST /v1/sleep).
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain('admin role');
   });
 });

@@ -75,11 +75,7 @@ describe('batchWriteAndDelete', () => {
     const toWrite1 = createMemory('batch written 1');
     const toWrite2 = createMemory('batch written 2');
 
-    batchWriteAndDelete(
-      tmpDir,
-      [toWrite1, toWrite2],
-      [toDelete1.id, toDelete2.id],
-    );
+    batchWriteAndDelete(tmpDir, [toWrite1, toWrite2], [toDelete1.id, toDelete2.id]);
 
     const all = loadAllEntries(tmpDir, 'default');
     const ids = all.map((e) => e.id);

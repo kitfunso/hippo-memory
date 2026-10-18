@@ -49,25 +49,30 @@ export async function replayDlqEntry(
   opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
   const { webhookSecret, previousSecret, ingestHook } = opts;
-  return replayParked<'github', JsonValue & GitHubWebhookEnvelope>({
-    dlq: githubDlq,
-    // The secret in effect now, not the one in effect when the row was parked.
-    refuseSignature: (row) => (webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null),
-    isEnvelope: isGitHubWebhookEnvelope,
-    notEnvelope: 'not a GitHub webhook envelope',
-    reingest: async (row) => {
-      if (!ingestHook) {
-        return { ok: true, status: 'replayed', memoryId: null, reason: 'dry-run: no ingest hook supplied' };
-      }
-      // The hook owns routing, idempotency and the memory write, and re-derives the key from the parsed event.
-      const { memoryId } = await ingestHook(ctx, {
-        rawPayload: row.rawPayload,
-        eventName: row.eventName ?? '',
-        deliveryId: row.deliveryId ?? '',
-      });
-      return { ok: true, status: 'replayed', memoryId };
+  return replayParked<'github', JsonValue & GitHubWebhookEnvelope>(
+    {
+      dlq: githubDlq,
+      // The secret in effect now, not the one in effect when the row was parked.
+      refuseSignature: (row) => (webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null),
+      isEnvelope: isGitHubWebhookEnvelope,
+      notEnvelope: 'not a GitHub webhook envelope',
+      reingest: async (row) => {
+        if (!ingestHook) {
+          return { ok: true, status: 'replayed', memoryId: null, reason: 'dry-run: no ingest hook supplied' };
+        }
+        // The hook owns routing, idempotency and the memory write, and re-derives the key from the parsed event.
+        const { memoryId } = await ingestHook(ctx, {
+          rawPayload: row.rawPayload,
+          eventName: row.eventName ?? '',
+          deliveryId: row.deliveryId ?? '',
+        });
+        return { ok: true, status: 'replayed', memoryId };
+      },
     },
-  }, ctx.store, id, opts.force === true);
+    ctx.store,
+    id,
+    opts.force === true,
+  );
 }
 
 function refuseSignature(

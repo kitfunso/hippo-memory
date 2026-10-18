@@ -3,7 +3,11 @@
 import { isSubagentPayload } from '../util/hook-payload.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 
-export interface CompactResumePayload { suppressOutput: boolean; payloadSessionId: string | null; boundary: boolean }
+export interface CompactResumePayload {
+  suppressOutput: boolean;
+  payloadSessionId: string | null;
+  boundary: boolean;
+}
 
 /**
  * Fail-closed read of the SessionStart payload: only a manual run or a main-session `source: 'compact'` payload may

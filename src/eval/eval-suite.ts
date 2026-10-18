@@ -175,8 +175,8 @@ function dagSummaryEntry(): MemoryEntry {
   return mem(
     'dag-summary-1',
     'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing ' +
-    'index), ' +
-    '/reports takes 8s ' +
+      'index), ' +
+      '/reports takes 8s ' +
       '(needs job queue)',
     {
       created: dateOffset(16),
@@ -281,21 +281,36 @@ function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
 
 // Noise resistance: relevant memories must be found despite these.
 const NOISE_TOPICS = [
-  'breakfast meeting catering ordered sandwiches', 'office temperature thermostat adjusted',
-  'printer paper refill third floor supply', 'parking lot gate code changed 4521',
-  'fire drill scheduled next Thursday morning', 'coffee machine broken maintenance called',
-  'desk booking system new policy hybrid', 'meeting room projector HDMI adapter missing',
-  'birthday celebration for Dave next Friday', 'recycling bins moved to kitchen area',
-  'badge access updated for new hires', 'elevator maintenance scheduled weekend',
-  'lunch order from Italian place confirmed', 'desk plants watering schedule posted',
-  'air conditioning unit serviced last week', 'office carpet cleaning Friday evening',
-  'new microwave installed in kitchen', 'visitor parking available spots three',
-  'holiday schedule posted on intranet', 'team photo session Thursday afternoon',
-  'chair ergonomics assessment signup sheet', 'standing desk adjustment instructions',
-  'kitchen fridge cleanup policy reminder', 'window blinds replaced on south side',
-  'bicycle rack installed in parking garage', 'team lunch budget increased quarterly',
-  'noise canceling headphones approved expense', 'monitor arm request form updated',
-  'desk drawer key replacement procedure', 'building security hours extended',
+  'breakfast meeting catering ordered sandwiches',
+  'office temperature thermostat adjusted',
+  'printer paper refill third floor supply',
+  'parking lot gate code changed 4521',
+  'fire drill scheduled next Thursday morning',
+  'coffee machine broken maintenance called',
+  'desk booking system new policy hybrid',
+  'meeting room projector HDMI adapter missing',
+  'birthday celebration for Dave next Friday',
+  'recycling bins moved to kitchen area',
+  'badge access updated for new hires',
+  'elevator maintenance scheduled weekend',
+  'lunch order from Italian place confirmed',
+  'desk plants watering schedule posted',
+  'air conditioning unit serviced last week',
+  'office carpet cleaning Friday evening',
+  'new microwave installed in kitchen',
+  'visitor parking available spots three',
+  'holiday schedule posted on intranet',
+  'team photo session Thursday afternoon',
+  'chair ergonomics assessment signup sheet',
+  'standing desk adjustment instructions',
+  'kitchen fridge cleanup policy reminder',
+  'window blinds replaced on south side',
+  'bicycle rack installed in parking garage',
+  'team lunch budget increased quarterly',
+  'noise canceling headphones approved expense',
+  'monitor arm request form updated',
+  'desk drawer key replacement procedure',
+  'building security hours extended',
 ];
 
 function noiseEntries(): MemoryEntry[] {
@@ -307,14 +322,15 @@ function noiseTargetEntries(): MemoryEntry[] {
     mem(
       'nr-1',
       'The database connection pool was exhausted because max_connections was set to 10 but the application had 25 ' +
-      'concurrent requests',
+        'concurrent requests',
       {
         created: dateOffset(20),
         tags: ['topic:database', 'topic:performance'],
       },
     ),
     mem('nr-2', 'The S3 bucket policy was misconfigured allowing public read access to customer data uploads', {
-      created: dateOffset(21), tags: ['topic:security', 'topic:s3'],
+      created: dateOffset(21),
+      tags: ['topic:security', 'topic:s3'],
     }),
   ];
 }
@@ -336,8 +352,11 @@ function noiseCases(): FeatureTestCase[] {
       description: 'find S3 issue despite noise',
     },
     {
-      id: 'nr-q3', category: 'noise-resistance', query: 'PostgreSQL migration constraint', expectedIds: ['dr-1'],
-      description: 'find earlier DB entry despite noise'
+      id: 'nr-q3',
+      category: 'noise-resistance',
+      query: 'PostgreSQL migration constraint',
+      expectedIds: ['dr-1'],
+      description: 'find earlier DB entry despite noise',
     },
     {
       id: 'nr-q4',
@@ -357,12 +376,18 @@ function addNoiseResistance(entries: MemoryEntry[], cases: FeatureTestCase[]): v
 function multiHopCases(): FeatureTestCase[] {
   return [
     {
-      id: 'mh-q1', category: 'multi-hop', query: 'Who fixed the Stripe webhook bug and what was the root cause?',
-      expectedIds: ['mh-1', 'mh-2', 'mh-3'], description: 'chain Alice -> Stripe -> Bob -> fix'
+      id: 'mh-q1',
+      category: 'multi-hop',
+      query: 'Who fixed the Stripe webhook bug and what was the root cause?',
+      expectedIds: ['mh-1', 'mh-2', 'mh-3'],
+      description: 'chain Alice -> Stripe -> Bob -> fix',
     },
     {
-      id: 'mh-q2', category: 'multi-hop', query: 'What are all the payment-related issues the team discussed?',
-      expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'], description: 'find all payment topics across speakers'
+      id: 'mh-q2',
+      category: 'multi-hop',
+      query: 'What are all the payment-related issues the team discussed?',
+      expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'],
+      description: 'find all payment topics across speakers',
     },
   ];
 }
@@ -429,7 +454,7 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
     } else {
       results = search(c.query, entries, { budget: 50000 });
     }
-    const returnedIds = results.map(r => r.entry.id);
+    const returnedIds = results.map((r) => r.entry.id);
 
     caseResults.push({
       case: c,
@@ -561,7 +586,7 @@ export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): 
   lines.push('');
   lines.push(
     `${pad('Feature', 24)} | ${pad('MRR', 8)} | ${pad('R@5', 8)} | ${pad('NDCG@5', 8)} | ${pad('vs baseline', 12)} | ` +
-    `verdict`,
+      `verdict`,
   );
   lines.push(
     `${'─'.repeat(24)}-|-${'─'.repeat(8)}-|-${'─'.repeat(8)}-|-` +
@@ -580,7 +605,7 @@ export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): 
   lines.push('');
   lines.push(
     `Overall: MRR ${pct(result.overall.mrr)} | R@5 ${pct(result.overall.recallAt5)} | NDCG@5 ` +
-    `${pct(result.overall.ndcgAt5)}`,
+      `${pct(result.overall.ndcgAt5)}`,
   );
 
   if (report) lines.push(...formatReportLines(report));

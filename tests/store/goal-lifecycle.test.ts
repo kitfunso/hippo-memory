@@ -1,7 +1,8 @@
 // tests/store/goal-lifecycle.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 
-const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
+const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) =>
+  activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { activeGoalsWithPolicies, pushGoal, completeGoal, suspendGoal } from '../_helpers/root-forms.js';
@@ -21,7 +22,11 @@ describe('goal lifecycle', () => {
       // SAFETY: the goal_stack table's status/completed_at/outcome_score columns are
       // TEXT/TEXT/REAL per the migration in src/db/index.ts; this query selects exactly
       // those three columns for a single row by primary key.
-      const row = db.prepare(`SELECT status, completed_at, outcome_score FROM goal_stack WHERE id = ?`).get(g.id) as { status: string; completed_at: string; outcome_score: number };
+      const row = db.prepare(`SELECT status, completed_at, outcome_score FROM goal_stack WHERE id = ?`).get(g.id) as {
+        status: string;
+        completed_at: string;
+        outcome_score: number;
+      };
       expect(row.status).toBe('completed');
       expect(row.completed_at).toBeTruthy();
       expect(row.outcome_score).toBe(0.85);

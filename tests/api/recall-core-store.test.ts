@@ -10,7 +10,11 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
 import {
-  sqliteStore, type HippoStore, type LastRecall, type LastRecallWrites, type RecallWrites,
+  sqliteStore,
+  type HippoStore,
+  type LastRecall,
+  type LastRecallWrites,
+  type RecallWrites,
 } from '../../src/store/index.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
@@ -30,8 +34,21 @@ function cliCore(): CliCoreRecall {
   const config = loadConfig(hippoRoot);
   return {
     rank: {
-      budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
-      search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
+      budget: 4000,
+      cost: (r) => r.tokens,
+      window: { limit: 10 },
+      includeSuperseded: false,
+      explicitScope: null,
+      activeScope: null,
+      search: {
+        usePhysics: false,
+        physicsConfig: config.physics,
+        multihop: false,
+        mmr: false,
+        mmrLambda: 0.7,
+        localBump: 1.2,
+        explain: false,
+      },
     },
     show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
     lastRecall: sqliteStore(hippoRoot).lastRecall,
@@ -52,7 +69,10 @@ beforeEach(() => {
   hippoRoot = join(home, '.hippo');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   initStore(hippoRoot);
-  for (const [i, text] of ['deploy pipeline uses blue green rollout', 'deploy token rotation happens weekly'].entries()) {
+  for (const [i, text] of [
+    'deploy pipeline uses blue green rollout',
+    'deploy token rotation happens weekly',
+  ].entries()) {
     writeEntry(hippoRoot, { ...createMemory(text), id: `mem_core_${i}`, strength: 1 });
   }
 });
@@ -74,7 +94,13 @@ describe('retrieve with the CLI ranking core', () => {
       },
     };
     const store: HippoStore = { ...inner, lastRecall: traced };
-    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store, config: loadConfig(hippoRoot) };
+    const ctx: Context = {
+      hippoRoot,
+      tenantId: 'default',
+      actor: adminActor('cli'),
+      store,
+      config: loadConfig(hippoRoot),
+    };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), lastRecall: traced } });
 
@@ -104,16 +130,29 @@ describe('retrieve with the CLI ranking core', () => {
     expect([...outcome.ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
   });
 
-  it('writes the second store\'s recall rows through the store named for that root', async () => {
+  it("writes the second store's recall rows through the store named for that root", async () => {
     const secondRoot = join(home, 'second');
     initStore(secondRoot);
-    writeEntry(secondRoot, { ...createMemory('deploy notes kept in the second store'), id: 'mem_second_0', strength: 1 });
+    writeEntry(secondRoot, {
+      ...createMemory('deploy notes kept in the second store'),
+      id: 'mem_second_0',
+      strength: 1,
+    });
     const inner = portOnlyStore(secondRoot);
     const writes: RecallWrites[] = [];
-    const globalStore: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
+    const globalStore: HippoStore = {
+      ...inner,
+      finishRecall: async (w) => {
+        writes.push(w);
+        await inner.finishRecall(w);
+      },
+    };
     const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
 
-    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) } } });
+    const result = await retrieve(ctx, {
+      query: 'deploy',
+      cliCore: { ...cliCore(), sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) } },
+    });
 
     expect(result.results.map((r) => r.id)).toContain('mem_second_0');
     expect(writes).toHaveLength(1);

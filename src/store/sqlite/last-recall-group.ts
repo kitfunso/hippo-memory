@@ -39,15 +39,22 @@ export function finishRecallAt(db: DatabaseSyncLike, writes: RecallWrites): Reca
 export function sqliteLastRecall(on: OnHandle): Sync<LastRecall> {
   return {
     applyTracedOutcome: (outcome, traceId) => on((db, files) => applyOutcomeAt(db, files, outcome, traceId), openStore),
-    applyOutcomeToLast: (target, good) => on((db, files) => {
-      const { last_retrieval_ids: ids, last_trace_id: trace } = loadLastRecallAt(db);
-      if (ids.length === 0) return [];
-      return applyOutcomeAt(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
-    }, openStore),
+    applyOutcomeToLast: (target, good) =>
+      on((db, files) => {
+        const { last_retrieval_ids: ids, last_trace_id: trace } = loadLastRecallAt(db);
+        if (ids.length === 0) return [];
+        return applyOutcomeAt(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
+      }, openStore),
     finishRecall(writes, globalRoot) {
       const { ids, opts } = writes.strengthen;
       const { traceId, strengthened } = on((db) => finishRecallAt(db, writes));
-      if (globalRoot !== undefined) strengthenRetrieved(globalRoot, ids.filter((id) => !strengthened.has(id)), opts);
+      if (globalRoot !== undefined) {
+        strengthenRetrieved(
+          globalRoot,
+          ids.filter((id) => !strengthened.has(id)),
+          opts,
+        );
+      }
       // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
       const index = { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) };
       on((db) => saveIndexAt(db, index), openStore);

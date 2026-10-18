@@ -1,4 +1,3 @@
-
 // Keeps the last meaningful segments, the most specific ones.
 const PATH_SEGMENTS_KEPT = 4;
 
@@ -11,16 +10,35 @@ export function extractPathTags(dirPath: string): string[] {
   const segments = normalized.split('/').filter(Boolean);
 
   const noise = new Set([
-    'users', 'home', 'documents', 'desktop', 'downloads',
-    'node_modules', '.git', '.hippo', 'dist', 'build',
-    'c:', 'd:', 'tmp', 'temp', 'var', 'usr', 'opt', 'etc',
-    'appdata', 'local', 'roaming', 'program files', 'program files (x86)',
+    'users',
+    'home',
+    'documents',
+    'desktop',
+    'downloads',
+    'node_modules',
+    '.git',
+    '.hippo',
+    'dist',
+    'build',
+    'c:',
+    'd:',
+    'tmp',
+    'temp',
+    'var',
+    'usr',
+    'opt',
+    'etc',
+    'appdata',
+    'local',
+    'roaming',
+    'program files',
+    'program files (x86)',
   ]);
 
   return segments
-    .filter(s => s.length >= 2 && !noise.has(s.toLowerCase()))
+    .filter((s) => s.length >= 2 && !noise.has(s.toLowerCase()))
     .slice(-PATH_SEGMENTS_KEPT)
-    .map(s => `path:${s.toLowerCase()}`);
+    .map((s) => `path:${s.toLowerCase()}`);
 }
 
 /** Path overlap score in 0..1 (1 = perfect match), normalized by the MORE SPECIFIC side (the larger tag set),
@@ -31,7 +49,7 @@ export function pathOverlapScore(memoryPathTags: string[], currentPathTags: stri
   if (memoryPathTags.length === 0 || currentPathTags.length === 0) return 0;
 
   const memSet = new Set(memoryPathTags);
-  const matches = currentPathTags.filter(t => memSet.has(t)).length;
+  const matches = currentPathTags.filter((t) => memSet.has(t)).length;
 
   // Normalize by the more specific side (the larger tag set) — kills the
   // genericity reward a memory-count-only normalization gave bare path tags.
@@ -46,6 +64,6 @@ const PATH_BOOST_WEIGHT = 0.3;
  * itself so call sites cannot drift.
  */
 export function pathBoostMultiplier(memoryTags: string[], currentPathTags: string[]): number {
-  const memPathTags = memoryTags.filter(t => t.startsWith('path:'));
+  const memPathTags = memoryTags.filter((t) => t.startsWith('path:'));
   return 1.0 + pathOverlapScore(memPathTags, currentPathTags) * PATH_BOOST_WEIGHT;
 }

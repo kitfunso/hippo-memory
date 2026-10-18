@@ -38,9 +38,21 @@ describe('upgrading a populated v1 store to the latest schema', () => {
         emotional_valence, schema_fit, source, outcome_score, conflicts_with_json, pinned, confidence, content)
        VALUES (?, '2025-01-02T03:04:05.000Z', '2025-02-03T04:05:06.000Z', ?, ?, 30, ?, ?, 'neutral', 0.5, 'cli', NULL, '[]', ?, 'verified', ?)`,
     );
-    insert.run('mem_old_1', 3, 0.8, 'semantic', '["alpha","beta"]', 1, 'a pinned semantic lesson from the first release');
+    insert.run(
+      'mem_old_1',
+      3,
+      0.8,
+      'semantic',
+      '["alpha","beta"]',
+      1,
+      'a pinned semantic lesson from the first release',
+    );
     insert.run('mem_old_2', 0, 0.4, 'episodic', '[]', 0, 'an episodic note');
-    old.prepare(`INSERT INTO consolidation_runs (timestamp, decayed, merged, removed) VALUES ('2025-02-01T00:00:00.000Z', 4, 2, 1)`).run();
+    old
+      .prepare(
+        `INSERT INTO consolidation_runs (timestamp, decayed, merged, removed) VALUES ('2025-02-01T00:00:00.000Z', 4, 2, 1)`,
+      )
+      .run();
     old.close();
   });
 

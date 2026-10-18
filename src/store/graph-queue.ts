@@ -14,14 +14,17 @@ function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: str
   // enqueue is memory-keyed (no source object), so a missing memory still throws (correct -
   // you cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
   const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
-  const result = db.prepare(`
+  const result = db
+    .prepare(`
     INSERT INTO graph_extraction_queue(tenant_id, memory_id, kind, status, enqueued_at, processed_at)
     VALUES (?, ?, ?, 'pending', ?, NULL)
-  `).run(tenantId, memoryId, sourceKind, now);
+  `)
+    .run(tenantId, memoryId, sourceKind, now);
   const id = Number(result.lastInsertRowid ?? 0);
   // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
   const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as
-    QueueRow | undefined;
+    | QueueRow
+    | undefined;
   if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
   return rowToQueueItem(row);
 }
@@ -49,11 +52,13 @@ export function markGraphDirtyAt(db: DatabaseSyncLike, tenantId: string, memoryI
 export function markPendingProcessedUpToAt(db: DatabaseSyncLike, tenantId: string, maxId: number): number {
   assertTenantId('markPendingProcessedUpTo', tenantId);
   const now = new Date().toISOString();
-  const res = db.prepare(`
+  const res = db
+    .prepare(`
     UPDATE graph_extraction_queue
     SET status = 'processed', processed_at = ?
     WHERE tenant_id = ? AND status = 'pending' AND id <= ?
-  `).run(now, tenantId, maxId);
+  `)
+    .run(now, tenantId, maxId);
   return Number(res.changes ?? 0);
 }
 
@@ -63,12 +68,13 @@ export function markPendingProcessedUpToAt(db: DatabaseSyncLike, tenantId: strin
 export function loadPendingExtractionTenantsAt(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
   // SAFETY: rows' shape matches the two aliased columns (tenant_id, max_id)
   // named in the SELECT above.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT tenant_id AS tenant_id, MAX(id) AS max_id
     FROM graph_extraction_queue
     WHERE status = 'pending'
     GROUP BY tenant_id
-  `).all() as { tenant_id: string; max_id: number }[];
+  `)
+    .all() as { tenant_id: string; max_id: number }[];
   return rows.map((r) => ({ tenantId: r.tenant_id, maxPendingId: Number(r.max_id) }));
 }
-

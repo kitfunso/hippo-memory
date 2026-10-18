@@ -64,9 +64,7 @@ function median(nums: readonly number[]): number {
 }
 
 function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] {
-  return refs
-    .map((e) => ({ id: e.id, ts: Date.parse(e.created) }))
-    .filter((e) => Number.isFinite(e.ts));
+  return refs.map((e) => ({ id: e.id, ts: Date.parse(e.created) })).filter((e) => Number.isFinite(e.ts));
 }
 
 /**
@@ -76,8 +74,7 @@ function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] 
 export function detectAvailabilityBias(opts: DetectAvailabilityBiasOptions): AvailabilityHint | null {
   const now = opts.now ?? Date.now();
   const recencyWindowMs = opts.recencyWindowMs ?? DEFAULT_RECENCY_WINDOW_MS;
-  const recentFractionThreshold =
-    opts.recentFractionThreshold ?? DEFAULT_RECENT_FRACTION_THRESHOLD;
+  const recentFractionThreshold = opts.recentFractionThreshold ?? DEFAULT_RECENT_FRACTION_THRESHOLD;
   const minReturned = opts.minReturned ?? DEFAULT_MIN_RETURNED;
   const minPool = opts.minPool ?? DEFAULT_MIN_POOL;
   const minOlderPassedOver = opts.minOlderPassedOver ?? DEFAULT_MIN_OLDER_PASSED_OVER;

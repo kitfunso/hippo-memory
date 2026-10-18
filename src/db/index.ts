@@ -6,7 +6,7 @@ export {
   withReadSnapshot,
   withTrialScope,
   withWriteScope,
-  withWriteScopeOr
+  withWriteScopeOr,
 } from './busy.js';
 export { getSchemaVersion, getMeta, setMeta, isFtsAvailable } from './meta.js';
 export { countTableRows, pruneConsolidationRuns, CONSOLIDATION_RUNS_KEPT } from './tables.js';

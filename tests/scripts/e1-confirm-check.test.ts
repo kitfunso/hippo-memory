@@ -18,10 +18,23 @@ beforeAll(() => {
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 // No stale hits, so compare.mjs's cleanStaleR5 is the same quantity as split's updatedR5.
-function writeRun(arm: string, seed: number, hitOf: (i: number) => boolean, meta: { halfLife?: number; ranAt?: string } = {}): void {
+function writeRun(
+  arm: string,
+  seed: number,
+  hitOf: (i: number) => boolean,
+  meta: { halfLife?: number; ranAt?: string } = {},
+): void {
   const probes = Array.from({ length: 40 }, (_, i) => ({
-    factId: i, hot: i % 2 === 0, staleEligible: i % 3 === 0, trapEligible: false, contraEligible: false,
-    hit: hitOf(i), rank: 0, staleHit: false, trapHit: false, contraHit: false,
+    factId: i,
+    hot: i % 2 === 0,
+    staleEligible: i % 3 === 0,
+    trapEligible: false,
+    contraEligible: false,
+    hit: hitOf(i),
+    rank: 0,
+    staleHit: false,
+    trapHit: false,
+    contraHit: false,
   }));
   const file = { meta: { protocolHash: `h${seed}`, arm, seed, ...meta }, epochs: [{ probes }] };
   fs.writeFileSync(path.join(dir, `${arm}-seed${seed}.json`), JSON.stringify(file));
@@ -38,7 +51,11 @@ describe('confirm-check.mjs', () => {
     const split = run('confirm-check.mjs', ['split', `${dir}:x`, `${dir}:y`, '1-8']);
     expect(cmp.status, cmp.stderr).toBe(0);
     expect(split.status, split.stderr).toBe(0);
-    const line = (out: string, metric: string) => out.split('\n').find((l) => l.startsWith(`${metric} |`))?.slice(metric.length);
+    const line = (out: string, metric: string) =>
+      out
+        .split('\n')
+        .find((l) => l.startsWith(`${metric} |`))
+        ?.slice(metric.length);
     expect(line(split.stdout, 'nonStaleR5')).toMatch(/\[/);
     expect(line(split.stdout, 'nonStaleR5')).toBe(line(cmp.stdout, 'nonStaleR5'));
     expect(line(split.stdout, 'updatedR5')).toMatch(/\[/);
@@ -46,7 +63,11 @@ describe('confirm-check.mjs', () => {
   });
 
   it('refuses a bad, reversed or repeated seed spec before reading any file', () => {
-    for (const [spec, msg] of [['5-3', /bad seed spec: 5-3/], ['1,x', /bad seed spec: 1,x/], ['1,2,1', /repeated seed in 1,2,1/]] as const) {
+    for (const [spec, msg] of [
+      ['5-3', /bad seed spec: 5-3/],
+      ['1,x', /bad seed spec: 1,x/],
+      ['1,2,1', /repeated seed in 1,2,1/],
+    ] as const) {
       const r = run('confirm-check.mjs', ['diff', `${dir}:nope`, `${dir}:nope`, spec]);
       expect(r.status).not.toBe(0);
       expect(r.stderr).toMatch(msg);
@@ -71,7 +92,11 @@ describe('confirm-check.mjs', () => {
     const r = run('confirm-check.mjs', ['r4-seeds', '81', '20']);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/seed 89: .* 50\.8% v1 window, SKIP/);
-    const kept = r.stdout.match(/R4 seeds: (.*)/)?.[1].trim().split(',') ?? [];
+    const kept =
+      r.stdout
+        .match(/R4 seeds: (.*)/)?.[1]
+        .trim()
+        .split(',') ?? [];
     expect(kept).toHaveLength(20);
     expect(kept).not.toContain('89');
   });

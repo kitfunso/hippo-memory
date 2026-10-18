@@ -6,7 +6,12 @@ import { readApiKeyRecord } from '../../src/store/auth.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import { NotFoundError } from '../../src/server.js';
 import {
-  type ApiKeyRecord, type AppendAuditOpts, type AuditEvent, type HippoStore, type KeyAudit, type ListAuditAfterOpts,
+  type ApiKeyRecord,
+  type AppendAuditOpts,
+  type AuditEvent,
+  type HippoStore,
+  type KeyAudit,
+  type ListAuditAfterOpts,
 } from '../../src/entry/store-kit.js';
 import type { StoreSide } from './store-conformance.js';
 import { portOnlyStore } from './port-only-store.js';
@@ -26,10 +31,12 @@ function copyRows(hippoRoot: string): CopiedRows {
   try {
     // SAFETY: the SELECT names one column, key_id.
     const ids = db.prepare('SELECT key_id FROM api_keys').all() as { key_id: string }[];
-    const keys = new Map(ids.flatMap(({ key_id }): [string, ApiKeyRecord][] => {
-      const record = readApiKeyRecord(db, key_id);
-      return record ? [[key_id, record]] : [];
-    }));
+    const keys = new Map(
+      ids.flatMap(({ key_id }): [string, ApiKeyRecord][] => {
+        const record = readApiKeyRecord(db, key_id);
+        return record ? [[key_id, record]] : [];
+      }),
+    );
     return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighIdAt(db) };
   } finally {
     closeHippoDb(db);
@@ -38,7 +45,9 @@ function copyRows(hippoRoot: string): CopiedRows {
 
 /** listAuditEventsAfter's checks and clamp, which every store owes its callers. */
 function checkedLimit(opts: ListAuditAfterOpts): number {
-  if (!Number.isInteger(opts.afterId) || opts.afterId < 0) throw new RangeError('afterId must be a non-negative integer');
+  if (!Number.isInteger(opts.afterId) || opts.afterId < 0) {
+    throw new RangeError('afterId must be a non-negative integer');
+  }
   if (opts.limit !== undefined && !Number.isInteger(opts.limit)) throw new RangeError('limit must be an integer');
   return Math.max(1, Math.min(opts.limit ?? 1000, 10000));
 }
@@ -49,7 +58,15 @@ export function inMemoryKeyAuditStore(hippoRoot: string): InMemoryKeyAuditStore 
   const append = (event: AppendAuditOpts): void => {
     lastId += 1;
     const metadata: AuditEvent['metadata'] = JSON.parse(JSON.stringify(event.metadata ?? {}));
-    audit.push({ id: lastId, ts: new Date().toISOString(), tenantId: event.tenantId, actor: event.actor, op: event.op, targetId: event.targetId ?? null, metadata });
+    audit.push({
+      id: lastId,
+      ts: new Date().toISOString(),
+      tenantId: event.tenantId,
+      actor: event.actor,
+      op: event.op,
+      targetId: event.targetId ?? null,
+      metadata,
+    });
   };
   const keyAudit: KeyAudit = {
     async revokeApiKey({ tenantId, keyId, actor, at }) {
@@ -62,7 +79,9 @@ export function inMemoryKeyAuditStore(hippoRoot: string): InMemoryKeyAuditStore 
     },
     async auditEventsAfter(opts) {
       const limit = checkedLimit(opts);
-      const rows = audit.filter((e) => e.id > opts.afterId && (opts.tenantId === undefined || e.tenantId === opts.tenantId));
+      const rows = audit.filter(
+        (e) => e.id > opts.afterId && (opts.tenantId === undefined || e.tenantId === opts.tenantId),
+      );
       return structuredClone(rows.slice(0, limit));
     },
     async auditHighId() {

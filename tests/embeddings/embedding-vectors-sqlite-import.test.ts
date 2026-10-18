@@ -5,13 +5,28 @@ import * as path from 'path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getMeta,
+  setMeta,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+} from '../../src/db/index.js';
 import { embeddingInputText } from '../../src/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { embedAll } from '../../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
-import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../../src/db/vector-store.js';
+import {
+  decodeVector,
+  deleteOrphanVectors,
+  encodeVector,
+  rankVectorRows,
+  topVectorMatches,
+  type VectorMatch,
+  type VectorRow,
+} from '../../src/db/vector-store.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, saveEmbeddingIndex } from '../_helpers/root-forms.js';
@@ -59,7 +74,14 @@ function downgradeToV51(): void {
 const backups = (): string[] => fs.readdirSync(root).filter((f) => f.startsWith('embeddings.json.imported-'));
 const vectorRows = (): Array<{ memory_id: string; model: string; dim: number }> =>
   // SAFETY: the SELECT names exactly these three columns.
-  withDb((db) => db.prepare('SELECT memory_id, model, dim FROM memory_vectors ORDER BY memory_id').all() as Array<{ memory_id: string; model: string; dim: number }>);
+  withDb(
+    (db) =>
+      db.prepare('SELECT memory_id, model, dim FROM memory_vectors ORDER BY memory_id').all() as Array<{
+        memory_id: string;
+        model: string;
+        dim: number;
+      }>,
+  );
 
 describe('embeddings.json import at schema v52', () => {
   it('moves every usable vector into the table, keeps the file as a backup, and a second open changes nothing', () => {
@@ -76,7 +98,9 @@ describe('embeddings.json import at schema v52', () => {
     expect(fs.existsSync(path.join(root, 'embeddings.json'))).toBe(false);
     expect(backups()).toHaveLength(1);
     expect(fs.readFileSync(path.join(root, backups()[0]!), 'utf8')).toBe(raw);
-    expect(vectorRows()).toEqual([a.id, b.id].sort().map((id) => ({ memory_id: id, model: 'text-embedding-3-small#t2', dim: 2 })));
+    expect(vectorRows()).toEqual(
+      [a.id, b.id].sort().map((id) => ({ memory_id: id, model: 'text-embedding-3-small#t2', dim: 2 })),
+    );
 
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(2);
     expect(backups()).toHaveLength(1);
@@ -151,7 +175,9 @@ describe('memory_vectors upkeep', () => {
   });
 
   it('the nearest-vector scan breaks ties by id and returns nothing for a zero query', async () => {
-    const rows = ['c', 'a', 'b'].map((t) => createMemory(`${t} note`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    const rows = ['c', 'a', 'b'].map((t) =>
+      createMemory(`${t} note`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     for (const r of rows) writeEntry(root, r);
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r) => [r.id, [1, 0]])));
     const ids = rows.map((r) => r.id).sort();
@@ -162,11 +188,16 @@ describe('memory_vectors upkeep', () => {
   });
 
   it('the nearest-vector scan hands the event loop back part way, and a write on another handle lands meanwhile', async () => {
-    const rows = Array.from({ length: 600 }, (_, i) => createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    const rows = Array.from({ length: 600 }, (_, i) =>
+      createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     batchWriteAndDelete(root, rows, []);
     // Row i sits at angle atan(i + 1) from the query, so the nearest three are rows 0, 1 and 2.
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r, i) => [r.id, [1, i + 1]])));
-    const late = createMemory('written while the scan ran', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const late = createMemory('written while the scan ran', {
+      tenantId: 'default',
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     let wrote = 'the scan never gave up the event loop';
     setImmediate(() => {
       try {
@@ -195,12 +226,23 @@ describe('rankVectorRows, the ranking an add-on store shares with hippo.db', () 
   it('skips a zero-norm row and a row of another dim; a zero query, an empty one or k 0 ranks nothing', () => {
     const rows = [row('zero', [0, 0]), row('wide', [0, 1, 0]), row('ok', [0, 1])];
     expect(rankVectorRows([0, 1], rows, 5).map((m) => m.id)).toEqual(['ok']);
-    expect([rankVectorRows([0, 0], rows, 5), rankVectorRows([], rows, 5), rankVectorRows([0, 1], rows, 0)]).toEqual([[], [], []]);
+    expect([rankVectorRows([0, 0], rows, 5), rankVectorRows([], rows, 5), rankVectorRows([0, 1], rows, 0)]).toEqual([
+      [],
+      [],
+      [],
+    ]);
   });
 
   it('gives the ids and scores topVectorMatches gives on the same stored rows', async () => {
-    const vectors = [[0.1, 0.7, 0.3], [0.3, 0.1, 0.9], [0.1000001, 0.7, 0.3], [-0.5, 0.2, 0.1]];
-    const rows = vectors.map((_, i) => createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    const vectors = [
+      [0.1, 0.7, 0.3],
+      [0.3, 0.1, 0.9],
+      [0.1000001, 0.7, 0.3],
+      [-0.5, 0.2, 0.1],
+    ];
+    const rows = vectors.map((_, i) =>
+      createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     for (const r of rows) writeEntry(root, r);
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r, i) => [r.id, vectors[i]!])));
     const q = [0.12345678901, 0.7, 0.29];

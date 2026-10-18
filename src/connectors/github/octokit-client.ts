@@ -27,10 +27,7 @@ export interface GitHubBackfillPage {
   readonly rateLimit: RateLimitInfo;
 }
 
-export type GitHubFetcher = (args: {
-  url: string;
-  token: string;
-}) => Promise<GitHubBackfillPage>;
+export type GitHubFetcher = (args: { url: string; token: string }) => Promise<GitHubBackfillPage>;
 
 /** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
 export function parseNextLink(linkHeader: string): string | null {
@@ -72,13 +69,17 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
 }
 
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
-  const res = await fetchWithRetry(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+  const res = await fetchWithRetry(
+    url,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
     },
-  }, { timeoutMs: GITHUB_TIMEOUT_MS });
+    { timeoutMs: GITHUB_TIMEOUT_MS },
+  );
   const headers = headersToRecord(res.headers);
   const rateLimit = parseRateLimit(headers, res.status);
 

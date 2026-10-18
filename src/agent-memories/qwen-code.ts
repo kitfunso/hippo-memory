@@ -17,7 +17,7 @@ function baseDir(ctx: AdapterContext): string {
 
 /** The nearest folder at or above `start` holding a `.git` entry; a file counts, so a linked worktree keeps its own. */
 function gitRoot(start: string): string | null {
-  for (let dir = start; ; ) {
+  for (let dir = start; ;) {
     if (fs.existsSync(path.join(dir, '.git'))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return null;

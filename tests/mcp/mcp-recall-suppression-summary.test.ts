@@ -26,7 +26,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -37,12 +37,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function callTool(
-  reqId: number,
-  name: string,
-  args: Record<string, string | number | boolean>,
-  ctx: McpContext,
-) {
+function callTool(reqId: number, name: string, args: Record<string, string | number | boolean>, ctx: McpContext) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -78,20 +73,29 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     // hybrid budget to drop some, so droppedByBudget > 0 and Cutoff fires.
     // Each row ~100 chars; tight budget = 200 tokens forces ~10 rows max.
     for (let i = 0; i < 30; i++) {
-      writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-        tenantId: 'default',
-      }));
+      writeEntry(
+        home,
+        createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          tenantId: 'default',
+        }),
+      );
     }
-    const res = await callTool(1, 'hippo_recall', { query: 'omega', budget: 200 }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      1,
+      'hippo_recall',
+      { query: 'omega', budget: 200 },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
     // v1.13.3: format is "## Cutoff\nShowing N of M candidates; ..." (was
     // bottom-placed "WYSIATI: showing N/M; ..." in v1.12.13-v1.13.2).
@@ -106,20 +110,29 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     // which has no per-query LIMIT, so it should reflect the full store size.
     // Tight budget forces droppedByBudget > 0 so Cutoff emits.
     for (let i = 0; i < 30; i++) {
-      writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-        tenantId: 'default',
-      }));
+      writeEntry(
+        home,
+        createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          tenantId: 'default',
+        }),
+      );
     }
-    const res = await callTool(2, 'hippo_recall', { query: 'omega', budget: 200 }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      2,
+      'hippo_recall',
+      { query: 'omega', budget: 200 },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
     // Extract Cutoff totalCandidates value via regex.
     const match = text.match(/Showing (\d+) of (\d+) candidates;/);
@@ -137,14 +150,20 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
 
   it('no Cutoff block when memory store is empty (no non-zero counters)', async () => {
     // Empty store -> 0 candidates, 0 of everything -> Cutoff not emitted.
-    const res = await callTool(3, 'hippo_recall', { query: 'nothing' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      3,
+      'hippo_recall',
+      { query: 'nothing' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
     expect(text).not.toMatch(/## Cutoff/);
     // v1.13.3 regression guard: the OLD "WYSIATI:" prefix must never appear
@@ -158,20 +177,29 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
     // test locks the new top-placement so a future refactor cannot regress
     // the warning back below the result list without breaking the suite.
     for (let i = 0; i < 30; i++) {
-      writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
-        layer: Layer.Buffer,
-        kind: 'raw',
-        tenantId: 'default',
-      }));
+      writeEntry(
+        home,
+        createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
+          layer: Layer.Buffer,
+          kind: 'raw',
+          tenantId: 'default',
+        }),
+      );
     }
-    const res = await callTool(4, 'hippo_recall', { query: 'omega', budget: 200 }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp:test',
-      role: 'admin',
-      hostAdmin: true,
-      store: sqliteStore(home), config: loadConfig(home),
-    });
+    const res = await callTool(
+      4,
+      'hippo_recall',
+      { query: 'omega', budget: 200 },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp:test',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
+    );
     const text = extractText(res);
     const cutoffIdx = text.indexOf('## Cutoff');
     // formatMemories starts with "Found N memories:" header; that's the

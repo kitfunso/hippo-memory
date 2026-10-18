@@ -26,16 +26,14 @@ describe('capture coherence', () => {
   });
 
   it('3. a whole sentence keeps its consequence: the "so it is" tail stays attached', () => {
-    const items = extractFromTexts([
-      'I have never seen this test fail on master before, so it is probably a flake.',
+    const items = extractFromTexts(['I have never seen this test fail on master before, so it is probably a flake.']);
+    expect(items.map((i) => i.content)).toEqual([
+      'I have never seen this test fail on master before, so it is probably a flake',
     ]);
-    expect(items.map((i) => i.content)).toEqual(['I have never seen this test fail on master before, so it is probably a flake']);
   });
 
   it('4. periods inside tokens survive clause-bounding', () => {
-    const items = extractFromTexts([
-      'Never edit capture.ts and audit.ts in the same commit without running npm test.',
-    ]);
+    const items = extractFromTexts(['Never edit capture.ts and audit.ts in the same commit without running npm test.']);
     expect(items).toHaveLength(1);
     expect(items[0].content).toContain('capture.ts');
   });
@@ -46,9 +44,7 @@ describe('capture coherence', () => {
     expect(mustNever[0].content.toLowerCase()).toContain('must never');
     expect(mustNever[0].content).toContain('.env');
 
-    const shouldAlways = extractFromTexts([
-      'We should always run the suite twice locally before merging any change.',
-    ]);
+    const shouldAlways = extractFromTexts(['We should always run the suite twice locally before merging any change.']);
     expect(shouldAlways).toHaveLength(1);
     expect(shouldAlways[0].content.toLowerCase()).toContain('always run the suite twice');
   });
@@ -90,7 +86,13 @@ describe('capture coherence', () => {
   });
 
   it('8. pattern-set coverage sweep: one post-fix case per pattern array', () => {
-    const cases: Array<{ array: string; text: string; category: string; mustContain: string; mustNotContain?: string }> = [
+    const cases: Array<{
+      array: string;
+      text: string;
+      category: string;
+      mustContain: string;
+      mustNotContain?: string;
+    }> = [
       {
         array: 'DECISION',
         text: "Let's go with the SQLite-backed store for the local cache.",
@@ -159,7 +161,9 @@ describe('capture coherence', () => {
     const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
 
-    const fix = extractFromTexts(['The fix was to bump the pool timeout to 30s, because the recycler defaults were too aggressive.']);
+    const fix = extractFromTexts([
+      'The fix was to bump the pool timeout to 30s, because the recycler defaults were too aggressive.',
+    ]);
     expect(fix, 'a "the fix was to ..." memory must not vanish').toHaveLength(1);
     expect(fix[0].content).toContain('pool timeout');
   });
@@ -172,8 +176,7 @@ describe('capture coherence', () => {
     // ordinary prose master handles correctly.
     const items = extractFromTexts(["Always pass 'user's a, b list' to the parser."]);
     expect(items).toHaveLength(1);
-    expect(items[0].content, 'possessive inside a literal must not close it')
-      .toContain("'user's a, b list'");
+    expect(items[0].content, 'possessive inside a literal must not close it').toContain("'user's a, b list'");
   });
 
   // Whole-sentence capture never decides where a quote opens or closes, so the shapes the clause scanner could not resolve come through intact.
@@ -182,9 +185,10 @@ describe('capture coherence', () => {
       "Always run 'echo a, b ';then verify.",
       "Always keep 'em enabled, then set ';foo, after restart.",
       "Always pass 'a, ('.trim() to the parser, then verify.",
-    ]) expect(extractFromTexts([text]).map((i) => i.content)).toEqual([text.slice(0, -1)]);
-    expect(extractFromTexts(['Never use --no-verify on git commits in this project.'])[0]?.content)
-      .toContain('Never');
+    ]) {
+      expect(extractFromTexts([text]).map((i) => i.content)).toEqual([text.slice(0, -1)]);
+    }
+    expect(extractFromTexts(['Never use --no-verify on git commits in this project.'])[0]?.content).toContain('Never');
   });
 
   // Codex P1 on this branch: the clause scanner cut inside code delimiters,
@@ -251,11 +255,16 @@ describe('capture coherence', () => {
       'Always run the suite twice, then deploy.',
     ];
     for (const text of corpus) {
-      expect(extractFromTexts([text]).map((i) => i.content), text).toEqual([text.slice(0, -1)]);
+      expect(
+        extractFromTexts([text]).map((i) => i.content),
+        text,
+      ).toEqual([text.slice(0, -1)]);
     }
     for (const text of [
       "Always pass '" + 'a, ' + 'x'.repeat(600) + "' to the parser.",
       "Always keep 'em enabled, then " + 'y'.repeat(520) + " check user's config.",
-    ]) expect(extractFromTexts([text]), 'a sentence over 500 chars is skipped, never cut').toEqual([]);
+    ]) {
+      expect(extractFromTexts([text]), 'a sentence over 500 chars is skipped, never cut').toEqual([]);
+    }
   });
 });

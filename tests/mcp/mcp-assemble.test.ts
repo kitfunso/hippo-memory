@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -16,7 +16,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 
 async function callTool(
   reqId: number,
@@ -49,7 +55,15 @@ describe('mcp hippo_assemble', () => {
   it('hippo_assemble is in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     // SAFETY: tools/list always returns { tools: [...] } per the MCP protocol handler above.
     const listResult = res?.result as { tools?: Array<{ name?: string }> } | undefined;
@@ -69,9 +83,16 @@ describe('mcp hippo_assemble', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(home, e);
     }
-    const res = await callTool(2, 'hippo_assemble', { session_id: 'sess-mcp' }, {
-      hippoRoot: home, tenantId: 'default', actor: 'mcp',
-    });
+    const res = await callTool(
+      2,
+      'hippo_assemble',
+      { session_id: 'sess-mcp' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('sess-mcp');
     expect(text).toContain('session message 0');
@@ -79,16 +100,30 @@ describe('mcp hippo_assemble', () => {
   });
 
   it('rejects empty session_id', async () => {
-    const res = await callTool(3, 'hippo_assemble', { session_id: '' }, {
-      hippoRoot: home, tenantId: 'default', actor: 'mcp',
-    });
+    const res = await callTool(
+      3,
+      'hippo_assemble',
+      { session_id: '' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     expect(extractText(res).toLowerCase()).toContain('no session_id');
   });
 
   it('clean empty result for unknown session', async () => {
-    const res = await callTool(4, 'hippo_assemble', { session_id: 'sess-nope' }, {
-      hippoRoot: home, tenantId: 'default', actor: 'mcp',
-    });
+    const res = await callTool(
+      4,
+      'hippo_assemble',
+      { session_id: 'sess-nope' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain('0 items');
   });

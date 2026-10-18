@@ -76,8 +76,10 @@ function planningLine(p: PlanningFallacyOutput): string | null {
     return `Planning fallacy hint (class: ${p.hint.classTag}): ${p.hint.baserateSummary} [detected: ${JSON.stringify(p.hint.detectedPhrase)}]`;
   }
   if (p.watching) {
-    return `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} ` +
-      `[detected: ${JSON.stringify(p.watching.detectedPhrase)}]`;
+    return (
+      `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} ` +
+      `[detected: ${JSON.stringify(p.watching.detectedPhrase)}]`
+    );
   }
   return null;
 }
@@ -90,10 +92,16 @@ function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | nu
 }
 
 /** A flag value, or the deferred error that rejects it. */
-interface ParsedFlag<T> { value?: T; fail?: () => never }
+interface ParsedFlag<T> {
+  value?: T;
+  fail?: () => never;
+}
 
 /** A flag the ranking stages read, rejected where the old mid-pipeline check printed its error. */
-interface LateFlagError { stage: RankStage; fail: () => never }
+interface LateFlagError {
+  stage: RankStage;
+  fail: () => never;
+}
 
 interface RecallLateFlags {
   graphHops?: RecallGraphHops;
@@ -166,7 +174,11 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
     picked = cliRecallReranker(name);
   } catch (err) {
     // An unknown name throws to the top-level handler, as it did when the lookup sat mid-pipeline.
-    return { fail: () => { throw err; } };
+    return {
+      fail: () => {
+        throw err;
+      },
+    };
   }
   if (!picked) return {};
   const { fn } = picked;
@@ -218,7 +230,10 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
   ];
   let error: LateFlagError | undefined;
   for (const [stage, fail] of staged) {
-    if (fail) { error = { stage, fail }; break; }
+    if (fail) {
+      error = { stage, fail };
+      break;
+    }
   }
   return {
     graphHops: graphHops.value,
@@ -232,12 +247,7 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
 
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieve` ranks and records,
  * then the block prints. */
-async function cmdRecall(
-  hippoRoot: string,
-  tenantId: string,
-  query: string,
-  flags: CliFlags
-): Promise<void> {
+async function cmdRecall(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   const ctx = cliApiContext(hippoRoot, tenantId);
   const o = parseRecallOptions(ctx, flags);
@@ -250,8 +260,7 @@ async function cmdRecall(
     cliCore: {
       rank: rankOptions(query, flags, o, priced),
       // The global store is a second source for this surface alone, and never when it is the store being searched.
-      sources:
-        globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
+      sources: globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
       lastRecall: ctx.store.lastRecall,
@@ -285,8 +294,21 @@ function parseRecallOptions(ctx: api.Context, flags: CliFlags) {
   const goalTag = stringFlagOrExit(flags, 'goal') ?? '';
   const sessionId = (stringFlagOrExit(flags, 'session-id') ?? envHippoSessionId() ?? '').trim();
   return {
-    budget, limit, asJson, showWhy, includeSuperseded, asOf, setting, tenantId: ctx.tenantId,
-    explicitScope, config, minResults, graphStream, late, goalTag, sessionId,
+    budget,
+    limit,
+    asJson,
+    showWhy,
+    includeSuperseded,
+    asOf,
+    setting,
+    tenantId: ctx.tenantId,
+    explicitScope,
+    config,
+    minResults,
+    graphStream,
+    late,
+    goalTag,
+    sessionId,
     includeContinuity: boolFlag(flags, 'continuity'),
   };
 }
@@ -360,10 +382,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
         // The total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
         totalCandidates: rank.totalCandidates + rank.graphAdded,
         droppedPreRank: rank.droppedPreRank + held,
-        droppedByBudget: Math.max(
-          0,
-          rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length,
-        ),
+        droppedByBudget: Math.max(0, rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length),
         summarySubstitutionsAdded: 0,
         freshTailAdded: 0,
       },
@@ -394,33 +413,47 @@ function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRender
     if (sessionHandoff) printHandoff(sessionHandoff);
     if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
   };
-  return settleTokens((t) => captureConsole(() => {
-    if (list.length === 0) {
-      // The hint still prints when nothing matched, so the agent sees its track record.
-      if (showPlan) { console.log(planText); console.log(); }
-      if (hasContinuity) {
-        printContinuity();
-        console.log(`(no memories matched "${query}")`);
-      } else {
-        console.log('No memories found for:', query);
+  return settleTokens((t) =>
+    captureConsole(() => {
+      if (list.length === 0) {
+        // The hint still prints when nothing matched, so the agent sees its track record.
+        if (showPlan) {
+          console.log(planText);
+          console.log();
+        }
+        if (hasContinuity) {
+          printContinuity();
+          console.log(`(no memories matched "${query}")`);
+        } else {
+          console.log('No memories found for:', query);
+        }
+        return;
       }
-      return;
-    }
-    printContinuity();
-    // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
-    if (h.anchoring) { console.log(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`); console.log(); }
-    if (h.availability) {
-      console.log(
-        `Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`,
-      );
-      console.log();
-    }
-    if (showPlan) { console.log(planText); console.log(); }
-    const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
-    if (cutoff) { console.log(cutoff); console.log(); }
-    console.log(recallHeading(list.length, t, query));
-    for (const r of list) console.log(entryText(r));
-  }));
+      printContinuity();
+      // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
+      if (h.anchoring) {
+        console.log(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`);
+        console.log();
+      }
+      if (h.availability) {
+        console.log(
+          `Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`,
+        );
+        console.log();
+      }
+      if (showPlan) {
+        console.log(planText);
+        console.log();
+      }
+      const cutoff = showWhy ? cutoffLine(list.length, h.summary) : null;
+      if (cutoff) {
+        console.log(cutoff);
+        console.log();
+      }
+      console.log(recallHeading(list.length, t, query));
+      for (const r of list) console.log(entryText(r));
+    }),
+  );
 }
 
 /** Pays the continuity sections in print order after the header; one that does not fit is dropped. */
@@ -537,7 +570,9 @@ async function presentRecall(
 type PresentedRecall = Awaited<ReturnType<typeof presentRecall>>;
 
 /** Where the presenter parks what it built; a `let` it assigned would read as never-assigned after the await. */
-interface PresentedSlot { presented?: PresentedRecall }
+interface PresentedSlot {
+  presented?: PresentedRecall;
+}
 
 /** What this recall prints: the JSON object, or the fitted block. */
 function recallOutput(

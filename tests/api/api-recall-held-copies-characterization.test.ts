@@ -25,7 +25,9 @@ function raw(text: string): MemoryEntry {
 
 describe('recall held-copy drop', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('held-copies'); });
+  beforeEach(() => {
+    root = makeRoot('held-copies');
+  });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('returns one row per text and counts the hidden copy as dropped before ranking', async () => {
@@ -41,7 +43,11 @@ describe('recall held-copy drop', () => {
   it('keepHeldCopies returns every copy and drops nothing', async () => {
     writeEntry(root, raw('quokka habitat notes'));
     writeEntry(root, raw('quokka habitat notes'));
-    const result = await retrieve(ctxFor(root), { query: 'quokka', window: { limit: 10 }, filter: { keepHeldCopies: true } });
+    const result = await retrieve(ctxFor(root), {
+      query: 'quokka',
+      window: { limit: 10 },
+      filter: { keepHeldCopies: true },
+    });
     expect(result.results).toHaveLength(2);
     expect(result.suppressionSummary).toMatchObject({ droppedPreRank: 0 });
   });

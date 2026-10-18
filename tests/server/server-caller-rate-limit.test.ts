@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { _readApiKeyVerifyStatsForTests, createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/auth.js';
+import {
+  _readApiKeyVerifyStatsForTests,
+  createApiKey,
+  revokeApiKey,
+  type CreateApiKeyOptions,
+} from '../../src/store/auth.js';
 import { serve, type AddonRoute, type ServeOpts } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
@@ -19,7 +24,15 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CALLER_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
+const ENV_KEYS = [
+  'HIPPO_V1_RPS',
+  'HIPPO_CALLER_RPS',
+  'HIPPO_CLIENT_IP_HEADER',
+  'HIPPO_TRUSTED_PROXIES',
+  'HIPPO_REQUIRE_AUTH',
+  'MCP_SSE_HEARTBEAT_MS',
+  'MCP_SSE_MAX_STREAMS',
+] as const;
 
 const WIDE = { ratePerSec: 1000, burst: 1000 };
 // A slow refill, so a test that takes a while still sees the bucket it drained.
@@ -72,7 +85,13 @@ async function send(path: string, init: RequestInit = {}): Promise<Reply> {
 
 const bearer = (token: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${token}`, ...extra });
 const recall = (headers: Record<string, string> = {}): Promise<Reply> => send('/v1/memories?q=x', { headers });
-const addonRoute = (onRun: () => void): AddonRoute => ({ path: '/v1/x-addon', handler: async () => { onRun(); return {}; } });
+const addonRoute = (onRun: () => void): AddonRoute => ({
+  path: '/v1/x-addon',
+  handler: async () => {
+    onRun();
+    return {};
+  },
+});
 
 async function replies(call: () => Promise<Reply>, n: number): Promise<Reply[]> {
   const out: Reply[] = [];
@@ -101,7 +120,8 @@ describe('per-caller buckets', () => {
     const a = mint({ ownerSubject: 'oid-a' });
     const b = mint({ ownerSubject: 'oid-b' });
     await start({ perCaller: { ratePerSec: 1, burst: 2 }, perAddress: { ratePerSec: 0.1, burst: 4 } });
-    const via = (token: string, address: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': address }));
+    const via = (token: string, address: string): Promise<Reply> =>
+      recall(bearer(token, { 'x-forwarded-for': address }));
     expect(await replies(() => via(a, '203.0.113.7'), 3)).toEqual([OK, OK, { status: 429, retryAfter: '1' }]);
     expect(await via(b, '203.0.113.7')).toEqual(OK);
     // A and B together spent the office address's four tokens; another address still has its own.
@@ -151,7 +171,8 @@ describe('per-caller buckets', () => {
   it('answers 429 before the body is read, so a broken body gets 429, not 400', async () => {
     const a = mint({ ownerSubject: 'oid-body' });
     await start({ perCaller: SLOW, perAddress: WIDE });
-    const broken = (): Promise<Reply> => send('/v1/memories', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{not json' });
+    const broken = (): Promise<Reply> =>
+      send('/v1/memories', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{not json' });
     expect((await broken()).status).toBe(400);
     expect((await recall(bearer(a))).status).toBe(200);
     expect(await broken()).toEqual({ status: 429, retryAfter: '10' });
@@ -161,8 +182,18 @@ describe('per-caller buckets', () => {
     let runs = 0;
     const a = mint({ ownerSubject: 'oid-addon' });
     const m = mint({ ownerSubject: 'oid-mcp' });
-    await start({ perCaller: SLOW, perAddress: WIDE }, { routes: [addonRoute(() => { runs += 1; })] });
-    const addon = (): Promise<Reply> => send('/v1/x-addon', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{}' });
+    await start(
+      { perCaller: SLOW, perAddress: WIDE },
+      {
+        routes: [
+          addonRoute(() => {
+            runs += 1;
+          }),
+        ],
+      },
+    );
+    const addon = (): Promise<Reply> =>
+      send('/v1/x-addon', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{}' });
     const mcp = (): Promise<Reply> => send('/mcp', { method: 'POST', headers: bearer(m, JSON_BODY), body: TOOLS_LIST });
     expect(await replies(addon, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
     expect(runs).toBe(2);
@@ -198,11 +229,26 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
       async close(): Promise<void> {},
     };
     let runs = 0;
-    await start({ perCaller: SLOW, perAddress: WIDE }, { store, routes: [addonRoute(() => { runs += 1; })] });
+    await start(
+      { perCaller: SLOW, perAddress: WIDE },
+      {
+        store,
+        routes: [
+          addonRoute(() => {
+            runs += 1;
+          }),
+        ],
+      },
+    );
     const v1 = (): Promise<Reply> => recall(bearer(key));
-    const addon = (): Promise<Reply> => send('/v1/x-addon', { method: 'POST', headers: bearer(key, JSON_BODY), body: '{}' });
+    const addon = (): Promise<Reply> =>
+      send('/v1/x-addon', { method: 'POST', headers: bearer(key, JSON_BODY), body: '{}' });
     const notHippoDb = { status: 501, retryAfter: null };
-    expect([await v1(), await addon(), await v1()]).toEqual([notHippoDb, notHippoDb, { status: 429, retryAfter: '10' }]);
+    expect([await v1(), await addon(), await v1()]).toEqual([
+      notHippoDb,
+      notHippoDb,
+      { status: 429, retryAfter: '10' },
+    ]);
     expect(runs).toBe(0);
   });
 });
@@ -215,7 +261,10 @@ describe('the MCP stream heartbeat', () => {
     const ac = new AbortController();
     const deadline = setTimeout(() => ac.abort(), 5000);
     try {
-      const res = await fetch(`${url}/mcp/stream`, { headers: { accept: 'text/event-stream', ...bearer(a) }, signal: ac.signal });
+      const res = await fetch(`${url}/mcp/stream`, {
+        headers: { accept: 'text/event-stream', ...bearer(a) },
+        signal: ac.signal,
+      });
       expect(res.status).toBe(200);
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
@@ -228,7 +277,9 @@ describe('the MCP stream heartbeat', () => {
       }
       expect(text).not.toContain('event: closed');
       expect(text.split(': ping').length - 1).toBeGreaterThanOrEqual(11);
-      expect((await send('/mcp', { method: 'POST', headers: bearer(a, JSON_BODY), body: TOOLS_LIST })).status).toBe(200);
+      expect((await send('/mcp', { method: 'POST', headers: bearer(a, JSON_BODY), body: TOOLS_LIST })).status).toBe(
+        200,
+      );
     } finally {
       clearTimeout(deadline);
       ac.abort();
@@ -243,7 +294,10 @@ describe('the MCP stream heartbeat', () => {
       const first = await fetch(`${url}/mcp/stream`, { headers: { accept: 'text/event-stream' }, signal: ac.signal });
       expect(first.status).toBe(200);
       await first.body!.getReader().read();
-      expect(await send('/mcp/stream', { headers: { accept: 'text/event-stream' } })).toEqual({ status: 429, retryAfter: '60' });
+      expect(await send('/mcp/stream', { headers: { accept: 'text/event-stream' } })).toEqual({
+        status: 429,
+        retryAfter: '60',
+      });
     } finally {
       ac.abort();
     }
@@ -255,7 +309,10 @@ const scryptRunsSince = (before: number): number => _readApiKeyVerifyStatsForTes
 const mintMany = (n: number): string[] => Array.from({ length: n }, () => mint());
 
 /** Wrong secrets for `keys` in turn, so the address bucket under test empties before any one key id's own five tries from that address. */
-function wrongSecretsAcross(keys: readonly string[], via: (token: string) => Promise<Reply> = (token) => recall(bearer(token))): () => Promise<Reply> {
+function wrongSecretsAcross(
+  keys: readonly string[],
+  via: (token: string) => Promise<Reply> = (token) => recall(bearer(token)),
+): () => Promise<Reply> {
   let sent = 0;
   return () => via(wrongSecretOf(keys[sent++ % keys.length]!));
 }
@@ -307,7 +364,10 @@ describe('the per-address scrypt bucket', () => {
       closeHippoDb(db);
     }
     // Burst 40 as the default, with a refill whose Retry-After no other limit answers.
-    await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.005, burst: 40 } }, { authResolver: () => null });
+    await start(
+      { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.005, burst: 40 } },
+      { authResolver: () => null },
+    );
     const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
     expect(await office(dev)).toEqual(OK);
     const before = _readApiKeyVerifyStatsForTests().scryptRuns;
@@ -331,8 +391,12 @@ describe('the per-address scrypt bucket', () => {
     freezeClock();
     const key = mint({ ownerSubject: 'oid-v6' });
     await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.1, burst: 2 } });
-    const from = (address: string): Promise<Reply> => recall(bearer(wrongSecretOf(key), { 'x-forwarded-for': address }));
-    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:2:ffff:1:2:3')]).toEqual([UNAUTHORISED, UNAUTHORISED]);
+    const from = (address: string): Promise<Reply> =>
+      recall(bearer(wrongSecretOf(key), { 'x-forwarded-for': address }));
+    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:2:ffff:1:2:3')]).toEqual([
+      UNAUTHORISED,
+      UNAUTHORISED,
+    ]);
     expect(await from('2001:0db8:0001:0002::b')).toEqual({ status: 429, retryAfter: '10' });
     expect(await from('2001:db8:1:3::a')).toEqual(UNAUTHORISED);
   });
@@ -371,9 +435,17 @@ describe('the per-address bucket', () => {
     await start({ perCaller: WIDE, perAddress: SLOW });
     const from = (address: string): Promise<Reply> => recall(bearer(key, { 'x-forwarded-for': address }));
     const drained = { status: 429, retryAfter: '10' };
-    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:2:ffff:1:2:3'), await from('2001:0db8:0001:0002::b')]).toEqual([OK, OK, drained]);
+    expect([
+      await from('2001:db8:1:2::a'),
+      await from('2001:db8:1:2:ffff:1:2:3'),
+      await from('2001:0db8:0001:0002::b'),
+    ]).toEqual([OK, OK, drained]);
     expect(await from('2001:db8:1:3::a')).toEqual(OK);
-    expect([await from('::ffff:198.51.100.1'), await from('198.51.100.1'), await from('198.51.100.1')]).toEqual([OK, OK, drained]);
+    expect([await from('::ffff:198.51.100.1'), await from('198.51.100.1'), await from('198.51.100.1')]).toEqual([
+      OK,
+      OK,
+      drained,
+    ]);
     expect(await from('198.51.100.2')).toEqual(OK);
   });
 
@@ -471,7 +543,12 @@ describe('boot and the other Retry-After replies', () => {
   });
 
   it('keeps Retry-After: 1 on the store-busy 503', async () => {
-    const busy: HippoStore = { ...sqliteStore(root), findApiKey: async () => { throw new StoreBusyError(); } };
+    const busy: HippoStore = {
+      ...sqliteStore(root),
+      findApiKey: async () => {
+        throw new StoreBusyError();
+      },
+    };
     await start({ perAddress: WIDE }, { store: busy });
     expect(await recall(bearer(mint()))).toEqual({ status: 503, retryAfter: '1' });
   });
@@ -485,7 +562,9 @@ describe('boot and the other Retry-After replies', () => {
     expect((await recall(bearer(a, { 'x-request-id': 'req-three' }))).status).toBe(429);
     const written = stderr.mock.calls.map(([chunk]) => String(chunk));
     expect(written.filter((line) => line.includes('rate limit'))).toEqual([
-      expect.stringMatching(/^\[hippo\] warn: caller over its rate limit.* requestId=req-two tenant=default person=oid-log\n$/),
+      expect.stringMatching(
+        /^\[hippo\] warn: caller over its rate limit.* requestId=req-two tenant=default person=oid-log\n$/,
+      ),
     ]);
     expect(written.join('')).not.toContain(a.slice(a.indexOf('.') + 1));
   });

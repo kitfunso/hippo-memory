@@ -10,7 +10,12 @@ import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
 import type { LocalFiles, OptionalGroup } from '../store/port.js';
 import {
-  runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
+  runDetachedSqliteRequest,
+  runSqliteHookRequest,
+  runSqliteRequest,
+  sqliteReach,
+  sqliteStore,
+  sqliteSyncStore,
 } from '../store/sqlite/store.js';
 import { CLI_ACTOR } from '../core/actor.js';
 
@@ -52,7 +57,9 @@ export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefi
 /** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the SQLite
  * adapter. */
 export function cliSyncOptions(
-  hippoRoot: string, machine: Machine, extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
+  hippoRoot: string,
+  machine: Machine,
+  extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
 ): SyncOptions {
   return { configAt: cliConfig, machine, agentImport: cliLocalFiles(hippoRoot).agentImport, ...extra };
 }
@@ -105,8 +112,9 @@ export const cliStdioHost: McpHost = {
       config: cliConfig(hippoRoot),
       reach: cliReach(hippoRoot, store),
       autoSleepRunner: (root) =>
-        runDetachedSqliteRequest(() => runConsolidation(cliLocalFiles(root), { config: cliConfig(root) }))
-          .then(() => {}),
+        runDetachedSqliteRequest(() => runConsolidation(cliLocalFiles(root), { config: cliConfig(root) })).then(
+          () => {},
+        ),
     };
   },
   runRequest: cliRequest,

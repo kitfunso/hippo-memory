@@ -18,10 +18,22 @@ const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGr
 
 // By file and exact line, so an edited line is read again; the value says why a slow runner cannot fail it.
 const ALLOWED = new Map([
-  ['token-eval-z0-turns.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);', 'the bound is the same step\'s own span, taken in the same run, which a slow runner only widens'],
-  ['token-eval-z0-codex-faults.test.ts: expect(wallMs + waitMs).toBeLessThanOrEqual(stepMs);', 'the bound is the same cell\'s own span, taken in the same run, which a slow runner only widens'],
-  ['db/audit-prune.test.ts: expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);', 'the value is a timestamp the code under test returns, bracketed by two clock reads taken around the call, which a slow runner only widens'],
-  ['store/company-brain-scorecard.test.ts: expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);', 'the value is a percentile computed from fixture timestamps, not a measured wall-clock span, so a slow runner cannot change it'],
+  [
+    'token-eval-z0-turns.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);',
+    "the bound is the same step's own span, taken in the same run, which a slow runner only widens",
+  ],
+  [
+    'token-eval-z0-codex-faults.test.ts: expect(wallMs + waitMs).toBeLessThanOrEqual(stepMs);',
+    "the bound is the same cell's own span, taken in the same run, which a slow runner only widens",
+  ],
+  [
+    'db/audit-prune.test.ts: expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);',
+    'the value is a timestamp the code under test returns, bracketed by two clock reads taken around the call, which a slow runner only widens',
+  ],
+  [
+    'store/company-brain-scorecard.test.ts: expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);',
+    'the value is a percentile computed from fixture timestamps, not a measured wall-clock span, so a slow runner cannot change it',
+  ],
 ]);
 
 /** The text between the bracket at `open` and the bracket that closes it. */
@@ -37,15 +49,22 @@ function inside(text: string, open: number): string {
 /** Every assertion in `text` that bounds an elapsed time from above, as `file: line text`. */
 function elapsedUpperBounds(file: string, text: string): string[] {
   const durations = [...text.matchAll(ASSIGNED)].map((m) => m[1]);
-  const timed = (code: string): boolean => CLOCK_DIFF.test(code) || REPORTED.test(code)
-    || durations.some((name) => new RegExp(String.raw`(?<![\w$.])${name.replaceAll('$', String.raw`\$`)}(?![\w$])`).test(code));
+  const timed = (code: string): boolean =>
+    CLOCK_DIFF.test(code) ||
+    REPORTED.test(code) ||
+    durations.some((name) =>
+      new RegExp(String.raw`(?<![\w$.])${name.replaceAll('$', String.raw`\$`)}(?![\w$])`).test(code),
+    );
   const hits: string[] = [];
   for (const found of text.matchAll(/\bexpect\(/g)) {
     const open = found.index + found[0].length - 1;
     const subject = inside(text, open);
     const after = text.slice(open + subject.length + 2);
     const matcher = MATCHER.exec(after);
-    if (subject !== '' && (matcher ? boundedByMatcher(subject, after, matcher, timed) : boundedInline(subject, timed))) {
+    if (
+      subject !== '' &&
+      (matcher ? boundedByMatcher(subject, after, matcher, timed) : boundedInline(subject, timed))
+    ) {
       const line = text.slice(0, found.index).split('\n').length;
       hits.push(`${file}: ${text.split(/\r?\n/)[line - 1].trim()}`);
     }
@@ -54,7 +73,12 @@ function elapsedUpperBounds(file: string, text: string): string[] {
 }
 
 /** expect(elapsed).toBeLessThan(n), and its mirror expect(n).toBeGreaterThan(elapsed). */
-function boundedByMatcher(subject: string, after: string, matcher: RegExpExecArray, timed: (code: string) => boolean): boolean {
+function boundedByMatcher(
+  subject: string,
+  after: string,
+  matcher: RegExpExecArray,
+  timed: (code: string) => boolean,
+): boolean {
   const upper = matcher[2].startsWith('toBeLess') !== (matcher[1] !== undefined);
   // The text before a comma is the value; after it comes the failure message.
   if (upper) return timed(subject.split(',')[0]);

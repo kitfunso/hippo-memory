@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  loadPhysicsState,
-  savePhysicsState,
-  resetAllPhysicsState,
-} from '../../src/db/physics-state.js';
+import { loadPhysicsState, savePhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { refreshParticleProperties } from '../../src/core/particle-refresh.js';
 import { float32ToBuffer, bufferToFloat32 } from '../../src/util/vector-codec.js';
 import { initializeParticle } from '../../src/core/physics.js';
@@ -26,13 +22,17 @@ beforeEach(() => {
 
 const NOW = new Date('2026-01-15T12:00:00Z');
 
-function insertMemoryRow(db: DatabaseSyncLike, id: string, opts?: Partial<{
-  emotional_valence: string;
-  retrieval_count: number;
-  strength: number;
-  half_life_days: number;
-  pinned: number;
-}>): void {
+function insertMemoryRow(
+  db: DatabaseSyncLike,
+  id: string,
+  opts?: Partial<{
+    emotional_valence: string;
+    retrieval_count: number;
+    strength: number;
+    half_life_days: number;
+    pinned: number;
+  }>,
+): void {
   const valence = opts?.emotional_valence ?? 'neutral';
   const rc = opts?.retrieval_count ?? 0;
   const strength = opts?.strength ?? 1.0;
@@ -43,7 +43,7 @@ function insertMemoryRow(db: DatabaseSyncLike, id: string, opts?: Partial<{
     `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days,
        layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive,
        outcome_negative, conflicts_with_json, pinned, confidence, content, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
   ).run(
     id,
     NOW.toISOString(),
@@ -143,9 +143,7 @@ describe('physics table creation', () => {
       // Should not throw
       // SAFETY: literal COUNT(*) query against the known memory_physics
       // schema always returns a single { cnt } row.
-      const row = db.prepare(
-        `SELECT COUNT(*) AS cnt FROM memory_physics`
-      ).get() as { cnt: number };
+      const row = db.prepare(`SELECT COUNT(*) AS cnt FROM memory_physics`).get() as { cnt: number };
       expect(row.cnt).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -157,9 +155,9 @@ describe('physics table creation', () => {
     try {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
       // is NOT NULL for every index row.
-      const rows = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_physics'`
-      ).all() as Array<{ name: string }>;
+      const rows = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_physics'`)
+        .all() as Array<{ name: string }>;
       const names = rows.map((r) => r.name);
       expect(names).toContain('idx_memory_physics_mass');
     } finally {
@@ -252,11 +250,7 @@ describe('loadPhysicsState with memoryIds filter', () => {
       insertMemoryRow(db, 'mem_y');
       insertMemoryRow(db, 'mem_z');
 
-      const particles = [
-        makeParticle('mem_x'),
-        makeParticle('mem_y'),
-        makeParticle('mem_z'),
-      ];
+      const particles = [makeParticle('mem_x'), makeParticle('mem_y'), makeParticle('mem_z')];
       savePhysicsState(db, particles);
 
       const loaded = loadPhysicsState(db, ['mem_x', 'mem_z']);
@@ -320,11 +314,7 @@ describe('loadPhysicsState without filter', () => {
       insertMemoryRow(db, 'mem_2');
       insertMemoryRow(db, 'mem_3');
 
-      savePhysicsState(db, [
-        makeParticle('mem_1'),
-        makeParticle('mem_2'),
-        makeParticle('mem_3'),
-      ]);
+      savePhysicsState(db, [makeParticle('mem_1'), makeParticle('mem_2'), makeParticle('mem_3')]);
 
       const loaded = loadPhysicsState(db);
       expect(loaded.size).toBe(3);
@@ -517,10 +507,7 @@ describe('resetAllPhysicsState', () => {
       expect(loadPhysicsState(db).size).toBe(1);
 
       // Reset
-      const entries = [
-        makeMemoryEntry('mem_r1'),
-        makeMemoryEntry('mem_r2'),
-      ];
+      const entries = [makeMemoryEntry('mem_r1'), makeMemoryEntry('mem_r2')];
       const embeddingIndex = {
         mem_r1: [0.5, 0.5, 0.5],
         mem_r2: [0.1, 0.2, 0.3],
@@ -547,10 +534,7 @@ describe('resetAllPhysicsState', () => {
       insertMemoryRow(db, 'mem_has_emb');
       insertMemoryRow(db, 'mem_no_emb');
 
-      const entries = [
-        makeMemoryEntry('mem_has_emb'),
-        makeMemoryEntry('mem_no_emb'),
-      ];
+      const entries = [makeMemoryEntry('mem_has_emb'), makeMemoryEntry('mem_no_emb')];
       const embeddingIndex = {
         mem_has_emb: [0.1, 0.2, 0.3],
         // mem_no_emb intentionally missing
@@ -690,7 +674,10 @@ describe('stored particles by store root', () => {
     const db = openHippoDb(tmpDir);
     try {
       for (const id of memoryIds) insertMemoryRow(db, id);
-      savePhysicsState(db, withParticle.map((id) => makeParticle(id)));
+      savePhysicsState(
+        db,
+        withParticle.map((id) => makeParticle(id)),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -698,7 +685,11 @@ describe('stored particles by store root', () => {
 
   it('loadStoredParticles returns every saved particle', () => {
     seed(['mem_s1', 'mem_s2'], ['mem_s1', 'mem_s2']);
-    expect(loadStoredParticles(tmpDir).map((p) => p.memoryId).sort()).toEqual(['mem_s1', 'mem_s2']);
+    expect(
+      loadStoredParticles(tmpDir)
+        .map((p) => p.memoryId)
+        .sort(),
+    ).toEqual(['mem_s1', 'mem_s2']);
   });
 
   it('resetStoredParticles drops stored state and keeps one particle per embedded id', () => {

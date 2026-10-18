@@ -29,7 +29,11 @@ function newCtx(tenantId = 'default') {
 // these two ops -- never nested objects or arrays.
 type AuditMetadataValue = string | number | boolean | null;
 
-function getAuditRows(hippoRoot: string, tenantId: string, op: 'auth_create' | 'auth_revoke'): Array<{
+function getAuditRows(
+  hippoRoot: string,
+  tenantId: string,
+  op: 'auth_create' | 'auth_revoke',
+): Array<{
   actor: string;
   targetId: string | null;
   metadata: Record<string, AuditMetadataValue>;

@@ -20,11 +20,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { retrieve } from '../../src/api/index.js';
-import {
-  hashQueryText,
-  type RecallHistorySnapshot,
-  type RecallHistoryEntry,
-} from '../../src/api/recall/finish.js';
+import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../../src/api/recall/finish.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
@@ -33,7 +29,11 @@ afterEach(() => {
 });
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
@@ -83,10 +83,7 @@ describe('api.recall anchoringHint', () => {
   it('populates anchoringHint on R2 (memory_dominance) when snapshot has 2 prior wins for same memory', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     // Two prior recalls in the snapshot, both returning this memory id.
-    const snapshot: RecallHistorySnapshot = [
-      entry(111, memId),
-      entry(222, memId),
-    ];
+    const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
       hints: { recallHistory: snapshot },
@@ -105,10 +102,7 @@ describe('api.recall anchoringHint', () => {
 
   it('absent when HIPPO_ANCHORING=off even with valid snapshot', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
-    const snapshot: RecallHistorySnapshot = [
-      entry(111, memId),
-      entry(222, memId),
-    ];
+    const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     vi.stubEnv('HIPPO_ANCHORING', 'off');
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
@@ -138,10 +132,7 @@ describe('api.recall anchoringHint', () => {
 
   it('emits recall_anchor_detected_memory_dominance audit on R2', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
-    const snapshot: RecallHistorySnapshot = [
-      entry(111, memId),
-      entry(222, memId),
-    ];
+    const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(0);
     await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(1);
@@ -149,10 +140,7 @@ describe('api.recall anchoringHint', () => {
 
   it('suppressedByInterference is INCREMENTED to 1 on R2 (it used to stay 0)', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
-    const snapshot: RecallHistorySnapshot = [
-      entry(111, memId),
-      entry(222, memId),
-    ];
+    const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
       hints: { recallHistory: snapshot },
@@ -175,10 +163,7 @@ describe('api.recall anchoringHint', () => {
 
   it('api.recall is return-value pure: identical opts.recallHistory snapshot → identical anchoringHint result', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
-    const snapshot: RecallHistorySnapshot = [
-      entry(111, memId),
-      entry(222, memId),
-    ];
+    const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     const r1 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     const r2 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(r1.anchoringHint).toEqual(r2.anchoringHint);
@@ -187,10 +172,7 @@ describe('api.recall anchoringHint', () => {
 
   it('cross-tenant scoping: tenant-b snapshot does not interact with tenant-a context', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
-    const snapshot: RecallHistorySnapshot = [
-      entry(111, memId),
-      entry(222, memId),
-    ];
+    const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     // ctx is tenant-default; snapshot rows reference memId which is also tenant-default.
     // Pass to a tenant-b ctx — top will be null (no matching memory in tenant-b).
     const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });

@@ -25,9 +25,7 @@ const DEFAULT_SSE_MAX_AGE_SEC = 3600;
  * so the raw bearer is never logged) plus the client address the rate limiter keys on; 'noauth' covers loopback. */
 function buildMcpClientKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
-  const tokenHash = auth.kind === 'bearer'
-    ? blockHash(auth.token)
-    : 'noauth';
+  const tokenHash = auth.kind === 'bearer' ? blockHash(auth.token) : 'noauth';
   return `http:${tokenHash}:${clientLimitKey(req)}`;
 }
 
@@ -207,21 +205,23 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
     }
     if (checking) return;
     checking = true;
-    heartbeatVerdict(req, opts).then((verdict) => {
-      checking = false;
-      if (!closed && verdict === 'unavailable') log.warn('heartbeat tick skipped: auth check unavailable');
-      if (closed || verdict === 'unavailable') return;
-      if (verdict === 'revoked') {
-        closeWith('auth_revoked');
-        clearInterval(ping);
-        return;
-      }
-      if (!writePing(res)) clearInterval(ping);
-    }).catch((err) => {
-      // Without the reset `checking` stays true and the heartbeat never runs again.
-      checking = false;
-      log.warn('heartbeat tick failed', errorFields(err));
-    });
+    heartbeatVerdict(req, opts)
+      .then((verdict) => {
+        checking = false;
+        if (!closed && verdict === 'unavailable') log.warn('heartbeat tick skipped: auth check unavailable');
+        if (closed || verdict === 'unavailable') return;
+        if (verdict === 'revoked') {
+          closeWith('auth_revoked');
+          clearInterval(ping);
+          return;
+        }
+        if (!writePing(res)) clearInterval(ping);
+      })
+      .catch((err) => {
+        // Without the reset `checking` stays true and the heartbeat never runs again.
+        checking = false;
+        log.warn('heartbeat tick failed', errorFields(err));
+      });
   }, heartbeatMs);
   // Don't keep the event loop alive just for this timer — the server's
   // listener already does that, and tests want the process to exit cleanly.
@@ -246,6 +246,12 @@ function writePing(res: ServerResponse): boolean {
 function endStreamWithReason(res: ServerResponse, reason: string): void {
   try {
     res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
-  } catch { /* socket already gone */ }
-  try { res.end(); } catch { /* socket already gone */ }
+  } catch {
+    /* socket already gone */
+  }
+  try {
+    res.end();
+  } catch {
+    /* socket already gone */
+  }
 }

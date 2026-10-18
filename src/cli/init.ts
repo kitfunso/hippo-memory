@@ -113,9 +113,11 @@ function initGlobalFirst(): string {
 }
 
 function printScanSummary(repoCount: number, totalLessons: number, totalLowInfo: number): void {
-  console.log(`\n${repoCount} repositories, ${totalLessons} new lessons learned` +
-    (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
-    '.');
+  console.log(
+    `\n${repoCount} repositories, ${totalLessons} new lessons learned` +
+      (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
+      '.',
+  );
 }
 
 async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): Promise<void> {
@@ -150,7 +152,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
     const entries = await listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
     console.log(
       `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
-      `memories${added > 0 ? ` (+${added} from git)` : ''}`,
+        `memories${added > 0 ? ` (+${added} from git)` : ''}`,
     );
   }
 

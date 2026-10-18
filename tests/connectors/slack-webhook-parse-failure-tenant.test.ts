@@ -53,9 +53,11 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     // Multi-workspace install: register team_id T_ACME → tenant 'acme'.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('T_ACME', 'acme', new Date().toISOString());
+      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'T_ACME',
+        'acme',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -91,9 +93,11 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     // means fail-closed (resolveTenantForSlackTeam returns null).
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('T_OTHER', 'other-tenant', new Date().toISOString());
+      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'T_OTHER',
+        'other-tenant',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }

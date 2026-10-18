@@ -11,7 +11,9 @@ import type { VectorSource } from '../search/vector.js';
 
 /** hippo.db under `hippoRoot` when the caller passed no store. */
 export function folderVectorSource({
-  hippoRoot, store, embeddings,
+  hippoRoot,
+  store,
+  embeddings,
 }: Pick<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>): VectorSource | undefined {
   if (!hippoRoot) return undefined;
   const config = { embeddings: embeddings ?? loadConfig(hippoRoot).embeddings };

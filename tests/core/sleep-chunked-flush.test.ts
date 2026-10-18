@@ -17,7 +17,16 @@ import { upsertEntryRow } from '../../src/store/entry-row.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { closeHippoDb, getHippoDbPath, getMeta, HOOK_DB_WAIT_MS, openHippoDb, runWithRequestStores, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getHippoDbPath,
+  getMeta,
+  HOOK_DB_WAIT_MS,
+  openHippoDb,
+  runWithRequestStores,
+  withSharedStoreHandles,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../src/util/write-budget.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -26,7 +35,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** The real clock with the hold a test picks, and a pause that yields once instead of waiting out the real gap. */
-const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({ ...WRITE_BUDGET, holdMs, pause });
+const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({
+  ...WRITE_BUDGET,
+  holdMs,
+  pause,
+});
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -69,14 +82,23 @@ function newRoot(): string {
 /** Three-row merge clusters first (sleep loads by created), then faded rows, one merged row holding a superseded text, and pinned rows sleep leaves alone. */
 function seed(counts: { clusters: number; dormant: number; filler: number }): Fixture {
   let n = 0;
-  const row = (text: string, ageDays: number, idleDays: number, opts: Parameters<typeof createMemory>[1] = {}): MemoryEntry => ({
+  const row = (
+    text: string,
+    ageDays: number,
+    idleDays: number,
+    opts: Parameters<typeof createMemory>[1] = {},
+  ): MemoryEntry => ({
     ...createMemory(text, opts),
     created: new Date(NOW.getTime() - ageDays * DAY + n++ * 1000).toISOString(),
     last_retrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
   });
   const clusters = Array.from({ length: counts.clusters }, (_, k) =>
-    [0, 1, 2].map((j) => row(`c${k}alpha c${k}beta c${k}gamma c${k}delta variant v${j}`, 90, 1)));
-  const dormant = Array.from({ length: counts.dormant }, (_, i) => ({ ...row(`faded d${i}alpha d${i}beta d${i}gamma`, 80, 60), half_life_days: 7 }));
+    [0, 1, 2].map((j) => row(`c${k}alpha c${k}beta c${k}gamma c${k}delta variant v${j}`, 90, 1)),
+  );
+  const dormant = Array.from({ length: counts.dormant }, (_, i) => ({
+    ...row(`faded d${i}alpha d${i}beta d${i}gamma`, 80, 60),
+    half_life_days: 7,
+  }));
   const kept = row('kept source beta text', 70, 1);
   const gone = { ...row('retired source alpha text', 70, 1), superseded_by: kept.id };
   const header = '[Consolidated from 2 related memories, newest first]';
@@ -84,7 +106,9 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
     ...row(mergedText(header, [kept.content, gone.content]), 70, 1, { layer: Layer.Semantic, source: 'consolidation' }),
     parents: [gone.id, kept.id],
   };
-  const filler = Array.from({ length: counts.filler }, (_, i) => row(`pinned p${i}alpha p${i}beta p${i}gamma`, 60, 1, { pinned: true }));
+  const filler = Array.from({ length: counts.filler }, (_, i) =>
+    row(`pinned p${i}alpha p${i}beta p${i}gamma`, 60, 1, { pinned: true }),
+  );
   const root = newRoot();
   insertRows(root, [...clusters.flat(), ...dormant, kept, gone, retired, ...filler]);
   return {
@@ -155,7 +179,10 @@ function callStack(): string {
 function countFlushBegins(prober: DatabaseSyncLike) {
   let begins = 0;
   const exec = DatabaseSync.prototype.exec;
-  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+    this: DatabaseSyncLike,
+    sql: string,
+  ) {
     if (sql === 'BEGIN IMMEDIATE' && this !== prober && callStack().includes('batchWriteAndDelete')) begins++;
     exec.call(this, sql);
   });
@@ -165,7 +192,9 @@ function countFlushBegins(prober: DatabaseSyncLike) {
 /** Ids from a counter, so two runs mint the same ones; generateId keeps randomUUID's first 12 hex digits. */
 async function withCountedIds<T>(run: () => Promise<T>): Promise<T> {
   let n = 0;
-  const spy = vi.spyOn(crypto, 'randomUUID').mockImplementation(() => `${(++n).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
+  const spy = vi
+    .spyOn(crypto, 'randomUUID')
+    .mockImplementation(() => `${(++n).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
   syncBuiltinESMExports();
   try {
     return await run();
@@ -180,15 +209,20 @@ function storeState(root: string) {
   return onStore(root, (db) => {
     const all = (sql: string): unknown[] => db.prepare(sql).all();
     // SAFETY: pragma_table_info yields one row per column with its name.
-    const columns = (all(`SELECT name FROM pragma_table_info('memories') WHERE name != 'updated_at'`) as Array<{ name: string }>).map((c) => c.name);
+    const columns = (
+      all(`SELECT name FROM pragma_table_info('memories') WHERE name != 'updated_at'`) as Array<{ name: string }>
+    ).map((c) => c.name);
     return {
       memories: all(`SELECT ${columns.join(', ')} FROM memories ORDER BY id`),
       fts: all('SELECT id, content, tags FROM memories_fts ORDER BY id, content'),
       dormant: all('SELECT * FROM dormant_memories ORDER BY tenant_id, id'),
-      audit: all('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY op, target_id, metadata_json'),
+      audit: all(
+        'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY op, target_id, metadata_json',
+      ),
       runs: all('SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY id'),
       sleepCount: getMeta(db, 'sleep_count', '0'),
-      mirrors: fs.readdirSync(root, { recursive: true, withFileTypes: true })
+      mirrors: fs
+        .readdirSync(root, { recursive: true, withFileTypes: true })
         .filter((e) => e.isFile() && !e.name.startsWith('hippo.db'))
         .map((e) => path.relative(root, path.join(e.parentPath, e.name)).replace(/\\/g, '/'))
         .sort(),
@@ -202,10 +236,17 @@ function storeFacts(fx: Fixture) {
     const memoryIds = ids(db, 'SELECT id FROM memories');
     const present = new Set(memoryIds);
     // SAFETY: both SELECTs name the columns their casts read.
-    const halfLife = new Map((db.prepare('SELECT id, half_life_days FROM memories').all() as Array<{ id: string; half_life_days: number }>).map((r) => [r.id, r.half_life_days]));
+    const halfLife = new Map(
+      (
+        db.prepare('SELECT id, half_life_days FROM memories').all() as Array<{ id: string; half_life_days: number }>
+      ).map((r) => [r.id, r.half_life_days]),
+    );
     // SAFETY: parents_json is NOT NULL and always holds the JSON array of ids writeEntry stored.
-    const merges = (db.prepare(`SELECT parents_json FROM memories WHERE source = 'consolidation'`).all() as Array<{ parents_json: string }>)
-      .map((r) => JSON.parse(r.parents_json) as string[]);
+    const merges = (
+      db.prepare(`SELECT parents_json FROM memories WHERE source = 'consolidation'`).all() as Array<{
+        parents_json: string;
+      }>
+    ).map((r) => JSON.parse(r.parents_json) as string[]);
     const clusterParents = merges.filter((p) => p.length === 3);
     const allParents = merges.flat();
     const dormantIds = ids(db, 'SELECT id FROM dormant_memories');
@@ -284,7 +325,8 @@ describe('chunked consolidation flush', () => {
     });
     const fx = seed({ clusters: 12, dormant: 10, filler: 20 });
     const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const atNow: typeof runConsolidation = (local, opts) => runConsolidation(local, { ...opts, now: NOW, budget: stopsOnSecondPause });
+    const atNow: typeof runConsolidation = (local, opts) =>
+      runConsolidation(local, { ...opts, now: NOW, budget: stopsOnSecondPause });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
 
@@ -314,12 +356,17 @@ describe('chunked consolidation flush', () => {
     let exited: Promise<unknown[]> | undefined;
     const holdsOnFirstPause = budget(0, async () => {
       if (exited) return yieldOnce();
-      const holder = new Worker(HOLD_LOCK_WORKER, { eval: true, workerData: { file: getHippoDbPath(fx.root), ms: 400 } });
+      const holder = new Worker(HOLD_LOCK_WORKER, {
+        eval: true,
+        workerData: { file: getHippoDbPath(fx.root), ms: 400 },
+      });
       exited = once(holder, 'exit');
       await once(holder, 'message');
     });
 
-    const result = await runWithRequestStores(() => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }), { busyWaitMs: 250 });
+    const result = await runWithRequestStores(() => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }), {
+      busyWaitMs: 250,
+    });
 
     expect(exited).toBeDefined();
     expect(await exited).toEqual([0]);
@@ -329,10 +376,14 @@ describe('chunked consolidation flush', () => {
   it('the partial audit row names the unit that threw, not the first unit of its chunk', async () => {
     const fx = seed({ clusters: 6, dormant: 0, filler: 0 });
     const bad = fx.clusters[3]!;
-    onStore(fx.root, (db) => db.exec(
-      `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`));
+    onStore(fx.root, (db) =>
+      db.exec(
+        `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+      ),
+    );
     const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const oneChunk: typeof runConsolidation = (local, opts) => runConsolidation(local, { ...opts, now: NOW, budget: budget(Infinity) });
+    const oneChunk: typeof runConsolidation = (local, opts) =>
+      runConsolidation(local, { ...opts, now: NOW, budget: budget(Infinity) });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
 
@@ -345,12 +396,15 @@ describe('chunked consolidation flush', () => {
 
   it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
     const fx = seed({ clusters: 2, dormant: 0, filler: 0 });
-    const timeout = await withSharedStoreHandles(async () => {
-      await consolidate(fx.root, { now: NOW, budget: budget(0) });
-      const db = openHippoDb(fx.root);
-      // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
-      return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
-    }, { busyWaitMs: HOOK_DB_WAIT_MS });
+    const timeout = await withSharedStoreHandles(
+      async () => {
+        await consolidate(fx.root, { now: NOW, budget: budget(0) });
+        const db = openHippoDb(fx.root);
+        // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
+        return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
+      },
+      { busyWaitMs: HOOK_DB_WAIT_MS },
+    );
     expect(timeout).toBe(HOOK_DB_WAIT_MS);
   });
 });

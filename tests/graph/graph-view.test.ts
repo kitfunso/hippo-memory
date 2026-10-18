@@ -37,15 +37,28 @@ const T = 'default';
 
 /** Seed: a policy + a decision that names it -> 2 entities + 1 `references` edge. */
 async function seedGraph(home: string, tenant = T): Promise<void> {
-  await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
-  await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, { decisionText: 'We adopt RetryPolicy across all services' });
+  await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
+    policyName: 'RetryPolicy',
+    policyText: 'retry up to 3x',
+  });
+  await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
+    decisionText: 'We adopt RetryPolicy across all services',
+  });
   await extractGraph(sqliteStore(home), tenant);
 }
 
 describe('graph-view: buildGraphModel (real DB)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('graphview'); });
-  afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
+  beforeEach(() => {
+    home = makeRoot('graphview');
+  });
+  afterEach(() => {
+    try {
+      rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  });
 
   it('1. maps entities -> nodes and relations -> edges', async () => {
     await seedGraph(home);
@@ -100,9 +113,19 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     // Many entities so that a small `limit`, under the old global-cap-then-filter,
     // would miss the focus entity / its neighbor. The by-name focus query (which
     // looks up the entity directly, then its bidirectional edges) must still find it.
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'FocusPol', policyText: 'the focus policy' });
-    for (let i = 0; i < 6; i++) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: `Filler${i}`, policyText: 'x' });
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'We adopt FocusPol across every service now' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'FocusPol',
+      policyText: 'the focus policy',
+    });
+    for (let i = 0; i < 6; i++) {
+      await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+        policyName: `Filler${i}`,
+        policyText: 'x',
+      });
+    }
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'We adopt FocusPol across every service now',
+    });
     await extractGraph(sqliteStore(home), T);
     const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'FocusPol', limit: 2 });
     expect(m.nodes.some((n) => n.name === 'FocusPol')).toBe(true); // found despite limit 2
@@ -112,22 +135,35 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   });
 
   it('16. focus subgraph includes neighbour-to-neighbour edges, not just focus-touching', async () => {
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolA', policyText: 'PolA works closely with PolB' });
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolB', policyText: 'a standalone policy' });
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB across the org now' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'PolA',
+      policyText: 'PolA works closely with PolB',
+    });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      policyName: 'PolB',
+      policyText: 'a standalone policy',
+    });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt PolA and PolB across the org now',
+    });
     await extractGraph(sqliteStore(home), T);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Adopt PolA and PolB across the org now' });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, {
+      entity: 'Adopt PolA and PolB across the org now',
+    });
     const nameById = new Map(m.nodes.map((n) => [n.id, n.name]));
     // PolA --references--> PolB connects two NEIGHBORS (neither is the focus decision);
     // it would be missing if only focus-touching edges were loaded.
-    const interNeighbor = m.edges.some(
-      (e) => nameById.get(e.from) === 'PolA' && nameById.get(e.to) === 'PolB',
-    );
+    const interNeighbor = m.edges.some((e) => nameById.get(e.from) === 'PolA' && nameById.get(e.to) === 'PolB');
     expect(interNeighbor).toBe(true);
   });
 
   it('17. focus on a name shared by many entities is capped to the limit', async () => {
-    for (let i = 0; i < 8; i++) await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { customer: 'Acme', note: `note ${i}` });
+    for (let i = 0; i < 8; i++) {
+      await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+        customer: 'Acme',
+        note: `note ${i}`,
+      });
+    }
     await extractGraph(sqliteStore(home), T);
     const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Acme', limit: 3 });
     expect(m.nodes.length).toBeLessThanOrEqual(3); // 8 same-name entities capped to 3
@@ -135,12 +171,19 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   });
 
   it('18. focus truncation is reported when the neighbour scan hits the cap', async () => {
-    for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
+    for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) {
+      await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
+    }
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt PolA and PolB and PolC and PolD now',
+    });
     await extractGraph(sqliteStore(home), T);
     // limit 3: the decision references 4 policies; one 1-hop neighbor cannot fit,
     // so the model must report truncated (not silently omit a neighbor).
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Adopt PolA and PolB and PolC and PolD now', limit: 3 });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, {
+      entity: 'Adopt PolA and PolB and PolC and PolD now',
+      limit: 3,
+    });
     expect(m.nodes.length).toBeLessThanOrEqual(3);
     expect(m.truncated).toBe(true);
   });
@@ -235,10 +278,13 @@ describe('graph-view: GET /v1/graph (live server)', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('12. returns the caller-tenant graph; another tenant\'s entities are absent', async () => {
+  it("12. returns the caller-tenant graph; another tenant's entities are absent", async () => {
     await seedGraph(home, T);
     // A separate tenant's graph in the same store must NOT leak to the default caller.
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'tenantB', { policyName: 'TenantBOnlyPolicy', policyText: 'x' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'tenantB', {
+      policyName: 'TenantBOnlyPolicy',
+      policyText: 'x',
+    });
     await extractGraph(sqliteStore(home), 'tenantB');
 
     const res = await fetch(`${handle.url}/v1/graph`);

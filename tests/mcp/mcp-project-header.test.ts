@@ -22,7 +22,11 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-interface Reply { readonly status: number; readonly text: string; readonly scoped: string | string[] | undefined }
+interface Reply {
+  readonly status: number;
+  readonly text: string;
+  readonly scoped: string | string[] | undefined;
+}
 
 let tmp: string;
 let handle: ServerHandle | null = null;
@@ -44,15 +48,23 @@ const REMEMBER = toolCall('hippo_remember', { text: 'the header test row about b
 /** POST /mcp through node:http, which sends a header given as an array once per value, as a proxy that repeats one would. */
 function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promise<Reply> {
   return new Promise((resolve, reject) => {
-    const req = http.request(`${handle!.url}/mcp`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
-    }, (res) => {
-      let text = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk: string) => { text += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, text, scoped: res.headers['x-hippo-project-scoped'] }));
-    });
+    const req = http.request(
+      `${handle!.url}/mcp`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
+      },
+      (res) => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => {
+          text += chunk;
+        });
+        res.on('end', () =>
+          resolve({ status: res.statusCode ?? 0, text, scoped: res.headers['x-hippo-project-scoped'] }),
+        );
+      },
+    );
     req.on('error', reject);
     req.end(body);
   });
@@ -104,7 +116,10 @@ describe('X-Hippo-Project on a shared store', () => {
   it('answers 400 with no JSON-RPC body for each bad header, and stores nothing', async () => {
     const store = makeStore(true);
     handle = await serve({ hippoRoot: store, port: 0 });
-    const withName = (aliases: string): http.OutgoingHttpHeaders => ({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases });
+    const withName = (aliases: string): http.OutgoingHttpHeaders => ({
+      'x-hippo-project': 'acme',
+      'x-hippo-project-aliases': aliases,
+    });
     const bad: ReadonlyArray<readonly [string, http.OutgoingHttpHeaders]> = [
       ['a bad escape', { 'x-hippo-project': '%E0%A4%A' }],
       ['a raw space', { 'x-hippo-project': 'acme app' }],
@@ -159,7 +174,11 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
   });
 
   it('marks a 200 and a 429 from a store that is not shared', async () => {
-    handle = await serve({ hippoRoot: makeStore(false), port: 0, rateLimits: { perAddress: { ratePerSec: 0.001, burst: 1 } } });
+    handle = await serve({
+      hippoRoot: makeStore(false),
+      port: 0,
+      rateLimits: { perAddress: { ratePerSec: 0.001, burst: 1 } },
+    });
     const replies = [await post({}), await post({})];
     expect(replies.map((r) => r.status)).toEqual([200, 429]);
     expect(replies.map((r) => r.scoped)).toEqual(['1', '1']);
@@ -169,8 +188,12 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
     expect(MCP_PROJECT_SCOPED_HEADER).toBe('X-Hippo-Project-Scoped');
     handle = await serve({ hippoRoot: makeStore(true), port: 0 });
     const aliases = (n: number): string => Array.from({ length: n }, (_, i) => `a${i}`).join(',');
-    expect((await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES) })).status).toBe(200);
-    expect((await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES + 1) })).status).toBe(400);
+    expect(
+      (await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES) })).status,
+    ).toBe(200);
+    expect(
+      (await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES + 1) })).status,
+    ).toBe(400);
   });
 });
 
@@ -179,7 +202,10 @@ describe('X-Hippo-Project on a store that is not shared', () => {
     const store = makeStore(false);
     handle = await serve({ hippoRoot: store, port: 0 });
     for (const name of ['acme', 'Acme App']) {
-      const r = await post({ 'x-hippo-project': name }, toolCall('hippo_remember', { text: `the solo store row sent as ${name}` }));
+      const r = await post(
+        { 'x-hippo-project': name },
+        toolCall('hippo_remember', { text: `the solo store row sent as ${name}` }),
+      );
       expect(r.status, `${name}: ${r.text}`).toBe(200);
       expect(r.text).toContain('Remembered');
     }

@@ -73,7 +73,7 @@ describe('one server per store', () => {
     await expect(boot()).resolves.toBeDefined();
   });
 
-  it('keeps a live process\'s claim that has no port yet, for detectServer and for a second claim', async () => {
+  it("keeps a live process's claim that has no port yet, for detectServer and for a second claim", async () => {
     await claimPidfile(root, 'now');
     expect(await detectServer(root)).toBeNull();
     expect(existsSync(join(root, 'server.pid'))).toBe(true);

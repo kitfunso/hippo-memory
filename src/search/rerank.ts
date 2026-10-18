@@ -74,7 +74,10 @@ function attachMmrRanks(scored: SearchResult[], picked: SearchResult[]): void {
 
 /** MMR over the top window only; the tail keeps its relevance order. */
 export function applyMmrWindow(
-  scored: SearchResult[], embeddingIndex: Record<string, ArrayLike<number>>, lambda: number, explain: boolean,
+  scored: SearchResult[],
+  embeddingIndex: Record<string, ArrayLike<number>>,
+  lambda: number,
+  explain: boolean,
 ): SearchResult[] {
   const head = scored.slice(0, MMR_CANDIDATE_CAP);
   const tail = scored.slice(MMR_CANDIDATE_CAP);
@@ -83,7 +86,10 @@ export function applyMmrWindow(
 
 /** Reranks the top `topK` (default 50), stamps pre and post ranks, then maps each head row through `onRanked`. */
 export async function applyReranker(
-  query: string, ordered: SearchResult[], reranker: RerankerFn, rerankerOptions?: RerankerOptions,
+  query: string,
+  ordered: SearchResult[],
+  reranker: RerankerFn,
+  rerankerOptions?: RerankerOptions,
   onRanked?: (ranked: RerankResult) => SearchResult,
 ): Promise<SearchResult[]> {
   const topK = rerankerOptions?.topK ?? DEFAULT_RERANK_TOP_K;

@@ -33,7 +33,12 @@ export function removeScratch(s: Scratch): void {
   fs.rmSync(s.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 
-export function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
+export function runHippo(
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  input?: string,
+): SpawnSyncReturns<string> {
   return hippoRun(args, { cwd, env, input });
 }
 
@@ -42,7 +47,10 @@ export function initProject(s: Scratch): void {
 }
 
 export async function initGlobal(s: Scratch): Promise<void> {
-  expect((await runCliAs(['init', '--global', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: s.proj, env: s.env })).status).toBe(0);
+  expect(
+    (await runCliAs(['init', '--global', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: s.proj, env: s.env }))
+      .status,
+  ).toBe(0);
 }
 
 export interface FixturePayload {
@@ -57,7 +65,12 @@ export function fixturePayload(index: number, over: Record<string, string> = {})
   return JSON.stringify({ ...JSON.parse(lines[index]), ...over });
 }
 
-export function postCompactPayload(sessionId: string, cwd: string, summary: string | null, extra: Record<string, string> = {}): string {
+export function postCompactPayload(
+  sessionId: string,
+  cwd: string,
+  summary: string | null,
+  extra: Record<string, string> = {},
+): string {
   const base = { session_id: sessionId, cwd, hook_event_name: 'PostCompact', trigger: 'auto', ...extra };
   return JSON.stringify(summary === null ? base : { ...base, compact_summary: summary });
 }

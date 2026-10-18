@@ -11,7 +11,9 @@ const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 let dir: string;
 
-beforeEach(() => { dir = makeRoot('spawn-error', { init: false }); });
+beforeEach(() => {
+  dir = makeRoot('spawn-error', { init: false });
+});
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /** Runs hippo with a Node binary gone from disk (upgraded mid-session): every worker spawn fails with ENOENT, reported as an 'error' event. */
@@ -19,10 +21,20 @@ function runWithMissingNode(args: readonly string[], logLevel: string, input?: s
   const preload = path.join(dir, 'missing-node.mjs');
   fs.writeFileSync(preload, `process.execPath = ${JSON.stringify(path.join(dir, 'no-such-node'))};\n`);
   const env: NodeJS.ProcessEnv = {
-    ...process.env, HIPPO_HOME: path.join(dir, 'global'), HOME: dir, USERPROFILE: dir, CODEX_HOME: path.join(dir, '.codex'),
-    HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: logLevel,
+    ...process.env,
+    HIPPO_HOME: path.join(dir, 'global'),
+    HOME: dir,
+    USERPROFILE: dir,
+    CODEX_HOME: path.join(dir, '.codex'),
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    HIPPO_LOG: logLevel,
   };
-  return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...args], { cwd: dir, env, input, encoding: 'utf8' });
+  return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...args], {
+    cwd: dir,
+    env,
+    input,
+    encoding: 'utf8',
+  });
 }
 
 describe('hippo session-end worker spawn', () => {
@@ -40,9 +52,12 @@ function installNodeAsCodex(bin: string): void {
   fs.mkdirSync(bin, { recursive: true });
   const ps = (s: string): string => `'${s.replace(/'/g, "''")}'`;
   const launcher = path.join(bin, process.platform === 'win32' ? 'codex.ps1' : 'codex');
-  fs.writeFileSync(launcher, process.platform === 'win32'
-    ? `& ${ps(process.execPath)} @args\r\nexit $LASTEXITCODE\r\n`
-    : `#!/bin/sh\nexec "${process.execPath}" "$@"\n`);
+  fs.writeFileSync(
+    launcher,
+    process.platform === 'win32'
+      ? `& ${ps(process.execPath)} @args\r\nexit $LASTEXITCODE\r\n`
+      : `#!/bin/sh\nexec "${process.execPath}" "$@"\n`,
+  );
   fs.chmodSync(launcher, 0o755);
   vi.stubEnv('HOME', dir);
   vi.stubEnv('USERPROFILE', dir);

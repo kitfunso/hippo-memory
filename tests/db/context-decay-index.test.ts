@@ -73,7 +73,9 @@ function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
     ORDER BY pinned DESC, CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
     / (half_life_days * ${rewardFactorSql()}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
   // SAFETY: one TEXT `id` column.
-  return withDb((db) => (db.prepare(sql).all(...params, now.toISOString(), cap) as Array<{ id: string }>).map((r) => r.id));
+  return withDb((db) =>
+    (db.prepare(sql).all(...params, now.toISOString(), cap) as Array<{ id: string }>).map((r) => r.id),
+  );
 }
 
 // The caps at which a key without the reward factor first drops a row it should keep: the pinned rows plus the rows that
@@ -85,7 +87,9 @@ function plainKeyCaps(now: Date): number[] {
     AND ${plain} <= ? AND ${plain} / ${rewardFactorSql()} <= ?))`;
   const iso = now.toISOString();
   // SAFETY: one INTEGER `n` column.
-  const n = withDb((db) => (db.prepare(sql).get(...params, iso, DECAY_KEY_HALF_LIVES, iso, DECAY_KEY_HALF_LIVES) as { n: number }).n);
+  const n = withDb(
+    (db) => (db.prepare(sql).get(...params, iso, DECAY_KEY_HALF_LIVES, iso, DECAY_KEY_HALF_LIVES) as { n: number }).n,
+  );
   return [n - 1, n].filter((cap) => cap >= 1);
 }
 
@@ -176,16 +180,21 @@ describe('loadContextCandidates past the cap', () => {
   });
 
   it('reads the subset through the v60 index with no full scan of memories', () => {
-    const { statements } = recordStatements(() => loadContextCandidates(home, 'default', { cap: 40, now: new Date(BASE) }));
+    const { statements } = recordStatements(() =>
+      loadContextCandidates(home, 'default', { cap: 40, now: new Date(BASE) }),
+    );
     const sql = statements.find((s) => SUBSET.test(s));
     expect(sql).toBeDefined();
     const marks = (sql ?? '').match(/\?/g)?.length ?? 0;
     const plan = withDb((db) =>
       // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
-      (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array<string>(marks).fill('x')) as Array<{ detail: string }>)
-        .map((r) => r.detail),
+      (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array<string>(marks).fill('x')) as Array<{ detail: string }>).map(
+        (r) => r.detail,
+      ),
     );
-    expect(plan.filter((line) => line.includes(`USING INDEX ${DECAY_KEY_INDEX} (tenant_id=? AND pinned=?`))).toHaveLength(2);
+    expect(
+      plan.filter((line) => line.includes(`USING INDEX ${DECAY_KEY_INDEX} (tenant_id=? AND pinned=?`)),
+    ).toHaveLength(2);
     expect(plan.some((line) => line.includes('AND <expr>>?)'))).toBe(true);
     expect(plan.filter((line) => /SCAN memories/.test(line))).toEqual([]);
   });

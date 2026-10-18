@@ -53,7 +53,7 @@ describe('pathOverlapScore', () => {
     const memTags = ['path:my-app', 'path:src', 'path:api'];
     const curTags = ['path:my-app', 'path:src', 'path:tests'];
     const score = pathOverlapScore(memTags, curTags);
-    expect(score).toBeCloseTo(2/3);
+    expect(score).toBeCloseTo(2 / 3);
   });
 
   it('returns 0 for no match', () => {
@@ -102,10 +102,7 @@ describe('pathBoostMultiplier', () => {
   // memory-count normalization); see
   // docs/plans/2026-07-18-s5-path-overlap-tuning.md T3
   it('DEFECT PIN: a single generic path tag no longer scores the full 1.3x boost from a deeper cwd', () => {
-    const boost = pathBoostMultiplier(
-      ['path:skf-user'],
-      ['path:skf-user', 'path:proj-nova', 'path:lib'],
-    );
+    const boost = pathBoostMultiplier(['path:skf-user'], ['path:skf-user', 'path:proj-nova', 'path:lib']);
     expect(boost).toBeCloseTo(1.1, 10);
   });
 

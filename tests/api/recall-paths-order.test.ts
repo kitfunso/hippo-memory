@@ -53,8 +53,21 @@ function cliCore(): Pick<CliCoreRecall, 'rank'> {
   const config = loadConfig(root);
   return {
     rank: {
-      budget: 4000, cost: (r) => r.tokens, window: { limit: 3 }, includeSuperseded: false, explicitScope: null, activeScope: null,
-      search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
+      budget: 4000,
+      cost: (r) => r.tokens,
+      window: { limit: 3 },
+      includeSuperseded: false,
+      explicitScope: null,
+      activeScope: null,
+      search: {
+        usePhysics: false,
+        physicsConfig: config.physics,
+        multihop: false,
+        mmr: false,
+        mmrLambda: 0.7,
+        localBump: 1.2,
+        explain: false,
+      },
     },
   };
 }
@@ -77,16 +90,23 @@ function written(): Written {
   const audit = auditRows()
     .filter((e) => e.id > seededAuditId)
     .map((e) => [e.op, isJsonNumber(e.metadata.results) ? e.metadata.results : null] as const);
-  const strengthened = loadEntriesByIds(root, ROWS.map((r) => r.id), TENANT)
+  const strengthened = loadEntriesByIds(
+    root,
+    ROWS.map((r) => r.id),
+    TENANT,
+  )
     .filter((e) => (e.retrieval_count ?? 0) > 0)
     .map((e) => e.id)
     .sort();
   const traces = onDb(root, (db) =>
-    db.prepare('SELECT pipeline, result_count FROM recall_traces ORDER BY id').all().map((r) => {
-      // SAFETY: the SELECT names two NOT NULL recall_traces columns, a TEXT and an INTEGER.
-      const row = r as { pipeline: string; result_count: number };
-      return [row.pipeline, Number(row.result_count)] as const;
-    }),
+    db
+      .prepare('SELECT pipeline, result_count FROM recall_traces ORDER BY id')
+      .all()
+      .map((r) => {
+        // SAFETY: the SELECT names two NOT NULL recall_traces columns, a TEXT and an INTEGER.
+        const row = r as { pipeline: string; result_count: number };
+        return [row.pipeline, Number(row.result_count)] as const;
+      }),
   );
   return { audit, strengthened, traces, lastRetrievalIds: loadLastRecall(root).last_retrieval_ids };
 }
@@ -115,7 +135,10 @@ describe('retrieve paths: order and writes', () => {
     const result = await retrieve(ctx(), { query: CLAIM, window: { limit: 3 } });
     expect(idsOf(result)).toEqual(BAND_IDS);
     expect(written()).toEqual({
-      audit: [['recall', 3], ['recall_autodebias_hint_no_class_match', null]],
+      audit: [
+        ['recall', 3],
+        ['recall_autodebias_hint_no_class_match', null],
+      ],
       strengthened: [...BAND_IDS].sort(),
       traces: [['api', 3]],
       lastRetrievalIds: [],
@@ -123,10 +146,18 @@ describe('retrieve paths: order and writes', () => {
   });
 
   it('the band ranker recorded for HTTP writes the no-session row first', async () => {
-    const result = await retrieve(ctx(), { query: CLAIM, window: { limit: 3 }, trace: { recordAs: RECALL_RECORDING.http } });
+    const result = await retrieve(ctx(), {
+      query: CLAIM,
+      window: { limit: 3 },
+      trace: { recordAs: RECALL_RECORDING.http },
+    });
     expect(idsOf(result)).toEqual(BAND_IDS);
     expect(written()).toEqual({
-      audit: [['recall_anchor_skipped_no_session', null], ['recall', 3], ['recall_autodebias_hint_no_class_match', null]],
+      audit: [
+        ['recall_anchor_skipped_no_session', null],
+        ['recall', 3],
+        ['recall_autodebias_hint_no_class_match', null],
+      ],
       strengthened: [...BAND_IDS].sort(),
       traces: [['api', 3]],
       lastRetrievalIds: [],
@@ -148,7 +179,11 @@ describe('retrieve paths: order and writes', () => {
     expect(ranked).toEqual(WIDE_RANKED);
     expect(idsOf(result)).toEqual(WIDE_BAND_IDS);
     expect(written()).toEqual({
-      audit: [['recall_autodebias_hint_no_class_match', null], ['recall', 2], ['recall_availability_detected', null]],
+      audit: [
+        ['recall_autodebias_hint_no_class_match', null],
+        ['recall', 2],
+        ['recall_availability_detected', null],
+      ],
       strengthened: WIDE_RANKED.slice(0, 2).sort(),
       traces: [['mcp', 2]],
       lastRetrievalIds: [],
@@ -167,7 +202,11 @@ describe('retrieve paths: order and writes', () => {
     });
     expect(idsOf(result)).toEqual(CORE_IDS);
     expect(written()).toEqual({
-      audit: [['recall_autodebias_hint_no_class_match', null], ['recall_availability_detected', null], ['recall', 2]],
+      audit: [
+        ['recall_autodebias_hint_no_class_match', null],
+        ['recall_availability_detected', null],
+        ['recall', 2],
+      ],
       strengthened: [...CORE_IDS].sort(),
       traces: [['cli', 2]],
       lastRetrievalIds: CORE_IDS,
@@ -178,7 +217,12 @@ describe('retrieve paths: order and writes', () => {
     let inspected: string[] = [];
     const result = await retrieve(ctx(), {
       query: CLAIM,
-      cliCore: { ...cliCore(), inspect: (ranking) => { inspected = ranking.results.map((r) => r.entry.id); } },
+      cliCore: {
+        ...cliCore(),
+        inspect: (ranking) => {
+          inspected = ranking.results.map((r) => r.entry.id);
+        },
+      },
     });
     expect(inspected).toEqual(INSPECT_IDS);
     expect(idsOf(result)).toEqual(INSPECT_IDS);

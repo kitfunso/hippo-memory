@@ -246,7 +246,15 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     const forwarded = ['exec', 'fix the bug & ship', 'a "quoted" word', ''];
     execFileSync('node', [path.join(process.cwd(), 'bin', 'hippo.js'), 'codex-run', '--', ...forwarded], {
       cwd: env.home,
-      env: { ...process.env, PATH: prevPathForChild, HOME: env.home, USERPROFILE: env.home, HIPPO_HOME: path.join(env.home, '.hippo-global'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ARGV_OUT: argvOut },
+      env: {
+        ...process.env,
+        PATH: prevPathForChild,
+        HOME: env.home,
+        USERPROFILE: env.home,
+        HIPPO_HOME: path.join(env.home, '.hippo-global'),
+        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+        ARGV_OUT: argvOut,
+      },
       stdio: 'pipe',
     });
 
@@ -255,7 +263,10 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     // codex-run leaves a detached session-end worker; let it finish before cleanup removes its folder.
     const workerLog = resolveCodexWrapperPaths().logFile;
     const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline && !(fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'))) {
+    while (
+      Date.now() < deadline &&
+      !(fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'))
+    ) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
     }
     expect(fs.readFileSync(workerLog, 'utf8')).toContain('skip: no hippo store');
@@ -283,11 +294,7 @@ describe('resolveCodexSessionTranscript', () => {
     const before = JSON.stringify({ session_id: 'old-session', ts: 1, text: 'before' }) + '\n';
     fs.writeFileSync(historyPath, before, 'utf8');
     const startOffset = Buffer.byteLength(before);
-    fs.appendFileSync(
-      historyPath,
-      JSON.stringify({ session_id: 'new-session', ts: 2, text: 'after' }) + '\n',
-      'utf8',
-    );
+    fs.appendFileSync(historyPath, JSON.stringify({ session_id: 'new-session', ts: 2, text: 'after' }) + '\n', 'utf8');
 
     const wanted = path.join(sessionsDir, 'rollout-2026-04-15T21-18-20-new-session.jsonl');
     const other = path.join(sessionsDir, 'rollout-2026-04-15T20-00-00-old-session.jsonl');
@@ -361,8 +368,13 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   const rollout = (text: string): string =>
     [
       { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } },
-      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Noted.' }] } },
-    ].map((line) => JSON.stringify(line)).join('\n') + '\n';
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Noted.' }] },
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join('\n') + '\n';
 
   const ruleText = (name: string): string =>
     `We decided how to ship the ${name} service. Never deploy the ${name} service on Fridays; the runbook is runbook-${name}.md.`;
@@ -371,16 +383,20 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   function writeStandInCodex(dir: string): string {
     fs.mkdirSync(dir, { recursive: true });
     const script = path.join(dir, 'fake-codex.js');
-    fs.writeFileSync(script, [
-      "const fs = require('fs');",
-      "const path = require('path');",
-      'const home = process.env.CODEX_HOME;',
-      "const sessions = path.join(home, 'sessions', '2026', '10', '03');",
-      'fs.mkdirSync(sessions, { recursive: true });',
-      `fs.appendFileSync(path.join(home, 'history.jsonl'), JSON.stringify({ session_id: 'sess-b', ts: 2, text: 'hi' }) + '\\n');`,
-      `fs.writeFileSync(path.join(sessions, 'rollout-2026-10-03T10-00-00-sess-b.jsonl'), ${JSON.stringify(rollout(ruleText(SENTINEL)))});`,
-      '',
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      script,
+      [
+        "const fs = require('fs');",
+        "const path = require('path');",
+        'const home = process.env.CODEX_HOME;',
+        "const sessions = path.join(home, 'sessions', '2026', '10', '03');",
+        'fs.mkdirSync(sessions, { recursive: true });',
+        `fs.appendFileSync(path.join(home, 'history.jsonl'), JSON.stringify({ session_id: 'sess-b', ts: 2, text: 'hi' }) + '\\n');`,
+        `fs.writeFileSync(path.join(sessions, 'rollout-2026-10-03T10-00-00-sess-b.jsonl'), ${JSON.stringify(rollout(ruleText(SENTINEL)))});`,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
 
     if (process.platform === 'win32') {
       // Not codex.cmd: spawnRealCodex's cmd.exe quoting cannot launch a .cmd backup (the run reports it as not recognized).
@@ -401,7 +417,11 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     const sessionsA = path.join(homeA, 'sessions', '2026', '10', '03');
     fs.mkdirSync(sessionsA, { recursive: true });
     fs.mkdirSync(homeB, { recursive: true });
-    fs.writeFileSync(path.join(homeA, 'history.jsonl'), JSON.stringify({ session_id: 'sess-a', ts: 1, text: 'old' }) + '\n', 'utf8');
+    fs.writeFileSync(
+      path.join(homeA, 'history.jsonl'),
+      JSON.stringify({ session_id: 'sess-a', ts: 1, text: 'old' }) + '\n',
+      'utf8',
+    );
     const decoy = path.join(sessionsA, 'rollout-2026-10-03T09-00-00-sess-a.jsonl');
     fs.writeFileSync(decoy, rollout(ruleText(DECOY)), 'utf8');
     // A newer mtime lets a wrapper that still looks in A pick the decoy by recency.
@@ -420,7 +440,10 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
 
     // The wrapper spawns powershell.exe or cmd.exe by bare name on Windows, so those folders must stay on PATH.
     const system32 = path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32');
-    const systemDirs = process.platform === 'win32' ? [system32, path.join(system32, 'WindowsPowerShell', 'v1.0')] : ['/usr/bin', '/bin'];
+    const systemDirs =
+      process.platform === 'win32'
+        ? [system32, path.join(system32, 'WindowsPowerShell', 'v1.0')]
+        : ['/usr/bin', '/bin'];
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HIPPO_HOME: globalRoot,
@@ -433,14 +456,23 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     delete childEnv.CLAUDE_CODE_SESSION_ID;
     delete childEnv.HIPPO_SESSION_ID;
 
-    const run = spawnSync(process.execPath, [HIPPO_JS, 'codex-run', '--'], { cwd: work, env: childEnv, encoding: 'utf8' });
+    const run = spawnSync(process.execPath, [HIPPO_JS, 'codex-run', '--'], {
+      cwd: work,
+      env: childEnv,
+      encoding: 'utf8',
+    });
     expect(run.status, run.stderr).toBe(0);
 
     const saved = (): string[] => loadAllEntries(globalRoot, 'default').map((e) => e.content);
     const readLog = (): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
     // The detached worker writes until its last log line; cleanup racing those writes fails with ENOTEMPTY.
-    const workerDone = (log: string): boolean => log.includes('skip capture') || /digest: (skip|wrote)|digest failed/.test(log);
-    await waitFor(() => workerDone(readLog()), { timeoutMs: 30_000, intervalMs: 200, what: 'the codex worker log line' });
+    const workerDone = (log: string): boolean =>
+      log.includes('skip capture') || /digest: (skip|wrote)|digest failed/.test(log);
+    await waitFor(() => workerDone(readLog()), {
+      timeoutMs: 30_000,
+      intervalMs: 200,
+      what: 'the codex worker log line',
+    });
 
     expect(readLog()).not.toContain('skip capture');
     expect(saved().some((c) => c.includes(SENTINEL))).toBe(true);

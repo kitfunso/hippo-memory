@@ -17,15 +17,106 @@ const CONFLICT_MIN_RARE_SHARED = 2;
 const POLARITY_WINDOW_WORDS = 40;
 
 const CONFLICT_STOPWORDS = new Set([
-  'the','a','an','is','was','are','were','be','been','being','to','of','in',
-  'for','on','with','at','by','from','it','this','that','and','or','but','so',
-  'if','as','we','i','you','they','he','she','my','our','your','its','his',
-  'her','their','up','out','just','also','then','than','some','all','any',
-  'each','very','too','do','did','does','has','had','have','will','would',
-  'could','should','may','might','can','shall','when','where','what','which',
-  'who','how','why','there','here','about','into','over','after','before',
-  'between','through','during','against','within','without','toward','upon',
-  'more','most','less','least','other','such','same','new','old','one','two',
+  'the',
+  'a',
+  'an',
+  'is',
+  'was',
+  'are',
+  'were',
+  'be',
+  'been',
+  'being',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'at',
+  'by',
+  'from',
+  'it',
+  'this',
+  'that',
+  'and',
+  'or',
+  'but',
+  'so',
+  'if',
+  'as',
+  'we',
+  'i',
+  'you',
+  'they',
+  'he',
+  'she',
+  'my',
+  'our',
+  'your',
+  'its',
+  'his',
+  'her',
+  'their',
+  'up',
+  'out',
+  'just',
+  'also',
+  'then',
+  'than',
+  'some',
+  'all',
+  'any',
+  'each',
+  'very',
+  'too',
+  'do',
+  'did',
+  'does',
+  'has',
+  'had',
+  'have',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'can',
+  'shall',
+  'when',
+  'where',
+  'what',
+  'which',
+  'who',
+  'how',
+  'why',
+  'there',
+  'here',
+  'about',
+  'into',
+  'over',
+  'after',
+  'before',
+  'between',
+  'through',
+  'during',
+  'against',
+  'within',
+  'without',
+  'toward',
+  'upon',
+  'more',
+  'most',
+  'less',
+  'least',
+  'other',
+  'such',
+  'same',
+  'new',
+  'old',
+  'one',
+  'two',
 ]);
 
 /** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
@@ -46,10 +137,11 @@ export function detectConflicts(
   const byTenant = new Map<string, number[]>();
   const ids: string[] = [];
   for (const entry of entries) {
-    const live = entry.layer !== Layer.Semantic
+    const live =
+      entry.layer !== Layer.Semantic &&
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
-      && !isQuarantineScope(entry.scope ?? null)
-      && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
+      !isQuarantineScope(entry.scope ?? null) &&
+      (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;
     const places = byTenant.get(entry.tenant_id);
     if (places) places.push(ids.length);
@@ -213,8 +305,8 @@ function classifyConflictType(
   // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <-> `disabled` and explicit
   // on/off in imperative context.
   const enabledDisabled =
-    (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable ']))
-    || (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));
+    (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable '])) ||
+    (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));
   if (enabledDisabled) return 'enabled/disabled mismatch on overlapping statement';
 
   const trueFalse =
@@ -224,8 +316,9 @@ function classifyConflictType(
       containsAny(a, [' false ', ' false.', ' false,', ' no ']));
   if (trueFalse) return 'true/false mismatch on overlapping statement';
 
-  const alwaysNever = (containsAny(a, [' always ', ' must ']) && containsAny(b, [' never ', ' must not ']))
-    || (containsAny(b, [' always ', ' must ']) && containsAny(a, [' never ', ' must not ']));
+  const alwaysNever =
+    (containsAny(a, [' always ', ' must ']) && containsAny(b, [' never ', ' must not '])) ||
+    (containsAny(b, [' always ', ' must ']) && containsAny(a, [' never ', ' must not ']));
   if (alwaysNever) return 'always/never mismatch on overlapping statement';
 
   if (
@@ -241,13 +334,36 @@ function classifyConflictType(
 function inferConflictPolarity(text: string): ConflictPolarity {
   const lowered = ` ${text.toLowerCase()} `;
   const negativePatterns = [
-    ' not ', ' never ', ' no ', " don't ", ' do not ', " doesn't ", ' does not ',
-    " can't ", ' cannot ', " shouldn't ", ' should not ', ' disabled ', ' disable ', ' off ',
-    ' false ', ' missing ', ' broken ', ' failed ',
+    ' not ',
+    ' never ',
+    ' no ',
+    " don't ",
+    ' do not ',
+    " doesn't ",
+    ' does not ',
+    " can't ",
+    ' cannot ',
+    " shouldn't ",
+    ' should not ',
+    ' disabled ',
+    ' disable ',
+    ' off ',
+    ' false ',
+    ' missing ',
+    ' broken ',
+    ' failed ',
   ];
   const positivePatterns = [
-    ' enabled ', ' enable ', ' works ', ' working ', ' true ', ' available ', ' present ', ' on ',
-    ' always ', ' must ',
+    ' enabled ',
+    ' enable ',
+    ' works ',
+    ' working ',
+    ' true ',
+    ' available ',
+    ' present ',
+    ' on ',
+    ' always ',
+    ' must ',
   ];
 
   if (containsAny(lowered, negativePatterns)) return 'negative';

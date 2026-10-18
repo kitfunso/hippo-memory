@@ -22,7 +22,12 @@ import {
 } from '../../src/eval/eval-stats.js';
 
 describe('four-bucket cost accounting', () => {
-  const usage = { inputTokens: 1_000_000, cacheWriteTokens: 2_000_000, cacheReadTokens: 10_000_000, outputTokens: 500_000 };
+  const usage = {
+    inputTokens: 1_000_000,
+    cacheWriteTokens: 2_000_000,
+    cacheReadTokens: 10_000_000,
+    outputTokens: 500_000,
+  };
 
   it('prices each bucket at its own rate', () => {
     const prices = { inputPerMTok: 3, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3, outputPerMTok: 15 };
@@ -43,8 +48,10 @@ describe('four-bucket cost accounting', () => {
     // Cutting 10% of the cached history saves far less than 10% of the input bill.
     const before = { inputTokens: 5_000, cacheWriteTokens: 5_000, cacheReadTokens: 900_000, outputTokens: 0 };
     const after = { ...before, cacheReadTokens: 810_000 };
-    const rawCut = 1 - (after.inputTokens + after.cacheWriteTokens + after.cacheReadTokens)
-      / (before.inputTokens + before.cacheWriteTokens + before.cacheReadTokens);
+    const rawCut =
+      1 -
+      (after.inputTokens + after.cacheWriteTokens + after.cacheReadTokens) /
+        (before.inputTokens + before.cacheWriteTokens + before.cacheReadTokens);
     const billCut = 1 - uncachedEquivalentInput(after) / uncachedEquivalentInput(before);
     expect(rawCut).toBeGreaterThan(0.09);
     expect(billCut).toBeGreaterThan(rawCut * 0.8);
@@ -79,7 +86,12 @@ describe('bootstrap', () => {
     // Five repos, each with a shared offset: tasks inside a repo move together.
     const byCluster = new Map<string, number[]>();
     const offsets = [-1, -0.5, 0, 0.5, 1.2];
-    offsets.forEach((o, i) => byCluster.set(`repo${i}`, Array.from({ length: 30 }, (_, j) => o + (j % 3) * 0.01)));
+    offsets.forEach((o, i) =>
+      byCluster.set(
+        `repo${i}`,
+        Array.from({ length: 30 }, (_, j) => o + (j % 3) * 0.01),
+      ),
+    );
     const clustered = clusteredPairedBootstrap(byCluster);
     const naive = pairedBootstrap([...byCluster.values()].flat());
     expect(clustered.estimate).toBeCloseTo(naive.estimate, 10);
@@ -112,7 +124,12 @@ describe('cost per resolved task', () => {
 });
 
 describe('pass@k and pass^k', () => {
-  const runs = [[true, false, true], [false, false, false], [true, true, true], [false, true]];
+  const runs = [
+    [true, false, true],
+    [false, false, false],
+    [true, true, true],
+    [false, true],
+  ];
   it('pass@k counts any success in the first k runs', () => {
     expect(passAtK(runs, 1)).toBeCloseTo(2 / 4, 10);
     expect(passAtK(runs, 3)).toBeCloseTo(2 / 3, 10);
@@ -129,7 +146,11 @@ describe('pass@k and pass^k', () => {
 
 describe('two-level bootstrap', () => {
   const mean = (xs: readonly number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
-  const data: Repository<number>[] = [[[1, 2], [3]], [[0.5], [2, 2]], [[-1], [4, 1]]];
+  const data: Repository<number>[] = [
+    [[1, 2], [3]],
+    [[0.5], [2, 2]],
+    [[-1], [4, 1]],
+  ];
   const small = { iterations: 300 };
 
   it('is deterministic for a seed and moves with the seed', () => {
@@ -161,7 +182,8 @@ describe('two-level bootstrap', () => {
   it('is wider than the family-level bootstrap when repositories carry the variation', () => {
     const offsets = [-1, 0, 1];
     const repos: Repository<number>[] = offsets.map((o) =>
-      Array.from({ length: 5 }, (_, f) => [o + f * 0.01, o + f * 0.01 + 0.02, o - f * 0.01]));
+      Array.from({ length: 5 }, (_, f) => [o + f * 0.01, o + f * 0.01 + 0.02, o - f * 0.01]),
+    );
     const byFamily = new Map<string, number[]>();
     repos.forEach((r, i) => r.forEach((fam, f) => byFamily.set(`${i}-${f}`, [...fam])));
     const two = twoLevelBootstrap(repos, mean, { iterations: 2000 });
@@ -171,7 +193,13 @@ describe('two-level bootstrap', () => {
   });
 
   it('gives p = 0 when every unit is above the null, using the 10,000 default', () => {
-    const r = twoLevelBootstrap([[[1], [2]], [[3], [1]]], mean);
+    const r = twoLevelBootstrap(
+      [
+        [[1], [2]],
+        [[3], [1]],
+      ],
+      mean,
+    );
     expect(r.p).toBe(0);
     expect(r.iterations).toBe(10_000);
     expect(r.dropped).toBe(0);
@@ -181,7 +209,11 @@ describe('two-level bootstrap', () => {
   });
 
   it('gives p above 0.5 for a distribution centred on the null', () => {
-    const centred: Repository<number>[] = [[[1], [-1]], [[2], [-2]], [[0.5], [-0.5]]];
+    const centred: Repository<number>[] = [
+      [[1], [-1]],
+      [[2], [-2]],
+      [[0.5], [-0.5]],
+    ];
     expect(twoLevelBootstrap(centred, mean, small).p).toBeGreaterThan(0.5);
   });
 
@@ -211,16 +243,23 @@ describe('two-level bootstrap', () => {
   });
 
   it('keeps the seeds of a family together', () => {
-    const repos: Repository<number>[] = [[[100, -100], [5]], [[7], [9]]];
+    const repos: Repository<number>[] = [
+      [[100, -100], [5]],
+      [[7], [9]],
+    ];
     let broken = 0;
     let sawFamily = 0;
-    twoLevelBootstrap(repos, (units) => {
-      const up = units.filter((u) => u === 100).length;
-      const down = units.filter((u) => u === -100).length;
-      if (up !== down) broken++;
-      if (up > 0) sawFamily++;
-      return mean(units);
-    }, small);
+    twoLevelBootstrap(
+      repos,
+      (units) => {
+        const up = units.filter((u) => u === 100).length;
+        const down = units.filter((u) => u === -100).length;
+        if (up !== down) broken++;
+        if (up > 0) sawFamily++;
+        return mean(units);
+      },
+      small,
+    );
     expect(broken).toBe(0);
     // The estimate's own call plus the 181 of default seed 1's 300 resamples that drew the family.
     expect(sawFamily).toBe(182);
@@ -230,10 +269,14 @@ describe('two-level bootstrap', () => {
     // One family of one unit in A, three in B: two draws give (2,0) from AA, (1,3) from AB or BA, (0,6) from BB.
     const repos: Repository<string>[] = [[['A']], [['B'], ['B'], ['B']]];
     const seen = new Set<string>();
-    twoLevelBootstrap(repos, (units) => {
-      seen.add(`${units.filter((u) => u === 'A').length},${units.filter((u) => u === 'B').length}`);
-      return 0;
-    }, { iterations: 500 });
+    twoLevelBootstrap(
+      repos,
+      (units) => {
+        seen.add(`${units.filter((u) => u === 'A').length},${units.filter((u) => u === 'B').length}`);
+        return 0;
+      },
+      { iterations: 500 },
+    );
     // The point-estimate call sees every unit: (1,3), already an allowed pair.
     expect([...seen].sort()).toEqual(['0,6', '1,3', '2,0']);
   });
@@ -274,8 +317,22 @@ describe('two-level bootstrap', () => {
   it('draws the same resamples for two statistics under one seed', () => {
     const seenA: string[] = [];
     const seenB: string[] = [];
-    twoLevelBootstrap(data, (u) => { seenA.push(u.join(',')); return mean(u); }, { ...small, seed: 3 });
-    twoLevelBootstrap(data, (u) => { seenB.push(u.join(',')); return u.length; }, { ...small, seed: 3 });
+    twoLevelBootstrap(
+      data,
+      (u) => {
+        seenA.push(u.join(','));
+        return mean(u);
+      },
+      { ...small, seed: 3 },
+    );
+    twoLevelBootstrap(
+      data,
+      (u) => {
+        seenB.push(u.join(','));
+        return u.length;
+      },
+      { ...small, seed: 3 },
+    );
     expect(seenA).toHaveLength(301);
     expect(seenB).toEqual(seenA);
   });
@@ -308,8 +365,15 @@ describe('holmAdjust', () => {
 });
 
 describe('verdict', () => {
-  const est = (estimate: number, low: number, high: number, nullValue = 0): TestedEstimate =>
-    ({ estimate, low, high, iterations: 10_000, p: 0, dropped: 0, nullValue });
+  const est = (estimate: number, low: number, high: number, nullValue = 0): TestedEstimate => ({
+    estimate,
+    low,
+    high,
+    iterations: 10_000,
+    p: 0,
+    dropped: 0,
+    nullValue,
+  });
   const lowerSpec: VerdictSpec = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt: -0.15 };
   const higherSpec: VerdictSpec = { helpful: 'higher', tieBand: [-0.05, 0.05], minimumEffectAt: 0.1 };
   const ratioSpec: VerdictSpec = { helpful: 'lower', tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 };
@@ -328,7 +392,7 @@ describe('verdict', () => {
     expect(verdict(est(0.07, 0.02, 0.12), 0.01, higherSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
   });
 
-  it('reads ratios against the estimate\'s nullValue of 1', () => {
+  it("reads ratios against the estimate's nullValue of 1", () => {
     expect(verdict(est(0.9, 0.85, 0.94, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
     expect(verdict(est(0.95, 0.9, 0.99, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
     expect(verdict(est(0.97, 0.96, 0.99, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
@@ -338,8 +402,7 @@ describe('verdict', () => {
 
   it('takes the null from the bootstrap run that built the estimate', () => {
     type Pair = { c: number; t: number };
-    const ratio = (u: readonly Pair[]): number =>
-      u.reduce((s, x) => s + x.t, 0) / u.reduce((s, x) => s + x.c, 0);
+    const ratio = (u: readonly Pair[]): number => u.reduce((s, x) => s + x.t, 0) / u.reduce((s, x) => s + x.c, 0);
     const saving: Repository<Pair>[] = [[[{ c: 1, t: 0.5 }]], [[{ c: 1, t: 0.6 }]], [[{ c: 1, t: 0.4 }]]];
     const atOne = twoLevelBootstrap(saving, ratio, { iterations: 300, nullValue: 1 });
     expect(atOne.nullValue).toBe(1);
@@ -351,7 +414,10 @@ describe('verdict', () => {
   });
 
   it('is inconclusive on a NaN estimate, even with a CI inside the tie band', () => {
-    expect(verdict(est(Number.NaN, -0.1, -0.01), 0.01, lowerSpec)).toEqual({ verdict: 'inconclusive', reachesMinimum: false });
+    expect(verdict(est(Number.NaN, -0.1, -0.01), 0.01, lowerSpec)).toEqual({
+      verdict: 'inconclusive',
+      reachesMinimum: false,
+    });
   });
 
   it('calls a tie when the interval sits inside the band, edges included', () => {

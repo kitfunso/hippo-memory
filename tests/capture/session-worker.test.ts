@@ -5,7 +5,14 @@ import nodeFs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnPosition, turnsAfter, type WorkerMode } from '../../src/capture/session-worker.js';
+import {
+  loadTurnPosition,
+  runSessionWorker,
+  saveTurnPosition,
+  turnPosition,
+  turnsAfter,
+  type WorkerMode,
+} from '../../src/capture/session-worker.js';
 import type { SessionTurn } from '../../src/capture/transcript.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
@@ -37,7 +44,12 @@ interface Recorder {
 
 function recorder(): Recorder {
   const runs: WorkerMode[] = [];
-  return { runs, work: async (mode) => { runs.push(mode); } };
+  return {
+    runs,
+    work: async (mode) => {
+      runs.push(mode);
+    },
+  };
 }
 
 describe('runSessionWorker', () => {
@@ -95,7 +107,9 @@ describe('runSessionWorker', () => {
   it('lets only one of two acquirers in one process run at a time: the second queues and its run waits for the first', async () => {
     const events: string[] = [];
     let release = (): void => undefined;
-    const firstHeld = new Promise<void>((resolve) => { release = resolve; });
+    const firstHeld = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const work = async (mode: WorkerMode): Promise<void> => {
       const run = events.filter((e) => e.startsWith('start')).length + 1;
       events.push(`start ${run} ${mode}`);
@@ -140,7 +154,11 @@ describe('runSessionWorker', () => {
 
   it('runs unlocked and warns once per lock path when the lock cannot be created', async () => {
     const real = nodeFs.writeFileSync;
-    const denyLock = (p: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions): void => {
+    const denyLock = (
+      p: fs.PathOrFileDescriptor,
+      data: string | NodeJS.ArrayBufferView,
+      options?: fs.WriteFileOptions,
+    ): void => {
       if (String(p).endsWith('.lock')) throw Object.assign(new Error('denied'), { code: 'EACCES' });
       real(p, data, options);
     };
@@ -163,7 +181,11 @@ describe('runSessionWorker', () => {
   });
 
   it('lets go of the lock when the work throws', async () => {
-    await expect(runSessionWorker(ID, 'turn', async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    await expect(
+      runSessionWorker(ID, 'turn', async () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
     expect(fs.existsSync(file('.lock'))).toBe(false);
   });
 });
@@ -196,7 +218,10 @@ describe('the progress cursor', () => {
     expect(loadTurnPosition(ID, transcript)).toBeNull();
     saveTurnPosition(ID, transcript, turns, () => {});
     expect(JSON.parse(fs.readFileSync(file('.cursor.json'), 'utf8'))).toMatchObject({
-      runtime: 'vscode', sessionId: ID, source: transcript, position: turnPosition(turns),
+      runtime: 'vscode',
+      sessionId: ID,
+      source: transcript,
+      position: turnPosition(turns),
     });
     expect(loadTurnPosition(ID, transcript)).toBe(turnPosition(turns));
     expect(loadTurnPosition(ID, `${transcript}.other`)).toBeNull();
@@ -214,7 +239,9 @@ describe('the progress cursor', () => {
       fs.rmSync(file('.cursor.json'));
       fs.mkdirSync(file('.cursor.json'));
       expect(loadTurnPosition(ID, transcript)).toBeNull();
-      expect(write.mock.calls.map((c) => String(c[0])).join('')).toMatch(/warn: session worker: cannot read the cursor .*errorClass=Error/);
+      expect(write.mock.calls.map((c) => String(c[0])).join('')).toMatch(
+        /warn: session worker: cannot read the cursor .*errorClass=Error/,
+      );
     } finally {
       write.mockRestore();
     }

@@ -25,7 +25,11 @@ afterEach(() => {
 });
 
 function seedBaserate(home: string): void {
-  for (const [est, act] of [[2, 4], [3, 6], [4, 8]]) {
+  for (const [est, act] of [
+    [2, 4],
+    [3, 6],
+    [4, 8],
+  ]) {
     const p = savePrediction(home, 'default', {
       classTag: 'migration-effort',
       claimText: `migration effort ${est} days`,

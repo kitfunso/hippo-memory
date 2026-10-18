@@ -12,7 +12,10 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 
-interface StatementProto { readonly sourceSQL: string; all(...params: unknown[]): unknown[] }
+interface StatementProto {
+  readonly sourceSQL: string;
+  all(...params: unknown[]): unknown[];
+}
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; all() takes SQL params and returns the row array.
 const { StatementSync } = require('node:sqlite') as { StatementSync: { prototype: StatementProto } };
@@ -42,7 +45,10 @@ interface RejectedLoser {
 async function arrayReads<T>(fn: () => Promise<T>): Promise<ArrayReads<T>> {
   const sql: string[] = [];
   const all = StatementSync.prototype.all;
-  const spy = vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+  const spy = vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (
+    this: StatementProto,
+    ...params: unknown[]
+  ) {
     sql.push(this.sourceSQL);
     return all.apply(this, params);
   });
@@ -62,7 +68,9 @@ function put(content: string, extra: Partial<MemoryEntry> = {}, tenantId = 'defa
 function rejectLoser(): RejectedLoser {
   const keepId = put('Always use semicolons in PowerShell');
   const loserId = put(LOSER);
-  replaceDetectedConflicts(root, [{ memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 }]);
+  replaceDetectedConflicts(root, [
+    { memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 },
+  ]);
   const conflictId = listMemoryConflicts(root, 'open')[0]!.id;
   const resolve = () => resolveMemoryConflict(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
   return { keepId, loserId, resolve };
@@ -83,14 +91,16 @@ function archivedRawIds(): string[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: one TEXT memory_id column.
-    return (db.prepare('SELECT memory_id FROM raw_archive ORDER BY memory_id').all() as Array<{ memory_id: string }>).map((r) => r.memory_id);
+    return (
+      db.prepare('SELECT memory_id FROM raw_archive ORDER BY memory_id').all() as Array<{ memory_id: string }>
+    ).map((r) => r.memory_id);
   } finally {
     closeHippoDb(db);
   }
 }
 
 describe('rejecting a conflict loser value', () => {
-  it('removes the same duplicates: case and spacing variants and raw rows, never another owner\'s or tenant\'s', async () => {
+  it("removes the same duplicates: case and spacing variants and raw rows, never another owner's or tenant's", async () => {
     const { keepId, loserId, resolve } = rejectLoser();
     const spaced = put(`  use &&   TO chain commands\tin powershell `);
     const raw = put(LOSER, { kind: 'raw' });

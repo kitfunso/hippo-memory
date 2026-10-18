@@ -10,7 +10,16 @@ import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_BRANCHES, rowsOf, seedPortBranches, seedTemplates, statsMirror, type Templates,
+  CLEARED_ENV,
+  FAKE_NOW,
+  freshStore,
+  normalize,
+  RECALL_BRANCHES,
+  rowsOf,
+  seedPortBranches,
+  seedTemplates,
+  statsMirror,
+  type Templates,
 } from '../_helpers/recall-golden-seed.js';
 
 beforeEach(() => {
@@ -19,8 +28,15 @@ beforeEach(() => {
 
 type Surface = 'http' | 'mcp';
 type Args = Record<string, string | number | boolean>;
-interface HttpReply { status: number; body: RecallResult }
-interface McpReply { status: number; text: string | null; error: unknown }
+interface HttpReply {
+  status: number;
+  body: RecallResult;
+}
+interface McpReply {
+  status: number;
+  text: string | null;
+  error: unknown;
+}
 
 const SURFACES: readonly Surface[] = ['http', 'mcp'];
 const SCENARIOS = RECALL_BRANCHES.flatMap((b) => SURFACES.map((via) => [`${via}: ${b.name}`, via, b] as const));
@@ -36,7 +52,11 @@ async function recallOver(url: string, via: Surface, args: Args): Promise<HttpRe
     return { status: res.status, body: (await res.json()) as RecallResult };
   }
   const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };
-  const res = await fetch(`${url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(rpc) });
+  const res = await fetch(`${url}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(rpc),
+  });
   // SAFETY: /mcp answers tools/call with a JSON-RPC reply whose result is { content: [{ text }] }, or with an error.
   const reply = (await res.json()) as { result?: { content?: { text: string }[] }; error?: unknown };
   return { status: res.status, text: reply.result?.content?.[0]?.text ?? null, error: reply.error ?? null };

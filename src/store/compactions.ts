@@ -86,7 +86,7 @@ export function latestStartedRows(
   return selectRows(
     db,
     `tenant_id = ? AND session_id = ? AND status = 'started' AND started_at <= ? AND started_at >= ? ORDER BY ` +
-    `started_at DESC, id DESC LIMIT 1`,
+      `started_at DESC, id DESC LIMIT 1`,
     tenantId,
     sessionId,
     notAfter,
@@ -113,7 +113,7 @@ export function openTranscriptRows(
   return selectRows(
     db,
     `tenant_id = ? AND status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL ` +
-    `ORDER BY started_at`,
+      `ORDER BY started_at`,
     tenantId,
     startedBefore,
     startedAfter,
@@ -123,7 +123,7 @@ export function openTranscriptRows(
 export function insertStartedCompaction(db: DatabaseSyncLike, tenantId: string, start: StartedCompactionInput): void {
   db.prepare(
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
-    `started_at)
+      `started_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     tenantId,
@@ -150,7 +150,7 @@ export function markCompactionSummarized(
   const result = db
     .prepare(
       `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = ` +
-      `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
+        `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
     )
     .run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
@@ -169,7 +169,7 @@ export function insertSummarizedCompaction(
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
   db.prepare(
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
-    `started_at, ` +
+      `started_at, ` +
       `summarised_at, summary, items_json, status${col})\n` +
       `     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
   ).run(
@@ -237,15 +237,18 @@ export function heldMemoryRows(db: DatabaseSyncLike, tenantId: string, origins: 
   return db
     .prepare(
       `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND ` +
-      `superseded_by IS NULL AND kind != 'raw'
+        `superseded_by IS NULL AND kind != 'raw'
        AND ${deny.sql}`,
     )
     .all(tenantId, ...origins, ...deny.params) as HeldMemoryRow[];
 }
 
 export function restampCompactionOrigin(db: DatabaseSyncLike, tenantId: string, from: string, into: string): number {
-  return Number(db.prepare(`UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`)
-    .run(into, tenantId, from).changes ?? 0);
+  return Number(
+    db
+      .prepare(`UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`)
+      .run(into, tenantId, from).changes ?? 0,
+  );
 }
 
 export function compactionTranscripts(
@@ -256,7 +259,7 @@ export function compactionTranscripts(
   return db
     .prepare(
       `SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path ` +
-      `IS NOT NULL`,
+        `IS NOT NULL`,
     )
     .all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
 }
@@ -269,7 +272,7 @@ export function compactionOriginsWithCwd(
   return db
     .prepare(
       `SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' ` +
-      `AND cwd IS NOT NULL`,
+        `AND cwd IS NOT NULL`,
     )
     .all(tenantId) as Array<{ origin: string; cwd: string }>;
 }

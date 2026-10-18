@@ -7,7 +7,19 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
-  NOW, call, get, isoAgo, makeStore, parse, postJson, seed, sessionCookie, startDashboard, type Json, type RunningDashboard, type TmpStore,
+  NOW,
+  call,
+  get,
+  isoAgo,
+  makeStore,
+  parse,
+  postJson,
+  seed,
+  sessionCookie,
+  startDashboard,
+  type Json,
+  type RunningDashboard,
+  type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from './_helpers/root-forms.js';
 
@@ -41,7 +53,10 @@ function lastAudit(): { actor: string; op: string } {
   const db = openHippoDb(store.hippoRoot);
   try {
     // SAFETY: the SELECT names the two audit_log columns of the cast shape.
-    return db.prepare('SELECT actor, op FROM audit_log ORDER BY id DESC LIMIT 1').get() as { actor: string; op: string };
+    return db.prepare('SELECT actor, op FROM audit_log ORDER BY id DESC LIMIT 1').get() as {
+      actor: string;
+      op: string;
+    };
   } finally {
     closeHippoDb(db);
   }
@@ -220,7 +235,10 @@ describe('request guards', () => {
     const path = `/api/memory/${target.id}/pin`;
     const json = { 'Content-Type': 'application/json' };
 
-    const big = await call(dash.port, 'POST', path, { headers: json, body: JSON.stringify({ pinned: true, pad: 'x'.repeat(5_000) }) });
+    const big = await call(dash.port, 'POST', path, {
+      headers: json,
+      body: JSON.stringify({ pinned: true, pad: 'x'.repeat(5_000) }),
+    });
     const broken = await call(dash.port, 'POST', path, { headers: json, body: '{"pinned": tru' });
 
     expect(big.status).toBe(400);
@@ -234,7 +252,10 @@ describe('request guards', () => {
 
     const reply = await new Promise<{ status: number; closed: Promise<void> }>((resolve, reject) => {
       const req = httpRequest({
-        host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
+        host: '127.0.0.1',
+        port: dash.port,
+        path: `/api/memory/${target.id}/pin`,
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', cookie: sessionCookie(dash.port) },
       });
       let answered = false;
@@ -242,9 +263,10 @@ describe('request guards', () => {
         answered = true;
         res.resume();
         const socket = req.socket;
-        const closed = socket === null || socket.destroyed
-          ? Promise.resolve()
-          : new Promise<void>((done) => socket.once('close', () => done()));
+        const closed =
+          socket === null || socket.destroyed
+            ? Promise.resolve()
+            : new Promise<void>((done) => socket.once('close', () => done()));
         resolve({ status: res.statusCode ?? 0, closed });
       });
       // A reset before the reply is the bug this guards: the server closed with request bytes unread.
@@ -271,13 +293,19 @@ describe('request guards', () => {
     vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', '50');
     try {
       const status = await new Promise<number>((resolve, reject) => {
-        const req = httpRequest({
-          host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: sessionCookie(dash.port) },
-        }, (res) => {
-          res.resume();
-          resolve(res.statusCode ?? 0);
-        });
+        const req = httpRequest(
+          {
+            host: '127.0.0.1',
+            port: dash.port,
+            path: `/api/memory/${target.id}/pin`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: sessionCookie(dash.port) },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
         req.on('error', reject);
         // Headers only: the body they promise is never written.
         req.flushHeaders();

@@ -16,11 +16,7 @@ import { CLI_ACTOR } from '../core/actor.js';
 
 export type { BriefStatus, ProjectBrief } from '../core/object-types.js';
 
-export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>([
-  'active',
-  'superseded',
-  'closed',
-]);
+export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>(['active', 'superseded', 'closed']);
 
 /** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger
  *  cap than the 4096 short-field convention. */
@@ -116,11 +112,7 @@ export function closeProjectBrief(
   return closeObject(objects, PROJECT_BRIEF, tenantId, id, actor);
 }
 
-export function loadProjectBriefById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<ProjectBrief | null> {
+export function loadProjectBriefById(objects: Objects, tenantId: string, id: number): Promise<ProjectBrief | null> {
   return objectById(objects, PROJECT_BRIEF, tenantId, id);
 }
 

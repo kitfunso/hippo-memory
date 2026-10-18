@@ -10,15 +10,106 @@ const CONFLICT_MIN_RARE_SHARED = 2;
 const POLARITY_WINDOW_WORDS = 40;
 
 const CONFLICT_STOPWORDS = new Set([
-  'the','a','an','is','was','are','were','be','been','being','to','of','in',
-  'for','on','with','at','by','from','it','this','that','and','or','but','so',
-  'if','as','we','i','you','they','he','she','my','our','your','its','his',
-  'her','their','up','out','just','also','then','than','some','all','any',
-  'each','very','too','do','did','does','has','had','have','will','would',
-  'could','should','may','might','can','shall','when','where','what','which',
-  'who','how','why','there','here','about','into','over','after','before',
-  'between','through','during','against','within','without','toward','upon',
-  'more','most','less','least','other','such','same','new','old','one','two',
+  'the',
+  'a',
+  'an',
+  'is',
+  'was',
+  'are',
+  'were',
+  'be',
+  'been',
+  'being',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'at',
+  'by',
+  'from',
+  'it',
+  'this',
+  'that',
+  'and',
+  'or',
+  'but',
+  'so',
+  'if',
+  'as',
+  'we',
+  'i',
+  'you',
+  'they',
+  'he',
+  'she',
+  'my',
+  'our',
+  'your',
+  'its',
+  'his',
+  'her',
+  'their',
+  'up',
+  'out',
+  'just',
+  'also',
+  'then',
+  'than',
+  'some',
+  'all',
+  'any',
+  'each',
+  'very',
+  'too',
+  'do',
+  'did',
+  'does',
+  'has',
+  'had',
+  'have',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'can',
+  'shall',
+  'when',
+  'where',
+  'what',
+  'which',
+  'who',
+  'how',
+  'why',
+  'there',
+  'here',
+  'about',
+  'into',
+  'over',
+  'after',
+  'before',
+  'between',
+  'through',
+  'during',
+  'against',
+  'within',
+  'without',
+  'toward',
+  'upon',
+  'more',
+  'most',
+  'less',
+  'least',
+  'other',
+  'such',
+  'same',
+  'new',
+  'old',
+  'one',
+  'two',
 ]);
 
 export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
@@ -27,7 +118,9 @@ export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reaso
 export function pairwiseMergePartners(contents: readonly string[]): number[][] {
   return contents.map((a, i) => {
     const out: number[] = [];
-    for (let j = i + 1; j < contents.length; j++) if (textOverlap(a, contents[j]) >= MERGE_OVERLAP_THRESHOLD) out.push(j);
+    for (let j = i + 1; j < contents.length; j++) {
+      if (textOverlap(a, contents[j]) >= MERGE_OVERLAP_THRESHOLD) out.push(j);
+    }
     return out;
   });
 }
@@ -40,19 +133,26 @@ export function pairwiseDetectConflicts(
 ): DetectedConflict[] {
   const survivors = entries.filter(
     (entry) =>
-      entry.layer !== Layer.Semantic
-      && !isQuarantineScope(entry.scope ?? null)
-      && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
+      entry.layer !== Layer.Semantic &&
+      !isQuarantineScope(entry.scope ?? null) &&
+      (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
   );
   const detected: DetectedConflict[] = [];
   for (let i = 0; i < survivors.length; i++) {
     for (let j = i + 1; j < survivors.length; j++) {
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
-      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) continue;
+      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) {
+        continue;
+      }
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
       if (!reasonAndScore) continue;
-      detected.push({ memory_a_id: survivors[i].id, memory_b_id: survivors[j].id, reason: reasonAndScore.reason, score: reasonAndScore.score });
+      detected.push({
+        memory_a_id: survivors[i].id,
+        memory_b_id: survivors[j].id,
+        reason: reasonAndScore.reason,
+        score: reasonAndScore.score,
+      });
     }
   }
   return detected;
@@ -105,16 +205,23 @@ function classifyConflictType(
   const a = ' ' + openingWindow(aText).toLowerCase() + ' ';
   const b = ' ' + openingWindow(bText).toLowerCase() + ' ';
   const enabledDisabled =
-    (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable ']))
-    || (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));
+    (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable '])) ||
+    (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));
   if (enabledDisabled) return 'enabled/disabled mismatch on overlapping statement';
-  const trueFalse = (containsAny(a, [' true ', ' true.', ' true,', ' yes ']) && containsAny(b, [' false ', ' false.', ' false,', ' no ']))
-    || (containsAny(b, [' true ', ' true.', ' true,', ' yes ']) && containsAny(a, [' false ', ' false.', ' false,', ' no ']));
+  const trueFalse =
+    (containsAny(a, [' true ', ' true.', ' true,', ' yes ']) &&
+      containsAny(b, [' false ', ' false.', ' false,', ' no '])) ||
+    (containsAny(b, [' true ', ' true.', ' true,', ' yes ']) &&
+      containsAny(a, [' false ', ' false.', ' false,', ' no ']));
   if (trueFalse) return 'true/false mismatch on overlapping statement';
-  const alwaysNever = (containsAny(a, [' always ', ' must ']) && containsAny(b, [' never ', ' must not ']))
-    || (containsAny(b, [' always ', ' must ']) && containsAny(a, [' never ', ' must not ']));
+  const alwaysNever =
+    (containsAny(a, [' always ', ' must ']) && containsAny(b, [' never ', ' must not '])) ||
+    (containsAny(b, [' always ', ' must ']) && containsAny(a, [' never ', ' must not ']));
   if (alwaysNever) return 'always/never mismatch on overlapping statement';
-  if ((aPolarity === 'positive' && bPolarity === 'negative') || (aPolarity === 'negative' && bPolarity === 'positive')) {
+  if (
+    (aPolarity === 'positive' && bPolarity === 'negative') ||
+    (aPolarity === 'negative' && bPolarity === 'positive')
+  ) {
     return 'negation polarity mismatch on overlapping statement';
   }
   return null;
@@ -123,13 +230,36 @@ function classifyConflictType(
 function inferConflictPolarity(text: string): 'positive' | 'negative' | 'neutral' {
   const lowered = ` ${text.toLowerCase()} `;
   const negativePatterns = [
-    ' not ', ' never ', ' no ', " don't ", ' do not ', " doesn't ", ' does not ',
-    " can't ", ' cannot ', " shouldn't ", ' should not ', ' disabled ', ' disable ', ' off ',
-    ' false ', ' missing ', ' broken ', ' failed ',
+    ' not ',
+    ' never ',
+    ' no ',
+    " don't ",
+    ' do not ',
+    " doesn't ",
+    ' does not ',
+    " can't ",
+    ' cannot ',
+    " shouldn't ",
+    ' should not ',
+    ' disabled ',
+    ' disable ',
+    ' off ',
+    ' false ',
+    ' missing ',
+    ' broken ',
+    ' failed ',
   ];
   const positivePatterns = [
-    ' enabled ', ' enable ', ' works ', ' working ', ' true ', ' available ', ' present ', ' on ',
-    ' always ', ' must ',
+    ' enabled ',
+    ' enable ',
+    ' works ',
+    ' working ',
+    ' true ',
+    ' available ',
+    ' present ',
+    ' on ',
+    ' always ',
+    ' must ',
   ];
   if (containsAny(lowered, negativePatterns)) return 'negative';
   if (containsAny(lowered, positivePatterns)) return 'positive';

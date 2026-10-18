@@ -39,11 +39,17 @@ async function runVerb(...args: string[]): Promise<{ status: number; stdout: str
 
 const hippo = (...args: string[]) => runVerb('import', ...args);
 
-const contents = (): string[] => loadAllEntries(hippoRoot, 'default').map((e) => e.content).sort();
+const contents = (): string[] =>
+  loadAllEntries(hippoRoot, 'default')
+    .map((e) => e.content)
+    .sort();
 
 describe('hippo import --markdown', () => {
   it('a dry run lists what it would import and writes nothing; a re-import skips what is already stored', async () => {
-    writeFileSync(join(cwd, 'notes.md'), '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n');
+    writeFileSync(
+      join(cwd, 'notes.md'),
+      '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n',
+    );
 
     const dry = await hippo('--markdown', 'notes.md', '--dry-run');
     expect(dry.status).toBe(0);
@@ -52,7 +58,10 @@ describe('hippo import --markdown', () => {
     expect(contents()).toEqual([]);
 
     expect((await hippo('--markdown', 'notes.md')).stdout).toMatch(/Imported: +2/);
-    expect(contents()).toEqual(['run the migration before the deploy step', 'the release build needs node 22 or newer']);
+    expect(contents()).toEqual([
+      'run the migration before the deploy step',
+      'the release build needs node 22 or newer',
+    ]);
 
     const again = await hippo('--markdown', 'notes.md');
     expect(again.stdout).toMatch(/Imported: +0/);
@@ -65,14 +74,19 @@ describe('hippo import embedding backfill', () => {
   it('a backfill that fails still imports, and warns with the rows left without a vector and the command that finishes them', async () => {
     // An API provider with no key makes the backfill reject after the rows are saved.
     writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }));
-    writeFileSync(join(cwd, 'notes.md'), '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n');
+    writeFileSync(
+      join(cwd, 'notes.md'),
+      '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n',
+    );
 
     vi.stubEnv('OPENAI_API_KEY', '');
     const r = await hippo('--markdown', 'notes.md');
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Imported: +2/);
     expect(contents()).toHaveLength(2);
-    expect(r.stderr).toMatch(/warn: import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill/);
+    expect(r.stderr).toMatch(
+      /warn: import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill/,
+    );
   });
 });
 

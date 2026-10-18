@@ -91,7 +91,10 @@ function reindexHint({ store, onHippoDb }: VectorSource): string {
 
 /** The nearest admitted rows not already in `entries`. */
 export async function vectorCandidatesOutside(
-  reads: VectorReads, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
+  reads: VectorReads,
+  entries: readonly MemoryEntry[],
+  queryVector: readonly number[],
+  spec: HybridVectorCandidates,
 ): Promise<MemoryEntry[]> {
   const inPool = new Set(entries.map((e) => e.id));
   // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a store on another thread.
@@ -101,7 +104,10 @@ export async function vectorCandidatesOutside(
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */
 export async function resolveVectorArm(
-  query: string, entries: MemoryEntry[], source: VectorSource | undefined, options: VectorArmOptions,
+  query: string,
+  entries: MemoryEntry[],
+  source: VectorSource | undefined,
+  options: VectorArmOptions,
 ): Promise<VectorArm> {
   const arm: VectorArm = { entries, addedRows: false, useEmbeddings: false, embeddingIndex: {}, queryVector: [] };
   if (!source) return arm;
@@ -134,7 +140,10 @@ async function fillVectorArm(
     return;
   }
   const spec = options.vectorCandidates;
-  const vectors = await storedVectorsOf(store, arm.entries.map((e) => e.id));
+  const vectors = await storedVectorsOf(
+    store,
+    arm.entries.map((e) => e.id),
+  );
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(), provider, query);
@@ -154,7 +163,12 @@ async function fillVectorArm(
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await storedVectorsOf(store, added.map((e) => e.id))) vectors.set(id, v);
+    for (const [id, v] of await storedVectorsOf(
+      store,
+      added.map((e) => e.id),
+    )) {
+      vectors.set(id, v);
+    }
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;

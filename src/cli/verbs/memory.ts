@@ -1,8 +1,16 @@
 // Store, recall and maintenance verbs; every verbs/ file keeps its rows in the order `hippo help` lists them.
 
 import {
-  CONFLICT_PEER_MULTIPLIER, DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET, SALIENCE_MIN_MULTIPLIER,
-  UTILITY_LENGTH_PENALTY_CAP, UTILITY_LENGTH_TOKENS, VALUE_MULT_MAX, VALUE_MULT_MIN, VALUE_MULT_SLOPE,
+  CONFLICT_PEER_MULTIPLIER,
+  DEFAULT_LOCAL_BUMP,
+  DEFAULT_MMR_LAMBDA,
+  DEFAULT_RECALL_BUDGET,
+  SALIENCE_MIN_MULTIPLIER,
+  UTILITY_LENGTH_PENALTY_CAP,
+  UTILITY_LENGTH_TOKENS,
+  VALUE_MULT_MAX,
+  VALUE_MULT_MIN,
+  VALUE_MULT_SLOPE,
 } from '../../core/search-types.js';
 import { DEFAULT_EMBEDDING_WEIGHT } from '../../search/hybrid.js';
 import { DEFAULT_GRAPH_HOPS, DEFAULT_GRAPH_SEED_COUNT } from '../../graph/stream.js';
@@ -15,7 +23,8 @@ export const MEMORY_VERBS = {
     repairsCodexWrapper: true,
     scoped: true,
     flags: { switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'], values: ['scan'], numbers: ['days'] },
-    usage: [`
+    usage: [
+      `
   init                     Create .hippo/ structure in current directory
     --scan [dir]           Find all git repos under dir (default: ~) and init each
     --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
@@ -24,7 +33,8 @@ export const MEMORY_VERBS = {
                            (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
     --no-schedule          Skip auto-creating the machine-level daily runner
     --no-learn             Skip seeding memories from git history and importing
-                           coding agents' own memories (every init imports those)`],
+                           coding agents' own memories (every init imports those)`,
+    ],
   }),
   remember: verb(() => import('../remember.js'), 'handleRemember', {
     repairsCodexWrapper: true,
@@ -33,7 +43,8 @@ export const MEMORY_VERBS = {
       values: ['artifact-ref', 'kind', 'layer', 'owner', 'scope'],
       lists: ['tag'],
     },
-    usage: [`
+    usage: [
+      `
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
@@ -41,28 +52,59 @@ export const MEMORY_VERBS = {
     --verified             Set confidence: verified (default)
     --observed             Set confidence: observed
     --inferred             Set confidence: inferred
-    --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
+    --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`,
+    ],
   }),
   supersede: verb(() => import('../remember.js'), 'handleSupersede', {
     destructive: true,
     flags: { switches: ['pin'], values: ['layer'], lists: ['tag'] },
-    usage: [`
+    usage: [
+      `
   supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
     --layer <layer>        Layer for the new memory (default: the old memory's layer)
     --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
-    --pin                  Pin the new memory (default: pinned if the old one was)`],
+    --pin                  Pin the new memory (default: pinned if the old one was)`,
+    ],
   }),
   recall: verb(() => import('../recall.js'), 'handleRecall', {
     repairsCodexWrapper: true,
     scoped: true,
     flags: {
-      switches: ['classic', 'continuity', 'equal-sources', 'evc-adaptive', 'filter-conflicts', 'graph-stream',
-        'include-superseded', 'json', 'multihop', 'no-mmr', 'physics', 'rerank-utility', 'value-aware', 'why'],
-      values: ['as-of', 'budget', 'goal', 'graph-hops', 'graph-seeds', 'hops', 'layer', 'max-neighbors', 'outcome',
-        'reranker', 'salience-threshold', 'scope', 'session-id'],
+      switches: [
+        'classic',
+        'continuity',
+        'equal-sources',
+        'evc-adaptive',
+        'filter-conflicts',
+        'graph-stream',
+        'include-superseded',
+        'json',
+        'multihop',
+        'no-mmr',
+        'physics',
+        'rerank-utility',
+        'value-aware',
+        'why',
+      ],
+      values: [
+        'as-of',
+        'budget',
+        'goal',
+        'graph-hops',
+        'graph-seeds',
+        'hops',
+        'layer',
+        'max-neighbors',
+        'outcome',
+        'reranker',
+        'salience-threshold',
+        'scope',
+        'session-id',
+      ],
       numbers: ['limit', 'local-bump', 'min-results', 'mmr-lambda', 'reranker-top-k'],
     },
-    usage: [`
+    usage: [
+      `
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_RECALL_BUDGET})
     --min-results <n>      Minimum results regardless of budget (default: 1)
@@ -138,7 +180,8 @@ export const MEMORY_VERBS = {
                            where you left off in one call. Anchored on the
                            active snapshot's session_id; no anchor = no
                            handoff/events (use 'hippo session resume' for
-                           the explicit handoff-without-snapshot path).`],
+                           the explicit handoff-without-snapshot path).`,
+    ],
   }),
   explain: verb(() => import('../explain.js'), 'handleExplain', {
     scoped: true,
@@ -147,32 +190,38 @@ export const MEMORY_VERBS = {
       values: ['as-of', 'budget', 'scope'],
       numbers: ['limit', 'local-bump', 'mmr-lambda'],
     },
-    usage: [`
+    usage: [
+      `
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget, counted as recall prints (default: ${DEFAULT_RECALL_BUDGET})
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
     --no-mmr               Disable MMR diversity re-ranking
-    --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)`],
+    --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)`,
+    ],
   }),
   trace: verb(() => import('../remember.js'), 'handleTrace', {
     flags: { switches: ['json'], values: ['outcome', 'session', 'source', 'steps', 'task'], lists: ['tag'] },
-    usage: [`
+    usage: [
+      `
   trace <id>               Memory dossier: content, decay trajectory, retrievals,
                            outcomes, consolidation parents, open conflicts
-    --json                 Output as JSON`],
+    --json                 Output as JSON`,
+    ],
   }),
   refine: verb(() => import('../maintenance.js'), 'handleRefine', {
     flags: { switches: ['all', 'dry-run', 'json'], values: ['model'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   refine                   Rewrite consolidated semantic memories with Claude
     --limit <n>            Cap the number of memories processed this run
     --all                  Ignore \`llm-refined\` tag and re-refine everything
     --dry-run              Call the API but don't write results back
     --model <id>           Override the default model (claude-sonnet-4-6)
     --json                 Output summary as JSON
-    (requires ANTHROPIC_API_KEY in env)`],
+    (requires ANTHROPIC_API_KEY in env)`,
+    ],
   }),
   eval: verb(() => import('../eval.js'), 'handleEval', {
     flags: {
@@ -180,7 +229,8 @@ export const MEMORY_VERBS = {
       values: ['baseline', 'compare', 'out'],
       numbers: ['embedding-weight', 'local-bump', 'max-cases', 'min-mrr', 'mmr-lambda'],
     },
-    usage: [`
+    usage: [
+      `
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
     --out <path>           With --bootstrap, write to file instead of stdout
@@ -193,7 +243,8 @@ export const MEMORY_VERBS = {
     --local-bump <f>       Local-over-global priority multiplier (default: ${DEFAULT_LOCAL_BUMP})
     --equal-sources        Shortcut for --local-bump 1.0
     --min-mrr <f>          Exit non-zero if mean MRR falls below this
-    --json                 Output full summary as JSON`],
+    --json                 Output full summary as JSON`,
+    ],
   }),
   context: verb(() => import('../context.js'), 'handleContext', {
     repairsCodexWrapper: true,
@@ -202,7 +253,8 @@ export const MEMORY_VERBS = {
       values: ['budget', 'format', 'framing', 'include-recent', 'runtime', 'scope'],
       numbers: ['limit'],
     },
-    usage: [`
+    usage: [
+      `
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget for the whole printed block (default: 1500)
@@ -211,33 +263,40 @@ export const MEMORY_VERBS = {
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
     --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),
                            or copilot (Copilot sessionStart hook JSON, from the store of the payload's cwd)
-    --framing <mode>       Framing: observe (default), suggest, assert`],
+    --framing <mode>       Framing: observe (default), suggest, assert`,
+    ],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
     repairsCodexWrapper: true,
     destructive: true,
     scoped: true,
     flags: { switches: ['dry-run', 'no-learn', 'no-share'], values: ['log-file'] },
-    usage: [`
+    usage: [
+      `
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
                            Runs at Claude Code and OpenCode session end and in the daily job.
                            With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
                            fact extraction; {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
-    --no-share             Skip auto-sharing to global store`],
+    --no-share             Skip auto-sharing to global store`,
+    ],
   }),
   'daily-runner': verb(() => import('../setup.js'), 'handleDailyRunner', {
     flags: {},
-    usage: [`
-  daily-runner             Sweep registered workspaces and run daily learn+sleep`],
+    usage: [
+      `
+  daily-runner             Sweep registered workspaces and run daily learn+sleep`,
+    ],
   }),
   dedup: verb(() => import('../maintenance.js'), 'handleDedup', {
     destructive: true,
     flags: { switches: ['dry-run'], numbers: ['threshold'] },
-    usage: [`
+    usage: [
+      `
   dedup                    Remove duplicate memories (keeps stronger copy)
     --dry-run              Preview without removing
-    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing`],
+    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing`,
+    ],
   }),
 } satisfies Record<string, VerbSpec>;

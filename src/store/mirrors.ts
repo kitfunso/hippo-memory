@@ -219,8 +219,11 @@ export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<Memory
       try {
         writeListedMirror(hippoRoot, entry, listed, made);
       } catch (err) {
-        log.warnThenSample('markdown-mirror', `${entry.id}.md not refreshed (${errorMessage(err)}); the database ` +
-          `write succeeded`, errorFields(err));
+        log.warnThenSample(
+          'markdown-mirror',
+          `${entry.id}.md not refreshed (${errorMessage(err)}); the database ` + `write succeeded`,
+          errorFields(err),
+        );
       }
     }
   });
@@ -248,26 +251,23 @@ export function removeEntryMirrorsIn(files: StoreFiles, id: string): void {
 /** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
  * can name the stuck file. */
 function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
-  return MIRROR_LAYERS
-    .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))
-    .filter((file) => fs.existsSync(file));
+  return MIRROR_LAYERS.map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`)).filter((file) =>
+    fs.existsSync(file),
+  );
 }
 
 /** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the reaper only scans
  * `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to delete by hand. Returns true if the
  * mirror ended up purged. */
-export function purgeMirrorBestEffort(
-  hippoRoot: string,
-  id: string,
-  isRaw: boolean,
-  logPrefix: string,
-): boolean {
+export function purgeMirrorBestEffort(hippoRoot: string, id: string, isRaw: boolean, logPrefix: string): boolean {
   try {
     removeEntryMirrors(hippoRoot, id);
     return true;
   } catch (firstErr) {
-    log.debug(`${logPrefix}: mirror cleanup for ${id} failed once, retrying: ${errorMessage(firstErr)}`,
-      errorFields(firstErr));
+    log.debug(
+      `${logPrefix}: mirror cleanup for ${id} failed once, retrying: ${errorMessage(firstErr)}`,
+      errorFields(firstErr),
+    );
     try {
       removeEntryMirrors(hippoRoot, id);
       return true;
@@ -283,7 +283,7 @@ export function purgeMirrorBestEffort(
         const pathsNote = leftover.length > 0 ? leftover.join(', ') : `${id}.md (path unresolved)`;
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} - no automatic retry exists for this file, ` +
-          `delete it manually: ${pathsNote} (${msg})`,
+            `delete it manually: ${pathsNote} (${msg})`,
           errorFields(secondErr),
         );
       }
@@ -302,7 +302,7 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
   const rows = db
     .prepare(
       `SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ` +
-      `ASC`,
+        `ASC`,
     )
     .all() as Array<{
     id: string;
@@ -356,11 +356,13 @@ export function readLastRecall(
 
 export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
   // SAFETY: runs' shape matches the four columns named in the SELECT below.
-  const runs = db.prepare(`
+  const runs = db
+    .prepare(`
     SELECT timestamp, decayed, merged, removed FROM (
       SELECT id, timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT ?
     ) ORDER BY timestamp ASC, id ASC
-  `).all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
+  `)
+    .all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
 
   return {
     total_remembered: Number(getMeta(db, 'total_remembered', '0')),

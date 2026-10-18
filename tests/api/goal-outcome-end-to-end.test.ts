@@ -28,9 +28,11 @@ function readStrength(root: string, memId: string): number {
   try {
     // SAFETY: memId is always a row this test wrote earlier, so the SELECT
     // by primary key always returns exactly one row with a strength column.
-    return (db.prepare(`SELECT strength FROM memories WHERE id = ?`).get(memId) as {
-      strength: number;
-    }).strength;
+    return (
+      db.prepare(`SELECT strength FROM memories WHERE id = ?`).get(memId) as {
+        strength: number;
+      }
+    ).strength;
   } finally {
     closeHippoDb(db);
   }
@@ -45,7 +47,7 @@ function setStrength(root: string, memId: string, strength: number) {
   }
 }
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;

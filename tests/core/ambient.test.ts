@@ -1,16 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { createMemory, Layer, type MemoryEntry, type EmotionalValence, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import {
+  createMemory,
+  Layer,
+  type MemoryEntry,
+  type EmotionalValence,
+  DEFAULT_HALF_LIFE_DAYS,
+} from '../../src/core/memory.js';
 import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../../src/core/ambient.js';
 
-function mem(content: string, opts: {
-  tags?: string[];
-  layer?: Layer;
-  emotional_valence?: EmotionalValence;
-  created?: string;
-  schema_fit?: number;
-  extracted_from?: string;
-  dag_level?: number;
-} = {}): MemoryEntry {
+function mem(
+  content: string,
+  opts: {
+    tags?: string[];
+    layer?: Layer;
+    emotional_valence?: EmotionalValence;
+    created?: string;
+    schema_fit?: number;
+    extracted_from?: string;
+    dag_level?: number;
+  } = {},
+): MemoryEntry {
   const entry = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: opts.layer ?? Layer.Episodic,
@@ -90,11 +99,7 @@ describe('computeAmbientState', () => {
   });
 
   it('computes dagDepth from max dag_level', () => {
-    const entries = [
-      mem('Root', { dag_level: 0 }),
-      mem('Mid', { dag_level: 1 }),
-      mem('Deep', { dag_level: 3 }),
-    ];
+    const entries = [mem('Root', { dag_level: 0 }), mem('Mid', { dag_level: 1 }), mem('Deep', { dag_level: 3 })];
     const state = computeAmbientState(entries);
     expect(state.dagDepth).toBe(3);
   });
@@ -111,7 +116,11 @@ describe('computeAmbientState', () => {
   it('skips superseded entries', () => {
     const entries = [
       mem('Active', { tags: ['a'] }),
-      (() => { const e = mem('Old', { tags: ['b'] }); e.superseded_by = 'xxx'; return e; })(),
+      (() => {
+        const e = mem('Old', { tags: ['b'] });
+        e.superseded_by = 'xxx';
+        return e;
+      })(),
     ];
     const state = computeAmbientState(entries);
     expect(state.totalMemories).toBe(2);

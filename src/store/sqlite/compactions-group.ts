@@ -11,7 +11,9 @@ export function sqliteCompactions(on: OnHandle): Sync<Compactions> {
     markSnapshotSaved: (tenantId, recordId) => on((db) => markSnapshotSaved(db, tenantId, recordId)),
     saveCallerItems: (tenantId, req) => {
       const notes: string[] = [];
-      const note = (message: string): void => { notes.push(message); };
+      const note = (message: string): void => {
+        notes.push(message);
+      };
       const written = on((db, files) => saveCallerItemsAt(db, files, tenantId, req, note));
       return { written, notes };
     },

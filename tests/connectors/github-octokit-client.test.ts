@@ -1,33 +1,22 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import {
-  GitHubFetchError,
-  parseNextLink,
-  realGitHubFetcher,
-} from '../../src/connectors/github/octokit-client.js';
+import { GitHubFetchError, parseNextLink, realGitHubFetcher } from '../../src/connectors/github/octokit-client.js';
 import { paddedJsonResponse } from '../_helpers/padded-response.js';
 
 describe('parseNextLink', () => {
   it('parses a sole rel="next" link', () => {
-    expect(parseNextLink('<https://api.github.com/x?page=2>; rel="next"')).toBe(
-      'https://api.github.com/x?page=2',
-    );
+    expect(parseNextLink('<https://api.github.com/x?page=2>; rel="next"')).toBe('https://api.github.com/x?page=2');
   });
 
   it('ignores rel="last" when no rel="next" is present', () => {
-    expect(parseNextLink('<https://api.github.com/x?page=10>; rel="last"')).toBe(
-      null,
-    );
+    expect(parseNextLink('<https://api.github.com/x?page=10>; rel="last"')).toBe(null);
   });
 
   it('returns null when the header has no rel="next"', () => {
-    expect(parseNextLink('<https://api.github.com/x?page=1>; rel="prev"')).toBe(
-      null,
-    );
+    expect(parseNextLink('<https://api.github.com/x?page=1>; rel="prev"')).toBe(null);
   });
 
   it('extracts rel="next" from a multi-rel header', () => {
-    const header =
-      '<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=10>; rel="last"';
+    const header = '<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=10>; rel="last"';
     expect(parseNextLink(header)).toBe('https://api.github.com/x?page=2');
   });
 
@@ -47,11 +36,7 @@ interface FakeFetchResponse {
   json: () => Promise<unknown[]>;
 }
 
-function makeResponse(
-  status: number,
-  body: string,
-  linkHeader = '',
-): FakeFetchResponse {
+function makeResponse(status: number, body: string, linkHeader = ''): FakeFetchResponse {
   const headers = new Headers();
   if (linkHeader) headers.set('link', linkHeader);
   return {
@@ -72,9 +57,9 @@ describe('realGitHubFetcher: non-200 must throw', () => {
       'fetch',
       vi.fn(async () => makeResponse(401, 'Bad credentials')),
     );
-    await expect(
-      realGitHubFetcher({ url: 'https://api.github.com/user', token: 'bad' }),
-    ).rejects.toBeInstanceOf(GitHubFetchError);
+    await expect(realGitHubFetcher({ url: 'https://api.github.com/user', token: 'bad' })).rejects.toBeInstanceOf(
+      GitHubFetchError,
+    );
   });
 
   it('throws GitHubFetchError on 404 Not Found', async () => {
@@ -114,9 +99,17 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
 
   /** The rejection of one page fetch whose reply is `reply`; a page that came back fails the test, since ingest would take its items. */
   async function failure(reply: Response): Promise<GitHubFetchError> {
-    vi.stubGlobal('fetch', vi.fn(async () => reply));
-    const outcome = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 'ghp_secret' }).then((page) => page, (err: Error) => err);
-    if (!(outcome instanceof GitHubFetchError)) throw new Error(`expected a GitHubFetchError, got ${JSON.stringify(outcome)}`);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => reply),
+    );
+    const outcome = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 'ghp_secret' }).then(
+      (page) => page,
+      (err: Error) => err,
+    );
+    if (!(outcome instanceof GitHubFetchError)) {
+      throw new Error(`expected a GitHubFetchError, got ${JSON.stringify(outcome)}`);
+    }
     return outcome;
   }
 
@@ -148,16 +141,28 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   });
 
   it('still returns the items and the next link of a well-formed page', async () => {
-    const reply = new Response(JSON.stringify([{ id: 1 }, { id: 2 }]), { status: 200, headers: { link: '<https://api.github.com/x?page=2>; rel="next"' } });
-    vi.stubGlobal('fetch', vi.fn(async () => reply));
+    const reply = new Response(JSON.stringify([{ id: 1 }, { id: 2 }]), {
+      status: 200,
+      headers: { link: '<https://api.github.com/x?page=2>; rel="next"' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => reply),
+    );
     const page = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 't' });
     expect(page.items).toEqual([{ id: 1 }, { id: 2 }]);
     expect(page.next).toBe('https://api.github.com/x?page=2');
   });
 
   it('keeps only a short excerpt of a large error body', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('x'.repeat(1024 * 1024), { status: 500 })));
-    const err = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 't' }).then(() => null, (e: GitHubFetchError) => e);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('x'.repeat(1024 * 1024), { status: 500 })),
+    );
+    const err = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 't' }).then(
+      () => null,
+      (e: GitHubFetchError) => e,
+    );
     expect(err?.status).toBe(500);
     expect(err?.bodyExcerpt).toBe('x'.repeat(256));
   });

@@ -45,7 +45,12 @@ describe('index.json is written by no hippo path', () => {
   it('reject leaves no index.json', async () => {
     const entry = createMemory('reject leaves index.json alone');
     writeEntry(root, entry);
-    await rejectValue(sqliteStore(root), { tenantId: entry.tenant_id, actor: 'test', reason: 'index-mirror-writers test', memoryId: entry.id });
+    await rejectValue(sqliteStore(root), {
+      tenantId: entry.tenant_id,
+      actor: 'test',
+      reason: 'index-mirror-writers test',
+      memoryId: entry.id,
+    });
     expect(fs.existsSync(indexPath())).toBe(false);
   });
 
@@ -61,7 +66,12 @@ describe('index.json is written by no hippo path', () => {
     saveIndex(root, loadLastRecall(root));
     const toReject = createMemory('sentinel reject');
     writeEntry(root, toReject);
-    await rejectValue(sqliteStore(root), { tenantId: toReject.tenant_id, actor: 'test', reason: 'sentinel', memoryId: toReject.id });
+    await rejectValue(sqliteStore(root), {
+      tenantId: toReject.tenant_id,
+      actor: 'test',
+      reason: 'sentinel',
+      memoryId: toReject.id,
+    });
 
     expect(fs.readFileSync(indexPath(), 'utf8')).toBe(sentinel);
   });

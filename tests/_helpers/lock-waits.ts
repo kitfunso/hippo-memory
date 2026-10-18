@@ -20,5 +20,7 @@ export function tracingLockWaits(env: NodeJS.ProcessEnv, dir: string): NodeJS.Pr
 export function lockWaitAskedMs(dir: string, pid: number): number {
   // SAFETY: lock-wait-trace.cjs writes exactly this shape on exit.
   const trace = JSON.parse(fs.readFileSync(path.join(dir, `${pid}.json`), 'utf8')) as LockWaitTrace;
-  return trace.busy.reduce((sum, statement) => sum + statement.waitMs, 0) + trace.sleeps.reduce((sum, ms) => sum + ms, 0);
+  return (
+    trace.busy.reduce((sum, statement) => sum + statement.waitMs, 0) + trace.sleeps.reduce((sum, ms) => sum + ms, 0)
+  );
 }

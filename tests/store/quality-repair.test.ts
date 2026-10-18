@@ -36,16 +36,24 @@ beforeEach(() => {
 });
 
 function seedIn(store: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic }), ...extra };
+  const entry = {
+    ...createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic }),
+    ...extra,
+  };
   writeEntry(store, entry);
   return entry;
 }
 const seed = (content: string, extra: Partial<MemoryEntry> = {}) => seedIn(root, content, extra);
-const bundle = (parts: readonly string[], parents: string[]) => seed(mergedText(HEADER, parts), { source: 'consolidation', layer: Layer.Semantic, parents });
+const bundle = (parts: readonly string[], parents: string[]) =>
+  seed(mergedText(HEADER, parts), { source: 'consolidation', layer: Layer.Semantic, parents });
 
 function withDb<T>(fn: (db: InstanceType<typeof DatabaseSync>) => T): T {
   const db = new DatabaseSync(join(root, 'hippo.db'));
-  try { return fn(db); } finally { db.close(); }
+  try {
+    return fn(db);
+  } finally {
+    db.close();
+  }
 }
 
 const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
@@ -56,7 +64,9 @@ const dispositionOf = (id: string) => run().issues.find((issue) => issue.id === 
 describe('recoverable automatic memory quality repair', () => {
   it('previews without writes, then preserves full history, audits each move, and leaves a restored row alone', async () => {
     const bad = seed('Found local migration files to be', { retrieval_count: 7, tags: ['error', 'captured'] });
-    const good = seed('Keep test schema setup outside production migrations because production applies every sorted migration.');
+    const good = seed(
+      'Keep test schema setup outside production migrations because production applies every sorted migration.',
+    );
     const before = readFileSync(join(root, 'hippo.db'));
     expect(run()).toMatchObject({ supported: true, appliedIds: [], backup: null });
     expect(readFileSync(join(root, 'hippo.db'))).toEqual(before);
@@ -69,14 +79,26 @@ describe('recoverable automatic memory quality repair', () => {
     expect(entryMirrorFiles(root, bad.id)).toEqual([]);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toEqual([good.id]);
     const snapshot = withDb((db) => readDormantSnapshot(db, 'default', bad.id));
-    expect(snapshot?.entry).toMatchObject({ content: bad.content, retrieval_count: 7, tags: bad.tags, source: bad.source });
-    expect(withDb((db) => db.prepare("SELECT target_id, metadata_json FROM audit_log WHERE op = 'quality_repair'").all())).toEqual([
+    expect(snapshot?.entry).toMatchObject({
+      content: bad.content,
+      retrieval_count: 7,
+      tags: bad.tags,
+      source: bad.source,
+    });
+    expect(
+      withDb((db) => db.prepare("SELECT target_id, metadata_json FROM audit_log WHERE op = 'quality_repair'").all()),
+    ).toEqual([
       { target_id: bad.id, metadata_json: JSON.stringify({ reason: 'sentence-fragment', backup: applied.backup }) },
     ]);
     expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null });
 
-    expect(await restoreDormant(ctx(), bad.id)).toMatchObject({ id: bad.id, content: bad.content, retrieval_count: 7, confidence: 'verified' });
+    expect(await restoreDormant(ctx(), bad.id)).toMatchObject({
+      id: bad.id,
+      content: bad.content,
+      retrieval_count: 7,
+      confidence: 'verified',
+    });
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null, issues: [] });
     const typed = createMemory(bad.content, { source: 'cli' });
     writeEntry(root, typed);
@@ -87,38 +109,52 @@ describe('recoverable automatic memory quality repair', () => {
     const content = 'bump build 78 for testflight deploy';
     const pinned = seed(content, { pinned: true });
     const raw = seed(content, { kind: 'raw' });
-    const imported = seed(content, { tags: ['claude-code-memory'], source: 'agent-memory:claude-code:p-001/note.md#abc' });
-    const kept = seed(content, { tags: ['claude-code-memory', 'captured'], source: 'agent-memory:claude-code:p-001/kept.md#def' });
+    const imported = seed(content, {
+      tags: ['claude-code-memory'],
+      source: 'agent-memory:claude-code:p-001/note.md#abc',
+    });
+    const kept = seed(content, {
+      tags: ['claude-code-memory', 'captured'],
+      source: 'agent-memory:claude-code:p-001/kept.md#def',
+    });
     const backing = seed(content);
     const prediction = savePrediction(root, 'default', { classTag: 'delivery', claimText: content });
     withDb((db) => db.prepare('UPDATE predictions SET memory_id = ? WHERE id = ?').run(backing.id, prediction.id));
     const result = run(true);
     expect(result.appliedIds).toEqual([]);
-    expect(result.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: pinned.id, protection: 'pinned' }),
-      expect.objectContaining({ id: raw.id, protection: 'raw receipt' }),
-      expect.objectContaining({ id: backing.id, protection: 'backs an object' }),
-    ]));
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: pinned.id, protection: 'pinned' }),
+        expect.objectContaining({ id: raw.id, protection: 'raw receipt' }),
+        expect.objectContaining({ id: backing.id, protection: 'backs an object' }),
+      ]),
+    );
     // An agent's note is never judged, even when it carries a hippo writer's tag.
     for (const row of [imported, kept]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
     expect(loadEveryTenantEntries(root)).toHaveLength(6);
-    expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({ memory_id: backing.id });
+    expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({
+      memory_id: backing.id,
+    });
   });
 
   it('the api keeps a pinned row, and a store told to let it go still cannot delete it', async () => {
     const content = 'bump build 78 for testflight deploy';
     const pinned = seed(content, { pinned: true });
     const plain = seed(content);
-    expect((await repairMemoryQuality(ctx(), false)).issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
-      expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
-    ]));
+    expect((await repairMemoryQuality(ctx(), false)).issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
+        expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
+      ]),
+    );
 
     const unpinned = run(false, { ...repairProtection, pinned: false });
-    expect(unpinned.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
-      expect.objectContaining({ id: pinned.id, disposition: 'set-aside' }),
-    ]));
+    expect(unpinned.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
+        expect.objectContaining({ id: pinned.id, disposition: 'set-aside' }),
+      ]),
+    );
 
     const letGo = run(true, { pinned: false, raw: false, trusted: false, objectBacked: false });
     expect(letGo.appliedIds).toEqual([plain.id]);
@@ -127,13 +163,20 @@ describe('recoverable automatic memory quality repair', () => {
   });
 
   it('never judges hand-written memories, only rows hippo wrote itself', () => {
-    const manual = ['Returns 404 when the API key is missing from the header', 'If the build fails', FRAGMENT, 'more detail soon']
-      .map((content) => seed(content, { source: 'cli' }));
+    const manual = [
+      'Returns 404 when the API key is missing from the header',
+      'If the build fails',
+      FRAGMENT,
+      'more detail soon',
+    ].map((content) => seed(content, { source: 'cli' }));
     const vouched = seed(FRAGMENT, { confidence: 'verified' });
     const invalidated = seed(FRAGMENT, { confidence: 'stale' });
     const watch = seed("Command 'npm test' failed (exit 1)", { source: 'autolearn' });
     const toolFailure = seed("Command 'npm test' failed (exit 1)", { source: 'tool-failure' });
-    const sound = seed('Production migrations must exclude test setup because sorted filenames control application order.', { source: 'consolidation' });
+    const sound = seed(
+      'Production migrations must exclude test setup because sorted filenames control application order.',
+      { source: 'consolidation' },
+    );
     const automatic = [
       seed(FRAGMENT, { source: 'compaction:s-1' }),
       seed(FRAGMENT, { source: 'cli', extracted_from: manual[0].id }),
@@ -147,7 +190,10 @@ describe('recoverable automatic memory quality repair', () => {
     const ids = issues.map((issue) => issue.id);
     for (const row of [...manual, vouched, invalidated, watch, toolFailure, sound]) expect(ids).not.toContain(row.id);
     for (const row of automatic) {
-      expect(issues.find((issue) => issue.id === row.id), row.source).toMatchObject({ reason: 'sentence-fragment', disposition: 'set-aside' });
+      expect(
+        issues.find((issue) => issue.id === row.id),
+        row.source,
+      ).toMatchObject({ reason: 'sentence-fragment', disposition: 'set-aside' });
     }
   });
 
@@ -157,25 +203,38 @@ describe('recoverable automatic memory quality repair', () => {
     const result = run(true);
     expect(result.appliedIds).toEqual([]);
     expect(result.issues).toHaveLength(2);
-    expect(result.issues).toEqual(expect.arrayContaining([
-      { id: possible.id, reason: 'possible-fragment', disposition: 'review' },
-      { id: condition.id, reason: 'possible-fragment', disposition: 'review' },
-    ]));
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        { id: possible.id, reason: 'possible-fragment', disposition: 'review' },
+        { id: condition.id, reason: 'possible-fragment', disposition: 'review' },
+      ]),
+    );
   });
 
   it('flags ambiguity and mixed bundles while preserving complete parts and structured records', () => {
-    const mixed = bundle(['Found local migration files to be', 'Production migrations must exclude test setup because sorted filenames control application order.'], []);
-    const unparsed = seed(`${HEADER}\n\nFound local migration files to be`, { source: 'consolidation', layer: Layer.Semantic });
+    const mixed = bundle(
+      [
+        'Found local migration files to be',
+        'Production migrations must exclude test setup because sorted filenames control application order.',
+      ],
+      [],
+    );
+    const unparsed = seed(`${HEADER}\n\nFound local migration files to be`, {
+      source: 'consolidation',
+      layer: Layer.Semantic,
+    });
     const weak = seed('more detail soon');
     const trace = seed('succeeds (inserts or updates)', { trace_outcome: 'success', layer: Layer.Trace });
     const promoted = seed('succeeds (inserts or updates)', { source: 'auto-promote', tags: ['captured'] });
     const digest = seed('succeeds (inserts or updates)', { tags: ['session-digest'] });
     const result = run(true);
-    expect(result.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: mixed.id, disposition: 'review' }),
-      { id: unparsed.id, reason: 'derived bundle has no safely parsed constituents', disposition: 'review' },
-      expect.objectContaining({ id: weak.id, disposition: 'review' }),
-    ]));
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: mixed.id, disposition: 'review' }),
+        { id: unparsed.id, reason: 'derived bundle has no safely parsed constituents', disposition: 'review' },
+        expect.objectContaining({ id: weak.id, disposition: 'review' }),
+      ]),
+    );
     for (const row of [trace, promoted, digest]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
     expect(result.appliedIds).toEqual([]);
     expect(loadEveryTenantEntries(root)).toHaveLength(6);
@@ -183,8 +242,14 @@ describe('recoverable automatic memory quality repair', () => {
 
   it('sets a bundle aside only when every part is a certain defect and every parent is automatic', () => {
     const parts = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'];
-    const fromCapture = bundle(parts, parts.map((content) => seed(content).id));
-    const fromPerson = bundle(parts, parts.map((content) => seed(content, { source: 'cli', confidence: 'verified' }).id));
+    const fromCapture = bundle(
+      parts,
+      parts.map((content) => seed(content).id),
+    );
+    const fromPerson = bundle(
+      parts,
+      parts.map((content) => seed(content, { source: 'cli', confidence: 'verified' }).id),
+    );
     const mixedParents = bundle(parts, [seed(parts[0]).id, seed(parts[1], { source: 'cli' }).id]);
     const orphan = bundle(parts, ['mem_gone_1', 'mem_gone_2']);
     const unlinked = bundle(parts, []);
@@ -193,15 +258,22 @@ describe('recoverable automatic memory quality repair', () => {
   });
 
   it('finds a parent that repair already moved to dormant storage', () => {
-    const parents = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'].map((content) => seed(content));
+    const parents = ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy'].map((content) =>
+      seed(content),
+    );
     expect([...run(true).appliedIds].sort()).toEqual(parents.map((row) => row.id).sort());
-    const merged = bundle(parents.map((row) => row.content), parents.map((row) => row.id));
+    const merged = bundle(
+      parents.map((row) => row.content),
+      parents.map((row) => row.id),
+    );
     expect(run(true).appliedIds).toEqual([merged.id]);
     expect(withDb((db) => readDormantSnapshot(db, 'default', merged.id))?.entry.content).toBe(merged.content);
   });
 
   it('leaves superseded and archived rows to their own lifecycle', () => {
-    const next = seed('Keep test schema setup outside production migrations because production applies every sorted migration.');
+    const next = seed(
+      'Keep test schema setup outside production migrations because production applies every sorted migration.',
+    );
     seed('Found local migration files to be', { superseded_by: next.id });
     seed('Found local migration files to be', { kind: 'archived' });
     expect(run(true)).toMatchObject({ total: 1, issues: [], appliedIds: [] });
@@ -209,7 +281,11 @@ describe('recoverable automatic memory quality repair', () => {
 
   it('rolls back snapshots and removal, and removes its backup, when audit fails', () => {
     const bad = seed('succeeds (inserts or updates)');
-    withDb((db) => db.exec("CREATE TRIGGER refuse_repair_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'quality_repair' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END"));
+    withDb((db) =>
+      db.exec(
+        "CREATE TRIGGER refuse_repair_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'quality_repair' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END",
+      ),
+    );
     expect(() => run(true)).toThrow(/audit unavailable/);
     expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(bad.id);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))).toBeNull();
@@ -246,7 +322,14 @@ describe('recoverable automatic memory quality repair', () => {
     const result = run(true);
     expect(result).toMatchObject({ supported: false, appliedIds: [], backup: null });
     expect(result.blockers).toContain('missing table: customer_notes');
-    expect(result.issues).toEqual([{ id: bad.id, reason: 'sentence-fragment', disposition: 'review', protection: 'unsupported schema; no changes permitted' }]);
+    expect(result.issues).toEqual([
+      {
+        id: bad.id,
+        reason: 'sentence-fragment',
+        disposition: 'review',
+        protection: 'unsupported schema; no changes permitted',
+      },
+    ]);
     expect(readFileSync(join(root, 'hippo.db'))).toEqual(before);
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(withDb((db) => db.prepare('PRAGMA user_version').get())).toEqual({ user_version: 43 });
@@ -271,7 +354,9 @@ describe('recoverable automatic memory quality repair', () => {
       note(projectNotes(world), 'result.md', bad.content);
       importForStore(world.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: world.machine });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
-    } finally { closeWorld(world); }
+    } finally {
+      closeWorld(world);
+    }
   });
 });
 
@@ -288,18 +373,27 @@ describe('hippo audit repair', () => {
     initStore(global);
     env = { ...process.env, HIPPO_HOME: global, HOME: dir, USERPROFILE: dir };
   });
-  const cli = (...args: string[]) => spawnSync(process.execPath, [HIPPO_JS, 'audit', 'repair', ...args], { cwd: dir, env, encoding: 'utf8' });
+  const cli = (...args: string[]) =>
+    spawnSync(process.execPath, [HIPPO_JS, 'audit', 'repair', ...args], { cwd: dir, env, encoding: 'utf8' });
   // The preview case reads bytes only, so it runs in process; the busy-store case keeps the child, a lock held by another process.
   const cliIn = (...args: string[]) => runCliAs(['audit', 'repair', ...args], { cwd: dir, env });
 
   it('previews as JSON, lets --dry-run win over --apply, and names --global in the recovery line', async () => {
     const bad = seedIn(local, 'Found local migration files to be');
     const globalBad = seedIn(global, 'Found local migration files to be');
-    expect(JSON.parse((await cliIn('--json')).stdout)).toMatchObject({ appliedIds: [], issues: [{ id: bad.id, disposition: 'set-aside' }] });
-    expect(JSON.parse((await cliIn('--apply', '--dry-run', '--json')).stdout)).toMatchObject({ appliedIds: [], backup: null });
+    expect(JSON.parse((await cliIn('--json')).stdout)).toMatchObject({
+      appliedIds: [],
+      issues: [{ id: bad.id, disposition: 'set-aside' }],
+    });
+    expect(JSON.parse((await cliIn('--apply', '--dry-run', '--json')).stdout)).toMatchObject({
+      appliedIds: [],
+      backup: null,
+    });
     expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
     const applied = await cliIn('--apply', '--global');
-    expect(applied.stdout).toContain(`Moved 1 memories to dormant storage. Recovery: hippo dormant restore <id> --global.`);
+    expect(applied.stdout).toContain(
+      `Moved 1 memories to dormant storage. Recovery: hippo dormant restore <id> --global.`,
+    );
     expect(loadEveryTenantEntries(global).map((entry) => entry.id)).not.toContain(globalBad.id);
     expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
   });
@@ -309,7 +403,12 @@ describe('hippo audit repair', () => {
     const holder = new DatabaseSync(join(local, 'hippo.db'));
     holder.exec('BEGIN IMMEDIATE');
     const result = (() => {
-      try { return cli('--apply'); } finally { holder.exec('ROLLBACK'); holder.close(); }
+      try {
+        return cli('--apply');
+      } finally {
+        holder.exec('ROLLBACK');
+        holder.close();
+      }
     })();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(STORE_BUSY_MESSAGE);

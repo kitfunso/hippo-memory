@@ -54,13 +54,36 @@ let adminKey: CreateApiKeyResult;
 async function seedTenant(tenantId: string, count: number): Promise<void> {
   const ctx: FullContext = apiCtx(home, tenantId, api.adminActor('test'));
   for (let i = 0; i < count; i++) {
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { decisionText: `${tenantId} decision ${i}` });
-    await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { incidentText: `${tenantId} incident ${i}` }, 'cli');
-    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { processName: `${tenantId} process ${i}`, steps: ['one', 'two'] });
-    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { policyName: `${tenantId} policy ${i}`, policyText: 'keep it short' });
-    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { skillName: `${tenantId} skill ${i}`, instructions: 'do the thing' });
-    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { repo: `${tenantId}/repo-${i}`, summary: 'a brief' });
-    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { customer: `${tenantId} customer ${i}`, note: 'a note' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+      decisionText: `${tenantId} decision ${i}`,
+    });
+    await openIncident(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      tenantId,
+      { incidentText: `${tenantId} incident ${i}` },
+      'cli',
+    );
+    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+      processName: `${tenantId} process ${i}`,
+      steps: ['one', 'two'],
+    });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+      policyName: `${tenantId} policy ${i}`,
+      policyText: 'keep it short',
+    });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+      skillName: `${tenantId} skill ${i}`,
+      instructions: 'do the thing',
+    });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+      repo: `${tenantId}/repo-${i}`,
+      summary: 'a brief',
+    });
+    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
+      customer: `${tenantId} customer ${i}`,
+      note: 'a note',
+    });
     savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
     const { id } = await api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
     const db = openHippoDb(home);
@@ -156,7 +179,7 @@ describe.each(ROUTES)('GET $path paging', (route) => {
 });
 
 describe('no paging params: the body a small store got before cursors existed', () => {
-  const ctx = (): FullContext => (apiCtx(home, 'default', api.adminActor('test')));
+  const ctx = (): FullContext => apiCtx(home, 'default', api.adminActor('test'));
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
   // Each reference is the store call the route made before paging, with the same arguments.
@@ -172,13 +195,16 @@ describe('no paging params: the body a small store got before cursors existed', 
     ['/v1/customer-notes', async () => json(await loadCustomerNotes(objectsAt(home), 'default', { limit: 100 }))],
   ]);
 
-  it.each(ROUTES.filter((r) => r.key !== null))('$path keeps its list and adds next_cursor: null last', async (route) => {
-    const page = await getPage(route);
-    expect(page.status).toBe(200);
-    expect(Object.keys(page.body ?? {})).toEqual([route.key, 'next_cursor']);
-    expect(page.next).toBeNull();
-    expect(page.items).toEqual(await before.get(route.path)!());
-  });
+  it.each(ROUTES.filter((r) => r.key !== null))(
+    '$path keeps its list and adds next_cursor: null last',
+    async (route) => {
+      const page = await getPage(route);
+      expect(page.status).toBe(200);
+      expect(Object.keys(page.body ?? {})).toEqual([route.key, 'next_cursor']);
+      expect(page.next).toBeNull();
+      expect(page.items).toEqual(await before.get(route.path)!());
+    },
+  );
 
   it('/v1/auth/keys returns the same bare array, with no next-page header', async () => {
     const expected = json(listApiKeys(home, { active: true }).filter((k) => k.tenantId === 'default'));
@@ -205,7 +231,9 @@ describe('rows that share a sort key', () => {
     try {
       // The test is about SQL ordering, so it pins the timestamps with SQL.
       db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`).run();
-      db.prepare(`UPDATE memory_quarantine SET quarantined_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`).run();
+      db.prepare(
+        `UPDATE memory_quarantine SET quarantined_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`,
+      ).run();
     } finally {
       closeHippoDb(db);
     }

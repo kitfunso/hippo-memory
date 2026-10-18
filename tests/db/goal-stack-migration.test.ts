@@ -23,9 +23,18 @@ describe('schema migration v18', () => {
       const cols = db.prepare(`PRAGMA table_info(goal_stack)`).all() as Array<{ name: string }>;
       const names = new Set(cols.map((c) => c.name));
       for (const required of [
-        'id', 'session_id', 'tenant_id', 'goal_name', 'level', 'parent_goal_id',
-        'status', 'success_condition', 'retrieval_policy_id',
-        'created_at', 'completed_at', 'outcome_score',
+        'id',
+        'session_id',
+        'tenant_id',
+        'goal_name',
+        'level',
+        'parent_goal_id',
+        'status',
+        'success_condition',
+        'retrieval_policy_id',
+        'created_at',
+        'completed_at',
+        'outcome_score',
       ]) {
         expect(names.has(required), `goal_stack.${required} missing`).toBe(true);
       }
@@ -38,10 +47,13 @@ describe('schema migration v18', () => {
     const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
-      const insert = () => db.prepare(
-        `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at)
+      const insert = () =>
+        db
+          .prepare(
+            `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run('g1', 's1', 'default', 'test', 0, 'bogus_status', new Date().toISOString());
+          )
+          .run('g1', 's1', 'default', 'test', 0, 'bogus_status', new Date().toISOString());
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
@@ -52,10 +64,13 @@ describe('schema migration v18', () => {
     const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
-      const insert = () => db.prepare(
-        `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at)
+      const insert = () =>
+        db
+          .prepare(
+            `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run('g1', 's1', 'default', 'test', 5, 'active', new Date().toISOString());
+          )
+          .run('g1', 's1', 'default', 'test', 5, 'active', new Date().toISOString());
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
@@ -66,10 +81,13 @@ describe('schema migration v18', () => {
     const home = makeRoot('b3-mig');
     const db = openHippoDb(home);
     try {
-      const insert = () => db.prepare(
-        `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at, outcome_score)
+      const insert = () =>
+        db
+          .prepare(
+            `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at, outcome_score)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run('g1', 's1', 'default', 'test', 0, 'completed', new Date().toISOString(), 1.5);
+          )
+          .run('g1', 's1', 'default', 'test', 0, 'completed', new Date().toISOString(), 1.5);
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
@@ -83,7 +101,15 @@ describe('schema migration v18', () => {
       // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
       const policyCols = db.prepare(`PRAGMA table_info(retrieval_policy)`).all() as Array<{ name: string }>;
       const policyNames = new Set(policyCols.map((c) => c.name));
-      for (const c of ['id', 'goal_id', 'policy_type', 'weight_schema_fit', 'weight_recency', 'weight_outcome', 'error_priority']) {
+      for (const c of [
+        'id',
+        'goal_id',
+        'policy_type',
+        'weight_schema_fit',
+        'weight_recency',
+        'weight_outcome',
+        'error_priority',
+      ]) {
         expect(policyNames.has(c), `retrieval_policy.${c} missing`).toBe(true);
       }
       // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
@@ -112,9 +138,15 @@ describe('schema migration v18', () => {
         INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind)
         VALUES ('m1','2026-04-29','2026-04-29',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')
       `).run();
-      db.prepare(`INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at) VALUES ('g1','s1','default','t',0,'active',?)`).run(new Date().toISOString());
-      db.prepare(`INSERT INTO retrieval_policy (id, goal_id, policy_type) VALUES ('rp1','g1','error-prioritized')`).run();
-      db.prepare(`INSERT INTO goal_recall_log (goal_id, memory_id, tenant_id, session_id, recalled_at, score) VALUES ('g1','m1','default','s1',?,1.0)`).run(new Date().toISOString());
+      db.prepare(
+        `INSERT INTO goal_stack (id, session_id, tenant_id, goal_name, level, status, created_at) VALUES ('g1','s1','default','t',0,'active',?)`,
+      ).run(new Date().toISOString());
+      db.prepare(
+        `INSERT INTO retrieval_policy (id, goal_id, policy_type) VALUES ('rp1','g1','error-prioritized')`,
+      ).run();
+      db.prepare(
+        `INSERT INTO goal_recall_log (goal_id, memory_id, tenant_id, session_id, recalled_at, score) VALUES ('g1','m1','default','s1',?,1.0)`,
+      ).run(new Date().toISOString());
 
       db.prepare(`DELETE FROM goal_stack WHERE id = 'g1'`).run();
 

@@ -103,12 +103,18 @@ async function incidentCreate(
   }
 
   const incidentPathTags = extractPathTags(process.cwd());
-  const created = await incidentsModule.openIncident(objects, cliConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
-    incidentText,
-    context,
-    linkedMemoryIds,
-    extraTags: incidentPathTags,
-  }, CLI_ACTOR);
+  const created = await incidentsModule.openIncident(
+    objects,
+    cliConfig(hippoRoot).defaultHalfLifeDays,
+    tenantId,
+    {
+      incidentText,
+      context,
+      linkedMemoryIds,
+      extraTags: incidentPathTags,
+    },
+    CLI_ACTOR,
+  );
 
   console.log(`Incident recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);

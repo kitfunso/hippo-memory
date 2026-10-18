@@ -1,7 +1,13 @@
 // Schema v55 adds the tool-call key and failure link to delivery_events, plus the partial unique index over the key.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  openHippoDbReadOnly,
+  closeHippoDb,
+  getSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { v55 } from '../../src/db/migrations/v55.js';
 import { tableColumns, tableExists } from '../../src/db/tables.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -22,7 +28,11 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 function indexSql(db: DatabaseSyncLike, name: string): string | undefined {
   // SAFETY: one TEXT `sql` column.
-  return (db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(name) as { sql?: string } | undefined)?.sql;
+  return (
+    db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(name) as
+      | { sql?: string }
+      | undefined
+  )?.sql;
 }
 
 function addEvent(db: DatabaseSyncLike, session: string): void {
@@ -59,7 +69,9 @@ describe('schema v55', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect([...tableColumns(db, 'delivery_events')]).toEqual(expect.arrayContaining(['tool_use_id', 'failure_id']));
-      expect(indexSql(db, INDEX)).toMatch(/UNIQUE INDEX .*\(tenant_id, session_id, tool_use_id\)\s+WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL/s);
+      expect(indexSql(db, INDEX)).toMatch(
+        /UNIQUE INDEX .*\(tenant_id, session_id, tool_use_id\)\s+WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL/s,
+      );
     });
   });
 

@@ -102,7 +102,9 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
         errorFields(err),
       );
     });
-    exited = new Promise<void>((resolve) => { started.once('exit', () => resolve()); });
+    exited = new Promise<void>((resolve) => {
+      started.once('exit', () => resolve());
+    });
     return started;
   };
 

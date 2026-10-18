@@ -43,7 +43,11 @@ describe('MCP-over-HTTP transport', () => {
 
   afterEach(async () => {
     await handle.stop();
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    try {
+      rmSync(home, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
   });
 
   it('POST /mcp tools/list returns the tool catalog', async () => {
@@ -110,7 +114,11 @@ describe('MCP-over-HTTP transport', () => {
 
   it('POST /mcp answers a missing method, a notification, an unknown method and a bad bearer', async () => {
     const post = async (body: string, headers: Record<string, string> = {}) => {
-      const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
+      const res = await fetch(`${handle.url}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body,
+      });
       return { status: res.status, body: await res.text() };
     };
     const noMethod = { status: 400, body: '{"error":"JSON-RPC body must include a method string"}' };
@@ -147,7 +155,11 @@ describe('MCP-over-HTTP transport', () => {
       expect(done).toBe(false);
       const text = new TextDecoder().decode(value);
       expect(text).toContain(': ping');
-      try { reader.cancel().catch(() => {}); } catch { /* no-op */ }
+      try {
+        reader.cancel().catch(() => {});
+      } catch {
+        /* no-op */
+      }
     } finally {
       ac.abort();
     }

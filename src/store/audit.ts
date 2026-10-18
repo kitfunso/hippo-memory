@@ -36,8 +36,7 @@ export function auditQueryFields(query: string): AuditQueryFields {
   };
 }
 
-const INSERT_AUDIT_ROW_SQL =
-  `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`;
+const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`;
 
 export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
   cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(new Date().toISOString(), ...auditRowValues(opts));
@@ -101,7 +100,7 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions):
   const rows = db
     .prepare(
       `SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')}${after.sql} ORDER BY ts DESC, id DESC ` +
-      `LIMIT ?`,
+        `LIMIT ?`,
     )
     .all(...params, ...after.params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
@@ -142,9 +141,7 @@ function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string
 
 /** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
 function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
-  const result = db
-    .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
-    .run(tenantId, cutoff);
+  const result = db.prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(tenantId, cutoff);
   return Number(result.changes ?? 0);
 }
 
@@ -152,12 +149,14 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
  * queryAuditEvents it has no row cap. */
 export function confirmedOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
   // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
-  const rows = db.prepare(
-    `SELECT target_id, MAX(ts) AS ts FROM audit_log
+  const rows = db
+    .prepare(
+      `SELECT target_id, MAX(ts) AS ts FROM audit_log
        WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
          AND json_extract(metadata_json, '$.good') = 1
        GROUP BY target_id`,
-  ).all(tenantId) as { target_id: string; ts: string }[];
+    )
+    .all(tenantId) as { target_id: string; ts: string }[];
   return new Map(rows.map((r) => [r.target_id, r.ts]));
 }
 

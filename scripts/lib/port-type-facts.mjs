@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import ts from 'typescript';
 
-export const parse = (file) => ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+export const parse = (file) =>
+  ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 export const lineOf = (sf, node) => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 
 /** The src file a relative specifier names, with .js read as .ts; undefined when it is not a file on disk. */
@@ -14,7 +15,8 @@ export function resolveSpec(file, spec) {
 }
 
 // port-groups.ts holds the session and admin groups (conflicts, dormant), so it is a port file here too.
-const declaresPort = (f) => f === 'src/store/port.ts' || f.startsWith('src/store/port/') || f === 'src/store/port-groups.ts';
+const declaresPort = (f) =>
+  f === 'src/store/port.ts' || f.startsWith('src/store/port/') || f === 'src/store/port-groups.ts';
 const typeTables = new Map();
 
 /** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */
@@ -24,9 +26,18 @@ function typeTable(file) {
   const decls = new Map();
   const links = new Map();
   for (const s of sf.statements) {
-    if (ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s)) decls.set(s.name.text, [...(decls.get(s.name.text) ?? []), s]);
-    const target = s.moduleSpecifier && ts.isStringLiteral(s.moduleSpecifier) ? resolveSpec(file, s.moduleSpecifier.text) : undefined;
-    const named = ts.isImportDeclaration(s) ? s.importClause?.namedBindings : ts.isExportDeclaration(s) ? s.exportClause : undefined;
+    if (ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s)) {
+      decls.set(s.name.text, [...(decls.get(s.name.text) ?? []), s]);
+    }
+    const target =
+      s.moduleSpecifier && ts.isStringLiteral(s.moduleSpecifier)
+        ? resolveSpec(file, s.moduleSpecifier.text)
+        : undefined;
+    const named = ts.isImportDeclaration(s)
+      ? s.importClause?.namedBindings
+      : ts.isExportDeclaration(s)
+        ? s.exportClause
+        : undefined;
     if (target && named && (ts.isNamedImports(named) || ts.isNamedExports(named))) {
       for (const e of named.elements) links.set(e.name.text, { file: target, name: (e.propertyName ?? e.name).text });
     }
@@ -63,8 +74,14 @@ function functionIn(file, node, seen) {
   if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) return functionIn(file, node.type, seen);
   if (ts.isArrayTypeNode(node)) return functionIn(file, node.elementType, seen);
   if (ts.isTypeLiteralNode(node)) return functionInMembers(file, node.members, seen);
-  const parts = ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node) ? node.types
-    : ts.isTupleTypeNode(node) ? node.elements : ts.isTypeReferenceNode(node) ? node.typeArguments ?? [] : [];
+  const parts =
+    ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)
+      ? node.types
+      : ts.isTupleTypeNode(node)
+        ? node.elements
+        : ts.isTypeReferenceNode(node)
+          ? (node.typeArguments ?? [])
+          : [];
   for (const part of parts) {
     const inner = functionIn(file, part, seen);
     if (inner !== null) return inner;
@@ -74,7 +91,9 @@ function functionIn(file, node, seen) {
     const key = `${decl.file}#${node.typeName.text}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const inner = ts.isTypeAliasDeclaration(decl.node) ? functionIn(decl.file, decl.node.type, seen) : functionInDeclared(decl.file, decl.node, seen);
+    const inner = ts.isTypeAliasDeclaration(decl.node)
+      ? functionIn(decl.file, decl.node.type, seen)
+      : functionInDeclared(decl.file, decl.node, seen);
     if (inner !== null) return inner;
   }
   return null;
@@ -86,7 +105,9 @@ function functionInDeclared(file, iface, seen) {
   if (own !== null) return own;
   for (const clause of iface.heritageClauses ?? []) {
     for (const base of clause.types) {
-      const inner = ts.isIdentifier(base.expression) ? functionIn(file, ts.factory.createTypeReferenceNode(base.expression.text, base.typeArguments), seen) : null;
+      const inner = ts.isIdentifier(base.expression)
+        ? functionIn(file, ts.factory.createTypeReferenceNode(base.expression.text, base.typeArguments), seen)
+        : null;
       if (inner !== null) return inner;
     }
   }
@@ -100,12 +121,22 @@ export function portFunctionParams(file) {
   const hits = [];
   for (const [owner, nodes] of decls) {
     for (const node of nodes) {
-      const members = ts.isInterfaceDeclaration(node) ? node.members : ts.isTypeLiteralNode(node.type) ? node.type.members : [];
+      const members = ts.isInterfaceDeclaration(node)
+        ? node.members
+        : ts.isTypeLiteralNode(node.type)
+          ? node.type.members
+          : [];
       for (const m of members) {
-        const fn = ts.isMethodSignature(m) ? m : ts.isPropertySignature(m) && m.type && ts.isFunctionTypeNode(m.type) ? m.type : undefined;
+        const fn = ts.isMethodSignature(m)
+          ? m
+          : ts.isPropertySignature(m) && m.type && ts.isFunctionTypeNode(m.type)
+            ? m.type
+            : undefined;
         for (const p of fn?.parameters ?? []) {
           const path = functionIn(file, p.type, new Set());
-          if (path !== null) hits.push(`${file}:${lineOf(sf, p)} ${owner}.${m.name.getText(sf)}(${p.name.getText(sf)}${path})`);
+          if (path !== null) {
+            hits.push(`${file}:${lineOf(sf, p)} ${owner}.${m.name.getText(sf)}(${p.name.getText(sf)}${path})`);
+          }
         }
       }
     }

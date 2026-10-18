@@ -10,7 +10,12 @@ export type SourceKind = 'distilled' | 'superseded';
 export type SourceObjectType = 'decision' | 'policy' | 'customer' | 'project';
 
 export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
-  'person', 'project', 'customer', 'system', 'policy', 'decision',
+  'person',
+  'project',
+  'customer',
+  'system',
+  'policy',
+  'decision',
 ]);
 
 /** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune
@@ -21,12 +26,18 @@ export interface SourceObjectRef {
 }
 
 export const GRAPH_RELATION_TYPES: ReadonlySet<RelationType> = new Set<RelationType>([
-  'owns', 'supersedes', 'depends-on', 'blocked-by', 'references',
+  'owns',
+  'supersedes',
+  'depends-on',
+  'blocked-by',
+  'references',
 ]);
 
 export type GraphQueueStatus = 'pending' | 'processed' | 'skipped';
 export const VALID_QUEUE_STATES: ReadonlySet<GraphQueueStatus> = new Set<GraphQueueStatus>([
-  'pending', 'processed', 'skipped',
+  'pending',
+  'processed',
+  'skipped',
 ]);
 
 export interface Entity {
@@ -115,10 +126,11 @@ export function rowToRelation(row: RelationRow): Relation {
   };
 }
 
-export const ENTITY_COLS = `id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, ` +
-`source_object_id, created_at`;
-export const RELATION_COLS = `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
-`source_object_type, source_object_id, created_at`;
+export const ENTITY_COLS =
+  `id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, ` + `source_object_id, created_at`;
+export const RELATION_COLS =
+  `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
+  `source_object_type, source_object_id, created_at`;
 
 export interface GraphQueueItem {
   id: number;

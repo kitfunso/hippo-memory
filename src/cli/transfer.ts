@@ -11,12 +11,7 @@ import { detailLines } from '../agent-memories/report.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { AUTO_SHARE_MIN_SCORE, shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
 import { syncGlobalToLocal } from '../sharing/global-sync.js';
-import {
-  importChatGPT,
-  importClaude,
-  importCursor,
-  importGenericFile,
-} from '../importers/sources.js';
+import { importChatGPT, importClaude, importCursor, importGenericFile } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
@@ -24,7 +19,13 @@ import * as api from '../api/index.js';
 import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
 import {
-  cliApiContext, cliFolder, cliInitGlobal, cliStore, cliSyncOptions, cliSyncStore, type CliContext,
+  cliApiContext,
+  cliFolder,
+  cliInitGlobal,
+  cliStore,
+  cliSyncOptions,
+  cliSyncStore,
+  type CliContext,
 } from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
@@ -138,7 +139,10 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
   const reposFlag = nonEmptyStringFlag(flags, 'repos');
   if (reposFlag) {
-    const repos = reposFlag.split(',').map((r) => r.trim()).filter(Boolean);
+    const repos = reposFlag
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean);
     let totalAdded = 0;
     let totalSkipped = 0;
 
@@ -319,9 +323,10 @@ function printFileImportSummary(
 function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: boolean): void {
   const opts = cliSyncOptions(hippoRoot, currentMachine(), { dryRun });
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
-  const report = useGlobal || isInitialized(hippoRoot)
-    ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
-    : importAtSessionEnd(process.cwd(), undefined, opts);
+  const report =
+    useGlobal || isInitialized(hippoRoot)
+      ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)
+      : importAtSessionEnd(process.cwd(), undefined, opts);
   for (const line of detailLines(report, dryRun)) console.log(line);
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
@@ -512,17 +517,19 @@ export async function handleExport({ hippoRoot, tenantId, args, flags }: Command
 
   let output: string;
   if (format === 'markdown' || format === 'md') {
-    output = entries.map(e => {
-      const meta = [
-        `id: ${e.id}`,
-        `created: ${e.created}`,
-        `tags: ${e.tags.join(', ')}`,
-        `confidence: ${e.confidence}`,
-        `half_life: ${e.half_life_days}d`,
-        `strength: ${e.strength.toFixed(2)}`,
-      ].join(' | ');
-      return `### ${e.id}\n\n${e.content}\n\n_${meta}_`;
-    }).join('\n\n---\n\n');
+    output = entries
+      .map((e) => {
+        const meta = [
+          `id: ${e.id}`,
+          `created: ${e.created}`,
+          `tags: ${e.tags.join(', ')}`,
+          `confidence: ${e.confidence}`,
+          `half_life: ${e.half_life_days}d`,
+          `strength: ${e.strength.toFixed(2)}`,
+        ].join(' | ');
+        return `### ${e.id}\n\n${e.content}\n\n_${meta}_`;
+      })
+      .join('\n\n---\n\n');
   } else {
     output = JSON.stringify(entries, null, 2);
   }

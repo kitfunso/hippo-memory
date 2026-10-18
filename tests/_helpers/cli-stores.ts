@@ -21,7 +21,11 @@ export function folderFiles(root: string): FolderFiles {
 
 /** hippo.db's own vector index under `root`, as embedMemory and embedAll take it. */
 export function localIndex(root: string): EmbedTarget {
-  return { hippoRoot: root, embeddingIndex: cliLocalFiles(root).embeddingIndex, embeddings: loadConfig(root).embeddings };
+  return {
+    hippoRoot: root,
+    embeddingIndex: cliLocalFiles(root).embeddingIndex,
+    embeddings: loadConfig(root).embeddings,
+  };
 }
 
 export { cliSyncStore as syncStore };

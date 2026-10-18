@@ -5,9 +5,22 @@ import { mintApiKey } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../../src/entry/store-kit.js';
-import { inMemoryKeyWritesStore, OWNED_SCOPE, OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/in-memory-key-writes-store.js';
 import {
-  FIXTURE_REVOKED_AT, onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture,
+  inMemoryKeyWritesStore,
+  OWNED_SCOPE,
+  OWNER,
+  seedOwnedKeys,
+  type OwnedKeys,
+} from '../_helpers/in-memory-key-writes-store.js';
+import {
+  FIXTURE_REVOKED_AT,
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type SideResult,
+  type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
@@ -31,22 +44,59 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 
 function newKey(fields: Partial<NewApiKey> = {}): NewApiKey {
   const { keyId, keyHash } = mintApiKey();
-  return { keyId, keyHash, tenantId: TENANT_A, label: 'new', role: 'member', createdAt: NOW, ownerSubject: null, expiresAt: null, ...fields };
+  return {
+    keyId,
+    keyHash,
+    tenantId: TENANT_A,
+    label: 'new',
+    role: 'member',
+    createdAt: NOW,
+    ownerSubject: null,
+    expiresAt: null,
+    ...fields,
+  };
 }
 
-const selfKey = (tenantId = TENANT_A): NewApiKey & { ownerSubject: string; expiresAt: string } => ({ ...newKey({ tenantId }), ownerSubject: OWNER, expiresAt: EXPIRES });
+const selfKey = (tenantId = TENANT_A): NewApiKey & { ownerSubject: string; expiresAt: string } => ({
+  ...newKey({ tenantId }),
+  ownerSubject: OWNER,
+  expiresAt: EXPIRES,
+});
 const SELF_META = { label: 'new', role: 'member', self: true, expiresAt: EXPIRES };
 
-const create = (key: NewApiKey): Call => (g) => g.createApiKey({ key, actor: 'api_key:caller', metadata: { label: key.label, role: key.role } });
-const createSelf = (key: NewApiKey & { ownerSubject: string; expiresAt: string }, perSubject: number): Call =>
-  (g) => g.createSelfApiKey({ key, actor: OWNER, metadata: SELF_META, perSubject });
+const create =
+  (key: NewApiKey): Call =>
+  (g) =>
+    g.createApiKey({ key, actor: 'api_key:caller', metadata: { label: key.label, role: key.role } });
+const createSelf =
+  (key: NewApiKey & { ownerSubject: string; expiresAt: string }, perSubject: number): Call =>
+  (g) =>
+    g.createSelfApiKey({ key, actor: OWNER, metadata: SELF_META, perSubject });
 type ListQuery = Omit<KeyListQuery, 'tenantId'> & { tenantId?: string | null };
-const list = (query: ListQuery): Call => (g) => g.listApiKeys({ tenantId: TENANT_A, ...query });
-const listIds = (query: ListQuery): Call => async (g) => (await g.listApiKeys({ tenantId: TENANT_A, ...query })).map((r) => r.key.keyId);
-const find = (keyId: string): Call => (_g, store) => store.findApiKey(keyId);
-const revokedAtOf = (keyId: string): Call => async (_g, store) => (await store.findApiKey(keyId))?.revokedAt;
+const list =
+  (query: ListQuery): Call =>
+  (g) =>
+    g.listApiKeys({ tenantId: TENANT_A, ...query });
+const listIds =
+  (query: ListQuery): Call =>
+  async (g) =>
+    (await g.listApiKeys({ tenantId: TENANT_A, ...query })).map((r) => r.key.keyId);
+const find =
+  (keyId: string): Call =>
+  (_g, store) =>
+    store.findApiKey(keyId);
+const revokedAtOf =
+  (keyId: string): Call =>
+  async (_g, store) =>
+    (await store.findApiKey(keyId))?.revokedAt;
 /** Stores word a refused write differently, so only whether it was refused is compared. */
-const settled = (call: Call): Call => (g, store) => call(g, store).then(() => 'stored', () => 'refused');
+const settled =
+  (call: Call): Call =>
+  (g, store) =>
+    call(g, store).then(
+      () => 'stored',
+      () => 'refused',
+    );
 
 const valueOf = (side: Side, i: number): KeyWritesValue => {
   const outcome = side.outcomes[i];
@@ -84,15 +134,45 @@ describe('KeyWrites.createApiKey', () => {
     const side = await conforms([create(key), find(key.keyId), list({ keyId: key.keyId, active: true })]);
     expect(side.outcomes.slice(0, 2)).toEqual([
       { value: undefined },
-      { value: { keyHash: key.keyHash, tenantId: TENANT_A, revokedAt: null, role: 'admin', scopes: [], expiresAt: null, ownerSubject: null } },
+      {
+        value: {
+          keyHash: key.keyHash,
+          tenantId: TENANT_A,
+          revokedAt: null,
+          role: 'admin',
+          scopes: [],
+          expiresAt: null,
+          ownerSubject: null,
+        },
+      },
     ]);
-    expect(valueOf(side, 2)).toEqual([{
-      rowId: expect.any(Number),
-      key: { keyId: key.keyId, tenantId: TENANT_A, label: 'ci', createdAt: NOW, revokedAt: null, role: 'admin', scopes: [], expiresAt: null, ownerSubject: null },
-    }]);
+    expect(valueOf(side, 2)).toEqual([
+      {
+        rowId: expect.any(Number),
+        key: {
+          keyId: key.keyId,
+          tenantId: TENANT_A,
+          label: 'ci',
+          createdAt: NOW,
+          revokedAt: null,
+          role: 'admin',
+          scopes: [],
+          expiresAt: null,
+          ownerSubject: null,
+        },
+      },
+    ]);
     expect(side.audit).toEqual([
       ...baseline.audit,
-      { id: nextAuditId, ts: NOW, tenantId: TENANT_A, actor: 'api_key:caller', op: 'auth_create', targetId: key.keyId, metadata: { label: 'ci', role: 'admin' } },
+      {
+        id: nextAuditId,
+        ts: NOW,
+        tenantId: TENANT_A,
+        actor: 'api_key:caller',
+        op: 'auth_create',
+        targetId: key.keyId,
+        metadata: { label: 'ci', role: 'admin' },
+      },
     ]);
   });
 
@@ -118,12 +198,33 @@ describe('KeyWrites.createApiKey', () => {
 describe('KeyWrites.createSelfApiKey', () => {
   it('revokes nothing while the owner is under the cap, counting neither expired nor revoked keys', async () => {
     const key = selfKey();
-    const side = await conforms([createSelf(key, 3), revokedAtOf(owned.liveOld), revokedAtOf(owned.liveNew), find(key.keyId)]);
+    const side = await conforms([
+      createSelf(key, 3),
+      revokedAtOf(owned.liveOld),
+      revokedAtOf(owned.liveNew),
+      find(key.keyId),
+    ]);
     expect(side.outcomes.slice(0, 3)).toEqual([{ value: [] }, { value: null }, { value: null }]);
-    expect(valueOf(side, 3)).toEqual({ keyHash: key.keyHash, tenantId: TENANT_A, revokedAt: null, role: 'member', scopes: [], expiresAt: EXPIRES, ownerSubject: OWNER });
+    expect(valueOf(side, 3)).toEqual({
+      keyHash: key.keyHash,
+      tenantId: TENANT_A,
+      revokedAt: null,
+      role: 'member',
+      scopes: [],
+      expiresAt: EXPIRES,
+      ownerSubject: OWNER,
+    });
     expect(side.audit).toEqual([
       ...baseline.audit,
-      { id: nextAuditId, ts: NOW, tenantId: TENANT_A, actor: OWNER, op: 'auth_create', targetId: key.keyId, metadata: SELF_META },
+      {
+        id: nextAuditId,
+        ts: NOW,
+        tenantId: TENANT_A,
+        actor: OWNER,
+        op: 'auth_create',
+        targetId: key.keyId,
+        metadata: SELF_META,
+      },
     ]);
   });
 
@@ -131,18 +232,45 @@ describe('KeyWrites.createSelfApiKey', () => {
     const key = selfKey();
     const { liveOld, liveNew, expired, revoked, liveB } = owned;
     const side = await conforms([
-      createSelf(key, 1), revokedAtOf(liveOld), revokedAtOf(liveNew), revokedAtOf(expired), revokedAtOf(revoked), revokedAtOf(liveB),
+      createSelf(key, 1),
+      revokedAtOf(liveOld),
+      revokedAtOf(liveNew),
+      revokedAtOf(expired),
+      revokedAtOf(revoked),
+      revokedAtOf(liveB),
       listIds({ ownerSubject: OWNER, active: true }),
     ]);
     expect(side.outcomes).toEqual([
-      { value: [liveOld, liveNew] }, { value: NOW }, { value: NOW }, { value: null }, { value: FIXTURE_REVOKED_AT }, { value: null }, { value: [key.keyId] },
+      { value: [liveOld, liveNew] },
+      { value: NOW },
+      { value: NOW },
+      { value: null },
+      { value: FIXTURE_REVOKED_AT },
+      { value: null },
+      { value: [key.keyId] },
     ]);
-    const revokeRow = (targetId: string, id: number): AuditEvent => ({ id, ts: NOW, tenantId: TENANT_A, actor: OWNER, op: 'auth_revoke', targetId, metadata: { replacedBy: key.keyId } });
+    const revokeRow = (targetId: string, id: number): AuditEvent => ({
+      id,
+      ts: NOW,
+      tenantId: TENANT_A,
+      actor: OWNER,
+      op: 'auth_revoke',
+      targetId,
+      metadata: { replacedBy: key.keyId },
+    });
     expect(side.audit).toEqual([
       ...baseline.audit,
       revokeRow(liveOld, nextAuditId),
       revokeRow(liveNew, nextAuditId + 1),
-      { id: nextAuditId + 2, ts: NOW, tenantId: TENANT_A, actor: OWNER, op: 'auth_create', targetId: key.keyId, metadata: SELF_META },
+      {
+        id: nextAuditId + 2,
+        ts: NOW,
+        tenantId: TENANT_A,
+        actor: OWNER,
+        op: 'auth_create',
+        targetId: key.keyId,
+        metadata: SELF_META,
+      },
     ]);
   });
 
@@ -153,16 +281,26 @@ describe('KeyWrites.createSelfApiKey', () => {
 
   it("counts and revokes only the key's own tenant", async () => {
     const key = selfKey(TENANT_B);
-    const side = await conforms([createSelf(key, 1), revokedAtOf(owned.liveOld), revokedAtOf(owned.liveNew), listIds({ tenantId: TENANT_B, ownerSubject: OWNER, active: true })]);
+    const side = await conforms([
+      createSelf(key, 1),
+      revokedAtOf(owned.liveOld),
+      revokedAtOf(owned.liveNew),
+      listIds({ tenantId: TENANT_B, ownerSubject: OWNER, active: true }),
+    ]);
     expect(side.outcomes).toEqual([{ value: [owned.liveB] }, { value: null }, { value: null }, { value: [key.keyId] }]);
     expect(side.audit.slice(baseline.audit.length).map((e) => [e.tenantId, e.op, e.targetId])).toEqual([
-      [TENANT_B, 'auth_revoke', owned.liveB], [TENANT_B, 'auth_create', key.keyId],
+      [TENANT_B, 'auth_revoke', owned.liveB],
+      [TENANT_B, 'auth_create', key.keyId],
     ]);
   });
 
   it('refuses a key id already taken and revokes nothing', async () => {
     const taken = { ...selfKey(), keyId: owned.liveNew };
-    const side = await conforms([settled(createSelf(taken, 1)), revokedAtOf(owned.liveOld), revokedAtOf(owned.liveNew)]);
+    const side = await conforms([
+      settled(createSelf(taken, 1)),
+      revokedAtOf(owned.liveOld),
+      revokedAtOf(owned.liveNew),
+    ]);
     expect(side.outcomes).toEqual([{ value: 'refused' }, { value: null }, { value: null }]);
     expect(side.audit).toEqual(baseline.audit);
   });
@@ -173,7 +311,10 @@ describe('KeyWrites.listApiKeys', () => {
     const { adminA, memberA, revokedA, memberB } = fixture.keys;
     const { liveOld, expired, revoked, liveB, liveNew } = owned;
     const side = await conforms([
-      listIds({ active: false }), listIds({ active: true }), listIds({ tenantId: TENANT_B, active: false }), listIds({ tenantId: 'nobody', active: false }),
+      listIds({ active: false }),
+      listIds({ active: true }),
+      listIds({ tenantId: TENANT_B, active: false }),
+      listIds({ tenantId: 'nobody', active: false }),
       list({ active: false }),
     ]);
     expect(side.outcomes.slice(0, 4)).toEqual([
@@ -186,7 +327,10 @@ describe('KeyWrites.listApiKeys', () => {
   });
 
   it("lists every tenant's keys, newest first, for a null tenant", async () => {
-    const side = await conforms([listIds({ tenantId: null, active: false }), listIds({ tenantId: null, active: true })]);
+    const side = await conforms([
+      listIds({ tenantId: null, active: false }),
+      listIds({ tenantId: null, active: true }),
+    ]);
     const { adminA, memberB } = fixture.keys;
     expect(valueOf(side, 0)).toHaveLength(9);
     expect(valueOf(side, 0)).toEqual(expect.arrayContaining([adminA, memberB, owned.liveB]));
@@ -195,9 +339,17 @@ describe('KeyWrites.listApiKeys', () => {
 
   it('filters by owner and by key id inside the tenant, and carries scope grants', async () => {
     const { memberA, memberB } = fixture.keys;
-    const side = await conforms([listIds({ ownerSubject: OWNER, active: false }), list({ keyId: memberA, active: true }), list({ keyId: memberB, active: false })]);
+    const side = await conforms([
+      listIds({ ownerSubject: OWNER, active: false }),
+      list({ keyId: memberA, active: true }),
+      list({ keyId: memberB, active: false }),
+    ]);
     expect(side.outcomes[0]).toEqual({ value: [owned.liveNew, owned.revoked, owned.expired, owned.liveOld] });
-    expect(valueOf(side, 1)).toEqual([expect.objectContaining({ key: expect.objectContaining({ keyId: memberA, scopes: [OWNED_SCOPE], ownerSubject: null }) })]);
+    expect(valueOf(side, 1)).toEqual([
+      expect.objectContaining({
+        key: expect.objectContaining({ keyId: memberA, scopes: [OWNED_SCOPE], ownerSubject: null }),
+      }),
+    ]);
     expect(valueOf(side, 2)).toEqual([]);
   });
 
@@ -205,7 +357,14 @@ describe('KeyWrites.listApiKeys', () => {
     const pages: Call = async (g) => {
       const first = await g.listApiKeys({ tenantId: TENANT_A, active: false, limit: 3 });
       const last = first.at(-1);
-      const rest = last ? await g.listApiKeys({ tenantId: TENANT_A, active: false, limit: 10, after: { key: last.rowId, id: last.rowId } }) : [];
+      const rest = last
+        ? await g.listApiKeys({
+            tenantId: TENANT_A,
+            active: false,
+            limit: 10,
+            after: { key: last.rowId, id: last.rowId },
+          })
+        : [];
       return [...first, ...rest].map((r) => r.key.keyId);
     };
     const side = await conforms([pages, listIds({ active: false })]);

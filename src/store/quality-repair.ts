@@ -66,10 +66,13 @@ function structured(entry: MemoryEntry): boolean {
 
 /** A parent that is gone says nothing about who wrote it, so it counts as a person's. */
 function fromAutomaticParents(entry: MemoryEntry, rows: ReadonlyMap<string, MemoryEntry>): boolean {
-  return entry.parents.length > 0 && entry.parents.every((id) => {
-    const parent = rows.get(id);
-    return parent !== undefined && isAutomaticEntry(parent);
-  });
+  return (
+    entry.parents.length > 0 &&
+    entry.parents.every((id) => {
+      const parent = rows.get(id);
+      return parent !== undefined && isAutomaticEntry(parent);
+    })
+  );
 }
 
 function contentIssue(
@@ -144,9 +147,15 @@ function plannedResult(db: DatabaseSyncLike, root: string, run: RepairRun) {
   const schema = pragmaUserVersion(db);
   const plan = blockers.length > 0 ? { ...unsupportedPreview(db, run.tenantId), all: [] } : planRows(db, run);
   const result: QualityRepairResult = {
-    root, schema, supported: blockers.length === 0, blockers,
+    root,
+    schema,
+    supported: blockers.length === 0,
+    blockers,
     total: plan.total,
-    issues: plan.issues, appliedIds: [], backup: null, warnings: [],
+    issues: plan.issues,
+    appliedIds: [],
+    backup: null,
+    warnings: [],
   };
   return { result, all: plan.all };
 }

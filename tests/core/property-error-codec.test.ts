@@ -13,14 +13,36 @@ import { arr, both, forAll, int, map, pick, str, type Gen } from '../_helpers/pr
 
 // One way to throw each class the codec lists; HttpError twice, with and without its optional field.
 const MAKERS: readonly ((text: string) => Error)[] = [
-  (m) => new Error(m), (m) => new TypeError(m), (m) => new RangeError(m), (m) => new SyntaxError(m),
-  (m) => new ReferenceError(m), (m) => new EvalError(m), (m) => new URIError(m),
-  (m) => new HttpError(400, m), (m) => new HttpError(429, m, 7), (m) => new BodyTooLargeError(m), (m) => new BodyTimeoutError(m),
-  (m) => new BadRequestError(m), (m) => new ForbiddenError(m), (m) => new NotFoundError(m), (m) => new ConflictError(m),
-  (m) => new RejectedValueError({ digest: m, tenantId: 't1', entryId: 'mem_1', reason: null, rejectedAt: '2026-01-01T00:00:00.000Z' }),
+  (m) => new Error(m),
+  (m) => new TypeError(m),
+  (m) => new RangeError(m),
+  (m) => new SyntaxError(m),
+  (m) => new ReferenceError(m),
+  (m) => new EvalError(m),
+  (m) => new URIError(m),
+  (m) => new HttpError(400, m),
+  (m) => new HttpError(429, m, 7),
+  (m) => new BodyTooLargeError(m),
+  (m) => new BodyTimeoutError(m),
+  (m) => new BadRequestError(m),
+  (m) => new ForbiddenError(m),
+  (m) => new NotFoundError(m),
+  (m) => new ConflictError(m),
+  (m) =>
+    new RejectedValueError({
+      digest: m,
+      tenantId: 't1',
+      entryId: 'mem_1',
+      reason: null,
+      rejectedAt: '2026-01-01T00:00:00.000Z',
+    }),
   (m) => new ScopeForbiddenError(m),
-  (m) => new SqliteBlockedError('other', m), (m) => new StoreNotPortedError('other', m), (m) => new OtherStoreFolderError('other', m),
-  (m) => new StoreBusyError(m), (m) => new IncompatibleBinaryError(m), (m) => Object.assign(new RawAppendOnlyError(new Error(m)), { cause: undefined }),
+  (m) => new SqliteBlockedError('other', m),
+  (m) => new StoreNotPortedError('other', m),
+  (m) => new OtherStoreFolderError('other', m),
+  (m) => new StoreBusyError(m),
+  (m) => new IncompatibleBinaryError(m),
+  (m) => Object.assign(new RawAppendOnlyError(new Error(m)), { cause: undefined }),
 ];
 
 // The codec keeps this many causes under an error and cuts the rest.
@@ -39,7 +61,10 @@ interface Case {
 }
 
 const RECIPE: Gen<Recipe> = both(int(0, MAKERS.length - 1), str('abc XYZ 019 .:/-_"é東\n', 0, 24));
-const CARRIED = both(pick(['retries', 'hint', 'detail', 'flag']), pick(['x', '', 0, 42, -1.5, Number.NaN, true, false, null]));
+const CARRIED = both(
+  pick(['retries', 'hint', 'detail', 'flag']),
+  pick(['x', '', 0, 42, -1.5, Number.NaN, true, false, null]),
+);
 const DROPPED = both(pick(['handle', 'rows']), pick([{ a: 1 }, [1, 2], 10n, new Date(0)]));
 
 const CASE: Gen<Case> = map(
@@ -78,7 +103,12 @@ describe('error codec properties', () => {
         const thrown = sent[depth]!;
         expect(Object.getPrototypeOf(got)).toBe(Object.getPrototypeOf(thrown));
         expect(got.message).toBe(thrown.message);
-        expect({ ...got }).toEqual(plainFields(thrown, drawn.dropped.map(([name]) => name)));
+        expect({ ...got }).toEqual(
+          plainFields(
+            thrown,
+            drawn.dropped.map(([name]) => name),
+          ),
+        );
       });
     });
   });

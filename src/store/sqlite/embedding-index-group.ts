@@ -2,9 +2,17 @@
 import { countAllEntriesAt, loadAllEntryIdsAt, loadEntriesByIdsAt } from '../entry-reads.js';
 import type { EmbeddingIndex } from '../port/embedding-index.js';
 import {
-  embeddingModelRequiresReindex, loadEmbeddingIndexAt, loadStoredParticlesAt, pendingVectorIdsAt, pruneOrphanVectorsAt,
-  resetStoredParticlesAt, saveEmbeddingIndexAt, saveStoredEmbeddingModel,
-  saveStoredVectorsAt, seedStoredParticleAt, storedVectorSummaryAt,
+  embeddingModelRequiresReindex,
+  loadEmbeddingIndexAt,
+  loadStoredParticlesAt,
+  pendingVectorIdsAt,
+  pruneOrphanVectorsAt,
+  resetStoredParticlesAt,
+  saveEmbeddingIndexAt,
+  saveStoredEmbeddingModel,
+  saveStoredVectorsAt,
+  seedStoredParticleAt,
+  storedVectorSummaryAt,
 } from '../vector-index.js';
 import { type OnHandle, openStore } from '../open.js';
 

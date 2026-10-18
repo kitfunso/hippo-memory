@@ -82,21 +82,16 @@ describe('extractLessons', () => {
   });
 
   it('extracts lessons from bug/bugfix commits', () => {
-    const log = [
-      'abc1234 bugfix: race condition in scheduler',
-      'def5678 bug in auth token refresh',
-    ].join('\n');
+    const log = ['abc1234 bugfix: race condition in scheduler', 'def5678 bug in auth token refresh'].join('\n');
 
     const lessons = extractLessons(log);
     expect(lessons.length).toBe(2);
   });
 
   it('ignores non-matching commits', () => {
-    const log = [
-      'abc1234 feat: add dark mode',
-      'ghi9012 docs: readme update',
-      'jkl3456 ci: update pipeline',
-    ].join('\n');
+    const log = ['abc1234 feat: add dark mode', 'ghi9012 docs: readme update', 'jkl3456 ci: update pipeline'].join(
+      '\n',
+    );
 
     const lessons = extractLessons(log);
     expect(lessons.length).toBe(0);
@@ -108,10 +103,7 @@ describe('extractLessons', () => {
 
   it('extracts lessons from multi-repo combined output', () => {
     // Simulate concatenated git logs from multiple repos
-    const repoALog = [
-      'aaa1111 fix: broken auth flow in login page',
-      'bbb2222 feat: add search bar',
-    ].join('\n');
+    const repoALog = ['aaa1111 fix: broken auth flow in login page', 'bbb2222 feat: add search bar'].join('\n');
 
     const repoBLog = [
       'ccc3333 hotfix: database connection pool exhaustion',
@@ -340,12 +332,11 @@ describe('a gated lesson still invalidates', () => {
     expect(updated, 'the stale memory should still exist').not.toBeNull();
     expect(
       updated!.tags,
-      'a gated lesson does not invalidate - documented limitation, see the comment above'
+      'a gated lesson does not invalidate - documented limitation, see the comment above',
     ).not.toContain('invalidated');
-    expect(
-      updated!.half_life_days,
-      'and its decay must be untouched, so rescans cannot compound'
-    ).toBe(stale.half_life_days);
+    expect(updated!.half_life_days, 'and its decay must be untouched, so rescans cannot compound').toBe(
+      stale.half_life_days,
+    );
 
     // ...and the thin subject itself is still not stored.
     const contents = loadAllEntries(repoRoot, 'default').map((e) => e.content);
@@ -359,10 +350,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
   let originalCwd: string;
 
   beforeEach(() => {
-    repoDir = initGitRepoWithCommits([
-      'fixed signals',
-      'fix --include-recent flag handling in hippo context',
-    ]);
+    repoDir = initGitRepoWithCommits(['fixed signals', 'fix --include-recent flag handling in hippo context']);
     hippoRoot = makeRoot('df4-mcp');
     originalCwd = process.cwd();
     process.chdir(repoDir);
@@ -381,12 +369,19 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         method: 'tools/call',
         params: { name: 'hippo_learn', arguments: { days: 3650 } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot) },
+      {
+        hippoRoot,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(hippoRoot),
+        config: loadConfig(hippoRoot),
+      },
     );
 
     // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/mcp/request.ts:173).
-    const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)
-      ?.content?.[0]?.text ?? '';
+    const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
     expect(text).toMatch(/low-information subjects dropped/);
 
     const entries = loadAllEntries(hippoRoot, 'default');

@@ -10,7 +10,8 @@ export const OBJECT_VERBS = {
       values: ['actual', 'class', 'estimate', 'note', 'state', 'status', 'target', 'unit'],
       numbers: ['limit'],
     },
-    usage: [`
+    usage: [
+      `
   predict "<claim>"        Record a prediction to score against the actual outcome later
     --class <c>            Reference class (required)
     --estimate <v>         Numeric estimate
@@ -24,22 +25,26 @@ export const OBJECT_VERBS = {
                            List predictions (closed and closed-unknown need --class)
   predict show <id>        Show one prediction
   predict baserate --class <c>
-                           How past estimates in a class compared with the actuals`],
+                           How past estimates in a class compared with the actuals`,
+    ],
   }),
   decide: verb(() => import('../decisions.js'), 'handleDecide', {
     flags: { values: ['context', 'status', 'supersedes'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   decide "<decision>"      Record a decision (first-class object + memory mirror)
     --context "<why>"      Why this decision was made
     --supersedes <mem-id>  Supersede the decision backed by this memory id
   decide list [--status active|superseded|closed|all] [--limit N]
                            List decisions (table is authoritative, survives decay)
   decide get <id>          Show a decision by its table id
-  decide close <id>        Retire (close) an active decision by its table id`],
+  decide close <id>        Retire (close) an active decision by its table id`,
+    ],
   }),
   incident: verb(() => import('../incidents.js'), 'handleIncident', {
     flags: { values: ['context', 'resolution', 'status'], numbers: ['limit'], lists: ['link'] },
-    usage: [`
+    usage: [
+      `
   incident "<incident>"    Record an incident (first-class object + memory mirror)
     --context "<details>"  What happened / surrounding detail
     --link <mem-id>        Link a memory as evidence (repeatable)
@@ -48,11 +53,13 @@ export const OBJECT_VERBS = {
   incident get <id>        Show an incident by its table id
   incident resolve <id>    Resolve an open incident (open -> resolved)
     --resolution "<text>"  How it was resolved (required)
-  incident close <id>      Retire (close) an open or resolved incident by its table id`],
+  incident close <id>      Retire (close) an open or resolved incident by its table id`,
+    ],
   }),
   process: verb(() => import('../playbooks.js'), 'handleProcess', {
     flags: { values: ['change', 'description', 'status'], numbers: ['limit'], lists: ['step'] },
-    usage: [`
+    usage: [
+      `
   process new "<name>"     Record a process map (first-class object + memory mirror)
     --step "<text>"        An ordered step (repeatable)
     --description "<text>" Optional summary of the process
@@ -63,11 +70,13 @@ export const OBJECT_VERBS = {
     --step "<text>"        A step of the new version (repeatable, required)
     --change "<summary>"   What changed in this version (the delta note)
     --description "<text>" Optional summary of the new version
-  process close <id>       Retire (close) an active process by its table id`],
+  process close <id>       Retire (close) an active process by its table id`,
+    ],
   }),
   policy: verb(() => import('../playbooks.js'), 'handlePolicy', {
     flags: { values: ['change', 'from', 'name', 'status', 'text', 'to'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   policy new "<name>"      Record a policy (bi-temporal first-class object + mirror)
     --text "<rule>"        The policy rule/statement (required)
     --from "<iso>"         Effective-from date (default: now)
@@ -82,11 +91,13 @@ export const OBJECT_VERBS = {
     --from "<iso>"         New effective-from (default: now)
     --to "<iso>"           New effective-to (optional)
     --change "<summary>"   What changed in this version (the delta note)
-  policy close <id>        Retire (close) an active policy by its table id`],
+  policy close <id>        Retire (close) an active policy by its table id`,
+    ],
   }),
   skill: verb(() => import('../playbooks.js'), 'handleSkill', {
     flags: { values: ['change', 'instructions', 'status', 'trigger'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   skill new "<name>"       Record a skill (reusable agent-followable capability)
     --instructions "<txt>" The skill body (required)
     --trigger "<when>"     Optional: when to apply this skill
@@ -98,13 +109,15 @@ export const OBJECT_VERBS = {
     --instructions "<txt>" The new skill body (required)
     --trigger "<when>"     Optional new trigger
     --change "<summary>"   What changed in this version (the delta note)
-  skill close <id>         Retire (close) an active skill by its table id`],
+  skill close <id>         Retire (close) an active skill by its table id`,
+    ],
   }),
   brief: verb(() => import('../briefs.js'), 'handleProjectBrief', {
     aliases: ['project-brief'],
     dryRun: { form: 'refresh', honoured: (args) => args[0] === 'refresh' },
     flags: { switches: ['dry-run'], values: ['change', 'repo', 'status', 'summary'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   brief new "<repo>"       Record a repo-scoped project brief
     --summary "<text>"     The brief body (required)
   brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
@@ -115,12 +128,14 @@ export const OBJECT_VERBS = {
     --change "<summary>"   What changed in this version (the delta note)
   brief close <id>         Retire (close) an active project brief by its table id
   brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
-    --dry-run              Print the assembled brief without writing it`],
+    --dry-run              Print the assembled brief without writing it`,
+    ],
   }),
   note: verb(() => import('../notes.js'), 'handleCustomerNote', {
     aliases: ['customer-note'],
     flags: { values: ['change', 'customer', 'status', 'text'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   note new "<customer>"    Record a customer/account-scoped note
     --text "<note>"        The note body (required)
   note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
@@ -129,18 +144,22 @@ export const OBJECT_VERBS = {
   note supersede <id>      Record a new version that supersedes an active note
     --text "<note>"        The new note body (required)
     --change "<summary>"   What changed in this version (the delta note)
-  note close <id>          Retire (close) an active customer note by its table id`],
+  note close <id>          Retire (close) an active customer note by its table id`,
+    ],
   }),
   graph: verb(() => import('../graph.js'), 'handleGraph', {
     flags: { switches: ['json', 'open'], values: ['entity', 'format', 'out'] },
-    usage: [`
+    usage: [
+      `
   graph extract            Rebuild the entity/relation graph from consolidated objects
-                           (decisions/policies/customer-notes/project-briefs); idempotent`],
+                           (decisions/policies/customer-notes/project-briefs); idempotent`,
+    ],
   }),
   invalidate: verb(() => import('../curate.js'), 'handleInvalidate', {
     destructive: true,
     flags: { switches: ['churn', 'dry-run'], values: ['id', 'reason'] },
-    usage: [`
+    usage: [
+      `
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
                            (content overlap, or a tag EXACTLY equal to the
                            full pattern - never token-level tag matching)
@@ -154,11 +173,13 @@ export const OBJECT_VERBS = {
                            changed or was deleted, or whose named symbol or
                            npm script was removed, in this repo's git history
                            since the memory was stored or confirmed
-    --dry-run              Preview what would be tagged; writes nothing`],
+    --dry-run              Preview what would be tagged; writes nothing`,
+    ],
   }),
   wm: verb(() => import('../continuity.js'), 'handleWm', {
     flags: { switches: ['json'], values: ['content', 'importance', 'scope', 'session', 'task'], numbers: ['limit'] },
-    usage: [`
+    usage: [
+      `
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry
       --scope <scope>      Scope name (default: default)
@@ -176,22 +197,28 @@ export const OBJECT_VERBS = {
       --session <id>       Filter by session
     wm flush               Same as clear; nothing runs it at session end
       --scope <scope>      Filter by scope
-      --session <id>       Filter by session`],
+      --session <id>       Filter by session`,
+    ],
   }),
   dashboard: verb(() => import('../serve.js'), 'handleDashboard', {
     flags: { numbers: ['port'] },
-    usage: [`
+    usage: [
+      `
   dashboard                Open web dashboard for memory health
-    --port <n>             Port to serve on (default: 3333)`],
+    --port <n>             Port to serve on (default: 3333)`,
+    ],
   }),
   mcp: verb(() => import('../serve.js'), 'handleMcp', {
     flags: {},
-    usage: [`
-  mcp                      Start MCP server (stdio transport)`],
+    usage: [
+      `
+  mcp                      Start MCP server (stdio transport)`,
+    ],
   }),
   serve: verb(() => import('../serve.js'), 'handleServe', {
     flags: { switches: ['allow-cleartext'], values: ['host', 'tls-cert', 'tls-key'], numbers: ['port'] },
-    usage: [`
+    usage: [
+      `
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or ${DEFAULT_SERVER_PORT})
     --host <host>          Address to bind (default: ${DEFAULT_SERVER_HOST})
@@ -201,7 +228,8 @@ export const OBJECT_VERBS = {
                            in front (or $HIPPO_ALLOW_CLEARTEXT=1)
                            Every request needs an API key (hippo auth create).
                            $HIPPO_ALLOW_KEYLESS_LOCAL=1 lets requests from this machine
-                           in without one, as a member; $HIPPO_REQUIRE_AUTH=1 wins over it.`],
+                           in without one, as a member; $HIPPO_REQUIRE_AUTH=1 wins over it.`,
+    ],
   }),
   goal: verb(() => import('../goals.js'), 'handleGoal', {
     scoped: true,
@@ -209,7 +237,8 @@ export const OBJECT_VERBS = {
       switches: ['all', 'no-propagate'],
       values: ['level', 'outcome', 'parent', 'policy', 'session-id', 'success', 'tenant-id'],
     },
-    usage: [`
+    usage: [
+      `
   goal <sub>               Goal stack, scoped per session
     goal push <name>       Push a new active goal; prints the new goal id
       --policy <type>      schema-fit-biased | error-prioritized |
@@ -225,7 +254,8 @@ export const OBJECT_VERBS = {
       --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
       --no-propagate       Close the goal without applying strength side-effects
     goal suspend <id>      Move an active goal to suspended
-    goal resume <id>       Move a suspended goal back to active (depth-capped)`],
+    goal resume <id>       Move a suspended goal back to active (depth-capped)`,
+    ],
   }),
   auth: verb(() => import('../auth.js'), 'handleAuth', {
     scoped: true,
@@ -257,6 +287,7 @@ export const OBJECT_VERBS = {
       --global             Operate on the global store
     auth ungrant <key_id> <scope>  Remove a scope grant
       --json               Output as JSON
-      --global             Operate on the global store`],
+      --global             Operate on the global store`,
+    ],
   }),
 } satisfies Record<string, VerbSpec>;

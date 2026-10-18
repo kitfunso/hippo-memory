@@ -24,7 +24,8 @@ export function compactionCountsAt(
        FROM compactions`,
     )
     .get(stuckBefore, stuckBefore, transcriptFloor) as
-    { total: number; summarised: number; started: number } | undefined;
+    | { total: number; summarised: number; started: number }
+    | undefined;
   return {
     total: Number(row?.total ?? 0),
     summarised: Number(row?.summarised ?? 0),
@@ -41,11 +42,13 @@ export interface TokenTally {
 /** Memory blocks injected since `sinceIso`, the tokens they sent and the tokens later model calls re-read. */
 export function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
   // SAFETY: COUNT/SUM aggregate row.
-  const row = db.prepare(
-    `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
+  const row = db
+    .prepare(
+      `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
               COALESCE(SUM(CASE WHEN event = 'inject' THEN tokens END), 0) AS t,
               COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
        FROM token_ledger WHERE ts >= ?`,
-  ).get(sinceIso) as { n: number; t: number; r: number } | undefined;
+    )
+    .get(sinceIso) as { n: number; t: number; r: number } | undefined;
   return { injected: Number(row?.n ?? 0), tokensSent: Number(row?.t ?? 0), tokensReread: Number(row?.r ?? 0) };
 }

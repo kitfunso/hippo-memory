@@ -6,7 +6,13 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, statSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openHippoDb, closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  withWriteScope,
+  withWriteScopeOr,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -41,35 +47,52 @@ describe('guarded rollback', () => {
   it('flags an unguarded rollback wherever it sits in the block, and flags nothing else', () => {
     const dir = mkdtempSync(join(tmpdir(), 'hippo-rollback-shape-'));
     try {
-      writeFileSync(join(dir, 'first.ts'), `} catch (e) {
+      writeFileSync(
+        join(dir, 'first.ts'),
+        `} catch (e) {
   db.exec('ROLLBACK');
   throw e;
 }
-`);
-      writeFileSync(join(dir, 'after-a-statement.ts'), `} catch (e) {
+`,
+      );
+      writeFileSync(
+        join(dir, 'after-a-statement.ts'),
+        `} catch (e) {
   log(e);
   db.exec('ROLLBACK'); // trailing comments do not hide a site
   throw e;
 }
-`);
-      writeFileSync(join(dir, 'nested-finally.ts'), `} finally {
+`,
+      );
+      writeFileSync(
+        join(dir, 'nested-finally.ts'),
+        `} finally {
   if (!done) {
     this.db.exec('ROLLBACK TO SAVEPOINT sp');
   }
 }
-`);
-      writeFileSync(join(dir, 'guarded.ts'), `} catch (e) {
+`,
+      );
+      writeFileSync(
+        join(dir, 'guarded.ts'),
+        `} catch (e) {
   try {
     db.exec('ROLLBACK');
   } catch { /* already rolled back */ }
   throw e;
 }
-`);
-      writeFileSync(join(dir, 'promise-catch.ts'), `run().catch(function (err) {
+`,
+      );
+      writeFileSync(
+        join(dir, 'promise-catch.ts'),
+        `run().catch(function (err) {
   db.exec('ROLLBACK');
 });
-`);
-      writeFileSync(join(dir, 'happy-path.ts'), `try {
+`,
+      );
+      writeFileSync(
+        join(dir, 'happy-path.ts'),
+        `try {
   const n = update();
   if (n === 0) {
     db.exec('ROLLBACK');
@@ -78,7 +101,8 @@ describe('guarded rollback', () => {
 } catch (e) {
   throw e;
 }
-`);
+`,
+      );
 
       const flagged = findErrorPathBareRollbacks(dir).map((f) => f.slice(dir.length + 1));
       expect(flagged.sort()).toEqual(['after-a-statement.ts:3', 'first.ts:2', 'nested-finally.ts:3']);

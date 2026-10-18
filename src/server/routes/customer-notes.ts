@@ -9,13 +9,7 @@ import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody, getString, requiredString } from '../validation.js';
 import { saveFor } from '../../api/objects/objects.js';
-import {
-  closeRoute,
-  getRoute,
-  listRoute,
-  supersedeRoute,
-  type VersionedRouteConfig,
-} from './object-routes.js';
+import { closeRoute, getRoute, listRoute, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOptions> = {
   noun: 'customer note',

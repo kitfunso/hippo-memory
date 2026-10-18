@@ -12,12 +12,7 @@ import {
   type RequiredStringRule,
 } from '../validation.js';
 import { saveFor } from '../../api/objects/objects.js';
-import {
-  closeRoute,
-  getRoute,
-  listRoute,
-  type ObjectRouteConfig,
-} from './object-routes.js';
+import { closeRoute, getRoute, listRoute, type ObjectRouteConfig } from './object-routes.js';
 
 const decisionRoutes: ObjectRouteConfig<'decision'> = {
   noun: 'decision',
@@ -63,10 +58,7 @@ export function handleListDecisions(rr: AuthedRouteRequest): Promise<void> {
 
 // Not on supersedeRoute: this one answers 201 and leaves the missing-row 404 to the store, where the other five answer
 // 200 after their own lookup.
-export async function handleSupersedeDecision(
-  rr: AuthedRouteRequest,
-  match: RegExpMatchArray,
-): Promise<void> {
+export async function handleSupersedeDecision(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   const oldId = parseInt(match[1], 10);
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);

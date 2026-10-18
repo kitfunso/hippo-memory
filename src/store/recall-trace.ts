@@ -233,11 +233,13 @@ export interface DeliveryEventRow {
 
 function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   // SAFETY: rows carry exactly the `id` and `ts` columns selected.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, ts FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
     ORDER BY id
-  `).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
+  `)
+    .all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
   const at = Date.parse(input.ts);
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
 }
@@ -246,11 +248,13 @@ function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInpu
   // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
   if (input.toolUseId === undefined || input.toolUseId === null) return null;
   // SAFETY: a single `id` column, undefined when no row matches.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT id FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND tool_use_id = ? AND turn_seq IS NOT NULL
     ORDER BY id LIMIT 1
-  `).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
+  `)
+    .get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
   return row?.id ?? null;
 }
 
@@ -260,11 +264,13 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
   if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     // SAFETY: a single `id` column, undefined when no row matches.
-    const row = db.prepare(`
+    const row = db
+      .prepare(`
       SELECT id FROM delivery_events
       WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND host_turn_id = ? AND turn_seq IS NOT NULL
       ORDER BY id LIMIT 1
-    `).get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as { id: number } | undefined;
+    `)
+      .get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as { id: number } | undefined;
     return row?.id ?? null;
   }
   if (input.promptHash === null) return null;
@@ -286,10 +292,12 @@ function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
 
 function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
   // SAFETY: a single MAX aggregate aliased `m`, NULL when the session has no turns yet.
-  const row = db.prepare(`
+  const row = db
+    .prepare(`
     SELECT MAX(turn_seq) AS m FROM delivery_events
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
-  `).get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
+  `)
+    .get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
   return (row.m ?? 0) + 1;
 }
 
@@ -336,7 +344,16 @@ function deliveryEventValues(input: DeliveryEventInput, turnSeq: number | null, 
 }
 
 const DELIVERY_CANDIDATE_COLUMNS = [
-  'event_id', 'tenant_id', 'memory_id', 'source_store', 'pool', 'stage', 'outcome', 'reason', 'cand_rank', 'score',
+  'event_id',
+  'tenant_id',
+  'memory_id',
+  'source_store',
+  'pool',
+  'stage',
+  'outcome',
+  'reason',
+  'cand_rank',
+  'score',
   'tokens',
 ] as const;
 
@@ -345,12 +362,21 @@ function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: 
   const width = DELIVERY_CANDIDATE_COLUMNS.length;
   const columns = DELIVERY_CANDIDATE_COLUMNS.join(', ');
   for (const chunk of chunked(input.candidates, rowsPerStatement(width))) {
-    db.prepare(
-      `INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`,
-    ).run(...chunk.flatMap((c) => [
-      eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score,
-      c.tokens,
-    ]));
+    db.prepare(`INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`).run(
+      ...chunk.flatMap((c) => [
+        eventId,
+        input.tenantId,
+        c.memoryId,
+        c.sourceStore,
+        c.pool,
+        c.stage,
+        c.outcome,
+        c.reason,
+        c.rank,
+        c.score,
+        c.tokens,
+      ]),
+    );
   }
 }
 
@@ -397,10 +423,14 @@ function writeDeliveryEvent(
       const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
       const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
       const values = deliveryEventValues(input, turnSeq, duplicateOf);
-      const id = Number(db.prepare(`
+      const id = Number(
+        db
+          .prepare(`
         INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
         VALUES (${placeholders(DELIVERY_EVENT_COLUMNS.length)})
-      `).run(...values).lastInsertRowid);
+      `)
+          .run(...values).lastInsertRowid,
+      );
       insertDeliveryCandidates(db, id, input);
       if (pruning) pruneDeliveryEvents(db, input.ts, now);
       return id;

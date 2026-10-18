@@ -84,9 +84,17 @@ export function resetHookInjection(
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
   // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
   if (sessionId === null || isSubagentPayload(stdinText)) return;
-  bookTokenUse({
-    tenantId, sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
-  }, cliLedgerReach(hippoRoot));
+  bookTokenUse(
+    {
+      tenantId,
+      sessionId,
+      surface: 'hook',
+      event: 'reset',
+      items: 0,
+      tokens: 0,
+    },
+    cliLedgerReach(hippoRoot),
+  );
 }
 
 /**

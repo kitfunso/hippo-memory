@@ -18,7 +18,8 @@ function foldOf(value: JsonValue | undefined): ProjectFold[] {
 export function foldEdges(store: Pick<ProjectTagReads, 'auditEvents'>): ProjectFold[] {
   return [
     ...store.auditEvents('project_merge').flatMap((e) => foldOf(e.metadata)),
-    ...store.auditEvents('project_repair')
+    ...store
+      .auditEvents('project_repair')
       .flatMap((e) => (Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [])),
   ];
 }

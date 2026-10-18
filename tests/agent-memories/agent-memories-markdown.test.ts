@@ -139,15 +139,7 @@ describe('splitMarkdownItems: input shape', () => {
 
 describe('splitMarkdownItems: fenced code', () => {
   it('keeps heading-like and bullet-like lines inside a fence in the bullet that holds it', () => {
-    const md = lines(
-      '## Real',
-      '- has code',
-      '  ```',
-      '  # not a heading',
-      '  - not a bullet',
-      '  ```',
-      '- after',
-    );
+    const md = lines('## Real', '- has code', '  ```', '  # not a heading', '  - not a bullet', '  ```', '- after');
     expect(splitMarkdownItems(md)).toEqual([
       { heading: 'Real', headingSlug: 'real', text: 'has code\n  ```\n  # not a heading\n  - not a bullet\n  ```' },
       { heading: 'Real', headingSlug: 'real', text: 'after' },
@@ -155,7 +147,19 @@ describe('splitMarkdownItems: fenced code', () => {
   });
 
   it('forms its own paragraph when the fence follows a blank line, blank lines inside included', () => {
-    const md = lines('## Notes', 'intro', '', '```sh', '# not a heading', '- not a bullet', '', 'still code', '```', '', '- after');
+    const md = lines(
+      '## Notes',
+      'intro',
+      '',
+      '```sh',
+      '# not a heading',
+      '- not a bullet',
+      '',
+      'still code',
+      '```',
+      '',
+      '- after',
+    );
     expect(splitMarkdownItems(md).map((i) => i.text)).toEqual([
       'intro',
       '```sh\n# not a heading\n- not a bullet\n\nstill code\n```',

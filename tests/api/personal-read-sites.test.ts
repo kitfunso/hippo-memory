@@ -5,7 +5,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor, CLI_LEARN, learn, MCP_LEARN, type LearnProfile } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  DEFAULT_HALF_LIFE_DAYS,
+  type CreateMemoryOptions,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
@@ -24,8 +29,13 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  saveEmbeddingIndex, loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords,
-  countSessionRawMemories, loadLatestHandoff, loadVectorCandidateEntries,
+  saveEmbeddingIndex,
+  loadAmbientCandidates,
+  loadContextCandidates,
+  loadTextsHoldingWords,
+  countSessionRawMemories,
+  loadLatestHandoff,
+  loadVectorCandidateEntries,
 } from '../_helpers/root-forms.js';
 
 const T = 'default';
@@ -44,10 +54,17 @@ function mem(content: string, opts: Partial<CreateMemoryOptions>): MemoryEntry {
 
 // Five rows that every site could match on "zebrafish", one per scope, plus raw rows for the session count.
 function seed(): void {
-  const rows = Object.entries(SCOPES).map(([k, scope]) => mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }));
+  const rows = Object.entries(SCOPES).map(([k, scope]) =>
+    mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }),
+  );
   batchWriteAndDelete(root, rows, []);
   saveEmbeddingIndex(root, Object.fromEntries(rows.map((e) => [e.id, QUERY])));
-  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', sourceSessionId: 'sess-1' }));
+  for (const k of ['a', 'b', 'team'] as const) {
+    writeEntry(
+      root,
+      mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', sourceSessionId: 'sess-1' }),
+    );
+  }
 }
 
 const keysOf = (entries: readonly MemoryEntry[]): string[] =>
@@ -71,14 +88,16 @@ afterEach(() => {
 
 describe('owner-taking read sites', () => {
   it('lexical recall: A sees its row, B and no-owner do not', () => {
-    const load = (own?: string): string[] => keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, undefined, 'exact', false, undefined, own));
+    const load = (own?: string): string[] =>
+      keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, undefined, 'exact', false, undefined, own));
     expect(load(OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B)).toEqual(['b', 'team']);
     expect(load()).toEqual(['team']);
   });
 
-  it('additive recall: a personal scope adds only the caller\'s own row, a connector scope adds its rows', () => {
-    const load = (scope: string, own?: string): string[] => keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, scope, 'additive', false, undefined, own));
+  it("additive recall: a personal scope adds only the caller's own row, a connector scope adds its rows", () => {
+    const load = (scope: string, own?: string): string[] =>
+      keysOf(loadRecallSearchEntries(root, 'zebrafish', 50, T, scope, 'additive', false, undefined, own));
     expect(load(OWN_A)).toEqual(['team']);
     expect(load(OWN_A, OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B, OWN_A)).toEqual(['a', 'team']);
@@ -87,7 +106,13 @@ describe('owner-taking read sites', () => {
 
   it('vector recall: A sees its row, B and no-owner do not', async () => {
     const load = async (own?: string): Promise<string[]> =>
-      keysOf(await loadVectorCandidateEntries(root, QUERY, { tenantId: T, scope: recallScopeFilter(undefined, 'exact', own), includeSuperseded: false }));
+      keysOf(
+        await loadVectorCandidateEntries(root, QUERY, {
+          tenantId: T,
+          scope: recallScopeFilter(undefined, 'exact', own),
+          includeSuperseded: false,
+        }),
+      );
     expect(await load(OWN_A)).toEqual(['a', 'team']);
     expect(await load(OWN_B)).toEqual(['b', 'team']);
     expect(await load()).toEqual(['team']);
@@ -110,7 +135,9 @@ describe('owner-taking read sites', () => {
 
   it('ambient tallies: A counts its row, B and no-owner do not', () => {
     const tags = (ownScope?: string): string[] =>
-      [...loadAmbientTallies(root, T, { ownScope, currentProject: [], now }).tagCounts.keys()].filter((t) => t.startsWith('who:')).sort();
+      [...loadAmbientTallies(root, T, { ownScope, currentProject: [], now }).tagCounts.keys()]
+        .filter((t) => t.startsWith('who:'))
+        .sort();
     expect(tags(OWN_A)).toEqual(['who:a', 'who:team']);
     expect(tags(OWN_B)).toEqual(['who:b', 'who:team']);
     expect(tags()).toEqual(['who:team']);
@@ -146,12 +173,22 @@ describe('deny-only read sites', () => {
     ];
     writeEntry(root, { ...mem(items[0], { scope: OWN_A }), origin_project: 'acme/app' });
     writeEntry(root, { ...mem(items[1], {}), origin_project: 'acme/app' });
-    const ctx: ItemContext = { tenantId: T, recordId: null, sessionId: 's1', originProject: 'acme/app', cwd: null, items, caller: { actor: 'alice@acme', origins: ['acme/app'] } };
+    const ctx: ItemContext = {
+      tenantId: T,
+      recordId: null,
+      sessionId: 's1',
+      originProject: 'acme/app',
+      cwd: null,
+      items,
+      caller: { actor: 'alice@acme', origins: ['acme/app'] },
+    };
     const db = openHippoDb(root);
     try {
       expect(saveItems(db, root, ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       // SAFETY: the SELECT names only the content column.
-      const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{ content: string }>;
+      const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{
+        content: string;
+      }>;
       expect(written.map((r) => r.content)).toEqual([items[0]]);
     } finally {
       closeHippoDb(db);
@@ -162,21 +199,36 @@ describe('deny-only read sites', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: one COUNT row.
-      expect((db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%zebrafish%'`).get() as { c: number }).c).toBe(5);
+      expect(
+        (db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%zebrafish%'`).get() as { c: number }).c,
+      ).toBe(5);
     } finally {
       closeHippoDb(db);
     }
-    expect(loadTextsHoldingWords(root, T, ['zebrafish']).map((r) => r.content)).toEqual(['zebrafish note team keeps the build cache warm']);
+    expect(loadTextsHoldingWords(root, T, ['zebrafish']).map((r) => r.content)).toEqual([
+      'zebrafish note team keeps the build cache warm',
+    ]);
   });
 
   it('failure dedup: only the team row carries the tag', () => {
-    expect(sqliteSyncStore(root).lessonWrites.contentsWithTag(T, 'path:hippo')).toEqual(['zebrafish note team keeps the build cache warm']);
+    expect(sqliteSyncStore(root).lessonWrites.contentsWithTag(T, 'path:hippo')).toEqual([
+      'zebrafish note team keeps the build cache warm',
+    ]);
   });
 });
 
 describe('admin read sites', () => {
   it('touchableScopeSql admits what canReadScope admits for an admin, owned or not, case variants included', () => {
-    const scopes = [null, SCOPES.slack, SCOPES.legacy, OWN_A, OWN_B, 'PERSONAL:PRIVATE:alice', 'Personal:Private:bob', 'personal:privatex'];
+    const scopes = [
+      null,
+      SCOPES.slack,
+      SCOPES.legacy,
+      OWN_A,
+      OWN_B,
+      'PERSONAL:PRIVATE:alice',
+      'Personal:Private:bob',
+      'personal:privatex',
+    ];
     scopes.forEach((scope, i) => writeEntry(root, mem(`gannet row ${i}`, { scope })));
     const actors: ScopeActor[] = [{ role: 'admin', owner: 'alice' }, { role: 'admin' }];
     for (const actor of actors) {
@@ -187,13 +239,18 @@ describe('admin read sites', () => {
     }
   });
 
-  it.each<[string, LearnProfile]>([['MCP', MCP_LEARN], ['CLI', CLI_LEARN]])(
-    '%s learn: another person\'s personal row never answers duplicate; a legacy row and the caller\'s own do',
+  it.each<[string, LearnProfile]>([
+    ['MCP', MCP_LEARN],
+    ['CLI', CLI_LEARN],
+  ])(
+    "%s learn: another person's personal row never answers duplicate; a legacy row and the caller's own do",
     async (_, profile) => {
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       const repo = path.join(dir, 'repo');
       fs.mkdirSync(repo);
-      const git = (...args: string[]): void => { execFileSync('git', args, { cwd: repo, stdio: 'ignore' }); };
+      const git = (...args: string[]): void => {
+        execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+      };
       git('init');
       git('config', 'user.name', 'Test User');
       git('config', 'user.email', 'test@example.com');

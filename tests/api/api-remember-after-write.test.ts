@@ -17,11 +17,14 @@ function breakEventLog(root: string): void {
 
 describe('remember with a connector event is transactional', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('after');  });
+  beforeEach(() => {
+    root = makeRoot('after');
+  });
 
   it('rolls back the memory row when the event log write throws', async () => {
     breakEventLog(root);
-    await expect(remember(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), {
+    await expect(
+      remember(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), {
         content: 'doomed',
         event: { connector: 'slack', eventId: 'Ev_doomed' },
       }),

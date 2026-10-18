@@ -72,7 +72,11 @@ export function seed(hippoRoot: string, content: string, over: Partial<MemoryEnt
 export function embed(hippoRoot: string, ids: readonly string[]): void {
   const db = openHippoDb(hippoRoot);
   try {
-    upsertVectors(db, ids.map((id) => [id, [0.1, 0.2]] as const), 'test-model');
+    upsertVectors(
+      db,
+      ids.map((id) => [id, [0.1, 0.2]] as const),
+      'test-model',
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -154,7 +158,12 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-export function postJson(port: number, path: string, payload: Json = {}, headers: Record<string, string> = {}): Promise<Reply> {
+export function postJson(
+  port: number,
+  path: string,
+  payload: Json = {},
+  headers: Record<string, string> = {},
+): Promise<Reply> {
   return call(port, 'POST', path, { headers: { ...JSON_HEADERS, ...headers }, body: JSON.stringify(payload) });
 }
 

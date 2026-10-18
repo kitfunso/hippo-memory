@@ -5,7 +5,12 @@ import { dirname, join } from 'node:path';
 import { restoreDormant } from '../../src/api/index.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { consolidate } from '../../src/index.js';
-import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../../src/agent-memories/sync.js';
+import {
+  importAtSessionEnd,
+  importForStore,
+  importProjectMemories,
+  type Machine,
+} from '../../src/agent-memories/sync.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/dormant.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
@@ -15,8 +20,22 @@ import { removeEntryMirrors } from '../../src/store/mirrors.js';
 import { deleteEntryRowInTx, writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import {
-  agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
-  tally, toolTally, withDb, type World,
+  agentRows,
+  auditCount,
+  closeWorld,
+  ctxFor,
+  dormantRows,
+  expectedContainer,
+  liveRows,
+  liveTexts,
+  note,
+  openWorld,
+  projectNotes,
+  sha,
+  tally,
+  toolTally,
+  withDb,
+  type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
@@ -32,11 +51,17 @@ beforeEach(() => {
 });
 afterEach(() => closeWorld(w));
 
-const sync = (): ImportReport => importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
+const sync = (): ImportReport =>
+  importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
 function legacyRow(content: string, file: string): MemoryEntry {
-  const entry = createMemory(content, { tags: ['claude-code-memory'], source: `claude-memory:${file}`, tenantId: 'default', baseHalfLifeDays: 30 });
+  const entry = createMemory(content, {
+    tags: ['claude-code-memory'],
+    source: `claude-memory:${file}`,
+    tenantId: 'default',
+    baseHalfLifeDays: 30,
+  });
   writeEntry(w.local, entry);
   return entry;
 }
@@ -50,9 +75,16 @@ describe('agent memory sync', () => {
     const rows = liveRows(w.local);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      content: DEPLOY, tags: ['claude-code-memory'], kind: 'distilled', layer: Layer.Episodic, confidence: 'observed', origin_project: 'proj',
+      content: DEPLOY,
+      tags: ['claude-code-memory'],
+      kind: 'distilled',
+      layer: Layer.Episodic,
+      confidence: 'observed',
+      origin_project: 'proj',
     });
-    expect(rows[0].source).toBe(`agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`);
+    expect(rows[0].source).toBe(
+      `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`,
+    );
     expect(existsSync(join(w.local, 'episodic', `${rows[0].id}.md`))).toBe(true);
   });
 
@@ -67,7 +99,9 @@ describe('agent memory sync', () => {
 
   it('an edit past character 1500 supersedes the row, though the stored text is the same', () => {
     const dir = projectNotes(w);
-    const long = 'The deploy checklist says to run the schema check, then the smoke test, then tell the desk. '.repeat(20).trim();
+    const long = 'The deploy checklist says to run the schema check, then the smoke test, then tell the desk. '
+      .repeat(20)
+      .trim();
     note(dir, 'checklist.md', long);
     sync();
     const [old] = liveRows(w.local);
@@ -112,7 +146,7 @@ describe('agent memory sync', () => {
     expect(dormantRows(w.local)).toEqual([]);
   });
 
-  it('a note whose row went dormant from decay gets its live row back, under the sync\'s own audit op', () => {
+  it("a note whose row went dormant from decay gets its live row back, under the sync's own audit op", () => {
     note(projectNotes(w), 'deploy.md', DEPLOY);
     sync();
     const [row] = liveRows(w.local);
@@ -132,7 +166,7 @@ describe('agent memory sync', () => {
     expect(auditCount(w.local, 'dormant_restore')).toBe(0);
   });
 
-  it('legacy rows are adopted from the store\'s own folder only: same text first, then one row per file name', () => {
+  it("legacy rows are adopted from the store's own folder only: same text first, then one row per file name", () => {
     const dir = projectNotes(w);
     const OTHER = 'The billing queue drains at midnight in the other project.';
     note(dir, 'deploy.md', DEPLOY);
@@ -144,7 +178,8 @@ describe('agent memory sync', () => {
 
     expect(claude(sync())).toMatchObject({ adopted: 1, replaced: 1, imported: 0 });
     expect(readEntry(w.local, renamed.id)).toMatchObject({
-      source: `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`, superseded_by: null,
+      source: `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(DEPLOY).slice(0, 16)}`,
+      superseded_by: null,
     });
     const staging = liveRows(w.local).find((e) => e.content === STAGING);
     expect(readEntry(w.local, edited.id)?.superseded_by).toBe(staging?.id);
@@ -158,7 +193,12 @@ describe('agent memory sync', () => {
     const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
 
     const winner = await stageSupersedeWinner(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.');
-    const report = importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine, busyWaitMs: 5000 });
+    const report = importForStore(w.local, {
+      configAt: loadConfig,
+      agentImport: sqliteAgentImport,
+      machine: w.machine,
+      busyWaitMs: 5000,
+    });
     await winner.committed;
 
     // replaced: the plan still held the row, so the import did reach its supersede step with a stale copy.
@@ -178,7 +218,14 @@ describe('agent memory sync', () => {
 
     note(dir, 'mail.md', MAIL.replace('Release', 'Weekly'));
     sync();
-    const stale = { ...createMemory(MAIL.replace('Release', 'Weekly'), { tags: ['claude-code-memory'], source: 'claude-memory:gone.md', tenantId: 'default' }), created: '2026-01-01T00:00:00.000Z' };
+    const stale = {
+      ...createMemory(MAIL.replace('Release', 'Weekly'), {
+        tags: ['claude-code-memory'],
+        source: 'claude-memory:gone.md',
+        tenantId: 'default',
+      }),
+      created: '2026-01-01T00:00:00.000Z',
+    };
     writeEntry(w.local, stale);
 
     sync();
@@ -187,15 +234,22 @@ describe('agent memory sync', () => {
     expect(liveRows(w.local).filter((e) => e.content.includes('Weekly'))).toHaveLength(1);
   });
 
-  it.skipIf(process.platform !== 'win32')('Windows folder case is normalised: the same folders in another case are the same container', () => {
-    note(projectNotes(w), 'deploy.md', DEPLOY);
-    sync();
-    const upper: Machine = { ...w.machine, env: { CLAUDE_CONFIG_DIR: join(w.home, '.claude').toUpperCase() } };
+  it.skipIf(process.platform !== 'win32')(
+    'Windows folder case is normalised: the same folders in another case are the same container',
+    () => {
+      note(projectNotes(w), 'deploy.md', DEPLOY);
+      sync();
+      const upper: Machine = { ...w.machine, env: { CLAUDE_CONFIG_DIR: join(w.home, '.claude').toUpperCase() } };
 
-    const again = importProjectMemories(w.local.toUpperCase(), { configAt: loadConfig, agentImport: sqliteAgentImport, machine: upper });
-    expect(claude(again)).toMatchObject({ unchanged: 1, imported: 0, setAside: 0 });
-    expect(liveRows(w.local)).toHaveLength(1);
-  });
+      const again = importProjectMemories(w.local.toUpperCase(), {
+        configAt: loadConfig,
+        agentImport: sqliteAgentImport,
+        machine: upper,
+      });
+      expect(claude(again)).toMatchObject({ unchanged: 1, imported: 0, setAside: 0 });
+      expect(liveRows(w.local)).toHaveLength(1);
+    },
+  );
 
   it('a secret note is skipped and counted, at every sync', () => {
     const dir = projectNotes(w);
@@ -221,7 +275,9 @@ describe('agent memory sync', () => {
     const spies = [
       vi.spyOn(process.stdout, 'write').mockImplementation(() => true),
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true),
-      ...(['log', 'info', 'warn', 'error'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => undefined)),
+      ...(['log', 'info', 'warn', 'error'] as const).map((m) =>
+        vi.spyOn(console, m).mockImplementation(() => undefined),
+      ),
     ];
     let report: ImportReport;
     try {
@@ -239,12 +295,18 @@ describe('agent memory sync', () => {
     const dir = projectNotes(w);
     [BASE, `${BASE} again today`, `${BASE} once more`].forEach((text, i) => note(dir, `crash-${i}.md`, text));
     sync();
-    const before = liveRows(w.local).map((e) => e.id).sort();
+    const before = liveRows(w.local)
+      .map((e) => e.id)
+      .sort();
     expect(before).toHaveLength(3);
 
     const result = await consolidate(w.local, { dryRun: false, now: new Date() });
     expect(result).toMatchObject({ merged: 0, extractionCandidates: 0 });
-    expect(liveRows(w.local).map((e) => e.id).sort()).toEqual(before);
+    expect(
+      liveRows(w.local)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(before);
     expect(loadAllEntries(w.local, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual([]);
   });
 
@@ -257,7 +319,15 @@ describe('agent memory sync', () => {
     const transcript = join(dirname(note(projectNotes(w, dirname(cwd)), 'queue.md', QUEUE)), '..', 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    expect(claude(importAtSessionEnd(cwd, transcript, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine })).imported).toBe(2);
+    expect(
+      claude(
+        importAtSessionEnd(cwd, transcript, {
+          configAt: loadConfig,
+          agentImport: sqliteAgentImport,
+          machine: w.machine,
+        }),
+      ).imported,
+    ).toBe(2);
     const origin = deriveOriginProject(cwd);
     expect(origin).not.toBe('');
     expect(liveTexts(w.global)).toEqual([DEPLOY, QUEUE].sort());

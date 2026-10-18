@@ -17,7 +17,13 @@ import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
-function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
+function safeRmSync(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:fresh-tail', role: 'admin' });
 }
@@ -36,7 +42,9 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
 
 describe('fresh-tail recall', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('fresh-tail'); });
+  beforeEach(() => {
+    root = makeRoot('fresh-tail');
+  });
   afterEach(() => safeRmSync(root));
 
   it('1. freshTailCount=0 (default): no fresh-tail rows surfaced', async () => {
@@ -128,14 +136,23 @@ describe('fresh-tail recall', () => {
     expect(queryMatchHit).toBeDefined();
   });
 
-  it('7. fresh-tail drops another project\'s row a store handed back despite the origins', async () => {
-    const [mine, theirs, global] = ['proj-a', 'proj-b', ''].map((origin) => ({ ...makeRaw(`raw row from ${origin || 'no project'}`), origin_project: origin }));
+  it("7. fresh-tail drops another project's row a store handed back despite the origins", async () => {
+    const [mine, theirs, global] = ['proj-a', 'proj-b', ''].map((origin) => ({
+      ...makeRaw(`raw row from ${origin || 'no project'}`),
+      origin_project: origin,
+    }));
     const store: HippoStore = { ...sqliteStore(root), freshRawEntries: async () => [mine!, theirs!, global!] };
-    const r = await retrieve({ ...ctxFor(root), store }, {
-      query: 'unmatched',
-      window: { freshTailCount: 5 },
-      filter: { project: { name: 'proj-a', legacyName: '' } },
-    });
-    expect(r.results.map((it) => [it.id, it.isFreshTail])).toEqual([[mine!.id, true], [global!.id, true]]);
+    const r = await retrieve(
+      { ...ctxFor(root), store },
+      {
+        query: 'unmatched',
+        window: { freshTailCount: 5 },
+        filter: { project: { name: 'proj-a', legacyName: '' } },
+      },
+    );
+    expect(r.results.map((it) => [it.id, it.isFreshTail])).toEqual([
+      [mine!.id, true],
+      [global!.id, true],
+    ]);
   });
 });

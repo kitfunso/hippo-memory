@@ -3,7 +3,8 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { isCrossSite } from '../../src/util/http-util.js';
 
-const req = (headers: Record<string, string>): IncomingMessage => Object.assign(new IncomingMessage(new Socket()), { headers });
+const req = (headers: Record<string, string>): IncomingMessage =>
+  Object.assign(new IncomingMessage(new Socket()), { headers });
 
 describe('isCrossSite', () => {
   it('accepts an Origin on the same host under http or https', () => {

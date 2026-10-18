@@ -27,9 +27,9 @@ function countAudit(db: DatabaseSyncLike, tenantId: string): number {
   // SAFETY: literal COUNT(*) query against the known audit_log schema always
   // returns a single { c } row; SQLite COUNT can surface as bigint for large
   // tables.
-  const r = db
-    .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ?`)
-    .get(tenantId) as { c: number | bigint };
+  const r = db.prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ?`).get(tenantId) as {
+    c: number | bigint;
+  };
   return Number(r.c);
 }
 
@@ -45,12 +45,9 @@ describe('parseOlderThanFlag', () => {
     expect(parseOlderThanFlag(raw)).toBe(days);
   });
 
-  it.each(['', '0', '0d', '-5', '-5d', 'abc', '30days', '30 d', '1.5d', 'd'])(
-    'rejects invalid input %s',
-    (raw) => {
-      expect(() => parseOlderThanFlag(raw)).toThrow(/Invalid --older-than/);
-    },
-  );
+  it.each(['', '0', '0d', '-5', '-5d', 'abc', '30days', '30 d', '1.5d', 'd'])('rejects invalid input %s', (raw) => {
+    expect(() => parseOlderThanFlag(raw)).toThrow(/Invalid --older-than/);
+  });
 });
 
 describe('computeCutoff', () => {
@@ -150,13 +147,21 @@ describe('pruneAuditLog', () => {
   });
 
   it('throws on non-positive olderThanDays', async () => {
-    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 0 })).rejects.toThrow(/positive number/);
-    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: -1 })).rejects.toThrow(/positive number/);
-    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: NaN })).rejects.toThrow(/positive number/);
+    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 0 })).rejects.toThrow(
+      /positive number/,
+    );
+    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: -1 })).rejects.toThrow(
+      /positive number/,
+    );
+    await expect(pruneAuditLog(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: NaN })).rejects.toThrow(
+      /positive number/,
+    );
   });
 
   it('throws on missing tenantId', async () => {
-    await expect(pruneAuditLog(apiCtx(root, '', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(/tenantId is required/);
+    await expect(pruneAuditLog(apiCtx(root, '', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(
+      /tenantId is required/,
+    );
   });
 
   it('the just-emitted audit_prune row is NOT itself pruned by the same call', async () => {
@@ -167,9 +172,7 @@ describe('pruneAuditLog', () => {
     expect(countAudit(db, 'acme')).toBe(1);
     // SAFETY: literal SELECT of the op column against the known audit_log
     // schema; op is NOT NULL.
-    const surviving = db
-      .prepare(`SELECT op FROM audit_log WHERE tenant_id = ?`)
-      .all('acme') as Array<{ op: string }>;
+    const surviving = db.prepare(`SELECT op FROM audit_log WHERE tenant_id = ?`).all('acme') as Array<{ op: string }>;
     expect(surviving.map((r) => r.op)).toEqual(['audit_prune']);
   });
 });

@@ -22,7 +22,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../../src/predictions/planning-fallacy.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
@@ -32,7 +32,11 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:j32-watch', role: 'admin' });
@@ -57,7 +61,9 @@ function seedClosedPredictions(root: string, classTag: string, n: number): void 
 
 describe('PlanningFallacyWatching', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('j32-watch'); });
+  beforeEach(() => {
+    root = makeRoot('j32-watch');
+  });
   afterEach(() => safeRmSync(root));
 
   it('Output.watching set with reason=tiebreak when >=2 classes tied at best overlap', async () => {
@@ -92,11 +98,14 @@ describe('PlanningFallacyWatching', () => {
   it('api.recall populates RecallResult.planningFallacyWatching when output is watching', async () => {
     // Seed at least one memory so recall has results (not strictly required
     // but exercises the populated-results path).
-    writeEntry(root, createMemory('some unrelated memory content', {
-      layer: Layer.Buffer,
-      kind: 'raw',
-      tenantId: 'default',
-    }));
+    writeEntry(
+      root,
+      createMemory('some unrelated memory content', {
+        layer: Layer.Buffer,
+        kind: 'raw',
+        tenantId: 'default',
+      }),
+    );
     const result = await retrieve(ctxFor(root), { query: 'this will take 2 days to finish the project' });
     expect(result.planningFallacyWatching).toBeDefined();
     expect(result.planningFallacyWatching!.reason).toBe('no_class_match');
@@ -107,11 +116,14 @@ describe('PlanningFallacyWatching', () => {
 
   it('api.recall populates planningFallacyHint (NOT watching) when class resolves (mutual exclusivity)', async () => {
     seedClosedPredictions(root, 'estimate-task', 3);
-    writeEntry(root, createMemory('some unrelated memory content', {
-      layer: Layer.Buffer,
-      kind: 'raw',
-      tenantId: 'default',
-    }));
+    writeEntry(
+      root,
+      createMemory('some unrelated memory content', {
+        layer: Layer.Buffer,
+        kind: 'raw',
+        tenantId: 'default',
+      }),
+    );
     const result = await retrieve(ctxFor(root), { query: 'the next task will take 2 days' });
     expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('estimate-task');

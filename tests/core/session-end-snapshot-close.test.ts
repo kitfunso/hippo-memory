@@ -28,12 +28,7 @@ function withScratchEnv() {
   return { dir, env };
 }
 
-function runHippo(
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-  input?: string,
-): SpawnSyncReturns<string> {
+function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
   return hippoRun(args, { cwd, env, input });
 }
 
@@ -62,10 +57,13 @@ async function loadSnapshotRetrying(
   tenantId: string,
 ): Promise<ReturnType<typeof loadActiveTaskSnapshot>> {
   let snapshot: ReturnType<typeof loadActiveTaskSnapshot> = null;
-  await waitFor(() => {
-    snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-    return true;
-  }, { ...WORKER_WAIT, timeoutMs: 1_000, intervalMs: 100, what: 'the snapshot readable' });
+  await waitFor(
+    () => {
+      snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      return true;
+    },
+    { ...WORKER_WAIT, timeoutMs: 1_000, intervalMs: 100, what: 'the snapshot readable' },
+  );
   return snapshot;
 }
 
@@ -95,7 +93,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     safeRmSync(dir);
   });
 
-  it('payload session_id is threaded through to the worker, which closes that session\'s own active snapshot', async () => {
+  it("payload session_id is threaded through to the worker, which closes that session's own active snapshot", async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'session-end wiring task',
@@ -113,9 +111,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     // The parent returns immediately; wait on the detached worker's own close
     // line (see closeStepLogged), then read the row once.
     await waitForCloseStep(logFile);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain(
-      'closed 1 active snapshot(s) for session sess-end-close-me',
-    );
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-end-close-me');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 
@@ -138,7 +134,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 
-  it('a DIFFERENT session\'s snapshot survives: session-end for session B never closes session A\'s active row', async () => {
+  it("a DIFFERENT session's snapshot survives: session-end for session B never closes session A's active row", async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'belongs to session A',
@@ -157,9 +153,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     // Wait until the worker reports its close step, so the survival check
     // proves it ran and closed nothing rather than that we did not wait long enough.
     await waitForCloseStep(logFile);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain(
-      'closed 0 active snapshot(s) for session sess-b-ending',
-    );
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 0 active snapshot(s) for session sess-b-ending');
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.status).toBe('active');
@@ -181,10 +175,10 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    await waitFor(
-      () => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('skip: no session_id'),
-      { ...WORKER_WAIT, what: 'the worker skip line in the log' },
-    );
+    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('skip: no session_id'), {
+      ...WORKER_WAIT,
+      what: 'the worker skip line in the log',
+    });
 
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
@@ -219,29 +213,53 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
   it('a session that never compacted gets a handoff from its own transcript', async () => {
     const hippoRoot = getHippoRoot(dir);
     const transcriptPath = path.join(dir, 'session.jsonl');
-    fs.writeFileSync(transcriptPath, [
-      { type: 'user', message: { role: 'user', content: 'add rate limiting to the webhook endpoint' } },
-      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Limiter added; the test is next.' }] } },
-    ].map((e) => JSON.stringify(e)).join('\n') + '\n');
+    fs.writeFileSync(
+      transcriptPath,
+      [
+        { type: 'user', message: { role: 'user', content: 'add rate limiting to the webhook endpoint' } },
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Limiter added; the test is next.' }] },
+        },
+      ]
+        .map((e) => JSON.stringify(e))
+        .join('\n') + '\n',
+    );
 
     const logFile = path.join(dir, 'session-end-no-compact.log');
-    const payload = JSON.stringify({ session_id: 'sess-no-compact', transcript_path: transcriptPath, hook_event_name: 'SessionEnd' });
+    const payload = JSON.stringify({
+      session_id: 'sess-no-compact',
+      transcript_path: transcriptPath,
+      hook_event_name: 'SessionEnd',
+    });
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
 
     await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('wrote handoff for session sess-no-compact');
-    expect(loadLatestHandoff(hippoRoot, 'default', 'sess-no-compact')?.nextAction).toBe('Limiter added; the test is next.');
+    expect(loadLatestHandoff(hippoRoot, 'default', 'sess-no-compact')?.nextAction).toBe(
+      'Limiter added; the test is next.',
+    );
   });
 
   it('reads the transcript even while the session holds the snapshot, in case another session takes the slot before the write', async () => {
     const hippoRoot = getHippoRoot(dir);
-    saveActiveTaskSnapshot(hippoRoot, 'default', { task: 'from the snapshot', summary: 's', next_step: 'n', session_id: 'sess-own', source: 'pre-compact' });
+    saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'from the snapshot',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-own',
+      source: 'pre-compact',
+    });
     // A tail with nothing to read is the one read that leaves a log line; the slot flip itself cannot be timed from a test.
     const transcriptPath = path.join(dir, 'own.jsonl');
     fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'summary' }) + '\n');
 
     const logFile = path.join(dir, 'session-end-own-snapshot.log');
-    const payload = JSON.stringify({ session_id: 'sess-own', transcript_path: transcriptPath, hook_event_name: 'SessionEnd' });
+    const payload = JSON.stringify({
+      session_id: 'sess-own',
+      transcript_path: transcriptPath,
+      hook_event_name: 'SessionEnd',
+    });
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
 
     await waitForCloseStep(logFile);
@@ -251,13 +269,20 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     expect(loadLatestHandoff(hippoRoot, 'default', 'sess-own')?.taskId).toBe('from the snapshot');
   });
 
-  it('a payload whose transcript is missing skips capture instead of reading another project\'s newest transcript', async () => {
+  it("a payload whose transcript is missing skips capture instead of reading another project's newest transcript", async () => {
     const other = path.join(dir, '.claude', 'projects', 'other-project');
     fs.mkdirSync(other, { recursive: true });
-    fs.writeFileSync(path.join(other, 'newest.jsonl'), JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n');
+    fs.writeFileSync(
+      path.join(other, 'newest.jsonl'),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n',
+    );
 
     const logFile = path.join(dir, 'session-end-missing-transcript.log');
-    const payload = JSON.stringify({ session_id: 'sess-gone', transcript_path: path.join(dir, 'gone.jsonl'), hook_event_name: 'SessionEnd' });
+    const payload = JSON.stringify({
+      session_id: 'sess-gone',
+      transcript_path: path.join(dir, 'gone.jsonl'),
+      hook_event_name: 'SessionEnd',
+    });
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 

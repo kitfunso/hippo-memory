@@ -27,7 +27,8 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
   // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder integer-like keys. The
   // aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
   // SAFETY: one row whose only column is that JSON text.
-  const row = db.prepare(`WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
+  const row = db
+    .prepare(`WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
     SELECT json_group_array(json_array(tag, n) ORDER BY first_r, first_key) AS pairs FROM (
       SELECT CAST(j.value AS TEXT) AS tag, COUNT(*) AS n, MIN(r) AS first_r, MIN(j.key) AS first_key
       FROM kept, json_each(${jsonList('kept.tags_json')}) AS j GROUP BY tag)`)
@@ -52,7 +53,8 @@ export function loadAmbientTalliesAt(
   const scopeParams = [...params, ...filter.currentProject, ...secret.params];
   // SAFETY: one aggregate row whose columns are the aliases named below. A row is an error when one of its tags is
   // `error`, `critical` or starts with `error:`, as isErrorTagged says.
-  const row = db.prepare(`SELECT
+  const row = db
+    .prepare(`SELECT
     COUNT(*) AS total,
     COALESCE(SUM(${strengthSql(filter.now)}), 0) AS strengthSum,
     COALESCE(SUM(julianday(created) > julianday(?)), 0) AS fresh,
@@ -66,9 +68,11 @@ export function loadAmbientTalliesAt(
     COALESCE(SUM(COALESCE(extracted_from, '') != ''), 0) AS extracted,
     MAX(0, COALESCE(MAX(COALESCE(dag_level, 0)), 0)) AS maxDagLevel
     FROM memories
-    WHERE ${scope}`,
-  ).get(freshAfter, HIGH_SCHEMA_FIT, ...scopeParams) as
-    Record<Exclude<keyof AmbientTallies, 'tagCounts'>, number | bigint>;
+    WHERE ${scope}`)
+    .get(freshAfter, HIGH_SCHEMA_FIT, ...scopeParams) as Record<
+    Exclude<keyof AmbientTallies, 'tagCounts'>,
+    number | bigint
+  >;
   const tagCounts = countTags(db, scope, scopeParams);
   return {
     total: Number(row.total),

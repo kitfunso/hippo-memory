@@ -26,9 +26,8 @@ afterEach(() => {
 function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number {
   // SAFETY: `SELECT COUNT(*) AS c ...` always returns exactly one row with a
   // numeric `c` column; this covers both call sites below.
-  return (db.prepare(
-    `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
-  ).get(sessionId) as { c: number }).c;
+  return (db.prepare(`SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`).get(sessionId) as { c: number })
+    .c;
 }
 
 let home: string;
@@ -79,9 +78,7 @@ describe('HTTP /v1/memories session_id', () => {
 
   it('session_id over the 256-char cap rejects with 400', async () => {
     const overCap = 'x'.repeat(257);
-    const res = await fetch(
-      `${handle.url}/v1/memories?q=auth&session_id=${encodeURIComponent(overCap)}`,
-    );
+    const res = await fetch(`${handle.url}/v1/memories?q=auth&session_id=${encodeURIComponent(overCap)}`);
     expect(res.status).toBe(400);
     // SAFETY: route under test returns a JSON error object with a string
     // `error` field on 400 responses (validated by the assertion below).

@@ -402,7 +402,7 @@ class WorkerPool implements SqliteExecutor {
     if (lost.length > 0 || cause !== undefined) {
       log.warn(
         `the store's ${lane.mode} worker stopped with ${lost.length} call(s) ` +
-        `unanswered${cause === undefined ? '' : `: ${cause.message}`}`,
+          `unanswered${cause === undefined ? '' : `: ${cause.message}`}`,
       );
     }
     // The server answers this class as its retryable 503.

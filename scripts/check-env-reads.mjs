@@ -55,7 +55,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\n${hits.length} process.env access(es) in ${srcDir}/ outside util/env.ts:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}`);
-    console.error('\nFix: add a typed accessor to src/util/env.ts and call it, or add the file to ALLOWED in this script with a reason.\n');
+    console.error(
+      '\nFix: add a typed accessor to src/util/env.ts and call it, or add the file to ALLOWED in this script with a reason.\n',
+    );
     process.exit(1);
   }
   console.log(`process.env is read only through ${srcDir}/util/env.ts. OK.`);

@@ -43,8 +43,17 @@ describe('failure log functions', () => {
   const log = () => sqliteSyncStore(root).failureLog;
 
   it('record writes a row that a later read finds', () => {
-    log().record({ tenantId: 'default', sessionId: 's1', tool: 'Bash', outcome: 'stored', sigHash: 'a', detailHash: 'b' });
-    expect(read((db) => failuresBySession(db, 'default', '1970-01-01T00:00:00.000Z')).map((r) => r.sessionId)).toEqual(['s1']);
+    log().record({
+      tenantId: 'default',
+      sessionId: 's1',
+      tool: 'Bash',
+      outcome: 'stored',
+      sigHash: 'a',
+      detailHash: 'b',
+    });
+    expect(read((db) => failuresBySession(db, 'default', '1970-01-01T00:00:00.000Z')).map((r) => r.sessionId)).toEqual([
+      's1',
+    ]);
   });
 
   it('requestOutcome reads a request outcome and settleOutcome rewrites it', () => {
@@ -59,8 +68,18 @@ describe('failure log functions', () => {
 describe('compactions.start and compactions.markSnapshotSaved', () => {
   it('inserts a started record and marks its snapshot saved', () => {
     const { compactions } = sqliteSyncStore(root);
-    const id = compactions.start('default', { sessionId: 's1', originProject: 'acme/app', trigger: 'auto', cwd: null, transcriptPath: null });
-    expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]).toMatchObject({ id, status: 'started', snapshot_saved: 0 });
+    const id = compactions.start('default', {
+      sessionId: 's1',
+      originProject: 'acme/app',
+      trigger: 'auto',
+      cwd: null,
+      transcriptPath: null,
+    });
+    expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]).toMatchObject({
+      id,
+      status: 'started',
+      snapshot_saved: 0,
+    });
     compactions.markSnapshotSaved('default', id);
     expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]?.snapshot_saved).toBe(1);
   });
@@ -68,7 +87,13 @@ describe('compactions.start and compactions.markSnapshotSaved', () => {
 
 describe('compactions.saveCallerItems', () => {
   const req = {
-    sessionId: 's1', trigger: 'auto', requestId: 'req-1', project: 'acme/app', owner: 'bob@acme', origins: ['acme/app'], baseHalfLifeDays: 365,
+    sessionId: 's1',
+    trigger: 'auto',
+    requestId: 'req-1',
+    project: 'acme/app',
+    owner: 'bob@acme',
+    origins: ['acme/app'],
+    baseHalfLifeDays: 365,
     items: ['The deploy script must run from the repo root, never from a subfolder.'],
   };
 
@@ -100,7 +125,10 @@ describe('localFiles.captures.write', () => {
     reject(rejected);
     const kept = 'Rotate the signing key before the old one expires.';
     const seen: string[] = [];
-    const outcomes = write([item(kept), item(kept), item(rejected)], new Set(), { lean: true, onCaptured: (e) => seen.push(e.content) });
+    const outcomes = write([item(kept), item(kept), item(rejected)], new Set(), {
+      lean: true,
+      onCaptured: (e) => seen.push(e.content),
+    });
     expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
     expect(seen).toEqual([kept]);
   });
@@ -108,7 +136,11 @@ describe('localFiles.captures.write', () => {
   it('skips an item whose text the store already holds without building its entry', () => {
     const held = 'Keep the changelog fragment in the same commit as the code.';
     let built = false;
-    const outcomes = write([{ content: held, makeEntry: () => ((built = true), createMemory(held)) }], new Set([duplicateKey(held)]), { lean: true });
+    const outcomes = write(
+      [{ content: held, makeEntry: () => ((built = true), createMemory(held)) }],
+      new Set([duplicateKey(held)]),
+      { lean: true },
+    );
     expect(outcomes).toEqual(['skipped']);
     expect(built).toBe(false);
   });

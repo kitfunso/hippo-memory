@@ -76,7 +76,9 @@ function floor(): string | undefined {
   const db = openHippoDb(home);
   try {
     // SAFETY: the meta table's value column is TEXT; one row by primary key.
-    return (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)?.value;
+    return (
+      db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined
+    )?.value;
   } finally {
     closeHippoDb(db);
   }
@@ -141,7 +143,10 @@ describe('POST /v1/auth/keys defaults', () => {
     for (const [body, role, days] of asks) {
       const made = await jsonOf<Minted>(await mintOver(admin.plaintext, body));
       expect([body, made.role, daysUntil(made.expiresAt)]).toEqual([body, role, days]);
-      expect([body, await listed(admin.plaintext, made.keyId)]).toEqual([body, expect.objectContaining({ role, expiresAt: made.expiresAt })]);
+      expect([body, await listed(admin.plaintext, made.keyId)]).toEqual([
+        body,
+        expect.objectContaining({ role, expiresAt: made.expiresAt }),
+      ]);
     }
   });
 
@@ -168,9 +173,12 @@ describe('POST /v1/auth/keys defaults', () => {
   it('writes the expiry into the audit row of the mint, null for a key that never expires', async () => {
     const admin = await hostMint('admin');
     const expiring = await jsonOf<Minted>(await mintOver(admin.plaintext, { label: 'ci' }));
-    const forever = await jsonOf<Minted>(await mintOver(admin.plaintext, { label: 'ops', role: 'admin', noExpiry: true }));
+    const forever = await jsonOf<Minted>(
+      await mintOver(admin.plaintext, { label: 'ops', role: 'admin', noExpiry: true }),
+    );
     const rows = await jsonOf<AuditRow[]>(await send('GET', '/v1/audit?op=auth_create', admin.plaintext));
-    const metadataOf = (keyId: string): AuditRow['metadata'] | undefined => rows.find((r) => r.targetId === keyId)?.metadata;
+    const metadataOf = (keyId: string): AuditRow['metadata'] | undefined =>
+      rows.find((r) => r.targetId === keyId)?.metadata;
     expect(metadataOf(expiring.keyId)).toEqual({ label: 'ci', role: 'member', expiresAt: expiring.expiresAt });
     expect(metadataOf(forever.keyId)).toEqual({ label: 'ops', role: 'admin', expiresAt: null });
   });
@@ -185,7 +193,8 @@ describe('POST /v1/auth/keys defaults', () => {
 });
 
 describe('hippo auth create defaults', () => {
-  const create = (flags: Record<string, string | boolean>) => runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags }));
+  const create = (flags: Record<string, string | boolean>) =>
+    runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags }));
 
   it('prints the role and the expiry date, and says on stderr which defaults it took and how to ask for an admin key', async () => {
     const run = await create({});
@@ -193,7 +202,9 @@ describe('hippo auth create defaults', () => {
     expect(run.stdout).toMatch(/^role: {6}member$/m);
     const expires = /^expires: {3}(\S+)$/m.exec(run.stdout)?.[1] ?? null;
     expect(daysUntil(expires)).toBe(90);
-    expect(run.stderr).toBe('hippo auth create: no --role given, so this is a member key (pass --role admin for an admin key); no --ttl-days or --no-expiry given, so it expires in 90 days.\n');
+    expect(run.stderr).toBe(
+      'hippo auth create: no --role given, so this is a member key (pass --role admin for an admin key); no --ttl-days or --no-expiry given, so it expires in 90 days.\n',
+    );
     const plaintext = /^plaintext: (\S+)$/m.exec(run.stdout)?.[1] ?? '';
     expect(run.stderr).not.toContain(plaintext);
     expect((await send('GET', '/v1/quarantine', plaintext)).status).toBe(403);
@@ -210,7 +221,9 @@ describe('hippo auth create defaults', () => {
     const roleOnly = await create({ role: 'admin' });
     expect(roleOnly.stderr).toBe('hippo auth create: no --ttl-days or --no-expiry given, so it expires in 90 days.\n');
     const expiryOnly = await create({ 'ttl-days': '7' });
-    expect(expiryOnly.stderr).toBe('hippo auth create: no --role given, so this is a member key (pass --role admin for an admin key).\n');
+    expect(expiryOnly.stderr).toBe(
+      'hippo auth create: no --role given, so this is a member key (pass --role admin for an admin key).\n',
+    );
   });
 
   it('--json carries role and expiresAt', async () => {
@@ -240,13 +253,20 @@ describe('hippo auth create defaults', () => {
     const week = hippoRun(['auth', 'create', '--global', '--json', '--ttl-days', '7'], { env, cwd: home });
     // SAFETY: --json prints one object with these fields.
     expect(daysUntil((JSON.parse(week.stdout) as Minted).expiresAt)).toBe(7);
-    const forever = hippoRun(['auth', 'create', '--global', '--json', '--role', 'admin', '--no-expiry'], { env, cwd: home });
+    const forever = hippoRun(['auth', 'create', '--global', '--json', '--role', 'admin', '--no-expiry'], {
+      env,
+      cwd: home,
+    });
     // SAFETY: as above.
     expect(JSON.parse(forever.stdout) as Minted).toMatchObject({ role: 'admin', expiresAt: null });
     expect(forever.stderr).not.toContain('unknown flag');
     const soon = hippoRun(['auth', 'create', '--global', '--ttl-days', 'soon'], { env, cwd: home });
     // The exit now waits for stderr to drain, so Node's one-time SQLite warning can follow the message.
-    expect([soon.status, soon.stdout, soon.stderr.trim().split('\n')[0]]).toEqual([1, '', '--ttl-days requires a numeric value.']);
+    expect([soon.status, soon.stdout, soon.stderr.trim().split('\n')[0]]).toEqual([
+      1,
+      '',
+      '--ttl-days requires a numeric value.',
+    ]);
   });
 });
 
@@ -254,7 +274,9 @@ describe('the first key of a store', () => {
   it('a store with no key and required auth is administered from the host CLI: it mints the first admin key with no key of its own', async () => {
     const before = await fetch(`${handle.url}/v1/quarantine`);
     expect(before.status).toBe(401);
-    const run = await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { role: 'admin', json: true } }));
+    const run = await runInProcess(() =>
+      handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { role: 'admin', json: true } }),
+    );
     // SAFETY: --json prints one object with these fields.
     const first = JSON.parse(run.stdout) as Minted;
     expect([first.role, daysUntil(first.expiresAt)]).toEqual(['admin', 90]);
@@ -263,7 +285,9 @@ describe('the first key of a store', () => {
   });
 
   it('gets no wider role for being first: with no role named it is a member key', async () => {
-    const run = await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { json: true } }));
+    const run = await runInProcess(() =>
+      handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { json: true } }),
+    );
     // SAFETY: --json prints one object with these fields.
     const first = JSON.parse(run.stdout) as Minted;
     expect(first.role).toBe('member');
@@ -275,7 +299,9 @@ describe('the first key of a store', () => {
     expect(minted.role).toBe('member');
     const db = openHippoDb(home);
     try {
-      expect(db.prepare('SELECT role FROM api_keys WHERE key_id = ?').get<{ role: string }>(minted.keyId)?.role).toBe('member');
+      expect(db.prepare('SELECT role FROM api_keys WHERE key_id = ?').get<{ role: string }>(minted.keyId)?.role).toBe(
+        'member',
+      );
     } finally {
       closeHippoDb(db);
     }

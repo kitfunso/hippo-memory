@@ -1,13 +1,13 @@
 import type { Migration } from './types.js';
 
 export const v41: Migration = {
-    version: 41,
-    up: (db) => {
-      // Rejected-value tombstone: upsertEntryRow refuses writes matching a row's digest. No raw content stored (may be
-      // secret); no FK: it outlives its row.
-      // No min_compatible_binary bump, a deliberate tradeoff: an old binary writes without the guard until upgraded
-      // (see MEMORY_ENVELOPE.md).
-      db.exec(`
+  version: 41,
+  up: (db) => {
+    // Rejected-value tombstone: upsertEntryRow refuses writes matching a row's digest. No raw content stored (may be
+    // secret); no FK: it outlives its row.
+    // No min_compatible_binary bump, a deliberate tradeoff: an old binary writes without the guard until upgraded
+    // (see MEMORY_ENVELOPE.md).
+    db.exec(`
         CREATE TABLE IF NOT EXISTS rejected_values (
           tenant_id  TEXT NOT NULL,
           digest     TEXT NOT NULL,            -- sha256/64 of normalized content
@@ -19,5 +19,5 @@ export const v41: Migration = {
           PRIMARY KEY (tenant_id, digest)
         ) WITHOUT ROWID;
       `);
-    },
+  },
 };

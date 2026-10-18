@@ -65,8 +65,21 @@ describe('token ledger write failures', () => {
   it('an MCP recall still answers and the ledger failure is warned', async () => {
     writeEntry(root, createMemory('ledger probe note about deploys'));
     const res = await handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'deploys' } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) },
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_recall', arguments: { query: 'deploys' } },
+      },
+      {
+        hippoRoot: root,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(root),
+        config: loadConfig(root),
+      },
     );
     expect(res?.error).toBeUndefined();
     expect(JSON.stringify(res?.result)).toContain('ledger probe note');
@@ -78,18 +91,26 @@ describe('token ledger write failures', () => {
     pinNote(store);
     const db = openHippoDb(store);
     // Reads still work, so only the hook's own insert can fail.
-    db.exec("CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END");
+    db.exec(
+      "CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END",
+    );
     closeHippoDb(db);
-    const out = await promptHookContext(apiCtx(store, 'default', adminActor('test')), { sessionId: 's-refused', project: PROJECT });
+    const out = await promptHookContext(apiCtx(store, 'default', adminActor('test')), {
+      sessionId: 's-refused',
+      project: PROJECT,
+    });
     expect(out.stdout).toContain('the deploy window opens on Tuesdays');
     const lines = skippedLines();
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^\[hippo\] warn: token ledger row skipped: ledger insert refused ts=\S+ errorClass=\w+ stack=\S/);
+    expect(lines[0]).toMatch(
+      /^\[hippo\] warn: token ledger row skipped: ledger insert refused ts=\S+ errorClass=\w+ stack=\S/,
+    );
   });
 
   it('a store with no ledger table is an expected skip: nothing at the default level, one debug line with no stack, and the hook prints its block', async () => {
     pinNote(root);
-    const hook = (sessionId: string) => promptHookContext(apiCtx(root, 'default', adminActor('test')), { sessionId, project: PROJECT });
+    const hook = (sessionId: string) =>
+      promptHookContext(apiCtx(root, 'default', adminActor('test')), { sessionId, project: PROJECT });
     expect((await hook('s-dropped-1')).stdout).toContain('the deploy window opens on Tuesdays');
     expect(skippedLines()).toEqual([]);
 
@@ -106,7 +127,10 @@ describe('token ledger write failures', () => {
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
     const store = makeRoot('ledger-notadb', { init: false });
     const write = (): void => {
-      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: { ...folderFiles(store), config: DEFAULT_CONFIG } });
+      bookTokenUse(
+        { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 },
+        { local: { ...folderFiles(store), config: DEFAULT_CONFIG } },
+      );
     };
     initStore(store);
     fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');

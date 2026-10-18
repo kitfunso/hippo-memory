@@ -39,7 +39,7 @@ export function strengthSql(now: Date): string {
   const boost = isRecallBoostAblated()
     ? '1.0'
     : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${RETRIEVAL_BOOST_SLOPE} * log2(COALESCE(retrieval_count, 0) + 1) ` +
-    `END)`;
+      `END)`;
   const valences = /* SAFETY: a Record keyed by EmotionalValence */ Object.keys(
     EMOTIONAL_MULTIPLIERS,
   ) as EmotionalValence[];

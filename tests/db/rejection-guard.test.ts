@@ -3,7 +3,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../../src/store/rejection.js';

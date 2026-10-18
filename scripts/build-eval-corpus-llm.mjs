@@ -37,13 +37,15 @@ function loadEntries(root) {
   const dbPath = path.join(root, 'hippo.db');
   if (!fs.existsSync(dbPath)) return [];
   const db = new DatabaseSync(dbPath);
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id, content, tags_json, layer
     FROM memories
     WHERE length(content) >= 50
     ORDER BY RANDOM()
     LIMIT ?
-  `).all(MAX_CASES * 3);
+  `)
+    .all(MAX_CASES * 3);
   db.close();
   return rows.map((r) => ({
     id: r.id,

@@ -5,7 +5,8 @@ import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
-const HAND_ROLLED = /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
+const HAND_ROLLED =
+  /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
 // The deny list lives with the JS predicates; the SQL that reads it lives with the other SQL twins.
 const SCOPE_MODULES = [join('core', 'recall-scope.ts'), join('store', 'rule-sql.ts')];
 const ALLOWED = new Set(SCOPE_MODULES);
@@ -13,17 +14,20 @@ const ALLOWED = new Set(SCOPE_MODULES);
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
-  "api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */",
+  'api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */',
   "store/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
   "store/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
-  "store/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies",
+  'store/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies',
   "store/search-rows.ts: * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot",
 ]);
 
 function hitsIn(file: string, text: string): string[] {
   const name = file.split(sep).join('/');
-  return text.split(/\r?\n/).flatMap((line, i) =>
-    HAND_ROLLED.test(line) && !DOC_LINES.has(`${name}: ${line.trim()}`) ? [`${name}:${i + 1}: ${line.trim()}`] : []);
+  return text
+    .split(/\r?\n/)
+    .flatMap((line, i) =>
+      HAND_ROLLED.test(line) && !DOC_LINES.has(`${name}: ${line.trim()}`) ? [`${name}:${i + 1}: ${line.trim()}`] : [],
+    );
 }
 
 const hits = (file: string): string[] => hitsIn(file, readFileSync(join(SRC, file), 'utf8'));
@@ -37,25 +41,35 @@ describe('scope SQL guard', () => {
   });
 
   it('no other source file spells the default-deny SQL or the legacy marker', () => {
-    const offenders = sources
-      .filter((f) => !ALLOWED.has(f) && !f.startsWith(EXEMPT_DIR))
-      .flatMap(hits);
+    const offenders = sources.filter((f) => !ALLOWED.has(f) && !f.startsWith(EXEMPT_DIR)).flatMap(hits);
     expect(offenders).toEqual([]);
   });
 
   it('flags every hand-rolled shape, a comment-shaped line included, and passes only the listed doc lines', () => {
     const bad = [
-      "AND scope NOT LIKE '%:private:%'", "AND scope NOT GLOB '*:private:*'", "AND instr(scope, ':private:') = 0",
-      "AND scope NOT LIKE 'personal:%'", "AND scope <> 'unknown:legacy'", "* AND scope NOT GLOB '*:private:*'",
+      "AND scope NOT LIKE '%:private:%'",
+      "AND scope NOT GLOB '*:private:*'",
+      "AND instr(scope, ':private:') = 0",
+      "AND scope NOT LIKE 'personal:%'",
+      "AND scope <> 'unknown:legacy'",
+      "* AND scope NOT GLOB '*:private:*'",
       "// AND scope NOT LIKE '%:private:%'",
     ];
     for (const line of bad) expect(hitsIn('store/x.ts', line), line).toHaveLength(1);
-    expect(hitsIn(`store${sep}handoffs.ts`, "  // continuity excludes slack:private:* and 'unknown:legacy'.")).toEqual([]);
+    expect(hitsIn(`store${sep}handoffs.ts`, "  // continuity excludes slack:private:* and 'unknown:legacy'.")).toEqual(
+      [],
+    );
     expect(hitsIn(`store${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too.")).toHaveLength(1);
   });
 
   it('every listed doc line still exists, so the list cannot hold a stale pass', () => {
-    const live = new Set(sources.flatMap((f) => readFileSync(join(SRC, f), 'utf8').split(/\r?\n/).map((l) => `${f.split(sep).join('/')}: ${l.trim()}`)));
+    const live = new Set(
+      sources.flatMap((f) =>
+        readFileSync(join(SRC, f), 'utf8')
+          .split(/\r?\n/)
+          .map((l) => `${f.split(sep).join('/')}: ${l.trim()}`),
+      ),
+    );
     expect([...DOC_LINES].filter((l) => !live.has(l))).toEqual([]);
   });
 });

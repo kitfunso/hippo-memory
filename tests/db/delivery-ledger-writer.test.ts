@@ -31,7 +31,9 @@ const DELIVERY_REJECTED_ROW_CAP = 16;
 /** One write attempt, made under a short lock wait: a bounded delay on any runner, which elapsed time is not. */
 function expectOneShortWait(statements: readonly string[]): void {
   expect(countMatching(statements, /^BEGIN IMMEDIATE$/)).toBe(1);
-  const waitsSet = statements.slice(0, statements.indexOf('BEGIN IMMEDIATE')).filter((sql) => sql.startsWith('PRAGMA busy_timeout = '));
+  const waitsSet = statements
+    .slice(0, statements.indexOf('BEGIN IMMEDIATE'))
+    .filter((sql) => sql.startsWith('PRAGMA busy_timeout = '));
   expect(Number(waitsSet.at(-1)?.split(' = ')[1])).toBeLessThanOrEqual(MAX_LEDGER_WAIT_MS);
 }
 
@@ -72,10 +74,19 @@ function event(overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput 
     recallHash: null,
     emittedHash: 'dddddddddddddddd',
     elapsedMs: 3,
-    candidates: [{
-      memoryId: 'mem-1', sourceStore: 'local', pool: 'pin', stage: 'final', outcome: 'emitted',
-      reason: null, rank: 1, score: 1, tokens: 10,
-    }],
+    candidates: [
+      {
+        memoryId: 'mem-1',
+        sourceStore: 'local',
+        pool: 'pin',
+        stage: 'final',
+        outcome: 'emitted',
+        reason: null,
+        rank: 1,
+        score: 1,
+        tokens: 10,
+      },
+    ],
     ...overrides,
   };
 }
@@ -110,10 +121,21 @@ describe('writeDeliveryEventOnHandle', () => {
       [first, 1, null, DELIVERY_LEDGER_VERSION],
       [second, 2, null, DELIVERY_LEDGER_VERSION],
     ]);
-    expect(rows[0].candidates).toEqual([{
-      event_id: first, tenant_id: 'default', memory_id: 'mem-1', source_store: 'local', pool: 'pin', stage: 'final',
-      outcome: 'emitted', reason: null, cand_rank: 1, score: 1, tokens: 10,
-    }]);
+    expect(rows[0].candidates).toEqual([
+      {
+        event_id: first,
+        tenant_id: 'default',
+        memory_id: 'mem-1',
+        source_store: 'local',
+        pool: 'pin',
+        stage: 'final',
+        outcome: 'emitted',
+        reason: null,
+        cand_rank: 1,
+        score: 1,
+        tokens: 10,
+      },
+    ]);
     expect(readDeliveryEvents(db, 'default', 'sess-2').map((r) => [r.id, r.turn_seq])).toEqual([[other, 1]]);
   });
 
@@ -149,7 +171,10 @@ describe('writeDeliveryEventOnHandle', () => {
     const parent = writeDeliveryEventOnHandle(db, event());
     writeDeliveryEventOnHandle(db, event({ sessionState: 'subagent' }));
     const missing = readDeliveryEvents(db, 'default', null);
-    expect(missing.map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[null, null], [null, null]]);
+    expect(missing.map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+      [null, null],
+      [null, null],
+    ]);
     const inSession = readDeliveryEvents(db, 'default', 'sess-1');
     expect(inSession.map((r) => [r.id === parent, r.session_state, r.turn_seq, r.duplicate_of])).toEqual([
       [true, 'payload', 1, null],
@@ -159,14 +184,26 @@ describe('writeDeliveryEventOnHandle', () => {
 
   it('W8 numbers two context rows 500 ms apart, since a context row has no prompt or host turn to match', () => {
     const context = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
-      event({ eventType: 'context', surface: 'context', sessionState: 'env', promptHash: null, promptLength: 0, ...overrides });
+      event({
+        eventType: 'context',
+        surface: 'context',
+        sessionState: 'env',
+        promptHash: null,
+        promptLength: 0,
+        ...overrides,
+      });
     writeDeliveryEventOnHandle(db, context());
     writeDeliveryEventOnHandle(db, context({ ts: at(500) }));
-    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+      [1, null],
+      [2, null],
+    ]);
   });
 
-  const boundary = (eventType: 'pre-compact' | 'compact-resume' | 'session-end', overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
-    event({ eventType, promptHash: null, promptLength: 0, ...overrides });
+  const boundary = (
+    eventType: 'pre-compact' | 'compact-resume' | 'session-end',
+    overrides: Partial<DeliveryEventInput> = {},
+  ): DeliveryEventInput => event({ eventType, promptHash: null, promptLength: 0, ...overrides });
 
   describe.each(['pre-compact', 'compact-resume', 'session-end'] as const)('%s boundary duplicates', (type) => {
     it('W1 flags a second prompt-less event 500 ms later as a duplicate of the first', () => {
@@ -181,7 +218,10 @@ describe('writeDeliveryEventOnHandle', () => {
     it('W2 numbers the same pair 3000 ms apart as turns 1 and 2', () => {
       writeDeliveryEventOnHandle(db, boundary(type));
       writeDeliveryEventOnHandle(db, boundary(type, { ts: at(3000) }));
-      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+        [1, null],
+        [2, null],
+      ]);
     });
 
     it('W6 with one host turn id, flags 500 ms apart and numbers 3000 ms apart', () => {
@@ -200,7 +240,9 @@ describe('writeDeliveryEventOnHandle', () => {
       writeDeliveryEventOnHandle(db, boundary(type, { ts: at(1500) }));
       writeDeliveryEventOnHandle(db, boundary(type, { ts: at(3000) }));
       expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
-        [1, null], [null, first], [2, null],
+        [1, null],
+        [null, first],
+        [2, null],
       ]);
     });
 
@@ -209,9 +251,15 @@ describe('writeDeliveryEventOnHandle', () => {
       writeDeliveryEventOnHandle(db, boundary(type, { sessionId: null, sessionState: 'missing', ts: at(500) }));
       writeDeliveryEventOnHandle(db, boundary(type, { sessionState: 'subagent' }));
       writeDeliveryEventOnHandle(db, boundary(type, { sessionState: 'subagent', ts: at(500) }));
-      expect(readDeliveryEvents(db, 'default', null).map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[null, null], [null, null]]);
-      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([
-        ['subagent', null, null], ['subagent', null, null],
+      expect(readDeliveryEvents(db, 'default', null).map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+        [null, null],
+        [null, null],
+      ]);
+      expect(
+        readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.session_state, r.turn_seq, r.duplicate_of]),
+      ).toEqual([
+        ['subagent', null, null],
+        ['subagent', null, null],
       ]);
     });
   });
@@ -219,7 +267,10 @@ describe('writeDeliveryEventOnHandle', () => {
   it('W3 keeps numbering a prompt-less prompt-submit pair 500 ms apart', () => {
     writeDeliveryEventOnHandle(db, event({ promptHash: null, promptLength: 0 }));
     writeDeliveryEventOnHandle(db, event({ promptHash: null, promptLength: 0, ts: at(500) }));
-    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+      [1, null],
+      [2, null],
+    ]);
   });
 
   it('W6 still flags a prompt-submit pair with one turn id 3000 ms apart', () => {
@@ -237,7 +288,9 @@ describe('writeDeliveryEventOnHandle', () => {
     writeDeliveryEventOnHandle(db, boundary('compact-resume', { ts: at(200) }));
     writeDeliveryEventOnHandle(db, boundary('pre-compact', { sessionId: 'sess-2', ts: at(300) }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.event_type, r.turn_seq, r.duplicate_of])).toEqual([
-      ['prompt-submit', 1, null], ['pre-compact', 1, null], ['compact-resume', 1, null],
+      ['prompt-submit', 1, null],
+      ['pre-compact', 1, null],
+      ['compact-resume', 1, null],
     ]);
     expect(readDeliveryEvents(db, 'default', 'sess-2').map((r) => [r.event_type, r.turn_seq, r.duplicate_of])).toEqual([
       ['pre-compact', 1, null],
@@ -247,7 +300,9 @@ describe('writeDeliveryEventOnHandle', () => {
   it('prunes events past the retention window, with their candidates', () => {
     writeDeliveryEventOnHandle(db, event({ ts: '2026-01-01T00:00:00.000Z', promptHash: 'old' }));
     expect(count('delivery_candidates')).toBe(1);
-    const later = new Date(Date.parse('2026-01-01T00:00:00.000Z') + (DELIVERY_LEDGER_RETENTION_DAYS + 1) * 86_400_000).toISOString();
+    const later = new Date(
+      Date.parse('2026-01-01T00:00:00.000Z') + (DELIVERY_LEDGER_RETENTION_DAYS + 1) * 86_400_000,
+    ).toISOString();
     const kept = writeDeliveryEventOnHandle(db, event({ ts: later, promptHash: 'new' }));
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.id)).toEqual([kept]);
     expect(count('delivery_candidates')).toBe(1);
@@ -263,16 +318,27 @@ describe('writeDeliveryEventOnHandle', () => {
   it('writes 3,000 candidates in two statements, not one a row, each row as given', () => {
     const base = event().candidates[0]!;
     const candidates = Array.from({ length: 3000 }, (_, i) => ({
-      ...base, memoryId: `m${i}`, rank: i + 1, score: i / 7, tokens: i,
+      ...base,
+      memoryId: `m${i}`,
+      rank: i + 1,
+      score: i / 7,
+      tokens: i,
     }));
     const { result, statements } = recordStatements(() => writeDeliveryEventOnHandle(db, event({ candidates })));
     expect(countMatching(statements, 'INSERT INTO delivery_candidates')).toBe(2);
-    const rows = db.prepare(
-      'SELECT memory_id, cand_rank, score, tokens FROM delivery_candidates WHERE event_id = ? ORDER BY cand_rank',
-    ).all(result);
-    expect(rows).toEqual(candidates.map((c) => ({
-      memory_id: c.memoryId, cand_rank: c.rank, score: c.score, tokens: c.tokens,
-    })));
+    const rows = db
+      .prepare(
+        'SELECT memory_id, cand_rank, score, tokens FROM delivery_candidates WHERE event_id = ? ORDER BY cand_rank',
+      )
+      .all(result);
+    expect(rows).toEqual(
+      candidates.map((c) => ({
+        memory_id: c.memoryId,
+        cand_rank: c.rank,
+        score: c.score,
+        tokens: c.tokens,
+      })),
+    );
   });
 
   it('rolls back and returns null with one stderr line when a write fails', () => {
@@ -289,7 +355,9 @@ describe('writeDeliveryEventOnHandle', () => {
     db.exec('DROP TABLE delivery_candidates');
     expect(runWithRequestId('req-ledger-7', () => writeDeliveryEventOnHandle(db, event()))).toBeNull();
     expect(err).toHaveBeenCalledTimes(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7 errorClass=\w+ stack=.*\n$/);
+    expect(String(err.mock.calls[0][0])).toMatch(
+      /^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7 errorClass=\w+ stack=.*\n$/,
+    );
   });
 });
 
@@ -335,7 +403,9 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     holder.exec('BEGIN IMMEDIATE');
     let dropped: StatementLog<number | null>;
     try {
-      dropped = recordStatements(() => writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p2', ts: at(5000) }), prune));
+      dropped = recordStatements(() =>
+        writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p2', ts: at(5000) }), prune),
+      );
     } finally {
       holder.exec('COMMIT');
       closeHippoDb(holder);
@@ -380,14 +450,30 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
 });
 
 describe('createDeliveryRecorder row building', () => {
-  const mem = (n: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({ ...createMemory(`memory number ${n}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), id: `m${String(n).padStart(3, '0')}`, ...extra });
-  const recorder = (payload: Record<string, string> = {}) => createDeliveryRecorder({
-    ledger: sqliteSyncStore(root).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default',
-    stdinText: JSON.stringify({ session_id: 's', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit', ...payload }),
+  const mem = (n: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
+    ...createMemory(`memory number ${n}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    id: `m${String(n).padStart(3, '0')}`,
+    ...extra,
   });
+  const recorder = (payload: Record<string, string> = {}) =>
+    createDeliveryRecorder({
+      ledger: sqliteSyncStore(root).localFiles.ledger,
+      storeHash: 'aaaaaaaaaaaaaaaa',
+      writeStore: 'local',
+      tenantId: 'default',
+      stdinText: JSON.stringify({
+        session_id: 's',
+        prompt: 'the raw prompt text',
+        hook_event_name: 'UserPromptSubmit',
+        ...payload,
+      }),
+    });
   const built = (rec: ReturnType<typeof recorder>): DeliveryEventInput => {
     let input: DeliveryEventInput | null = null;
-    rec.flush((i) => { input = i; return 1; });
+    rec.flush((i) => {
+      input = i;
+      return 1;
+    });
     if (input === null) throw new Error('recorder wrote nothing');
     return input;
   };
@@ -396,22 +482,34 @@ describe('createDeliveryRecorder row building', () => {
     const rec = recorder();
     const entries = Array.from({ length: 40 }, (_, i) => mem(i));
     rec.offer(entries, false);
-    const stages: Array<[DeliveryStage, DeliveryRejectReason]> = [['load', 'duplicate'], ['gate', 'gate-below-threshold'], ['budget', 'budget']];
+    const stages: Array<[DeliveryStage, DeliveryRejectReason]> = [
+      ['load', 'duplicate'],
+      ['gate', 'gate-below-threshold'],
+      ['budget', 'budget'],
+    ];
     entries.slice(2, 32).forEach((e, i) => {
       const [stage, reason] = stages[i % 3];
       rec.reject(e, stage, reason, i);
     });
-    rec.selected([{ entry: entries[0], score: 2, tokens: 5 }, { entry: entries[1], score: 1, tokens: 7 }]);
+    rec.selected([
+      { entry: entries[0], score: 2, tokens: 5 },
+      { entry: entries[1], score: 1, tokens: 7 },
+    ]);
     rec.delivered({ state: 'sent', emittedText: 'block text' });
     const input = built(rec);
     const rejectedRows = input.candidates.filter((c) => c.outcome === 'rejected');
-    expect(input.candidates.filter((c) => c.outcome === 'emitted').map((c) => [c.memoryId, c.rank])).toEqual([['m000', 1], ['m001', 2]]);
+    expect(input.candidates.filter((c) => c.outcome === 'emitted').map((c) => [c.memoryId, c.rank])).toEqual([
+      ['m000', 1],
+      ['m001', 2],
+    ]);
     expect(rejectedRows).toHaveLength(DELIVERY_REJECTED_ROW_CAP);
     expect(rejectedRows.slice(0, 10).every((c) => c.stage === 'budget')).toBe(true);
     expect(rejectedRows.slice(10).every((c) => c.stage === 'gate')).toBe(true);
     expect(rejectedRows[0].score).toBeGreaterThan(rejectedRows[1].score ?? 0);
     // 30 rejected (16 listed) + 8 never decided = 38 rejected, 22 unlisted.
-    expect([input.consideredCount, input.selectedCount, input.rejectedCount, input.rejectedUnlisted]).toEqual([40, 2, 38, 22]);
+    expect([input.consideredCount, input.selectedCount, input.rejectedCount, input.rejectedUnlisted]).toEqual([
+      40, 2, 38, 22,
+    ]);
     expect([input.selectedTokens, input.emittedCount]).toEqual([12, 2]);
   });
 
@@ -422,7 +520,10 @@ describe('createDeliveryRecorder row building', () => {
     rec.reject(b, 'eligible', 'quality');
     rec.reject(b, 'budget', 'budget');
     rec.reject(a, 'budget', 'budget');
-    rec.selected([{ entry: a, score: 1, tokens: 3 }, { entry: c, score: 1, tokens: 3, promptRecall: true }]);
+    rec.selected([
+      { entry: a, score: 1, tokens: 3 },
+      { entry: c, score: 1, tokens: 3, promptRecall: true },
+    ]);
     rec.delivered({ state: 'reused-recall-sent', staticReused: true, emittedText: 'recall only' });
     const rows = new Map(built(rec).candidates.map((r) => [r.memoryId, r]));
     expect([rows.get('m001')?.outcome, rows.get('m001')?.pool]).toEqual(['reused', 'pin']);
@@ -436,7 +537,12 @@ describe('createDeliveryRecorder row building', () => {
     const input = built(rec);
     expect(input.promptHash).toMatch(/^[0-9a-f]{16}$/);
     expect(input.emittedHash).toMatch(/^[0-9a-f]{16}$/);
-    expect([input.promptLength, input.injectedTokens, input.runtime, input.eventType]).toEqual([19, 3, 'claude-code', 'prompt-submit']);
+    expect([input.promptLength, input.injectedTokens, input.runtime, input.eventType]).toEqual([
+      19,
+      3,
+      'claude-code',
+      'prompt-submit',
+    ]);
     expect(JSON.stringify(input)).not.toContain('raw prompt');
   });
 
@@ -466,11 +572,26 @@ describe('createDeliveryRecorder row building', () => {
 });
 
 describe('tool-failure rows', () => {
-  const failureEvent = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput => event({
-    eventType: 'tool-failure', promptHash: null, promptLength: 0, blockState: 'empty', consideredCount: 0, selectedCount: 0, emittedCount: 0,
-    selectedTokens: 0, injectedTokens: 0, budgetTokens: 0, staticHash: null, emittedHash: null, elapsedMs: 1, toolUseId: null, failureId: null,
-    candidates: [], ...overrides,
-  });
+  const failureEvent = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
+    event({
+      eventType: 'tool-failure',
+      promptHash: null,
+      promptLength: 0,
+      blockState: 'empty',
+      consideredCount: 0,
+      selectedCount: 0,
+      emittedCount: 0,
+      selectedTokens: 0,
+      injectedTokens: 0,
+      budgetTokens: 0,
+      staticHash: null,
+      emittedHash: null,
+      elapsedMs: 1,
+      toolUseId: null,
+      failureId: null,
+      candidates: [],
+      ...overrides,
+    });
   const rows = () => readDeliveryEvents(db, 'default', 'sess-1');
 
   it('every stored row carries the current ledger version', () => {
@@ -483,19 +604,28 @@ describe('tool-failure rows', () => {
   it('the same tool_use_id twice is a duplicate of the first row and unnumbered', () => {
     const first = writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
     const second = writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
-    expect(rows().map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([[first, 1, null], [second, null, first]]);
+    expect(rows().map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
+      [first, 1, null],
+      [second, null, first],
+    ]);
   });
 
   it('two distinct ids within one millisecond are two numbered rows', () => {
     writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
     writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_2' }));
-    expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+    expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+      [1, null],
+      [2, null],
+    ]);
   });
 
   it('no id gives two numbered rows, never merged by time', () => {
     writeDeliveryEventOnHandle(db, failureEvent());
     writeDeliveryEventOnHandle(db, failureEvent());
-    expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+    expect(rows().map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+      [1, null],
+      [2, null],
+    ]);
   });
 
   it('the same id in another session or tenant is not a duplicate', () => {
@@ -509,17 +639,22 @@ describe('tool-failure rows', () => {
   it('a sub-agent row is unnumbered and never a duplicate', () => {
     writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
     writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1', sessionState: 'subagent' }));
-    expect(rows().map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([['payload', 1, null], ['subagent', null, null]]);
+    expect(rows().map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([
+      ['payload', 1, null],
+      ['subagent', null, null],
+    ]);
   });
 
   it('the index rejects a forced second numbered row with the same key', () => {
     writeDeliveryEventOnHandle(db, failureEvent({ toolUseId: 'toolu_1' }));
-    const forced = (turnSeq: number | null): void => { db.prepare(
-      `INSERT INTO delivery_events (ts, ledger_version, tenant_id, runtime, event_type, surface, store_hash, write_store, session_id,
+    const forced = (turnSeq: number | null): void => {
+      db.prepare(
+        `INSERT INTO delivery_events (ts, ledger_version, tenant_id, runtime, event_type, surface, store_hash, write_store, session_id,
          session_state, turn_seq, block_state, tool_use_id)
        VALUES ('2026-09-01T00:00:00.000Z', 4, 'default', 'claude-code', 'tool-failure', 'hook', 'aaaaaaaaaaaaaaaa', 'local', 'sess-1',
          'payload', ?, 'empty', 'toolu_1')`,
-    ).run(turnSeq); };
+      ).run(turnSeq);
+    };
     expect(() => forced(9)).toThrow(/UNIQUE|constraint/i);
     expect(() => forced(null)).not.toThrow();
   });

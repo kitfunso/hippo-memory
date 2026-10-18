@@ -11,7 +11,11 @@ import { MAX_LIST_LIMIT } from '../util/limits.js';
 import { conflictPageAt, openConflictsNamingAt } from './conflicts.js';
 import { openStore, type Handles } from './open.js';
 import type {
-  DashboardReads, DashboardRow, DashboardScan, DashboardText, ExcludedCounts,
+  DashboardReads,
+  DashboardRow,
+  DashboardScan,
+  DashboardText,
+  ExcludedCounts,
 } from './port/dashboard-reads.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
@@ -27,8 +31,20 @@ const LIVE_COLUMNS =
   'EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id) AS embedded';
 type LiveRow = Pick<
   MemoryRow,
-  | 'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'emotional_valence'
-  | 'outcome_positive' | 'outcome_negative' | 'pinned' | 'confidence' | 'superseded_by' | 'kind' | 'scope'
+  | 'id'
+  | 'created'
+  | 'last_retrieved'
+  | 'retrieval_count'
+  | 'half_life_days'
+  | 'layer'
+  | 'emotional_valence'
+  | 'outcome_positive'
+  | 'outcome_negative'
+  | 'pinned'
+  | 'confidence'
+  | 'superseded_by'
+  | 'kind'
+  | 'scope'
   | 'origin_project'
 > & { head: string; embedded: number };
 
@@ -37,8 +53,8 @@ type TextRow = Pick<MemoryRow, 'id' | 'created' | 'content' | 'tags_json'>;
 
 // SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does,
 // where LIKE would fold case.
-const QUARANTINED = `(scope IS NOT NULL ` +
-  `AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
+const QUARANTINED =
+  `(scope IS NOT NULL ` + `AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
 const SUPERSEDED_BY = `(superseded_by IS NOT NULL AND superseded_by <> '')`;
 const KIND = `COALESCE(kind, 'distilled')`;
 const LIVE = `NOT ${SUPERSEDED_BY} AND ${KIND} IN ('raw', 'distilled') AND NOT ${QUARANTINED}`;
@@ -103,12 +119,14 @@ function eachOpenConflictPage(db: DatabaseSyncLike, tenantId: string, visit: Das
 
 function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
   // SAFETY: the SELECT names exactly these two fields, and `why` is one of the three CASE arms or NULL.
-  const counts = db.prepare(
-    `SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
-      `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
-      `WHEN ${KIND} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
-      `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
-  ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
+  const counts = db
+    .prepare(
+      `SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
+        `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
+        `WHEN ${KIND} = 'archived' THEN 'archived' END AS why, COUNT(*) AS n ` +
+        `FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why`,
+    )
+    .all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
   const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0 };
   for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
   return excluded;
@@ -137,9 +155,13 @@ export function sqliteDashboardReads({ on, files }: Handles): DashboardReads {
     },
     scan: (tenantId, visit) => on((db) => scanAt(db, tenantId, visit), openStore),
     scanText(tenantId, visit) {
-      on((db) => withReadSnapshot(db, () => {
-        eachLivePage<TextRow>(db, tenantId, TEXT_COLUMNS, (page) => visit(page.map(toDashboardText)));
-      }), openStore);
+      on(
+        (db) =>
+          withReadSnapshot(db, () => {
+            eachLivePage<TextRow>(db, tenantId, TEXT_COLUMNS, (page) => visit(page.map(toDashboardText)));
+          }),
+        openStore,
+      );
     },
     openConflictsOf: (tenantId, memoryId) => on((db) => openConflictsNamingAt(db, tenantId, memoryId), openStore),
     hasVector(id) {

@@ -31,11 +31,7 @@ function sign(body: string, secret: string = SECRET): string {
   return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
 }
 
-function postWebhook(
-  port: number,
-  body: string,
-  headers: Record<string, string>,
-): Promise<Response> {
+function postWebhook(port: number, body: string, headers: Record<string, string>): Promise<Response> {
   return fetch(`http://127.0.0.1:${port}/v1/connectors/github/events`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
@@ -184,9 +180,7 @@ describe('POST /v1/connectors/github/events', () => {
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issue_comment', 'd-2'));
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
-    const ghRow = entries.find(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
-    );
+    const ghRow = entries.find((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999');
     expect(ghRow).toBeDefined();
   });
 
@@ -195,25 +189,17 @@ describe('POST /v1/connectors/github/events', () => {
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'pull_request', 'd-3'));
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
-    const ghRow = entries.find(
-      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/pull/7',
-    );
+    const ghRow = entries.find((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/pull/7');
     expect(ghRow).toBeDefined();
   });
 
   it('4. valid signature + pull_request_review_comment.created → 200, memory ingested', async () => {
     const body = prReviewCommentBody('created');
-    const res = await postWebhook(
-      handle.port,
-      body,
-      defaultHeaders(body, 'pull_request_review_comment', 'd-4'),
-    );
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'pull_request_review_comment', 'd-4'));
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root, 'default');
     const ghRow = entries.find(
-      (e) =>
-        e.kind === 'raw' &&
-        e.artifact_ref === 'github://acme/repo/pull/7/review_comment/12345',
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/pull/7/review_comment/12345',
     );
     expect(ghRow).toBeDefined();
   });
@@ -265,11 +251,7 @@ describe('POST /v1/connectors/github/events', () => {
   it('9. issue_comment.deleted → archives previously-ingested comment', async () => {
     // First, ingest a comment.
     const createBody = issueCommentBody('created');
-    const createRes = await postWebhook(
-      handle.port,
-      createBody,
-      defaultHeaders(createBody, 'issue_comment', 'd-9a'),
-    );
+    const createRes = await postWebhook(handle.port, createBody, defaultHeaders(createBody, 'issue_comment', 'd-9a'));
     expect(createRes.status).toBe(200);
     const beforeRaws = loadAllEntries(root, 'default').filter(
       (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42/comment/999',
@@ -278,11 +260,7 @@ describe('POST /v1/connectors/github/events', () => {
 
     // Now delete it.
     const delBody = issueCommentBody('deleted');
-    const delRes = await postWebhook(
-      handle.port,
-      delBody,
-      defaultHeaders(delBody, 'issue_comment', 'd-9b'),
-    );
+    const delRes = await postWebhook(handle.port, delBody, defaultHeaders(delBody, 'issue_comment', 'd-9b'));
     expect(delRes.status).toBe(200);
     const json = await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes);
     expect(json.status).toBe('archived');
@@ -298,9 +276,11 @@ describe('POST /v1/connectors/github/events', () => {
     // Seed github_installations with a different installation_id (multi-tenant).
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('77', 'tenant-other', new Date().toISOString());
+      db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        '77',
+        'tenant-other',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -313,10 +293,7 @@ describe('POST /v1/connectors/github/events', () => {
 
     const db2 = openHippoDb(root);
     try {
-      const row = queryOne<{ bucket: string }>(
-        db2,
-        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
-      );
+      const row = queryOne<{ bucket: string }>(db2, `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`);
       expect(row.bucket).toBe('unroutable');
     } finally {
       closeHippoDb(db2);
@@ -327,9 +304,11 @@ describe('POST /v1/connectors/github/events', () => {
     // Seed github_installations non-empty so PAT-mode falls through to repo lookup.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('77', 'tenant-other', new Date().toISOString());
+      db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        '77',
+        'tenant-other',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -342,10 +321,7 @@ describe('POST /v1/connectors/github/events', () => {
 
     const db2 = openHippoDb(root);
     try {
-      const row = queryOne<{ bucket: string }>(
-        db2,
-        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
-      );
+      const row = queryOne<{ bucket: string }>(db2, `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`);
       expect(row.bucket).toBe('unroutable');
     } finally {
       closeHippoDb(db2);
@@ -357,12 +333,16 @@ describe('POST /v1/connectors/github/events', () => {
     // mode) and repositories has a mapping for the inbound repo.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('77', 'tenant-other', new Date().toISOString());
-      db.prepare(
-        `INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('acme/repo', 'tenant-a', new Date().toISOString());
+      db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        '77',
+        'tenant-other',
+        new Date().toISOString(),
+      );
+      db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'acme/repo',
+        'tenant-a',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -394,10 +374,7 @@ describe('POST /v1/connectors/github/events', () => {
 
     const db = openHippoDb(root);
     try {
-      const row = queryOne<{ bucket: string }>(
-        db,
-        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
-      );
+      const row = queryOne<{ bucket: string }>(db, `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`);
       expect(row.bucket).toBe('parse_error');
     } finally {
       closeHippoDb(db);
@@ -423,38 +400,66 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   it('14b. a signed delivery sent again under the same X-GitHub-Delivery is refused with 409; a new id passes', async () => {
-    const issueRows = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref?.startsWith('github://acme/repo/issue/'));
+    const issueRows = () =>
+      loadAllEntries(root, 'default').filter(
+        (e) => e.kind === 'raw' && e.artifact_ref?.startsWith('github://acme/repo/issue/'),
+      );
     const first = issueBody({ number: 50 });
     expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'))).status).toBe(200);
 
     const replay = await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'));
-    expect({ status: replay.status, body: await replay.json() }).toEqual({ status: 409, body: { error: 'duplicate X-GitHub-Delivery' } });
+    expect({ status: replay.status, body: await replay.json() }).toEqual({
+      status: 409,
+      body: { error: 'duplicate X-GitHub-Delivery' },
+    });
     const other = issueBody({ number: 51 });
     expect((await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay'))).status).toBe(409);
     expect(issueRows().map((e) => e.artifact_ref)).toEqual(['github://acme/repo/issue/50']);
 
     const fresh = await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay-next'));
-    expect({ status: fresh.status, status_field: (await jsonAs<{ status: string }>(fresh)).status }).toEqual({ status: 200, status_field: 'ingested' });
-    expect(issueRows().map((e) => e.artifact_ref).sort()).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
+    expect({ status: fresh.status, status_field: (await jsonAs<{ status: string }>(fresh)).status }).toEqual({
+      status: 200,
+      status_field: 'ingested',
+    });
+    expect(
+      issueRows()
+        .map((e) => e.artifact_ref)
+        .sort(),
+    ).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
   });
 
   it('14d. the same delivery replayed after a restart, which forgets every claimed id, is a stored duplicate with no new rows', async () => {
-    const issueRows = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/53');
+    const issueRows = () =>
+      loadAllEntries(root, 'default').filter(
+        (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/53',
+      );
     const body = issueBody({ number: 53 });
-    expect((await jsonAs<{ status: string }>(await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart')))).status).toBe('ingested');
+    expect(
+      (
+        await jsonAs<{ status: string }>(
+          await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart')),
+        )
+      ).status,
+    ).toBe('ingested');
     await handle.stop();
     // A fresh module graph is a fresh process's memory: the in-memory claim on d-restart is gone.
     vi.resetModules();
     const restarted: typeof import('../../src/server.js') = await import('../../src/server.js');
     handle = await restarted.serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
     const replay = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-restart'));
-    expect({ status: replay.status, body: await jsonAs<{ status: string }>(replay) }).toMatchObject({ status: 200, body: { status: 'duplicate' } });
+    expect({ status: replay.status, body: await jsonAs<{ status: string }>(replay) }).toMatchObject({
+      status: 200,
+      body: { status: 'duplicate' },
+    });
     expect(issueRows()).toHaveLength(1);
   });
 
   it('14c. a bad signature never claims a delivery id, so the signed delivery under that id still lands', async () => {
     const body = issueBody({ number: 52 });
-    const forged = await postWebhook(handle.port, body, { ...defaultHeaders(body, 'issues', 'd-forged-first'), 'x-hub-signature-256': 'sha256=deadbeef' });
+    const forged = await postWebhook(handle.port, body, {
+      ...defaultHeaders(body, 'issues', 'd-forged-first'),
+      'x-hub-signature-256': 'sha256=deadbeef',
+    });
     expect(forged.status).toBe(401);
     expect((await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-forged-first'))).status).toBe(200);
   });
@@ -472,10 +477,7 @@ describe('POST /v1/connectors/github/events', () => {
 
     const db = openHippoDb(root);
     try {
-      const row = queryOne<{ bucket: string }>(
-        db,
-        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
-      );
+      const row = queryOne<{ bucket: string }>(db, `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`);
       expect(row.bucket).toBe('unhandled');
     } finally {
       closeHippoDb(db);
@@ -520,7 +522,8 @@ describe('POST /v1/connectors/github/events', () => {
 
   it('17. pull_request_review_comment.deleted → archives the previously-ingested review comment', async () => {
     const artifactRef = 'github://acme/repo/pull/7/review_comment/12345';
-    const liveRaws = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+    const liveRaws = () =>
+      loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
     const createBody = prReviewCommentBody('created');
     const createRes = await postWebhook(
       handle.port,
@@ -537,8 +540,11 @@ describe('POST /v1/connectors/github/events', () => {
       defaultHeaders(delBody, 'pull_request_review_comment', 'd-17b'),
     );
     expect(delRes.status).toBe(200);
-    expect(await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes))
-      .toEqual({ ok: true, status: 'archived', archivedCount: 1 });
+    expect(await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes)).toEqual({
+      ok: true,
+      status: 'archived',
+      archivedCount: 1,
+    });
     expect(liveRaws().length).toBe(0);
 
     // Nothing was parked: the delete was handled, not left for an operator.

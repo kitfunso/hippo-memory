@@ -34,7 +34,16 @@ describe('hippo status', () => {
     await run('init');
     await run('remember', 'alpha deploys use blue green');
     await run('remember', 'beta pinned rule', '--pin');
-    await run('trace', 'record', '--task', 't', '--steps', '[{"action":"a","observation":"o"}]', '--outcome', 'success');
+    await run(
+      'trace',
+      'record',
+      '--task',
+      't',
+      '--steps',
+      '[{"action":"a","observation":"o"}]',
+      '--outcome',
+      'success',
+    );
     const out = await run('status');
     expect({
       total: field(out, 'Total memories'),
@@ -49,14 +58,27 @@ describe('hippo status', () => {
       forgotten: field(out, 'Total forgotten'),
       sleep: field(out, 'Last sleep'),
     }).toEqual({
-      total: '3', buffer: '0', episodic: '2', semantic: '0', trace: '1', pinned: '1', conflicts: '0',
-      remembered: '2', recalled: '0', forgotten: '0', sleep: 'never',
+      total: '3',
+      buffer: '0',
+      episodic: '2',
+      semantic: '0',
+      trace: '1',
+      pinned: '1',
+      conflicts: '0',
+      remembered: '2',
+      recalled: '0',
+      forgotten: '0',
+      sleep: 'never',
     });
   });
 
   it('reports an empty store as zeros', async () => {
     await run('init');
     const out = await run('status');
-    expect([field(out, 'Total memories'), field(out, 'Pinned'), field(out, 'Total remembered')]).toEqual(['0', '0', '0']);
+    expect([field(out, 'Total memories'), field(out, 'Pinned'), field(out, 'Total remembered')]).toEqual([
+      '0',
+      '0',
+      '0',
+    ]);
   });
 });

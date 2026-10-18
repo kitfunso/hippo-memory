@@ -4,7 +4,9 @@ import { RequestDeadline } from '../../src/util/request-scope.js';
 
 function pendingCall() {
   let settle!: () => void;
-  const call = new Promise<void>((resolve) => { settle = resolve; });
+  const call = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
   return { call, settle };
 }
 

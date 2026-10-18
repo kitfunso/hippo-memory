@@ -42,9 +42,7 @@ export type AnthropicMessageFailure =
   | { kind: 'unreadable'; message: string }
   | { kind: 'empty' };
 
-export type AnthropicMessageResult =
-  | { ok: true; text: string }
-  | { ok: false; failure: AnthropicMessageFailure };
+export type AnthropicMessageResult = { ok: true; text: string } | { ok: false; failure: AnthropicMessageFailure };
 
 /** True for a failure the next call would repeat, so a caller looping over items should stop rather than retry. */
 export function isPermanentFailure(failure: AnthropicMessageFailure): boolean {
@@ -68,19 +66,23 @@ async function errorSnippet(res: Response): Promise<string> {
 export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promise<AnthropicMessageResult> {
   let res: Response;
   try {
-    res = await fetchWithRetry(MESSAGES_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': req.apiKey,
-        'anthropic-version': API_VERSION,
+    res = await fetchWithRetry(
+      MESSAGES_URL,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': req.apiKey,
+          'anthropic-version': API_VERSION,
+        },
+        body: JSON.stringify({
+          model: req.model ?? DEFAULT_MODEL,
+          max_tokens: req.maxTokens,
+          messages: [{ role: 'user', content: req.prompt }],
+        }),
       },
-      body: JSON.stringify({
-        model: req.model ?? DEFAULT_MODEL,
-        max_tokens: req.maxTokens,
-        messages: [{ role: 'user', content: req.prompt }],
-      }),
-    }, { timeoutMs: llmTimeoutMs(), totalMs: llmTotalMs(), fetchFn: req.fetcher ?? fetch });
+      { timeoutMs: llmTimeoutMs(), totalMs: llmTotalMs(), fetchFn: req.fetcher ?? fetch },
+    );
   } catch (err) {
     return { ok: false, failure: { kind: 'request', message: errorMessage(err) } };
   }
@@ -101,9 +103,13 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
 /** The text extraction and DAG summaries hand to their `onError` callback. */
 export function describeMessageFailure(failure: AnthropicMessageFailure): string {
   switch (failure.kind) {
-    case 'request': return `request failed: ${failure.message}`;
-    case 'http': return failure.detail ? `HTTP ${failure.status}: ${failure.detail}` : `HTTP ${failure.status}`;
-    case 'unreadable': return `unparseable response: ${failure.message}`;
-    case 'empty': return 'the reply held no text';
+    case 'request':
+      return `request failed: ${failure.message}`;
+    case 'http':
+      return failure.detail ? `HTTP ${failure.status}: ${failure.detail}` : `HTTP ${failure.status}`;
+    case 'unreadable':
+      return `unparseable response: ${failure.message}`;
+    case 'empty':
+      return 'the reply held no text';
   }
 }

@@ -38,8 +38,13 @@ const FIXTURE_COUNTS = new Map<string, number>([
 
 const ROOT = path.join(fileURLToPath(new URL('..', import.meta.url)), 'fixtures', 'capture');
 const subdirs = (dir: string): string[] =>
-  fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
-const fixtureDirs = subdirs(ROOT).flatMap((runtime) => subdirs(path.join(ROOT, runtime)).map((event) => `${runtime}/${event}`));
+  fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+const fixtureDirs = subdirs(ROOT).flatMap((runtime) =>
+  subdirs(path.join(ROOT, runtime)).map((event) => `${runtime}/${event}`),
+);
 
 describe('capture contract conformance', () => {
   it('maps every fixture directory to a reader, and every reader to fixtures', () => {

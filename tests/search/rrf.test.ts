@@ -47,8 +47,8 @@ describe('rrf', () => {
 
   describe('rrfFuse — partial candidate overlap', () => {
     it('candidate present in only one list uses default absentRank = maxListLen + 1', () => {
-      const a = ['x', 'y'];           // length 2
-      const b = ['z'];                 // length 1
+      const a = ['x', 'y']; // length 2
+      const b = ['z']; // length 1
       // maxListLen = 2; absentRank defaults to 3.
       const out = rrfFuse([a, b], [0.5, 0.5]);
       // x: in a@1, absent from b (rank 3) → 0.5/61 + 0.5/63
@@ -107,7 +107,13 @@ describe('rrf', () => {
 
   describe('rrfFuse — generic over candidate type', () => {
     it('works with numeric ids', () => {
-      const out = rrfFuse<number>([[1, 2, 3], [3, 2, 1]], [0.5, 0.5]);
+      const out = rrfFuse<number>(
+        [
+          [1, 2, 3],
+          [3, 2, 1],
+        ],
+        [0.5, 0.5],
+      );
       expect(out.size).toBe(3);
       expect(out.get(1)).toBeCloseTo(out.get(3)!, 10);
     });

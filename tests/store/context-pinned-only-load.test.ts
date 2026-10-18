@@ -28,7 +28,11 @@ let globalRoot: string;
 let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
-  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
+  const entry = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    origin_project: PROJECT,
+    ...extra,
+  };
   writeEntry(root, entry);
   return entry;
 }
@@ -242,9 +246,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       currentProject: PROJECT,
     });
 
-    expect(new Set(ids(result))).toEqual(
-      new Set([pinA.id, pinB.id, recents[3].id, recents[2].id]),
-    );
+    expect(new Set(ids(result))).toEqual(new Set([pinA.id, pinB.id, recents[3].id, recents[2].id]));
   });
 
   it('sources recent-N candidates from the global store too', async () => {
@@ -273,8 +275,20 @@ describe('pinned-only context loads a slice, not the corpus', () => {
 
 describe('loadAmbientCandidates', () => {
   it('scopes to the caller tenant', () => {
-    const mine = { ...createMemory('a row belonging to tenant a', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant-a' }), pinned: true };
-    const theirs = { ...createMemory('a row belonging to tenant b', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'tenant-b' }), pinned: true };
+    const mine = {
+      ...createMemory('a row belonging to tenant a', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tenantId: 'tenant-a',
+      }),
+      pinned: true,
+    };
+    const theirs = {
+      ...createMemory('a row belonging to tenant b', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tenantId: 'tenant-b',
+      }),
+      pinned: true,
+    };
     writeEntry(local, mine);
     writeEntry(local, theirs);
 
@@ -288,12 +302,19 @@ describe('loadAmbientCandidates', () => {
     const created = '2026-05-05T05:05:05.000Z';
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 40; i++) {
-        writeEntry(local, { ...createMemory(`tied row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created, id: `id-${String(i).padStart(3, '0')}` });
+        writeEntry(local, {
+          ...createMemory(`tied row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+          created,
+          id: `id-${String(i).padStart(3, '0')}`,
+        });
       }
     });
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 3, () => true);
-    const newestThree = got.map((e) => e.id).sort().slice(-3);
+    const newestThree = got
+      .map((e) => e.id)
+      .sort()
+      .slice(-3);
 
     expect(newestThree).toEqual(['id-037', 'id-038', 'id-039']);
   });
@@ -310,16 +331,20 @@ describe('loadAmbientCandidates', () => {
     });
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 5, () => true);
-    const sorted = [...got].sort((a, b) =>
-      a.created.localeCompare(b.created) || a.id.localeCompare(b.id),
-    );
+    const sorted = [...got].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id));
 
     expect(got.map((e) => e.id)).toEqual(sorted.map((e) => e.id));
   });
 
   it('asks for nothing recent when the caller wants no backfill', () => {
-    writeEntry(local, { ...createMemory('an unpinned row nobody asked for', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created: '2026-08-08T00:00:00.000Z' });
-    const pin = { ...createMemory('the only pin in the store', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true };
+    writeEntry(local, {
+      ...createMemory('an unpinned row nobody asked for', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      created: '2026-08-08T00:00:00.000Z',
+    });
+    const pin = {
+      ...createMemory('the only pin in the store', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      pinned: true,
+    };
     writeEntry(local, pin);
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 0, () => true);
@@ -333,13 +358,17 @@ describe('loadAmbientCandidates', () => {
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 32; i++) {
         writeEntry(local, {
-          ...createMemory(`canonical filler row ${i} with enough words to be worth storing`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+          ...createMemory(`canonical filler row ${i} with enough words to be worth storing`, {
+            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          }),
           created: new Date(Date.UTC(2026, 5, 1, 12, i)).toISOString(),
         });
       }
     });
     const drifted = {
-      ...createMemory('a legacy row whose frontmatter recorded a local offset', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ...createMemory('a legacy row whose frontmatter recorded a local offset', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
       created: '2026-06-01T09:00:00-04:00',
     };
     writeEntry(local, drifted);
@@ -349,7 +378,7 @@ describe('loadAmbientCandidates', () => {
     expect(got.map((e) => e.id)).toContain(drifted.id);
   });
 
-  it('finds the caller\'s older rows behind a full window of other projects without reading the corpus', async () => {
+  it("finds the caller's older rows behind a full window of other projects without reading the corpus", async () => {
     const mine = Array.from({ length: 5 }, (_, i) => ({
       ...createMemory(`an older row of the caller ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       origin_project: PROJECT,
@@ -366,9 +395,15 @@ describe('loadAmbientCandidates', () => {
       }
     });
     let admitted = 0;
-    const admit = (e: { origin_project?: string | null }): boolean => { admitted++; return e.origin_project === PROJECT; };
+    const admit = (e: { origin_project?: string | null }): boolean => {
+      admitted++;
+      return e.origin_project === PROJECT;
+    };
 
-    const { entries: got } = loadAmbientCandidates(local, 'default', 5, admit, undefined, { names: [PROJECT], userGlobal: true });
+    const { entries: got } = loadAmbientCandidates(local, 'default', 5, admit, undefined, {
+      names: [PROJECT],
+      userGlobal: true,
+    });
 
     expect(got.map((e) => e.id).sort()).toEqual(mine.map((e) => e.id).sort());
     expect(admitted).toBeLessThan(105);
@@ -380,7 +415,9 @@ describe('loadAmbientCandidates', () => {
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 40; i++) {
         writeEntry(local, {
-          ...createMemory(`fractional filler row ${i} with enough words to be worth storing`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+          ...createMemory(`fractional filler row ${i} with enough words to be worth storing`, {
+            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          }),
           created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
         });
       }

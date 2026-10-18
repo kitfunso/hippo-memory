@@ -34,8 +34,24 @@ describe('api.sleep secretSkipped counter', () => {
     globalTmp = makeRoot('sleep-secretskip-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalTmp);
 
-    writeEntry(hippoRoot, createMemory(SECRET_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
-    writeEntry(hippoRoot, createMemory(CLEAN_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
+    writeEntry(
+      hippoRoot,
+      createMemory(SECRET_ROW, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        pinned: true,
+        tags: ['error', 'gotcha'],
+        tenantId: 'default',
+      }),
+    );
+    writeEntry(
+      hippoRoot,
+      createMemory(CLEAN_ROW, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        pinned: true,
+        tags: ['error', 'gotcha'],
+        tenantId: 'default',
+      }),
+    );
 
     ctx = apiCtx(hippoRoot, 'default', adminActor('test:secret-skip'));
   });

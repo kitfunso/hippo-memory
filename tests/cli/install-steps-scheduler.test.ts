@@ -47,13 +47,16 @@ describe('setupDailySchedule', () => {
   });
 
   // A Windows host resolves the root with backslashes, which the crontab branch refuses, so this case runs on POSIX hosts (CI) only.
-  it.skipIf(process.platform === 'win32')('on Linux reads and writes the crontab through crontab argv, never a shell command line', () => {
-    const calls = scheduleOn('linux', '/srv/hippo-home');
-    expect(calls.map(({ file, args }) => [file, args])).toEqual([
-      ['crontab', ['-l']],
-      ['crontab', ['-']],
-    ]);
-    expect(calls[1]!.opts.input).toContain(`# hippo:${DAILY_TASK_NAME}`);
-    expect(calls.every(({ opts }) => opts.shell === undefined && opts.stdio === 'pipe')).toBe(true);
-  });
+  it.skipIf(process.platform === 'win32')(
+    'on Linux reads and writes the crontab through crontab argv, never a shell command line',
+    () => {
+      const calls = scheduleOn('linux', '/srv/hippo-home');
+      expect(calls.map(({ file, args }) => [file, args])).toEqual([
+        ['crontab', ['-l']],
+        ['crontab', ['-']],
+      ]);
+      expect(calls[1]!.opts.input).toContain(`# hippo:${DAILY_TASK_NAME}`);
+      expect(calls.every(({ opts }) => opts.shell === undefined && opts.stdio === 'pipe')).toBe(true);
+    },
+  );
 });

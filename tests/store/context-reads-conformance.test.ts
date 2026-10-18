@@ -4,13 +4,27 @@ import { rmSync } from 'node:fs';
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type {
-  AmbientCandidateRequest, AmbientLoadResult, AmbientStoreFilter, AmbientTallies, AuditEvent, ContinuityKey, MemoryEntry,
+  AmbientCandidateRequest,
+  AmbientLoadResult,
+  AmbientStoreFilter,
+  AmbientTallies,
+  AuditEvent,
+  ContinuityKey,
+  MemoryEntry,
 } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from '../_helpers/context-fixture.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryContextStore } from '../_helpers/in-memory-context-store.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type Outcome,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
 
 type Call = GroupCall<'contextReads', unknown>;
 type Named = readonly [string, Call];
@@ -20,7 +34,12 @@ let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's outcomes by name. */
 async function conforms(named: readonly Named[], on = fixture): Promise<Map<string, Outcome<unknown>>> {
-  const sides = await onBothStores(on, 'contextReads', inMemoryContextStore, named.map(([, call]) => call));
+  const sides = await onBothStores(
+    on,
+    'contextReads',
+    inMemoryContextStore,
+    named.map(([, call]) => call),
+  );
   expect(sides.other).toEqual(sides.sqlite);
   if (on === fixture) expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return new Map(named.map(([name], i) => [name, sides.sqlite.outcomes[i]]));
@@ -62,7 +81,8 @@ const KEYS: readonly (readonly [string, ContinuityKey | null])[] = [
 ];
 
 /** Every memory id an outcome holds anywhere, so a test can say which rows a read never let through. */
-const idsIn = (outcome: Outcome<unknown> | undefined): string[] => JSON.stringify(outcome ?? null).match(/mem_[a-z0-9_]+/g) ?? [];
+const idsIn = (outcome: Outcome<unknown> | undefined): string[] =>
+  JSON.stringify(outcome ?? null).match(/mem_[a-z0-9_]+/g) ?? [];
 
 /** Rows the default deny refuses: another person's personal scope and the legacy quarantine bucket. */
 const DENIED: readonly string[] = ['mem_a_bob', 'mem_a_legacy'];
@@ -78,10 +98,14 @@ describe('ContextReads.unfinishedHandoff', () => {
   it('reads alike under every key, age and bad tenant', async () => {
     const calls: Named[] = [];
     for (const [k, key] of KEYS) {
-      for (const hours of [72, 2, 1000]) calls.push([`unfinished ${k} ${hours}h`, (g) => g.unfinishedHandoff(TENANT_A, hours * HOUR, key)]);
+      for (const hours of [72, 2, 1000]) {
+        calls.push([`unfinished ${k} ${hours}h`, (g) => g.unfinishedHandoff(TENANT_A, hours * HOUR, key)]);
+      }
     }
     calls.push(['unfinished globex', (g) => g.unfinishedHandoff(TENANT_B, 72 * HOUR, null)]);
-    for (const bad of ['', 'sess-x']) calls.push([`unfinished bad ${bad}`, (g) => g.unfinishedHandoff(bad, HOUR, null)]);
+    for (const bad of ['', 'sess-x']) {
+      calls.push([`unfinished bad ${bad}`, (g) => g.unfinishedHandoff(bad, HOUR, null)]);
+    }
     const out = await conforms(calls);
 
     expect(out.get('unfinished no key 72h')).toMatchObject({ value: { summary: 'partial handoff for session b' } });
@@ -95,9 +119,18 @@ describe('ContextReads.unfinishedHandoff', () => {
 });
 
 /** An ambient load in PROJECT, which refuses other projects' rows unless `cross`; each answer lists its refusals in read order. */
-function ambient(tenantId: string, recentNeeded: number, more: Omit<AmbientCandidateRequest, 'admit' | 'recentNeeded'> = {}, cross = false): Call {
+function ambient(
+  tenantId: string,
+  recentNeeded: number,
+  more: Omit<AmbientCandidateRequest, 'admit' | 'recentNeeded'> = {},
+  cross = false,
+): Call {
   return async (g) => ({
-    result: await g.ambientCandidates(tenantId, { recentNeeded, admit: { currentProject: PROJECT, includeCrossProject: cross }, ...more }),
+    result: await g.ambientCandidates(tenantId, {
+      recentNeeded,
+      admit: { currentProject: PROJECT, includeCrossProject: cross },
+      ...more,
+    }),
   });
 }
 
@@ -120,18 +153,41 @@ describe('ContextReads.ambientCandidates', () => {
       ['no tenant', ambient('', 3)],
     ]);
 
-    expect(out.get('drifted')).toMatchObject({ value: { result: { entries: expect.arrayContaining([expect.objectContaining({ id: 'mem_b_drift' })]) } } });
-    expect(out.get('recall')).toMatchObject({ value: { result: { recall: expect.arrayContaining([expect.objectContaining({ id: 'mem_a_error' })]) } } });
+    expect(out.get('drifted')).toMatchObject({
+      value: { result: { entries: expect.arrayContaining([expect.objectContaining({ id: 'mem_b_drift' })]) } },
+    });
+    expect(out.get('recall')).toMatchObject({
+      value: { result: { recall: expect.arrayContaining([expect.objectContaining({ id: 'mem_a_error' })]) } },
+    });
     expect(out.get('recall no term indexed')).toMatchObject({ value: { result: { recall: [] } } });
     expect(out.get('no names')).toMatchObject({ value: { result: { entries: [{ id: 'mem_a_pin' }] } } });
     // Pins are read oldest first: the other project's pin, then the private one the default deny refuses.
     expect(out.get('pins only')).toMatchObject({
-      value: { result: { refused: [{ id: 'mem_a_pin_other', reason: 'admission' }, { id: 'mem_a_pin_private', reason: 'admission' }] } },
+      value: {
+        result: {
+          refused: [
+            { id: 'mem_a_pin_other', reason: 'admission' },
+            { id: 'mem_a_pin_private', reason: 'admission' },
+          ],
+        },
+      },
     });
     // The first tenant's loads never show, or refuse, a second-tenant row.
-    for (const [name, outcome] of out) if (name !== 'drifted') expect(idsIn(outcome).filter((id) => id.startsWith('mem_b_')), name).toEqual([]);
+    for (const [name, outcome] of out) {
+      if (name !== 'drifted') {
+        expect(
+          idsIn(outcome).filter((id) => id.startsWith('mem_b_')),
+          name,
+        ).toEqual([]);
+      }
+    }
     // Prompt recall applies the default deny itself: another person's personal row and the legacy bucket stay out, the caller's own comes in.
-    for (const name of ['recall', 'recall own scope']) expect(recallIds(out.get(name)).filter((id) => DENIED.includes(id)), name).toEqual([]);
+    for (const name of ['recall', 'recall own scope']) {
+      expect(
+        recallIds(out.get(name)).filter((id) => DENIED.includes(id)),
+        name,
+      ).toEqual([]);
+    }
     expect(recallIds(out.get('recall own scope'))).toEqual(expect.arrayContaining(['mem_a_alice']));
   });
 });
@@ -158,8 +214,16 @@ describe('ContextReads.contextCandidates', () => {
     expect(out.get('exact scope')).toMatchObject({ value: [{ id: 'mem_a_team' }] });
     for (const [name, outcome] of out) {
       if (name === 'globex') continue;
-      expect(idsIn(outcome).filter((id) => id.startsWith('mem_b_')), name).toEqual([]);
-      if (name !== 'exact scope') expect(idsIn(outcome).filter((id) => DENIED.includes(id)), name).toEqual([]);
+      expect(
+        idsIn(outcome).filter((id) => id.startsWith('mem_b_')),
+        name,
+      ).toEqual([]);
+      if (name !== 'exact scope') {
+        expect(
+          idsIn(outcome).filter((id) => DENIED.includes(id)),
+          name,
+        ).toEqual([]);
+      }
     }
     expect(idsIn(out.get('every row'))).toEqual(expect.arrayContaining(['mem_a_team']));
     expect(idsIn(out.get('own scope, every row'))).toEqual(expect.arrayContaining(['mem_a_alice']));
@@ -181,7 +245,10 @@ function tagsOf(outcome: Outcome<unknown> | undefined): string[] {
 
 describe('ContextReads.ambientTallies', () => {
   it('counts the same rows alike', async () => {
-    const tally = (tenantId: string, filter: Partial<AmbientStoreFilter> = {}): Call => async (g) => comparable(await g.ambientTallies(tenantId, { currentProject: [PROJECT], now: NOW, ...filter }));
+    const tally =
+      (tenantId: string, filter: Partial<AmbientStoreFilter> = {}): Call =>
+      async (g) =>
+        comparable(await g.ambientTallies(tenantId, { currentProject: [PROJECT], now: NOW, ...filter }));
     const out = await conforms([
       ['every row', tally(TENANT_A)],
       ['project', tally(TENANT_A, { project: [PROJECT] })],
@@ -205,8 +272,11 @@ describe('ContextReads.ambientTallies', () => {
 /** Digest, vault and tagged rows over both tenants, apart from the getContext fixture so its windows stay as they are. */
 function seedRowReads(dir: string): void {
   const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
-  const row = (content: string, minute: number, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry =>
-    ({ ...createMemory(content, { tenantId: TENANT_A, ...over }), created: at(minute), id: `mem_r_${minute}` });
+  const row = (content: string, minute: number, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry => ({
+    ...createMemory(content, { tenantId: TENANT_A, ...over }),
+    created: at(minute),
+    id: `mem_r_${minute}`,
+  });
   const digest = { source: 'session-digest', tags: ['session-digest'] };
   const rows = [
     row('digest of session one', 1, { ...digest, sourceSessionId: 's1' }),
@@ -238,21 +308,24 @@ describe('ContextReads row reads', () => {
   afterAll(() => rmSync(rowsFixture.dir, { recursive: true, force: true }));
 
   it('read the newest rows, schema fit, live digests and raw rows under a ref alike', async () => {
-    const out = await conforms([
-      ['newest 3', (g) => g.newestEntries(TENANT_A, 3)],
-      ['newest all', (g) => g.newestEntries(TENANT_A, -1)],
-      ['newest none', (g) => g.newestEntries(TENANT_A, 0)],
-      ['newest globex', (g) => g.newestEntries(TENANT_B, 5)],
-      ['fit pipeline', (g) => g.schemaFit(TENANT_A, 'a pipeline note', ['pipeline'])],
-      ['fit no tags', (g) => g.schemaFit(TENANT_A, 'vault note', [])],
-      ['fit empty tenant', (g) => g.schemaFit('nobody', 'anything', ['pipeline'])],
-      ['digests but s1', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'session-digest', 'session-digest', 's1')],
-      ['digests other source', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'cli', 'session-digest', 's1')],
-      ['raw under notes', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:notes:')],
-      ['raw under globex notes', (g) => g.rawRowsUnderRef(TENANT_B, 'vault:notes:')],
-      ['raw under nothing', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:none:')],
-      ['raw under a wildcard', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:no_es:')],
-    ], rowsFixture);
+    const out = await conforms(
+      [
+        ['newest 3', (g) => g.newestEntries(TENANT_A, 3)],
+        ['newest all', (g) => g.newestEntries(TENANT_A, -1)],
+        ['newest none', (g) => g.newestEntries(TENANT_A, 0)],
+        ['newest globex', (g) => g.newestEntries(TENANT_B, 5)],
+        ['fit pipeline', (g) => g.schemaFit(TENANT_A, 'a pipeline note', ['pipeline'])],
+        ['fit no tags', (g) => g.schemaFit(TENANT_A, 'vault note', [])],
+        ['fit empty tenant', (g) => g.schemaFit('nobody', 'anything', ['pipeline'])],
+        ['digests but s1', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'session-digest', 'session-digest', 's1')],
+        ['digests other source', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'cli', 'session-digest', 's1')],
+        ['raw under notes', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:notes:')],
+        ['raw under globex notes', (g) => g.rawRowsUnderRef(TENANT_B, 'vault:notes:')],
+        ['raw under nothing', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:none:')],
+        ['raw under a wildcard', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:no_es:')],
+      ],
+      rowsFixture,
+    );
 
     expect(out.get('newest 3')).toMatchObject({ value: [{ id: 'mem_r_11' }, { id: 'mem_r_13' }, { id: 'mem_r_13b' }] });
     expect(out.get('newest none')).toEqual({ value: [] });

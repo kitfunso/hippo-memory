@@ -29,7 +29,9 @@ function createReadyProbe(readiness: { ping(): Promise<void> }, now: () => numbe
 
   return () => {
     if (answer !== undefined && now() - answer.at < READY_WINDOW_MS) return Promise.resolve(answer.ok);
-    inFlight ??= read().finally(() => { inFlight = undefined; });
+    inFlight ??= read().finally(() => {
+      inFlight = undefined;
+    });
     return inFlight;
   };
 }

@@ -113,9 +113,10 @@ export async function hybridSearch(
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
   const dense = denseScores(arm);
   const fusion = { entries: arm.entries, bm25Scores, dense, bm25Weight: 1 - embeddingWeight, embeddingWeight };
-  const rrfScores = arm.useEmbeddings && options.scoring === 'rrf'
-    ? await fuseRanks({ ...fusion, graph: graphStoresOf(source, options), graphStream: options.graphStream })
-    : null;
+  const rrfScores =
+    arm.useEmbeddings && options.scoring === 'rrf'
+      ? await fuseRanks({ ...fusion, graph: graphStoresOf(source, options), graphStream: options.graphStream })
+      : null;
 
   const scored = scoreHybridPool({
     ...fusion,
@@ -132,7 +133,11 @@ export async function hybridSearch(
 }
 
 /** The vector arm over `store`, embedding queries with the provider `config` names. */
-export function vectorSourceOf({ store, config, onHippoDb }: {
+export function vectorSourceOf({
+  store,
+  config,
+  onHippoDb,
+}: {
   store: HippoStore;
   config: Pick<HippoConfig, 'embeddings'>;
   onHippoDb?: boolean;

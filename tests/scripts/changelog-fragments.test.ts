@@ -9,7 +9,11 @@ const OLD = '# Changelog\n\n## 1.9.9 - 2026-01-01\n\n### Fixed\n\n- Old.\n';
 
 function withFixture(
   fragments: Record<string, string>,
-  body: (f: { run: (...args: string[]) => { status: number | null; stderr: string }; read: (p: string) => string; has: (p: string) => boolean }) => void,
+  body: (f: {
+    run: (...args: string[]) => { status: number | null; stderr: string };
+    read: (p: string) => string;
+    has: (p: string) => boolean;
+  }) => void,
   changelog = OLD,
 ) {
   const root = mkdtempSync(join(tmpdir(), 'hippo-fragments-'));
@@ -52,13 +56,17 @@ describe('changelog-fragments.mjs', () => {
 
   it('refuses to fold into a version that already has a section, and changes nothing', () => {
     const done = '# Changelog\n\n## 2.0.0 - 2026-09-01\n\n- Done.\n';
-    withFixture({ 'fix-c.md': '### Fixed\n\n- C.\n' }, ({ run, read, has }) => {
-      const r = run('fold', '2026-09-22');
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('already has a ## 2.0.0 section');
-      expect(read('CHANGELOG.md')).toBe(done);
-      expect(has('changelog.d/fix-c.md')).toBe(true);
-    }, done);
+    withFixture(
+      { 'fix-c.md': '### Fixed\n\n- C.\n' },
+      ({ run, read, has }) => {
+        const r = run('fold', '2026-09-22');
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('already has a ## 2.0.0 section');
+        expect(read('CHANGELOG.md')).toBe(done);
+        expect(has('changelog.d/fix-c.md')).toBe(true);
+      },
+      done,
+    );
   });
 
   it('refuses a fragment with a ## heading or text outside a ### heading', () => {

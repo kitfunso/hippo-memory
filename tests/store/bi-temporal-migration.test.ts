@@ -20,7 +20,11 @@ describe('bi-temporal schema v11', () => {
   it('valid_from can be overridden in createMemory', () => {
     const home = makeRoot('bt');
     const pastDate = '2025-01-01T00:00:00.000Z';
-    const e = createMemory('historical fact', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, validFrom: pastDate });
+    const e = createMemory('historical fact', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      validFrom: pastDate,
+    });
     expect(e.valid_from).toBe(pastDate);
     writeEntry(home, e);
     const read = readEntry(home, e.id);

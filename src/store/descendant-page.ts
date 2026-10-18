@@ -68,7 +68,7 @@ function keyedLevel(
     const keys = db
       .prepare(
         `SELECT id, dag_parent_id, scope, origin_project FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ` +
-        `${TENANT_IS} ORDER BY created ASC, id ASC`,
+          `${TENANT_IS} ORDER BY created ASC, id ASC`,
       )
       .all(...chunk, walk.tenantId) as ChildKey[];
     for (const key of keys) {
@@ -133,7 +133,7 @@ function firstRows(
   db: DatabaseSyncLike,
   walk: PagedWalk,
   parents: readonly string[],
-  at: { perParent: ReadonlyMap<string, number>; room: number }
+  at: { perParent: ReadonlyMap<string, number>; room: number },
 ): MemoryEntry[] {
   const whole: string[] = [];
   let left = at.room;
@@ -160,7 +160,7 @@ function childrenInOrder(
     const rows = db
       .prepare(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND ` +
-        `id <> ? ` +
+          `id <> ? ` +
           `ORDER BY created ASC, id ASC LIMIT ?`,
       )
       .all(...chunk, walk.tenantId, walk.summary.id, limit) as MemoryRow[];

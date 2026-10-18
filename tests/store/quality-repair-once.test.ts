@@ -17,15 +17,25 @@ const CUT = 'Found local migration files to be';
 const DOUBTFUL = 'When CI fails we retry once';
 
 function seed(store: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic }), ...extra };
+  const entry = {
+    ...createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic }),
+    ...extra,
+  };
   writeEntry(store, entry);
   return entry;
 }
-const ids = (store: string) => loadAllEntries(store, 'default').map((entry) => entry.id).sort();
+const ids = (store: string) =>
+  loadAllEntries(store, 'default')
+    .map((entry) => entry.id)
+    .sort();
 const repairQualityOnce = (files: { hippoRoot: string }, tenantId: string) => repairStoreOnce(files, tenantId, protect);
 function flag(store: string): string {
   const db = new DatabaseSync(join(store, 'hippo.db'));
-  try { return getMeta(db, 'quality_repair_auto'); } finally { db.close(); }
+  try {
+    return getMeta(db, 'quality_repair_auto');
+  } finally {
+    db.close();
+  }
 }
 
 describe('repairQualityOnce', () => {
@@ -34,7 +44,7 @@ describe('repairQualityOnce', () => {
     root = makeRoot('quality-once');
   });
 
-  it('sets aside certain defects on the first run only, and never a person\'s words', () => {
+  it("sets aside certain defects on the first run only, and never a person's words", () => {
     const bad = seed(root, CUT);
     const person = seed(root, CUT, { source: 'cli' });
     const first = repairQualityOnce({ hippoRoot: root }, 'default');
@@ -51,7 +61,10 @@ describe('repairQualityOnce', () => {
   it('reads the rows once per plan, and the apply plans once under its lock', () => {
     seed(root, CUT);
     const spy = vi.spyOn(DatabaseSync.prototype, 'prepare');
-    const fullReads = () => spy.mock.calls.map((call) => String(call[0])).filter((text) => /FROM memories\s+WHERE tenant_id = \? ORDER BY created/.test(text)).length;
+    const fullReads = () =>
+      spy.mock.calls
+        .map((call) => String(call[0]))
+        .filter((text) => /FROM memories\s+WHERE tenant_id = \? ORDER BY created/.test(text)).length;
     try {
       repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect });
       expect(fullReads()).toBe(1);
@@ -64,7 +77,10 @@ describe('repairQualityOnce', () => {
   });
 
   it('marks a clean store done without a backup', () => {
-    seed(root, 'Keep test schema setup outside production migrations because production applies every sorted migration.');
+    seed(
+      root,
+      'Keep test schema setup outside production migrations because production applies every sorted migration.',
+    );
     expect(repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ appliedIds: [], backup: null });
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(flag(root)).toBe('1');
@@ -87,7 +103,11 @@ describe('repairQualityOnce', () => {
   it('leaves a store whose schema it cannot repair unmarked', () => {
     const bad = seed(root, CUT);
     const db = new DatabaseSync(join(root, 'hippo.db'));
-    try { db.exec('DROP TABLE audit_log'); } finally { db.close(); }
+    try {
+      db.exec('DROP TABLE audit_log');
+    } finally {
+      db.close();
+    }
     expect(repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ supported: false, appliedIds: [] });
     expect(flag(root)).toBe('');
     expect(ids(root)).toEqual([bad.id]);
@@ -106,7 +126,14 @@ describe('the upgrade runs the repair once', () => {
     global = join(dir, 'global');
     initStore(local);
     initStore(global);
-    env = { ...process.env, HIPPO_HOME: global, HOME: dir, USERPROFILE: dir, APPDATA: join(dir, 'AppData', 'Roaming'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    env = {
+      ...process.env,
+      HIPPO_HOME: global,
+      HOME: dir,
+      USERPROFILE: dir,
+      APPDATA: join(dir, 'AppData', 'Roaming'),
+      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    };
   });
   // In process, so coverage sees sleep and the daily runner; the runner's own steps still start real children.
   const cli = (...args: string[]) => runCliAs(args, { cwd: dir, env });
@@ -134,7 +161,9 @@ describe('the upgrade runs the repair once', () => {
     seed(local, DOUBTFUL);
     seed(local, 'Always check which branch the PR merges into');
     const first = await cli('sleep', '--no-learn');
-    expect(first.stdout).toContain('Checked old automatic memories once after the upgrade: 2 look doubtful and were kept; hippo audit repair lists them.');
+    expect(first.stdout).toContain(
+      'Checked old automatic memories once after the upgrade: 2 look doubtful and were kept; hippo audit repair lists them.',
+    );
     expect(flag(local)).toBe('1');
   });
 

@@ -26,7 +26,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 const REPO = 'acme/demo';
 const TENANT = 'default';
 
-const ctx = (root: string): FullContext => (apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' });
 
 interface CursorRow {
   issues_hwm: string | null;
@@ -103,7 +103,7 @@ type GitHubIssueItem = {
   user: { login: string; id: number };
   updated_at: string;
   pull_request?: { url: string };
-}
+};
 
 type GitHubIssueCommentItem = {
   id: number;
@@ -111,7 +111,7 @@ type GitHubIssueCommentItem = {
   user: { login: string; id: number };
   updated_at: string;
   issue_url: string;
-}
+};
 
 type GitHubPrReviewCommentItem = {
   id: number;
@@ -119,7 +119,7 @@ type GitHubPrReviewCommentItem = {
   user: { login: string; id: number };
   updated_at: string;
   pull_request_url: string;
-}
+};
 
 /** Build a stream-1 (issues) item. */
 function issueItem(number: number, updatedAt: string, isPr = false): GitHubIssueItem {
@@ -177,10 +177,7 @@ describe('backfillRepo', () => {
       ],
       issueComments: [
         {
-          items: [
-            issueCommentItem(101, 1, '2026-05-01T11:00:00Z'),
-            issueCommentItem(102, 2, '2026-05-02T11:00:00Z'),
-          ],
+          items: [issueCommentItem(101, 1, '2026-05-01T11:00:00Z'), issueCommentItem(102, 2, '2026-05-02T11:00:00Z')],
           next: null,
           rateLimit: NO_RATE,
         },
@@ -205,9 +202,7 @@ describe('backfillRepo', () => {
     expect(r.ingested.issueComments).toBe(2);
     expect(r.ingested.prReviewComments).toBe(1);
 
-    const entries = loadAllEntries(root, 'default').filter((e) =>
-      e.tags.includes('source:github'),
-    );
+    const entries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
     expect(entries).toHaveLength(6);
 
     const row = readCursorRow(root);
@@ -259,9 +254,7 @@ describe('backfillRepo', () => {
     expect(r2.ingested.issueComments).toBe(0);
     expect(r2.ingested.prReviewComments).toBe(0);
 
-    const entries = loadAllEntries(root, 'default').filter((e) =>
-      e.tags.includes('source:github'),
-    );
+    const entries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
     expect(entries).toHaveLength(3);
   });
 
@@ -290,17 +283,11 @@ describe('backfillRepo', () => {
     });
 
     expect(r.ingested.issues).toBe(3);
-    const entries = loadAllEntries(root, 'default').filter((e) =>
-      e.tags.includes('source:github'),
-    );
+    const entries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
     // Only the 3 non-PR items should have produced memories.
     expect(entries).toHaveLength(3);
     const refs = entries.map((e) => e.artifact_ref).sort();
-    expect(refs).toEqual([
-      `github://${REPO}/issue/1`,
-      `github://${REPO}/issue/3`,
-      `github://${REPO}/issue/5`,
-    ]);
+    expect(refs).toEqual([`github://${REPO}/issue/1`, `github://${REPO}/issue/3`, `github://${REPO}/issue/5`]);
   });
 
   it('4. rate-limit pause: sleeps and retries the same URL', async () => {
@@ -395,9 +382,7 @@ describe('backfillRepo', () => {
     });
 
     expect(r.ingested.issues).toBe(5);
-    const entries = loadAllEntries(root, 'default').filter((e) =>
-      e.tags.includes('source:github'),
-    );
+    const entries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
     expect(entries).toHaveLength(5);
   });
 
@@ -424,13 +409,9 @@ describe('backfillRepo', () => {
       token: 't',
     });
 
-    const issuesCall = capture.calls.find(
-      (c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'),
-    );
+    const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
     expect(issuesCall).toBeDefined();
-    expect(issuesCall?.url).toContain(
-      `since=${encodeURIComponent('2026-01-01T00:00:00Z')}`,
-    );
+    expect(issuesCall?.url).toContain(`since=${encodeURIComponent('2026-01-01T00:00:00Z')}`);
   });
 
   it('8. empty repo: zero ingests across all streams, HWMs stay NULL', async () => {

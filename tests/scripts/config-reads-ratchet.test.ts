@@ -7,7 +7,11 @@ import { spawnSync } from 'node:child_process';
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-config-reads.mjs');
 const LAYERS = { folders: { api: 'api', cli: 'surface', core: 'base', store: 'store' }, rootFiles: {} };
 
-function withFixture(files: Record<string, string>, baseline: Record<string, number>, body: (run: () => { status: number | null; stderr: string }) => void) {
+function withFixture(
+  files: Record<string, string>,
+  baseline: Record<string, number>,
+  body: (run: () => { status: number | null; stderr: string }) => void,
+) {
   const root = mkdtempSync(join(tmpdir(), 'hippo-config-reads-'));
   const write = (p: string, text: string) => {
     mkdirSync(dirname(join(root, p)), { recursive: true });
@@ -26,7 +30,7 @@ function withFixture(files: Record<string, string>, baseline: Record<string, num
   }
 }
 
-const READ = "const c = loadConfig(root);\n";
+const READ = 'const c = loadConfig(root);\n';
 
 describe('check-config-reads.mjs', () => {
   it('fails on a loadConfig call in a non-surface file above the baseline', () => {
@@ -42,7 +46,7 @@ describe('check-config-reads.mjs', () => {
       'src/store/a.ts': READ,
       'src/cli/b.ts': READ,
       'src/core/config.ts': READ,
-      'src/store/c.ts': "// loadConfig(root) is read by the caller\ntype T = typeof loadConfig;\n",
+      'src/store/c.ts': '// loadConfig(root) is read by the caller\ntype T = typeof loadConfig;\n',
     };
     withFixture(files, { 'src/store/a.ts': 1 }, (run) => {
       expect(run().status).toBe(0);

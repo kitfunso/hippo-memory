@@ -10,8 +10,8 @@ export function assertTenantId(fnName: string, value: JsonValue): asserts value 
   if (/^sess[-_]/i.test(value)) {
     throw new Error(
       `${fnName}: tenantId looks like a session id ('${value}'). ` +
-      `In v0.41+ these helpers take (hippoRoot, tenantId, ...). ` +
-      `Pass the tenant id (e.g. 'default') and the session id separately.`,
+        `In v0.41+ these helpers take (hippoRoot, tenantId, ...). ` +
+        `Pass the tenant id (e.g. 'default') and the session id separately.`,
     );
   }
 }

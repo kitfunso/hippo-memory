@@ -76,10 +76,15 @@ describe('serve autoSleep option', () => {
     try {
       const { root, url, key } = await startServer(undefined);
       for (const note of NOTES) await remember(url, key, note);
-      await vi.waitFor(() => {
-        const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
-        expect(lines.some((l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms'))).toBe(true);
-      }, { timeout: 20_000 });
+      await vi.waitFor(
+        () => {
+          const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
+          expect(
+            lines.some((l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms')),
+          ).toBe(true);
+        },
+        { timeout: 20_000 },
+      );
       expect(sleepRuns(root)).toBe(0);
     } finally {
       stderr.mockRestore();

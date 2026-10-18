@@ -22,7 +22,10 @@ beforeEach(() => {
 function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['confidence'] }): MemoryEntry {
   const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
   return {
-    ...createMemory('an aged memory used to probe the confidence tier', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, confidence: overrides.confidence }),
+    ...createMemory('an aged memory used to probe the confidence tier', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      confidence: overrides.confidence,
+    }),
     last_retrieved: old,
     half_life_days: 3650, // survives DECAY_THRESHOLD so it stays a survivor
     ...overrides,

@@ -22,7 +22,7 @@ export function clientIpForRateLimit(req: IncomingMessage): string {
   const trust = proxyTrust(envTrustedProxies());
   if (trust === undefined || !isTrustedProxy(trust, socketIp)) return socketIp;
   const raw = req.headers[header];
-  const hops = (Array.isArray(raw) ? raw.join(',') : raw ?? '')
+  const hops = (Array.isArray(raw) ? raw.join(',') : (raw ?? ''))
     .split(',')
     .map((hop) => hop.trim())
     .filter((hop) => hop.length > 0);
@@ -40,7 +40,10 @@ function proxyTrust(raw: string | undefined): BlockList | undefined {
   if (!value) return undefined;
   if (trustedProxyCache?.raw === value) return trustedProxyCache.list;
   const list = new BlockList();
-  for (const entry of value.split(',').map((e) => e.trim()).filter((e) => e.length > 0)) {
+  for (const entry of value
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0)) {
     const [addr = '', prefix] = entry.split('/');
     const family = isIP(addr) === 6 ? 'ipv6' : 'ipv4';
     const bits = prefix === undefined ? undefined : Number(prefix);
@@ -64,7 +67,7 @@ export class UntrustedClientIpHeaderError extends Error {
   constructor(readonly header: string) {
     super(
       `hippo serve: HIPPO_CLIENT_IP_HEADER is ${header} but HIPPO_TRUSTED_PROXIES is unset, so no peer may set that ` +
-      `header. ` +
+        `header. ` +
         "Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs.",
     );
     this.name = 'UntrustedClientIpHeaderError';
@@ -85,7 +88,13 @@ export class WildcardTrustedProxiesError extends Error {
 
 /** Checked at boot: a wildcard proxy list is refused, and a client-IP header needs a list to be read from. */
 export function assertClientIpHeaderPinned(): void {
-  if (envTrustedProxies()?.split(',').some((entry) => entry.trim() === '*')) throw new WildcardTrustedProxiesError();
+  if (
+    envTrustedProxies()
+      ?.split(',')
+      .some((entry) => entry.trim() === '*')
+  ) {
+    throw new WildcardTrustedProxiesError();
+  }
   const header = envClientIpHeader();
   if (!header) return;
   if (proxyTrust(envTrustedProxies()) === undefined) throw new UntrustedClientIpHeaderError(header);

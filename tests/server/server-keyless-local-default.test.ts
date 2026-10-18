@@ -64,7 +64,9 @@ function call(path: string, { method = 'GET', headers = {}, body }: Call = {}): 
       }
       let text = '';
       res.setEncoding('utf8');
-      res.on('data', (chunk: string) => { text += chunk; });
+      res.on('data', (chunk: string) => {
+        text += chunk;
+      });
       res.on('end', () => {
         const json = parsed(text);
         resolve({ status, error: json.error ?? '', json });
@@ -75,10 +77,15 @@ function call(path: string, { method = 'GET', headers = {}, body }: Call = {}): 
   });
 }
 
-const recall = (headers: Readonly<Record<string, string>> = {}): Promise<Reply> => call('/v1/memories?q=deploy', { headers });
+const recall = (headers: Readonly<Record<string, string>> = {}): Promise<Reply> =>
+  call('/v1/memories?q=deploy', { headers });
 
 function remember(content: string, headers: Readonly<Record<string, string>> = {}): Promise<Reply> {
-  return call('/v1/memories', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ content }) });
+  return call('/v1/memories', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify({ content }),
+  });
 }
 
 function rememberActors(): string[] {
@@ -189,14 +196,30 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
     expect((await remember('keyless-opt-in-canary')).status).toBe(200);
     expect(rememberActors()).toEqual(['localhost:cli']);
     expect(await listedKeyCount()).toBe(0);
-    expect((await call('/v1/sleep', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dry_run":true}' })).status).toBe(403);
+    expect(
+      (
+        await call('/v1/sleep', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{"dry_run":true}',
+        })
+      ).status,
+    ).toBe(403);
     expect((await call('/mcp/stream')).status).toBe(200);
   });
 
   it('is still a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more', async () => {
     vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
     expect(await listedKeyCount()).toBe(0);
-    expect((await call('/v1/sleep', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dry_run":true}' })).status).toBe(403);
+    expect(
+      (
+        await call('/v1/sleep', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{"dry_run":true}',
+        })
+      ).status,
+    ).toBe(403);
   });
 
   it('still serves a keyed request as that key', async () => {

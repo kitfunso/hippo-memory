@@ -14,7 +14,8 @@ const savedCwd = process.cwd();
 let home = '';
 
 // The guard sits in main() before any verb, so the whole entry runs in process; no process boundary is under test.
-const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
+const hippoRun = (...args: string[]): Promise<InProcessResult> =>
+  runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
 beforeEach(() => {
   home = makeStore('numeric-guard').base;
@@ -55,11 +56,14 @@ describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () =
     expect(res.stderr).toContain(`--${flag} requires a numeric value`);
   });
 
-  it.each(['0', '2.5'])('recall --reranker-top-k %s exits 1, since a slice would quietly drop candidates', async (value) => {
-    const res = await hippoRun('recall', 'some query', '--reranker', 'clef-flash', '--reranker-top-k', value);
-    expect(res.status).toBe(1);
-    expect(res.stderr).toContain('Must be a positive integer');
-  });
+  it.each(['0', '2.5'])(
+    'recall --reranker-top-k %s exits 1, since a slice would quietly drop candidates',
+    async (value) => {
+      const res = await hippoRun('recall', 'some query', '--reranker', 'clef-flash', '--reranker-top-k', value);
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('Must be a positive integer');
+    },
+  );
 
   // Pins the GLOBAL semantics: handleStatus takes no flags at all (mirrors the
   // --scope test's status case), yet the guard still exits 1 pre-dispatch.

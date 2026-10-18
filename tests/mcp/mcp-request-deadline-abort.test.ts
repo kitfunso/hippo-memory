@@ -12,16 +12,30 @@ let ctx: McpContext;
 
 beforeEach(() => {
   root = makeRoot('mcp-abort');
-  ctx = { hippoRoot: root, tenantId: 'default', actor: 'test', role: 'admin', store: sqliteStore(root), config: loadConfig(root) };
+  ctx = {
+    hippoRoot: root,
+    tenantId: 'default',
+    actor: 'test',
+    role: 'admin',
+    store: sqliteStore(root),
+    config: loadConfig(root),
+  };
 });
 
-const REMEMBER = { jsonrpc: '2.0' as const, id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: 'a fact that must not be stored' } } };
+const REMEMBER = {
+  jsonrpc: '2.0' as const,
+  id: 1,
+  method: 'tools/call',
+  params: { name: 'hippo_remember', arguments: { text: 'a fact that must not be stored' } },
+};
 
 describe('a tool call at its request deadline', () => {
   it('rejects with the deadline error and stores nothing once the signal has aborted', async () => {
     const abort = new AbortController();
     abort.abort(new DOMException('hippo_remember did not finish within 5 ms', 'TimeoutError'));
-    await expect(runWithRequestId('req-abort', () => handleMcpRequest(REMEMBER, ctx), undefined, abort.signal)).rejects.toMatchObject({ name: 'TimeoutError' });
+    await expect(
+      runWithRequestId('req-abort', () => handleMcpRequest(REMEMBER, ctx), undefined, abort.signal),
+    ).rejects.toMatchObject({ name: 'TimeoutError' });
     expect(loadAllEntries(root, 'default')).toHaveLength(0);
   });
 

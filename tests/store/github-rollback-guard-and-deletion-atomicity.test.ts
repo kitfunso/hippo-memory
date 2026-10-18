@@ -28,12 +28,18 @@ function ctx(home: string): FullContext {
 // Windows can hold a brief lock on SQLite WAL/shm files after close. Make
 // rmSync best-effort so a transient EPERM in cleanup doesn't fail the test.
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 describe('rollback guard', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('v131-rollback'); });
+  beforeEach(() => {
+    home = makeRoot('v131-rollback');
+  });
   afterEach(() => safeRmSync(home));
 
   it('refuses to open a DB stamped with min_compatible_binary newer than this binary', () => {
@@ -94,7 +100,9 @@ describe('rollback guard', () => {
 
 describe('deletion atomicity', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('v131-delete-atomic'); });
+  beforeEach(() => {
+    home = makeRoot('v131-delete-atomic');
+  });
   afterEach(() => safeRmSync(home));
 
   it('multi-row deletion: when one archive throws, ALL roll back AND idempotency stays unset for retry', async () => {
@@ -125,7 +133,9 @@ describe('deletion atomicity', () => {
     const dbCheck = openHippoDb(home);
     try {
       // SAFETY: `SELECT id` names exactly this one text column.
-      const rows = dbCheck.prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`).all(ref) as Array<{id: string}>;
+      const rows = dbCheck.prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`).all(ref) as Array<{
+        id: string;
+      }>;
       expect(rows).toHaveLength(3);
     } finally {
       closeHippoDb(dbCheck);
@@ -191,14 +201,18 @@ describe('deletion atomicity', () => {
     const dbAfter = openHippoDb(home);
     try {
       // SAFETY: `SELECT id` names exactly this one text column.
-      const surviving = dbAfter.prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`).all(ref) as Array<{id: string}>;
+      const surviving = dbAfter
+        .prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`)
+        .all(ref) as Array<{ id: string }>;
       expect(surviving).toHaveLength(0);
 
       // Idempotency mark committed.
       // SAFETY: the SELECT list above names exactly these two columns; the
       // row may be absent (undefined) if no matching idempotency key was
       // written.
-      const log = dbAfter.prepare(`SELECT idempotency_key, memory_id FROM github_event_log WHERE idempotency_key=?`).get('test-key-multi-archive') as { idempotency_key: string; memory_id: string } | undefined;
+      const log = dbAfter
+        .prepare(`SELECT idempotency_key, memory_id FROM github_event_log WHERE idempotency_key=?`)
+        .get('test-key-multi-archive') as { idempotency_key: string; memory_id: string } | undefined;
       expect(log).toBeDefined();
     } finally {
       closeHippoDb(dbAfter);
@@ -218,7 +232,9 @@ describe('deletion atomicity', () => {
 
 describe('backfill HWM stays put on capped streams', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('v131-cap-hwm'); });
+  beforeEach(() => {
+    home = makeRoot('v131-cap-hwm');
+  });
   afterEach(() => safeRmSync(home));
 
   it('--max cap does NOT advance issues_hwm so the next run picks up the tail', async () => {
@@ -255,7 +271,8 @@ describe('backfill HWM stays put on capped streams', () => {
     try {
       // SAFETY: `SELECT issues_hwm` names exactly this one nullable text
       // column; the row may be absent if this repo has no cursor row yet.
-      const row = db.prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
+      const row = db
+        .prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
         .get('default', 'acme/demo') as { issues_hwm: string | null } | undefined;
       // HWM did NOT advance (capped run, drained=false).
       expect(row?.issues_hwm ?? null).toBeNull();
@@ -267,7 +284,9 @@ describe('backfill HWM stays put on capped streams', () => {
 
 describe('backfill issues_hwm advances past skipped PRs', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('v131-skip-pr-hwm'); });
+  beforeEach(() => {
+    home = makeRoot('v131-skip-pr-hwm');
+  });
   afterEach(() => safeRmSync(home));
 
   it('a page consisting entirely of PRs (skipped) still advances issues_hwm', async () => {
@@ -277,9 +296,30 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
     // v1.3.1: track updated_at on every item BEFORE toIngestEvent skip, so
     //         PR-only pages advance the HWM.
     const items = [
-      { number: 1, pull_request: {}, title: 'pr1', body: 'p1', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T10:00:00Z' },
-      { number: 2, pull_request: {}, title: 'pr2', body: 'p2', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T11:00:00Z' },
-      { number: 3, pull_request: {}, title: 'pr3', body: 'p3', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T12:00:00Z' },
+      {
+        number: 1,
+        pull_request: {},
+        title: 'pr1',
+        body: 'p1',
+        user: { login: 'a', id: 1 },
+        updated_at: '2026-05-04T10:00:00Z',
+      },
+      {
+        number: 2,
+        pull_request: {},
+        title: 'pr2',
+        body: 'p2',
+        user: { login: 'a', id: 1 },
+        updated_at: '2026-05-04T11:00:00Z',
+      },
+      {
+        number: 3,
+        pull_request: {},
+        title: 'pr3',
+        body: 'p3',
+        user: { login: 'a', id: 1 },
+        updated_at: '2026-05-04T12:00:00Z',
+      },
     ];
 
     const fetcher: GitHubFetcher = async ({ url }) => {
@@ -301,7 +341,8 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
     try {
       // SAFETY: `SELECT issues_hwm` names exactly this one nullable text
       // column; the row may be absent if this repo has no cursor row yet.
-      const row = db.prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
+      const row = db
+        .prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
         .get('default', 'acme/demo') as { issues_hwm: string | null } | undefined;
       expect(row?.issues_hwm).toBe('2026-05-04T12:00:00Z');
     } finally {

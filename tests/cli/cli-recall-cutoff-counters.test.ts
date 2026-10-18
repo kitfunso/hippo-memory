@@ -156,7 +156,11 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     const mk = (text: string) => {
       const m = createMemory(text, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T,
+        tags: [],
+        layer: Layer.Semantic,
+        confidence: 'verified',
+        source: 'test',
+        tenantId: T,
       });
       writeEntry(root, m, { actor: 'test' });
       return m;
@@ -181,10 +185,9 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     expect(ids, 'graph neighbour must be surfaced by edge').toContain(b.id);
     // the graph-added row must be inside the PUBLISHED total, not only the
     // internal arithmetic - this is what broke: total said 1, returned said 2
-    expect(
-      s.totalCandidates,
-      'published invariant must close when the graph adds an out-of-pool row',
-    ).toBe(s.droppedPreRank + s.droppedByBudget + rows.length);
+    expect(s.totalCandidates, 'published invariant must close when the graph adds an out-of-pool row').toBe(
+      s.droppedPreRank + s.droppedByBudget + rows.length,
+    );
     expect(s.totalCandidates, 'total must count the edge-surfaced row').toBeGreaterThanOrEqual(rows.length);
   });
 });
@@ -215,14 +218,10 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
     // Every printed row costs more than the 40-token budget leaves, so only the one-row floor survives of the 40.
     expect(returned).toBe(1);
     expect(s.totalCandidates).toBe(40);
-    expect(
-      s.droppedByBudget,
-      'budget/rank drops must be counted - this read 0 in production',
-    ).toBe(39);
-    expect(
-      s.totalCandidates,
-      'published invariant must close on the budget path too',
-    ).toBe(s.droppedPreRank + s.droppedByBudget + returned);
+    expect(s.droppedByBudget, 'budget/rank drops must be counted - this read 0 in production').toBe(39);
+    expect(s.totalCandidates, 'published invariant must close on the budget path too').toBe(
+      s.droppedPreRank + s.droppedByBudget + returned,
+    );
   });
 });
 
@@ -251,8 +250,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
     // must not single one out.
     expect(output).toMatch(/^Cutoff: showing \d+ of \d+ candidates;/m);
     expect(output).toMatch(/not shown \(rank, budget or limit\)/);
-    expect(output, 'must not name a control the caller may never have passed')
-      .not.toMatch(/dropped to fit limit/);
+    expect(output, 'must not name a control the caller may never have passed').not.toMatch(/dropped to fit limit/);
   });
 
   it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', async () => {

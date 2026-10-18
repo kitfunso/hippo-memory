@@ -156,8 +156,14 @@ describe('v39 migration backfill', () => {
   it('backfills shared:<project>: rows from their source, mapping the home basename to user-global', () => {
     const storeRoot = makeProjectStore('proj-a');
     const homeName = path.basename(os.homedir()).toLowerCase();
-    writeEntry(storeRoot, createMemory('shared from proj b long ago', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' }));
-    writeEntry(storeRoot, createMemory('shared from a home session', { source: `shared:${homeName}:2026-01-01T00:00:00Z` }));
+    writeEntry(
+      storeRoot,
+      createMemory('shared from proj b long ago', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' }),
+    );
+    writeEntry(
+      storeRoot,
+      createMemory('shared from a home session', { source: `shared:${homeName}:2026-01-01T00:00:00Z` }),
+    );
     regressStoreToV38(storeRoot);
 
     closeHippoDb(openHippoDb(storeRoot)); // migrate
@@ -224,7 +230,10 @@ describe('v39 migration backfill', () => {
     vi.stubEnv('HIPPO_HOME', globalRoot);
     try {
       initStore(globalRoot);
-      writeEntry(globalRoot, { ...createMemory('a user-global lesson in a dotfiles-managed store'), origin_project: '' });
+      writeEntry(globalRoot, {
+        ...createMemory('a user-global lesson in a dotfiles-managed store'),
+        origin_project: '',
+      });
       regressStoreToV38(globalRoot);
       closeHippoDb(openHippoDb(globalRoot)); // migrate
       const [entry] = loadAllEntries(globalRoot, 'default');

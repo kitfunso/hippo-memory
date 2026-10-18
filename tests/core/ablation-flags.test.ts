@@ -23,7 +23,12 @@ import {
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { outcomeMultiplier } from '../../src/search/boosts.js';
 import { markRetrieved } from '../../src/core/memory.js';
-import { evalNow, isOutcomeSlowAblated, strengthAblation, _resetAblationCacheForTests } from '../../src/core/ablation.js';
+import {
+  evalNow,
+  isOutcomeSlowAblated,
+  strengthAblation,
+  _resetAblationCacheForTests,
+} from '../../src/core/ablation.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -75,9 +80,7 @@ const NOW = new Date('2026-06-11T12:00:00.000Z');
 describe('defaults (no flags set)', () => {
   it('decay, strengthening, and both outcome channels all run', async () => {
     // Decay live: old memory weaker than fresh.
-    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(
-      calculateStrength(agedMemory(0), NOW, abl()),
-    );
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
     // Strengthening live: markRetrieved mutates.
     const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
     expect(marked.retrieval_count).toBe(1);
@@ -236,9 +239,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
   });
 
   it('isolation: decay still runs', () => {
-    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(
-      calculateStrength(agedMemory(0), NOW, abl()),
-    );
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
   });
 
   it('neutralizes the READ side too: prior retrieval_count > 0 gives no boost', () => {
@@ -315,9 +316,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
   });
 
   it('isolation: decay and strengthening still run', () => {
-    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(
-      calculateStrength(agedMemory(0), NOW, abl()),
-    );
+    expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
     const [marked] = markRetrieved([agedMemory(30)], NOW, abl());
     expect(marked.retrieval_count).toBe(1);
   });
@@ -336,12 +335,16 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     // otherwise differ from plain's initial cache purely by fixture timing.
     rewarded.strength = calculateStrength(rewarded, NOW, abl());
     plain.strength = calculateStrength(plain, NOW, abl());
-    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBe(replayPriority(plain, NOW, isOutcomeSlowAblated()));
+    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBe(
+      replayPriority(plain, NOW, isOutcomeSlowAblated()),
+    );
     // Sanity: WITHOUT the flag the rewarded memory is prioritized.
     clearAblationEnv();
     rewarded.strength = calculateStrength(rewarded, NOW, abl());
     plain.strength = calculateStrength(plain, NOW, abl());
-    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBeGreaterThan(replayPriority(plain, NOW, isOutcomeSlowAblated()));
+    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBeGreaterThan(
+      replayPriority(plain, NOW, isOutcomeSlowAblated()),
+    );
   });
 });
 
@@ -393,9 +396,15 @@ describe('HIPPO_FAKE_NOW', () => {
     realFresh.half_life_days = 7;
     expect(calculateStrength(realFresh, undefined, abl())).toBeLessThan(0.01);
     // createMemory write-stamps honor the fake clock too (simulated sessions).
-    expect(createMemory('stamped in 2030', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }).created).toBe('2030-01-01T00:00:00.000Z');
+    expect(createMemory('stamped in 2030', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }).created).toBe(
+      '2030-01-01T00:00:00.000Z',
+    );
     // markRetrieved default stamp = fake now.
-    const [marked] = markRetrieved([createMemory('stamp me', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], undefined, abl());
+    const [marked] = markRetrieved(
+      [createMemory('stamp me', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })],
+      undefined,
+      abl(),
+    );
     expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
   });
 
@@ -463,10 +472,14 @@ describe('HIPPO_FAKE_NOW', () => {
     // Local-only store via the wrapper (global root nonexistent path).
     const { writeEntry } = await import('../../src/store/entry-writes.js');
     writeEntry(tmp, m);
-    const results = await searchBothHybrid('wrapper clock consistency check', ...sharingStores(tmp, path.join(tmp, 'no-global')), {
-      budget: 10000,
-      explain: true,
-    });
+    const results = await searchBothHybrid(
+      'wrapper clock consistency check',
+      ...sharingStores(tmp, path.join(tmp, 'no-global')),
+      {
+        budget: 10000,
+        explain: true,
+      },
+    );
     expect(results).toHaveLength(1);
     expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
   });

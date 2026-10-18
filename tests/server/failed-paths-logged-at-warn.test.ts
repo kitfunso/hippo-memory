@@ -69,7 +69,9 @@ describe('judge failures', () => {
   });
 
   it('warns with the error class on a transport error', async () => {
-    const fetcher: typeof fetch = async () => { throw new TypeError('socket hang up'); };
+    const fetcher: typeof fetch = async () => {
+      throw new TypeError('socket hang up');
+    };
     await judgeAll(['a durable fact about the deploy'], { apiKey: 'k', fetcher });
     expect(lines.join('')).toMatch(/warn: judge: request failed: socket hang up.*errorClass=TypeError/);
   });
@@ -80,16 +82,27 @@ describe('failures that used to log at debug', () => {
 
   it('warns once when a judge reply is not readable, then goes quiet', async () => {
     const fetcher: typeof fetch = async () => new Response('<html>busy</html>', { status: 200 });
-    await judgeAll(['a durable fact about the deploy', 'another durable fact about the deploy'], { apiKey: 'k', fetcher, concurrency: 1 });
+    await judgeAll(['a durable fact about the deploy', 'another durable fact about the deploy'], {
+      apiKey: 'k',
+      fetcher,
+      concurrency: 1,
+    });
     expect(lines.join('').match(/warn: judge: unreadable response/g)).toHaveLength(1);
   });
 
   it('warns once when a local embedding fails, and still answers []', async () => {
-    const pipeline = async () => async (): Promise<{ data: number[] }> => { throw new Error('onnx runtime crashed'); };
-    const embedder = createLocalEmbedder({ installed: () => true, load: async () => ({ name: 'stand-in', mod: { pipeline } }) });
+    const pipeline = async () => async (): Promise<{ data: number[] }> => {
+      throw new Error('onnx runtime crashed');
+    };
+    const embedder = createLocalEmbedder({
+      installed: () => true,
+      load: async () => ({ name: 'stand-in', mod: { pipeline } }),
+    });
     expect(await embedder.embed('one', 'Xenova/test-model')).toEqual([]);
     expect(await embedder.embed('two', 'Xenova/test-model')).toEqual([]);
-    expect(lines.join('').match(/warn: local embedding with Xenova\/test-model failed: onnx runtime crashed/g)).toHaveLength(1);
+    expect(
+      lines.join('').match(/warn: local embedding with Xenova\/test-model failed: onnx runtime crashed/g),
+    ).toHaveLength(1);
   });
 });
 

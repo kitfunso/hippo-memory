@@ -115,7 +115,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(`\n  ${c.folders.join(', ')}`);
       for (const [a, b] of c.edges) console.error(`    ${a} -> ${b}`);
     }
-    console.error('\nFix: move what one folder takes from the other into the folder both already import, or a lower layer.\n');
+    console.error(
+      '\nFix: move what one folder takes from the other into the folder both already import, or a lower layer.\n',
+    );
     process.exit(1);
   }
   console.log(`No runtime import cycles between the top-level folders of ${srcDir}/. OK.`);

@@ -3,9 +3,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import type { HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../store/busy.js';
-import {
-  createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder,
-} from '../store/sqlite/held-connection.js';
+import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { configReader } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
@@ -46,15 +44,17 @@ import {
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import {
-  dispatchAddonRoute, dispatchHostRoute, dispatchPublicJson, dispatchV1Route, HOST_ROUTES,
+  dispatchAddonRoute,
+  dispatchHostRoute,
+  dispatchPublicJson,
+  dispatchV1Route,
+  HOST_ROUTES,
 } from './route-table.js';
 import type { RateLimitSpec, ResolvedServeOptions, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
 // listening, a string only for pipe/unix-socket listeners (never used here).
-function isAddressInfo(
-  a: string | import('node:net').AddressInfo | null,
-): a is import('node:net').AddressInfo {
+function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is import('node:net').AddressInfo {
   return a !== null && typeof a !== 'string';
 }
 
@@ -157,8 +157,8 @@ function assertBindable(host: string): void {
   if (!LOOPBACK_HOSTS.has(host) && !envRequireAuth()) {
     throw new Error(
       `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
-      `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
-      `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
+        `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
+        `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
     );
   }
 }
@@ -242,7 +242,11 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
   const mapped = replyFor(err);
   logRequestFailure(req, err, mapped.status);
   if (res.headersSent) {
-    try { res.end(); } catch { /* socket already gone */ }
+    try {
+      res.end();
+    } catch {
+      /* socket already gone */
+    }
     return;
   }
   if (isStoreBusy(err)) {

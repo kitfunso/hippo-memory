@@ -24,8 +24,21 @@ export function sqlText(value: string): string {
 
 /** Resolves once the child holds the lock with `statements` applied and uncommitted; it commits `settleMs` later.
  * `beforeLock` runs first, for statements such as ATTACH that a transaction forbids. */
-export function stageWinner(dbPath: string, statements: readonly string[], beforeLock: readonly string[] = [], settleMs = 1000): Promise<StagedWinner> {
-  const args = ['--no-warnings', '-e', WINNER_SRC, dbPath, String(settleMs), JSON.stringify(statements), JSON.stringify(beforeLock)];
+export function stageWinner(
+  dbPath: string,
+  statements: readonly string[],
+  beforeLock: readonly string[] = [],
+  settleMs = 1000,
+): Promise<StagedWinner> {
+  const args = [
+    '--no-warnings',
+    '-e',
+    WINNER_SRC,
+    dbPath,
+    String(settleMs),
+    JSON.stringify(statements),
+    JSON.stringify(beforeLock),
+  ];
   const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
   const committed = new Promise<void>((resolve, reject) => {
     child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`race winner exited with ${code}`))));
@@ -41,7 +54,16 @@ export function stageWinner(dbPath: string, statements: readonly string[], befor
 }
 
 /** A winner whose rows another store already holds: the child copies `tables` from the scratch store, then runs `statements`. */
-export function stageScratchWinner(hippoRoot: string, scratchRoot: string, tables: readonly string[], statements: readonly string[] = []): Promise<StagedWinner> {
+export function stageScratchWinner(
+  hippoRoot: string,
+  scratchRoot: string,
+  tables: readonly string[],
+  statements: readonly string[] = [],
+): Promise<StagedWinner> {
   const copies = tables.map((table) => `INSERT INTO main.${table} SELECT * FROM scratch.${table}`);
-  return stageWinner(getHippoDbPath(hippoRoot), [...copies, ...statements], [`ATTACH DATABASE ${sqlText(getHippoDbPath(scratchRoot))} AS scratch`]);
+  return stageWinner(
+    getHippoDbPath(hippoRoot),
+    [...copies, ...statements],
+    [`ATTACH DATABASE ${sqlText(getHippoDbPath(scratchRoot))} AS scratch`],
+  );
 }

@@ -22,7 +22,7 @@ function newRoot(): string {
 }
 
 const ctxFor = (hippoRoot: string): FullContext =>
-  (apiCtx(hippoRoot, 'default', { subject: 'sleep-superseded-test', role: 'admin' }));
+  apiCtx(hippoRoot, 'default', { subject: 'sleep-superseded-test', role: 'admin' });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -35,11 +35,18 @@ describe('sleep skips superseded rows', () => {
     const root = newRoot();
     const blamed = createMemory('the march outage postmortem blamed bob for dropping the billing table in production');
     writeEntry(root, blamed);
-    for (const text of ['the march outage postmortem blamed the dropped billing table', 'the march outage postmortem blamed the dropped billing table in production']) {
+    for (const text of [
+      'the march outage postmortem blamed the dropped billing table',
+      'the march outage postmortem blamed the dropped billing table in production',
+    ]) {
       writeEntry(root, createMemory(text));
     }
-    const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change', 'alice owns the oldfact payroll service']
-      .map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
+    const facts = [
+      'alice moved the deploy to friday',
+      'alice owns the billing service',
+      'alice reviews every schema change',
+      'alice owns the oldfact payroll service',
+    ].map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
     await supersede(ctxFor(root), blamed.id, 'the march outage postmortem found no single person at fault');
     await supersede(ctxFor(root), facts[3]!.id, 'bob owns the payroll service');
@@ -48,7 +55,12 @@ describe('sleep skips superseded rows', () => {
       prompts.push(String(init?.body));
       return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
     });
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('real network call in a test'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('real network call in a test');
+      }),
+    );
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
 
     await consolidate(root, { now: new Date(Date.now() + DAY), fetcher });
@@ -58,16 +70,24 @@ describe('sleep skips superseded rows', () => {
     expect(sent).toContain('alice reviews every schema change');
     expect(sent).not.toMatch(/blamed bob|oldfact/);
     const current = loadAllEntries(root, 'default').filter((e) => !e.superseded_by);
-    expect(current.some((e) => e.content.startsWith('[Consolidated from 2 related memories, newest first]'))).toBe(true);
+    expect(current.some((e) => e.content.startsWith('[Consolidated from 2 related memories, newest first]'))).toBe(
+      true,
+    );
     expect(current.map((e) => e.content).join('\n')).not.toMatch(/blamed bob|oldfact/);
   });
 
   it('as DAG rebuild and L3 profile input', async () => {
     const root = newRoot();
-    const summary = createMemory('alice runs billing and payroll', { layer: Layer.Semantic, confidence: 'inferred', dagLevel: 2, tags: ['dag-summary'] });
+    const summary = createMemory('alice runs billing and payroll', {
+      layer: Layer.Semantic,
+      confidence: 'inferred',
+      dagLevel: 2,
+      tags: ['dag-summary'],
+    });
     writeEntry(root, summary);
-    const [kept, stale] = ['alice runs billing', 'alice runs payroll']
-      .map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted'] }));
+    const [kept, stale] = ['alice runs billing', 'alice runs payroll'].map((text) =>
+      createMemory(text, { layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted'] }),
+    );
     writeEntry(root, kept!);
     writeEntry(root, stale!);
     await supersede(ctxFor(root), stale!.id, 'bob runs payroll');

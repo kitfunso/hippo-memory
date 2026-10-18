@@ -111,8 +111,12 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
   // The walker follows the flags object out of each row's handler and never looks at a declaration.
   let found: ReturnType<typeof collectVerbReads>;
   const rows: Record<string, { readonly flags: VerbFlags }> = COMMANDS;
-  const namesOf = (flags: VerbFlags): string[] =>
-    [...(flags.switches ?? []), ...(flags.values ?? []), ...(flags.numbers ?? []), ...(flags.lists ?? [])];
+  const namesOf = (flags: VerbFlags): string[] => [
+    ...(flags.switches ?? []),
+    ...(flags.values ?? []),
+    ...(flags.numbers ?? []),
+    ...(flags.lists ?? []),
+  ];
   // The walker builds a TypeScript program over all of src/, which is pure CPU and slowest on a shared runner.
   beforeAll(() => {
     found = collectVerbReads(resolve(__dirname, '..', '..'));
@@ -124,8 +128,12 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
     for (const { verb, flags } of found.verbs) {
       const switches = rows[verb]?.flags.switches ?? [];
       for (const [name, read] of Object.entries(flags)) {
-        if (read === 'on-off' && !switches.includes(name)) wrongKind.push(`${verb} --${name} is read as on/off and is not a switch`);
-        if (read === 'value' && switches.includes(name)) wrongKind.push(`${verb} --${name} is a switch and its value is read`);
+        if (read === 'on-off' && !switches.includes(name)) {
+          wrongKind.push(`${verb} --${name} is read as on/off and is not a switch`);
+        }
+        if (read === 'value' && switches.includes(name)) {
+          wrongKind.push(`${verb} --${name} is a switch and its value is read`);
+        }
       }
     }
     expect(wrongKind).toEqual([]);
@@ -145,7 +153,9 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
       const own = namesOf(flags);
       const foreign = everyFlag.find((name) => !own.includes(name)) ?? '';
       const ignored = undeclaredFlags(flags, [...own, foreign]);
-      if (ignored.length !== 1 || ignored[0] !== foreign) wrong.push(`${verb} is told it ignores: ${ignored.join(', ')}`);
+      if (ignored.length !== 1 || ignored[0] !== foreign) {
+        wrong.push(`${verb} is told it ignores: ${ignored.join(', ')}`);
+      }
     }
     expect(wrong).toEqual([]);
   });
@@ -167,7 +177,8 @@ describe('runCli: --flag=value end-to-end guards', () => {
   const savedCwd = process.cwd();
   let tmpDir: string;
 
-  const runCli = (args: string[]): Promise<InProcessResult> => runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
+  const runCli = (args: string[]): Promise<InProcessResult> =>
+    runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
   beforeEach(() => {
     tmpDir = makeStore('cli-flag-equals').base;
@@ -184,11 +195,31 @@ describe('runCli: --flag=value end-to-end guards', () => {
   });
 
   it.each([
-    { id: '15', args: ['invalidate', '--dry-run=false', 'X'], flag: 'dry-run', why: 'rejects instead of running the destructive path' },
-    { id: '26', args: ['share', 'no-such-id', '--force=false'], flag: 'force', why: 'is never read as the truthy string "false"' },
+    {
+      id: '15',
+      args: ['invalidate', '--dry-run=false', 'X'],
+      flag: 'dry-run',
+      why: 'rejects instead of running the destructive path',
+    },
+    {
+      id: '26',
+      args: ['share', 'no-such-id', '--force=false'],
+      flag: 'force',
+      why: 'is never read as the truthy string "false"',
+    },
     { id: '27', args: ['audit', '--fix=false'], flag: 'fix', why: 'is rejected before any memory is deleted' },
-    { id: '28', args: ['remember', 'use pnpm', '--pin', 'true'], flag: 'pin', why: 'is not stored as the text "use pnpm true"' },
-    { id: '28b', args: ['last-sleep', '--keep=false'], flag: 'keep', why: 'is never read as the truthy string that keeps the log' },
+    {
+      id: '28',
+      args: ['remember', 'use pnpm', '--pin', 'true'],
+      flag: 'pin',
+      why: 'is not stored as the text "use pnpm true"',
+    },
+    {
+      id: '28b',
+      args: ['last-sleep', '--keep=false'],
+      flag: 'keep',
+      why: 'is never read as the truthy string that keeps the log',
+    },
   ])('case $id: a valued switch --$flag $why', async ({ args, flag }) => {
     const res = await runCli(args);
     expect(res.status).toBe(1);
@@ -196,13 +227,48 @@ describe('runCli: --flag=value end-to-end guards', () => {
   });
 
   it.each([
-    { id: '16', args: ['recall', 'deploy steps', '--hops='], message: '--hops requires an integer value', why: 'an empty glued value hits the --hops guard' },
-    { id: '20', args: ['recall', 'deploy steps', '--budget='], message: '--budget requires an integer value', why: 'an empty glued value is not silently unbounded' },
-    { id: '20b', args: ['recall', 'deploy steps', '--budget=abc'], message: 'Invalid --budget: "abc"', why: 'a junk value gets a different message than the empty case' },
-    { id: '22', args: ['recall', 'deploy steps', '--budget', 'abc'], message: 'Invalid --budget: "abc"', why: 'the separated form is rejected too' },
-    { id: '23', args: ['recall', 'deploy steps', '--budget=-1'], message: 'Invalid --budget: "-1"', why: 'a negative bound is not a bound' },
-    { id: '24', args: ['assemble', '--session', 's1', '--budget=abc'], message: 'Invalid --budget: "abc"', why: 'assemble errors instead of using the api default' },
-    { id: '25', args: ['drill', 'no-such-id', '--budget=abc'], message: 'Invalid --budget: "abc"', why: 'drill errors instead of dropping the size cap' },
+    {
+      id: '16',
+      args: ['recall', 'deploy steps', '--hops='],
+      message: '--hops requires an integer value',
+      why: 'an empty glued value hits the --hops guard',
+    },
+    {
+      id: '20',
+      args: ['recall', 'deploy steps', '--budget='],
+      message: '--budget requires an integer value',
+      why: 'an empty glued value is not silently unbounded',
+    },
+    {
+      id: '20b',
+      args: ['recall', 'deploy steps', '--budget=abc'],
+      message: 'Invalid --budget: "abc"',
+      why: 'a junk value gets a different message than the empty case',
+    },
+    {
+      id: '22',
+      args: ['recall', 'deploy steps', '--budget', 'abc'],
+      message: 'Invalid --budget: "abc"',
+      why: 'the separated form is rejected too',
+    },
+    {
+      id: '23',
+      args: ['recall', 'deploy steps', '--budget=-1'],
+      message: 'Invalid --budget: "-1"',
+      why: 'a negative bound is not a bound',
+    },
+    {
+      id: '24',
+      args: ['assemble', '--session', 's1', '--budget=abc'],
+      message: 'Invalid --budget: "abc"',
+      why: 'assemble errors instead of using the api default',
+    },
+    {
+      id: '25',
+      args: ['drill', 'no-such-id', '--budget=abc'],
+      message: 'Invalid --budget: "abc"',
+      why: 'drill errors instead of dropping the size cap',
+    },
   ])('case $id: $why', async ({ args, message }) => {
     const res = await runCli(args);
     expect(res.status).toBe(1);
@@ -253,7 +319,9 @@ describe('runCli: --flag=value end-to-end guards', () => {
     const plain = await runCli(['forget', 'no-such-id']);
     const res = await runCli(['forget', 'no-such-id', '--json']);
     const plainStderr = ownStderr(plain.stderr);
-    expect(ownStderr(res.stderr)).toBe(`hippo: ignoring unknown flag --json. A later release will reject it.\n${plainStderr}`);
+    expect(ownStderr(res.stderr)).toBe(
+      `hippo: ignoring unknown flag --json. A later release will reject it.\n${plainStderr}`,
+    );
     expect({ status: res.status, stdout: res.stdout }).toEqual({ status: plain.status, stdout: plain.stdout });
     expect(plainStderr).toContain('Memory not found: no-such-id');
   });
@@ -263,9 +331,24 @@ describe('runCli: --flag=value end-to-end guards', () => {
   });
 
   it.each([
-    { id: '31', args: ['reject', 'X', '--dry-run'], message: 'hippo reject has no --dry-run', why: 'reject has no dry run' },
-    { id: '33', args: ['share', 'X', '--dry-run'], message: 'hippo share has no --dry-run outside `hippo share --auto`', why: 'share <id> would share for real' },
-    { id: '34', args: ['brief', 'close', '1', '--dry-run'], message: 'hippo brief has no --dry-run outside `hippo brief refresh`', why: 'brief close would close the brief' },
+    {
+      id: '31',
+      args: ['reject', 'X', '--dry-run'],
+      message: 'hippo reject has no --dry-run',
+      why: 'reject has no dry run',
+    },
+    {
+      id: '33',
+      args: ['share', 'X', '--dry-run'],
+      message: 'hippo share has no --dry-run outside `hippo share --auto`',
+      why: 'share <id> would share for real',
+    },
+    {
+      id: '34',
+      args: ['brief', 'close', '1', '--dry-run'],
+      message: 'hippo brief has no --dry-run outside `hippo brief refresh`',
+      why: 'brief close would close the brief',
+    },
   ])('case $id: --dry-run stops with exit 2, because $why', async ({ args, message }) => {
     const res = await runCli(args);
     expect(res.status).toBe(2);
@@ -283,7 +366,10 @@ describe('runCli: --flag=value end-to-end guards', () => {
     const home = join(tmpDir, 'home');
     const memDir = join(home, '.claude', 'projects', 'p', 'memory');
     mkdirSync(memDir, { recursive: true });
-    writeFileSync(join(memDir, 'note.md'), '---\nname: note\ntype: reference\n---\nThe staging deploy waits for the friday freeze.\n');
+    writeFileSync(
+      join(memDir, 'note.md'),
+      '---\nname: note\ntype: reference\n---\nThe staging deploy waits for the friday freeze.\n',
+    );
     vi.stubEnv('HOME', home);
     vi.stubEnv('USERPROFILE', home);
 

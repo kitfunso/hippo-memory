@@ -21,7 +21,10 @@ let globalRoot: string;
 const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
 const unownedAdmin: Actor = { subject: 'api_key:hk_admin', role: 'admin' };
-const outsiders: ReadonlyArray<[string, Actor]> = [['another owner', actorB], ['an unowned admin', unownedAdmin]];
+const outsiders: ReadonlyArray<[string, Actor]> = [
+  ['another owner', actorB],
+  ['an unowned admin', unownedAdmin],
+];
 
 type ByIdCall = () => void | Promise<McpResponse | RejectResult | null>;
 
@@ -32,7 +35,12 @@ function ctxFor(actor: Actor): FullContext {
 function mcpCtxFor(actor: Actor): McpContext {
   const store = sqliteStore(root);
   const ctx: McpContext = {
-    hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role, store, reach: testReach(root, store),
+    hippoRoot: root,
+    tenantId: 'default',
+    actor: actor.subject,
+    role: actor.role,
+    store,
+    reach: testReach(root, store),
     config: loadConfig(root),
   };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
@@ -74,8 +82,8 @@ afterEach(() => {
   rmSync(globalRoot, { recursive: true, force: true });
 });
 
-describe('by-id writes on someone else\'s personal row', () => {
-  it('supersede by the owner keeps the successor in the owner\'s scope with origin \'\'', async () => {
+describe("by-id writes on someone else's personal row", () => {
+  it("supersede by the owner keeps the successor in the owner's scope with origin ''", async () => {
     const id = await personalRow();
     const { newId } = await supersede(ctxFor(actorA), id, 'a newer version of the note');
     const successor = readEntry(root, newId, 'default');
@@ -85,10 +93,16 @@ describe('by-id writes on someone else\'s personal row', () => {
 
   it('hippo_share: another owner and an unowned admin get the missing-id error, while a team row still shares', async () => {
     const id = await personalRow();
-    const share = (actor: Actor, target: string): Promise<McpResponse | null> => handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_share', arguments: { id: target, force: true } } },
-      mcpCtxFor(actor),
-    );
+    const share = (actor: Actor, target: string): Promise<McpResponse | null> =>
+      handleMcpRequest(
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'hippo_share', arguments: { id: target, force: true } },
+        },
+        mcpCtxFor(actor),
+      );
     for (const [, actor] of outsiders) {
       await expectMissingIdAnswer(id, (target) => share(actor, target));
     }
@@ -106,13 +120,18 @@ describe('reject next to personal rows', () => {
     for (const [, actor] of outsiders) {
       await expectMissingIdAnswer(id, (target) => reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }));
     }
-    expect(await masked(id, () => reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }))).toEqual({ status: 400, message: PERSONAL_REFUSAL });
-    await expect(rejectValue(sqliteStore(root), { tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id })).rejects.toThrow(PERSONAL_REFUSAL);
+    expect(await masked(id, () => reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }))).toEqual({
+      status: 400,
+      message: PERSONAL_REFUSAL,
+    });
+    await expect(
+      rejectValue(sqliteStore(root), { tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id }),
+    ).rejects.toThrow(PERSONAL_REFUSAL);
     expect(await listRejectionsForTenant(sqliteStore(root), 'default')).toHaveLength(0);
     expect(readEntry(root, id, 'default')?.scope).toBe('personal:private:a');
   });
 
-  it('reject by value removes team copies and the caller\'s own personal copy, never another person\'s', async () => {
+  it("reject by value removes team copies and the caller's own personal copy, never another person's", async () => {
     const mineA = (await remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true })).id;
     const mineB = (await remember(ctxFor(actorB), { content: SHARED_TEXT, personal: true })).id;
     const team = (await remember(ctxFor(actorB), { content: SHARED_TEXT })).id;
@@ -126,17 +145,27 @@ describe('reject next to personal rows', () => {
   it('the CLI reject by value, which has no owner, leaves every personal row', async () => {
     const mineA = (await remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true })).id;
     const team = (await remember(ctxFor(actorB), { content: SHARED_TEXT })).id;
-    const { removedIds } = await rejectValue(sqliteStore(root), { tenantId: 'default', actor: 'cli', reason: 'stale', value: SHARED_TEXT });
+    const { removedIds } = await rejectValue(sqliteStore(root), {
+      tenantId: 'default',
+      actor: 'cli',
+      reason: 'stale',
+      value: SHARED_TEXT,
+    });
     expect(removedIds).toEqual([team]);
     expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
   });
 
-  it('reject by value leaves another person\'s dormant personal copy and removes a dormant team copy', async () => {
-    const personal = createMemory(SHARED_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'personal:private:a' });
+  it("reject by value leaves another person's dormant personal copy and removes a dormant team copy", async () => {
+    const personal = createMemory(SHARED_TEXT, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      scope: 'personal:private:a',
+    });
     const team = createMemory(SHARED_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const db = openHippoDb(root);
     try {
-      for (const entry of [personal, team]) insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
+      for (const entry of [personal, team]) {
+        insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
+      }
     } finally {
       closeHippoDb(db);
     }

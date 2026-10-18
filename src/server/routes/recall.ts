@@ -65,9 +65,7 @@ export async function handleAssembleSession(
   // Same strict-parse convention as summarize_overflow on /v1/memories:
   // ?summarizeOlder=banana is false (matches includeContinuity convention).
   const sumOlderRaw = query.get('summarizeOlder');
-  const summarizeOlder = sumOlderRaw === null
-    ? undefined
-    : (sumOlderRaw === '1' || sumOlderRaw === 'true');
+  const summarizeOlder = sumOlderRaw === null ? undefined : sumOlderRaw === '1' || sumOlderRaw === 'true';
   const scopeQ = query.get('scope');
   const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
   const assembleExtra: Pick<AssembleOptions, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};

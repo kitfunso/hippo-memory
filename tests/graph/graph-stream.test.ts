@@ -12,20 +12,27 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import {
-  selectGraphSeeds,
-  graphRankStream,
-  type GraphSeed,
-} from '../../src/graph/stream.js';
+import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/graph/stream.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function mem(home: string, tenant: string, text: string): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
-  const m = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant });
+  const m = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tags: [],
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'test',
+    tenantId: tenant,
+  });
   writeEntry(home, m, { actor: 'test' });
   return m;
 }
@@ -36,7 +43,15 @@ const seed = (index: number, strength = 1.0): GraphSeed => ({ index, strength })
 /** Like `mem`, but with an explicit envelope scope (v1.26.1 pool-only pinning case). */
 function scopedMem(home: string, tenant: string, text: string, scope: string): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
-  const m = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant, scope });
+  const m = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tags: [],
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    source: 'test',
+    tenantId: tenant,
+    scope,
+  });
   writeEntry(home, m, { actor: 'test' });
   return m;
 }
@@ -64,31 +79,38 @@ describe('selectGraphSeeds (pure)', () => {
 describe('graphRankStream (real SQLite)', () => {
   let home: string;
   const T = 'default';
-  beforeEach(() => { home = makeRoot('graphstream'); });
+  beforeEach(() => {
+    home = makeRoot('graphstream');
+  });
   afterEach(() => safeRmSync(home));
 
   it('scores a 1-hop neighbour; excludes the seed and unrelated in-pool entries', async () => {
     const a = mem(home, T, 'alpha cache invalidation decision');
     const b = mem(home, T, 'unrelated wording xyzzy plugh');
     const x = mem(home, T, 'no graph path at all');
-    const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B');
+    const ea = ent(home, T, a, 'A');
+    const eb = ent(home, T, b, 'B');
     ent(home, T, x, 'X');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
 
     const entries = [a, b, x];
     const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T });
-    expect(out).toEqual([1]);          // only b; seed(0) and x(2) excluded
+    expect(out).toEqual([1]); // only b; seed(0) and x(2) excluded
   });
 
   it('orders a 1-hop neighbour above a 2-hop neighbour (per-hop decay)', async () => {
-    const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb'); const c = mem(home, T, 'ccc');
-    const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B'); const ec = ent(home, T, c, 'C');
+    const a = mem(home, T, 'aaa');
+    const b = mem(home, T, 'bbb');
+    const c = mem(home, T, 'ccc');
+    const ea = ent(home, T, a, 'A');
+    const eb = ent(home, T, b, 'B');
+    const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ec, relType: 'supersedes', memoryId: b.id });
 
     const entries = [a, b, c];
     const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 2 });
-    expect(out).toEqual([1, 2]);       // b (1-hop) before c (2-hop)
+    expect(out).toEqual([1, 2]); // b (1-hop) before c (2-hop)
     // hops:1 reaches only b
     expect(await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 1 })).toEqual([1]);
   });
@@ -103,27 +125,34 @@ describe('graphRankStream (real SQLite)', () => {
     }
     const entries = [a, ...ns];
     const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, maxNeighbors: 2 });
-    expect(out.length).toBe(2);        // capped at 2 of the 3 neighbors
+    expect(out.length).toBe(2); // capped at 2 of the 3 neighbors
   });
 
   it('deterministic ties: equal hop+strength neighbours order by index asc', async () => {
-    const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb'); const c = mem(home, T, 'ccc');
-    const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B'); const ec = ent(home, T, c, 'C');
+    const a = mem(home, T, 'aaa');
+    const b = mem(home, T, 'bbb');
+    const c = mem(home, T, 'ccc');
+    const ea = ent(home, T, a, 'A');
+    const eb = ent(home, T, b, 'B');
+    const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
     const out = await graphRankStream([a, b, c], [seed(0)], { store: sqliteStore(home), tenantId: T });
-    expect(out).toEqual([1, 2]);       // b and c both 1-hop from a -> index asc
+    expect(out).toEqual([1, 2]); // b and c both 1-hop from a -> index asc
   });
 
   it('empty graph -> [] (no-op; caller skips the 3rd list)', async () => {
-    const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb');
+    const a = mem(home, T, 'aaa');
+    const b = mem(home, T, 'bbb');
     // no entities, no relations
     expect(await graphRankStream([a, b], [seed(0)], { store: sqliteStore(home), tenantId: T })).toEqual([]);
   });
 
   it('a reached neighbour NOT in the candidate pool is ignored', async () => {
-    const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb');
-    const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B');
+    const a = mem(home, T, 'aaa');
+    const b = mem(home, T, 'bbb');
+    const ea = ent(home, T, a, 'A');
+    const eb = ent(home, T, b, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     // pool excludes b
     const entries = [a, mem(home, T, 'other in pool but no path')];
@@ -156,12 +185,16 @@ describe('graphRankStream (real SQLite)', () => {
   });
 
   it('seeds are never scored, even when a seed is graph-adjacent to another seed', async () => {
-    const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb'); const c = mem(home, T, 'ccc');
-    const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B'); const ec = ent(home, T, c, 'C');
+    const a = mem(home, T, 'aaa');
+    const b = mem(home, T, 'bbb');
+    const c = mem(home, T, 'ccc');
+    const ea = ent(home, T, a, 'A');
+    const eb = ent(home, T, b, 'B');
+    const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id }); // a-b (both seeds)
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id }); // a-c (c not a seed)
     const out = await graphRankStream([a, b, c], [seed(0), seed(1, 0.5)], { store: sqliteStore(home), tenantId: T });
-    expect(out).toEqual([2]);          // only c; seeds 0 and 1 excluded
+    expect(out).toEqual([2]); // only c; seeds 0 and 1 excluded
   });
 
   it('a neighbour reachable from two seeds at the same hop takes the STRONGER seed', async () => {
@@ -171,9 +204,9 @@ describe('graphRankStream (real SQLite)', () => {
     // order — which would have tied them if nShared were locked to the weak seed's strength).
     const seedStrong = mem(home, T, 'strong seed aaa');
     const seedWeak = mem(home, T, 'weak seed bbb');
-    const nWeakOnly = mem(home, T, 'weak-only neighbour ccc');  // index 2
-    const filler = mem(home, T, 'filler no edge ddd');          // index 3
-    const nShared = mem(home, T, 'shared neighbour eee');       // index 4
+    const nWeakOnly = mem(home, T, 'weak-only neighbour ccc'); // index 2
+    const filler = mem(home, T, 'filler no edge ddd'); // index 3
+    const nShared = mem(home, T, 'shared neighbour eee'); // index 4
     const eStrong = ent(home, T, seedStrong, 'STRONG');
     const eWeak = ent(home, T, seedWeak, 'WEAK');
     const eWeakOnly = ent(home, T, nWeakOnly, 'WONLY');
@@ -181,24 +214,47 @@ describe('graphRankStream (real SQLite)', () => {
     const eShared = ent(home, T, nShared, 'SHARED');
     // Insert strong->shared FIRST (lower id) then weak->shared (higher id, returned first by
     // the loader's id-DESC order) — the exact ordering that would mis-score under the bug.
-    insertRelationAt(home, T, { fromEntityId: eStrong, toEntityId: eShared, relType: 'supersedes', memoryId: seedStrong.id });
-    insertRelationAt(home, T, { fromEntityId: eWeak, toEntityId: eShared, relType: 'supersedes', memoryId: seedWeak.id });
-    insertRelationAt(home, T, { fromEntityId: eWeak, toEntityId: eWeakOnly, relType: 'supersedes', memoryId: seedWeak.id });
+    insertRelationAt(home, T, {
+      fromEntityId: eStrong,
+      toEntityId: eShared,
+      relType: 'supersedes',
+      memoryId: seedStrong.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: eWeak,
+      toEntityId: eShared,
+      relType: 'supersedes',
+      memoryId: seedWeak.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: eWeak,
+      toEntityId: eWeakOnly,
+      relType: 'supersedes',
+      memoryId: seedWeak.id,
+    });
 
     const entries = [seedStrong, seedWeak, nWeakOnly, filler, nShared];
     const out = await graphRankStream(entries, [seed(0, 1.0), seed(1, 0.3)], { store: sqliteStore(home), tenantId: T });
-    expect(out).toEqual([4, 2]);       // nShared (strong, index 4) ranks ABOVE nWeakOnly (weak, index 2)
+    expect(out).toEqual([4, 2]); // nShared (strong, index 4) ranks ABOVE nWeakOnly (weak, index 2)
   });
 
   it('expands across the global store (a global seed reaches a global neighbour)', async () => {
     const glob = makeRoot('graphstream');
     try {
-      const g = mem(glob, T, 'global seed'); const gn = mem(glob, T, 'global neighbour');
-      const eg = ent(glob, T, g, 'G'); const egn = ent(glob, T, gn, 'GN');
+      const g = mem(glob, T, 'global seed');
+      const gn = mem(glob, T, 'global neighbour');
+      const eg = ent(glob, T, g, 'G');
+      const egn = ent(glob, T, gn, 'GN');
       insertRelationAt(glob, T, { fromEntityId: eg, toEntityId: egn, relType: 'supersedes', memoryId: g.id });
-      const entries = [g, gn];         // pool = the two global memories
-      const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, global: sqliteStore(glob) });
-      expect(out).toEqual([1]);        // gn reached via the global graph
-    } finally { safeRmSync(glob); }
+      const entries = [g, gn]; // pool = the two global memories
+      const out = await graphRankStream(entries, [seed(0)], {
+        store: sqliteStore(home),
+        tenantId: T,
+        global: sqliteStore(glob),
+      });
+      expect(out).toEqual([1]); // gn reached via the global graph
+    } finally {
+      safeRmSync(glob);
+    }
   });
 });

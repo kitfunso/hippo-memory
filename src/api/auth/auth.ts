@@ -132,10 +132,7 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
 
 /** Mint a member key for the caller an auth resolver vouched for, whatever its role; the
  * binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
-export async function authCreateSelf(
-  ctx: Context,
-  opts: AuthCreateSelfOpts,
-): Promise<AuthCreateSelfResult> {
+export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
   await keyWrites.createSelfApiKey(mint);
@@ -284,16 +281,15 @@ export async function authGrant(ctx: Context, keyId: string, scope: string): Pro
 }
 
 /** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
-export async function authUngrant(
-  ctx: Context,
-  keyId: string,
-  scope: string,
-): Promise<AuthGrantResult> {
+export async function authUngrant(ctx: Context, keyId: string, scope: string): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_ungrant');
 }
 
 async function changeGrant(
-  ctx: Context, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant',
+  ctx: Context,
+  keyId: string,
+  scope: string,
+  op: 'auth_grant' | 'auth_ungrant',
 ): Promise<AuthGrantResult> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can change scope grants');

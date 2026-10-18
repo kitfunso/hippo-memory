@@ -23,10 +23,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-type Step =
-  | { op: 'flush file'; bytes: number }
-  | { op: 'flush folder' }
-  | { op: 'rename'; from: string; to: string };
+type Step = { op: 'flush file'; bytes: number } | { op: 'flush folder' } | { op: 'rename'; from: string; to: string };
 
 /** Records each flush and rename as it happens, then lets it through. A crash cannot be staged, so the order of the calls is the evidence. */
 function recordSteps(): Step[] {
@@ -98,7 +95,9 @@ describe('writeFileAtomic through the rename path', () => {
   it.skipIf(WINDOWS)('a folder that cannot be flushed is a warning, and the new content still lands', () => {
     const fsync = fs.fsyncSync.bind(fs);
     vi.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
-      if (fs.fstatSync(fd).isDirectory()) throw Object.assign(new Error('EINVAL: invalid argument, fsync'), { code: 'EINVAL' });
+      if (fs.fstatSync(fd).isDirectory()) {
+        throw Object.assign(new Error('EINVAL: invalid argument, fsync'), { code: 'EINVAL' });
+      }
       fsync(fd);
     });
     syncBuiltinESMExports();
@@ -107,7 +106,9 @@ describe('writeFileAtomic through the rename path', () => {
     writeFileAtomic(file, NEW_TEXT);
 
     expect(fs.readFileSync(file, 'utf8')).toBe(NEW_TEXT);
-    expect(logged()).toEqual([`[hippo] warn: could not flush the folder ${dir} to disk after replacing a file in it: EINVAL: invalid argument, fsync`]);
+    expect(logged()).toEqual([
+      `[hippo] warn: could not flush the folder ${dir} to disk after replacing a file in it: EINVAL: invalid argument, fsync`,
+    ]);
   });
 });
 

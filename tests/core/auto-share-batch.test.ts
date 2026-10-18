@@ -33,14 +33,19 @@ describe('autoShare batching', () => {
     const hippoRoot = join(tmp, `proj${topics.length}`, '.hippo');
     initStore(hippoRoot);
     for (const topic of topics) {
-      writeEntry(hippoRoot, createMemory(`gotcha: ${topic} needs the explicit flag or the command silently does nothing`, {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: ['error'],
-        tenantId: 'default',
-      }));
+      writeEntry(
+        hippoRoot,
+        createMemory(`gotcha: ${topic} needs the explicit flag or the command silently does nothing`, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+          tags: ['error'],
+          tenantId: 'default',
+        }),
+      );
     }
     const { result, statements } = recordStatements(() => autoShare(...sharingStores(hippoRoot)));
-    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(expect.arrayContaining(result.map((e) => e.content)));
+    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(
+      expect.arrayContaining(result.map((e) => e.content)),
+    );
     return { shared: result.length, globalWrites: countMatching(statements, /^BEGIN IMMEDIATE$/) };
   }
 

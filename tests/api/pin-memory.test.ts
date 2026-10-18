@@ -19,7 +19,11 @@ afterEach(() => {
 });
 
 function seed(tenantId = 'default', scope: string | null = null): MemoryEntry {
-  const entry = createMemory('the build cache lives on the second disk', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, scope });
+  const entry = createMemory('the build cache lives on the second disk', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tenantId,
+    scope,
+  });
   writeEntry(root, entry);
   return entry;
 }

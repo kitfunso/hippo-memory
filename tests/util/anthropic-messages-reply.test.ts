@@ -1,35 +1,62 @@
 // sendAnthropicMessage reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
 import { describe, expect, it, vi } from 'vitest';
-import { type AnthropicMessageFailure, isPermanentFailure, sendAnthropicMessage } from '../../src/util/anthropic-messages.js';
+import {
+  type AnthropicMessageFailure,
+  isPermanentFailure,
+  sendAnthropicMessage,
+} from '../../src/util/anthropic-messages.js';
 
 const REPLY_CAP_BYTES = 1024 * 1024;
 
 function send(body: string): ReturnType<typeof sendAnthropicMessage> {
-  return sendAnthropicMessage({ apiKey: 'k-test', maxTokens: 10, prompt: 'hi', fetcher: async () => new Response(body, { status: 200 }) });
+  return sendAnthropicMessage({
+    apiKey: 'k-test',
+    maxTokens: 10,
+    prompt: 'hi',
+    fetcher: async () => new Response(body, { status: 200 }),
+  });
 }
 
 describe('sendAnthropicMessage reply reading', () => {
   it('returns the first text block, trimmed', async () => {
-    expect(await send(JSON.stringify({ content: [{ type: 'text', text: '  tea  ' }] }))).toEqual({ ok: true, text: 'tea' });
+    expect(await send(JSON.stringify({ content: [{ type: 'text', text: '  tea  ' }] }))).toEqual({
+      ok: true,
+      text: 'tea',
+    });
   });
 
   it('reports a reply with no text block as an empty failure, not as ok', async () => {
-    for (const body of ['{}', '{"content":[]}', '{"content":"tea"}', '{"content":[{"type":"tool_use"}]}', '{"content":[null]}']) {
+    for (const body of [
+      '{}',
+      '{"content":[]}',
+      '{"content":"tea"}',
+      '{"content":[{"type":"tool_use"}]}',
+      '{"content":[null]}',
+    ]) {
       expect(await send(body)).toEqual({ ok: false, failure: { kind: 'empty' } });
     }
   });
 
   it('reports a body that is not a JSON object as unreadable', async () => {
     for (const body of ['null', '[]', '"tea"']) {
-      expect(await send(body)).toEqual({ ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } });
+      expect(await send(body)).toEqual({
+        ok: false,
+        failure: { kind: 'unreadable', message: 'the reply is not a JSON object' },
+      });
     }
-    expect(await send('<html>busy</html>')).toEqual({ ok: false, failure: { kind: 'unreadable', message: 'reply is not JSON' } });
+    expect(await send('<html>busy</html>')).toEqual({
+      ok: false,
+      failure: { kind: 'unreadable', message: 'reply is not JSON' },
+    });
   });
 
   it('reports a reply over the byte cap as unreadable, even one that holds valid text', async () => {
     const padded = `{"content":[{"type":"text","text":"tea"}]${' '.repeat(REPLY_CAP_BYTES)}}`;
     expect(JSON.parse(padded).content[0].text).toBe('tea');
-    expect(await send(padded)).toEqual({ ok: false, failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes` } });
+    expect(await send(padded)).toEqual({
+      ok: false,
+      failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes` },
+    });
   });
 });
 
@@ -37,7 +64,12 @@ describe('sendAnthropicMessage on a non-2xx reply', () => {
   const LEAKED_KEY = `sk-ant-api03-${'a'.repeat(40)}`;
 
   function failWith(status: number, body: string): ReturnType<typeof sendAnthropicMessage> {
-    return sendAnthropicMessage({ apiKey: 'k-test', maxTokens: 10, prompt: 'hi', fetcher: async () => new Response(body, { status }) });
+    return sendAnthropicMessage({
+      apiKey: 'k-test',
+      maxTokens: 10,
+      prompt: 'hi',
+      fetcher: async () => new Response(body, { status }),
+    });
   }
 
   it('keeps the start of the error body on one line, capped, with key-shaped text masked', async () => {
@@ -58,9 +90,16 @@ describe('sendAnthropicMessage on a non-2xx reply', () => {
   it('warns with the error fields when the body cannot be read, and keeps the empty detail', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      const broken = new ReadableStream<Uint8Array>({ pull: () => { throw new Error('socket reset'); } });
+      const broken = new ReadableStream<Uint8Array>({
+        pull: () => {
+          throw new Error('socket reset');
+        },
+      });
       const reply = await sendAnthropicMessage({
-        apiKey: 'k-test', maxTokens: 10, prompt: 'hi', fetcher: async () => new Response(broken, { status: 400 }),
+        apiKey: 'k-test',
+        maxTokens: 10,
+        prompt: 'hi',
+        fetcher: async () => new Response(broken, { status: 400 }),
       });
       expect(reply).toEqual({ ok: false, failure: { kind: 'http', status: 400, detail: '' } });
       const written = stderr.mock.calls.map((c) => String(c[0])).join('');

@@ -28,7 +28,12 @@ describe('storeExtractedFacts', () => {
       { content: 'Bob prefers async standup meetings', tags: ['speaker:Bob', 'topic:standup'], valence: 'positive' },
     ];
 
-    const entries = storeExtractedFacts(sqliteSyncStore(dir).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const entries = storeExtractedFacts(
+      sqliteSyncStore(dir).localFiles.learning,
+      source,
+      facts,
+      DEFAULT_HALF_LIFE_DAYS,
+    );
 
     expect(entries).toHaveLength(2);
 
@@ -60,7 +65,12 @@ describe('storeExtractedFacts', () => {
       { content: 'Deploy uses blue-green strategy', tags: ['speaker:Carol', 'topic:deploy'], valence: 'neutral' },
     ];
 
-    const entries = storeExtractedFacts(sqliteSyncStore(dir).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const entries = storeExtractedFacts(
+      sqliteSyncStore(dir).localFiles.learning,
+      source,
+      facts,
+      DEFAULT_HALF_LIFE_DAYS,
+    );
     expect(entries).toHaveLength(1);
 
     const tags = entries[0]!.tags;

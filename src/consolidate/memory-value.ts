@@ -89,14 +89,14 @@ export function validateWeights(
     if (!isFiniteWeightValue(v)) {
       throw new Error(
         `memory-value: weights constant is malformed — "${key}" is not a finite number ` +
-        `(src/consolidate/memory-value-weights.ts)`,
+          `(src/consolidate/memory-value-weights.ts)`,
       );
     }
   }
   if (!isNonEmptyDigestString(digest)) {
     throw new Error(
       'memory-value: weights constant is malformed — SOURCE_ARTIFACT_SHA256 digest missing ' +
-      '(src/consolidate/memory-value-weights.ts)',
+        '(src/consolidate/memory-value-weights.ts)',
     );
   }
 }
@@ -112,7 +112,10 @@ export function scoreEntries(
   now: Date,
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
 ): Map<string, number> {
-  return scoreFeatures(entries.map((e) => [e.id, computeMvFeatures(e, now)] as const), weights);
+  return scoreFeatures(
+    entries.map((e) => [e.id, computeMvFeatures(e, now)] as const),
+    weights,
+  );
 }
 
 /** One entry's id and its features. */
@@ -188,7 +191,12 @@ export function rankNonPinnedByTenant(
   validateWeights(weights, digest);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now));
-  return rankCandidates(candidates, () => true, (ids) => [ids.map((id) => byId.get(id)!)], weights);
+  return rankCandidates(
+    candidates,
+    () => true,
+    (ids) => [ids.map((id) => byId.get(id)!)],
+    weights,
+  );
 }
 
 /** A non-pinned row's id, tenant and features: all the ranking keeps of a row. */

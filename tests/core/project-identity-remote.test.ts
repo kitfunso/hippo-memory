@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { _resetProjectIdentityCacheForTests, projectNames, resolveProjectIdentity } from '../../src/core/project-identity.js';
+import {
+  _resetProjectIdentityCacheForTests,
+  projectNames,
+  resolveProjectIdentity,
+} from '../../src/core/project-identity.js';
 import { normalizeRemote, originUrlFromConfig } from '../../src/core/project-remote.js';
 
 afterEach(() => {
@@ -52,13 +56,25 @@ describe('normalizeRemote', () => {
     ['scp', 'git@github.com:acme/api.git', 'github.com/acme/api'],
     ['scp without a user', 'github.com:acme/api', 'github.com/acme/api'],
     ['https', 'https://github.com/acme/api', 'github.com/acme/api'],
-    ['https with a token and a port', 'https://oauth2:not-a-real-token@gitlab.example.com:8443/acme/api.git/', 'gitlab.example.com/acme/api'],
+    [
+      'https with a token and a port',
+      'https://oauth2:not-a-real-token@gitlab.example.com:8443/acme/api.git/',
+      'gitlab.example.com/acme/api',
+    ],
     ['Azure DevOps https', 'https://org@dev.azure.com/org/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
     ['Azure DevOps ssh', 'git@ssh.dev.azure.com:v3/org/proj/repo', 'dev.azure.com/org/proj/repo'],
     ['Azure DevOps old host', 'https://org.visualstudio.com/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
-    ['Azure DevOps old host with its collection', 'https://org.visualstudio.com/DefaultCollection/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
+    [
+      'Azure DevOps old host with its collection',
+      'https://org.visualstudio.com/DefaultCollection/proj/_git/repo',
+      'dev.azure.com/org/proj/repo',
+    ],
     ['Azure DevOps old ssh host', 'org@vs-ssh.visualstudio.com:v3/org/proj/repo', 'dev.azure.com/org/proj/repo'],
-    ['https with a token in the query', 'https://gitlab.example.com/acme/api.git?private_token=not-a-real-token', 'gitlab.example.com/acme/api'],
+    [
+      'https with a token in the query',
+      'https://gitlab.example.com/acme/api.git?private_token=not-a-real-token',
+      'gitlab.example.com/acme/api',
+    ],
     ['scp with a fragment', 'git@github.com:acme/api.git#main', 'github.com/acme/api'],
   ])('%s', (_form, url, id) => {
     expect(normalizeRemote(url)).toBe(id);
@@ -82,12 +98,15 @@ describe('normalizeRemote', () => {
 
 describe('originUrlFromConfig', () => {
   it('reads the first origin url, with quotes and comments, and ignores other remotes', () => {
-    const text = '[remote "upstream"]\n\turl = git@github.com:up/api.git\n[remote "origin"] # mine\n\turl = "git@github.com:acme/api.git" ; why\n\turl = git@github.com:second/api.git\n';
+    const text =
+      '[remote "upstream"]\n\turl = git@github.com:up/api.git\n[remote "origin"] # mine\n\turl = "git@github.com:acme/api.git" ; why\n\turl = git@github.com:second/api.git\n';
     expect(originUrlFromConfig(text)).toBe('git@github.com:acme/api.git');
   });
 
   it('reads the old dotted section, and treats the subsection name as case-sensitive', () => {
-    expect(originUrlFromConfig('[remote.origin]\nurl = https://github.com/acme/api\n')).toBe('https://github.com/acme/api');
+    expect(originUrlFromConfig('[remote.origin]\nurl = https://github.com/acme/api\n')).toBe(
+      'https://github.com/acme/api',
+    );
     expect(originUrlFromConfig('[remote "Origin"]\n\turl = https://github.com/acme/api\n')).toBeNull();
   });
 });
@@ -95,12 +114,21 @@ describe('originUrlFromConfig', () => {
 describe('resolveProjectIdentity with an origin remote', () => {
   it('names a checkout by its remote and keeps the folder rule as its legacy name', () => {
     const root = repo('git@github.com:acme/api.git', 'home', 'work', 'api');
-    expect(identity(mkdirs('home', 'work', 'api', 'src'))).toEqual({ root, name: 'github.com/acme/api', legacyName: 'api', aliases: ['api'], isHome: false });
+    expect(identity(mkdirs('home', 'work', 'api', 'src'))).toEqual({
+      root,
+      name: 'github.com/acme/api',
+      legacyName: 'api',
+      aliases: ['api'],
+      isHome: false,
+    });
   });
 
   it('falls back to the folder name with no remote, and with a file remote', () => {
     expect(identity(repo(null, 'home', 'api'))).toMatchObject({ name: 'api', legacyName: 'api' });
-    expect(identity(repo('file:///srv/git/tool.git', 'home', 'tool'))).toMatchObject({ name: 'tool', legacyName: 'tool' });
+    expect(identity(repo('file:///srv/git/tool.git', 'home', 'tool'))).toMatchObject({
+      name: 'tool',
+      legacyName: 'tool',
+    });
   });
 
   it('prefers the id in .hippo-project.json, lowercased, and ignores an unusable one', () => {
@@ -123,7 +151,10 @@ describe('resolveProjectIdentity with an origin remote', () => {
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'acme-api' }));
     expect(projectNames(identity(root))).toEqual(['acme-api', 'github.com/acme/api', 'api']);
     fs.rmSync(path.join(root, '.hippo-project.json'));
-    fs.writeFileSync(path.join(process.env.HIPPO_HOME!, 'config.json'), JSON.stringify({ projectIdentity: { remote: false } }));
+    fs.writeFileSync(
+      path.join(process.env.HIPPO_HOME!, 'config.json'),
+      JSON.stringify({ projectIdentity: { remote: false } }),
+    );
     _resetProjectIdentityCacheForTests();
     expect(projectNames(identity(root))).toEqual(['api', 'github.com/acme/api']);
   });
@@ -171,7 +202,10 @@ describe('resolveProjectIdentity with an origin remote', () => {
 
   it('drops the remote rule when the global config sets projectIdentity.remote to false', () => {
     const root = repo('git@github.com:acme/api.git', 'home', 'api');
-    fs.writeFileSync(path.join(process.env.HIPPO_HOME!, 'config.json'), JSON.stringify({ projectIdentity: { remote: false } }));
+    fs.writeFileSync(
+      path.join(process.env.HIPPO_HOME!, 'config.json'),
+      JSON.stringify({ projectIdentity: { remote: false } }),
+    );
     _resetProjectIdentityCacheForTests();
     expect(identity(root)).toMatchObject({ name: 'api', legacyName: 'api' });
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'acme-api' }));

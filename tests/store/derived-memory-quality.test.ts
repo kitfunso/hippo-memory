@@ -43,7 +43,9 @@ describe('quality at automatic derivation boundaries', () => {
     for (const content of [
       'Production migrations must exclude test schema setup because sorted filenames control application order.',
       'Production migrations must exclude test schema setup because deployment applies the sorted filenames in order.',
-    ]) writeEntry(root, createMemory(content, captured));
+    ]) {
+      writeEntry(root, createMemory(content, captured));
+    }
     const result = await consolidate(root);
     expect(result.merged).toBe(2);
     expect(result.extractionCandidates).toBe(2);
@@ -61,11 +63,21 @@ describe('quality at automatic derivation boundaries', () => {
   it('writes complete extracted facts while refusing returned fragments per fact', () => {
     const source = createMemory('A discussion about the production migration deployment ordering.');
     writeEntry(root, source);
-    const facts = storeExtractedFacts(sqliteSyncStore(root).localFiles.learning, source, [
-      { content: 'Found local migration files to be', tags: [], valence: 'neutral' },
-      { content: 'Production migration files must exclude test schema setup because sorted filenames control application order.', tags: [], valence: 'neutral' },
-      { content: 'succeeds (inserts or updates)', tags: [], valence: 'neutral' },
-    ], DEFAULT_HALF_LIFE_DAYS);
+    const facts = storeExtractedFacts(
+      sqliteSyncStore(root).localFiles.learning,
+      source,
+      [
+        { content: 'Found local migration files to be', tags: [], valence: 'neutral' },
+        {
+          content:
+            'Production migration files must exclude test schema setup because sorted filenames control application order.',
+          tags: [],
+          valence: 'neutral',
+        },
+        { content: 'succeeds (inserts or updates)', tags: [], valence: 'neutral' },
+      ],
+      DEFAULT_HALF_LIFE_DAYS,
+    );
     expect(facts).toHaveLength(1);
     expect(facts[0].content).toContain('must exclude test schema setup');
     expect(loadAllEntries(root, 'default')).toHaveLength(2);
@@ -74,8 +86,10 @@ describe('quality at automatic derivation boundaries', () => {
   it('refuses incomplete generated summary prose through the shared new/rebuild summary boundary', async () => {
     const errors: string[] = [];
     const result = await generateDagSummary('migration rules', ['a supported source lesson'], {
-      apiKey: 'test', onError: (message) => errors.push(message),
-      fetcher: async () => new Response(JSON.stringify({ content: [{ text: 'Found local migration files to be' }] }), { status: 200 }),
+      apiKey: 'test',
+      onError: (message) => errors.push(message),
+      fetcher: async () =>
+        new Response(JSON.stringify({ content: [{ text: 'Found local migration files to be' }] }), { status: 200 }),
     });
     expect(result).toBeNull();
     expect(errors).toEqual([expect.stringContaining('summary quality refused')]);

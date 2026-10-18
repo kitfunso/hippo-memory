@@ -20,7 +20,10 @@ export async function waitFor(check: () => boolean | Promise<boolean>, opts: Wai
       lastError = err;
     }
     if (Date.now() >= deadline) {
-      const detail = lastError === undefined ? '' : ` (last error: ${lastError instanceof Error ? lastError.message : String(lastError)})`;
+      const detail =
+        lastError === undefined
+          ? ''
+          : ` (last error: ${lastError instanceof Error ? lastError.message : String(lastError)})`;
       throw new Error(`${what} not met within ${timeoutMs} ms${detail}`);
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));

@@ -22,14 +22,21 @@ let root: string;
 
 beforeEach(() => {
   root = makeRoot('inline-reindex');
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'new-m' } }), 'utf8');
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'new-m' } }),
+    'utf8',
+  );
   vi.stubEnv(KEY_ENV, ['sk', 'test'].join('-'));
-  vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
-    // SAFETY: the stub only receives the embeddings request body, which is JSON.
-    const body = JSON.parse(String(init?.body)) as JsonValue;
-    const input = isJsonObject(body) && Array.isArray(body.input) ? body.input : [];
-    return new Response(JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }));
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      // SAFETY: the stub only receives the embeddings request body, which is JSON.
+      const body = JSON.parse(String(init?.body)) as JsonValue;
+      const input = isJsonObject(body) && Array.isArray(body.input) ? body.input : [];
+      return new Response(JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }));
+    }),
+  );
 });
 
 afterEach(() => {
@@ -39,7 +46,8 @@ afterEach(() => {
 function seed(rows: number): MemoryEntry {
   // One transaction: a write per row timed out on the Windows runner at 257 rows.
   const entries = Array.from({ length: rows }, (_row, i) =>
-    createMemory(`inline reindex boundary row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    createMemory(`inline reindex boundary row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+  );
   batchWriteAndDelete(root, entries, []);
   const last = entries[rows - 1]!;
   saveStoredVectors(root, [[last.id, [0, 1]]], embeddingIndexIdentity('old-m'));

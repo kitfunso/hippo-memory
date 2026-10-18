@@ -14,8 +14,7 @@ export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_
   if (run.dryRun) return;
   const { config, result } = run;
   try {
-    const physicsEnabled = config.physics.enabled === true
-      || (config.physics.enabled === 'auto');
+    const physicsEnabled = config.physics.enabled === true || config.physics.enabled === 'auto';
 
     if (physicsEnabled) simulateStoredParticles(run, maxParticles);
   } catch (error) {
@@ -44,7 +43,7 @@ function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
       : '';
   result.details.push(
     `  ⚛️  physics: ${stats.particleCount} particles${capped}, ` +
-    `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}`
+      `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}`,
   );
 }
 

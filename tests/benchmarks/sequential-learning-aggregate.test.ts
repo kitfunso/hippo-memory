@@ -11,10 +11,7 @@ import {
   aggregatePhases,
   pairedPermutationCI,
 } from '../../benchmarks/sequential-learning/aggregate.mjs';
-import {
-  generateTasks,
-  TRAP_PLACEMENTS,
-} from '../../benchmarks/sequential-learning/traps.mjs';
+import { generateTasks, TRAP_PLACEMENTS } from '../../benchmarks/sequential-learning/traps.mjs';
 
 // ---------------------------------------------------------------------------
 // Pure aggregator math
@@ -32,9 +29,7 @@ describe('aggregate helpers', () => {
   it('ciHalfWidth95 for 10-sample [0.10..0.20] is approximately 0.032', () => {
     // Hand-verified: mean=0.15, sample variance ~0.001944, sd ~0.04410,
     // CI = 2.262 * 0.04410 / sqrt(10) ~= 0.0315.
-    expect(
-      ciHalfWidth95([0.10, 0.15, 0.20, 0.10, 0.15, 0.20, 0.10, 0.15, 0.20, 0.15]),
-    ).toBeCloseTo(0.032, 2);
+    expect(ciHalfWidth95([0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.15])).toBeCloseTo(0.032, 2);
   });
 
   it('ciHalfWidth95 returns 0 for n=1 (no sample variance estimable)', () => {
@@ -56,14 +51,14 @@ describe('aggregate helpers', () => {
 
   it('aggregatePhases averages early/mid/late across seeds', () => {
     const seeds = [
-      { early: 0.80, mid: 0.20, late: 0.10 },
-      { early: 0.70, mid: 0.30, late: 0.15 },
+      { early: 0.8, mid: 0.2, late: 0.1 },
+      { early: 0.7, mid: 0.3, late: 0.15 },
       { early: 0.75, mid: 0.25, late: 0.05 },
     ];
     const agg = aggregatePhases(seeds);
     expect(agg.early.mean).toBeCloseTo(0.75, 5);
     expect(agg.mid.mean).toBeCloseTo(0.25, 5);
-    expect(agg.late.mean).toBeCloseTo(0.10, 5);
+    expect(agg.late.mean).toBeCloseTo(0.1, 5);
     // Only n=3 -> ci95 returns 0 (below the n=5 floor)
     expect(agg.late.ci95).toBe(0);
     // Late is 0.10 +/- 0.05 around a 0.10 mean: sqrt(0.005 / 2).
@@ -72,11 +67,11 @@ describe('aggregate helpers', () => {
 
   it('aggregatePhases reports a positive ci95 when n>=5 with variance', () => {
     const seeds = [
-      { early: 0.80, mid: 0.20, late: 0.05 },
-      { early: 0.70, mid: 0.30, late: 0.15 },
+      { early: 0.8, mid: 0.2, late: 0.05 },
+      { early: 0.7, mid: 0.3, late: 0.15 },
       { early: 0.75, mid: 0.25, late: 0.05 },
-      { early: 0.85, mid: 0.15, late: 0.20 },
-      { early: 0.65, mid: 0.35, late: 0.10 },
+      { early: 0.85, mid: 0.15, late: 0.2 },
+      { early: 0.65, mid: 0.35, late: 0.1 },
     ];
     const agg = aggregatePhases(seeds);
     // Late has mean 0.11 and sample variance 0.017 / 4, so 2.776 * sqrt(0.00425 / 5).
@@ -98,8 +93,8 @@ describe('pairedPermutationCI', () => {
   });
 
   it('large positive delta: CI excludes 0', () => {
-    const xsA = [0.80, 0.85, 0.78, 0.82, 0.79, 0.81, 0.83, 0.84, 0.80, 0.82];
-    const xsB = [0.20, 0.25, 0.18, 0.22, 0.19, 0.21, 0.23, 0.24, 0.20, 0.22];
+    const xsA = [0.8, 0.85, 0.78, 0.82, 0.79, 0.81, 0.83, 0.84, 0.8, 0.82];
+    const xsB = [0.2, 0.25, 0.18, 0.22, 0.19, 0.21, 0.23, 0.24, 0.2, 0.22];
     const { deltaMean, ciLow, ciHigh } = pairedPermutationCI(xsA, xsB);
     expect(deltaMean).toBeCloseTo(0.6, 10);
     // Every diff is 0.6, so the sign-flip quantiles are -0.36 and +0.36; the fixed seed puts the resample mean at -0.003912.

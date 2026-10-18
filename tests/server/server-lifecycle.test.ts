@@ -49,17 +49,26 @@ interface UploadReply {
 function uploadUnpaced(port: number, path: string, headers: Record<string, string> = {}): Promise<UploadReply> {
   const chunk = Buffer.alloc(64 * 1024, 'x');
   return new Promise<UploadReply>((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json', ...headers } });
+    const req = httpRequest({
+      host: '127.0.0.1',
+      port,
+      path,
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+    });
     let answered = false;
     req.on('response', (res) => {
       answered = true;
       const socket = req.socket;
-      const closed = socket === null || socket.destroyed
-        ? Promise.resolve()
-        : new Promise<void>((done) => socket.once('close', () => done()));
+      const closed =
+        socket === null || socket.destroyed
+          ? Promise.resolve()
+          : new Promise<void>((done) => socket.once('close', () => done()));
       const parts: Buffer[] = [];
       res.on('data', (part: Buffer) => parts.push(part));
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(parts).toString('utf8'), closed }));
+      res.on('end', () =>
+        resolve({ status: res.statusCode ?? 0, body: Buffer.concat(parts).toString('utf8'), closed }),
+      );
       res.on('error', reject);
     });
     // A reset before the reply is read is the bug this guards: the server closed with request bytes unread.
@@ -151,7 +160,9 @@ describe('server lifecycle', () => {
     try {
       // What Node emits when accept() fails, as it does when the process runs out of file descriptors.
       handle.server?.emit('error', Object.assign(new Error('accept EMFILE'), { code: 'EMFILE' }));
-      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(/^\[hippo\] error: serve: listener error: accept EMFILE /);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(
+        /^\[hippo\] error: serve: listener error: accept EMFILE /,
+      );
       expect((await fetch(`${handle.url}/health`)).status).toBe(200);
     } finally {
       stderr.mockRestore();
@@ -186,8 +197,7 @@ describe('server lifecycle', () => {
     try {
       // A concurrent `hippo serve` on the same root must be rejected before it
       // can listen or clobber the pidfile.
-      await expect(serve({ hippoRoot: home, port: 0 }))
-        .rejects.toThrow(/already running/i);
+      await expect(serve({ hippoRoot: home, port: 0 })).rejects.toThrow(/already running/i);
 
       // The pidfile must still describe the first (real) server, uncorrupted.
       const info = JSON.parse(readFileSync(join(home, 'server.pid'), 'utf8'));
@@ -207,7 +217,10 @@ describe('server lifecycle', () => {
       // before any key check, and a webhook route reads one once a secret and a signature header are there.
       vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
       const signed = { 'x-slack-signature': 'v0=00', 'x-slack-request-timestamp': '1' };
-      for (const [path, headers] of [['/v1/memories', {}], ['/v1/connectors/slack/events', signed]] as const) {
+      for (const [path, headers] of [
+        ['/v1/memories', {}],
+        ['/v1/connectors/slack/events', signed],
+      ] as const) {
         const reply = await uploadUnpaced(handle.port, path, headers);
         expect(reply.status).toBe(413);
         expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });

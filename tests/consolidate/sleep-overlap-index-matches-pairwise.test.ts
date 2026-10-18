@@ -13,9 +13,68 @@ const SIZES = [0, 1, 2, 3, 8, 30, 120, 300];
 const SEEDS_PER_SIZE = 4;
 
 // A small shared vocabulary so random texts collide often, plus the polarity words, stopwords and punctuation the rules key on.
-const TOPIC = ['deploy', 'cache', 'Redis', 'auth', 'token', 'retry', 'queue', 'schema', 'index', 'build', 'lint', 'port', 'api', 'db', 'x', 'v2', 'café', 'rate_limit', 'flag', 'cron'];
-const STOP = ['the', 'a', 'to', 'of', 'in', 'for', 'on', 'with', 'is', 'it', 'and', 'we', 'when', 'after', 'new', 'one'];
-const POLAR = ['always', 'never', 'must', 'must not', 'enabled', 'disabled', 'enable', 'disable', 'not', "don't", 'true', 'true.', 'false,', 'yes', 'no', 'works', 'broken', 'off', 'available', 'missing'];
+const TOPIC = [
+  'deploy',
+  'cache',
+  'Redis',
+  'auth',
+  'token',
+  'retry',
+  'queue',
+  'schema',
+  'index',
+  'build',
+  'lint',
+  'port',
+  'api',
+  'db',
+  'x',
+  'v2',
+  'café',
+  'rate_limit',
+  'flag',
+  'cron',
+];
+const STOP = [
+  'the',
+  'a',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'is',
+  'it',
+  'and',
+  'we',
+  'when',
+  'after',
+  'new',
+  'one',
+];
+const POLAR = [
+  'always',
+  'never',
+  'must',
+  'must not',
+  'enabled',
+  'disabled',
+  'enable',
+  'disable',
+  'not',
+  "don't",
+  'true',
+  'true.',
+  'false,',
+  'yes',
+  'no',
+  'works',
+  'broken',
+  'off',
+  'available',
+  'missing',
+];
 
 function randomTexts(rnd: () => number, n: number): string[] {
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rnd() * xs.length)];
@@ -80,7 +139,10 @@ describe('sleep overlap index matches the pairwise passes', () => {
   it('keeps pairs that sit exactly on each threshold', () => {
     const shared = ['aa', 'bb', 'cc', 'dd', 'ee', 'ff', 'gg'];
     // 7 shared of 20 distinct tokens is a Jaccard of exactly 0.35; dropping one shared token falls just under.
-    const onMerge = [[...shared, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'].join(' '), [...shared, 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7'].join(' ')];
+    const onMerge = [
+      [...shared, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'].join(' '),
+      [...shared, 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7'].join(' '),
+    ];
     const underMerge = [onMerge[0], onMerge[1].replace('gg', 'q8')];
     for (const texts of [onMerge, underMerge]) {
       expect(texts.map((_, i) => mergePartnersOf(texts)(i))).toEqual(pairwiseMergePartners(texts));
@@ -88,8 +150,15 @@ describe('sleep overlap index matches the pairwise passes', () => {
     expect(mergePartnersOf(onMerge)(0)).toEqual([1]);
 
     // 3 shared of 6 distinct tokens is a Jaccard of exactly 0.5.
-    const onConflict = ['always alpha beta gamma', 'never alpha beta gamma zeta', 'never alpha beta gamma zeta eta'].map((text, k) => ({
-      ...createMemory(text, {}), id: `c${k}`, created: NOW.toISOString(), last_retrieved: NOW.toISOString(),
+    const onConflict = [
+      'always alpha beta gamma',
+      'never alpha beta gamma zeta',
+      'never alpha beta gamma zeta eta',
+    ].map((text, k) => ({
+      ...createMemory(text, {}),
+      id: `c${k}`,
+      created: NOW.toISOString(),
+      last_retrieved: NOW.toISOString(),
     }));
     const got = detectConflicts(onConflict, NOW);
     expect(got).toEqual(pairwiseDetectConflicts(onConflict, NOW));

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../../src/util/token-text.js';
 import type { SearchResult } from '../../src/core/search-types.js';
@@ -21,7 +21,11 @@ let project: string;
 let env: NodeJS.ProcessEnv;
 
 // In process unless `spawned`: the first SessionStart case runs its hooks in a real child, the rest read bytes and rows.
-async function hippo(args: string[], input?: string, spawned = false): Promise<{ status: number | null; stdout: string; stderr: string }> {
+async function hippo(
+  args: string[],
+  input?: string,
+  spawned = false,
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
   const r = spawned ? hippoRun(args, { cwd: project, env, input }) : await runCliAs(args, { cwd: project, env, input });
   expect(r.status, r.stderr).toBe(0);
   return r;
@@ -32,7 +36,11 @@ beforeEach(async () => {
   project = path.join(home, 'project');
   fs.mkdirSync(project);
   env = {
-    ...process.env, HOME: home, USERPROFILE: home, APPDATA: home, HIPPO_HOME: path.join(home, 'global'),
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    APPDATA: home,
+    HIPPO_HOME: path.join(home, 'global'),
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
   await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
@@ -42,7 +50,9 @@ beforeEach(async () => {
 /** The commands `hippo hook install claude-code` wrote for one event. */
 function installedCommands(event: string): string[] {
   const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
-  return settings.hooks[event].flatMap((entry: { hooks: Array<{ command: string }> }) => entry.hooks.map((h) => h.command));
+  return settings.hooks[event].flatMap((entry: { hooks: Array<{ command: string }> }) =>
+    entry.hooks.map((h) => h.command),
+  );
 }
 
 interface HookPayload {
@@ -72,7 +82,9 @@ async function remember(text: string, ...flags: string[]): Promise<string> {
 
 async function promptContext(prompt: string): Promise<string> {
   const [command] = installedCommands('UserPromptSubmit').filter((c) => c.includes('hippo context --pinned-only'));
-  return additionalContext((await runHook(command, { session_id: 'lean-session', hook_event_name: 'UserPromptSubmit', prompt })).stdout);
+  return additionalContext(
+    (await runHook(command, { session_id: 'lean-session', hook_event_name: 'UserPromptSubmit', prompt })).stdout,
+  );
 }
 
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
@@ -81,7 +93,12 @@ const count = (haystack: string, needle: string): number => haystack.split(needl
 function enablePromptRecall(): void {
   const file = path.join(project, '.hippo', 'config.json');
   const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
-  config.pinnedInject = { ...config.pinnedInject, promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 };
+  config.pinnedInject = {
+    ...config.pinnedInject,
+    promptRecall: true,
+    promptRecallThreshold: 0.1,
+    promptRecallMinShared: 1,
+  };
   fs.writeFileSync(file, JSON.stringify(config));
 }
 
@@ -93,12 +110,20 @@ describe('SessionStart hooks', () => {
     // The SessionEnd worker leaves the output of a real sleep run in this log.
     await remember('the release script needs the staging flag or it publishes to production');
     await hippo(['sleep', '--log-file', logFile]);
-    const lines = fs.readFileSync(logFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = fs
+      .readFileSync(logFile, 'utf8')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     // In process the console spies bypass the tee, so only cmdSleep's opening line is certain; teed warnings may follow.
     expect(lines[0]).toMatch(/^\[hippo\] \S+ consolidating memory\.\.\.$/);
 
     const runs = [];
-    for (const c of commands) runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }, true));
+    for (const c of commands) {
+      runs.push(
+        await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }, true),
+      );
+    }
     const stdout = runs.map((r) => r.stdout).join('');
     const stderr = runs.map((r) => r.stderr).join('');
 
@@ -114,18 +139,26 @@ describe('SessionStart hooks', () => {
     const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
     await remember('the release script needs the staging flag or it publishes to production');
     await hippo(['sleep', '--log-file', logFile]);
-    const lines = fs.readFileSync(logFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = fs
+      .readFileSync(logFile, 'utf8')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     fs.mkdirSync(path.join(project, '.hippo', 'compactions-spool'), { recursive: true });
     fs.writeFileSync(path.join(project, '.hippo', 'compactions-spool', 'x.unreadable.bad'), '{');
 
     const runs = [];
-    for (const c of commands) runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
+    for (const c of commands) {
+      runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
+    }
     const stdout = runs.map((r) => r.stdout).join('');
     const stderr = runs.map((r) => r.stderr).join('');
 
     expect(stdout.endsWith('\n')).toBe(true);
     expect(stdout.slice(0, -1)).not.toContain('\n');
-    expect(JSON.parse(stdout)).toEqual({ systemMessage: 'Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.' });
+    expect(JSON.parse(stdout)).toEqual({
+      systemMessage: 'Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.',
+    });
     for (const line of lines) expect(stdout).not.toContain(line);
     for (const line of lines) expect(stderr).toContain(line);
     expect(fs.existsSync(logFile)).toBe(false);
@@ -139,7 +172,10 @@ describe('a memory with a copy in the global store', () => {
 
   it('reaches the prompt hook once, and the freed recent slot goes to the next memory', async () => {
     // The freed slot is a newest-5 backfill, so pin the pre-1.55.0 default.
-    fs.writeFileSync(path.join(project, '.hippo', 'config.json'), JSON.stringify({ pinnedInject: { promptRecall: false } }));
+    fs.writeFileSync(
+      path.join(project, '.hippo', 'config.json'),
+      JSON.stringify({ pinnedInject: { promptRecall: false } }),
+    );
     await hippo(['promote', await remember(rule, '--pin')]);
     await remember(older);
     await hippo(['share', await remember(newest), '--force']);
@@ -198,7 +234,9 @@ describe('a memory with a copy in the global store', () => {
   it('comes back once from `hippo recall --multihop`', async () => {
     await hippo(['share', await remember(older), '--force']);
 
-    const out = JSON.parse((await hippo(['recall', 'when does the staging database reset', '--multihop', '--json'])).stdout);
+    const out = JSON.parse(
+      (await hippo(['recall', 'when does the staging database reset', '--multihop', '--json'])).stdout,
+    );
     expect(out.results.filter((r: { content: string }) => r.content === older)).toHaveLength(1);
   });
 
@@ -230,30 +268,58 @@ describe('a memory with a copy in the global store', () => {
       return root;
     };
     const mem = (root: string, text: string): MemoryEntry => {
-      const m = createMemory(text, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T, scope: null });
+      const m = createMemory(text, {
+        tags: [],
+        layer: Layer.Semantic,
+        confidence: 'verified',
+        source: 'test',
+        tenantId: T,
+        scope: null,
+      });
       writeEntry(root, m, { actor: 'test' });
       return m;
     };
     const entity = (root: string, m: MemoryEntry): number =>
       insertEntityAt(root, T, { entityType: 'decision', name: m.id, memoryId: m.id }).id;
-    const sr = (entry: MemoryEntry, score: number): SearchResult =>
-      ({ entry, score, bm25: score, cosine: 0, tokens: estimateTokens(entry.content) });
+    const sr = (entry: MemoryEntry, score: number): SearchResult => ({
+      entry,
+      score,
+      bm25: score,
+      cosine: 0,
+      tokens: estimateTokens(entry.content),
+    });
 
     const local = store('graph-local');
     const global = store('graph-global');
     const seed = mem(local, rule);
     const linked = mem(local, older);
-    insertRelationAt(local, T, { fromEntityId: entity(local, seed), toEntityId: entity(local, linked), relType: 'references', memoryId: seed.id });
+    insertRelationAt(local, T, {
+      fromEntityId: entity(local, seed),
+      toEntityId: entity(local, linked),
+      relType: 'references',
+      memoryId: seed.id,
+    });
     // The global graph holds a third memory that links to shared copies of both local ones.
     const other = mem(global, newest);
     const linkedCopy = mem(global, older);
     const seedCopy = mem(global, rule);
     const eOther = entity(global, other);
     for (const copy of [linkedCopy, seedCopy]) {
-      insertRelationAt(global, T, { fromEntityId: eOther, toEntityId: entity(global, copy), relType: 'references', memoryId: other.id });
+      insertRelationAt(global, T, {
+        fromEntityId: eOther,
+        toEntityId: entity(global, copy),
+        relType: 'references',
+        memoryId: other.id,
+      });
     }
 
-    const out = await graphExpandRecall([sr(seed, 1), sr(other, 0.9)], { hops: 1, store: sqliteStore(local), global: sqliteStore(global), tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall([sr(seed, 1), sr(other, 0.9)], {
+      hops: 1,
+      store: sqliteStore(local),
+      global: sqliteStore(global),
+      tenantId: T,
+      budget: 4000,
+    });
     const ids = out.map((r) => r.entry.id);
     for (const text of [rule, older, newest]) expect(out.filter((r) => r.entry.content === text)).toHaveLength(1);
     expect(ids).toContain(linked.id);

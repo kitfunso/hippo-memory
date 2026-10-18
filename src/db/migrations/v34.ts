@@ -75,18 +75,18 @@ const TRG_SKILLS_SUPERSEDE_TENANT_MATCH_UPDATE = `
         `;
 
 export const v34: Migration = {
-    version: 34,
-    up: (db) => {
-      // Skill first-class object: `instructions` plus optional `trigger_text`, superseding like v32 processes;
-      // exportSkills writes it to AGENTS.md / CLAUDE.md.
-      // The column is `trigger_text`, not `trigger`, because TRIGGER is a SQLite reserved keyword.
-      if (!tableExists(db, 'skills')) {
-        db.exec(SKILLS_TABLE);
-        db.exec(IDX_SKILLS_TENANT_STATUS);
-        db.exec(IDX_SKILLS_MEMORY);
-        db.exec(TRG_SKILLS_TENANT_MATCH_INSERT);
-        db.exec(TRG_SKILLS_TENANT_MATCH_UPDATE);
-        db.exec(TRG_SKILLS_SUPERSEDE_TENANT_MATCH_UPDATE);
-      }
-    },
+  version: 34,
+  up: (db) => {
+    // Skill first-class object: `instructions` plus optional `trigger_text`, superseding like v32 processes;
+    // exportSkills writes it to AGENTS.md / CLAUDE.md.
+    // The column is `trigger_text`, not `trigger`, because TRIGGER is a SQLite reserved keyword.
+    if (!tableExists(db, 'skills')) {
+      db.exec(SKILLS_TABLE);
+      db.exec(IDX_SKILLS_TENANT_STATUS);
+      db.exec(IDX_SKILLS_MEMORY);
+      db.exec(TRG_SKILLS_TENANT_MATCH_INSERT);
+      db.exec(TRG_SKILLS_TENANT_MATCH_UPDATE);
+      db.exec(TRG_SKILLS_SUPERSEDE_TENANT_MATCH_UPDATE);
+    }
+  },
 };

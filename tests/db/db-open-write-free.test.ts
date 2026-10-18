@@ -22,11 +22,14 @@ const { DatabaseSync } = require('node:sqlite') as {
 };
 
 // Statements that need the write lock; a caught one waits out the lock holder, which only a clock would show.
-const NEEDS_WRITE_LOCK = /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|BEGIN|SAVEPOINT|VACUUM)\b|PRAGMA (user_version|schema_version) =/;
+const NEEDS_WRITE_LOCK =
+  /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|BEGIN|SAVEPOINT|VACUUM)\b|PRAGMA (user_version|schema_version) =/;
 
 let root: string;
 
-beforeEach(() => { root = makeRoot('open-write-free', { init: false }); });
+beforeEach(() => {
+  root = makeRoot('open-write-free', { init: false });
+});
 
 describe('openHippoDb on an already-current store is write-free', () => {
   it('runs no statement that needs the write lock, even while a second connection holds BEGIN IMMEDIATE', () => {
@@ -37,7 +40,9 @@ describe('openHippoDb on an already-current store is write-free', () => {
     const holder = new DatabaseSync(dbPath);
     holder.exec('PRAGMA busy_timeout = 0');
     holder.exec('BEGIN IMMEDIATE');
-    holder.exec(`INSERT INTO meta(key, value) VALUES('lockprobe', 'x') ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
+    holder.exec(
+      `INSERT INTO meta(key, value) VALUES('lockprobe', 'x') ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+    );
 
     try {
       const { result: db, statements } = recordStatements(() => openHippoDb(root));
@@ -62,7 +67,10 @@ describe('openHippoDb on an already-current store is write-free', () => {
 
   it('self-heal is intact: dropping memories_fts rebuilds and backfills it on reopen', () => {
     initStore(root);
-    const m = createMemory('fts self-heal probe content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const m = createMemory('fts self-heal probe content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
     writeEntry(root, m);
 
     const db1 = openHippoDb(root);
@@ -76,9 +84,9 @@ describe('openHippoDb on an already-current store is write-free', () => {
     const db2 = openHippoDb(root);
     try {
       // SAFETY: the query selects only `name`, a TEXT column of sqlite_master.
-      const tables = (db2
+      const tables = db2
         .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'`)
-        .all() as Array<{ name: string }>);
+        .all() as Array<{ name: string }>;
       expect(tables.length).toBe(1);
       // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
       const row = db2.prepare(`SELECT COUNT(*) AS c FROM memories_fts WHERE id = ?`).get(m.id) as

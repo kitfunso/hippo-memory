@@ -35,10 +35,11 @@ describe('__session-end-worker awaits cmdSleep before finishing', () => {
     writeFileSync(join(dir, 'hippo.db'), 'not a sqlite database, deliberately corrupted for this test');
 
     const logFile = join(dir, 'worker-await.log');
-    const result = await runCliAs(
-      ['__session-end-worker', '--log-file', logFile],
-      { cwd: dir, env, input: JSON.stringify({ hook_event_name: 'SessionEnd' }) },
-    );
+    const result = await runCliAs(['__session-end-worker', '--log-file', logFile], {
+      cwd: dir,
+      env,
+      input: JSON.stringify({ hook_event_name: 'SessionEnd' }),
+    });
 
     // Pre-fix, an unhandled rejection kills the process non-zero; the fix exits clean.
     expect(result.status).toBe(0);

@@ -32,7 +32,11 @@ function writeWithCompanions(db: DatabaseSyncLike, { entry, actor, event, quaran
   writeInOwnTenant(db, entry, actor, (handle, memoryId) => {
     if (quarantine) {
       recordQuarantine(handle, {
-        tenantId: entry.tenant_id, memoryId, originalScope: quarantine.originalScope, reason: quarantine.reason, actor,
+        tenantId: entry.tenant_id,
+        memoryId,
+        originalScope: quarantine.originalScope,
+        reason: quarantine.reason,
+        actor,
       });
     }
     if (event && !logEvent(handle, event, memoryId)) throw new EventAlreadyLogged();
@@ -53,14 +57,19 @@ function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteO
 /** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back write leaves none. */
 export function sqliteConnectorWrites(on: OnHandle): Sync<ConnectorWrites> {
   return {
-    writeConnectorEntry: (write) => on((db, files) => {
-      const entry = stampOriginProjectIn(files, write.entry);
-      const result = writeOnce(db, { ...write, entry });
-      if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
-      return result;
-    }, openStore),
+    writeConnectorEntry: (write) =>
+      on((db, files) => {
+        const entry = stampOriginProjectIn(files, write.entry);
+        const result = writeOnce(db, { ...write, entry });
+        if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
+        return result;
+      }, openStore),
     // The log write's answer is unread: a key logged before keeps its row and the archive stands.
-    archiveConnectorEntry: (archive) => on((db, files) =>
-      archiveRawAt(db, files, archive, (handle, archivedId) => { logEvent(handle, archive.event, archivedId); })),
+    archiveConnectorEntry: (archive) =>
+      on((db, files) =>
+        archiveRawAt(db, files, archive, (handle, archivedId) => {
+          logEvent(handle, archive.event, archivedId);
+        }),
+      ),
   };
 }

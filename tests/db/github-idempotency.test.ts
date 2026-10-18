@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { githubEventSeenAt as hasSeenKey, markGitHubEventSeenAt as markKeySeen, githubEventMemoryAt as lookupMemoryByKey } from '../../src/store/connectors/github.js';
+import {
+  githubEventSeenAt as hasSeenKey,
+  markGitHubEventSeenAt as markKeySeen,
+  githubEventMemoryAt as lookupMemoryByKey,
+} from '../../src/store/connectors/github.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 describe('github idempotency', () => {
@@ -55,7 +59,12 @@ describe('github idempotency', () => {
     try {
       markKeySeen(db, { idempotencyKey: 'k4', deliveryId: 'd4', eventName: 'issues', memoryId: 'm-first' });
       // Second call with different metadata must not throw and must not overwrite memory_id.
-      markKeySeen(db, { idempotencyKey: 'k4', deliveryId: 'd4-other', eventName: 'pull_request', memoryId: 'm-second' });
+      markKeySeen(db, {
+        idempotencyKey: 'k4',
+        deliveryId: 'd4-other',
+        eventName: 'pull_request',
+        memoryId: 'm-second',
+      });
       expect(lookupMemoryByKey(db, 'k4')).toBe('m-first');
     } finally {
       closeHippoDb(db);

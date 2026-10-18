@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../../src/db/index.js';
 import { v14 } from '../../src/db/migrations/v14.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
@@ -38,9 +38,11 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const home = makeRoot('a3');
     const db = openHippoDb(home);
     expect(() =>
-      db.prepare(
-        `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('b1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','bogus')`,
-      ).run(),
+      db
+        .prepare(
+          `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('b1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','bogus')`,
+        )
+        .run(),
     ).toThrow(/invalid kind/i);
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
@@ -127,7 +129,9 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     // SAFETY: PRAGMA table_info always returns rows with a name column.
     const cols = db.prepare(`PRAGMA table_info(raw_archive)`).all() as Array<{ name: string }>;
     const names = cols.map((c) => c.name);
-    expect(names).toEqual(expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']));
+    expect(names).toEqual(
+      expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']),
+    );
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
@@ -178,9 +182,11 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const home = makeRoot('a3');
     const db = openHippoDb(home);
     expect(() =>
-      db.prepare(
-        `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('null1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c',NULL)`,
-      ).run(),
+      db
+        .prepare(
+          `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('null1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c',NULL)`,
+        )
+        .run(),
     ).toThrow(/invalid kind/i);
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
@@ -205,9 +211,11 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
       `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
     ).run('m1', ts, 'test', 'user:1', '{}');
     expect(() =>
-      db.prepare(
-        `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
-      ).run('m1', ts, 'duplicate at same instant', 'user:1', '{}'),
+      db
+        .prepare(
+          `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run('m1', ts, 'duplicate at same instant', 'user:1', '{}'),
     ).toThrow(/UNIQUE constraint/i);
     // Different timestamps for the same memory_id are allowed (history)
     db.prepare(

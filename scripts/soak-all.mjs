@@ -42,20 +42,31 @@ const PROFILES = [
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const summary = [];
-console.error(`Running ${PROFILES.length} profiles × ${TICKS} ticks × ${PARTICLES} starting particles (seed=${SEED})\n`);
+console.error(
+  `Running ${PROFILES.length} profiles × ${TICKS} ticks × ${PARTICLES} starting particles (seed=${SEED})\n`,
+);
 
 for (const profile of PROFILES) {
   const outCsv = path.join(OUT_DIR, `soak-${profile}.csv`);
   const started = Date.now();
   try {
-    execFileSync(process.execPath, [
-      'scripts/soak-test.mjs',
-      '--profile', profile,
-      '--ticks', String(TICKS),
-      '--particles', String(PARTICLES),
-      '--seed', String(SEED),
-      '--out', outCsv,
-    ], { stdio: 'inherit', timeout: 600_000 });
+    execFileSync(
+      process.execPath,
+      [
+        'scripts/soak-test.mjs',
+        '--profile',
+        profile,
+        '--ticks',
+        String(TICKS),
+        '--particles',
+        String(PARTICLES),
+        '--seed',
+        String(SEED),
+        '--out',
+        outCsv,
+      ],
+      { stdio: 'inherit', timeout: 600_000 },
+    );
   } catch (err) {
     console.error(`  ${profile}: FAILED — ${err.message}`);
     summary.push({ profile, status: 'FAILED', error: err.message });
@@ -66,12 +77,12 @@ for (const profile of PROFILES) {
   // Parse CSV tail for summary stats
   const csv = fs.readFileSync(outCsv, 'utf8').trim().split(/\r?\n/);
   const header = csv[0].split(',');
-  const rows = csv.slice(1).map(line => line.split(','));
+  const rows = csv.slice(1).map((line) => line.split(','));
   const idxEnergy = header.indexOf('total_energy');
   const idxParticles = header.indexOf('particles');
   const idxMaxVel = header.indexOf('max_vel');
 
-  const energies = rows.map(r => Number(r[idxEnergy])).filter(Number.isFinite);
+  const energies = rows.map((r) => Number(r[idxEnergy])).filter(Number.isFinite);
   const firstE = energies[0] ?? 0;
   const finalE = energies[energies.length - 1] ?? 0;
   const maxAbsE = energies.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
@@ -79,7 +90,17 @@ for (const profile of PROFILES) {
   const finalN = rows.length ? Number(rows[rows.length - 1][idxParticles]) : 0;
   const bounded = Number.isFinite(finalE) && maxVel <= 1.0; // config cap is 0.1; 10x = 1.0
 
-  summary.push({ profile, status: bounded ? 'BOUNDED' : 'DIVERGED', ticks: rows.length, firstE, finalE, maxAbsE, maxVel, finalN, wallMs });
+  summary.push({
+    profile,
+    status: bounded ? 'BOUNDED' : 'DIVERGED',
+    ticks: rows.length,
+    firstE,
+    finalE,
+    maxAbsE,
+    maxVel,
+    finalN,
+    wallMs,
+  });
 }
 
 // ---- write summary ----
@@ -97,17 +118,23 @@ for (const s of summary) {
     lines.push(`| ${s.profile} | FAILED | — | — | — | — | — | — | — |`);
     continue;
   }
-  lines.push(`| ${s.profile} | ${s.status} | ${s.ticks} | ${s.firstE.toFixed(3)} | ${s.finalE.toFixed(3)} | ${s.maxAbsE.toFixed(3)} | ${s.maxVel.toFixed(4)} | ${s.finalN} | ${(s.wallMs/1000).toFixed(1)} |`);
+  lines.push(
+    `| ${s.profile} | ${s.status} | ${s.ticks} | ${s.firstE.toFixed(3)} | ${s.finalE.toFixed(3)} | ${s.maxAbsE.toFixed(3)} | ${s.maxVel.toFixed(4)} | ${s.finalN} | ${(s.wallMs / 1000).toFixed(1)} |`,
+  );
 }
 lines.push('');
 
-const boundedCount = summary.filter(s => s.status === 'BOUNDED').length;
+const boundedCount = summary.filter((s) => s.status === 'BOUNDED').length;
 lines.push(`**Verdict: ${boundedCount} of ${PROFILES.length} profiles bounded.**`);
 lines.push('');
 if (boundedCount === PROFILES.length) {
-  lines.push('All workload profiles show bounded energy within the configured velocity cap (0.1, Lyapunov-relevant upper bound 1.0 = 10× cap). Physics engine is stable under every tested regime.');
+  lines.push(
+    'All workload profiles show bounded energy within the configured velocity cap (0.1, Lyapunov-relevant upper bound 1.0 = 10× cap). Physics engine is stable under every tested regime.',
+  );
 } else {
-  lines.push('Some profiles diverged — see individual CSVs for detail. Investigation required before claiming engine stability.');
+  lines.push(
+    'Some profiles diverged — see individual CSVs for detail. Investigation required before claiming engine stability.',
+  );
 }
 
 fs.writeFileSync(summaryPath, lines.join('\n'));
@@ -115,6 +142,8 @@ fs.writeFileSync(summaryPath, lines.join('\n'));
 console.error('\n=== Summary ===');
 for (const s of summary) {
   const tag = s.status === 'BOUNDED' ? '✓' : s.status === 'DIVERGED' ? '✗' : '!';
-  console.error(`  ${tag} ${s.profile.padEnd(22)} status=${s.status} finalE=${s.finalE?.toFixed?.(3) ?? '?'} maxV=${s.maxVel?.toFixed?.(4) ?? '?'}`);
+  console.error(
+    `  ${tag} ${s.profile.padEnd(22)} status=${s.status} finalE=${s.finalE?.toFixed?.(3) ?? '?'} maxV=${s.maxVel?.toFixed?.(4) ?? '?'}`,
+  );
 }
 console.error(`\nSummary written to: ${summaryPath}`);

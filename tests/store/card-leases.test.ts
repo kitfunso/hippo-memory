@@ -11,8 +11,15 @@ import { cardDetailOf } from '../_helpers/card-detail.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  createCard, loadCard, loadCardRuns, claimCard, heartbeatCard, blockCard, reviewCard,
-  completeCard, reclaimExpiredCards,
+  createCard,
+  loadCard,
+  loadCardRuns,
+  claimCard,
+  heartbeatCard,
+  blockCard,
+  reviewCard,
+  completeCard,
+  reclaimExpiredCards,
 } from '../_helpers/root-forms.js';
 
 let root: string;
@@ -113,14 +120,14 @@ describe('refusals', () => {
     expect(loadCard(root, 'default', card.id)).toEqual(before);
   });
 
-  it('an unknown card id or another tenant\'s throws unknown card id on heartbeat', async () => {
+  it("an unknown card id or another tenant's throws unknown card id on heartbeat", async () => {
     const card = createCard(root, 'default', { title: 'T3 unknown hb' });
     claimCard(root, 'default', card.id, 'r1');
     expect(() => heartbeatCard(root, 'default', 'nope', 1)).toThrow('unknown card id: nope');
     expect(() => heartbeatCard(root, 'tenant2', card.id, 1)).toThrow(`unknown card id: ${card.id}`);
   });
 
-  it('an unknown card id or another tenant\'s throws unknown card id on block, review and complete even with a run id', async () => {
+  it("an unknown card id or another tenant's throws unknown card id on block, review and complete even with a run id", async () => {
     const card = createCard(root, 'default', { title: 'T3 unknown brc' });
     const claimed = claimCard(root, 'default', card.id, 'r1')!;
     expect(() => blockCard(root, 'default', 'nope', 'why', claimed.runId)).toThrow('unknown card id: nope');
@@ -128,7 +135,9 @@ describe('refusals', () => {
     expect(() => reviewCard(root, 'default', 'nope', claimed.runId)).toThrow('unknown card id: nope');
     expect(() => reviewCard(root, 'tenant2', card.id, claimed.runId)).toThrow(`unknown card id: ${card.id}`);
     expect(() => completeCard(root, 'default', 'nope', 'success', claimed.runId)).toThrow('unknown card id: nope');
-    expect(() => completeCard(root, 'tenant2', card.id, 'success', claimed.runId)).toThrow(`unknown card id: ${card.id}`);
+    expect(() => completeCard(root, 'tenant2', card.id, 'success', claimed.runId)).toThrow(
+      `unknown card id: ${card.id}`,
+    );
   });
 
   it('heartbeat returns null, not throws, for every non-running status', async () => {
@@ -192,13 +201,22 @@ describe('sweep', () => {
     try {
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ?`).run(pastIso(), passed.id);
       db.prepare(`UPDATE cards SET lease_until = NULL, heartbeat_at = NULL WHERE id = ?`).run(nullLease.id);
-      db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ? AND tenant_id = ?`).run(pastIso(), otherTenant.id, 'tenant2');
+      db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ? AND tenant_id = ?`).run(
+        pastIso(),
+        otherTenant.id,
+        'tenant2',
+      );
     } finally {
       closeHippoDb(db);
     }
 
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-1', summary: 'before sweep', nextAction: undefined, artifacts: [], cardId: passed.id,
+      version: 1,
+      sessionId: 'sess-1',
+      summary: 'before sweep',
+      nextAction: undefined,
+      artifacts: [],
+      cardId: passed.id,
     });
     const handoffBefore = (await cardDetailOf(root, 'default', passed.id))?.handoff;
 
@@ -233,7 +251,7 @@ describe('sweep', () => {
   });
 });
 
-describe('a reclaimed runtime\'s run id is refused', () => {
+describe("a reclaimed runtime's run id is refused", () => {
   it('rejects the old run id after reclaim and a new claim; the new run id is accepted', async () => {
     const parent = createCard(root, 'default', { title: 'T5 parent' });
     const child = createCard(root, 'default', { title: 'T5 child', dependsOn: [parent.id] });
@@ -375,10 +393,17 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
   const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
-    worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
+    worker.once('message', (msg) => {
+      if (msg === 'locked') resolve();
+    });
   });
   const released = new Promise<void>((resolve) => {
-    worker.on('message', (msg) => { if (msg === 'released') { worker.terminate(); resolve(); } });
+    worker.on('message', (msg) => {
+      if (msg === 'released') {
+        worker.terminate();
+        resolve();
+      }
+    });
   });
   // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
   const startHold = (): void => worker.postMessage('hold');
@@ -470,7 +495,10 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
   function runCliSpawned(cwd: string, env: Record<string, string>, ...args: string[]) {
     try {
       const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
-        cwd, env: { ...process.env, ...env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+        cwd,
+        env: { ...process.env, ...env },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       return { out: stdout, status: 0 };
     } catch (e) {
@@ -484,7 +512,6 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const r = await runCliAs(args, { cwd, env: { ...process.env, ...env } });
     return { out: r.status === 0 ? r.stdout : r.stdout + r.stderr, status: r.status };
   }
-
 
   async function setupCliHome() {
     const home = makeRoot('w2b-cli', { init: false });
@@ -581,7 +608,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C3, ROADMAP.md:1222 end to end: reclaim returns a crashed claimant\'s card to ready with its handoff intact', async () => {
+  it("C3, ROADMAP.md:1222 end to end: reclaim returns a crashed claimant's card to ready with its handoff intact", async () => {
     const { home, env } = await setupCliHome();
     try {
       const create = await runCli(home, env, 'card', 'create', '--title', 't');
@@ -623,7 +650,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
 
       const reclaim = await runCli(home, env, 'card', 'reclaim', id);
       expect(reclaim.status).toBe(1);
-      expect(reclaim.out).toContain('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
+      expect(reclaim.out).toContain(
+        'Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)',
+      );
 
       const show = await runCli(home, env, 'card', 'show', id, '--json');
       expect(JSON.parse(show.out).card.status).toBe('running');
@@ -663,10 +692,30 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       const completeRunId = runIdFrom(completeClaim.out);
       await runCli(home, env, 'card', 'review', completeId);
 
-      const completeWrong = await runCli(home, env, 'card', 'complete', completeId, '--outcome', 'success', '--run', '999');
+      const completeWrong = await runCli(
+        home,
+        env,
+        'card',
+        'complete',
+        completeId,
+        '--outcome',
+        'success',
+        '--run',
+        '999',
+      );
       expect(completeWrong.status).toBe(1);
       expect(completeWrong.out).toContain('status review');
-      const completeRight = await runCli(home, env, 'card', 'complete', completeId, '--outcome', 'success', '--run', completeRunId);
+      const completeRight = await runCli(
+        home,
+        env,
+        'card',
+        'complete',
+        completeId,
+        '--outcome',
+        'success',
+        '--run',
+        completeRunId,
+      );
       expect(completeRight.status, completeRight.out).toBe(0);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -732,7 +781,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
 
       const reclaimProto = await runCli(home, env, 'card', 'reclaim', '__proto__');
       expect(reclaimProto.status).toBe(1);
-      expect(reclaimProto.out).toContain('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
+      expect(reclaimProto.out).toContain(
+        'Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)',
+      );
 
       // --run=5 is a real flag now, so it reaches the live-run check instead of the parser guard.
       const equalsForm = await runCli(home, env, 'card', 'heartbeat', id, '--run=5');

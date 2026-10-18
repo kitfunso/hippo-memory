@@ -20,7 +20,9 @@ beforeEach(() => {
   listeners = recordListeners(process, 'on', 'once');
   exit = stubExit();
   printed = [];
-  vi.spyOn(console, 'log').mockImplementation((line: string) => { printed.push(line); });
+  vi.spyOn(console, 'log').mockImplementation((line: string) => {
+    printed.push(line);
+  });
 });
 
 afterEach(() => {

@@ -13,9 +13,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../../src/mcp/server.js';
+import {
+  handleMcpRequest,
+  _resetSessionRecallHistoryMcpForTests,
+  type McpContext,
+  type McpResponse,
+} from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -29,16 +34,8 @@ type RecallToolArgs = {
   session_id?: string;
 };
 
-function callTool(
-  reqId: number,
-  name: string,
-  args: RecallToolArgs,
-  ctx: McpContext,
-) {
-  return handleMcpRequest(
-    { jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } },
-    ctx,
-  );
+function callTool(reqId: number, name: string, args: RecallToolArgs, ctx: McpContext) {
+  return handleMcpRequest({ jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }
 
 function extractText(res: McpResponse | null): string {
@@ -73,12 +70,15 @@ describe('mcp hippo_recall anchoringHint', () => {
     // Seed a memory that matches the test query so MCP physics/hybrid
     // returns a non-null top-1.
     for (let i = 0; i < 3; i++) {
-      writeEntry(home, createMemory(`frobnicate baz quux content ${i}`, {
-        layer: Layer.Buffer,
-        confidence: 'observed',
-        kind: 'raw',
-        tenantId: 'default',
-      }));
+      writeEntry(
+        home,
+        createMemory(`frobnicate baz quux content ${i}`, {
+          layer: Layer.Buffer,
+          confidence: 'observed',
+          kind: 'raw',
+          tenantId: 'default',
+        }),
+      );
     }
   });
 
@@ -89,7 +89,15 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
+    const ctx: McpContext = {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     // Three recalls with DIFFERENT queries on the same session — same top
     // memory should win each time and trigger R2 on the 3rd.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
@@ -108,14 +116,30 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   it('does NOT render anchoring block on the first recall (no history yet)', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
+    const ctx: McpContext = {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     const res = await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Anchoring hint');
   });
 
   it('emits recall_anchor_skipped_no_session when session_id is absent', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
+    const ctx: McpContext = {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(0);
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux' }, ctx);
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(1);
@@ -123,7 +147,15 @@ describe('mcp hippo_recall anchoringHint', () => {
 
   it('does NOT render anchoring block when HIPPO_ANCHORING=off', async () => {
     vi.stubEnv('HIPPO_ANCHORING', 'off');
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
+    const ctx: McpContext = {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     await callTool(2, 'hippo_recall', { query: 'frobnicate baz different words', session_id: 'sess1' }, ctx);

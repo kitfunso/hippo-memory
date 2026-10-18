@@ -51,7 +51,15 @@ export function inMemoryAuditLogStore(hippoRoot: string): InMemoryAuditLogStore 
       for (const event of events) {
         lastId += 1;
         const metadata: AuditEvent['metadata'] = JSON.parse(JSON.stringify(event.metadata ?? {}));
-        audit.push({ id: lastId, ts: new Date().toISOString(), tenantId: event.tenantId, actor: event.actor, op: event.op, targetId: event.targetId ?? null, metadata });
+        audit.push({
+          id: lastId,
+          ts: new Date().toISOString(),
+          tenantId: event.tenantId,
+          actor: event.actor,
+          op: event.op,
+          targetId: event.targetId ?? null,
+          metadata,
+        });
       }
     },
     auditLog,

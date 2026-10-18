@@ -16,14 +16,16 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function post(
-  port: number,
-  path: string,
-  payload: string = '{}',
-): Promise<{ status: number; body: string }> {
+function post(port: number, path: string, payload: string = '{}'): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json', cookie: sessionCookie(port) } },
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: sessionCookie(port) },
+      },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -52,9 +54,7 @@ describe('dashboard tenant-scoping', () => {
 
   afterEach(async () => {
     if (server) {
-      await new Promise<void>((resolve, reject) =>
-        server!.close((err) => (err ? reject(err) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => server!.close((err) => (err ? reject(err) : resolve())));
       server = undefined;
     }
   });
@@ -80,9 +80,7 @@ describe('dashboard tenant-scoping', () => {
     const db = openHippoDb(hippoRoot);
     try {
       // SAFETY: the SELECT names one column of the row seeded above, which exists.
-      const row = db
-        .prepare(`SELECT pinned FROM memories WHERE id = ?`)
-        .get(a.id) as { pinned: number };
+      const row = db.prepare(`SELECT pinned FROM memories WHERE id = ?`).get(a.id) as { pinned: number };
       expect(row.pinned).toBe(0);
     } finally {
       closeHippoDb(db);

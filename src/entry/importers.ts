@@ -1,6 +1,10 @@
 // The published importers take a folder in their options, so this entry builds the hippo.db store each one writes to.
 import {
-  importEntries as importInto, importRoot, type ImportOptions, type ImportResult, type TargetedImport,
+  importEntries as importInto,
+  importRoot,
+  type ImportOptions,
+  type ImportResult,
+  type TargetedImport,
 } from '../importers/core.js';
 import * as sources from '../importers/sources.js';
 import { importMarkdown as importMarkdownInto } from '../importers/markdown.js';

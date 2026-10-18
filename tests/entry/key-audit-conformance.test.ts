@@ -4,7 +4,14 @@ import { rmSync } from 'node:fs';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from '../_helpers/in-memory-key-audit-store.js';
 import {
-  FIXTURE_REVOKED_AT, onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture,
+  FIXTURE_REVOKED_AT,
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type GroupCall,
+  type SideResult,
+  type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
@@ -25,9 +32,18 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
   return sides.sqlite;
 }
 
-const revoke = (tenantId: string, keyId: string): Call => (g) => g.revokeApiKey({ tenantId, keyId, actor: 'api_key:caller', at: AT });
-const revokedAtOf = (keyId: string): Call => async (_g, store) => (await store.findApiKey(keyId))?.revokedAt;
-const after = (afterId: number, limit?: number, tenantId?: string): Call => (g) => g.auditEventsAfter({ afterId, limit, tenantId });
+const revoke =
+  (tenantId: string, keyId: string): Call =>
+  (g) =>
+    g.revokeApiKey({ tenantId, keyId, actor: 'api_key:caller', at: AT });
+const revokedAtOf =
+  (keyId: string): Call =>
+  async (_g, store) =>
+    (await store.findApiKey(keyId))?.revokedAt;
+const after =
+  (afterId: number, limit?: number, tenantId?: string): Call =>
+  (g) =>
+    g.auditEventsAfter({ afterId, limit, tenantId });
 const highId: Call = (g) => g.auditHighId();
 
 beforeAll(async () => {
@@ -76,7 +92,15 @@ describe('KeyAudit.revokeApiKey', () => {
     expect(side.outcomes).toEqual([{ value: AT }, { value: AT }, { value: next }, { value: AT }]);
     expect(side.audit).toEqual([
       ...baseline.audit,
-      { id: next, ts: NOW, tenantId: TENANT_A, actor: 'api_key:caller', op: 'auth_revoke', targetId: memberA, metadata: {} },
+      {
+        id: next,
+        ts: NOW,
+        tenantId: TENANT_A,
+        actor: 'api_key:caller',
+        op: 'auth_revoke',
+        targetId: memberA,
+        metadata: {},
+      },
     ]);
   });
 });

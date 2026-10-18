@@ -15,7 +15,10 @@ import type { JsonValue } from '../../src/util/json.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
-import { inMemoryConnectorEventsStore, type InMemoryConnectorEventsStore } from '../_helpers/in-memory-connector-events-store.js';
+import {
+  inMemoryConnectorEventsStore,
+  type InMemoryConnectorEventsStore,
+} from '../_helpers/in-memory-connector-events-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/core/config.js';
 
@@ -49,16 +52,28 @@ function copyWithRoutes(): string {
   sqliteSyncStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
-    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT_A, NOW);
+    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
+      '101',
+      TENANT_A,
+      NOW,
+    );
   } finally {
     closeHippoDb(db);
   }
   return root;
 }
 
-const slackRows = (memory: InMemoryConnectorEventsStore) => memory.events().filter((e) => e.connector === 'slack').map((e) => [e.eventKey, e.memoryId]);
+const slackRows = (memory: InMemoryConnectorEventsStore) =>
+  memory
+    .events()
+    .filter((e) => e.connector === 'slack')
+    .map((e) => [e.eventKey, e.memoryId]);
 const githubRows = (memory: InMemoryConnectorEventsStore) =>
-  memory.events().filter((e) => e.connector === 'github').map((e) => [e.deliveryId, e.eventName, e.memoryId]).sort();
+  memory
+    .events()
+    .filter((e) => e.connector === 'github')
+    .map((e) => [e.deliveryId, e.eventName, e.memoryId])
+    .sort();
 
 beforeAll(() => {
   fixture = seedTwoTenants();
@@ -83,29 +98,64 @@ describe('the connector entry points on a store with connectorEvents', () => {
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryConnectorEventsStore(copyOf());
-    const slack: Context = { hippoRoot, tenantId: TENANT_A, actor: slackActor, store: memory.store, config: loadConfig(hippoRoot) };
+    const slack: Context = {
+      hippoRoot,
+      tenantId: TENANT_A,
+      actor: slackActor,
+      store: memory.store,
+      config: loadConfig(hippoRoot),
+    };
     const github: Context = { ...slack, actor: githubActor };
     const message = (eventId: string, text: string, ts: string) =>
-      ingestMessage(slack, { teamId: 'T1', channel: { id: 'C1', is_private: false }, message: { type: 'message', channel: 'C1', user: 'U1', text, ts }, eventId });
-    const comment = (deliveryId: string) => ingestEvent(github, {
-      event: { eventName: 'issue_comment', payload: { action: 'created', repository: REPO, issue: { number: 1 }, comment: { id: 9, body: 'I can reproduce this on main', user: { login: 'bob', id: 2 } } } },
-      rawBody: '{}', deliveryId,
-    });
-    const deleted = (eventId: string, deletedTs: string) => handleMessageDeleted(slack, { teamId: 'T1', channelId: 'C1', deletedTs, eventId });
+      ingestMessage(slack, {
+        teamId: 'T1',
+        channel: { id: 'C1', is_private: false },
+        message: { type: 'message', channel: 'C1', user: 'U1', text, ts },
+        eventId,
+      });
+    const comment = (deliveryId: string) =>
+      ingestEvent(github, {
+        event: {
+          eventName: 'issue_comment',
+          payload: {
+            action: 'created',
+            repository: REPO,
+            issue: { number: 1 },
+            comment: { id: 9, body: 'I can reproduce this on main', user: { login: 'bob', id: 2 } },
+          },
+        },
+        rawBody: '{}',
+        deliveryId,
+      });
+    const deleted = (eventId: string, deletedTs: string) =>
+      handleMessageDeleted(slack, { teamId: 'T1', channelId: 'C1', deletedTs, eventId });
     const commentDeleted = (deliveryId: string) =>
-      handleCommentDeleted(github, { artifactRef: COMMENT_REF, idempotencyKey: 'deleted-comment-9', deliveryId, eventName: 'issue_comment' });
+      handleCommentDeleted(github, {
+        artifactRef: COMMENT_REF,
+        idempotencyKey: 'deleted-comment-9',
+        deliveryId,
+        eventName: 'issue_comment',
+      });
 
     const ids = await withSqliteBlocked('in-memory', async () => {
       const stored = await message('Ev_message', 'the release is frozen until friday', '1700.000001');
       expect(stored).toEqual({ status: 'ingested', memoryId: expect.any(String) });
-      expect(await message('Ev_message', 'the release is frozen until friday', '1700.000001')).toEqual({ status: 'duplicate', memoryId: stored.memoryId });
+      expect(await message('Ev_message', 'the release is frozen until friday', '1700.000001')).toEqual({
+        status: 'duplicate',
+        memoryId: stored.memoryId,
+      });
       expect(await message('Ev_empty', '   ', '1700.000002')).toEqual({ status: 'skipped', memoryId: null });
       expect(await message('Ev_empty', '   ', '1700.000002')).toEqual({ status: 'skipped', memoryId: null });
       const noted = await comment('d-1');
       expect(noted).toEqual({ status: 'ingested', memoryId: expect.any(String) });
       expect(await comment('d-2')).toEqual({ status: 'duplicate', memoryId: noted.memoryId });
       const held = await memory.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A);
-      expect(new Map(held.map((r) => [r.id, [r.kind, r.artifact_ref]]))).toEqual(new Map([[stored.memoryId, ['raw', MESSAGE_REF]], [noted.memoryId, ['raw', COMMENT_REF]]]));
+      expect(new Map(held.map((r) => [r.id, [r.kind, r.artifact_ref]]))).toEqual(
+        new Map([
+          [stored.memoryId, ['raw', MESSAGE_REF]],
+          [noted.memoryId, ['raw', COMMENT_REF]],
+        ]),
+      );
 
       expect(await deleted('Ev_deleted', '1700.000001')).toEqual({ status: 'archived', memoryId: stored.memoryId });
       expect(await deleted('Ev_deleted', '1700.000001')).toEqual({ status: 'duplicate', memoryId: null });
@@ -118,11 +168,26 @@ describe('the connector entry points on a store with connectorEvents', () => {
     });
 
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(slackRows(memory)).toEqual([['Ev_deleted', ids.message], ['Ev_empty', null], ['Ev_message', ids.message], ['Ev_unknown', null]]);
-    expect(githubRows(memory)).toEqual([['d-1', 'issue_comment', ids.comment], ['d-3', 'issue_comment', ids.comment]]);
-    expect(memory.auditRows().filter((r) => r.ts === NOW).map((r) => [r.op, r.targetId, r.actor, r.tenantId])).toEqual([
-      ['remember', ids.message, 'connector:slack', TENANT_A], ['remember', ids.comment, 'connector:github', TENANT_A],
-      ['archive_raw', ids.message, 'connector:slack', TENANT_A], ['archive_raw', ids.comment, 'connector:github', TENANT_A],
+    expect(slackRows(memory)).toEqual([
+      ['Ev_deleted', ids.message],
+      ['Ev_empty', null],
+      ['Ev_message', ids.message],
+      ['Ev_unknown', null],
+    ]);
+    expect(githubRows(memory)).toEqual([
+      ['d-1', 'issue_comment', ids.comment],
+      ['d-3', 'issue_comment', ids.comment],
+    ]);
+    expect(
+      memory
+        .auditRows()
+        .filter((r) => r.ts === NOW)
+        .map((r) => [r.op, r.targetId, r.actor, r.tenantId]),
+    ).toEqual([
+      ['remember', ids.message, 'connector:slack', TENANT_A],
+      ['remember', ids.comment, 'connector:github', TENANT_A],
+      ['archive_raw', ids.message, 'connector:slack', TENANT_A],
+      ['archive_raw', ids.comment, 'connector:github', TENANT_A],
     ]);
     expect(memory.letters()).toEqual([]);
   });
@@ -142,29 +207,80 @@ describe('both webhooks under a store that is not hippo.db', () => {
     handles.push(handle);
     return { root, url: handle.url };
   };
-  const slackSignature = (ts: string, body: string, secret: string): string => `v0=${createHmac('sha256', secret).update(`v0:${ts}:${body}`).digest('hex')}`;
-  const postSlack = async (url: string, payload: JsonValue, secret = secrets.slack, ts = String(Math.floor(Date.now() / 1000))) => {
+  const slackSignature = (ts: string, body: string, secret: string): string =>
+    `v0=${createHmac('sha256', secret).update(`v0:${ts}:${body}`).digest('hex')}`;
+  const postSlack = async (
+    url: string,
+    payload: JsonValue,
+    secret = secrets.slack,
+    ts = String(Math.floor(Date.now() / 1000)),
+  ) => {
     const body = JSON.stringify(payload);
-    const headers = { 'content-type': 'application/json', 'x-slack-request-timestamp': ts, 'x-slack-signature': slackSignature(ts, body, secret) };
+    const headers = {
+      'content-type': 'application/json',
+      'x-slack-request-timestamp': ts,
+      'x-slack-signature': slackSignature(ts, body, secret),
+    };
     const res = await fetch(`${url}/v1/connectors/slack/events`, { method: 'POST', headers, body });
     return { status: res.status, body: await res.json(), sent: { body, ts, signature: headers['x-slack-signature'] } };
   };
   const postGitHub = async (url: string, deliveryId: string, payload: JsonValue, secret = secrets.github) => {
     const body = JSON.stringify(payload);
     const signature = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
-    const headers = { 'content-type': 'application/json', 'x-hub-signature-256': signature, 'x-github-event': 'issue_comment', 'x-github-delivery': deliveryId };
+    const headers = {
+      'content-type': 'application/json',
+      'x-hub-signature-256': signature,
+      'x-github-event': 'issue_comment',
+      'x-github-delivery': deliveryId,
+    };
     const res = await fetch(`${url}/v1/connectors/github/events`, { method: 'POST', headers, body });
     return { status: res.status, body: await res.json() };
   };
-  const slackEvent = (teamId: string, eventId: string, event: JsonValue) => ({ type: 'event_callback', team_id: teamId, event_id: eventId, event_time: 1_700_000_000, event });
-  const posted = (ts: string) => ({ type: 'message', channel: 'C1', channel_type: 'channel', user: 'U1', text: 'the release is frozen until friday', ts });
-  const removed = (ts: string) => ({ type: 'message', subtype: 'message_deleted', channel: 'C1', deleted_ts: ts, ts: '1700.500000' });
-  const commentEvent = (action: 'created' | 'deleted') => ({
-    action, installation: { id: 101 }, repository: REPO, issue: { number: 1 },
-    comment: { id: 9, body: 'I can reproduce this on main', user: { login: 'bob', id: 2 }, updated_at: '2026-02-28T09:00:00Z' },
+  const slackEvent = (teamId: string, eventId: string, event: JsonValue) => ({
+    type: 'event_callback',
+    team_id: teamId,
+    event_id: eventId,
+    event_time: 1_700_000_000,
+    event,
   });
-  const added = () => memory.auditRows().slice(baseline).map((r) => [r.op, r.targetId, r.actor, r.tenantId]);
-  const rows = () => ({ slack: slackRows(memory), github: githubRows(memory), letters: memory.letters().length, audit: added().length });
+  const posted = (ts: string) => ({
+    type: 'message',
+    channel: 'C1',
+    channel_type: 'channel',
+    user: 'U1',
+    text: 'the release is frozen until friday',
+    ts,
+  });
+  const removed = (ts: string) => ({
+    type: 'message',
+    subtype: 'message_deleted',
+    channel: 'C1',
+    deleted_ts: ts,
+    ts: '1700.500000',
+  });
+  const commentEvent = (action: 'created' | 'deleted') => ({
+    action,
+    installation: { id: 101 },
+    repository: REPO,
+    issue: { number: 1 },
+    comment: {
+      id: 9,
+      body: 'I can reproduce this on main',
+      user: { login: 'bob', id: 2 },
+      updated_at: '2026-02-28T09:00:00Z',
+    },
+  });
+  const added = () =>
+    memory
+      .auditRows()
+      .slice(baseline)
+      .map((r) => [r.op, r.targetId, r.actor, r.tenantId]);
+  const rows = () => ({
+    slack: slackRows(memory),
+    github: githubRows(memory),
+    letters: memory.letters().length,
+    audit: added().length,
+  });
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
@@ -186,34 +302,68 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const memoryId: string = stored.body.memoryId;
     // Slack signs a retry afresh, so the retry passes the replay window and the event log is what dedupes it.
     const retryTs = String(Number(stored.sent.ts) - 1);
-    const retry = await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')), secrets.slack, retryTs);
+    const retry = await postSlack(
+      served.url,
+      slackEvent('T_ACME', 'Ev_message', posted('1700.000001')),
+      secrets.slack,
+      retryTs,
+    );
     expect(retry).toMatchObject({ status: 200, body: { ok: true, status: 'duplicate', memoryId } });
     const stray = await postSlack(served.url, slackEvent('T_OTHER', 'Ev_stray', posted('1700.000003')));
     expect(stray).toMatchObject({ status: 200, body: { ok: true, status: 'dlq' } });
-    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_deleted', removed('1700.000001')))).toMatchObject({ status: 200, body: { ok: true, status: 'archived' } });
+    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_deleted', removed('1700.000001')))).toMatchObject({
+      status: 200,
+      body: { ok: true, status: 'archived' },
+    });
     const noted = await postGitHub(served.url, 'd-1', commentEvent('created'));
     expect(noted).toEqual({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const commentId: string = noted.body.memoryId;
-    expect(await postGitHub(served.url, 'd-2', commentEvent('deleted'))).toEqual({ status: 200, body: { ok: true, status: 'archived', archivedCount: 1 } });
+    expect(await postGitHub(served.url, 'd-2', commentEvent('deleted'))).toEqual({
+      status: 200,
+      body: { ok: true, status: 'archived', archivedCount: 1 },
+    });
 
-    expect(slackRows(memory)).toEqual([['Ev_deleted', memoryId], ['Ev_message', memoryId]]);
-    expect(githubRows(memory)).toEqual([['d-1', 'issue_comment', commentId], ['d-2', 'issue_comment', commentId]]);
-    expect(added()).toEqual([
-      ['remember', memoryId, 'connector:slack', TENANT_A], ['archive_raw', memoryId, 'connector:slack', TENANT_A],
-      ['remember', commentId, 'connector:github', TENANT_A], ['archive_raw', commentId, 'connector:github', TENANT_A],
+    expect(slackRows(memory)).toEqual([
+      ['Ev_deleted', memoryId],
+      ['Ev_message', memoryId],
     ]);
-    expect(memory.letters()).toMatchObject([{
-      connector: 'slack', id: 1, tenantId: '__unroutable__', bucket: 'unroutable', error: 'unroutable team_id: T_OTHER', teamId: 'T_OTHER',
-      rawPayload: stray.sent.body, signature: stray.sent.signature, slackTimestamp: stray.sent.ts,
-    }]);
+    expect(githubRows(memory)).toEqual([
+      ['d-1', 'issue_comment', commentId],
+      ['d-2', 'issue_comment', commentId],
+    ]);
+    expect(added()).toEqual([
+      ['remember', memoryId, 'connector:slack', TENANT_A],
+      ['archive_raw', memoryId, 'connector:slack', TENANT_A],
+      ['remember', commentId, 'connector:github', TENANT_A],
+      ['archive_raw', commentId, 'connector:github', TENANT_A],
+    ]);
+    expect(memory.letters()).toMatchObject([
+      {
+        connector: 'slack',
+        id: 1,
+        tenantId: '__unroutable__',
+        bucket: 'unroutable',
+        error: 'unroutable team_id: T_OTHER',
+        teamId: 'T_OTHER',
+        rawPayload: stray.sent.body,
+        signature: stray.sent.signature,
+        slackTimestamp: stray.sent.ts,
+      },
+    ]);
     expect(readdirSync(served.root).sort()).toEqual([OTHER_STORE_MARKER, 'server.pid']);
   });
 
   it('a delivery signed with another secret is a 401 and adds no event, letter or audit row', async () => {
     const before = rows();
     const other = randomBytes(24).toString('hex');
-    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_forged', posted('1700.000009')), other)).toMatchObject({ status: 401, body: { error: 'invalid Slack signature' } });
-    expect(await postGitHub(served.url, 'd-forged', commentEvent('created'), other)).toEqual({ status: 401, body: { error: 'invalid GitHub signature' } });
+    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_forged', posted('1700.000009')), other)).toMatchObject({
+      status: 401,
+      body: { error: 'invalid Slack signature' },
+    });
+    expect(await postGitHub(served.url, 'd-forged', commentEvent('created'), other)).toEqual({
+      status: 401,
+      body: { error: 'invalid GitHub signature' },
+    });
     expect(rows()).toEqual(before);
   });
 });

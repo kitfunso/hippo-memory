@@ -133,13 +133,23 @@ describe('connector webhooks', () => {
     });
   const slackHeaders = (body: string) => {
     const ts = String(Math.floor(Date.now() / 1000));
-    return { 'x-slack-request-timestamp': ts, 'x-slack-signature': `v0=${createHmac('sha256', SIGNING).update(`v0:${ts}:${body}`).digest('hex')}` };
+    return {
+      'x-slack-request-timestamp': ts,
+      'x-slack-signature': `v0=${createHmac('sha256', SIGNING).update(`v0:${ts}:${body}`).digest('hex')}`,
+    };
   };
-  const dlqRows = (table: 'slack_dlq' | 'github_dlq'): Array<{ id: number; raw_payload: string; signature: string | null; error: string }> => {
+  const dlqRows = (
+    table: 'slack_dlq' | 'github_dlq',
+  ): Array<{ id: number; raw_payload: string; signature: string | null; error: string }> => {
     const db = openHippoDb(root);
     try {
       // SAFETY: the SELECT names exactly these four columns.
-      return db.prepare(`SELECT id, raw_payload, signature, error FROM ${table} ORDER BY id`).all() as Array<{ id: number; raw_payload: string; signature: string | null; error: string }>;
+      return db.prepare(`SELECT id, raw_payload, signature, error FROM ${table} ORDER BY id`).all() as Array<{
+        id: number;
+        raw_payload: string;
+        signature: string | null;
+        error: string;
+      }>;
     } finally {
       closeHippoDb(db);
     }
@@ -152,7 +162,14 @@ describe('connector webhooks', () => {
       team_id: 'T1',
       event_id: 'EvDlq',
       event_time: Math.floor(Date.now() / 1000),
-      event: { type: 'message', channel: 'C1', channel_type: 'channel', user: 'U1', text: `bot token ${SLACK_TOKEN} expires on friday`, ts: '1700000000.000300' },
+      event: {
+        type: 'message',
+        channel: 'C1',
+        channel_type: 'channel',
+        user: 'U1',
+        text: `bot token ${SLACK_TOKEN} expires on friday`,
+        ts: '1700000000.000300',
+      },
     });
     expect((await post('slack', body, slackHeaders(body))).status).toBe(200);
 
@@ -163,8 +180,20 @@ describe('connector webhooks', () => {
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
     await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
-    expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
-    expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) }, row.id, { force: true })).ok).toBe(true);
+    expect(
+      (
+        await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) }, row.id, {
+          signingSecret: SIGNING,
+        })
+      ).status,
+    ).toBe('sig_missing');
+    expect(
+      (
+        await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) }, row.id, {
+          force: true,
+        })
+      ).ok,
+    ).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
   });
 
@@ -250,7 +279,11 @@ describe('machine-captured lessons', () => {
   });
 
   it('hippo watch drops a token from the failed command and its stderr', () => {
-    const entry = captureError(1, `curl: (22) 401 for token ${GHP}`, `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`);
+    const entry = captureError(
+      1,
+      `curl: (22) 401 for token ${GHP}`,
+      `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`,
+    );
     expect(entry.content).not.toContain(GHP);
     expect(entry.content).toContain('[REDACTED]');
   });

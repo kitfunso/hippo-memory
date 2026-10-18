@@ -18,7 +18,12 @@ export type { Captures } from './captures.js';
 export type { CompactionHooks } from './compaction-hooks.js';
 export type { Consolidation } from './consolidation.js';
 export type {
-  ConflictPair, DashboardReads, DashboardRow, DashboardScan, DashboardText, ExcludedCounts,
+  ConflictPair,
+  DashboardReads,
+  DashboardRow,
+  DashboardScan,
+  DashboardText,
+  ExcludedCounts,
 } from './dashboard-reads.js';
 export type { Diagnostics } from './diagnostics.js';
 export type { EmbeddingIndex } from './embedding-index.js';

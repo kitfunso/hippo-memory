@@ -3,10 +3,7 @@ import { type MemoryEntry, type EmotionalValence } from '../../src/core/memory.j
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { computeSalience } from '../../src/core/salience.js';
 
-function mem(
-  content: string,
-  opts: { tags?: string[]; emotional_valence?: EmotionalValence } = {},
-): MemoryEntry {
+function mem(content: string, opts: { tags?: string[]; emotional_valence?: EmotionalValence } = {}): MemoryEntry {
   const entry = createMemory(content, { tags: opts.tags ?? [] });
   if (opts.emotional_valence) entry.emotional_valence = opts.emotional_valence;
   return entry;
@@ -33,22 +30,14 @@ describe('computeSalience', () => {
 
   it('skips duplicate content', () => {
     const existing = [mem('Database migration failed with timeout error on production')];
-    const result = computeSalience(
-      'Database migration failed with timeout error on production',
-      [],
-      existing,
-    );
+    const result = computeSalience('Database migration failed with timeout error on production', [], existing);
     expect(result.decision).toBe('skip');
     expect(result.reason).toContain('duplicate');
   });
 
   it('stores error content despite overlap', () => {
     const existing = [mem('Database migration failed with timeout error')];
-    const result = computeSalience(
-      'Database migration failed with timeout error',
-      ['error'],
-      existing,
-    );
+    const result = computeSalience('Database migration failed with timeout error', ['error'], existing);
     expect(result.decision).toBe('store');
     expect(result.reason).toBe('error_despite_overlap');
   });
@@ -58,23 +47,15 @@ describe('computeSalience', () => {
       mem(`Error ${i}: connection timeout on database`, {
         tags: ['error'],
         emotional_valence: 'negative',
-      })
+      }),
     );
-    const result = computeSalience(
-      'Error 5: connection timeout on database',
-      ['error'],
-      recent,
-    );
+    const result = computeSalience('Error 5: connection timeout on database', ['error'], recent);
     expect(result.decision).toBe('start_weak');
     expect(result.score).toBeLessThan(0.5);
   });
 
   it('stores novel errors at high score', () => {
-    const result = computeSalience(
-      'Never seen before: quantum decoherence in memory subsystem',
-      ['error'],
-      [],
-    );
+    const result = computeSalience('Never seen before: quantum decoherence in memory subsystem', ['error'], []);
     expect(result.decision).toBe('store');
     expect(result.reason).toBe('error_novel');
     expect(result.score).toBe(0.9);
@@ -82,11 +63,7 @@ describe('computeSalience', () => {
 
   it('boosts score for structured tags', () => {
     const plain = computeSalience('Some useful information about the project', [], []);
-    const structured = computeSalience(
-      'Some useful information about the project',
-      ['topic:architecture'],
-      [],
-    );
+    const structured = computeSalience('Some useful information about the project', ['topic:architecture'], []);
     expect(structured.score).toBeGreaterThan(plain.score);
   });
 
@@ -102,12 +79,9 @@ describe('computeSalience', () => {
 
   it('respects custom overlapThreshold', () => {
     const existing = [mem('The quick brown fox jumps over the lazy dog near the river')];
-    const strictResult = computeSalience(
-      'The quick brown fox jumps over the lazy dog near the river',
-      [],
-      existing,
-      { overlapThreshold: 0.3 },
-    );
+    const strictResult = computeSalience('The quick brown fox jumps over the lazy dog near the river', [], existing, {
+      overlapThreshold: 0.3,
+    });
     expect(strictResult.decision).toBe('skip');
   });
 });

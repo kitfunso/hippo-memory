@@ -7,7 +7,17 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { initStore } from '../../src/store/open.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import {
-  PROMPT_HOOK, dispose, eventCount, eventsN, hippo, hippoIn, project, promptPayload, tableRows, writeConfig, type Project,
+  PROMPT_HOOK,
+  dispose,
+  eventCount,
+  eventsN,
+  hippo,
+  hippoIn,
+  project,
+  promptPayload,
+  tableRows,
+  writeConfig,
+  type Project,
 } from '../_helpers/delivery-boundary.js';
 
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
@@ -25,7 +35,9 @@ function seedFacts(target: Project): void {
   facts.forEach((content, i) => {
     writeEntry(target.hippoRoot, {
       ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      id: `mem_ctx_fact_${i}`, created: '2026-05-20T00:00:00.000Z', last_retrieved: '2026-05-20T00:00:00.000Z',
+      id: `mem_ctx_fact_${i}`,
+      created: '2026-05-20T00:00:00.000Z',
+      last_retrieved: '2026-05-20T00:00:00.000Z',
     });
   });
 }
@@ -37,15 +49,22 @@ async function run(target: Project, args: string[], sessionId: string | null = '
   return spawned ? hippo(target, ['context', ...args], { env }) : hippoIn(target, ['context', ...args], { env });
 }
 
-interface TraceRow { id: number; query_hash: string }
+interface TraceRow {
+  id: number;
+  query_hash: string;
+}
 
 function contextTraces(target: Project): TraceRow[] {
-  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`)
-    .map((r) => ({ id: Number(r.id), query_hash: String(r.query_hash) }));
+  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`).map(
+    (r) => ({ id: Number(r.id), query_hash: String(r.query_hash) }),
+  );
 }
 
 function traceResultIds(target: Project, traceId: number): string[] {
-  return tableRows(target, `SELECT memory_id FROM recall_trace_results WHERE trace_id = ${traceId} ORDER BY result_rank`).map((r) => String(r.memory_id));
+  return tableRows(
+    target,
+    `SELECT memory_id FROM recall_trace_results WHERE trace_id = ${traceId} ORDER BY result_rank`,
+  ).map((r) => String(r.memory_id));
 }
 
 beforeEach(() => {
@@ -63,8 +82,15 @@ describe('what one hippo context call records', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('rollback plan');
     const [e] = eventsN(p, 'ctx-1', 1);
-    expect([e.event_type, e.surface, e.runtime, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['context', 'context', 'unknown', 'env', 1, 'sent', DELIVERY_LEDGER_VERSION]);
+    expect([e.event_type, e.surface, e.runtime, e.session_state, e.turn_seq, e.block_state, e.ledger_version]).toEqual([
+      'context',
+      'context',
+      'unknown',
+      'env',
+      1,
+      'sent',
+      DELIVERY_LEDGER_VERSION,
+    ]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     const [trace] = contextTraces(p);
     expect([e.recall_trace_id, e.query_hash]).toEqual([trace.id, trace.query_hash]);
@@ -92,7 +118,12 @@ describe('what one hippo context call records', () => {
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
     expect(traceResultIds(p, trace.id)).toEqual([]);
-    expect([e.block_state, e.recall_trace_id, e.query_hash, e.candidates]).toEqual(['empty', null, trace.query_hash, []]);
+    expect([e.block_state, e.recall_trace_id, e.query_hash, e.candidates]).toEqual([
+      'empty',
+      null,
+      trace.query_hash,
+      [],
+    ]);
     expect(e.query_hash).toBe(blockHash('zzqxv wplmk'));
   });
 
@@ -121,7 +152,10 @@ describe('what one hippo context call records', () => {
     expect((await run(p, ['deploy', 'windows'])).status).toBe(0);
     const rows = eventsN(p, 'ctx-1', 2);
     const traces = contextTraces(p);
-    expect(rows.map((e) => [e.turn_seq, e.duplicate_of, e.recall_trace_id])).toEqual([[1, null, traces[0].id], [2, null, traces[1].id]]);
+    expect(rows.map((e) => [e.turn_seq, e.duplicate_of, e.recall_trace_id])).toEqual([
+      [1, null, traces[0].id],
+      [2, null, traces[1].id],
+    ]);
   });
 
   it('C7: no session id leaves an unnumbered missing row', async () => {
@@ -135,14 +169,26 @@ describe('what one hippo context call records', () => {
     writeConfig(p, { holdout: true });
     const held = await run(p, QUERY, 'ctx-held');
     expect([zero.stdout, held.stdout]).toEqual(['', '']);
-    expect([eventsN(p, 'ctx-zero', 1)[0].block_state, eventsN(p, 'ctx-held', 1)[0].block_state]).toEqual(['disabled', 'disabled']);
+    expect([eventsN(p, 'ctx-zero', 1)[0].block_state, eventsN(p, 'ctx-held', 1)[0].block_state]).toEqual([
+      'disabled',
+      'disabled',
+    ]);
   });
 
   it('C9: a hook payload with a prompt still leaves a context row with no prompt facts', async () => {
-    const r = await hippoIn(p, ['context', ...QUERY], { input: promptPayload('ctx-hooked'), env: { HIPPO_FAKE_NOW: FAKE_NOW } });
+    const r = await hippoIn(p, ['context', ...QUERY], {
+      input: promptPayload('ctx-hooked'),
+      env: { HIPPO_FAKE_NOW: FAKE_NOW },
+    });
     expect(r.status, r.stderr).toBe(0);
     const [e] = eventsN(p, 'ctx-hooked', 1);
-    expect([e.event_type, e.runtime, e.session_state, e.prompt_hash, e.prompt_length]).toEqual(['context', 'claude-code', 'payload', null, 0]);
+    expect([e.event_type, e.runtime, e.session_state, e.prompt_hash, e.prompt_length]).toEqual([
+      'context',
+      'claude-code',
+      'payload',
+      null,
+      0,
+    ]);
   });
 
   it('C10: the per-prompt hook writes no trace, so its row links none', async () => {
@@ -181,9 +227,14 @@ describe('the ledger changes nothing a context call prints', () => {
     expect([eventCount(p), eventCount(off)]).toEqual([1, 0]);
   });
 
-  const resultRows = (target: Project) => tableRows(target, `SELECT t.id AS trace_id, r.memory_id, r.result_rank, r.score
-    FROM recall_trace_results r JOIN recall_traces t ON t.id = r.trace_id WHERE t.pipeline = 'context' ORDER BY t.id, r.result_rank`);
-  const retrievalCounts = (target: Project) => tableRows(target, 'SELECT id, retrieval_count FROM memories ORDER BY id');
+  const resultRows = (target: Project) =>
+    tableRows(
+      target,
+      `SELECT t.id AS trace_id, r.memory_id, r.result_rank, r.score
+    FROM recall_trace_results r JOIN recall_traces t ON t.id = r.trace_id WHERE t.pipeline = 'context' ORDER BY t.id, r.result_rank`,
+    );
+  const retrievalCounts = (target: Project) =>
+    tableRows(target, 'SELECT id, retrieval_count FROM memories ORDER BY id');
 
   it('I1: a query in both formats prints the same bytes and leaves the same trace results and retrieval counts', async () => {
     for (const args of [[...QUERY], [...QUERY, '--format', 'json']]) {
@@ -212,7 +263,8 @@ describe('the ledger changes nothing a context call prints', () => {
       printed.push(on.stdout);
     }
     expect(printed[0]).toBe('');
-    const traces = (target: Project) => tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`);
+    const traces = (target: Project) =>
+      tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`);
     expect(traces(off)).toHaveLength(2);
     expect(traces(p)).toEqual(traces(off));
     expect(retrievalCounts(p)).toEqual(retrievalCounts(off));

@@ -73,7 +73,9 @@ describe('GET /v1/memories continuity + scope', () => {
     // Snapshot 4 + 1 + 1, handoff 1 + 1, event 2, each at Math.ceil(len/4).
     expect(body.continuityTokens).toBe(10);
 
-    const blank = await fetch(`${handle.url}/v1/memories?q=deploys&include_continuity=true&fresh_tail_session_id=&session_id=%20%20`);
+    const blank = await fetch(
+      `${handle.url}/v1/memories?q=deploys&include_continuity=true&fresh_tail_session_id=&session_id=%20%20`,
+    );
     expect(blank.status).toBe(200);
     expect(blank.headers.get('cache-control')).toBe('no-store');
   });

@@ -39,11 +39,7 @@ export async function listObjects<O, S extends string>(flags: CliFlags, spec: Ob
 }
 
 /** The `<id>` after the subcommand; prints `usage` and exits 1 when it is missing. */
-export function idArgOrExit(
-  args: string[],
-  usage: string,
-  label: string,
-): number {
+export function idArgOrExit(args: string[], usage: string, label: string): number {
   const idRaw = args[1];
   if (!idRaw) {
     fail(usage);

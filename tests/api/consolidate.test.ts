@@ -6,7 +6,13 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../_helpers/root-forms.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import {
+  createMemory,
+  Layer,
+  calculateStrength,
+  resolveConfidence,
+  DEFAULT_HALF_LIFE_DAYS,
+} from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
@@ -15,7 +21,8 @@ import { simulate, type PhysicsParticle } from '../../src/core/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
 
@@ -82,7 +89,10 @@ describe('Decay pass', () => {
     const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
     const faded = { half_life_days: 1, created: at, last_retrieved: at };
     writeEntry(tmpDir, { ...createMemory7('an old note about a retired staging hostname nobody uses'), ...faded });
-    writeEntry(tmpDir, { ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }), ...faded });
+    writeEntry(tmpDir, {
+      ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }),
+      ...faded,
+    });
     writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic }));
     writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic }));
 
@@ -90,7 +100,12 @@ describe('Decay pass', () => {
     const real = await consolidate(tmpDir, { now });
 
     expect(dry.dryRun).toBe(true);
-    expect([dry.decayed, dry.dormant, dry.removed, dry.merged]).toEqual([real.decayed, real.dormant, real.removed, real.merged]);
+    expect([dry.decayed, dry.dormant, dry.removed, dry.merged]).toEqual([
+      real.decayed,
+      real.dormant,
+      real.removed,
+      real.merged,
+    ]);
     expect(real.dormant).toBe(1);
     expect(real.removed).toBe(1);
     expect(real.merged).toBe(2);
@@ -259,15 +274,30 @@ describe('Merge pass', () => {
     // days out, the merged source decays below an unmerged peer written at
     // the same time with the same default half-life.
     const later = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
-    const unmergedPeer = { ...createMemory('completely unrelated standalone topic', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), half_life_days: e1.half_life_days };
+    const unmergedPeer = {
+      ...createMemory('completely unrelated standalone topic', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      half_life_days: e1.half_life_days,
+    };
     expect(calculateStrength(m1!, later)).toBeLessThan(calculateStrength(unmergedPeer, later));
   });
 
   it('half-life demotion floors at 1 day', async () => {
     initStore(tmpDir);
 
-    const e1 = { ...createMemory('cache refresh failure data pipeline error', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), half_life_days: 2 };
-    const e2 = { ...createMemory('cache refresh failure data pipeline problem', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), half_life_days: 2 };
+    const e1 = {
+      ...createMemory('cache refresh failure data pipeline error', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+      }),
+      half_life_days: 2,
+    };
+    const e2 = {
+      ...createMemory('cache refresh failure data pipeline problem', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+      }),
+      half_life_days: 2,
+    };
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
@@ -322,33 +352,20 @@ describe('Merge pass', () => {
 
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
-    expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|always\/never mismatch|negation polarity mismatch/i);
+    expect(conflicts[0].reason).toMatch(
+      /enabled\/disabled mismatch|always\/never mismatch|negation polarity mismatch/i,
+    );
   });
 
   it('preserves contradiction detection across multiple polarity patterns', async () => {
     initStore(tmpDir);
 
     const pairs = [
-      [
-        'Always use Sled for local storage',
-        'Never use Sled for local storage',
-      ],
-      [
-        'API auth must be enabled in prod',
-        'Disable API auth in prod',
-      ],
-      [
-        'Production deploys must require approval',
-        'Production deploys should not require approval',
-      ],
-      [
-        'Metrics endpoint is available in staging',
-        'Metrics endpoint is missing in staging',
-      ],
-      [
-        'Background sync works on iOS',
-        'Background sync is broken on iOS',
-      ],
+      ['Always use Sled for local storage', 'Never use Sled for local storage'],
+      ['API auth must be enabled in prod', 'Disable API auth in prod'],
+      ['Production deploys must require approval', 'Production deploys should not require approval'],
+      ['Metrics endpoint is available in staging', 'Metrics endpoint is missing in staging'],
+      ['Background sync works on iOS', 'Background sync is broken on iOS'],
     ] as const;
 
     for (const [left, right] of pairs) {
@@ -390,18 +407,9 @@ describe('Merge pass', () => {
     initStore(tmpDir);
 
     const pairs = [
-      [
-        'Always create a worktree when working in exemem-workspace',
-        "Don't touch other agents' worktrees",
-      ],
-      [
-        'Schema service owns schema creation',
-        'Schemas are global',
-      ],
-      [
-        'Multi-node dogfood snapshots',
-        'Dogfood database snapshot',
-      ],
+      ['Always create a worktree when working in exemem-workspace', "Don't touch other agents' worktrees"],
+      ['Schema service owns schema creation', 'Schemas are global'],
+      ['Multi-node dogfood snapshots', 'Dogfood database snapshot'],
     ] as const;
 
     const ids = pairs.flatMap(([left, right], index) => {
@@ -467,11 +475,24 @@ describe('Physics pass', () => {
   /** Three memories, two of them in conflict, each with a particle whose mass, charge and temperature are out of date. */
   function seedConflictingParticles(physicsEnabled: boolean) {
     initStore(tmpDir);
-    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 }, physics: { enabled: physicsEnabled } }), 'utf8');
+    fs.writeFileSync(
+      path.join(tmpDir, 'config.json'),
+      JSON.stringify({ replay: { count: 0 }, physics: { enabled: physicsEnabled } }),
+      'utf8',
+    );
     // A 30-day half-life, so a pass that lost the half-lives and fell back to the simulation's own default would show.
-    const a = createMemory('The deploy job runs on the staging cluster every night', { layer: Layer.Episodic, baseHalfLifeDays: 30 });
-    const b = createMemory('Invoices are sent by the billing worker on the first of the month', { layer: Layer.Episodic, baseHalfLifeDays: 30 });
-    const c = createMemory('The search index is rebuilt after each schema change', { layer: Layer.Episodic, baseHalfLifeDays: 30 });
+    const a = createMemory('The deploy job runs on the staging cluster every night', {
+      layer: Layer.Episodic,
+      baseHalfLifeDays: 30,
+    });
+    const b = createMemory('Invoices are sent by the billing worker on the first of the month', {
+      layer: Layer.Episodic,
+      baseHalfLifeDays: 30,
+    });
+    const c = createMemory('The search index is rebuilt after each schema change', {
+      layer: Layer.Episodic,
+      baseHalfLifeDays: 30,
+    });
     writeEntry(tmpDir, { ...a, conflicts_with: [b.id] });
     writeEntry(tmpDir, { ...b, conflicts_with: [a.id] });
     writeEntry(tmpDir, c);
@@ -502,7 +523,9 @@ describe('Physics pass', () => {
     const expected = seeded.map((p) => ({ ...p, position: [...p.position], velocity: [...p.velocity] }));
     refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now);
     const stats = simulate(expected, {
-      conflictPairs: new Map(entries.filter((e) => e.conflicts_with.length > 0).map((e) => [e.id, new Set(e.conflicts_with)])),
+      conflictPairs: new Map(
+        entries.filter((e) => e.conflicts_with.length > 0).map((e) => [e.id, new Set(e.conflicts_with)]),
+      ),
       halfLives: new Map(entries.map((e) => [e.id, e.half_life_days])),
       config: loadConfig(tmpDir).physics,
     });
@@ -510,16 +533,17 @@ describe('Physics pass', () => {
     const result = await consolidate(tmpDir, { now });
 
     expect(result.physicsSimulated).toBe(3);
-    expect(result.details).toContain(
-      `  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}`,
-    );
+    expect(result.details).toContain(`  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}`);
     const stored = new Map(storedParticles().map((p) => [p.memoryId, p]));
     for (const want of expected) {
       const got = stored.get(want.memoryId)!;
       expect(got.position).toEqual(want.position.map(Math.fround));
       expect(got.velocity).toEqual(want.velocity.map(Math.fround));
-      expect({ mass: got.mass, charge: got.charge, temperature: got.temperature })
-        .toEqual({ mass: want.mass, charge: want.charge, temperature: want.temperature });
+      expect({ mass: got.mass, charge: got.charge, temperature: got.temperature }).toEqual({
+        mass: want.mass,
+        charge: want.charge,
+        temperature: want.temperature,
+      });
       expect(got.lastSimulation).not.toBe(STALE.lastSimulation);
     }
 

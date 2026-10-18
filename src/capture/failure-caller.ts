@@ -111,9 +111,16 @@ async function logOutcome(
       return;
     }
     await ctx.store.failureLog.record({
-      tenantId: ctx.tenantId, sessionId: req.sessionId, tool: req.tool, outcome, rule: req.rule,
-      sigHash: req.text?.trim() ? failureHash(req.text) : null, detailHash: req.detailHash,
-      ownerSubject: key.owner, originProject: req.project.name, requestId: req.requestId,
+      tenantId: ctx.tenantId,
+      sessionId: req.sessionId,
+      tool: req.tool,
+      outcome,
+      rule: req.rule,
+      sigHash: req.text?.trim() ? failureHash(req.text) : null,
+      detailHash: req.detailHash,
+      ownerSubject: key.owner,
+      originProject: req.project.name,
+      requestId: req.requestId,
     });
   } catch (err) {
     log.warn(`capture-error: failure not logged: ${errorMessage(err)}`, errorFields(err));

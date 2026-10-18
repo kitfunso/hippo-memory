@@ -46,7 +46,10 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
 
     if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
       flush();
-      const itemText = trimmed.replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '').trim();
+      const itemText = trimmed
+        .replace(/^[-*+]\s+/, '')
+        .replace(/^\d+\.\s+/, '')
+        .trim();
       pendingText = itemText;
       continue;
     }

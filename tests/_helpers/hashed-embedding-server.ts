@@ -49,13 +49,17 @@ export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
       }
       if (status !== 200) {
         // Retry-After 0, the default, lets the provider's three attempts run without a wait.
-        res.writeHead(status, { 'content-type': 'application/json', 'retry-after': retryAfter }).end('{"error":"injected"}');
+        res
+          .writeHead(status, { 'content-type': 'application/json', 'retry-after': retryAfter })
+          .end('{"error":"injected"}');
         return;
       }
       // SAFETY: the openai provider posts {model, input: string[]} here.
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: string[] };
       const answer = (): void => {
-        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: body.input.map((t) => ({ embedding: hashedVector(t) })) }));
+        res
+          .writeHead(200, { 'content-type': 'application/json' })
+          .end(JSON.stringify({ data: body.input.map((t) => ({ embedding: hashedVector(t) })) }));
       };
       if (fault === null) answer();
       else setTimeout(answer, fault);
@@ -71,10 +75,13 @@ export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
       status = next;
       retryAfter = String(retryAfterSec);
     },
-    setFault: (next) => { fault = next; },
-    close: () => new Promise<void>((resolve, reject) => {
-      server.closeAllConnections();
-      server.close((err) => (err ? reject(err) : resolve()));
-    }),
+    setFault: (next) => {
+      fault = next;
+    },
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.closeAllConnections();
+        server.close((err) => (err ? reject(err) : resolve()));
+      }),
   };
 }

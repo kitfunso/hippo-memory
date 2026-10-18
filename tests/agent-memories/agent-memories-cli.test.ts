@@ -36,20 +36,49 @@ function box(): Box {
 
 function env(b: Box, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {
-    ...process.env, HOME: b.home, USERPROFILE: b.home, APPDATA: join(b.home, 'AppData', 'Roaming'), HIPPO_HOME: b.global, HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    ...process.env,
+    HOME: b.home,
+    USERPROFILE: b.home,
+    APPDATA: join(b.home, 'AppData', 'Roaming'),
+    HIPPO_HOME: b.global,
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
-  for (const key of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'XDG_DATA_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete out[key];
+  for (const key of [
+    'CLAUDE_CONFIG_DIR',
+    'CODEX_HOME',
+    'XDG_DATA_HOME',
+    'HIPPO_AGENT_MEMORY_TOOLS',
+    'ANTHROPIC_API_KEY',
+    'OPENAI_API_KEY',
+  ]) {
+    delete out[key];
+  }
   return { ...out, ...extra };
 }
 
-function hippoSpawned(b: Box, cwd: string, args: string[], opts: { extra?: Record<string, string>; input?: string } = {}): string {
+function hippoSpawned(
+  b: Box,
+  cwd: string,
+  args: string[],
+  opts: { extra?: Record<string, string>; input?: string } = {},
+): string {
   return execFileSync(process.execPath, [HIPPO_BIN, ...args], {
-    cwd, env: env(b, opts.extra), input: opts.input ?? '', encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 60_000,
+    cwd,
+    env: env(b, opts.extra),
+    input: opts.input ?? '',
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: 60_000,
   });
 }
 
 /** In process, as hippoSpawned would run it: stdout back, or a throw on a non-zero exit. The first case keeps the spawn. */
-async function hippo(b: Box, cwd: string, args: string[], opts: { extra?: Record<string, string>; input?: string } = {}): Promise<string> {
+async function hippo(
+  b: Box,
+  cwd: string,
+  args: string[],
+  opts: { extra?: Record<string, string>; input?: string } = {},
+): Promise<string> {
   const r = await runCliAs(args, { cwd, env: env(b, opts.extra), input: opts.input ?? '' });
   if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
   return r.stdout;
@@ -60,7 +89,8 @@ function note(dir: string, file: string, body: string): void {
   writeFileSync(join(dir, file), `---\nname: ${file}\ntype: feedback\n---\n${body}\n`, 'utf8');
 }
 
-const projectNotes = (b: Box, project = b.project): string => join(b.home, '.claude', 'projects', claudeFolderName(project), 'memory');
+const projectNotes = (b: Box, project = b.project): string =>
+  join(b.home, '.claude', 'projects', claudeFolderName(project), 'memory');
 
 /** Claude Code's user folder is whatever `autoMemoryDirectory` in its user settings names. */
 function userNotes(b: Box): string {
@@ -73,7 +103,12 @@ function userNotes(b: Box): string {
 type MemoryEntryRow = ReturnType<typeof loadAllEntries>[number];
 
 const imported = (root: string): string[] =>
-  isInitialized(root) ? loadAllEntries(root, 'default').filter((e) => e.source?.startsWith('agent-memory:')).map((e) => e.content).sort() : [];
+  isInitialized(root)
+    ? loadAllEntries(root, 'default')
+        .filter((e) => e.source?.startsWith('agent-memory:'))
+        .map((e) => e.content)
+        .sort()
+    : [];
 
 const PROJECT_NOTE = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'The user prefers short replies with the answer first.';
@@ -91,7 +126,9 @@ describe('hippo init', () => {
 
     const later = 'The staging database moved to the eu-central region.';
     note(projectNotes(b), 'staging.md', later);
-    expect(hippoSpawned(b, b.project, ['init', '--no-hooks', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
+    expect(hippoSpawned(b, b.project, ['init', '--no-hooks', '--no-schedule'])).toContain(
+      'Imported 1 agent memory (Claude Code 1).',
+    );
     expect(imported(join(b.project, '.hippo'))).toEqual([PROJECT_NOTE, later].sort());
   });
 
@@ -116,7 +153,7 @@ describe('hippo init', () => {
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
   });
 
-  it('--scan runs each repository\'s project pass, then the user pass once, in one line', async () => {
+  it("--scan runs each repository's project pass, then the user pass once, in one line", async () => {
     const b = box();
     const scan = tmp();
     const repos = ['alpha', 'beta'].map((name) => {
@@ -132,7 +169,9 @@ describe('hippo init', () => {
     expect(out.match(/Imported \d+ agent memor/g)).toEqual(['Imported 3 agent memor']);
     expect(out).toContain('Imported 3 agent memories (Claude Code 3).');
     for (const [i, repo] of repos.entries()) {
-      expect(imported(join(repo, '.hippo'))).toEqual([`The ${['alpha', 'beta'][i]} service pins its toolchain in the lockfile.`]);
+      expect(imported(join(repo, '.hippo'))).toEqual([
+        `The ${['alpha', 'beta'][i]} service pins its toolchain in the lockfile.`,
+      ]);
     }
     expect(imported(b.global)).toEqual([USER_NOTE]);
   });
@@ -143,7 +182,9 @@ describe('hippo setup', () => {
     const b = box();
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    expect(await hippo(b, b.project, ['setup', '--dry-run', '--no-schedule'])).toContain('[dry-run] Imported 1 agent memory (Claude Code 1).');
+    expect(await hippo(b, b.project, ['setup', '--dry-run', '--no-schedule'])).toContain(
+      '[dry-run] Imported 1 agent memory (Claude Code 1).',
+    );
     expect(imported(b.global)).toEqual([]);
 
     expect(await hippo(b, b.project, ['setup', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
@@ -186,7 +227,7 @@ describe('hippo sleep', () => {
 });
 
 describe('hippo import --agents', () => {
-  it('--dry-run prints each tool\'s home and folders and what would change, and writes nothing', async () => {
+  it("--dry-run prints each tool's home and folders and what would change, and writes nothing", async () => {
     const b = box();
     await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
@@ -215,7 +256,11 @@ describe('hippo import --agents', () => {
     expect(imported(b.global)).toEqual([]);
 
     await hippo(b, b.project, ['import', '--agents']);
-    const byText = new Map(loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:')).map((e) => [e.content, e.origin_project]));
+    const byText = new Map(
+      loadAllEntries(b.global, 'default')
+        .filter((e) => e.source?.startsWith('agent-memory:'))
+        .map((e) => [e.content, e.origin_project]),
+    );
     expect(byText.get(PROJECT_NOTE)).toBe(deriveOriginProject(b.project));
     expect(byText.get(USER_NOTE)).toBe('');
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
@@ -273,7 +318,9 @@ describe('hooks in a folder without a store', () => {
 
   it('a worktree and its main checkout share one global row of the Claude folder they share, and a worktree that gets a store leaves it to the main checkout', async () => {
     const b = box();
-    const git = (cwd: string, ...args: string[]): void => { execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'ignore' }); };
+    const git = (cwd: string, ...args: string[]): void => {
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'ignore' });
+    };
     git(b.project, 'commit', '-q', '--allow-empty', '-m', 'base');
     const worktree = join(tmp(), 'feature-wt');
     git(b.project, 'worktree', 'add', '-q', worktree);
@@ -283,8 +330,11 @@ describe('hooks in a folder without a store', () => {
 
     await hippo(b, b.project, ['import', '--agents']);
     await hippo(b, worktree, ['import', '--agents']);
-    const origins = (): string[] => (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : [])
-      .filter((e) => e.content === PROJECT_NOTE).map((e) => e.origin_project ?? '').sort();
+    const origins = (): string[] =>
+      (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : [])
+        .filter((e) => e.content === PROJECT_NOTE)
+        .map((e) => e.origin_project ?? '')
+        .sort();
     expect(origins()).toEqual([main]);
 
     await hippo(b, worktree, ['init', '--no-hooks', '--no-schedule']);
@@ -297,7 +347,8 @@ describe('hooks in a folder without a store', () => {
     const plain = tmp();
     note(projectNotes(b, plain), 'schema.md', PROJECT_NOTE);
     await hippo(b, plain, ['import', '--agents']);
-    const globalRows = (): MemoryEntryRow[] => (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter((e) => e.content === PROJECT_NOTE);
+    const globalRows = (): MemoryEntryRow[] =>
+      (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter((e) => e.content === PROJECT_NOTE);
     expect(globalRows().map((e) => e.origin_project)).toEqual(['']);
 
     await hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);
@@ -307,7 +358,8 @@ describe('hooks in a folder without a store', () => {
 
   it('handover finds the global copies filed under a name merged into the project', async () => {
     const b = box();
-    const id = (name: string): void => writeFileSync(join(b.project, '.hippo-project.json'), JSON.stringify({ id: name }));
+    const id = (name: string): void =>
+      writeFileSync(join(b.project, '.hippo-project.json'), JSON.stringify({ id: name }));
     id('old-id');
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     await hippo(b, b.project, ['import', '--agents']);

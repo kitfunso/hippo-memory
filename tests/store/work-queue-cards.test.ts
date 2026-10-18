@@ -7,7 +7,13 @@ import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { initStore } from '../../src/store/open.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../../src/core/card.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
@@ -18,13 +24,25 @@ import { cardDetailOf } from '../_helpers/card-detail.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  createCard, loadCard, loadCardRuns, claimCard, blockCard, reviewCard, completeCard,
+  createCard,
+  loadCard,
+  loadCardRuns,
+  claimCard,
+  blockCard,
+  reviewCard,
+  completeCard,
   addCardComment,
 } from '../_helpers/root-forms.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
-interface ColumnInfo { name: string; type: string; notnull: number; dflt_value: string | null; pk: number }
+interface ColumnInfo {
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | null;
+  pk: number;
+}
 
 function columns(db: DatabaseSyncLike, table: string): ColumnInfo[] {
   // SAFETY: PRAGMA table_info always yields rows shaped like ColumnInfo.
@@ -52,13 +70,29 @@ describe('test 1: fresh store, single open', () => {
     const db = openHippoDb(root);
     try {
       expect(columns(db, 'cards').map((c) => c.name)).toEqual(
-        expect.arrayContaining(['id', 'title', 'status', 'assignee_runtime', 'lease_until', 'heartbeat_at', 'tenant_id']),
+        expect.arrayContaining([
+          'id',
+          'title',
+          'status',
+          'assignee_runtime',
+          'lease_until',
+          'heartbeat_at',
+          'tenant_id',
+        ]),
       );
-      expect(columns(db, 'card_deps').map((c) => c.name)).toEqual(expect.arrayContaining(['parent', 'child', 'tenant_id']));
-      expect(columns(db, 'card_runs').map((c) => c.name)).toEqual(expect.arrayContaining(['id', 'card', 'runtime', 'outcome']));
-      expect(columns(db, 'card_comments').map((c) => c.name)).toEqual(expect.arrayContaining(['id', 'card_id', 'author', 'body']));
+      expect(columns(db, 'card_deps').map((c) => c.name)).toEqual(
+        expect.arrayContaining(['parent', 'child', 'tenant_id']),
+      );
+      expect(columns(db, 'card_runs').map((c) => c.name)).toEqual(
+        expect.arrayContaining(['id', 'card', 'runtime', 'outcome']),
+      );
+      expect(columns(db, 'card_comments').map((c) => c.name)).toEqual(
+        expect.arrayContaining(['id', 'card_id', 'author', 'body']),
+      );
       expect(indexNames(db, 'cards')).toContain('idx_cards_tenant_status');
-      expect(indexNames(db, 'card_deps')).toEqual(expect.arrayContaining(['idx_card_deps_tenant_child', 'idx_card_deps_tenant_parent']));
+      expect(indexNames(db, 'card_deps')).toEqual(
+        expect.arrayContaining(['idx_card_deps_tenant_child', 'idx_card_deps_tenant_parent']),
+      );
       expect(indexNames(db, 'card_runs')).toContain('idx_card_runs_tenant_card');
       expect(indexNames(db, 'card_comments')).toContain('idx_card_comments_tenant_card');
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_card');
@@ -182,10 +216,17 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
   const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, cardId, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
-    worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
+    worker.once('message', (msg) => {
+      if (msg === 'locked') resolve();
+    });
   });
   const released = new Promise<void>((resolve) => {
-    worker.on('message', (msg) => { if (msg === 'released') { worker.terminate(); resolve(); } });
+    worker.on('message', (msg) => {
+      if (msg === 'released') {
+        worker.terminate();
+        resolve();
+      }
+    });
   });
   // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
   const startHold = (): void => worker.postMessage('hold');
@@ -288,10 +329,17 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
   `;
   const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, parentId, holdMs } });
   const locked = new Promise<void>((resolve) => {
-    worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
+    worker.once('message', (msg) => {
+      if (msg === 'locked') resolve();
+    });
   });
   const released = new Promise<void>((resolve) => {
-    worker.on('message', (msg) => { if (msg === 'released') { worker.terminate(); resolve(); } });
+    worker.on('message', (msg) => {
+      if (msg === 'released') {
+        worker.terminate();
+        resolve();
+      }
+    });
   });
   return { locked, released };
 }
@@ -398,13 +446,27 @@ describe('test 9: the latest handoff filed against a card', () => {
   it('round-trips a handoff saved with a matching cardId and ignores others', async () => {
     const card = createCard(root, 'default', { title: 'Handoff target' });
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-1', summary: 'wrong card', nextAction: undefined, artifacts: [], cardId: 'other-card',
+      version: 1,
+      sessionId: 'sess-1',
+      summary: 'wrong card',
+      nextAction: undefined,
+      artifacts: [],
+      cardId: 'other-card',
     });
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-2', summary: 'no card', nextAction: undefined, artifacts: [],
+      version: 1,
+      sessionId: 'sess-2',
+      summary: 'no card',
+      nextAction: undefined,
+      artifacts: [],
     });
     saveSessionHandoff(root, 'default', {
-      version: 1, sessionId: 'sess-3', summary: 'right card', nextAction: undefined, artifacts: [], cardId: card.id,
+      version: 1,
+      sessionId: 'sess-3',
+      summary: 'right card',
+      nextAction: undefined,
+      artifacts: [],
+      cardId: card.id,
     });
 
     const handoff = (await cardDetailOf(root, 'default', card.id))?.handoff;
@@ -431,7 +493,10 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   function runCliSpawned(cwd: string, env: Record<string, string>, ...args: string[]) {
     try {
       const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
-        cwd, env: { ...process.env, ...env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+        cwd,
+        env: { ...process.env, ...env },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       return { out: stdout, status: 0 };
     } catch (e) {
@@ -445,7 +510,6 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     const r = await runCliAs(args, { cwd, env: { ...process.env, ...env } });
     return { out: r.status === 0 ? r.stdout : r.stdout + r.stderr, status: r.status };
   }
-
 
   function cardIdFrom(out: string): string {
     const id = out.match(/Created card (\S+)/)?.[1];
@@ -493,7 +557,14 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       initStore(join(home, '.hippo'));
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
-      const create = await runInProcess(() => handleCard({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['create'], flags: { title: 'x', 'depends-on': ['nope'] } }));
+      const create = await runInProcess(() =>
+        handleCard({
+          hippoRoot: join(home, '.hippo'),
+          tenantId: 'default',
+          args: ['create'],
+          flags: { title: 'x', 'depends-on': ['nope'] },
+        }),
+      );
       expect(create.status).toBe(1);
       expect(create.stderr).toContain('unknown parent card id: nope');
     } finally {
@@ -628,7 +699,9 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
 
       const protoKey = await runCli(home, env, 'card', 'constructor', '--x');
       expect(protoKey.status).toBe(1);
-      expect(protoKey.out).toContain('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
+      expect(protoKey.out).toContain(
+        'Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>',
+      );
 
       const list = await runCli(home, env, 'card', 'list');
       expect(list.status, list.out).toBe(0);
@@ -646,7 +719,22 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       const parentId = cardIdFrom(parent.out);
       expect(parentId).toBeTruthy();
 
-      const create = await runCli(home, env, 'card', 'create', '--title', 'child', '--repo', 'r', '--contract', 'c', '--budget', '5', '--depends-on', parentId);
+      const create = await runCli(
+        home,
+        env,
+        'card',
+        'create',
+        '--title',
+        'child',
+        '--repo',
+        'r',
+        '--contract',
+        'c',
+        '--budget',
+        '5',
+        '--depends-on',
+        parentId,
+      );
       expect(create.status, create.out).toBe(0);
       const childId = cardIdFrom(create.out);
       expect(childId).toBeTruthy();
@@ -672,7 +760,18 @@ describe('test 11: the card verb is wired through the flag parser and the comman
     initStore(root);
     const a = createCard(root, 'default', { title: 'A' });
     const b = createCard(root, 'default', { title: 'B' });
-    const { args, flags } = parseArgs(['node', 'hippo', 'card', 'create', '--title', 'child', '--depends-on', a.id, '--depends-on', b.id]);
+    const { args, flags } = parseArgs([
+      'node',
+      'hippo',
+      'card',
+      'create',
+      '--title',
+      'child',
+      '--depends-on',
+      a.id,
+      '--depends-on',
+      b.id,
+    ]);
 
     const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, tenantId: 'default', args, flags }));
 
@@ -684,7 +783,9 @@ describe('test 11: the card verb is wired through the flag parser and the comman
 
 describe('test 12: unknown dependsOn pre-check', () => {
   it('throws and leaves zero rows in cards and card_deps', async () => {
-    expect(() => createCard(root, 'default', { title: 'x', dependsOn: ['nope'] })).toThrow('unknown parent card id: nope');
+    expect(() => createCard(root, 'default', { title: 'x', dependsOn: ['nope'] })).toThrow(
+      'unknown parent card id: nope',
+    );
     const db = openHippoDb(root);
     try {
       expect(countRows(db, 'cards')).toBe(0);
@@ -695,7 +796,7 @@ describe('test 12: unknown dependsOn pre-check', () => {
   });
 });
 
-describe('test 13: addCardComment checks the card belongs to the caller\'s tenant', () => {
+describe("test 13: addCardComment checks the card belongs to the caller's tenant", () => {
   it('throws unknown card id for a foreign-tenant card and for a missing id; happy path still works', async () => {
     const card = createCard(root, 'default', { title: 'Commented' });
 
@@ -766,9 +867,15 @@ describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their in
   it('createCard throws for a budget that is not a positive integer and commits nothing', async () => {
     const db = openHippoDb(root);
     try {
-      expect(() => createCard(root, 'default', { title: 'x', budget: 0 })).toThrow('Invalid budget: 0 (expected a positive integer)');
-      expect(() => createCard(root, 'default', { title: 'x', budget: -3 })).toThrow('Invalid budget: -3 (expected a positive integer)');
-      expect(() => createCard(root, 'default', { title: 'x', budget: 2.5 })).toThrow('Invalid budget: 2.5 (expected a positive integer)');
+      expect(() => createCard(root, 'default', { title: 'x', budget: 0 })).toThrow(
+        'Invalid budget: 0 (expected a positive integer)',
+      );
+      expect(() => createCard(root, 'default', { title: 'x', budget: -3 })).toThrow(
+        'Invalid budget: -3 (expected a positive integer)',
+      );
+      expect(() => createCard(root, 'default', { title: 'x', budget: 2.5 })).toThrow(
+        'Invalid budget: 2.5 (expected a positive integer)',
+      );
       expect(countRows(db, 'cards')).toBe(0);
     } finally {
       closeHippoDb(db);

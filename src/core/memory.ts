@@ -15,7 +15,7 @@ export enum Layer {
   Buffer = 'buffer',
   Episodic = 'episodic',
   Semantic = 'semantic',
-  Trace = 'trace',  // ordered action→outcome sequence for RSI
+  Trace = 'trace', // ordered action→outcome sequence for RSI
 }
 
 export type EmotionalValence = 'neutral' | 'positive' | 'negative' | 'critical';
@@ -34,29 +34,29 @@ export type MemoryKind = (typeof MEMORY_KINDS)[number];
 // Row fields stay snake_case because they match the stored and wire shape; option types are camelCase.
 export interface MemoryEntry {
   id: string;
-  created: string;         // ISO 8601
-  last_retrieved: string;  // ISO 8601
+  created: string; // ISO 8601
+  last_retrieved: string; // ISO 8601
   retrieval_count: number;
-  strength: number;        // 0..1, current computed strength
+  strength: number; // 0..1, current computed strength
   half_life_days: number;
   layer: Layer;
   tags: string[];
   emotional_valence: EmotionalValence;
-  schema_fit: number;      // 0..1
+  schema_fit: number; // 0..1
   source: string;
-  outcome_score: number | null;  // null = no feedback yet
-  outcome_positive: number;      // cumulative positive outcome count
-  outcome_negative: number;      // cumulative negative outcome count
+  outcome_score: number | null; // null = no feedback yet
+  outcome_positive: number; // cumulative positive outcome count
+  outcome_negative: number; // cumulative negative outcome count
   conflicts_with: string[];
   pinned: boolean;
-  confidence: ConfidenceLevel;  // epistemic confidence tier
-  content: string;         // the actual memory text
-  parents: string[];       // IDs of source memories this was consolidated from (may be empty)
-  starred: boolean;        // user-bookmarked
-  trace_outcome: TraceOutcome;      // final outcome for trace-layer entries; null otherwise
+  confidence: ConfidenceLevel; // epistemic confidence tier
+  content: string; // the actual memory text
+  parents: string[]; // IDs of source memories this was consolidated from (may be empty)
+  starred: boolean; // user-bookmarked
+  trace_outcome: TraceOutcome; // final outcome for trace-layer entries; null otherwise
   source_session_id: string | null; // set by auto-promote and session digests; null for everything else
-  valid_from: string;               // ISO 8601 timestamp when this belief became true
-  superseded_by: string | null;     // ID of the memory that replaced this one; null = current
+  valid_from: string; // ISO 8601 timestamp when this belief became true
+  superseded_by: string | null; // ID of the memory that replaced this one; null = current
   extracted_from: string | null;
   dag_level: number; // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
@@ -77,11 +77,11 @@ export interface MemoryEntry {
   /** Reserved: ISO 8601 time the level-3 entity profile was built; only set on dag_level=3 rows. */
   dag_level_3_built_at?: string | null;
   // Provenance envelope
-  kind: MemoryKind;             // raw | distilled | superseded | archived
-  scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
-  owner: string | null;         // 'user:<id>' or 'agent:<id>'
-  artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
-  tenant_id: string;            // 'default' for single-tenant deployments
+  kind: MemoryKind; // raw | distilled | superseded | archived
+  scope: string | null; // e.g. 'team:eng', 'project:foo'; null = global
+  owner: string | null; // 'user:<id>' or 'agent:<id>'
+  artifact_ref: string | null; // URI to source artifact (slack://, gh://, file://)
+  tenant_id: string; // 'default' for single-tenant deployments
   /**
    * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write),
    * denied by ambient context.
@@ -104,7 +104,7 @@ export const CHURN_STALE_TAG = 'churn-stale';
 export const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
   positive: 1.0,
-  negative: 2.0,  // error-tagged
+  negative: 2.0, // error-tagged
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
@@ -134,10 +134,7 @@ export function _resetLossAversionRatioCacheForTests(): void {
 /**
  * Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains claim.
  */
-export function applyLossAversionRatio(
-  valence: EmotionalValence,
-  baseMultiplier: number,
-): number {
+export function applyLossAversionRatio(valence: EmotionalValence, baseMultiplier: number): number {
   if (valence !== 'negative') return baseMultiplier;
   return baseMultiplier * getLossAversionRatio();
 }
@@ -223,9 +220,7 @@ export function calculateStrength(
 
   // EVAL-ONLY ablation (see ablation.ts): anchor decay at creation so clock resets from earlier unflagged runs cannot
   // leak in.
-  const lastRetrieved = new Date(
-    ablation.recallBoost ? entry.created : entry.last_retrieved,
-  );
+  const lastRetrieved = new Date(ablation.recallBoost ? entry.created : entry.last_retrieved);
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   const rewardFactor = calculateRewardFactor(entry, ablation);
@@ -542,11 +537,7 @@ export function createSuccessor(
  * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3 is novel and decays
  * faster if unused.
  *  Tags shared with existing memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
-export function computeSchemaFit(
-  content: string,
-  tags: string[],
-  existingEntries: MemoryEntry[]
-): number {
+export function computeSchemaFit(content: string, tags: string[], existingEntries: MemoryEntry[]): number {
   return schemaFitFrom(content, tags, schemaFitSourceOf(existingEntries));
 }
 

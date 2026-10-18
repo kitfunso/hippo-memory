@@ -71,7 +71,12 @@ export function payloadString(payload: JsonValue, key: 'session_id' | 'tool_name
 
 /** Normalized form used to spot repeats. The failure log keeps only its hash, so changing it breaks repeat counts. */
 export function failureSignature(text: string): string {
-  return text.toLowerCase().replace(/[0-9a-f]{7,}/g, '#').replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
+  return text
+    .toLowerCase()
+    .replace(/[0-9a-f]{7,}/g, '#')
+    .replace(/\d+/g, '#')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** The hash the failure log stores for a lesson text or a detail; one function so every writer counts repeats alike. */

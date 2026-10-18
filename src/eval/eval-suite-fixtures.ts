@@ -10,10 +10,18 @@ export function dateOffset(days: number): string {
   return d.toISOString();
 }
 
-export function mem(id: string, content: string, opts: {
-  layer?: Layer; tags?: string[]; created?: string;
-  extracted_from?: string; dag_level?: number; dag_parent_id?: string;
-} = {}): MemoryEntry {
+export function mem(
+  id: string,
+  content: string,
+  opts: {
+    layer?: Layer;
+    tags?: string[];
+    created?: string;
+    extracted_from?: string;
+    dag_level?: number;
+    dag_parent_id?: string;
+  } = {},
+): MemoryEntry {
   const entry = createMemory(content, {
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
@@ -32,7 +40,7 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-src-1',
       'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the ' +
-      'staging environment is ' +
+        'staging environment is ' +
         'using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of the security patches',
       {
         created: dateOffset(10),
@@ -42,7 +50,7 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-ext-1',
       'The staging environment runs Kubernetes 1.28 and needs to be upgraded to 1.30 before end of Q2 for security ' +
-      'patches',
+        'patches',
       {
         created: dateOffset(10),
         layer: Layer.Semantic,
@@ -58,7 +66,7 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-src-2',
       'speaker:Bob: Yeah and the thing about the monitoring is that we switched from Datadog to Grafana last month ' +
-      'and the alerting rules ' +
+        'and the alerting rules ' +
         'still need to be migrated, Carol was supposed to handle that but she has been busy with the frontend rewrite',
       {
         created: dateOffset(11),
@@ -68,7 +76,7 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-ext-2',
       'The team switched from Datadog to Grafana last month but alerting rules have not been migrated yet. Carol is ' +
-      'responsible but blocked ' +
+        'responsible but blocked ' +
         'by the frontend rewrite.',
       {
         created: dateOffset(11),
@@ -85,7 +93,7 @@ export function authMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-src-3',
       'speaker:Carol: The login page redesign is almost done, I just need to wire up the OAuth2 PKCE flow with the ' +
-      'new identity provider and ' +
+        'new identity provider and ' +
         'write the integration tests',
       {
         created: dateOffset(12),
@@ -95,7 +103,7 @@ export function authMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-ext-3',
       'Carol is nearly done with the login page redesign. Remaining work: wire up OAuth2 PKCE flow with the new ' +
-      'identity provider and write ' +
+        'identity provider and write ' +
         'integration tests.',
       {
         created: dateOffset(12),
@@ -113,7 +121,7 @@ export function multiHopEntries(): MemoryEntry[] {
     mem(
       'mh-1',
       'speaker:Alice works on the payment gateway integration with Stripe. She found a webhook signature validation ' +
-      'bug.',
+        'bug.',
       {
         created: dateOffset(25),
         tags: ['speaker:Alice', 'topic:payments'],
@@ -122,7 +130,7 @@ export function multiHopEntries(): MemoryEntry[] {
     mem(
       'mh-2',
       'speaker:Bob reviewed the Stripe webhook code and confirmed the signature validation uses the wrong secret key ' +
-      'from the test environment.',
+        'from the test environment.',
       {
         created: dateOffset(26),
         tags: ['speaker:Bob', 'topic:payments'],
@@ -131,7 +139,7 @@ export function multiHopEntries(): MemoryEntry[] {
     mem(
       'mh-3',
       'speaker:Alice fixed the Stripe webhook by switching to the production secret key. Payment confirmations now ' +
-      'arrive within 2 seconds.',
+        'arrive within 2 seconds.',
       {
         created: dateOffset(27),
         tags: ['speaker:Alice', 'topic:payments'],
@@ -140,7 +148,7 @@ export function multiHopEntries(): MemoryEntry[] {
     mem(
       'mh-4',
       'speaker:Carol reported that the billing dashboard shows incorrect revenue numbers because it reads from the ' +
-      'payments_raw table instead of ' +
+        'payments_raw table instead of ' +
         'payments_reconciled.',
       {
         created: dateOffset(28),
@@ -161,10 +169,12 @@ function directRecallLateEntries(): MemoryEntry[] {
       },
     ),
     mem('dr-6', 'Webpack bundle size grew to 2.3MB because lodash was imported as a whole instead of cherry-picking', {
-      created: dateOffset(6), tags: ['topic:frontend']
+      created: dateOffset(6),
+      tags: ['topic:frontend'],
     }),
     mem('dr-7', 'The Redis cache TTL for user sessions should match the JWT expiration to prevent stale sessions', {
-      created: dateOffset(7), tags: ['topic:caching']
+      created: dateOffset(7),
+      tags: ['topic:caching'],
     }),
     mem('dr-8', 'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching', {
       created: dateOffset(8),
@@ -201,7 +211,8 @@ export function directRecallEntries(): MemoryEntry[] {
       },
     ),
     mem('dr-4', 'Docker container memory limits need to be set to 512MB for the worker service to prevent OOM kills', {
-      created: dateOffset(4), tags: ['topic:devops']
+      created: dateOffset(4),
+      tags: ['topic:devops'],
     }),
     ...directRecallLateEntries(),
   ];

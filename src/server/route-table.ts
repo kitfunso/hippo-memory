@@ -15,14 +15,14 @@ import {
   handleListAuthKeys,
   handleListQuarantine,
   handleRejectQuarantine,
-  handleRevokeAuthKey
+  handleRevokeAuthKey,
 } from './routes/admin.js';
 import {
   handleCloseCustomerNote,
   handleCreateCustomerNote,
   handleGetCustomerNote,
   handleListCustomerNotes,
-  handleSupersedeCustomerNote
+  handleSupersedeCustomerNote,
 } from './routes/customer-notes.js';
 import {
   handleCloseDecision,
@@ -46,7 +46,7 @@ import {
   handleGetGraph,
   handlePromoteMemory,
   handleSleep,
-  handleSupersedeMemory
+  handleSupersedeMemory,
 } from './routes/memories.js';
 import {
   handleClosePolicy,
@@ -76,7 +76,7 @@ import {
   handleGetProjectBrief,
   handleListProjectBriefs,
   handleRefreshProjectBrief,
-  handleSupersedeProjectBrief
+  handleSupersedeProjectBrief,
 } from './routes/project-briefs.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
 import {
@@ -604,7 +604,10 @@ async function passAuthGate(
 export function routeLabel(route: Route): string {
   if ('path' in route) return route.path;
   if ('pattern' in route) return route.pattern;
-  return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/').replaceAll('(\\d+)', ':id');
+  return route.regex.source
+    .replace(/^\^|\$$/g, '')
+    .replaceAll('\\/', '/')
+    .replaceAll('(\\d+)', ':id');
 }
 
 const findV1Route = routeLookup(V1_ROUTES, routeMatches);

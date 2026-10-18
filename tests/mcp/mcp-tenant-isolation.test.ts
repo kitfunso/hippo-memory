@@ -13,12 +13,7 @@ import { loadConfig } from '../../src/core/config.js';
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
-function callTool(
-  reqId: number,
-  name: string,
-  args: Record<string, string | number | boolean>,
-  ctx: McpContext,
-) {
+function callTool(reqId: number, name: string, args: Record<string, string | number | boolean>, ctx: McpContext) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -56,13 +51,30 @@ describe('mcp tenant + client-key isolation', () => {
   // ---- Test 1: lastRecalledIds keyed by clientKey --------------------------
   it('lastRecalledIds is keyed by clientKey — outcome from client B cannot touch client A', async () => {
     // Seed a memory in tenant alpha for both clients to recall.
-    const seeded = await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'shared-canary lastRecalled keyed-by-clientKey alpha-tenant' },
-    );
+    const seeded = await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'shared-canary lastRecalled keyed-by-clientKey alpha-tenant',
+    });
 
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:tokenA:1.2.3.4', store: sqliteStore(home), config: loadConfig(home) };
-    const ctxB = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:tokenB:5.6.7.8', store: sqliteStore(home), config: loadConfig(home) };
+    const ctxA = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:tokenA:1.2.3.4',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
+    const ctxB = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:tokenB:5.6.7.8',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
 
     // Both clients recall the same memory.
     await callTool(1, 'hippo_recall', { query: 'lastRecalled', budget: 1500 }, ctxA);
@@ -74,9 +86,10 @@ describe('mcp tenant + client-key isolation', () => {
       try {
         // SAFETY: `seeded` was just written via apiRemember above, so its row
         // exists and always has retrieval_count and strength columns.
-        return db
-          .prepare(`SELECT retrieval_count, strength FROM memories WHERE id = ?`)
-          .get(seeded.id) as { retrieval_count: number; strength: number };
+        return db.prepare(`SELECT retrieval_count, strength FROM memories WHERE id = ?`).get(seeded.id) as {
+          retrieval_count: number;
+          strength: number;
+        };
       } finally {
         closeHippoDb(db);
       }
@@ -91,7 +104,16 @@ describe('mcp tenant + client-key isolation', () => {
     //
     // Probe that branch directly: clear B's set by giving a different
     // clientKey that has never recalled.
-    const ctxC = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:tokenC:never-recalled', store: sqliteStore(home), config: loadConfig(home) };
+    const ctxC = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:tokenC:never-recalled',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     const cOutcome = await callTool(3, 'hippo_outcome', { good: true }, ctxC);
     expect(extractText(cOutcome)).toMatch(/No recent recalls/i);
 
@@ -103,12 +125,20 @@ describe('mcp tenant + client-key isolation', () => {
 
   // ---- Test 2: MCP recall produces audit_log with actor='mcp' ---------------
   it('hippo_recall via MCP routes through api.ts and writes audit_log with actor=mcp', async () => {
-    await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'audit-canary recall actor-mcp shape lock' },
-    );
+    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'audit-canary recall actor-mcp shape lock',
+    });
 
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:t:addr', store: sqliteStore(home), config: loadConfig(home) };
+    const ctx = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:t:addr',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     await callTool(1, 'hippo_recall', { query: 'audit-canary', budget: 1500 }, ctx);
 
     const db = openHippoDb(home);
@@ -135,13 +165,17 @@ describe('mcp tenant + client-key isolation', () => {
 
   // ---- Test 3: MCP remember produces audit_log with actor='mcp' -------------
   it('hippo_remember via MCP routes through api.ts and writes audit_log with actor=mcp', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:t:addr', store: sqliteStore(home), config: loadConfig(home) };
-    const res = await callTool(
-      1,
-      'hippo_remember',
-      { text: 'audit-canary remember actor-mcp shape lock' },
-      ctx,
-    );
+    const ctx = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:t:addr',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
+    const res = await callTool(1, 'hippo_remember', { text: 'audit-canary remember actor-mcp shape lock' }, ctx);
     expect(extractText(res)).toMatch(/Remembered \[mem_/);
 
     const db = openHippoDb(home);
@@ -157,9 +191,20 @@ describe('mcp tenant + client-key isolation', () => {
 
   // ---- Test 3.5: hippo_outcome routes through api.ts (audit_log actor=mcp) -
   it('hippo_outcome via MCP routes through api.ts and writes audit_log with op=outcome actor=mcp', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:t:addr-outcome', store: sqliteStore(home), config: loadConfig(home) };
+    const ctx = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:t:addr-outcome',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     // Seed a memory + recall it so lastRecalledIds is populated for clientKey.
-    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), { content: 'outcome-canary memory for audit shape lock' });
+    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'outcome-canary memory for audit shape lock',
+    });
     await callTool(1, 'hippo_recall', { query: 'outcome-canary' }, ctx);
     // Apply positive outcome.
     const res = await callTool(2, 'hippo_outcome', { good: true }, ctx);
@@ -178,12 +223,19 @@ describe('mcp tenant + client-key isolation', () => {
 
   // ---- Test 4: stdio backward-compat — no clientKey → stdio-${pid} ---------
   it('McpContext with no clientKey falls back to stdio-${pid} and recall/outcome work end-to-end', async () => {
-    await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'stdio-fallback canary backward-compat clientKey-undefined' },
-    );
+    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'stdio-fallback canary backward-compat clientKey-undefined',
+    });
 
-    const ctxNoKey = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, store: sqliteStore(home), config: loadConfig(home) };
+    const ctxNoKey = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
 
     // Recall sets the keyed Map under the stdio-${pid}:alpha fallback.
     const recallRes = await callTool(1, 'hippo_recall', { query: 'stdio-fallback', budget: 1500 }, ctxNoKey);
@@ -200,10 +252,9 @@ describe('mcp tenant + client-key isolation', () => {
   // their hash(bearer) prefixes differ → different clientKeys). Client B's
   // outcome on a key client B never recalled returns "No recent recalls".
   it('two HTTP-MCP clients on the same tenant have isolated lastRecalledIds (buildMcpClientKey shape)', async () => {
-    await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'cross-client http-mcp simulated bearer-isolation' },
-    );
+    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'cross-client http-mcp simulated bearer-isolation',
+    });
 
     // Simulate exactly what server.ts:buildMcpClientKey produces:
     //   `http:${sha256(bearer).slice(0,16)}:${remoteAddr}`
@@ -214,8 +265,26 @@ describe('mcp tenant + client-key isolation', () => {
     const keyB = `http:${createHash('sha256').update(bearerB).digest('hex').slice(0, 16)}:${remoteAddr}`;
     expect(keyA).not.toBe(keyB);
 
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: keyA, store: sqliteStore(home), config: loadConfig(home) };
-    const ctxB = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: keyB, store: sqliteStore(home), config: loadConfig(home) };
+    const ctxA = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: keyA,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
+    const ctxB = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: keyB,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
 
     // Only A recalls.
     await callTool(1, 'hippo_recall', { query: 'cross-client', budget: 1500 }, ctxA);
@@ -231,47 +300,69 @@ describe('mcp tenant + client-key isolation', () => {
 
   // One key held by a session in each repo: the project is part of the outcome key, so beta cannot rate acme's recall.
   it('one clientKey with two projects keeps a lastRecalledIds entry per project', async () => {
-    await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'per-project outcome key canary', project: { name: 'acme' } },
-    );
-    const base = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:shared-key:1.2.3.4', store: sqliteStore(home), config: loadConfig(home) };
+    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'per-project outcome key canary',
+      project: { name: 'acme' },
+    });
+    const base = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:shared-key:1.2.3.4',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     const acme: McpContext = { ...base, project: { name: 'acme', legacyName: 'acme' } };
     const beta: McpContext = { ...base, project: { name: 'beta', legacyName: 'beta' } };
 
     await callTool(1, 'hippo_recall', { query: 'per-project outcome', budget: 1500 }, acme);
     expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, beta))).toMatch(/No recent recalls/i);
-    expect(extractText(await callTool(3, 'hippo_outcome', { good: true }, acme))).toMatch(/Applied positive outcome to 1 memories/);
+    expect(extractText(await callTool(3, 'hippo_outcome', { good: true }, acme))).toMatch(
+      /Applied positive outcome to 1 memories/,
+    );
   });
 
   it('caps lastRecalledIds at MAX_RECALL_CLIENTS, dropping the client that recalled longest ago', async () => {
-    await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'recall client cap canary', project: { name: 'acme' } },
-    );
+    await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'recall client cap canary',
+      project: { name: 'acme' },
+    });
     const MAX_RECALL_CLIENTS = 4096;
     lastRecalledIds.clear();
     try {
       for (let i = 0; i < MAX_RECALL_CLIENTS; i++) lastRecalledIds.set(`flood:${i}`, []);
       lastRecalledIds.set('flood:0', []);
-      const acme: McpContext = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin', hostAdmin: true, clientKey: 'http:cap-key:1.2.3.4', project: { name: 'acme', legacyName: 'acme' } , store: sqliteStore(home), config: loadConfig(home) };
+      const acme: McpContext = {
+        hippoRoot: home,
+        tenantId: 'alpha',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        clientKey: 'http:cap-key:1.2.3.4',
+        project: { name: 'acme', legacyName: 'acme' },
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      };
       await callTool(1, 'hippo_recall', { query: 'client cap canary', budget: 1500 }, acme);
       expect(lastRecalledIds.size).toBe(MAX_RECALL_CLIENTS);
       expect(lastRecalledIds.has('flood:1')).toBe(false);
       expect(lastRecalledIds.has('flood:0')).toBe(true);
-      expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, acme))).toMatch(/Applied positive outcome to 1 memories/);
+      expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, acme))).toMatch(
+        /Applied positive outcome to 1 memories/,
+      );
     } finally {
       lastRecalledIds.clear();
     }
   });
 
   // ---- Test 6: hippo_share cross-tenant denied -----------------------------
-  it('hippo_share cross-tenant: tenant B cannot share tenant A\'s memory to the global store', async () => {
+  it("hippo_share cross-tenant: tenant B cannot share tenant A's memory to the global store", async () => {
     // Tenant A pushes a memory.
-    const a = await apiRemember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'alpha-private hippo_share cross-tenant exfil canary' },
-    );
+    const a = await apiRemember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'alpha-private hippo_share cross-tenant exfil canary',
+    });
 
     // Tenant B's MCP context tries to call hippo_share with A's id. The
     // tool surface returns the JSON-RPC error envelope rather than throwing
@@ -280,7 +371,17 @@ describe('mcp tenant + client-key isolation', () => {
     // directly, so the throw propagates. Wrap accordingly.
     const store = sqliteStore(home);
     const reach = testReach(home, store);
-    const ctxB = { hippoRoot: home, tenantId: 'bravo', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:bravo-token:1.2.3.4', store, reach, config: loadConfig(home) };
+    const ctxB = {
+      hippoRoot: home,
+      tenantId: 'bravo',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:bravo-token:1.2.3.4',
+      store,
+      reach,
+      config: loadConfig(home),
+    };
 
     let threwNotFound = false;
     try {
@@ -294,16 +395,26 @@ describe('mcp tenant + client-key isolation', () => {
     const gdb = openHippoDb(globalHome);
     try {
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
-      const rows = gdb
-        .prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%alpha-private%'`)
-        .get() as { c: number };
+      const rows = gdb.prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%alpha-private%'`).get() as {
+        c: number;
+      };
       expect(Number(rows.c)).toBe(0);
     } finally {
       closeHippoDb(gdb);
     }
 
     // Sanity: tenant A can still share its own memory.
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:alpha-token:1.2.3.4', store, reach, config: loadConfig(home) };
+    const ctxA = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'mcp',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:alpha-token:1.2.3.4',
+      store,
+      reach,
+      config: loadConfig(home),
+    };
     const okRes = await callTool(2, 'hippo_share', { id: a.id, force: true }, ctxA);
     expect(extractText(okRes)).toMatch(/Shared \[mem_|Shared \[g_/);
   });
@@ -311,7 +422,16 @@ describe('mcp tenant + client-key isolation', () => {
   // ---- Test 7: T2 — ctx.actor threads into audit_log subject ---------------
   // Under HTTP-MCP ctx.actor carries the auth-resolved subject, so it must be the audit_log actor for remember and outcome.
   it('hippo_remember and hippo_outcome via MCP thread ctx.actor into audit_log subject (T2)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'user:alice', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:alice:addr', store: sqliteStore(home), config: loadConfig(home) };
+    const ctx = {
+      hippoRoot: home,
+      tenantId: 'alpha',
+      actor: 'user:alice',
+      role: 'admin' as const,
+      hostAdmin: true as const,
+      clientKey: 'http:alice:addr',
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
 
     const rememberRes = await callTool(
       1,
@@ -362,7 +482,13 @@ describe('mcp tenant + client-key isolation', () => {
       // 'mcp'` fallback under test; handleMcpRequest only ever reads
       // ctx?.actor optionally, so the missing required field is safe at
       // runtime and is exactly the shape this test needs.
-      { hippoRoot: home, tenantId: 'alpha', clientKey: 'http:no-actor:addr', store: sqliteStore(home), config: loadConfig(home) } as McpContext,
+      {
+        hippoRoot: home,
+        tenantId: 'alpha',
+        clientKey: 'http:no-actor:addr',
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      } as McpContext,
     );
     expect(extractText(res)).toMatch(/Remembered \[mem_/);
 
@@ -377,4 +503,3 @@ describe('mcp tenant + client-key isolation', () => {
     }
   });
 });
-

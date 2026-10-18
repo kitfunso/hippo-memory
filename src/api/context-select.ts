@@ -93,9 +93,9 @@ export function oneCopyPerMemory(
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
     const held = best.get(entry.content);
-    const wins = !held || (held.entry.pinned !== entry.pinned
-      ? entry.pinned
-      : score(entry, isGlobal) > score(held.entry, held.isGlobal));
+    const wins =
+      !held ||
+      (held.entry.pinned !== entry.pinned ? entry.pinned : score(entry, isGlobal) > score(held.entry, held.isGlobal));
     if (wins) best.set(entry.content, { entry, isGlobal });
   };
   for (const e of local) offer(e, false);
@@ -104,8 +104,7 @@ export function oneCopyPerMemory(
   return [local.filter((e) => kept.has(e)), global.filter((e) => kept.has(e))];
 }
 
-export const finiteOr = (v: number, dflt: number, min: number): number =>
-  Number.isFinite(v) && v >= min ? v : dflt;
+export const finiteOr = (v: number, dflt: number, min: number): number => (Number.isFinite(v) && v >= min ? v : dflt);
 
 /** The pinned-only branch's shared budget: the backfill and the pin loop both spend it. */
 interface Picked {
@@ -278,10 +277,14 @@ function promptRecallCandidates(
   // A candidate carrying a pin's text would inject that memory a second time.
   const pinnedText = new Set(rankedPinned.map((r) => r.entry.content));
   const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
-    !admit(e) ? 'scope'
-      : e.pinned ? 'pinned'
-        : !isWorthSurfacing(e) ? 'quality'
-          : pinnedText.has(e.content) ? 'duplicate'
+    !admit(e)
+      ? 'scope'
+      : e.pinned
+        ? 'pinned'
+        : !isWorthSurfacing(e)
+          ? 'quality'
+          : pinnedText.has(e.content)
+            ? 'duplicate'
             : null;
   const eligible = (e: MemoryEntry): boolean => {
     const why = ineligibleReason(e);
@@ -310,7 +313,10 @@ function promptCandidateItems(
   const seenCandidateIds = new Set<string>();
   const candidateItems: PromptCandidate[] = [];
   // Local wins the id collision (a global row synced into the local store).
-  for (const [entries, isGlobal] of [[localCandidates, primaryIsGlobal], [globalCandidates, true]] as const) {
+  for (const [entries, isGlobal] of [
+    [localCandidates, primaryIsGlobal],
+    [globalCandidates, true],
+  ] as const) {
     for (const e of entries) {
       if (seenCandidateIds.has(e.id)) continue;
       seenCandidateIds.add(e.id);
@@ -395,9 +401,15 @@ export async function selectBySearch(
   admission: ContextAdmission,
 ): Promise<ContextResultEntry[]> {
   const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
-  const results = plan.hasGlobal && !plan.primaryIsGlobal
-    ? await searchBothStores(ctx, plan, { left, minResults, pools, admit: admission.bothStoresAdmit })
-    : await searchLocalRows(ctx, plan, { left, minResults, localEntries: pools.local.entries, admit: admission.admit });
+  const results =
+    plan.hasGlobal && !plan.primaryIsGlobal
+      ? await searchBothStores(ctx, plan, { left, minResults, pools, admit: admission.bothStoresAdmit })
+      : await searchLocalRows(ctx, plan, {
+          left,
+          minResults,
+          localEntries: pools.local.entries,
+          admit: admission.admit,
+        });
   await auditContextRecall(ctx, plan, results.length);
   return results;
 }

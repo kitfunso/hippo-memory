@@ -67,7 +67,11 @@ function isString<T>(value: T): value is T & string {
 }
 
 // The same bytes the old console.log loop produced: one log per line, joined by a newline.
-function printContextMarkdown(items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>, total: number, framing: string): void {
+function printContextMarkdown(
+  items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
+  total: number,
+  framing: string,
+): void {
   for (const line of contextBlockLines(items, total, framing)) console.log(line);
 }
 
@@ -190,12 +194,14 @@ describe('printContextMarkdown snapshots', () => {
   });
 
   it('single item with many tags', () => {
-    const oneItem = [{
-      entry: { ...memVerifiedSemantic, tags: ['a', 'b', 'c', 'd', 'e'] },
-      score: 0.9,
-      tokens: 20,
-      isGlobal: false,
-    }];
+    const oneItem = [
+      {
+        entry: { ...memVerifiedSemantic, tags: ['a', 'b', 'c', 'd', 'e'] },
+        score: 0.9,
+        tokens: 20,
+        isGlobal: false,
+      },
+    ];
     const out = captureStdout(() => printContextMarkdown(oneItem, 20, 'observe'));
     expect(out).toMatchSnapshot();
   });

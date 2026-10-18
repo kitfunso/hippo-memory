@@ -212,16 +212,15 @@ function buildDeliveryStream(): GeneratedDelivery[] {
   return out;
 }
 
-const ctxFor = (root: string, tenantId = 'default'): FullContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
+const ctxFor = (root: string, tenantId = 'default'): FullContext =>
+  apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' });
 
 function rawCount(root: string): number {
   const db = openHippoDb(root);
   try {
     // SAFETY: the db driver's .get() returns `unknown`; `SELECT COUNT(*) AS c` always
     // yields exactly one row with a numeric (or bigint) `c` column.
-    const row = db
-      .prepare(`SELECT COUNT(*) AS c FROM memories WHERE kind = ?`)
-      .get('raw') as { c: number | bigint };
+    const row = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE kind = ?`).get('raw') as { c: number | bigint };
     return Number(row.c);
   } finally {
     closeHippoDb(db);
@@ -323,9 +322,7 @@ describe('GitHub connector — 200-event smoke test', () => {
 
     // ---- (6) No-scope recall denial of a private repo memory -------------
     // Pick the first delivery whose repo was private, then recall its marker.
-    const privateDelivery = deliveries.find(
-      (d) => d.isPrivate && !toDeleteIds.has(d.deliveryId),
-    );
+    const privateDelivery = deliveries.find((d) => d.isPrivate && !toDeleteIds.has(d.deliveryId));
     expect(privateDelivery).toBeDefined();
     const privateMarker = privateDelivery!.markerText;
 
@@ -374,9 +371,11 @@ describe('GitHub connector — 200-event smoke test', () => {
     // Seed a routing table so we land in the multi-tenant branch.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('99999', 'tenant-known', new Date().toISOString());
+      db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        '99999',
+        'tenant-known',
+        new Date().toISOString(),
+      );
       const resolved = await resolveTenantForGitHub(sqliteStore(root), { installationId: 'unknown-99' });
       expect(resolved).toBeNull();
     } finally {

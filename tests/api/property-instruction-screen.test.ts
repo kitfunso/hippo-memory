@@ -15,7 +15,12 @@ const ZWSP = String.fromCodePoint(0x200b);
 const ZWNJ = String.fromCodePoint(0x200c);
 const ZWJ = String.fromCodePoint(0x200d);
 // Zero-width space and joiners, word joiner, soft hyphen, BOM, grapheme joiner, Mongolian vowel separator and the two direction marks.
-const INVISIBLE = [ZWSP, ZWNJ, ZWJ, ...[0x2060, 0x00ad, 0xfeff, 0x034f, 0x180e, 0x200e, 0x200f].map((code) => String.fromCodePoint(code))];
+const INVISIBLE = [
+  ZWSP,
+  ZWNJ,
+  ZWJ,
+  ...[0x2060, 0x00ad, 0xfeff, 0x034f, 0x180e, 0x200e, 0x200f].map((code) => String.fromCodePoint(code)),
+];
 
 // Each phrase is named by one pattern alone, so the reason is known without asking the detector.
 const PHRASES: readonly { reason: string; text: string }[] = [
@@ -64,7 +69,25 @@ const SMUGGLED: Gen<{ content: string; reason: string }> = map(
 );
 
 // Words the patterns name, with no verb that would complete a phrase.
-const ENGLISH = ['the', 'meeting', 'moved', 'to', 'Tuesday', 'always', 'never', 'previous', 'instructions', 'system', 'prompt', 'the user', 'tokens', 'credentials', 'curl', 'assistant', 'above'];
+const ENGLISH = [
+  'the',
+  'meeting',
+  'moved',
+  'to',
+  'Tuesday',
+  'always',
+  'never',
+  'previous',
+  'instructions',
+  'system',
+  'prompt',
+  'the user',
+  'tokens',
+  'credentials',
+  'curl',
+  'assistant',
+  'above',
+];
 // Russian and Greek, some spelled only with letters that are drawn like Latin ones.
 const LOOKALIKE_SCRIPTS = ['привет', 'спасибо', 'сор', 'роса', 'уха', 'хор', 'καλημέρα', 'ορίζω', 'χαρά', 'ρόα'];
 const OTHER_SCRIPTS = ['会议', '明天', 'ありがとう', '東京', 'مرحبا', 'شكرا', 'שלום', 'café', 'naïve'];
@@ -74,7 +97,14 @@ const JOINED = [`می${ZWNJ}خواهم`, `کتاب${ZWNJ}ها`, `क्${ZWJ}ष
 const REWRITTEN = ['ｆｕｌｌ', 'Ｔｕｅｓｄａｙ', 'R&amp;D', 'caf&#233;', '&lt;3', '&#x6771;'];
 
 const PROSE: Gen<string> = map(
-  arr(both(pick([...ENGLISH, ...LOOKALIKE_SCRIPTS, ...OTHER_SCRIPTS, ...JOINED, ...REWRITTEN]), pick([' ', ' ', ', ', '. ', '\n', '\u00a0', '\u3000'])), 1, 14),
+  arr(
+    both(
+      pick([...ENGLISH, ...LOOKALIKE_SCRIPTS, ...OTHER_SCRIPTS, ...JOINED, ...REWRITTEN]),
+      pick([' ', ' ', ', ', '. ', '\n', '\u00a0', '\u3000']),
+    ),
+    1,
+    14,
+  ),
   (parts) => parts.map(([word, gap]) => word + gap).join(''),
 );
 
@@ -94,17 +124,26 @@ describe('injection screening properties', () => {
 
 describe('injection screening leaves the stored text alone', () => {
   let root = '';
-  beforeAll(() => { root = makeRoot('property-screen'); });
-  afterAll(() => { rmSync(root, { recursive: true, force: true }); });
+  beforeAll(() => {
+    root = makeRoot('property-screen');
+  });
+  afterAll(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
 
   it('untrusted content is stored as it was sent, flagged or not', async () => {
     const ctx: FullContext = apiCtx(root, 'default', api.adminActor('test'));
     // A visible word at each end: the store trims what it is given.
-    const sent = map(arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3), (bodies) => `note ${bodies.join('\n')} end`);
+    const sent = map(
+      arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3),
+      (bodies) => `note ${bodies.join('\n')} end`,
+    );
     // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.
-    await withSharedStoreHandles(() => forAll(0x570e, 100, sent, async (content) => {
-      const { id } = await api.remember(ctx, { content, untrusted: true });
-      expect(readEntry(root, id, 'default')?.content).toBe(content);
-    }));
+    await withSharedStoreHandles(() =>
+      forAll(0x570e, 100, sent, async (content) => {
+        const { id } = await api.remember(ctx, { content, untrusted: true });
+        expect(readEntry(root, id, 'default')?.content).toBe(content);
+      }),
+    );
   });
 });

@@ -35,7 +35,11 @@ describe('hippo dag', () => {
   it('counts rows per DAG level and the level-1 facts with no parent', async () => {
     const store = path.join(hippoRoot, '.hippo');
     const row = (content: string, dag_level: number, dag_parent_id?: string) => {
-      const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dagLevel: dag_level, dagParentId: dag_parent_id });
+      const entry = createMemory(content, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        dagLevel: dag_level,
+        dagParentId: dag_parent_id,
+      });
       writeEntry(store, entry);
       return entry.id;
     };
@@ -49,7 +53,12 @@ describe('hippo dag', () => {
     row('Raw note two', 0);
 
     const result = await hippo(hippoRoot, 'dag', '--stats');
-    expect(result.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)).toEqual([
+    expect(
+      result
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ).toEqual([
       'DAG Structure:',
       'Level 3 (entity profiles):  1',
       'Level 2 (topic summaries):  2',

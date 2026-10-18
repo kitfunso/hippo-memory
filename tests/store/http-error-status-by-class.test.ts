@@ -23,7 +23,11 @@ afterEach(() => {
 
 type ReplyBody = Record<string, string>;
 
-interface Reply { status: number; body: ReplyBody; requestIdHeader: string | null }
+interface Reply {
+  status: number;
+  body: ReplyBody;
+  requestIdHeader: string | null;
+}
 
 interface ProbeRequest {
   method: string;
@@ -58,7 +62,12 @@ describe('mapApiError maps by class, never by message', () => {
   });
 
   it('old message text on a plain Error no longer buys a 4xx, and the text is withheld', () => {
-    for (const text of ['memory not found: mem_x', 'Unknown key_id: k_x', 'Memory m is already superseded by n', 'scope s requires admin role']) {
+    for (const text of [
+      'memory not found: mem_x',
+      'Unknown key_id: k_x',
+      'Memory m is already superseded by n',
+      'scope s requires admin role',
+    ]) {
       expect(mapApiError(new Error(text))).toEqual({ status: 500, message: INTERNAL_ERROR_MESSAGE });
     }
     expect(mapApiError('a thrown string')).toEqual({ status: 500, message: INTERNAL_ERROR_MESSAGE });
@@ -93,9 +102,17 @@ describe('typed errors from real domain paths keep their status and message', ()
   it('ConflictError -> 409: superseding a row that is already superseded', async () => {
     const old = createMemory('the build runs on node 20', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(home, old);
-    const first = await call(handle, { method: 'POST', path: `/v1/memories/${old.id}/supersede`, body: { content: 'the build runs on node 22' } });
+    const first = await call(handle, {
+      method: 'POST',
+      path: `/v1/memories/${old.id}/supersede`,
+      body: { content: 'the build runs on node 22' },
+    });
     expect(first.status).toBe(200);
-    const r = await call(handle, { method: 'POST', path: `/v1/memories/${old.id}/supersede`, body: { content: 'the build runs on node 24' } });
+    const r = await call(handle, {
+      method: 'POST',
+      path: `/v1/memories/${old.id}/supersede`,
+      body: { content: 'the build runs on node 24' },
+    });
     expect(r.status).toBe(409);
     expect(r.body.error).toMatch(/is already superseded by/);
   });
@@ -128,7 +145,11 @@ describe('an untyped error is a 500 that hides its text', () => {
     home = makeRoot('error-class', { init: false });
     mkdirSync(join(home, 'hippo.db'));
     // No key can be minted in a store that will not open, so a resolver vouches for an admin on the admin-only audit route.
-    handle = await serve({ hippoRoot: home, port: 0, authResolver: () => ({ tenantId: 'default', subject: 'ops', role: 'admin' }) });
+    handle = await serve({
+      hippoRoot: home,
+      port: 0,
+      authResolver: () => ({ tenantId: 'default', subject: 'ops', role: 'admin' }),
+    });
   });
 
   afterAll(async () => {
@@ -145,7 +166,11 @@ describe('an untyped error is a 500 that hides its text', () => {
       writes.push(String(chunk));
       return true;
     });
-    const r = await call(handle, { method: 'GET', path: '/v1/audit', headers: { 'x-request-id': 'req-s1b-500', authorization: 'Bearer ops-token' } });
+    const r = await call(handle, {
+      method: 'GET',
+      path: '/v1/audit',
+      headers: { 'x-request-id': 'req-s1b-500', authorization: 'Bearer ops-token' },
+    });
     expect(r.status).toBe(500);
     expect(r.body).toEqual({ error: INTERNAL_ERROR_MESSAGE, requestId: 'req-s1b-500' });
     expect(r.requestIdHeader).toBe('req-s1b-500');

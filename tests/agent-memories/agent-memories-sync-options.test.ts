@@ -13,8 +13,21 @@ import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { isInitialized } from '../../src/core/project-identity.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import {
-  auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, tally, toolTally, userNotes,
-  writeConfig, type World,
+  auditTotal,
+  closeWorld,
+  codexSummary,
+  ctxFor,
+  dormantRows,
+  liveRows,
+  liveTexts,
+  note,
+  openWorld,
+  projectNotes,
+  tally,
+  toolTally,
+  userNotes,
+  writeConfig,
+  type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
@@ -39,7 +52,8 @@ beforeEach(() => {
 afterEach(() => closeWorld(w));
 
 const withEnv = (env: Machine['env']): Machine => ({ ...w.machine, env });
-const sync = (extra: Partial<SyncOptions> = {}): ImportReport => importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine, ...extra });
+const sync = (extra: Partial<SyncOptions> = {}): ImportReport =>
+  importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine, ...extra });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
 describe('agent memory sync: options, time and reporting', () => {
@@ -49,10 +63,22 @@ describe('agent memory sync: options, time and reporting', () => {
     codexSummary(w, BULLET);
 
     for (const off of ['', 'none', ' NONE ']) {
-      expect(tally(importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }) })).imported).toBe(0);
+      expect(
+        tally(
+          importForStore(w.local, {
+            configAt: loadConfig,
+            agentImport: sqliteAgentImport,
+            machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }),
+          }),
+        ).imported,
+      ).toBe(0);
     }
     expect(tally(sync()).imported).toBe(0);
-    const report = importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }) });
+    const report = importForStore(w.local, {
+      configAt: loadConfig,
+      agentImport: sqliteAgentImport,
+      machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }),
+    });
     expect([claude(report).imported, toolTally(report, 'codex').imported]).toEqual([1, 1]);
     expect(report.warnings.filter((line) => line.includes('"nosuchtool"'))).toHaveLength(2);
   });
@@ -64,7 +90,10 @@ describe('agent memory sync: options, time and reporting', () => {
 
     expect(tally(sync()).imported).toBe(0);
     expect(isInitialized(w.global)).toBe(false);
-    expect(tally(importForStore(w.global, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine })).imported).toBe(1);
+    expect(
+      tally(importForStore(w.global, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine }))
+        .imported,
+    ).toBe(1);
     expect(liveTexts(w.global)).toEqual([USER_NOTE]);
   });
 
@@ -124,7 +153,14 @@ describe('agent memory sync: options, time and reporting', () => {
     sync();
 
     expect(sync({ dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
-    expect(importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: altMachine, dryRun: true }).tools.find((t) => t.tool === 'claude-code')?.unlisted).toBe(1);
+    expect(
+      importForStore(w.local, {
+        configAt: loadConfig,
+        agentImport: sqliteAgentImport,
+        machine: altMachine,
+        dryRun: true,
+      }).tools.find((t) => t.tool === 'claude-code')?.unlisted,
+    ).toBe(1);
   });
 
   it('summaryLine names what moved, and is null when nothing did', () => {
@@ -150,7 +186,7 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(summaryLine(sync())).toBe('Agent memories: 1 pinned memory kept with the note gone.');
   });
 
-  it('created carries the item\'s time as a 24-character Z timestamp, from an offset modified too, capped at now', () => {
+  it("created carries the item's time as a 24-character Z timestamp, from an offset modified too, capped at now", () => {
     note(dir, 'offset.md', A, 'type: feedback\nmodified: 2026-03-04T10:00:00+02:00');
     const byMtime = note(dir, 'mtime.md', B);
     // Node 22's utimes passes seconds as a double, so .123 lands at .1229999; half a second is exact.
@@ -161,7 +197,10 @@ describe('agent memory sync: options, time and reporting', () => {
     const end = Date.now();
 
     const byText = new Map(liveRows(w.local).map((e) => [e.content, e]));
-    expect([byText.get(A)?.created, byText.get(A)?.valid_from]).toEqual(['2026-03-04T08:00:00.000Z', '2026-03-04T08:00:00.000Z']);
+    expect([byText.get(A)?.created, byText.get(A)?.valid_from]).toEqual([
+      '2026-03-04T08:00:00.000Z',
+      '2026-03-04T08:00:00.000Z',
+    ]);
     expect(byText.get(B)?.created).toBe('2025-11-05T06:07:08.500Z');
     const future = Date.parse(byText.get(USER_NOTE)?.created ?? '');
     expect(future >= start - 1000 && future <= end).toBe(true);
@@ -172,18 +211,30 @@ describe('agent memory sync: options, time and reporting', () => {
     const monthAgo = new Date(Date.now() - 30 * 86_400_000);
     const yesterday = new Date(Date.now() - 86_400_000).toISOString();
     const fresh = Array.from({ length: 5 }, (_, i) => {
-      const made = createMemory(`Incident ${i + 700} on the Orders API was fixed by raising the pool to ${i + 20} connections.`, { tenantId: 'default', baseHalfLifeDays: 30 });
+      const made = createMemory(
+        `Incident ${i + 700} on the Orders API was fixed by raising the pool to ${i + 20} connections.`,
+        { tenantId: 'default', baseHalfLifeDays: 30 },
+      );
       const entry = { ...made, created: yesterday, valid_from: yesterday };
       writeEntry(w.local, entry);
       return entry.id;
     });
     for (let i = 0; i < 40; i++) {
-      const file = note(dir, `n${i}.md`, `Build ${i} of the payments service needs flag ${i + 100} set before release.`);
+      const file = note(
+        dir,
+        `n${i}.md`,
+        `Build ${i} of the payments service needs flag ${i + 100} set before release.`,
+      );
       utimesSync(file, monthAgo, monthAgo);
     }
     expect(claude(sync()).imported).toBe(40);
 
-    const result = await getContext(ctxFor(w.local), { pinnedOnly: true, includeRecent: 5, currentProject: 'proj', budget: 100_000 });
+    const result = await getContext(ctxFor(w.local), {
+      pinnedOnly: true,
+      includeRecent: 5,
+      currentProject: 'proj',
+      budget: 100_000,
+    });
     expect(result.entries.map((e) => e.entry.id).sort()).toEqual([...fresh].sort());
   });
 

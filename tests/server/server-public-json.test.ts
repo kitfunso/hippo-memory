@@ -34,9 +34,18 @@ interface Reply {
   body: string;
 }
 
-const served: Reply = { status: 200, contentType: 'application/json', cacheControl: 'no-store', body: JSON.stringify(BODY) };
+const served: Reply = {
+  status: 200,
+  contentType: 'application/json',
+  cacheControl: 'no-store',
+  body: JSON.stringify(BODY),
+};
 
-async function start(publicJson: Readonly<Record<string, JsonValue>>, hippoRoot = root, store?: HippoStore): Promise<void> {
+async function start(
+  publicJson: Readonly<Record<string, JsonValue>>,
+  hippoRoot = root,
+  store?: HippoStore,
+): Promise<void> {
   handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, publicJson, store });
 }
 
@@ -44,13 +53,21 @@ async function send(method: string, path: string, authorization?: string): Promi
   const headers = new Headers();
   if (authorization !== undefined) headers.set('authorization', authorization);
   const res = await fetch(`${handle!.url}${path}`, { method, headers });
-  return { status: res.status, contentType: res.headers.get('content-type'), cacheControl: res.headers.get('cache-control'), body: await res.text() };
+  return {
+    status: res.status,
+    contentType: res.headers.get('content-type'),
+    cacheControl: res.headers.get('cache-control'),
+    body: await res.text(),
+  };
 }
 
 /** The error serve() throws for this publicJson, or null when it started; a started server is stopped so a case never leaks one. */
 async function bootError(publicJson: Readonly<Record<string, JsonValue>>): Promise<Error | null> {
   return serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson }).then(
-    async (h) => { await h.stop(); return null; },
+    async (h) => {
+      await h.stop();
+      return null;
+    },
     (err: Error) => err,
   );
 }
@@ -65,7 +82,13 @@ describe('a publicJson path behind serve()', () => {
   });
 
   it('answers every other call as a server without it does: unconfigured paths, and POST, HEAD and PUT on the public path', async () => {
-    const calls = [['GET', '/v1/x-other'], ['GET', '/v1/memories?q=x'], ['POST', INFO], ['HEAD', INFO], ['PUT', INFO]] as const;
+    const calls = [
+      ['GET', '/v1/x-other'],
+      ['GET', '/v1/memories?q=x'],
+      ['POST', INFO],
+      ['HEAD', INFO],
+      ['PUT', INFO],
+    ] as const;
     const replies = async (): Promise<Reply[]> => {
       const out: Reply[] = [];
       for (const [method, path] of calls) out.push(await send(method, path));
@@ -111,7 +134,10 @@ describe('a publicJson path under a store that is not hippo.db', () => {
       ...sqliteStore(bare),
       kind: 'stub',
       localFiles: undefined,
-      async findApiKey(): Promise<ApiKeyRecord | null> { lookups += 1; return null; },
+      async findApiKey(): Promise<ApiKeyRecord | null> {
+        lookups += 1;
+        return null;
+      },
     };
     try {
       await start({ [INFO]: BODY }, bare, store);
@@ -139,7 +165,9 @@ describe('serve() refuses a publicJson path it cannot serve safely', () => {
     ['a trailing slash', '/v1/x/'],
     ['a query string', '/v1/x?y=1'],
   ])('%s: %s', async (_name, path) => {
-    expect((await bootError({ [path]: {} }))?.message).toBe(`public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    expect((await bootError({ [path]: {} }))?.message).toBe(
+      `public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`,
+    );
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });
 

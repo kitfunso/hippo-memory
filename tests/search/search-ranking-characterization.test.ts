@@ -43,7 +43,13 @@ const ENTRIES: MemoryEntry[] = [
   mk('d6', 'deploy pipeline secrets live in the shared vault', 5, { tags: ['scope:team-b'], outcome_negative: 2 }),
   mk('d7', 'long thread: the deploy pipeline requires approval from ops before release', 12),
   mk('x1', 'deploy pipeline requires ops approval', 11, { tags: ['extracted'], extracted_from: 'd7', dag_level: 1 }),
-  mk('s1', 'deploy pipeline summary topic', 3, { tags: ['dag-summary'], dag_level: 2, descendant_count: 2, last_rebuilt_at: ago(2), rebuild_count: 4 }),
+  mk('s1', 'deploy pipeline summary topic', 3, {
+    tags: ['dag-summary'],
+    dag_level: 2,
+    descendant_count: 2,
+    last_rebuilt_at: ago(2),
+    rebuild_count: 4,
+  }),
   mk('c1', 'child note about the weekend freeze', 3, { dag_parent_id: 's1' }),
   mk('o1', 'old deploy pipeline used jenkins', 100, { superseded_by: 'n1' }),
   mk('n1', 'new deploy pipeline uses github actions', 20, { valid_from: ago(20) }),
@@ -53,9 +59,20 @@ const ENTRIES: MemoryEntry[] = [
 
 /** Query vector is [1,0,0]: z2 matches it exactly with no shared word, d1 and s1 sit close, noise is orthogonal. */
 const VECTORS = {
-  d1: [0.9, 0.1, 0], d2: [0.6, 0.8, 0], d3: [0.5, 0.5, 0.5], d4: [0.2, 0.9, 0.1], d5: [0.7, 0.7, 0],
-  d6: [0.7, 0.69, 0.1], d7: [0.4, 0.4, 0.8], x1: [0.8, 0.2, 0.1], s1: [0.88, 0.12, 0], c1: [0.3, 0, 0.9],
-  o1: [0.5, 0.1, 0.8], n1: [0.6, 0.3, 0.3], z1: [0, 0, 1], z2: [1, 0, 0],
+  d1: [0.9, 0.1, 0],
+  d2: [0.6, 0.8, 0],
+  d3: [0.5, 0.5, 0.5],
+  d4: [0.2, 0.9, 0.1],
+  d5: [0.7, 0.7, 0],
+  d6: [0.7, 0.69, 0.1],
+  d7: [0.4, 0.4, 0.8],
+  x1: [0.8, 0.2, 0.1],
+  s1: [0.88, 0.12, 0],
+  c1: [0.3, 0, 0.9],
+  o1: [0.5, 0.1, 0.8],
+  n1: [0.6, 0.3, 0.3],
+  z1: [0, 0, 1],
+  z2: [1, 0, 0],
 } satisfies Record<string, number[]>;
 
 /** Rows only the vector arm can add: in the store, absent from the caller's pool. */
@@ -106,7 +123,11 @@ describe('search ranking characterization: hybrid without vectors', () => {
 
 function seedStore(): string {
   const root = makeRoot('rank-char', { init: false });
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),
+    'utf8',
+  );
   initStore(root);
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
   vi.stubEnv('OPENAI_API_KEY', 'sk-test');
@@ -114,15 +135,32 @@ function seedStore(): string {
   saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const entity = (memoryId: string): number =>
     insertEntityAt(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
-  for (const [from, to] of [['z2', 'c1'], ['x1', 'd4'], ['d1', 'd3']]) {
-    insertRelationAt(root, TENANT, { fromEntityId: entity(from), toEntityId: entity(to), relType: 'supersedes', memoryId: from });
+  for (const [from, to] of [
+    ['z2', 'c1'],
+    ['x1', 'd4'],
+    ['d1', 'd3'],
+  ]) {
+    insertRelationAt(root, TENANT, {
+      fromEntityId: entity(from),
+      toEntityId: entity(to),
+      relType: 'supersedes',
+      memoryId: from,
+    });
   }
   const db = openHippoDb(root);
   try {
-    savePhysicsState(db, (['d1', 'd2', 'd3', 's1', 'z2', 'n1'] as const).map((id, i) => ({
-      memoryId: id, position: VECTORS[id], velocity: [0.01 * i, 0, 0], mass: 1 + i / 4, charge: 0, temperature: 0.5,
-      lastSimulation: NOW.toISOString(),
-    })));
+    savePhysicsState(
+      db,
+      (['d1', 'd2', 'd3', 's1', 'z2', 'n1'] as const).map((id, i) => ({
+        memoryId: id,
+        position: VECTORS[id],
+        velocity: [0.01 * i, 0, 0],
+        mass: 1 + i / 4,
+        charge: 0,
+        temperature: 0.5,
+        lastSimulation: NOW.toISOString(),
+      })),
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -143,11 +181,16 @@ describe('search ranking characterization: hybrid and physics with a store', () 
 
   beforeEach(() => {
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
-      // SAFETY: body is the OpenAI embeddings request the provider just serialised.
-      const body = JSON.parse(init.body) as { input: string[] };
-      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: { body: string }) => {
+        // SAFETY: body is the OpenAI embeddings request the provider just serialised.
+        const body = JSON.parse(init.body) as { input: string[] };
+        return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), {
+          status: 200,
+        });
+      }),
+    );
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -157,18 +200,24 @@ describe('search ranking characterization: hybrid and physics with a store', () 
     expect(pin(await hybridSearch('deploy pipeline', clone(), opts()))).toMatchSnapshot();
   });
   it('blend without MMR, custom weight', async () => {
-    expect(pin(await hybridSearch('deploy pipeline', clone(), { ...opts(), mmr: false, embeddingWeight: 0.3 }))).toMatchSnapshot();
+    expect(
+      pin(await hybridSearch('deploy pipeline', clone(), { ...opts(), mmr: false, embeddingWeight: 0.3 })),
+    ).toMatchSnapshot();
   });
   it('rrf', async () => {
     expect(pin(await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf' }))).toMatchSnapshot();
   });
   it('rrf with the graph stream', async () => {
     const graphStream = { weight: 0.5, tenantId: TENANT, seedCount: 3 };
-    expect(pin(await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf', graphStream }))).toMatchSnapshot();
+    expect(
+      pin(await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf', graphStream })),
+    ).toMatchSnapshot();
   });
   it('reranker reverses the head', async () => {
     const reranker: RerankerFn = async (_q, items) =>
-      [...items].reverse().map((r, i) => ({ ...r, rerankScore: i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: i + 1 }));
+      [...items]
+        .reverse()
+        .map((r, i) => ({ ...r, rerankScore: i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: i + 1 }));
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), reranker, rerankerOptions: { topK: 3 } });
     expect(pin(res)).toMatchSnapshot();
   });
@@ -183,7 +232,10 @@ describe('search ranking characterization: hybrid and physics with a store', () 
   it('physics with asOf, summary deboost and vector candidates', async () => {
     const vectorCandidates = { tenantId: TENANT, includeSuperseded: false, limit: 5 };
     const res = await physicsSearch('deploy pipeline', clone(), {
-      ...opts(), asOf: ago(50), summaryDeboost: 0.6, vectorCandidates,
+      ...opts(),
+      asOf: ago(50),
+      summaryDeboost: 0.6,
+      vectorCandidates,
     });
     expect(pin(res)).toMatchSnapshot();
   });

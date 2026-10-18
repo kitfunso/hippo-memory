@@ -21,7 +21,13 @@ import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const sync = (root: string, home: string): Tally =>
-  totalTally(importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } }));
+  totalTally(
+    importProjectMemories(root, {
+      configAt: loadConfig,
+      agentImport: sqliteAgentImport,
+      machine: { home, env: {}, platform: process.platform },
+    }),
+  );
 
 // AWS's own documented example access key — a well-known non-secret placeholder,
 // safe to embed. NEVER put a real credential in a fixture, even here.
@@ -70,7 +76,7 @@ describe('agent memory import secret veto', () => {
     expect([tally.imported, tally.secret]).toEqual([1, 1]);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const joined = entries.map(e => e.content).join('\n');
+    const joined = entries.map((e) => e.content).join('\n');
 
     // The benign lesson is present...
     expect(joined).toContain('run lighthouse after deploys');

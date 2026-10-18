@@ -17,7 +17,10 @@ import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
 import { selectEntriesByIds } from '../entry-reads.js';
 import {
-  rememberAuditMetadata, writeEntryDbOnly, writeEntryMirrorsIn, type WriteEntryInternalOptions,
+  rememberAuditMetadata,
+  writeEntryDbOnly,
+  writeEntryMirrorsIn,
+  type WriteEntryInternalOptions,
 } from '../entry-writes.js';
 import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
 import { type OnHandle, openStore, type StoreFiles } from '../open.js';
@@ -185,7 +188,13 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): AppliedOut
     updateMemoryRows(db, rows);
     // A good outcome drops the churn-stale tag; only those rows' indexed text changes.
     const retagged = rows.filter((row) => row.tags.join(' ') !== read.get(row.id)?.tags.join(' '));
-    if (retagged.length > 0) replaceFtsRows(db, retagged, retagged.map((row) => row.id));
+    if (retagged.length > 0) {
+      replaceFtsRows(
+        db,
+        retagged,
+        retagged.map((row) => row.id),
+      );
+    }
     const parents = [...new Set(rows.flatMap((row) => (row.dag_parent_id ? [row.dag_parent_id] : [])))];
     const flipped = markSummariesDirtyInTx(db, parents, outcome.tenantId);
     appendAuditEventsAt(db, outcomeAuditRows(applied, flipped, outcome));
@@ -218,15 +227,17 @@ function outcomeAuditRows(
 
 function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
   const { tenantId, actor, id, pinned } = pin;
-  return auditingRefusal(db, actor, () => withWriteScope(db, 'set_pinned', () => {
-    assertInReach(db, pin, id);
-    const entry = selectEntriesByIds(db, [id], tenantId).get(id);
-    if (!entry) throw notFound(id);
-    const updated = { ...entry, pinned };
-    writeEntryDbOnly(db, updated, { actor });
-    appendAuditEvent(db, { tenantId, actor, op: 'pin', targetId: id, metadata: { pinned } });
-    return updated;
-  }));
+  return auditingRefusal(db, actor, () =>
+    withWriteScope(db, 'set_pinned', () => {
+      assertInReach(db, pin, id);
+      const entry = selectEntriesByIds(db, [id], tenantId).get(id);
+      if (!entry) throw notFound(id);
+      const updated = { ...entry, pinned };
+      writeEntryDbOnly(db, updated, { actor });
+      appendAuditEvent(db, { tenantId, actor, op: 'pin', targetId: id, metadata: { pinned } });
+      return updated;
+    }),
+  );
 }
 
 /** Reach, the CAS on the old row, the successor's insert and the supersede row in one BEGIN IMMEDIATE transaction. Two
@@ -234,22 +245,24 @@ function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
 function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
   const { tenantId, actor, oldId, successor } = write;
   // The refusal row lands after the scope has rolled back, in a fresh implicit transaction the aborted one cannot undo.
-  auditingRefusal(db, actor, () => withWriteScope(db, 'supersede', () => {
-    assertInReach(db, write, oldId);
-    // SAFETY: RETURNING names one column, dag_parent_id; no row means another writer got there first.
-    const won = db
-      .prepare(
-        'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING ' +
-        'dag_parent_id',
-      )
-      .get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
-    if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
-    // After the CAS, so a lost race marks no parent for rebuild.
-    if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
-    assertIdInTenant(db, successor);
-    writeEntryDbOnly(db, successor, { actor });
-    appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
-  }));
+  auditingRefusal(db, actor, () =>
+    withWriteScope(db, 'supersede', () => {
+      assertInReach(db, write, oldId);
+      // SAFETY: RETURNING names one column, dag_parent_id; no row means another writer got there first.
+      const won = db
+        .prepare(
+          'UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING ' +
+            'dag_parent_id',
+        )
+        .get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
+      if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
+      // After the CAS, so a lost race marks no parent for rebuild.
+      if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
+      assertIdInTenant(db, successor);
+      writeEntryDbOnly(db, successor, { actor });
+      appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
+    }),
+  );
 }
 
 /** A mirror left on disk would bring the archived row back on the next import; on failure the reaper retries, as
@@ -260,7 +273,7 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: strin
   } catch (mirrorErr) {
     log.error(
       `archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ` +
-      `${errorMessage(mirrorErr)}`,
+        `${errorMessage(mirrorErr)}`,
       errorFields(mirrorErr),
     );
     return;

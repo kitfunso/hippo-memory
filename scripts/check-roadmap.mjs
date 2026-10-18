@@ -15,7 +15,10 @@ let fence;
 
 for (const [index, line] of lines.entries()) {
   const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
-  if (marker && !fence) { fence = marker[1]; continue; }
+  if (marker && !fence) {
+    fence = marker[1];
+    continue;
+  }
   if (fence) {
     if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = undefined;
     continue;
@@ -28,7 +31,10 @@ for (const [index, line] of lines.entries()) {
   const heading = line.match(/^#{1,6}\s+(.+?)(?:\s+#+)?\s*$/);
   if (!heading) continue;
   const title = heading[1];
-  const slug = title.toLowerCase().replace(/[^\p{L}\p{N}_\-\s]/gu, '').replace(/\s/g, '-');
+  const slug = title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_\-\s]/gu, '')
+    .replace(/\s/g, '-');
   const count = slugCounts.get(slug) ?? 0;
   slugCounts.set(slug, count + 1);
   const anchor = count ? `${slug}-${count}` : slug;
@@ -37,8 +43,9 @@ for (const [index, line] of lines.entries()) {
   headings.push([index + 1, title]);
   const item = title.match(/^([A-Z][A-Z0-9]*\d[a-z]?(?:\.\d+)*)\.\s/);
   if (item) {
-    if (initiatives.has(item[1])) issues.push(`line ${index + 1}: duplicate initiative ${item[1]} (first at line ${initiatives.get(item[1])})`);
-    else initiatives.set(item[1], index + 1);
+    if (initiatives.has(item[1])) {
+      issues.push(`line ${index + 1}: duplicate initiative ${item[1]} (first at line ${initiatives.get(item[1])})`);
+    } else initiatives.set(item[1], index + 1);
   }
 }
 
@@ -56,7 +63,9 @@ for (const [line, text] of content) {
   }
 }
 for (const [line, title] of headings) {
-  for (const clause of title.matchAll(/(?:hard|conditional(?: adapters)?|optional producer|baselines?|rollout gates?|release gates?|gates?|completion):\s*([^;\]]+)/g)) {
+  for (const clause of title.matchAll(
+    /(?:hard|conditional(?: adapters)?|optional producer|baselines?|rollout gates?|release gates?|gates?|completion):\s*([^;\]]+)/g,
+  )) {
     for (const ref of clause[1].matchAll(/\b([A-Z][A-Z0-9]*\d[a-z]?(?:\.\d+)*)\b/g)) {
       references++;
       if (!initiatives.has(ref[1])) issues.push(`line ${line}: unknown typed dependency ${ref[1]}`);
@@ -67,8 +76,12 @@ for (const [line, text] of content) {
   for (const link of text.matchAll(/\[([^\]]+)\]\(#([^\s)]+)\)/g)) {
     references++;
     let fragment;
-    try { fragment = decodeURIComponent(link[2]); }
-    catch { issues.push(`line ${line}: invalid anchor encoding ${link[2]}`); continue; }
+    try {
+      fragment = decodeURIComponent(link[2]);
+    } catch {
+      issues.push(`line ${line}: invalid anchor encoding ${link[2]}`);
+      continue;
+    }
     if (!anchors.has(fragment)) issues.push(`line ${line}: unknown local anchor #${fragment}`);
     if (/^[A-Z][A-Z0-9]*\d[a-z]?(?:\.\d+)*$/.test(link[1]) && !initiatives.has(link[1])) {
       issues.push(`line ${line}: unknown linked initiative ${link[1]}`);

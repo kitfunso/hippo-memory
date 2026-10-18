@@ -127,8 +127,9 @@ function rowToDormantMemory(row: DormantRow): DormantMemory {
 }
 
 // The snapshot's scope as a `scope` column, so recall-scope's SQL fragments read it as they read memories.scope.
-const DORMANT_WITH_SCOPE = `(SELECT *, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END ` +
-`AS scope FROM dormant_memories)`;
+const DORMANT_WITH_SCOPE =
+  `(SELECT *, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END ` +
+  `AS scope FROM dormant_memories)`;
 const EVERY_SCOPE: SqlFragment = { sql: '1', params: [] };
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by search terms. */
@@ -163,20 +164,24 @@ function listDormantRows(
 /** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */
 export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: string): DormantSnapshot | null {
   // SAFETY: row's shape matches the seven columns named in the SELECT.
-  const row = db.prepare(
-    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+  const row = db
+    .prepare(
+      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
        FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
-  ).get(tenantId, id) as DormantRow | undefined;
+    )
+    .get(tenantId, id) as DormantRow | undefined;
   return row ? toSnapshot(row) : null;
 }
 
 /** Every dormant memory of a tenant whose snapshot still reads back. */
 export function listDormantSnapshots(db: DatabaseSyncLike, tenantId: string): DormantSnapshot[] {
   // SAFETY: rows' shape matches the seven columns named in the SELECT.
-  const rows = db.prepare(
-    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+  const rows = db
+    .prepare(
+      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
        FROM dormant_memories WHERE tenant_id = ?`,
-  ).all(tenantId) as DormantRow[];
+    )
+    .all(tenantId) as DormantRow[];
   return rows.flatMap((row) => toSnapshot(row) ?? []);
 }
 
@@ -205,8 +210,13 @@ function toSnapshot(row: DormantRow): DormantSnapshot | null {
 
 /** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went dormant. */
 export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: string, entry: MemoryEntry): void {
-  db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`)
-    .run(entry.id, entry.content, JSON.stringify(entry), tenantId, id);
+  db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`).run(
+    entry.id,
+    entry.content,
+    JSON.stringify(entry),
+    tenantId,
+    id,
+  );
 }
 
 /** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot readable or not). */
@@ -227,13 +237,18 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
 /** Deletes the tenant's dormant copies of a rejected digest whose snapshot scope `inReach` admits, so the value cannot
  * linger; returns their ids. */
 export function purgeDormantByDigest(
-  db: DatabaseSyncLike, tenantId: string, digest: string, inReach: (scope: string | null) => boolean,
+  db: DatabaseSyncLike,
+  tenantId: string,
+  digest: string,
+  inReach: (scope: string | null) => boolean,
 ): string[] {
   // SAFETY: rows' shape matches the three columns named in the SELECT.
-  const rows = db.prepare(
-    `SELECT id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope
+  const rows = db
+    .prepare(
+      `SELECT id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope
        FROM dormant_memories WHERE tenant_id = ?`,
-  ).all(tenantId) as Array<{ id: string; content: string; scope: string | null }>;
+    )
+    .all(tenantId) as Array<{ id: string; content: string; scope: string | null }>;
   const removed: string[] = [];
   for (const row of rows) {
     if (rejectionDigest(row.content) !== digest || !inReach(row.scope)) continue;

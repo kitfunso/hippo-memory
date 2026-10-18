@@ -35,7 +35,11 @@ const row = (text: string, origin: string | null, extra: Partial<MemoryEntry> = 
   return entry;
 };
 const note = (text: string, origin: string, extra: Partial<MemoryEntry> = {}): MemoryEntry =>
-  row(text, origin, { source: `agent-memory:claude-code:p-0123456789ab/${text.slice(0, 8)}.md#abc`, tags: ['claude-code-memory'], ...extra });
+  row(text, origin, {
+    source: `agent-memory:claude-code:p-0123456789ab/${text.slice(0, 8)}.md#abc`,
+    tags: ['claude-code-memory'],
+    ...extra,
+  });
 const byId = () => new Map(loadAllEntries(home, 'default').map((e) => [e.id, e]));
 const open = () => (db = openHippoDb(home));
 const ctx = () => cliApiContext(home, T);
@@ -43,7 +47,10 @@ function mirror(id: string): string | null {
   const walk = (dir: string): string | null => {
     for (const name of readdirSync(dir)) {
       const p = join(dir, name);
-      if (statSync(p).isDirectory()) { const hit = walk(p); if (hit) return hit; } else if (name === `${id}.md`) return readFileSync(p, 'utf8');
+      if (statSync(p).isDirectory()) {
+        const hit = walk(p);
+        if (hit) return hit;
+      } else if (name === `${id}.md`) return readFileSync(p, 'utf8');
     }
     return null;
   };
@@ -71,7 +78,11 @@ describe('hippo projects merge', () => {
     expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.origin_project).toBe('repo');
     expect(rows.get(held.id)!.origin_project).toBe('repo');
     // The next sync renames its container prefix, so the import keeps its id, source and tag.
-    expect(rows.get(kept.id)).toMatchObject({ origin_project: 'repo', source: kept.source, tags: ['claude-code-memory'] });
+    expect(rows.get(kept.id)).toMatchObject({
+      origin_project: 'repo',
+      source: kept.source,
+      tags: ['claude-code-memory'],
+    });
     expect(rows.get(pinned.id)!.origin_project).toBe('repo');
     expect(rows.get(pinned.id)!.tags).toContain('claude-code-memory');
     expect(rows.get(lesson.id)!.origin_project).toBe('repo');
@@ -80,9 +91,13 @@ describe('hippo projects merge', () => {
     expect(mirror(copy.id)).toBeNull();
     expect(existsSync(r.backup!)).toBe(true);
     // SAFETY: the SELECT names the one column of the row type.
-    const audit = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'project_merge'`).all() as Array<{ metadata_json: string }>;
+    const audit = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'project_merge'`).all() as Array<{
+      metadata_json: string;
+    }>;
     expect(audit).toHaveLength(1);
-    expect(JSON.parse(audit[0].metadata_json).restamped).toEqual(expect.arrayContaining([lesson.id, pinned.id, kept.id]));
+    expect(JSON.parse(audit[0].metadata_json).restamped).toEqual(
+      expect.arrayContaining([lesson.id, pinned.id, kept.id]),
+    );
   });
 
   it('refuses user-global and unknown as either side', () => {
@@ -94,10 +109,18 @@ describe('hippo projects merge', () => {
   it('re-tags dormant rows and compaction records too, so a restore does not come back hidden', () => {
     open();
     const faded = createMemory('a faded worktree lesson about the cache', { layer: Layer.Semantic });
-    db.prepare(`INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at) VALUES (?, ?, ?, ?, 'decay', 0.01, ?)`)
-      .run(T, faded.id, faded.content, JSON.stringify({ ...faded, origin_project: 'repo-wt-a' }), new Date().toISOString());
-    db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'repo-wt-a', 'auto', '/x', ?)`)
-      .run(T, new Date().toISOString());
+    db.prepare(
+      `INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at) VALUES (?, ?, ?, ?, 'decay', 0.01, ?)`,
+    ).run(
+      T,
+      faded.id,
+      faded.content,
+      JSON.stringify({ ...faded, origin_project: 'repo-wt-a' }),
+      new Date().toISOString(),
+    );
+    db.prepare(
+      `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'repo-wt-a', 'auto', '/x', ?)`,
+    ).run(T, new Date().toISOString());
 
     const r = mergeProjectNames(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
 
@@ -113,7 +136,8 @@ describe('hippo projects repair', () => {
     const b2 = row('proj-b parent two', 'proj-b');
     const c1 = row('proj-c parent', 'proj-c');
     const g1 = row('user-global parent', '');
-    const merged = (parents: string[]) => row(`merged from ${parents.join(' ')}`, '', { source: 'consolidation', parents });
+    const merged = (parents: string[]) =>
+      row(`merged from ${parents.join(' ')}`, '', { source: 'consolidation', parents });
     const one = merged([b1.id, b2.id]);
     const two = merged([b1.id, c1.id]);
     const none = merged(['mem_gone']);
@@ -140,7 +164,8 @@ describe('hippo projects repair', () => {
     const b2 = row('proj-b parent two', 'proj-b');
     const c1 = row('proj-c parent', 'proj-c');
     const bystanders = Array.from({ length: 5 }, (_, i) => row(`bystander ${i}`, `proj-x${i}`));
-    const merged = (parents: string[]) => row(`merged from ${parents.join(' ')}`, '', { source: 'consolidation', parents });
+    const merged = (parents: string[]) =>
+      row(`merged from ${parents.join(' ')}`, '', { source: 'consolidation', parents });
     const tagged = [merged([b1.id]), merged([b2.id])];
     const aside = [merged([b1.id, c1.id]), merged([b2.id, c1.id])];
     open();
@@ -172,7 +197,11 @@ describe('hippo projects repair', () => {
     const rows = byId();
     expect([...r.copies].sort()).toEqual([copy.id, reflowed.id].sort());
     expect([rows.has(copy.id), rows.has(own.id), rows.has(saved.id)]).toEqual([false, true, true]);
-    expect(listDormantSnapshots(db, T).map((s) => s.entry.id).sort()).toEqual([copy.id, reflowed.id].sort());
+    expect(
+      listDormantSnapshots(db, T)
+        .map((s) => s.entry.id)
+        .sort(),
+    ).toEqual([copy.id, reflowed.id].sort());
     expect(mirror(copy.id)).toBeNull();
   });
 
@@ -183,7 +212,9 @@ describe('hippo projects repair', () => {
     const lesson = row('a lesson saved while the folder had its old name', 'old-name');
     const kept = row('a lesson under a name with no folder left', 'gone-name');
     open();
-    const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
+    const compaction = db.prepare(
+      `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`,
+    );
     compaction.run(T, 'c1', 'old-name', repo, new Date().toISOString());
     compaction.run(T, 'c2', 'old-name', join(home, 'removed'), new Date().toISOString());
     compaction.run(T, 'c3', 'gone-name', join(home, 'removed'), new Date().toISOString());
@@ -203,11 +234,16 @@ describe('hippo projects repair', () => {
     for (const name of ['b', 'c']) mkdirSync(join(home, 'work', name, '.git'), { recursive: true });
     const lesson = row('a lesson two renames back', 'a');
     open();
-    const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
+    const compaction = db.prepare(
+      `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`,
+    );
     compaction.run(T, 'c1', 'a', join(home, 'work', 'b'), new Date().toISOString());
     compaction.run(T, 'c2', 'b', join(home, 'work', 'c'), new Date().toISOString());
 
-    const merged = row('merged from c and a soon-folded b parent', '', { source: 'consolidation', parents: [row('parent under b', 'b').id, row('parent under c', 'c').id] });
+    const merged = row('merged from c and a soon-folded b parent', '', {
+      source: 'consolidation',
+      parents: [row('parent under b', 'b').id, row('parent under c', 'c').id],
+    });
     const dry = repairProjectNames(ctx(), { dryRun: true });
     expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
     // Planned against the folded names, as apply sees them: both parents are under c.
@@ -220,8 +256,9 @@ describe('hippo projects repair', () => {
     const repo = join(home, 'work', 'repo');
     mkdirSync(join(repo, '.git'), { recursive: true });
     open();
-    db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'old-name', 'auto', ?, ?)`)
-      .run(T, repo, new Date().toISOString());
+    db.prepare(
+      `INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, 'c1', 's1', 'old-name', 'auto', ?, ?)`,
+    ).run(T, repo, new Date().toISOString());
     expect(repairProjectNames(ctx(), { dryRun: true }).folds).toEqual([]);
   });
 });
@@ -234,6 +271,10 @@ describe('hippo projects list', () => {
     row('a saved lesson', 'repo-wt-a');
     open();
 
-    expect(listProjectNames(ctx()).find((p) => p.origin === 'repo-wt-a')).toMatchObject({ live: 3, imported: 2, copiesElsewhere: 1 });
+    expect(listProjectNames(ctx()).find((p) => p.origin === 'repo-wt-a')).toMatchObject({
+      live: 3,
+      imported: 2,
+      copiesElsewhere: 1,
+    });
   });
 });

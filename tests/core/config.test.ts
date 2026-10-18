@@ -5,7 +5,11 @@ import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import {
-  configReader, loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig,
+  configReader,
+  loadConfig,
+  isSharedStore,
+  _resetSharedStoreCacheForTests,
+  type HippoConfig,
 } from '../../src/core/config.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { log } from '../../src/util/log.js';
@@ -29,7 +33,7 @@ describe('config.pinnedInject', () => {
     try {
       fs.writeFileSync(path.join(tmp, 'config.json'), JSON.stringify({ pinnedInject: { budget: 200 } }));
       const cfg = loadConfig(tmp);
-      expect(cfg.pinnedInject.enabled).toBe(true);  // default retained
+      expect(cfg.pinnedInject.enabled).toBe(true); // default retained
       expect(cfg.pinnedInject.budget).toBe(200);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
@@ -63,16 +67,18 @@ describe('loadConfig characterization', () => {
   });
 
   it('warns once per malformed field, in field order, and falls back for each', () => {
-    const { cfg, warnings } = load(JSON.stringify({
-      decayBasis: 'bogus',
-      memoryValue: true,
-      dormant: { enabled: 'false', retentionDays: -1 },
-      churnStaleness: { enabled: 'yes' },
-      defaultHalfLifeDays: 0,
-      agentMemories: { tools: 'claude-code' },
-      deliveryLedger: 'yes',
-      pilot: { holdoutRateBp: 20000 },
-    }));
+    const { cfg, warnings } = load(
+      JSON.stringify({
+        decayBasis: 'bogus',
+        memoryValue: true,
+        dormant: { enabled: 'false', retentionDays: -1 },
+        churnStaleness: { enabled: 'yes' },
+        defaultHalfLifeDays: 0,
+        agentMemories: { tools: 'claude-code' },
+        deliveryLedger: 'yes',
+        pilot: { holdoutRateBp: 20000 },
+      }),
+    );
     expect(warnings.map((w) => w.slice(0, w.indexOf(' must ')))).toEqual([
       'config.json\'s "memoryValue"',
       'config.json\'s "dormant.enabled"',
@@ -106,19 +112,21 @@ describe('loadConfig characterization', () => {
 
   it('merges nested blocks over the defaults and keeps valid values', () => {
     const defaults = load(null).cfg;
-    const { cfg, warnings } = load(JSON.stringify({
-      decayBasis: 'session',
-      defaultHalfLifeDays: 12,
-      defaultBudget: 999,
-      embeddings: { enabled: false },
-      search: { rerank: 'none' },
-      memoryValue: { enabled: true },
-      dormant: { enabled: false, retentionDays: 0 },
-      churnStaleness: { enabled: true },
-      agentMemories: { tools: ['codex'] },
-      deliveryLedger: { enabled: true },
-      pilot: { holdoutRateBp: 2000 },
-    }));
+    const { cfg, warnings } = load(
+      JSON.stringify({
+        decayBasis: 'session',
+        defaultHalfLifeDays: 12,
+        defaultBudget: 999,
+        embeddings: { enabled: false },
+        search: { rerank: 'none' },
+        memoryValue: { enabled: true },
+        dormant: { enabled: false, retentionDays: 0 },
+        churnStaleness: { enabled: true },
+        agentMemories: { tools: ['codex'] },
+        deliveryLedger: { enabled: true },
+        pilot: { holdoutRateBp: 2000 },
+      }),
+    );
     expect(warnings).toEqual([]);
     expect(cfg).toEqual({
       ...defaults,
@@ -138,8 +146,14 @@ describe('loadConfig characterization', () => {
 
   it('keeps deliveryLedger off unless a real boolean sits inside an object', () => {
     expect(load(null).cfg.deliveryLedger).toEqual({ enabled: false });
-    expect(load(JSON.stringify({ pinnedInject: { promptRecall: false } })).cfg.deliveryLedger).toEqual({ enabled: false });
-    for (const body of [{ deliveryLedger: true }, { deliveryLedger: { enabled: 'true' } }, { deliveryLedger: [true] }]) {
+    expect(load(JSON.stringify({ pinnedInject: { promptRecall: false } })).cfg.deliveryLedger).toEqual({
+      enabled: false,
+    });
+    for (const body of [
+      { deliveryLedger: true },
+      { deliveryLedger: { enabled: 'true' } },
+      { deliveryLedger: [true] },
+    ]) {
       const { cfg, warnings } = load(JSON.stringify(body));
       expect(cfg.deliveryLedger, JSON.stringify(body)).toEqual({ enabled: false });
       expect(warnings, JSON.stringify(body)).toHaveLength(1);
@@ -149,7 +163,9 @@ describe('loadConfig characterization', () => {
 
   it('throws with the file path and the parse error on unparsable JSON, and names a non-object', () => {
     expect(() => load('{not json')).toThrow(/config\.json could not be loaded: .*(JSON|property name)/);
-    for (const json of ['null', '[]', '"tea"']) expect(() => load(json), json).toThrow(/config\.json must hold a JSON object/);
+    for (const json of ['null', '[]', '"tea"']) {
+      expect(() => load(json), json).toThrow(/config\.json must hold a JSON object/);
+    }
   });
 });
 
@@ -284,9 +300,11 @@ describe('config.json is parsed once per file version, per reader', () => {
 
   it('loadConfig holds no parse: each call reads the file', () => {
     fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 200 } }));
-    expect(configReads(() => {
-      for (let i = 0; i < 3; i++) loadConfig(tmp);
-    })).toBe(3);
+    expect(
+      configReads(() => {
+        for (let i = 0; i < 3; i++) loadConfig(tmp);
+      }),
+    ).toBe(3);
   });
 
   it('two roots in one process keep their own parses, so neither answers from the other', () => {

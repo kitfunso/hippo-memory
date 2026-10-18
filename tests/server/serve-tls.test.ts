@@ -23,15 +23,19 @@ const CLI_PATH = join(process.cwd(), 'dist', 'cli.js');
 
 function der(tag: number, ...parts: Buffer[]): Buffer {
   const body = Buffer.concat(parts);
-  const length = body.length < 0x80 ? [body.length]
-    : body.length < 0x100 ? [0x81, body.length]
-    : [0x82, body.length >> 8, body.length & 0xff];
+  const length =
+    body.length < 0x80
+      ? [body.length]
+      : body.length < 0x100
+        ? [0x81, body.length]
+        : [0x82, body.length >> 8, body.length & 0xff];
   return Buffer.concat([Buffer.from([tag, ...length]), body]);
 }
 
 const sequence = (...parts: Buffer[]): Buffer => der(0x30, ...parts);
 const oid = (hex: string): Buffer => der(0x06, Buffer.from(hex, 'hex'));
-const utcTime = (at: Date): Buffer => der(0x17, Buffer.from(`${at.toISOString().replace(/[-:T]/g, '').slice(2, 14)}Z`, 'ascii'));
+const utcTime = (at: Date): Buffer =>
+  der(0x17, Buffer.from(`${at.toISOString().replace(/[-:T]/g, '').slice(2, 14)}Z`, 'ascii'));
 const ECDSA_WITH_SHA256 = sequence(oid('2a8648ce3d040302'));
 const DAY_MS = 86_400_000;
 
@@ -135,21 +139,28 @@ describe('hippo serve over TLS', () => {
     vi.restoreAllMocks();
     for (const kill of children.splice(0)) kill();
     // A killed child holds the store open for a moment on Windows, so removal is retried until the child lets go.
-    await waitFor(() => {
-      try {
-        rmSync(home, { recursive: true, force: true });
-        return true;
-      } catch (err) {
-        // SAFETY: rmSync throws only errno exceptions.
-        const { code } = err as NodeJS.ErrnoException;
-        if (code === 'EPERM' || code === 'EBUSY') return false;
-        throw err;
-      }
-    }, { timeoutMs: 5_000, intervalMs: 50, what: 'the killed server child releasing its store' });
+    await waitFor(
+      () => {
+        try {
+          rmSync(home, { recursive: true, force: true });
+          return true;
+        } catch (err) {
+          // SAFETY: rmSync throws only errno exceptions.
+          const { code } = err as NodeJS.ErrnoException;
+          if (code === 'EPERM' || code === 'EBUSY') return false;
+          throw err;
+        }
+      },
+      { timeoutMs: 5_000, intervalMs: 50, what: 'the killed server child releasing its store' },
+    );
   });
 
-  const childEnv = (extra: Record<string, string>): NodeJS.ProcessEnv =>
-    ({ ...process.env, HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ...extra });
+  const childEnv = (extra: Record<string, string>): NodeJS.ProcessEnv => ({
+    ...process.env,
+    HIPPO_HOME: join(home, 'global-hippo'),
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    ...extra,
+  });
 
   it('answers HTTPS with the given certificate on a network bind, takes no cleartext request and logs no cleartext warning', async () => {
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
@@ -170,21 +181,30 @@ describe('hippo serve over TLS', () => {
   });
 
   it('refuses to start on certificate text that is not a certificate, naming TLS as the cause', async () => {
-    await expect(serve({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } }))
-      .rejects.toThrow(/TLS certificate or key was refused/);
+    await expect(serve({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } })).rejects.toThrow(
+      /TLS certificate or key was refused/,
+    );
   });
 
   /** Starts the real command and resolves with what it printed once its start lines are complete. */
   function startServe(args: string[], env: Record<string, string>): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
-        cwd: home, env: childEnv(env), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+        cwd: home,
+        env: childEnv(env),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
       });
       children.push(() => child.kill('SIGKILL'));
       let stdout = '';
       let stderr = '';
-      const timer = setTimeout(() => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)), 30_000);
-      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+      const timer = setTimeout(
+        () => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)),
+        30_000,
+      );
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf8');
+      });
       child.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString('utf8');
         if (!stdout.includes('press Ctrl+C to stop')) return;
@@ -199,23 +219,39 @@ describe('hippo serve over TLS', () => {
   }
 
   it.each([
-    ['--tls-cert and --tls-key', (cert: string, key: string) => ({ args: ['--tls-cert', cert, '--tls-key', key], env: {} })],
-    ['HIPPO_TLS_CERT and HIPPO_TLS_KEY', (cert: string, key: string) => ({ args: [], env: { HIPPO_TLS_CERT: cert, HIPPO_TLS_KEY: key } })],
+    [
+      '--tls-cert and --tls-key',
+      (cert: string, key: string) => ({ args: ['--tls-cert', cert, '--tls-key', key], env: {} }),
+    ],
+    [
+      'HIPPO_TLS_CERT and HIPPO_TLS_KEY',
+      (cert: string, key: string) => ({ args: [], env: { HIPPO_TLS_CERT: cert, HIPPO_TLS_KEY: key } }),
+    ],
   ])('the command serves HTTPS from %s, and says at start that local requests need no key', async (_source, given) => {
     const { args, env } = given(certPath, keyPath);
     const stdout = await startServe(args, env);
     const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
     expect(await healthOverTls(port, pair.cert)).toBe(200);
-    expect(stdout).toContain('requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request');
+    expect(stdout).toContain(
+      'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request',
+    );
   });
 
   it.each([
     ['only a certificate', ['--tls-cert', 'cert.pem'], /needs both a certificate and a key/],
-    ['a file that does not exist', ['--tls-cert', 'no-such-cert.pem', '--tls-key', 'no-such-key.pem'], /cannot read the TLS files/],
+    [
+      'a file that does not exist',
+      ['--tls-cert', 'no-such-cert.pem', '--tls-key', 'no-such-key.pem'],
+      /cannot read the TLS files/,
+    ],
   ])('the command exits 1 on %s rather than serve in cleartext', (_case, args, message) => {
     // The timeout ends a run that served anyway, which then fails the status check.
     const run = spawnSync(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
-      cwd: home, env: childEnv({}), encoding: 'utf8', timeout: 20_000, windowsHide: true,
+      cwd: home,
+      env: childEnv({}),
+      encoding: 'utf8',
+      timeout: 20_000,
+      windowsHide: true,
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toMatch(message);

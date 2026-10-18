@@ -19,15 +19,35 @@ import type { EntrySignals } from '../store/port/sharing.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
-  'file-path', 'config', 'deploy', 'cron', 'url', 'auth',
-  'field-names', 'column-names', 'api-key', 'endpoint',
+  'file-path',
+  'config',
+  'deploy',
+  'cron',
+  'url',
+  'auth',
+  'field-names',
+  'column-names',
+  'api-key',
+  'endpoint',
 ]);
 
 /** Tags that indicate transferable memories (good transfer candidates) */
 const TRANSFERABLE_TAGS = new Set([
-  'error', 'platform', 'windows', 'encoding', 'python', 'shell',
-  'powershell', 'quant', 'backtest', 'pattern', 'rule', 'gotcha',
-  'sub-agent', 'review', 'best-practice',
+  'error',
+  'platform',
+  'windows',
+  'encoding',
+  'python',
+  'shell',
+  'powershell',
+  'quant',
+  'backtest',
+  'pattern',
+  'rule',
+  'gotcha',
+  'sub-agent',
+  'review',
+  'best-practice',
 ]);
 
 /** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows inherit them. */
@@ -92,7 +112,7 @@ export async function shareMemory(
   local: FolderStore,
   global: ConfiguredFolder,
   id: string,
-  options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
+  options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {},
 ): Promise<MemoryEntry | null> {
   // tenantId is optional for single-tenant callers; MCP/REST hosts MUST pass it so tenant A cannot share tenant B's
   // memory to global (the read finds no row of another tenant).
@@ -142,7 +162,7 @@ function assertShareable(entry: MemoryEntry, id: string): void {
   if (secret.flagged) {
     throw new BadRequestError(
       `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
-      `Secrets stay in their owning project's store.`,
+        `Secrets stay in their owning project's store.`,
     );
   }
 
@@ -171,8 +191,9 @@ export async function listPeers(
 
   // Tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const tallies = (await global.store.localFiles.sharing.sourceTallies(tenantId))
-    .sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
+  const tallies = (await global.store.localFiles.sharing.sourceTallies(tenantId)).sort((a, b) =>
+    a.first < b.first ? -1 : a.first > b.first ? 1 : 0,
+  );
   const peerMap = new Map<string, { count: number; latest: string }>();
 
   for (const tally of tallies) {
@@ -285,9 +306,10 @@ export function autoShare(
   // A row with none of these signals scores at most 0.5, so above that
   // bar only signal rows can share or count as never-auto-share skips.
   const local = from.store.localFiles;
-  const localEntries = minScore > 0.5
-    ? local.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, options.tenantId)
-    : local.learning.allEntries(options.tenantId);
+  const localEntries =
+    minScore > 0.5
+      ? local.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, options.tenantId)
+      : local.learning.allEntries(options.tenantId);
   const to = global.store.localFiles;
   to.ensureFiles();
   // Host-wide read. The global store IS the union across all tenants;

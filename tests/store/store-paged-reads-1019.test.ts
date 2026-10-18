@@ -23,7 +23,10 @@ function freshRoot(): string {
 describe('syncMirrorFiles', () => {
   it('rewrites every mirror byte for byte when the rows span more than one page', () => {
     const root = freshRoot();
-    writeEntriesTogether(root, Array.from({ length: 530 }, (_, i) => ({ ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` })));
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 530 }, (_, i) => ({ ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` })),
+    );
     const entries = loadAllEntries(root, 'default').filter((e) => e.id.startsWith('mem_page_'));
     expect(entries).toHaveLength(530);
     const files = entries.map((e) => path.join(root, e.layer, `${e.id}.md`));
@@ -57,7 +60,8 @@ describe('writeRecallTrace', () => {
       expect(count(empty)).toBe(0);
       expect(count(many)).toBe(250);
       // SAFETY: the SELECT names the single memory_id column.
-      const last = db.prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? AND result_rank = 250')
+      const last = db
+        .prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? AND result_rank = 250')
         .get(many) as { memory_id: string };
       expect(last.memory_id).toBe('m249');
     } finally {

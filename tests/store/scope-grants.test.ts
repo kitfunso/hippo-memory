@@ -64,7 +64,11 @@ describe('scope grants over HTTP', () => {
     return fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${key}` } });
   }
 
-  async function callTool(key: string, name: string, args: Record<string, string>): Promise<{ status: number; text: string }> {
+  async function callTool(
+    key: string,
+    name: string,
+    args: Record<string, string>,
+  ): Promise<{ status: number; text: string }> {
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -93,7 +97,10 @@ describe('scope grants over HTTP', () => {
     expect(contextDenied.text).not.toContain('payroll');
     expect(JSON.parse(contextDenied.text).error).toBeTruthy();
 
-    const assemble = await get(`/v1/sessions/sess_1/assemble?scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
+    const assemble = await get(
+      `/v1/sessions/sess_1/assemble?scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
+      member.plaintext,
+    );
     expect(assemble.status).toBe(403);
   });
 
@@ -117,11 +124,17 @@ describe('scope grants over HTTP', () => {
     expect(JSON.parse(contextAllowed.text).error).toBeUndefined();
 
     // A second restricted scope, never granted, stays denied.
-    const otherDenied = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(OTHER_PRIVATE_SCOPE)}`, member.plaintext);
+    const otherDenied = await get(
+      `/v1/memories?q=kowalski&scope=${encodeURIComponent(OTHER_PRIVATE_SCOPE)}`,
+      member.plaintext,
+    );
     expect(otherDenied.status).toBe(403);
 
     await api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
-    const afterUngrant = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
+    const afterUngrant = await get(
+      `/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
+      member.plaintext,
+    );
     expect(afterUngrant.status).toBe(403);
   });
 
@@ -132,17 +145,27 @@ describe('scope grants over HTTP', () => {
   });
 
   it('a mixed-case private row never reaches a member through default recall on HTTP or MCP', async () => {
-    writeEntry(home, { ...createMemory('zzzmixedcasezzz quarterly numbers', { layer: Layer.Episodic }), scope: 'Slack:Private:C9' });
+    writeEntry(home, {
+      ...createMemory('zzzmixedcasezzz quarterly numbers', { layer: Layer.Episodic }),
+      scope: 'Slack:Private:C9',
+    });
     const member = mintKey(home, 'member');
-    expect(await (await get('/v1/memories?q=zzzmixedcasezzz+quarterly', member.plaintext)).text()).not.toContain('zzzmixedcasezzz');
-    expect((await callTool(member.plaintext, 'hippo_recall', { query: 'zzzmixedcasezzz quarterly' })).text).not.toContain('zzzmixedcasezzz');
+    expect(await (await get('/v1/memories?q=zzzmixedcasezzz+quarterly', member.plaintext)).text()).not.toContain(
+      'zzzmixedcasezzz',
+    );
+    expect(
+      (await callTool(member.plaintext, 'hippo_recall', { query: 'zzzmixedcasezzz quarterly' })).text,
+    ).not.toContain('zzzmixedcasezzz');
   });
 
   it('a consolidation merge of private sources never reaches a member through default recall', async () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ contextProjectIsolation: false, replay: { count: 0 } }));
     const backbone = 'rotate the staging tls certificates before expiry';
     writeEntry(home, createMemory(backbone, { layer: Layer.Episodic, scope: PRIVATE_SCOPE }));
-    writeEntry(home, createMemory(`${backbone} zzzprivatemarkerzzz notify on-call`, { layer: Layer.Episodic, scope: PRIVATE_SCOPE }));
+    writeEntry(
+      home,
+      createMemory(`${backbone} zzzprivatemarkerzzz notify on-call`, { layer: Layer.Episodic, scope: PRIVATE_SCOPE }),
+    );
     const result = await consolidate(home, { dryRun: false });
     expect(result.semanticCreated).toBe(1);
 
@@ -152,7 +175,10 @@ describe('scope grants over HTTP', () => {
     expect(await res.text()).not.toContain('zzzprivatemarkerzzz');
 
     const admin = mintKey(home, 'admin');
-    const adminRes = await get(`/v1/memories?q=staging+tls+certificates&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, admin.plaintext);
+    const adminRes = await get(
+      `/v1/memories?q=staging+tls+certificates&scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
+      admin.plaintext,
+    );
     expect(await adminRes.text()).toContain('zzzprivatemarkerzzz');
   });
 });
@@ -230,14 +256,16 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     expect(asked).toEqual([]);
   });
 
-  it('CLI grant runs in the key\'s own tenant', () => {
+  it("CLI grant runs in the key's own tenant", () => {
     const other = mintKey(home, 'member', 'other-tenant');
     execFileSync('node', [HIPPO_BIN, 'auth', 'grant', other.keyId, PRIVATE_SCOPE, '--global'], {
-      cwd: home, env: { ...process.env, HIPPO_HOME: home, HIPPO_TENANT: 'default' }, stdio: 'pipe',
+      cwd: home,
+      env: { ...process.env, HIPPO_HOME: home, HIPPO_TENANT: 'default' },
+      stdio: 'pipe',
     });
     const db = openHippoDb(home);
     try {
-      expect((readApiKeyRecord(db, other.keyId)?.scopes ?? [])).toEqual([PRIVATE_SCOPE]);
+      expect(readApiKeyRecord(db, other.keyId)?.scopes ?? []).toEqual([PRIVATE_SCOPE]);
     } finally {
       closeHippoDb(db);
     }
@@ -268,14 +296,14 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const db = openHippoDb(home);
     try {
-      expect((readApiKeyRecord(db, member.keyId)?.scopes ?? [])).toEqual([PRIVATE_SCOPE]);
+      expect(readApiKeyRecord(db, member.keyId)?.scopes ?? []).toEqual([PRIVATE_SCOPE]);
     } finally {
       closeHippoDb(db);
     }
   });
 });
 
-describe('supersede keeps the old row\'s scope', () => {
+describe("supersede keeps the old row's scope", () => {
   let home: string;
 
   beforeEach(() => {
@@ -298,13 +326,17 @@ describe('supersede keeps the old row\'s scope', () => {
   it('CLI supersede: the successor of a private row stays in that scope', async () => {
     const cliHome = makeRoot('scope-grants-cli', { init: false });
     const env = { HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: cliHome, env: { ...process.env, ...env } });
+    execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: cliHome,
+      env: { ...process.env, ...env },
+    });
     const hippoDir = join(cliHome, '.hippo');
     const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE, tenantId: 'default' });
     writeEntry(hippoDir, old);
 
     execFileSync('node', [HIPPO_BIN, 'supersede', old.id, 'kowalski payroll rollout moved to friday'], {
-      cwd: cliHome, env: { ...process.env, ...env },
+      cwd: cliHome,
+      env: { ...process.env, ...env },
     });
 
     const refreshed = readEntry(hippoDir, old.id, 'default');
@@ -329,10 +361,24 @@ describe('graph view carries no private receipt text', () => {
 
   it('GET /v1/graph as a member never contains private receipt text after a brief refresh + graph extract', async () => {
     const member = mintKey(home, 'member');
-    writeEntry(home, { ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: PRIVATE_SCOPE });
-    writeEntry(home, { ...createMemory('testrepo release notes went out today', { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: null });
+    writeEntry(home, {
+      ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }),
+      scope: PRIVATE_SCOPE,
+    });
+    writeEntry(home, {
+      ...createMemory('testrepo release notes went out today', {
+        layer: Layer.Episodic,
+        tags: ['path:testrepo'],
+        source: 'test',
+      }),
+      scope: null,
+    });
 
-    await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'testrepo');
+    await refreshedBrief(
+      objectsAt(home),
+      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      'testrepo',
+    );
     await extractGraph(sqliteStore(home), 'default');
 
     const res = await fetch(`${handle.url}/v1/graph`, { headers: { authorization: `Bearer ${member.plaintext}` } });

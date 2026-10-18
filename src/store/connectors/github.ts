@@ -34,8 +34,14 @@ export function githubEventMemoryAt(db: DatabaseSyncLike, idempotencyKey: string
 /** False when the key was already logged, so a caller inside a write scope can roll its own row back. */
 export function markGitHubEventSeenAt(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
   return markEventSeenAt(
-    db, GITHUB_LOG, entry.idempotencyKey,
-    [['delivery_id', entry.deliveryId], ['event_name', entry.eventName]], entry.memoryId,
+    db,
+    GITHUB_LOG,
+    entry.idempotencyKey,
+    [
+      ['delivery_id', entry.deliveryId],
+      ['event_name', entry.eventName],
+    ],
+    entry.memoryId,
   );
 }
 
@@ -104,13 +110,9 @@ export function githubRoutingAt(
   args: { installationId?: string | null; repoFullName?: string | null },
 ): GitHubRouting {
   // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
-  const instCount = (db
-    .prepare(`SELECT COUNT(*) AS c FROM github_installations`)
-    .get() as { c: number | bigint }).c;
+  const instCount = (db.prepare(`SELECT COUNT(*) AS c FROM github_installations`).get() as { c: number | bigint }).c;
   // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
-  const repoCount = (db
-    .prepare(`SELECT COUNT(*) AS c FROM github_repositories`)
-    .get() as { c: number | bigint }).c;
+  const repoCount = (db.prepare(`SELECT COUNT(*) AS c FROM github_repositories`).get() as { c: number | bigint }).c;
   const counts = { installations: Number(instCount), repositories: Number(repoCount) };
 
   if (args.installationId) {
@@ -125,9 +127,7 @@ export function githubRoutingAt(
   }
   // SAFETY: the SELECT projects exactly the tenant_id column of github_repositories.
   const row = db
-    .prepare(
-      `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
-    )
+    .prepare(`SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`)
     .get(args.repoFullName) as { tenant_id?: string } | undefined;
   return { ...counts, tenant: row?.tenant_id ?? null };
 }
@@ -172,7 +172,7 @@ export function saveGitHubHwmAt(
 export function seedGitHubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string, since: string): void {
   db.prepare(
     `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +
-    `pr_review_comments_hwm, updated_at)
+      `pr_review_comments_hwm, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
          issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),

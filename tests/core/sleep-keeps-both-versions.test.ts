@@ -69,10 +69,20 @@ function write(root: string, text: string, extra: Partial<MemoryEntry> = {}): Me
 // A child process that cannot reach the real stores, the real launchers or a provider key.
 function hermeticEnv(): NodeJS.ProcessEnv {
   const home = tmp();
-  const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(home, 'global'), HOME: home, USERPROFILE: home, APPDATA: home, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HIPPO_HOME: join(home, 'global'),
+    HOME: home,
+    USERPROFILE: home,
+    APPDATA: home,
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+  };
   delete env.ANTHROPIC_API_KEY;
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-  env[pathKey] = (env[pathKey] ?? '').split(delimiter).filter((p) => !/[\\/]npm[\\/]?$/i.test(p)).join(delimiter);
+  env[pathKey] = (env[pathKey] ?? '')
+    .split(delimiter)
+    .filter((p) => !/[\\/]npm[\\/]?$/i.test(p))
+    .join(delimiter);
   return env;
 }
 
@@ -88,14 +98,29 @@ const json = (out: string): { results: { id: string; content: string }[] } => JS
 type ToolArgs = { query?: string; fresh_tail_count?: number; days?: number };
 
 async function mcp(root: string, name: string, args: ToolArgs): Promise<string> {
-  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root), config: loadConfig(root) });
+  const res = await handleMcpRequest(
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+    {
+      hippoRoot: root,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(root),
+      config: loadConfig(root),
+    },
+  );
   // SAFETY: the tools/call case always wraps a tool's output as { content: [{ type: 'text', text }] }.
   const result = res?.result as { content?: { text?: string }[] } | undefined;
   return result?.content?.[0]?.text ?? '';
 }
 
-const merged = (root: string): MemoryEntry[] => loadAllEntries(root, 'default').filter((e) => e.source === 'consolidation');
-const activeText = (root: string): string => loadAllEntries(root, 'default').map((e) => e.content).join('\n');
+const merged = (root: string): MemoryEntry[] =>
+  loadAllEntries(root, 'default').filter((e) => e.source === 'consolidation');
+const activeText = (root: string): string =>
+  loadAllEntries(root, 'default')
+    .map((e) => e.content)
+    .join('\n');
 
 function halfLifeKept(root: string, entries: MemoryEntry[]): void {
   for (const e of entries) expect(readEntry(root, e.id)!.half_life_days).toBe(e.half_life_days);
@@ -143,7 +168,10 @@ describe('sleep keeps both versions', () => {
     const root = newRoot();
     const corrections = [
       // The old text is longer, so a merge that kept only the longest text kept the old value.
-      ['The web app dev server runs on port 3000 for local development work.', 'The web app dev server now runs on port 5173.'],
+      [
+        'The web app dev server runs on port 3000 for local development work.',
+        'The web app dev server now runs on port 5173.',
+      ],
       // Same wording, so dedup saw a duplicate and kept the old value by content order.
       ['The public API rate limit is 100 requests', 'The public API rate limit is 250 requests'],
     ];
@@ -183,7 +211,10 @@ describe('sleep keeps both versions', () => {
       ['The dev server port is 3000', 'The dev server port is 5173'],
       // The overlap tokenizer drops 1-char tokens, so these two score as identical.
       ['Retry the flaky upload step 3 times', 'Retry the flaky upload step 5 times'],
-      ['The team uses npm to install packages in the monorepo', 'The team uses pnpm to install packages in the monorepo'],
+      [
+        'The team uses npm to install packages in the monorepo',
+        'The team uses pnpm to install packages in the monorepo',
+      ],
     ];
     for (const text of pairs.flat()) writeEntry(root, createMemory(text));
 
@@ -210,7 +241,8 @@ describe('merge caps', () => {
   it('merges at most five sources; the rest stay unmerged and keep their half-life', async () => {
     const root = newRoot();
     const sources = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'].map((name) =>
-      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`));
+      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`),
+    );
 
     expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(1);
 
@@ -224,7 +256,9 @@ describe('merge caps', () => {
 
   it('merges at most 2,000 characters of source text', async () => {
     const root = newRoot();
-    const body = 'The nightly build writes its cache to the shared volume and prunes entries older than a week. '.repeat(9).trim();
+    const body = 'The nightly build writes its cache to the shared volume and prunes entries older than a week. '
+      .repeat(9)
+      .trim();
     const sources = ['alpha', 'bravo', 'charlie'].map((name) => write(root, `${name}: ${body}`));
     for (const e of sources) expect(e.content.length).toBeGreaterThan(700); // two fit under the cap, three do not
     for (const e of sources) expect(e.content.length).toBeLessThan(1000);
@@ -233,15 +267,21 @@ describe('merge caps', () => {
 
     const [row] = merged(root);
     expect(row.parents).toHaveLength(2);
-    halfLifeKept(root, sources.filter((e) => !row.parents.includes(e.id)));
+    halfLifeKept(
+      root,
+      sources.filter((e) => !row.parents.includes(e.id)),
+    );
   });
 
   it('a source over the size cap never seeds a merge of the texts it alone links', async () => {
     const root = newRoot();
-    const checklist = 'Deploy checklist: build the image, run the migrations, warm the cache, flip the traffic, watch the error rate. ';
+    const checklist =
+      'Deploy checklist: build the image, run the migrations, warm the cache, flip the traffic, watch the error rate. ';
     const seed = write(root, checklist.repeat(20).trim(), { created: new Date(Date.now() - DAY).toISOString() }); // oldest, so it seeds first
-    const steps = ['Deploy step: build the image and run the migrations.', 'Deploy step: warm the cache, flip the traffic and watch the error rate.']
-      .map((text) => write(root, text));
+    const steps = [
+      'Deploy step: build the image and run the migrations.',
+      'Deploy step: warm the cache, flip the traffic and watch the error rate.',
+    ].map((text) => write(root, text));
 
     expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
     halfLifeKept(root, [seed, ...steps]);
@@ -259,20 +299,36 @@ describe('merge caps', () => {
   function sevenLookAlikes(root: string): MemoryEntry[] {
     const start = Date.now() - DAY;
     return ['alpha', 'bravo', 'delta', 'gamma', 'kappa', 'omega', 'sigma'].map((name, i) =>
-      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`, { created: new Date(start + i * 60_000).toISOString() }));
+      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`, {
+        created: new Date(start + i * 60_000).toISOString(),
+      }),
+    );
   }
 
   it('a rejected merge leaves the rows past the cap free to merge', async () => {
     const root = newRoot();
     const rows = sevenLookAlikes(root);
-    reject(root, [`[Consolidated pattern from 5 related memories, newest first]\n\n${rows.slice(0, 5).reverse().map((e) => `- ${e.content}`).join('\n')}`]);
+    reject(root, [
+      `[Consolidated pattern from 5 related memories, newest first]\n\n${rows
+        .slice(0, 5)
+        .reverse()
+        .map((e) => `- ${e.content}`)
+        .join('\n')}`,
+    ]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(1);
-    expect([...merged(root)[0].parents].sort()).toEqual(rows.slice(5).map((e) => e.id).sort());
+    expect([...merged(root)[0].parents].sort()).toEqual(
+      rows
+        .slice(5)
+        .map((e) => e.id)
+        .sort(),
+    );
     const db = openHippoDb(root);
     try {
-      expect(queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds).toEqual(rows.slice(0, 5).map((e) => e.id));
+      expect(queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds).toEqual(
+        rows.slice(0, 5).map((e) => e.id),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -293,7 +349,9 @@ describe('merged row', () => {
   it('writes each distinct text once', async () => {
     const root = newRoot();
     const staging = 'The staging service listens on port 4400.';
-    for (const text of [staging, staging.replace(' ', '  '), 'The analytics service listens on port 7700.']) write(root, text);
+    for (const text of [staging, staging.replace(' ', '  '), 'The analytics service listens on port 7700.']) {
+      write(root, text);
+    }
 
     await consolidate(root, { now: new Date() });
 
@@ -310,12 +368,20 @@ describe('merged row', () => {
       'Deploy note: the staging service listens on port 4401 for the internal dashboard.',
       'Deploy note: the staging service listens on port 4402 for the dashboard.',
     ];
-    const writeAll = (root: string): void => texts.forEach((text, i) => { write(root, text, { created: new Date(Date.now() - DAY + i * 60_000).toISOString() }); });
+    const writeAll = (root: string): void =>
+      texts.forEach((text, i) => {
+        write(root, text, { created: new Date(Date.now() - DAY + i * 60_000).toISOString() });
+      });
     const root = newRoot();
     writeAll(root);
 
     await consolidate(root, { now: new Date() });
-    expect(merged(root)[0].content).toBe(`[Consolidated pattern from 3 related memories, newest first]\n\n${[...texts].reverse().map((t) => `- ${t}`).join('\n')}`);
+    expect(merged(root)[0].content).toBe(
+      `[Consolidated pattern from 3 related memories, newest first]\n\n${[...texts]
+        .reverse()
+        .map((t) => `- ${t}`)
+        .join('\n')}`,
+    );
 
     const again = newRoot();
     writeAll(again);
@@ -327,7 +393,9 @@ describe('merged row', () => {
   it('a merge rejected before this release stays rejected', async () => {
     const root = newRoot();
     const pair = ['The staging service listens on port 4400.', 'The analytics service listens on port 7700.'];
-    const triple = ['billing', 'orders', 'search'].map((db) => `Nightly backups of the ${db} database run at 02:00 UTC.`);
+    const triple = ['billing', 'orders', 'search'].map(
+      (db) => `Nightly backups of the ${db} database run at 02:00 UTC.`,
+    );
     const sources = [...pair, ...triple].map((text) => write(root, text));
     // The rows the previous release wrote for these clusters: the longest text alone for two sources, first lines for more.
     reject(root, [
@@ -342,7 +410,10 @@ describe('merged row', () => {
   });
 
   it('reads back every text it holds, lines and all', () => {
-    const texts = ['Deploy steps:\n- build the image\n\nthen flip the traffic', 'The staging service listens on port 4400.'];
+    const texts = [
+      'Deploy steps:\n- build the image\n\nthen flip the traffic',
+      'The staging service listens on port 4400.',
+    ];
     const content = mergedText('[Consolidated from 2 related memories, newest first]', texts);
     expect(heldTexts({ content, source: 'consolidation' })).toEqual(texts);
   });
@@ -351,9 +422,14 @@ describe('merged row', () => {
 describe('a retired version leaves the merged row', () => {
   const OLD = 'The web app dev server runs on port 3000 locally.';
   const NEW = 'The web app dev server now runs on port 5173 locally.';
-  const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
-  const recalled = async (root: string): Promise<string> => (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
-  const current = (root: string): string => loadAllEntries(root, 'default').filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
+  const ctx = (root: string): FullContext => apiCtx(root, 'default', api.adminActor('cli'));
+  const recalled = async (root: string): Promise<string> =>
+    (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
+  const current = (root: string): string =>
+    loadAllEntries(root, 'default')
+      .filter((e) => !e.superseded_by)
+      .map((e) => e.content)
+      .join('\n');
 
   async function mergedPair(): Promise<{ root: string; old: MemoryEntry; next: MemoryEntry; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
@@ -411,12 +487,17 @@ describe('a retired version leaves the merged row', () => {
 
     expect(current(root)).not.toContain(OLD);
     expect(await recalled(root)).not.toContain('port 3000');
-    expect(merged(root).map((e) => [e.content, e.parents])).toEqual([[`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]]]);
+    expect(merged(root).map((e) => [e.content, e.parents])).toEqual([
+      [`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]],
+    ]);
   });
 
   it('sleep takes a rejected text out of merged rows, including rows an older release wrote', async () => {
     const { root, next, row } = await mergedPair();
-    const legacy = write(root, `[Consolidated from 2 related memories]\n\n${OLD}`, { layer: Layer.Semantic, source: 'consolidation' });
+    const legacy = write(root, `[Consolidated from 2 related memories]\n\n${OLD}`, {
+      layer: Layer.Semantic,
+      source: 'consolidation',
+    });
     reject(root, [OLD]); // a rejection whose sweep missed the merged rows, as resolve --reject-loser leaves it
 
     await consolidate(root, { now: new Date(Date.now() + DAY) });
@@ -424,15 +505,20 @@ describe('a retired version leaves the merged row', () => {
     const ids = loadAllEntries(root, 'default').map((e) => e.id);
     expect(ids).not.toContain(row.id);
     expect(ids).not.toContain(legacy.id);
-    expect(merged(root).map((e) => [e.content, e.parents])).toEqual([[`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]]]);
+    expect(merged(root).map((e) => [e.content, e.parents])).toEqual([
+      [`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]],
+    ]);
   });
 });
 
 describe('recall and context show a merged row, not the sources it holds', () => {
-  const FACTS = ['General project context: the staging service listens on port 4400.', 'General project context: the analytics service listens on port 7700.'];
+  const FACTS = [
+    'General project context: the staging service listens on port 4400.',
+    'General project context: the analytics service listens on port 7700.',
+  ];
   const QUERY = 'service listens port';
   const copies = (text: string): number => text.split('port 4400').length - 1;
-  const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
+  const ctx = (root: string): FullContext => apiCtx(root, 'default', api.adminActor('cli'));
 
   async function mergedStore(): Promise<{ root: string; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
@@ -446,30 +532,46 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('api context', async () => {
     const { root, row } = await mergedStore();
-    const got = await api.getContext(ctx(root), { currentProject: cwdProject(), q: QUERY, budget: 4000, crossProject: true });
+    const got = await api.getContext(ctx(root), {
+      currentProject: cwdProject(),
+      q: QUERY,
+      budget: 4000,
+      crossProject: true,
+    });
     expect(got.entries.map((r) => r.entry.id)).toEqual([row.id]);
   });
 
   it('api recall with a fresh tail', async () => {
     const { root, row } = await mergedStore();
-    expect((await api.retrieve(ctx(root), { query: QUERY, window: { freshTailCount: 5 } })).results.map((r) => r.id)).toEqual([row.id]);
+    expect(
+      (await api.retrieve(ctx(root), { query: QUERY, window: { freshTailCount: 5 } })).results.map((r) => r.id),
+    ).toEqual([row.id]);
   });
 
   it('CLI recall and explain', async () => {
     const { root, row } = await mergedStore();
-    for (const cmd of ['recall', 'explain']) expect(json(await hippo(root, cmd, QUERY, '--json')).results.map((r) => r.id), cmd).toEqual([row.id]);
+    for (const cmd of ['recall', 'explain']) {
+      expect(
+        json(await hippo(root, cmd, QUERY, '--json')).results.map((r) => r.id),
+        cmd,
+      ).toEqual([row.id]);
+    }
   });
 
   it('CLI recall whose budget cuts the merged row still shows the sources it holds', async () => {
     const { root } = await mergedStore();
     // 140 tokens print both source lines but not the merged row ranked after them.
-    const shown = json(await hippo(root, 'recall', QUERY, '--json', '--budget', '140', '--min-results', '0')).results.map((r) => r.content);
+    const shown = json(
+      await hippo(root, 'recall', QUERY, '--json', '--budget', '140', '--min-results', '0'),
+    ).results.map((r) => r.content);
     expect(shown.sort()).toEqual([...FACTS].sort());
   });
 
   it('CLI recall filtered to the episodic layer still shows the sources', async () => {
     const { root } = await mergedStore();
-    const shown = json(await hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic')).results.map((r) => r.content);
+    const shown = json(await hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic')).results.map(
+      (r) => r.content,
+    );
     expect(shown.sort()).toEqual([...FACTS].sort());
   });
 
@@ -492,11 +594,21 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('MCP recall counts the hidden sources as filtered before ranking, as CLI and API recall do', async () => {
     const { root } = await mergedStore();
-    expect(await mcp(root, 'hippo_recall', { query: QUERY })).toContain('Showing 1 of 3 candidates; 2 filtered pre-rank.');
+    expect(await mcp(root, 'hippo_recall', { query: QUERY })).toContain(
+      'Showing 1 of 3 candidates; 2 filtered pre-rank.',
+    );
   });
 
   const hookContext = async (root: string): Promise<string[]> =>
-    (await api.getContext(ctx(root), { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 5, budget: 4000, crossProject: true })).entries.map((r) => r.entry.id);
+    (
+      await api.getContext(ctx(root), {
+        currentProject: cwdProject(),
+        pinnedOnly: true,
+        includeRecent: 5,
+        budget: 4000,
+        crossProject: true,
+      })
+    ).entries.map((r) => r.entry.id);
 
   it('a pinned memory never merges, so the per-prompt block still shows it after a sleep', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
@@ -513,7 +625,10 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     const root = newRoot();
     const text = 'Deploy rule: the staging service listens on port 4400.';
     const pin = write(root, text, { pinned: true, created: new Date(Date.now() - DAY).toISOString() });
-    const old = write(root, `[Consolidated from 2 related memories]\n\n${text}`, { layer: Layer.Semantic, source: 'consolidation' });
+    const old = write(root, `[Consolidated from 2 related memories]\n\n${text}`, {
+      layer: Layer.Semantic,
+      source: 'consolidation',
+    });
 
     expect(await hookContext(root)).toEqual(expect.arrayContaining([old.id, pin.id]));
   });
@@ -528,7 +643,9 @@ describe('a new value is never skipped as a copy of an old one', () => {
   const texts = (root: string): string[] => loadAllEntries(root, 'default').map((e) => e.content);
 
   function commit(repo: string, message: string): void {
-    const git = (...args: string[]): void => { execFileSync('git', args, { cwd: repo, env: hermeticEnv(), stdio: 'ignore' }); };
+    const git = (...args: string[]): void => {
+      execFileSync('git', args, { cwd: repo, env: hermeticEnv(), stdio: 'ignore' });
+    };
     git('init', '-q');
     git('config', 'user.email', 'test@example.com');
     git('config', 'user.name', 'Test');
@@ -572,7 +689,14 @@ describe('a new value is never skipped as a copy of an old one', () => {
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
 
-    const imported = (): number => totalTally(importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } })).imported;
+    const imported = (): number =>
+      totalTally(
+        importProjectMemories(root, {
+          configAt: loadConfig,
+          agentImport: sqliteAgentImport,
+          machine: { home, env: {}, platform: process.platform },
+        }),
+      ).imported;
     expect(imported()).toBe(1);
     expect(imported()).toBe(0);
   });
@@ -617,7 +741,9 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_NEW);
     const contents = (rs: { entry: MemoryEntry }[]): string[] => rs.map((r) => r.entry.content).sort();
 
-    expect(contents(await searchBothHybrid('dev server port', ...sharingStores(root, getGlobalRoot())))).toEqual([LONG_NEW, LONG_OLD].sort());
+    expect(contents(await searchBothHybrid('dev server port', ...sharingStores(root, getGlobalRoot())))).toEqual(
+      [LONG_NEW, LONG_OLD].sort(),
+    );
   });
 
   it('the salience gate', () => {

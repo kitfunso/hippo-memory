@@ -19,10 +19,16 @@ describe('consolidate auto-promote: session -> trace', () => {
     initStore(tmpDir);
     const sid = 'test-session-auto';
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid, event_type: 'action', content: 'read x.ts', source: 'agent',
+      session_id: sid,
+      event_type: 'action',
+      content: 'read x.ts',
+      source: 'agent',
     });
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid, event_type: 'action', content: 'edit line 42', source: 'agent',
+      session_id: sid,
+      event_type: 'action',
+      content: 'edit line 42',
+      source: 'agent',
     });
     appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
@@ -54,7 +60,10 @@ describe('consolidate auto-promote: session -> trace', () => {
     initStore(tmpDir);
     const sid = 'test-no-outcome';
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid, event_type: 'action', content: 'did stuff', source: 'agent',
+      session_id: sid,
+      event_type: 'action',
+      content: 'did stuff',
+      source: 'agent',
     });
 
     await consolidate(tmpDir, { now: new Date() });
@@ -66,7 +75,10 @@ describe('consolidate auto-promote: session -> trace', () => {
   it('does NOT promote a session whose completion outcome is not a known one', async () => {
     initStore(tmpDir);
     appendSessionEvent(tmpDir, 'default', {
-      session_id: 'sess-bogus', event_type: 'session_complete', content: 'bogus', source: 'agent',
+      session_id: 'sess-bogus',
+      event_type: 'session_complete',
+      content: 'bogus',
+      source: 'agent',
     });
 
     const result = await consolidate(tmpDir, { now: new Date() });
@@ -79,7 +91,10 @@ describe('consolidate auto-promote: session -> trace', () => {
     initStore(tmpDir);
     const sid = 'test-idempotent';
     appendSessionEvent(tmpDir, 'default', {
-      session_id: sid, event_type: 'action', content: 'action a', source: 'agent',
+      session_id: sid,
+      event_type: 'action',
+      content: 'action a',
+      source: 'agent',
     });
     appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
@@ -105,8 +120,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     // polarity heuristic (distinctive shared tokens + opposing polarity).
     // Without the trace-vs-trace skip, detectConflicts would flag the pair.
     // With the skip, traces are treated as variants, not contradictions.
-    const sharedTokens =
-      'refactor auth module rotation strategy overlapping distinctive tokens here';
+    const sharedTokens = 'refactor auth module rotation strategy overlapping distinctive tokens here';
 
     appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-1',
@@ -126,15 +140,11 @@ describe('consolidate auto-promote: session -> trace', () => {
     await consolidate(tmpDir, { now: new Date() });
 
     const entries = loadAllEntries(tmpDir, 'default');
-    const traceIds = new Set(
-      entries.filter((e) => e.layer === Layer.Trace).map((e) => e.id),
-    );
+    const traceIds = new Set(entries.filter((e) => e.layer === Layer.Trace).map((e) => e.id));
     expect(traceIds.size).toBe(2);
 
     const conflicts = listMemoryConflicts(tmpDir);
-    const traceVsTrace = conflicts.filter(
-      (c) => traceIds.has(c.memory_a_id) && traceIds.has(c.memory_b_id),
-    );
+    const traceVsTrace = conflicts.filter((c) => traceIds.has(c.memory_a_id) && traceIds.has(c.memory_b_id));
     expect(traceVsTrace).toHaveLength(0);
   });
 

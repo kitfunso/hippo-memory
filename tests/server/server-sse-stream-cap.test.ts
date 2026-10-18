@@ -71,7 +71,11 @@ describe('/mcp/stream concurrent stream cap', () => {
 
     first.abort();
     let status = 0;
-    await waitFor(async () => (status = (await openStream()).status) === 200, { timeoutMs: 3000, intervalMs: 50, what: 'a freed stream slot' });
+    await waitFor(async () => (status = (await openStream()).status) === 200, {
+      timeoutMs: 3000,
+      intervalMs: 50,
+      what: 'a freed stream slot',
+    });
     expect(status).toBe(200);
   });
 

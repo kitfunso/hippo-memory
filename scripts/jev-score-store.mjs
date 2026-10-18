@@ -37,14 +37,16 @@ function rng() {
 }
 
 const sourceFilter = arg('source', null);
-const all = db.prepare(`
+const all = db
+  .prepare(`
   SELECT id, content, source, retrieval_count, outcome_positive, outcome_negative,
          pinned, schema_fit, created,
          julianday('now') - julianday(created) AS age_days
   FROM memories
   WHERE kind != 'archived' AND length(content) > 20
     AND (? IS NULL OR source = ?)
-`).all(sourceFilter, sourceFilter);
+`)
+  .all(sourceFilter, sourceFilter);
 if (sourceFilter) console.log(`DIAGNOSTIC LANE: source = '${sourceFilter}' (not a pre-registered verdict lane)`);
 
 const rows = all
@@ -57,7 +59,10 @@ console.log(`Scoring ${rows.length} of ${all.length} memories from ${dbPath} (se
 console.log(`Estimated cost: $${(rows.length * COST_PER_CALL_USD).toFixed(4)}\n`);
 
 const started = Date.now();
-const judgments = await judgeAll(rows.map((r) => r.content), { apiKey, concurrency: 8 });
+const judgments = await judgeAll(
+  rows.map((r) => r.content),
+  { apiKey, concurrency: 8 },
+);
 const elapsed = (Date.now() - started) / 1000;
 
 const scored = rows.map((r, i) => ({ row: r, j: judgments[i] })).filter((x) => x.j !== null);
@@ -133,8 +138,8 @@ for (const [lName, label] of Object.entries(LABELS)) {
   verdicts[lName] = { best_baseline: best, ...d, passes };
   console.log(
     `${lName.padEnd(24)} best baseline: ${best.padEnd(24)} ` +
-    `delta ${d.point >= 0 ? '+' : ''}${fmt(d.point)}  CI [${fmt(d.lo)}, ${fmt(d.hi)}]  ` +
-    `${passes ? 'PASS' : 'FAIL (rule: delta > 0.07 and CI excludes 0)'}`,
+      `delta ${d.point >= 0 ? '+' : ''}${fmt(d.point)}  CI [${fmt(d.lo)}, ${fmt(d.hi)}]  ` +
+      `${passes ? 'PASS' : 'FAIL (rule: delta > 0.07 and CI excludes 0)'}`,
   );
 }
 
@@ -142,22 +147,45 @@ const kinds = {};
 for (const x of scored) kinds[x.j.kind] = (kinds[x.j.kind] ?? 0) + 1;
 const flat = scored.filter((x) => x.row.schema_fit === 0.5).map((x) => x.j.durable);
 console.log(`\nJev kind distribution: ${JSON.stringify(kinds)}`);
-console.log(`On the flat schema_fit 0.5 default: ${flat.length}/${scored.length} rows, ` +
-  (flat.length ? `Jev spreads them ${fmt(Math.min(...flat))}..${fmt(Math.max(...flat))}` : 'none'));
-console.log(`Failed calls: ${failed}/${rows.length}   wall: ${elapsed.toFixed(1)}s   cost: $${(rows.length * COST_PER_CALL_USD).toFixed(4)}`);
+console.log(
+  `On the flat schema_fit 0.5 default: ${flat.length}/${scored.length} rows, ` +
+    (flat.length ? `Jev spreads them ${fmt(Math.min(...flat))}..${fmt(Math.max(...flat))}` : 'none'),
+);
+console.log(
+  `Failed calls: ${failed}/${rows.length}   wall: ${elapsed.toFixed(1)}s   cost: $${(rows.length * COST_PER_CALL_USD).toFixed(4)}`,
+);
 
 const outDir = join(process.cwd(), 'results');
 mkdirSync(outDir, { recursive: true });
 const outPath = join(outDir, `jev-store-score-${new Date().toISOString().slice(0, 10)}.json`);
-writeFileSync(outPath, JSON.stringify({
-  protocol: 'docs/EXPERIMENT-PROTOCOL.md',
-  db: dbPath, seed, drawn: rows.length, scored: scored.length, failed,
-  auc_table: table, verdicts, kinds, elapsed_s: elapsed,
-  rows: scored.map((x) => ({
-    id: x.row.id, source: x.row.source, retrieval_count: x.row.retrieval_count,
-    outcome_positive: x.row.outcome_positive, pinned: x.row.pinned,
-    age_days: Math.round(x.row.age_days), schema_fit_now: x.row.schema_fit, jev: x.j,
-  })),
-}, null, 2));
+writeFileSync(
+  outPath,
+  JSON.stringify(
+    {
+      protocol: 'docs/EXPERIMENT-PROTOCOL.md',
+      db: dbPath,
+      seed,
+      drawn: rows.length,
+      scored: scored.length,
+      failed,
+      auc_table: table,
+      verdicts,
+      kinds,
+      elapsed_s: elapsed,
+      rows: scored.map((x) => ({
+        id: x.row.id,
+        source: x.row.source,
+        retrieval_count: x.row.retrieval_count,
+        outcome_positive: x.row.outcome_positive,
+        pinned: x.row.pinned,
+        age_days: Math.round(x.row.age_days),
+        schema_fit_now: x.row.schema_fit,
+        jev: x.j,
+      })),
+    },
+    null,
+    2,
+  ),
+);
 console.log(`\nWrote ${outPath}`);
 db.close();

@@ -22,7 +22,8 @@ describe('legacy index.json and stats.json shapes', () => {
     fs.writeFileSync(path.join(root, 'index.json'), body, 'utf8');
     fs.writeFileSync(path.join(root, 'stats.json'), body, 'utf8');
     // SAFETY: COUNT(*) always returns one row with the aliased integer column n.
-    const memoryCount = (): number => onHandle(root, (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n, openStore);
+    const memoryCount = (): number =>
+      onHandle(root, (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n, openStore);
     expect(memoryCount()).toBe(0);
     expect(memoryCount()).toBe(0);
     expect(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).toBe(body);
@@ -43,8 +44,11 @@ describe('packageScriptsAt', () => {
     expect(packageScriptsAt(dir, commit('{"scripts":{"a":"b"}}'))).toEqual({ a: 'b' });
   });
 
-  it.each(['{"scripts":"build"}', '{"scripts":["x"]}', '{"scripts":{"a":1}}', '{"scripts":null}'])('reads %s as no scripts', (pkg) => {
-    git('init', '-q');
-    expect(packageScriptsAt(dir, commit(pkg))).toEqual({});
-  });
+  it.each(['{"scripts":"build"}', '{"scripts":["x"]}', '{"scripts":{"a":1}}', '{"scripts":null}'])(
+    'reads %s as no scripts',
+    (pkg) => {
+      git('init', '-q');
+      expect(packageScriptsAt(dir, commit(pkg))).toEqual({});
+    },
+  );
 });

@@ -6,11 +6,7 @@ import { readEntry } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/auth.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
-import {
-  remember,
-  promote,
-  supersede,
-} from '../../src/api/index.js';
+import { remember, promote, supersede } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { ConflictError } from '../../src/core/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -48,14 +44,19 @@ describe('api tenant isolation', () => {
 
   // ---- Test 1: promote cross-tenant denied ----------------------------------
   it('promote refuses to promote a row that belongs to another tenant', async () => {
-    const created = await remember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'alpha-row promote-cross-tenant canary' },
-    );
+    const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'alpha-row promote-cross-tenant canary',
+    });
 
     await expect(
       promote(
-        { hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+        {
+          hippoRoot: home,
+          store: sqliteStore(home),
+          config: loadConfig(home),
+          tenantId: 'bravo',
+          actor: { subject: 'api_key:bravo-key', role: 'admin' },
+        },
         created.id,
       ),
     ).rejects.toThrow(/memory not found/i);
@@ -83,7 +84,7 @@ describe('api tenant isolation', () => {
 
   // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
   it('supersede refuses the writer that read the row before another process superseded it', async () => {
-    const alpha = (): FullContext => (apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }));
+    const alpha = (): FullContext => apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' });
     const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
     const winner = await stageSupersedeWinner(alpha(), created.id, 'the winner');
@@ -94,7 +95,11 @@ describe('api tenant isolation', () => {
 
     const db = openHippoDb(home);
     try {
-      const old = queryRow<{ superseded_by: string | null }>(db, `SELECT superseded_by FROM memories WHERE id = ?`, created.id);
+      const old = queryRow<{ superseded_by: string | null }>(
+        db,
+        `SELECT superseded_by FROM memories WHERE id = ?`,
+        created.id,
+      );
       expect(old?.superseded_by).toBe(winner.successorId);
       // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
       const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
@@ -103,15 +108,16 @@ describe('api tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(`is already superseded by ${winner.successorId}`);
+    await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(
+      `is already superseded by ${winner.successorId}`,
+    );
   });
 
   // ---- Test 6: supersede CAS — clean path -----------------------------------
   it('supersede CAS clean path: both rows present, audit row written, chain pointer set', async () => {
-    const created = await remember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'alpha-row supersede clean-path canary' },
-    );
+    const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'alpha-row supersede clean-path canary',
+    });
 
     const result = await supersede(
       apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
@@ -154,12 +160,12 @@ describe('api tenant isolation', () => {
 
   // ---- Test 7: supersede CAS — tenant-scoped --------------------------------
   it('supersede across tenants throws "Memory not found" via readEntry tenant scope', async () => {
-    const created = await remember(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      { content: 'alpha-row supersede tenant-scope canary' },
-    );
+    const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
+      content: 'alpha-row supersede tenant-scope canary',
+    });
 
-    await expect(supersede(
+    await expect(
+      supersede(
         apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }),
         created.id,
         'cross-tenant supersede attempt',
@@ -232,7 +238,7 @@ describe('authCreate HTTP body.tenantId ignored', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': `Bearer ${alphaPlaintext}`,
+        authorization: `Bearer ${alphaPlaintext}`,
       },
       body: JSON.stringify({ tenantId: 'bravo', label: 'should-be-alpha' }),
     });
@@ -240,7 +246,7 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     // SAFETY: POST /v1/auth/keys returns AuthCreateResult {keyId, plaintext,
     // tenantId, role} verbatim via sendJson (src/api/index.ts authCreate + the
     // /v1/auth/keys route in src/server.ts).
-    const body = await res.json() as { keyId: string; plaintext: string; tenantId: string };
+    const body = (await res.json()) as { keyId: string; plaintext: string; tenantId: string };
     expect(body.tenantId).toBe('alpha');
     expect(body.keyId).toMatch(/^hk_/);
 

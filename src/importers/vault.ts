@@ -80,7 +80,16 @@ async function syncVaultFolder(
   const seen = new Set<string>();
 
   const run: VaultImportRun = {
-    ctx, folderPath, vaultName, scope, extraTags, dryRun, existing, seen, baseHalfLifeDays, tally,
+    ctx,
+    folderPath,
+    vaultName,
+    scope,
+    extraTags,
+    dryRun,
+    existing,
+    seen,
+    baseHalfLifeDays,
+    tally,
   };
   const importNotes = async (): Promise<void> => {
     for (const relpath of relpaths) await importVaultNote(run, relpath);
@@ -207,7 +216,8 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
     return;
   }
 
-  const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
+  const tags = vaultNoteTags(run, hashTag, fm, body);
+  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
     tally.skipped++;
     return;
   }
@@ -274,20 +284,10 @@ async function archivePriors(run: VaultImportRun, priors: readonly { id: string 
 function vaultNoteTags(run: VaultImportRun, hashTag: string, fm: Record<string, string>, body: string): string[] {
   // Build the FULL tag envelope before the idempotency decision, de-duplicated and order-preserving (createMemory
   // stores tags verbatim).
-  const frontmatterTags = [
-    ...frontmatterList(fm['tags']),
-    ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
-  ];
+  const frontmatterTags = [...frontmatterList(fm['tags']), ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`)];
   const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
   return Array.from(
-    new Set([
-      'source:vault',
-      `vault:${run.vaultName}`,
-      hashTag,
-      ...frontmatterTags,
-      ...wikilinkTags,
-      ...run.extraTags,
-    ]),
+    new Set(['source:vault', `vault:${run.vaultName}`, hashTag, ...frontmatterTags, ...wikilinkTags, ...run.extraTags]),
   );
 }
 

@@ -13,7 +13,14 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const INTEGRATIONS = new Set(['native-hooks', 'native-plugin', 'wrapper', 'instruction-file', 'mcp-recipe', 'none']);
 const STATUSES = new Set(['verified', 'shipped', 'planned', 'blocked', 'unknown']);
-const ROUTES = ['promptContext', 'toolFailureCapture', 'preLossSave', 'postCompactExtract', 'sessionEndCapture', 'compactResume'];
+const ROUTES = [
+  'promptContext',
+  'toolFailureCapture',
+  'preLossSave',
+  'postCompactExtract',
+  'sessionEndCapture',
+  'compactResume',
+];
 const NULLABLE = ['interface', 'setup', 'store', 'maxSaveDelay'];
 const MIN_FRAMEWORK_ROWS = 6;
 const issues = [];
@@ -39,8 +46,12 @@ function checkMode(at, m, routes) {
     const status = m?.[key];
     if (!STATUSES.has(status)) issues.push(`${where}: ${key} must be one of ${[...STATUSES].join(', ')}`);
     if (status === 'verified' && !m.liveEvidence?.length) issues.push(`${where}: ${key} verified needs liveEvidence`);
-    if (status === 'shipped' && !m.fixtureEvidence?.length) issues.push(`${where}: ${key} shipped needs fixtureEvidence`);
-    if ((status === 'verified' || status === 'shipped') && !routes?.preLossSave) issues.push(`${where}: ${key} ${status} needs a preLossSave route`);
+    if (status === 'shipped' && !m.fixtureEvidence?.length) {
+      issues.push(`${where}: ${key} shipped needs fixtureEvidence`);
+    }
+    if ((status === 'verified' || status === 'shipped') && !routes?.preLossSave) {
+      issues.push(`${where}: ${key} ${status} needs a preLossSave route`);
+    }
   }
 }
 
@@ -60,11 +71,15 @@ for (const e of inventory.entries ?? []) {
   if (e.integration?.includes('none') && (e.integration.length > 1 || e.sources?.length)) {
     issues.push(`${at}: integration none stands alone and lists no sources`);
   }
-  for (const key of ROUTES) if (!isStrOrNull(e.routes?.[key])) issues.push(`${at}: routes.${key} must be a string or null`);
+  for (const key of ROUTES) {
+    if (!isStrOrNull(e.routes?.[key])) issues.push(`${at}: routes.${key} must be a string or null`);
+  }
   for (const key of ['preLossEvent', 'beforeTrimOrReset']) {
     if (!isStrOrNull(e.upstream?.[key])) issues.push(`${at}: upstream.${key} must be a string or null`);
   }
-  for (const key of NULLABLE) if (!(key in e) || !isStrOrNull(e[key])) issues.push(`${at}: ${key} must be present, a string or null`);
+  for (const key of NULLABLE) {
+    if (!(key in e) || !isStrOrNull(e[key])) issues.push(`${at}: ${key} must be present, a string or null`);
+  }
   if (!e.owner || !e.nextAction || !e.roadmap) issues.push(`${at}: owner, nextAction and roadmap are required`);
   for (const p of [...(e.sources ?? []), ...(e.claims ?? [])]) exists(at, p);
   for (const p of e.sources ?? []) cited.add(p.replace(/\/$/, ''));
@@ -76,9 +91,13 @@ const claimed = [];
 const readme = read('README.md').split(/\r?\n/);
 const tableStart = readme.findIndex((l) => /^\|\s*Framework\s*\|/.test(l));
 const rows = [];
-for (let i = tableStart + 2; tableStart !== -1 && i < readme.length && readme[i].startsWith('|'); i++) rows.push(readme[i]);
+for (let i = tableStart + 2; tableStart !== -1 && i < readme.length && readme[i].startsWith('|'); i++) {
+  rows.push(readme[i]);
+}
 if (rows.length < MIN_FRAMEWORK_ROWS) {
-  issues.push(`README.md: framework table (| Framework | ...) has ${rows.length} rows, expected at least ${MIN_FRAMEWORK_ROWS}`);
+  issues.push(
+    `README.md: framework table (| Framework | ...) has ${rows.length} rows, expected at least ${MIN_FRAMEWORK_ROWS}`,
+  );
 }
 for (const row of rows) claimed.push(['README.md framework table', row.split('|')[1].trim()]);
 

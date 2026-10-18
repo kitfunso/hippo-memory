@@ -48,7 +48,8 @@ function seed(text: string, origin: string | null): MemoryEntry {
   return entry;
 }
 
-const originOf = (id: string): string | null | undefined => loadAllEntries(hippoRoot, 'default').find((e) => e.id === id)?.origin_project;
+const originOf = (id: string): string | null | undefined =>
+  loadAllEntries(hippoRoot, 'default').find((e) => e.id === id)?.origin_project;
 
 describe('hippo projects', () => {
   it('lists each project name with its live memory count', async () => {
@@ -60,7 +61,10 @@ describe('hippo projects', () => {
     expect(json.status).toBe(0);
     // SAFETY: --json prints listProjects' rows; the assertions below fail on any other shape.
     const { projects } = JSON.parse(json.stdout) as { projects: Array<{ origin: string | null; live: number }> };
-    expect(projects.map((p) => [p.origin, p.live]).sort()).toEqual([['', 1], ['repo', 2]]);
+    expect(projects.map((p) => [p.origin, p.live]).sort()).toEqual([
+      ['', 1],
+      ['repo', 2],
+    ]);
 
     const text = await hippo();
     expect(text.status).toBe(0);

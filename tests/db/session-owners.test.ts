@@ -12,10 +12,14 @@ import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/util/version.js'
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
 
-interface StatementProto { readonly sourceSQL: string }
+interface StatementProto {
+  readonly sourceSQL: string;
+}
 type StatementGet = (this: StatementProto, ...params: string[]) => object | undefined;
 // SAFETY: node:sqlite has no bundled types; `get` takes SQL params and returns one row or undefined.
-const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as { StatementSync: { prototype: { get: StatementGet } } };
+const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
+  StatementSync: { prototype: { get: StatementGet } };
+};
 
 let home: string;
 
@@ -29,12 +33,23 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 }
 
 function ctx(owner: string, tenantId = 'default'): Context {
-  return { hippoRoot: home, store: sqliteStore(home), config: loadConfig(home), tenantId, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
+  return {
+    hippoRoot: home,
+    store: sqliteStore(home),
+    config: loadConfig(home),
+    tenantId,
+    actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
+  };
 }
 
 function bindings(): Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }> {
   // SAFETY: the SELECT names exactly these four TEXT columns.
-  return withDb((db) => db.prepare(`SELECT tenant_id, session_id, owner_subject, created_at FROM session_owners ORDER BY tenant_id`).all() as Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }>);
+  return withDb(
+    (db) =>
+      db
+        .prepare(`SELECT tenant_id, session_id, owner_subject, created_at FROM session_owners ORDER BY tenant_id`)
+        .all() as Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }>,
+  );
 }
 
 function setFloor(v: string): void {
@@ -46,7 +61,11 @@ const PREVIOUS_RELEASE = '1.63.2';
 
 function floor(): string | undefined {
   // SAFETY: one TEXT `value` column by primary key.
-  return withDb((db) => (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)?.value);
+  return withDb(
+    (db) =>
+      (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)
+        ?.value,
+  );
 }
 
 beforeEach(() => {
@@ -73,8 +92,12 @@ describe('bindSessionOwner', () => {
     holder.exec('BEGIN IMMEDIATE');
     try {
       // Another connection holds the write lock, so a rebind that asked for it would fail after the short wait.
-      await expect(runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's1'), { busyWaitMs: 50 })).resolves.toBeUndefined();
-      await expect(runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's2'), { busyWaitMs: 50 })).rejects.toThrow();
+      await expect(
+        runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's1'), { busyWaitMs: 50 }),
+      ).resolves.toBeUndefined();
+      await expect(
+        runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's2'), { busyWaitMs: 50 }),
+      ).rejects.toThrow();
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);
@@ -91,7 +114,11 @@ describe('bindSessionOwner', () => {
 
   it('a floor raise that fails takes the binding with it, since both are one transaction', async () => {
     setFloor('0.0.1');
-    withDb((db) => db.exec(`CREATE TRIGGER fail_floor BEFORE INSERT ON meta WHEN NEW.key = 'min_compatible_binary' BEGIN SELECT RAISE(ABORT, 'floor boom'); END`));
+    withDb((db) =>
+      db.exec(
+        `CREATE TRIGGER fail_floor BEFORE INSERT ON meta WHEN NEW.key = 'min_compatible_binary' BEGIN SELECT RAISE(ABORT, 'floor boom'); END`,
+      ),
+    );
     await expect(bindSessionOwner(ctx('alice'), 's1')).rejects.toThrow('floor boom');
     expect(bindings()).toEqual([]);
     expect(floor()).toBe('0.0.1');
@@ -111,7 +138,10 @@ describe('bindSessionOwner', () => {
     let raced = false;
     let alice: Promise<void> = Promise.resolve();
     // Alice commits right after Bob's read finds no owner, so he reaches the insert with her row already there.
-    const read = vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (this: StatementProto, ...params: string[]) {
+    const read = vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (
+      this: StatementProto,
+      ...params: string[]
+    ) {
       const row = get.apply(this, params);
       if (raced || !this.sourceSQL.includes('FROM session_owners')) return row;
       raced = true;
@@ -132,25 +162,39 @@ describe('bindSessionOwner', () => {
     setFloor('0.0.1');
     saveActiveTaskSnapshot(home, 'default', { task: 't', summary: 's', next_step: 'n' });
     expect(floor()).toBe('0.0.1');
-    saveActiveTaskSnapshot(home, 'default', { task: 't', summary: 's', next_step: 'n' }, { owner: 'alice', project: ['p'] });
+    saveActiveTaskSnapshot(
+      home,
+      'default',
+      { task: 't', summary: 's', next_step: 'n' },
+      { owner: 'alice', project: ['p'] },
+    );
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
   });
 
   it('a new bind prunes bindings older than 90 days, in every tenant, and keeps younger ones', async () => {
     const daysAgo = (d: number): string => new Date(Date.now() - d * 86_400_000).toISOString();
     withDb((db) => {
-      const insert = db.prepare(`INSERT INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`);
+      const insert = db.prepare(
+        `INSERT INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
+      );
       insert.run('default', 'old', 'alice', daysAgo(91));
       insert.run('acme', 'old-acme', 'bob', daysAgo(91));
       insert.run('default', 'young', 'alice', daysAgo(89));
     });
     await bindSessionOwner(ctx('carol'), 'new');
-    expect(bindings().map((b) => b.session_id).sort()).toEqual(['new', 'young']);
+    expect(
+      bindings()
+        .map((b) => b.session_id)
+        .sort(),
+    ).toEqual(['new', 'young']);
   });
 
   it('two tenants may hold one session id', async () => {
     await bindSessionOwner(ctx('alice'), 's1');
     await bindSessionOwner(ctx('bob', 'acme'), 's1');
-    expect(bindings().map((b) => [b.tenant_id, b.owner_subject])).toEqual([['acme', 'bob'], ['default', 'alice']]);
+    expect(bindings().map((b) => [b.tenant_id, b.owner_subject])).toEqual([
+      ['acme', 'bob'],
+      ['default', 'alice'],
+    ]);
   });
 });

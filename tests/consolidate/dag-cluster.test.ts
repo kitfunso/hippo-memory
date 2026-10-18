@@ -7,19 +7,23 @@ describe('clusterFacts', () => {
     const facts = [
       createMemory('John plays basketball daily', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['extracted', 'speaker:John', 'topic:basketball'],
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:John', 'topic:basketball'],
       }),
       createMemory('John wants to improve shooting percentage', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['extracted', 'speaker:John', 'topic:basketball'],
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:John', 'topic:basketball'],
       }),
       createMemory('Tim enjoys reading sci-fi novels', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['extracted', 'speaker:Tim', 'topic:reading'],
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:Tim', 'topic:reading'],
       }),
       createMemory('Tim recently read Dune by Frank Herbert', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['extracted', 'speaker:Tim', 'topic:reading'],
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:Tim', 'topic:reading'],
       }),
     ];
 
@@ -27,9 +31,7 @@ describe('clusterFacts', () => {
 
     expect(clusters.length).toBeGreaterThanOrEqual(2);
 
-    const johnCluster = clusters.find((c) =>
-      c.members.some((m) => m.content.includes('John')),
-    );
+    const johnCluster = clusters.find((c) => c.members.some((m) => m.content.includes('John')));
     expect(johnCluster).toBeDefined();
     expect(johnCluster!.members.length).toBeGreaterThanOrEqual(2);
     expect(johnCluster!.label).toContain('John');
@@ -39,7 +41,8 @@ describe('clusterFacts', () => {
     const facts = [
       createMemory('Alice likes chess', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['extracted', 'speaker:Alice'],
+        layer: Layer.Semantic,
+        tags: ['extracted', 'speaker:Alice'],
       }),
     ];
 

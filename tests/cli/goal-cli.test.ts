@@ -25,7 +25,8 @@ afterEach(() => {
   rmSync(env.cwd, { recursive: true, force: true });
 });
 
-const goal = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', 'goal', ...args]));
+const goal = (...args: string[]): Promise<InProcessResult> =>
+  runInProcess(() => runCli(['node', 'hippo', 'goal', ...args]));
 
 /** Stdout of a goal verb that must succeed. */
 async function ok(...args: string[]): Promise<string> {

@@ -22,7 +22,10 @@ const MODEL = 'test/model';
 
 /** A local provider over a stand-in for the optional package, which these tests never install; each gets its own loads. */
 function localProvider(pipeline: PipelineFn, cacheDir: string): EmbeddingProvider {
-  const transformers = { installed: () => true, load: async () => ({ name: '@huggingface/transformers', mod: { env: { cacheDir }, pipeline } }) };
+  const transformers = {
+    installed: () => true,
+    load: async () => ({ name: '@huggingface/transformers', mod: { env: { cacheDir }, pipeline } }),
+  };
   return resolveEmbeddingProvider(loadConfig(tempDir()).embeddings, { provider: 'local', model: MODEL, transformers });
 }
 
@@ -160,7 +163,9 @@ describe('the local embedding model under a recall deadline', () => {
     });
     const provider = localProvider(pipeline, tempDir());
 
-    await expect(provider.embed(['a memory'], 'passage')).rejects.toThrow(/did not load: fetch failed: getaddrinfo ENOTFOUND/);
+    await expect(provider.embed(['a memory'], 'passage')).rejects.toThrow(
+      /did not load: fetch failed: getaddrinfo ENOTFOUND/,
+    );
     await expect(provider.embed(['a memory'], 'passage')).rejects.toThrow(/did not load: fetch failed/);
 
     const warnings = logged().filter((line) => line.includes(`local embedding model ${MODEL} did not load`));

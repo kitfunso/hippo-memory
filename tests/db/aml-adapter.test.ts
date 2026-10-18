@@ -39,14 +39,17 @@ interface SearchRow {
 }
 
 async function waitForAdapterReady(baseUrl: string, timeoutMs = 10_000): Promise<void> {
-  await waitFor(async () => {
-    try {
-      const res = await fetch(`${baseUrl}/health`);
-      return res.status === 200 || res.status === 503;
-    } catch {
-      return false; // not listening yet
-    }
-  }, { timeoutMs, intervalMs: 50, what: `adapter reachable at ${baseUrl}` });
+  await waitFor(
+    async () => {
+      try {
+        const res = await fetch(`${baseUrl}/health`);
+        return res.status === 200 || res.status === 503;
+      } catch {
+        return false; // not listening yet
+      }
+    },
+    { timeoutMs, intervalMs: 50, what: `adapter reachable at ${baseUrl}` },
+  );
 }
 
 interface AdapterHandle {
@@ -187,16 +190,11 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     const addBody = await addRes.json();
     expect(addBody).toEqual({ success: true, request_id, user_id, session_id });
 
-    const searchRes = await postSearch(
-      { query: 'aml-happy-path-marker', user_id, top_k: 5 },
-      authHeader(validKey),
-    );
+    const searchRes = await postSearch({ query: 'aml-happy-path-marker', user_id, top_k: 5 }, authHeader(validKey));
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
     expect(Array.isArray(searchBody.data)).toBe(true);
-    const found = searchBody.data.some((row) =>
-      row.content.includes('aml-happy-path-marker'),
-    );
+    const found = searchBody.data.some((row) => row.content.includes('aml-happy-path-marker'));
     expect(found).toBe(true);
   });
 
@@ -235,10 +233,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
     expect(directRes.status).toBe(200);
 
-    const searchRes = await postSearch(
-      { query: marker, user_id: 'user-a-iso', top_k: 10 },
-      authHeader(validKey),
-    );
+    const searchRes = await postSearch({ query: marker, user_id: 'user-a-iso', top_k: 10 }, authHeader(validKey));
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
     const contents = searchBody.data.map((row) => row.content);
@@ -318,10 +313,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
 
     it('X-Api-Key header works', async () => {
-      const res = await postSearch(
-        { query: 'x', user_id: 'user-auth', top_k: 1 },
-        { 'X-Api-Key': validKey },
-      );
+      const res = await postSearch({ query: 'x', user_id: 'user-auth', top_k: 1 }, { 'X-Api-Key': validKey });
       expect(res.status).toBe(200);
     });
 
@@ -399,9 +391,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     const searchRes = await postSearch({ query: 'zqx7 wvk3', user_id, top_k: 5 }, authHeader(validKey));
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
-    const row = searchBody.data.find(
-      (r) => r.content.includes('zqx7') && r.content.includes('wvk3'),
-    );
+    const row = searchBody.data.find((r) => r.content.includes('zqx7') && r.content.includes('wvk3'));
     expect(row).toBeDefined();
     expect(row!.content).toContain('user: zqx7');
     expect(row!.content).toContain('assistant: wvk3');

@@ -27,7 +27,11 @@ describe('a deliberate stale tier survives being read', () => {
   it('a recall through getContext leaves an invalidated memory invalidated', async () => {
     const { id } = await remember(ctx(), { content: 'deploys go through the legacy pipeline' });
 
-    const result = invalidateMatching(sqliteSyncStore(home).localFiles.learning, { from: 'legacy pipeline', to: null, type: 'deprecation' });
+    const result = invalidateMatching(sqliteSyncStore(home).localFiles.learning, {
+      from: 'legacy pipeline',
+      to: null,
+      type: 'deprecation',
+    });
     expect(result.invalidated).toBe(1);
 
     const invalidated = readEntry(home, id)!;

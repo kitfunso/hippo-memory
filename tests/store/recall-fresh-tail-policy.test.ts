@@ -16,7 +16,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve, RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -27,7 +27,11 @@ afterEach(() => {
 });
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:f5-policy', role: 'admin' });
@@ -75,13 +79,9 @@ describe('fresh-tail policy', () => {
     expect(thrown).toBeInstanceOf(RecallContractError);
     // SAFETY: the instanceof check above confirms `thrown` is a
     // RecallContractError before either cast reads its fields.
-    expect((thrown as RecallContractError).code).toBe(
-      'fresh_tail_requires_session_id',
-    );
+    expect((thrown as RecallContractError).code).toBe('fresh_tail_requires_session_id');
     // SAFETY: same guaranteed RecallContractError instance as above.
-    expect((thrown as RecallContractError).message).toContain(
-      'HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL',
-    );
+    expect((thrown as RecallContractError).message).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
   });
 
   it('env=1, freshTailSessionId set → no throw, session-scoped rows surface', async () => {
@@ -100,7 +100,10 @@ describe('fresh-tail policy', () => {
       query: 'session',
       window: { freshTailCount: 5, freshTailSessionId: sess },
     });
-    const fresh = r.results.filter((it) => it.isFreshTail).map((it) => it.content).sort();
+    const fresh = r.results
+      .filter((it) => it.isFreshTail)
+      .map((it) => it.content)
+      .sort();
     // Every fresh-tail row must come from sess-A, and all three of them surface.
     expect(fresh).toEqual(['session A event 0', 'session A event 1', 'session A event 2']);
     // And no fresh-tail row should mention "session B".

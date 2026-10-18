@@ -99,7 +99,7 @@ export function appendConsolidationRunAt(
     run.timestamp,
     run.decayed,
     run.merged,
-    run.removed
+    run.removed,
   );
   pruneConsolidationRuns(db);
   writeStatsMirror(files.hippoRoot, buildStatsFromDb(db));
@@ -108,10 +108,12 @@ export function appendConsolidationRunAt(
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
 export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
-  const row = db.prepare(
-    `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
        AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
-  ).get<{ n: number }>(tenantId, dayAgo);
+    )
+    .get<{ n: number }>(tenantId, dayAgo);
   return row.n;
 }
 
@@ -119,7 +121,8 @@ export function createdSinceLastSleepAt(db: DatabaseSyncLike, tenantId: string, 
 export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
   // SAFETY: row's shape matches the single `timestamp` column named in the SELECT.
   const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as
-    { timestamp?: string } | undefined;
+    | { timestamp?: string }
+    | undefined;
   return row?.timestamp;
 }
 
@@ -127,9 +130,9 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
 export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayContext {
   // Get recent consolidation timestamps (last 20)
   // SAFETY: rows' shape matches the single `timestamp` column above.
-  const rows = db.prepare(
-    `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`
-  ).all() as Array<{ timestamp: string }>;
+  const rows = db
+    .prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`)
+    .all() as Array<{ timestamp: string }>;
 
   const sleepCount = Number(getMeta(db, 'sleep_count', '0')) || rows.length;
 

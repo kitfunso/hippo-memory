@@ -11,7 +11,16 @@ import { initStore } from '../../src/store/open.js';
 import { isInitialized } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import {
-  closeWorld, codexSummary, distUrl, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, type World,
+  closeWorld,
+  codexSummary,
+  distUrl,
+  dormantRows,
+  liveRows,
+  liveTexts,
+  note,
+  openWorld,
+  projectNotes,
+  type World,
 } from '../_helpers/agent-memories-world.js';
 
 const WORKER = `
@@ -61,12 +70,18 @@ function claudeTree(config: string, label: string, projects: readonly string[], 
 
 function geminiTree(gemini: string, label: string, projects: readonly string[]): void {
   plain(join(gemini, 'GEMINI.md'), ['## Gemini Added Memories', '', `- CANARY ${label} gemini user.`, ''].join('\n'));
-  plain(join(gemini, 'projects.json'), JSON.stringify({ projects: Object.fromEntries(projects.map((p, i) => [p, `slug${i}`])) }));
+  plain(
+    join(gemini, 'projects.json'),
+    JSON.stringify({ projects: Object.fromEntries(projects.map((p, i) => [p, `slug${i}`])) }),
+  );
   projects.forEach((_, i) => canary(join(gemini, 'tmp', `slug${i}`, 'memory'), `${label} gemini project`));
 }
 
 function copilotTree(data: string, label: string, projects: readonly string[]): void {
-  canary(join(data, 'User', 'globalStorage', 'github.copilot-chat', 'memory-tool', 'memories'), `${label} copilot user`);
+  canary(
+    join(data, 'User', 'globalStorage', 'github.copilot-chat', 'memory-tool', 'memories'),
+    `${label} copilot user`,
+  );
   projects.forEach((p, i) => {
     const ws = join(data, 'User', 'workspaceStorage', `ws${i}`);
     plain(join(ws, 'workspace.json'), JSON.stringify({ folder: pathToFileURL(p).href }));
@@ -76,13 +91,19 @@ function copilotTree(data: string, label: string, projects: readonly string[]): 
 
 function qwenTree(base: string, label: string, projects: readonly string[]): void {
   canary(join(base, 'memories'), `${label} qwen user`);
-  for (const p of projects) canary(join(base, 'projects', sanitizeCwd(p, process.platform), 'memory'), `${label} qwen project`);
+  for (const p of projects) {
+    canary(join(base, 'projects', sanitizeCwd(p, process.platform), 'memory'), `${label} qwen project`);
+  }
 }
 
 const codexTree = (codexHome: string, label: string): void =>
-  plain(join(codexHome, 'memories', 'memory_summary.md'), ['v1', '', '## User Profile', '', `- CANARY ${label} codex bullet.`, ''].join('\n'));
+  plain(
+    join(codexHome, 'memories', 'memory_summary.md'),
+    ['v1', '', '## User Profile', '', `- CANARY ${label} codex bullet.`, ''].join('\n'),
+  );
 
-const openclawTree = (workspace: string, label: string): void => plain(join(workspace, 'MEMORY.md'), `- CANARY ${label} openclaw memory.\n`);
+const openclawTree = (workspace: string, label: string): void =>
+  plain(join(workspace, 'MEMORY.md'), `- CANARY ${label} openclaw memory.\n`);
 
 /** Canaries at every tool's home default and at every variable's folder; returns the variables. */
 function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessEnv {
@@ -91,7 +112,11 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
   claudeTree(join(home, '.claude'), 'home', projects, join(home, 'claude-user'));
   codexTree(join(home, '.codex'), 'home');
   geminiTree(join(home, '.gemini'), 'home', projects);
-  for (const appData of [join(home, 'AppData', 'Roaming'), join(home, '.config'), join(home, 'Library', 'Application Support')]) {
+  for (const appData of [
+    join(home, 'AppData', 'Roaming'),
+    join(home, '.config'),
+    join(home, 'Library', 'Application Support'),
+  ]) {
     copilotTree(join(appData, 'Code'), 'home', projects);
   }
   openclawTree(join(home, '.openclaw', 'workspace'), 'home');
@@ -101,7 +126,9 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
   canary(join(env('claude'), 'projects', 'pinned-canary', 'memory'), 'env claude pinned');
   codexTree(env('codex'), 'env');
   geminiTree(join(env('gemini'), '.gemini'), 'env', projects);
-  for (const name of ['vscode-appdata', 'appdata', 'xdg']) copilotTree(join(env(name), 'Code'), `env ${name}`, projects);
+  for (const name of ['vscode-appdata', 'appdata', 'xdg']) {
+    copilotTree(join(env(name), 'Code'), `env ${name}`, projects);
+  }
   copilotTree(join(env('vscode-portable'), 'user-data'), 'env portable', projects);
   openclawTree(join(env('openclaw-home'), '.openclaw', 'workspace'), 'env home');
   openclawTree(join(env('openclaw-state'), 'workspace'), 'env state');
@@ -109,11 +136,24 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
   for (const name of ['qwen-home', 'qwen-runtime', 'qwen-base']) qwenTree(env(name), `env ${name}`, projects);
   for (const p of projects) canary(join(p, '.qwen', 'memory'), 'env qwen local');
   return {
-    HOME: home, USERPROFILE: home, APPDATA: env('appdata'), XDG_CONFIG_HOME: env('xdg'), XDG_DATA_HOME: env('xdg-data'),
-    CLAUDE_CONFIG_DIR: env('claude'), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-canary', CODEX_HOME: env('codex'), GEMINI_CLI_HOME: env('gemini'),
-    VSCODE_APPDATA: env('vscode-appdata'), VSCODE_PORTABLE: env('vscode-portable'),
-    OPENCLAW_HOME: env('openclaw-home'), OPENCLAW_STATE_DIR: env('openclaw-state'), OPENCLAW_WORKSPACE_DIR: env('openclaw-workspace'),
-    QWEN_HOME: env('qwen-home'), QWEN_RUNTIME_DIR: env('qwen-runtime'), QWEN_CODE_MEMORY_BASE_DIR: env('qwen-base'), QWEN_CODE_MEMORY_LOCAL: '1',
+    HOME: home,
+    USERPROFILE: home,
+    APPDATA: env('appdata'),
+    XDG_CONFIG_HOME: env('xdg'),
+    XDG_DATA_HOME: env('xdg-data'),
+    CLAUDE_CONFIG_DIR: env('claude'),
+    CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-canary',
+    CODEX_HOME: env('codex'),
+    GEMINI_CLI_HOME: env('gemini'),
+    VSCODE_APPDATA: env('vscode-appdata'),
+    VSCODE_PORTABLE: env('vscode-portable'),
+    OPENCLAW_HOME: env('openclaw-home'),
+    OPENCLAW_STATE_DIR: env('openclaw-state'),
+    OPENCLAW_WORKSPACE_DIR: env('openclaw-workspace'),
+    QWEN_HOME: env('qwen-home'),
+    QWEN_RUNTIME_DIR: env('qwen-runtime'),
+    QWEN_CODE_MEMORY_BASE_DIR: env('qwen-base'),
+    QWEN_CODE_MEMORY_LOCAL: '1',
   };
 }
 
@@ -136,8 +176,12 @@ function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise
     const child = spawn(process.execPath, args, { env, windowsHide: true });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString('utf8'); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+    child.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString('utf8');
+    });
+    child.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString('utf8');
+    });
     child.on('error', fail);
     child.on('close', (code) => {
       if (code !== 0) {
@@ -151,7 +195,9 @@ function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise
 }
 
 const everyText = (root: string): string[] =>
-  isInitialized(root) ? [...loadAllEntries(root, 'default').map((e) => e.content), ...dormantRows(root).map((d) => d.content)] : [];
+  isInitialized(root)
+    ? [...loadAllEntries(root, 'default').map((e) => e.content), ...dormantRows(root).map((d) => d.content)]
+    : [];
 
 beforeEach(() => {
   w = openWorld();
@@ -186,7 +232,12 @@ describe('agent memory sync: real homes are never read', () => {
       const tagged = AGENT_MEMORY_TOOLS.map((t) => rows.some((e) => e.tags.includes(t.tag)));
       expect(tagged, run.local).toEqual(AGENT_MEMORY_TOOLS.map(() => true));
       const projectTags = new Set(liveRows(run.local).flatMap((e) => e.tags));
-      expect(['claude-code-memory', 'gemini-memory', 'copilot-memory', 'qwen-code-memory'].filter((t) => !projectTags.has(t)), run.local).toEqual([]);
+      expect(
+        ['claude-code-memory', 'gemini-memory', 'copilot-memory', 'qwen-code-memory'].filter(
+          (t) => !projectTags.has(t),
+        ),
+        run.local,
+      ).toEqual([]);
     }
   });
 });

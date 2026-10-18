@@ -107,7 +107,7 @@ function drillResult(
     content: summary.content,
     // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
     // level-0 children, never the BFS-depth-N total (independent-review MED #4).
-    descendantCount: summary.descendant_count ?? (sizes[0] ?? 0),
+    descendantCount: summary.descendant_count ?? sizes[0] ?? 0,
     earliestAt: summary.earliest_at ?? null,
     latestAt: summary.latest_at ?? null,
   };
@@ -119,7 +119,7 @@ function drillResult(
     created: c.created,
   }));
 
-  const fixed = opts.budget !== undefined ? opts.cost?.fixed(summaryOut, total) ?? 0 : 0;
+  const fixed = opts.budget !== undefined ? (opts.cost?.fixed(summaryOut, total) ?? 0) : 0;
   const { children, truncated } = capChildren(all, fixed, opts, limit);
 
   return {
@@ -137,12 +137,7 @@ interface CappedChildren {
 }
 
 /** Global cumulative token budget first, then the `limit` cap. */
-function capChildren(
-  all: DrillDownChild[],
-  fixed: number,
-  opts: DrillDownOptions,
-  limit: number,
-): CappedChildren {
+function capChildren(all: DrillDownChild[], fixed: number, opts: DrillDownOptions, limit: number): CappedChildren {
   let children = all;
   let truncated = false;
   if (opts.budget !== undefined) {

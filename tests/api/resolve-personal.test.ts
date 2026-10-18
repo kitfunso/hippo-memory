@@ -27,8 +27,19 @@ function ctxFor(actor: Actor): FullContext {
   return apiCtx(root, 'default', actor);
 }
 
-async function callTool(actor: Actor, name: string, args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role , store: sqliteStore(root), config: loadConfig(root) };
+async function callTool(
+  actor: Actor,
+  name: string,
+  args: Record<string, string | number | boolean>,
+): Promise<McpResponse | null> {
+  const ctx: McpContext = {
+    hippoRoot: root,
+    tenantId: 'default',
+    actor: actor.subject,
+    role: actor.role,
+    store: sqliteStore(root),
+    config: loadConfig(root),
+  };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }
@@ -41,7 +52,10 @@ function replyText(res: McpResponse | null): string {
 
 /** Seeds one open conflict per pair, replacing any before, and returns their ids; each pair's first id must be in no other pair. */
 function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>): number[] {
-  replaceDetectedConflicts(root, pairs.map(([a, b]) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradictory deploy advice', score: 0.9 })));
+  replaceDetectedConflicts(
+    root,
+    pairs.map(([a, b]) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradictory deploy advice', score: 0.9 })),
+  );
   const open = listMemoryConflicts(root, 'open', 'default');
   return pairs.map(([a]) => {
     const conflict = open.find((c) => [c.memory_a_id, c.memory_b_id].includes(a));
@@ -74,7 +88,7 @@ afterEach(() => {
 });
 
 describe('resolving conflicts next to personal rows', () => {
-  it('rejectLoser on a team row sweeps team duplicates but leaves another person\'s personal row holding the same text', async () => {
+  it("rejectLoser on a team row sweeps team duplicates but leaves another person's personal row holding the same text", async () => {
     const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
     const teamCopy = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
     const loser = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
@@ -91,7 +105,7 @@ describe('resolving conflicts next to personal rows', () => {
     expect(tombstones.map((r) => r.sourceMemoryId)).toEqual([loser]);
   });
 
-  it('rejectLoser on the owner\'s own personal loser is a 400 that changes nothing, while forget resolves it', async () => {
+  it("rejectLoser on the owner's own personal loser is a 400 that changes nothing, while forget resolves it", async () => {
     const { personalId, teamId, conflictId } = await personalPair();
     let refusal: { status: number; message: string } | undefined;
     try {
@@ -110,9 +124,10 @@ describe('resolving conflicts next to personal rows', () => {
     expect(readEntry(root, personalId, 'default')).toBeNull();
   });
 
-  it('hippo_conflicts hides a pair holding someone else\'s personal row, and the owner sees it', async () => {
+  it("hippo_conflicts hides a pair holding someone else's personal row, and the owner sees it", async () => {
     const { personalId, teamId } = await personalPair();
-    const otherTeamId = (await remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' })).id;
+    const otherTeamId = (await remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' }))
+      .id;
     const [conflictId, teamConflictId] = seedConflicts([personalId, teamId], [otherTeamId, teamId]);
     const listed = replyText(await callTool(actorA, 'hippo_conflicts', {}));
     expect(listed).toContain(`conflict_${conflictId}:`);
@@ -124,11 +139,17 @@ describe('resolving conflicts next to personal rows', () => {
     }
   });
 
-  it('hippo_resolve on a pair holding someone else\'s personal row answers as a missing conflict does, and the owner resolves it', async () => {
+  it("hippo_resolve on a pair holding someone else's personal row answers as a missing conflict does, and the owner resolves it", async () => {
     const { personalId, teamId, conflictId } = await personalPair();
     for (const outsider of [actorB, unownedAdmin]) {
-      expect(replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, forget: true }))).toBe(NOT_RESOLVED);
-      expect(replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId + 1000, keep: teamId, forget: true }))).toBe(NOT_RESOLVED);
+      expect(
+        replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, forget: true })),
+      ).toBe(NOT_RESOLVED);
+      expect(
+        replyText(
+          await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId + 1000, keep: teamId, forget: true }),
+        ),
+      ).toBe(NOT_RESOLVED);
     }
     expect(readEntry(root, personalId, 'default')).not.toBeNull();
     expect(listMemoryConflicts(root, 'open', 'default').map((c) => c.id)).toEqual([conflictId]);

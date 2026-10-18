@@ -23,7 +23,11 @@ const CHAIN = new Set(['then', 'catch', 'finally']);
 /** The call a `.then`/`.catch`/`.finally` chain starts from. */
 function chainRoot(call) {
   let inner = call;
-  while (ts.isPropertyAccessExpression(inner.expression) && CHAIN.has(inner.expression.name.text) && ts.isCallExpression(inner.expression.expression)) {
+  while (
+    ts.isPropertyAccessExpression(inner.expression) &&
+    CHAIN.has(inner.expression.name.text) &&
+    ts.isCallExpression(inner.expression.expression)
+  ) {
     inner = inner.expression.expression;
   }
   return inner;
@@ -49,17 +53,32 @@ export function findFloatingApiCalls(program, rootDir) {
   const hits = [];
   for (const sf of program.getSourceFiles()) {
     const rel = sf.fileName.replace(/\\/g, '/').slice(root.length + 1);
-    if (sf.isDeclarationFile || !sf.fileName.replace(/\\/g, '/').startsWith(`${root}/`) || !/^(src|tests)\//.test(rel)) continue;
+    if (
+      sf.isDeclarationFile ||
+      !sf.fileName.replace(/\\/g, '/').startsWith(`${root}/`) ||
+      !/^(src|tests)\//.test(rel)
+    ) {
+      continue;
+    }
     const hit = (node, why) => {
       const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
       hits.push({ file: rel, line: line + 1, text: node.getText(sf).split('\n')[0], why });
     };
     const visit = (node) => {
-      if (ts.isExpressionStatement(node) && ts.isCallExpression(node.expression)
-        && isApiWrite(chainRoot(node.expression)) && !isHandled(node.expression)) hit(node, 'dropped');
+      if (
+        ts.isExpressionStatement(node) &&
+        ts.isCallExpression(node.expression) &&
+        isApiWrite(chainRoot(node.expression)) &&
+        !isHandled(node.expression)
+      ) {
+        hit(node, 'dropped');
+      }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'expect') {
         const [cb] = node.arguments;
-        const isSync = cb && (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb)) && !(cb.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
+        const isSync =
+          cb &&
+          (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb)) &&
+          !(cb.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
         if (isSync && ts.isCallExpression(cb.body) && isApiWrite(chainRoot(cb.body))) hit(node, 'sync expect');
       }
       ts.forEachChild(node, visit);
@@ -75,7 +94,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error('\nApi write calls whose Promise nothing awaits:');
     for (const h of hits) console.error(`  ${h.file}:${h.line}  (${h.why})  ${h.text}`);
-    console.error('\nFix: `await` or `return` the call, `void` it if a rejection cannot happen, and test a refusal with `await expect(call).rejects`.\n');
+    console.error(
+      '\nFix: `await` or `return` the call, `void` it if a rejection cannot happen, and test a refusal with `await expect(call).rejects`.\n',
+    );
     process.exit(1);
   }
   console.log('Every api write call in src/ and tests/ is awaited or returned. OK.');

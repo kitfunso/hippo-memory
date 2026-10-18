@@ -71,7 +71,11 @@ export interface EmbeddingProvider {
 
 class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'local' as const;
-  constructor(readonly model: string, private readonly enabled: boolean, private readonly embedder: LocalEmbedder) {}
+  constructor(
+    readonly model: string,
+    private readonly enabled: boolean,
+    private readonly embedder: LocalEmbedder,
+  ) {}
   get id(): string {
     return this.model;
   }
@@ -343,10 +347,7 @@ export interface ResolveProviderOptions {
 /** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it
  * surfaces via `isAvailable()`);
  * only an invalid config (e.g. insecure apiBaseUrl) throws, deliberately loud, so hot-path callers wrap it. */
-export function resolveEmbeddingProvider(
-  cfg: EmbeddingsConfig,
-  opts: ResolveProviderOptions = {},
-): EmbeddingProvider {
+export function resolveEmbeddingProvider(cfg: EmbeddingsConfig, opts: ResolveProviderOptions = {}): EmbeddingProvider {
   const requested = opts.provider ?? cfg.provider ?? 'local';
   // An explicit embeddings.enabled=false hard-disables embedding for BOTH local
   // and API providers — for API this prevents unwanted paid off-box calls.
@@ -370,8 +371,7 @@ export function resolveEmbeddingProvider(
   // If no API model was chosen (config left the local default in place), fall
   // back to the provider's flagship model rather than POSTing a local model id.
   const requestedModel = (opts.model ?? cfg.model)?.trim();
-  const model =
-    requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL ? requestedModel : spec.defaultModel;
+  const model = requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL ? requestedModel : spec.defaultModel;
   const baseUrl = validateBaseUrl(cfg.apiBaseUrl, spec.defaultBaseUrl);
   const batchSize =
     cfg.batchSize !== undefined && Number.isInteger(cfg.batchSize) && cfg.batchSize > 0

@@ -32,7 +32,9 @@ describe('MemoryEntry 2.0 shape', () => {
   it('refuses an entry that carries the 1.x tenantId and no tenant_id', () => {
     const { tenant_id: _dropped, ...rest } = createMemory('legacy caller', { tenantId: 'acme' });
     // @ts-expect-error a 1.x caller still passes tenantId
-    expect(() => writeEntry(root, { ...rest, tenantId: 'acme' })).toThrow(new TypeError('tenantId was renamed to tenant_id in 2.0'));
+    expect(() => writeEntry(root, { ...rest, tenantId: 'acme' })).toThrow(
+      new TypeError('tenantId was renamed to tenant_id in 2.0'),
+    );
   });
 
   it('revives a 1.x dormant JSON row with the right tenant and a boolean flag', () => {
@@ -41,7 +43,15 @@ describe('MemoryEntry 2.0 shape', () => {
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).run('acme', rest.id, rest.content, JSON.stringify(snapshot), 'decay', 0.1, '2026-01-01T00:00:00.000Z');
+        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+        'acme',
+        rest.id,
+        rest.content,
+        JSON.stringify(snapshot),
+        'decay',
+        0.1,
+        '2026-01-01T00:00:00.000Z',
+      );
       const [snap] = listDormantSnapshots(db, 'acme');
       expect(snap?.entry.tenant_id).toBe('acme');
       expect(snap?.entry.summary_dirty).toBe(true);

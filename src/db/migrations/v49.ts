@@ -1,12 +1,12 @@
 import type { Migration } from './types.js';
 
 export const v49: Migration = {
-    version: 49,
-    up: (db) => {
-      // Compaction record (src/capture/compaction-record.ts): one row per Claude Code compaction, written before it
-      // (started)
-      // and after it (summarized, done). Not a memory row. Additive only: no min_compatible_binary bump.
-      db.exec(`
+  version: 49,
+  up: (db) => {
+    // Compaction record (src/capture/compaction-record.ts): one row per Claude Code compaction, written before it
+    // (started)
+    // and after it (summarized, done). Not a memory row. Additive only: no min_compatible_binary bump.
+    db.exec(`
         CREATE TABLE IF NOT EXISTS compactions (
           tenant_id       TEXT NOT NULL DEFAULT 'default',
           id              TEXT NOT NULL,
@@ -29,5 +29,5 @@ export const v49: Migration = {
         CREATE INDEX IF NOT EXISTS idx_compactions_status
           ON compactions(tenant_id, status);
       `);
-    },
+  },
 };

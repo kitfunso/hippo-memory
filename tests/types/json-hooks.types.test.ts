@@ -3,8 +3,13 @@
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
-  installJsonHooks, readJsonFile, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile,
-  type InstallResult, type JsonHookPaths,
+  installJsonHooks,
+  readJsonFile,
+  resolveJsonHookPaths,
+  uninstallJsonHooks,
+  writeSettingsFile,
+  type InstallResult,
+  type JsonHookPaths,
 } from '../../src/entry/json-hooks.js';
 
 type Target = 'claude-code' | 'codex' | 'copilot';

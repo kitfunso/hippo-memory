@@ -7,7 +7,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { pushGoal, completeGoal } from '../_helpers/root-forms.js';
 
-const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);

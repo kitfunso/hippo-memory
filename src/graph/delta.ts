@@ -103,9 +103,12 @@ function diffRelations(
     if (from === undefined || to === undefined) continue;
     const key = relationKey(from, to, row.rel_type);
     const want = wanted.get(key);
-    const same = want !== undefined && !kept.has(key)
-      && `${row.memory_id ?? ''}|${row.source_kind}` === provenanceOf(want.memoryId, kinds)
-      && row.source_object_type === want.sourceObject.type && row.source_object_id === want.sourceObject.id;
+    const same =
+      want !== undefined &&
+      !kept.has(key) &&
+      `${row.memory_id ?? ''}|${row.source_kind}` === provenanceOf(want.memoryId, kinds) &&
+      row.source_object_type === want.sourceObject.type &&
+      row.source_object_id === want.sourceObject.id;
     if (same) kept.add(key);
     else deletes.push({ op: 'deleteRelation', id: row.id });
   }

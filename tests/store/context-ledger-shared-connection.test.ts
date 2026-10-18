@@ -39,9 +39,12 @@ function seedCli(content: string, extra: Partial<MemoryEntry> = {}) {
 }
 
 function enablePromptRecall(root: string) {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
-    pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
-  }));
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({
+      pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -61,15 +64,26 @@ describe('the static and recall ledger rows share one connection', () => {
     seedCli('the deploy rollback plan for the postgres migration', { created: '2026-01-01T00:00:00.000Z' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
-    execFileSync(process.execPath, [
-      '--import', pathToFileURL(preloadPath).href, HIPPO_JS,
-      'context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context',
-    ], {
-      env: { ...process.env, HIPPO_HOME: globalDir, F5_CONN_LOG: logPath },
-      cwd: cliTmp,
-      input: JSON.stringify({ session_id: 'sess-f5-1', prompt: 'postgres migration rollback plan' }),
-      encoding: 'utf8',
-    });
+    execFileSync(
+      process.execPath,
+      [
+        '--import',
+        pathToFileURL(preloadPath).href,
+        HIPPO_JS,
+        'context',
+        '--pinned-only',
+        '--include-recent',
+        '5',
+        '--format',
+        'additional-context',
+      ],
+      {
+        env: { ...process.env, HIPPO_HOME: globalDir, F5_CONN_LOG: logPath },
+        cwd: cliTmp,
+        input: JSON.stringify({ session_id: 'sess-f5-1', prompt: 'postgres migration rollback plan' }),
+        encoding: 'utf8',
+      },
+    );
 
     const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean);
     const connIds = new Set(lines.map((l) => l.split('\t')[0]));

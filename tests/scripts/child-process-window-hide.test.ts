@@ -25,7 +25,8 @@ function callText(src: string, open: number): string {
 }
 
 function findCalls(): { site: string; text: string }[] {
-  return ['src', 'extensions'].flatMap(tsFiles)
+  return ['src', 'extensions']
+    .flatMap(tsFiles)
     .filter((f) => /from ['"](node:)?child_process['"]/.test(readFileSync(f, 'utf8')))
     .flatMap((f) => {
       const src = readFileSync(f, 'utf8');
@@ -42,7 +43,9 @@ describe('child_process window hiding', () => {
   });
 
   it('every call sets windowsHide explicitly', () => {
-    const missing = findCalls().filter((c) => !/windowsHide\s*:/.test(c.text)).map((c) => c.site);
+    const missing = findCalls()
+      .filter((c) => !/windowsHide\s*:/.test(c.text))
+      .map((c) => c.site);
     expect(missing).toEqual([]);
   });
 });

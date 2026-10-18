@@ -16,7 +16,12 @@ export interface VerbFlags {
 // The entry point reads these for every verb, so no verb declares them.
 const GLOBAL_FLAGS: VerbFlags = { switches: ['help', 'version'] };
 
-const FIELD_KINDS = [['switches', 'switch'], ['values', 'value'], ['numbers', 'number'], ['lists', 'list']] as const;
+const FIELD_KINDS = [
+  ['switches', 'switch'],
+  ['values', 'value'],
+  ['numbers', 'number'],
+  ['lists', 'list'],
+] as const;
 
 const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
   [GLOBAL_FLAGS, ...Object.values(COMMANDS).map((row) => row.flags)].map((verb) => [

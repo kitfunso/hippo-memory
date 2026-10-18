@@ -40,7 +40,11 @@ describe('server hardening', () => {
 
   afterEach(async () => {
     if (handle) {
-      try { await handle.stop(); } catch { /* already stopped */ }
+      try {
+        await handle.stop();
+      } catch {
+        /* already stopped */
+      }
     }
     vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
     vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
@@ -88,7 +92,11 @@ describe('server hardening', () => {
         }
         if (r.done) break;
       }
-      try { reader.cancel().catch(() => {}); } catch { /* no-op */ }
+      try {
+        reader.cancel().catch(() => {});
+      } catch {
+        /* no-op */
+      }
       expect(closedReason).toBe('max_age_exceeded');
     } finally {
       ac.abort();
@@ -136,7 +144,11 @@ describe('server hardening', () => {
 
       // Now revoke the key. Next heartbeat should close the stream.
       const db2 = openHippoDb(root);
-      try { revokeApiKey(db2, keyId); } finally { closeHippoDb(db2); }
+      try {
+        revokeApiKey(db2, keyId);
+      } finally {
+        closeHippoDb(db2);
+      }
 
       let buf = decoder.decode(first.value);
       let closedReason: string | null = null;
@@ -160,7 +172,11 @@ describe('server hardening', () => {
         }
         if (r.done) break;
       }
-      try { reader.cancel().catch(() => {}); } catch { /* no-op */ }
+      try {
+        reader.cancel().catch(() => {});
+      } catch {
+        /* no-op */
+      }
       expect(closedReason).toBe('auth_revoked');
     } finally {
       ac.abort();
@@ -239,14 +255,11 @@ describe('server hardening', () => {
     it('query string on public route does not change routing (still HMAC-verified)', async () => {
       // Adding ?bypass=1 must not affect routing — pathname is matched,
       // search is ignored. A request without a valid signature still 401s.
-      const res = await fetch(
-        `http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: '{}',
-        },
-      );
+      const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
       // No x-slack-signature header → HMAC verify fails → 401.
       expect(res.status).toBe(401);
     });

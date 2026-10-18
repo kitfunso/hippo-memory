@@ -61,7 +61,12 @@ export function parseRetryAfterMs(header: string | null, now: number = Date.now(
 
 // Node's fetch reports a broken socket as a bare `fetch failed` with one of these on its cause.
 const TRANSIENT_CODES: ReadonlySet<string> = new Set([
-  'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
 ]);
 
 /** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A refused connection is
@@ -110,10 +115,11 @@ function logRetry(
 type Sleep = (ms: number) => Promise<void>;
 
 // `cancel` clears the timer, so a wait the caller left does not keep the process alive.
-const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> => new Promise((resolve) => {
-  const timer = setTimeout(resolve, ms);
-  cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
-});
+const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  });
 
 /** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its
  * reason, so no further attempt starts. */

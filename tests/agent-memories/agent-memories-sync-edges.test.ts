@@ -11,8 +11,22 @@ import { removeEntryMirrors } from '../../src/store/mirrors.js';
 import { deleteEntryRowInTx, writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import {
-  auditCount, auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes,
-  sha, toolTally, withDb, type World,
+  auditCount,
+  auditTotal,
+  closeWorld,
+  codexSummary,
+  ctxFor,
+  dormantRows,
+  expectedContainer,
+  liveRows,
+  liveTexts,
+  note,
+  openWorld,
+  projectNotes,
+  sha,
+  toolTally,
+  withDb,
+  type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
@@ -34,7 +48,8 @@ beforeEach(() => {
 });
 afterEach(() => closeWorld(w));
 
-const sync = (): ImportReport => importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
+const sync = (): ImportReport =>
+  importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 const only = (): MemoryEntry => {
   const rows = liveRows(w.local);
@@ -106,7 +121,11 @@ describe('agent memory sync: the Added list', () => {
     note(dir, 'deploy.md', A);
     sync();
     const newest = only();
-    const older = { ...newest, id: createMemory(A, { baseHalfLifeDays: 30 }).id, created: new Date(Date.parse(newest.created) - 60_000).toISOString() };
+    const older = {
+      ...newest,
+      id: createMemory(A, { baseHalfLifeDays: 30 }).id,
+      created: new Date(Date.parse(newest.created) - 60_000).toISOString(),
+    };
     writeEntry(w.local, older);
 
     expect(claude(sync())).toMatchObject({ collapsed: 1, unchanged: 0, imported: 0 });
@@ -143,12 +162,18 @@ describe('agent memory sync: the Added list', () => {
     note(dir, 'big.md', A);
     note(dir, 'nul.md', B);
     sync();
-    const before = liveRows(w.local).map((e) => e.id).sort();
+    const before = liveRows(w.local)
+      .map((e) => e.id)
+      .sort();
     note(dir, 'big.md', `${A} ${'padding line for the size cap\n'.repeat(10_000)}`);
     note(dir, 'nul.md', `${B}\u0000`);
 
     expect(claude(sync())).toMatchObject({ unread: 2, setAside: 0, replaced: 0, imported: 0 });
-    expect(liveRows(w.local).map((e) => e.id).sort()).toEqual(before);
+    expect(
+      liveRows(w.local)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(before);
   });
 
   it('an emptied file, as a tool leaves it mid-rewrite, leaves its rows alone', () => {
@@ -169,18 +194,21 @@ describe('agent memory sync: the Added list', () => {
     expect(ids()).toEqual(before);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('a note that fails to read leaves its row alone (chmod cannot block a read on Windows or as root)', () => {
-    const file = note(dir, 'deploy.md', A);
-    sync();
-    const { id } = only();
-    chmodSync(file, 0o000);
-    try {
-      expect(claude(sync())).toMatchObject({ unread: 1, setAside: 0 });
-    } finally {
-      chmodSync(file, 0o600);
-    }
-    expect(only().id).toBe(id);
-  });
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'a note that fails to read leaves its row alone (chmod cannot block a read on Windows or as root)',
+    () => {
+      const file = note(dir, 'deploy.md', A);
+      sync();
+      const { id } = only();
+      chmodSync(file, 0o000);
+      try {
+        expect(claude(sync())).toMatchObject({ unread: 1, setAside: 0 });
+      } finally {
+        chmodSync(file, 0o600);
+      }
+      expect(only().id).toBe(id);
+    },
+  );
 
   it('a refused item (edited to hold a secret, cut under 10 characters, or rejected) sets its tagged row aside', async () => {
     const REJECTED = 'The release branch is cut every second Thursday.';
@@ -201,7 +229,11 @@ describe('agent memory sync: the Added list', () => {
 
   it('a note holding a Bearer header or a JWT is refused, and an email address is stored masked', () => {
     note(dir, 'bearer.md', 'The staging API takes Authorization: Bearer abcdefghijklmnop123456 on every call.');
-    note(dir, 'jwt.md', 'Replay the session with eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl to reproduce it.');
+    note(
+      dir,
+      'jwt.md',
+      'Replay the session with eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl to reproduce it.',
+    );
     note(dir, 'email.md', 'Send the release notes to alice@example.com before tagging.');
 
     expect(claude(sync())).toMatchObject({ secret: 2, imported: 1 });
@@ -235,7 +267,9 @@ describe('agent memory sync: the Added list', () => {
     const id = importThenDelete();
     const source = `agent-memory:claude-code:${expectedContainer(dir, 'p')}/deploy.md#${sha(A).slice(0, 16)}`;
     withDb(w.local, (db) => {
-      const put = db.prepare(`INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at) VALUES ('default', ?, ?, ?, 'decay', 0.1, ?)`);
+      const put = db.prepare(
+        `INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at) VALUES ('default', ?, ?, ?, 'decay', 0.1, ?)`,
+      );
       put.run('mem_broken_json', A, '{not json', new Date().toISOString());
       put.run('mem_broken_entry', A, JSON.stringify({ source }), new Date(Date.now() + 1000).toISOString());
     });
@@ -253,7 +287,12 @@ describe('agent memory sync: the Added list', () => {
     const row = only();
     withDb(w.local, (db) => {
       db.exec('BEGIN IMMEDIATE');
-      insertDormantRow(db, { entry: { ...row, superseded_by: 'mem_elsewhere' }, strength: 0.1, reason: 'decay', dormantAt: new Date().toISOString() });
+      insertDormantRow(db, {
+        entry: { ...row, superseded_by: 'mem_elsewhere' },
+        strength: 0.1,
+        reason: 'decay',
+        dormantAt: new Date().toISOString(),
+      });
       deleteEntryRowInTx(db, row, 'test');
       db.exec('COMMIT');
     });
@@ -269,8 +308,16 @@ describe('agent memory sync: the Added list', () => {
     const base = `agent-memory:codex:${expectedContainer(file, 'u')}/user-profile/${sha(text).slice(0, 12)}`;
 
     expect(toolTally(sync(), 'codex').imported).toBe(2);
-    expect(liveRows(w.global).map((e) => e.source).sort()).toEqual([`${base}#${sha(text).slice(0, 16)}`, `${base}~2#${sha(text).slice(0, 16)}`]);
-    writeFileSync(file, ['v1', '', '## User Profile', '', '- Prefers tabs over spaces in Go files.', ''].join('\n'), 'utf8');
+    expect(
+      liveRows(w.global)
+        .map((e) => e.source)
+        .sort(),
+    ).toEqual([`${base}#${sha(text).slice(0, 16)}`, `${base}~2#${sha(text).slice(0, 16)}`]);
+    writeFileSync(
+      file,
+      ['v1', '', '## User Profile', '', '- Prefers tabs over spaces in Go files.', ''].join('\n'),
+      'utf8',
+    );
     expect(toolTally(sync(), 'codex')).toMatchObject({ unchanged: 1, setAside: 1 });
     expect(liveRows(w.global).map((e) => e.source)).toEqual([`${base}#${sha(text).slice(0, 16)}`]);
   });

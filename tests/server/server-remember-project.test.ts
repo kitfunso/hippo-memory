@@ -58,7 +58,11 @@ async function originAfterPost(h: ServerHandle, body: Record<string, JsonValue>)
 
 async function hookText(project: string): Promise<string> {
   const ctx: FullContext = apiCtx(store, 'default', adminActor('remember-project-test'));
-  const req = { sessionId: `s-${project}`, project: { name: project, legacyName: project }, payload: { prompt: PROMPT } };
+  const req = {
+    sessionId: `s-${project}`,
+    project: { name: project, legacyName: project },
+    payload: { prompt: PROMPT },
+  };
   return (await promptHookContext(ctx, req, { sharedStore: true })).stdout;
 }
 
@@ -115,7 +119,9 @@ describe('POST /v1/memories on a shared store', () => {
 
   it('ignores legacy_name, so a folder name never lands', async () => {
     const h = await start({ sharedStore: true });
-    expect(await originAfterPost(h, { content: ROW, project: { name: 'acme/app', legacy_name: 'hippo-team' } })).toBe('acme/app');
+    expect(await originAfterPost(h, { content: ROW, project: { name: 'acme/app', legacy_name: 'hippo-team' } })).toBe(
+      'acme/app',
+    );
   });
 
   it("a row posted with no project never reaches another project's prompt context", async () => {

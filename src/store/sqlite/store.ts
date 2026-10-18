@@ -8,11 +8,12 @@ import { getHippoDbPath } from '../../db/index.js';
 import { activeGoalsWithPoliciesAt } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
+import { loadAmbientCandidatesAt, loadContextCandidatesAt, newestEntriesAt, schemaFitAt } from '../candidates.js';
 import {
-  loadAmbientCandidatesAt, loadContextCandidatesAt, newestEntriesAt, schemaFitAt,
-} from '../candidates.js';
-import {
-  liveContentsBySourceAndTagAt, loadEntriesByIdsAt, loadFreshRawMemoriesAt, rawRowsUnderRefAt,
+  liveContentsBySourceAndTagAt,
+  loadEntriesByIdsAt,
+  loadFreshRawMemoriesAt,
+  rawRowsUnderRefAt,
 } from '../entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { sqliteCaptures } from './captures-group.js';
@@ -40,10 +41,7 @@ import { sqliteGraphRebuild } from './graph-rebuild-group.js';
 import { sqliteLedger } from './ledger-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
-import {
-  sqliteAuditMaintenance,
-  sqliteLessonWrites,
-} from './maintenance-groups.js';
+import { sqliteAuditMaintenance, sqliteLessonWrites } from './maintenance-groups.js';
 import { finishRecallAt, sqliteLastRecall } from './last-recall-group.js';
 import { sqliteGraphReads } from './graph-reads-group.js';
 import { sqliteObjects } from './objects-group.js';
@@ -57,10 +55,31 @@ import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
 import { type Handles, handlesOf, type OnHandle, openStore } from '../open.js';
 import {
-  type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
-  type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
-  type KeyGrants, type KeyWrites, type LastRecall, type LessonWrites, type Objects, type Predictions, type Quarantine,
-  type Readiness, type StoreGroups, type StoreReach, type StoreWith, type Sync, type VectorViews, type VectorWrites,
+  type AuditLog,
+  type AuditMaintenance,
+  type ConnectorEvents,
+  type ConnectorWrites,
+  type ContextReads,
+  type ContinuityBlock,
+  type DagReads,
+  type EntryWrites,
+  type GraphReads,
+  type HippoStore,
+  type KeyAudit,
+  type KeyGrants,
+  type KeyWrites,
+  type LastRecall,
+  type LessonWrites,
+  type Objects,
+  type Predictions,
+  type Quarantine,
+  type Readiness,
+  type StoreGroups,
+  type StoreReach,
+  type StoreWith,
+  type Sync,
+  type VectorViews,
+  type VectorWrites,
   hasGroup,
 } from '../port.js';
 import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
@@ -225,7 +244,9 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
     ping() {
       // A probe must not create the store; the first write does, so a root with none yet is ready.
       if (!existsSync(getHippoDbPath(hippoRoot))) return;
-      on((db) => { db.prepare('SELECT 1').get(); });
+      on((db) => {
+        db.prepare('SELECT 1').get();
+      });
     },
   };
 }
@@ -300,31 +321,70 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
 
 type ServedBaseMethods = Pick<
   HippoStore,
-  | 'kind' | 'findApiKey' | 'searchRecallEntries' | 'entriesByIds' | 'activeGoals' | 'freshRawEntries' | 'continuity'
-  | 'planningFallacyEvidence' | 'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
+  | 'kind'
+  | 'findApiKey'
+  | 'searchRecallEntries'
+  | 'entriesByIds'
+  | 'activeGoals'
+  | 'freshRawEntries'
+  | 'continuity'
+  | 'planningFallacyEvidence'
+  | 'appendAuditEvents'
+  | 'finishRecall'
+  | 'bumpRecallStats'
+  | 'recordTokens'
 >;
 
 function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
-  const { kind, findApiKey, searchRecallEntries, entriesByIds, activeGoals, freshRawEntries, continuity,
-    planningFallacyEvidence, appendAuditEvents, finishRecall, bumpRecallStats, recordTokens } = sync;
-  return { kind, findApiKey, searchRecallEntries, entriesByIds, activeGoals, freshRawEntries, continuity,
-    planningFallacyEvidence, appendAuditEvents, finishRecall, bumpRecallStats, recordTokens };
+  const {
+    kind,
+    findApiKey,
+    searchRecallEntries,
+    entriesByIds,
+    activeGoals,
+    freshRawEntries,
+    continuity,
+    planningFallacyEvidence,
+    appendAuditEvents,
+    finishRecall,
+    bumpRecallStats,
+    recordTokens,
+  } = sync;
+  return {
+    kind,
+    findApiKey,
+    searchRecallEntries,
+    entriesByIds,
+    activeGoals,
+    freshRawEntries,
+    continuity,
+    planningFallacyEvidence,
+    appendAuditEvents,
+    finishRecall,
+    bumpRecallStats,
+    recordTokens,
+  };
 }
 
 function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
   return {
     unfinishedHandoff: (tenantId, maxAgeMs, key) =>
-      on((db) => loadLatestHandoffAt(
-        db,
-        tenantId,
-        undefined,
-        { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
-        key ?? undefined,
-      ), openStore),
-    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) => on(
-      (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => ambientRefusal(e, admit), recall, origins),
-      openStore,
-    ),
+      on(
+        (db) =>
+          loadLatestHandoffAt(
+            db,
+            tenantId,
+            undefined,
+            { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
+            key ?? undefined,
+          ),
+        openStore,
+      ),
+    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) =>
+      on(
+        (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => ambientRefusal(e, admit), recall, origins),
+        openStore,
+      ),
     contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
     ambientTallies: (tenantId, filter) => on((db) => loadAmbientTalliesAt(db, tenantId, filter), openStore),
     newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),
@@ -363,12 +423,7 @@ function sqliteKeyAudit(on: OnHandle): Sync<KeyAudit> {
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
-function continuityAt(
-  on: OnHandle,
-  tenantId: string,
-  eventLimit: number,
-  key: ContinuityKey | null,
-): ContinuityBlock {
+function continuityAt(on: OnHandle, tenantId: string, eventLimit: number, key: ContinuityKey | null): ContinuityBlock {
   return on((db, files) => {
     const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined);
     const sessionId = activeSnapshot?.session_id ?? undefined;

@@ -29,10 +29,7 @@ function cleanup(home: string): void {
 }
 
 async function seedMemory(home: string, content: string, tenantId = 'default'): Promise<string> {
-  const res = await remember(
-    apiCtx(home, tenantId, { subject: 'cli', role: 'admin' }),
-    { content, kind: 'distilled' },
-  );
+  const res = await remember(apiCtx(home, tenantId, { subject: 'cli', role: 'admin' }), { content, kind: 'distilled' });
   return res.id;
 }
 

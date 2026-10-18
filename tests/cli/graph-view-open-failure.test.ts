@@ -28,8 +28,14 @@ describe('graph view --open', () => {
     const launches: string[][] = [];
     const launcher = Object.assign(new EventEmitter(), { unref: () => {} });
     try {
-      openInBrowser('graph&calc.html', (cmd, args) => { launches.push([cmd, ...args]); return launcher; });
-      openInBrowser('graph.html', (cmd, args) => { launches.push([cmd, ...args]); return launcher; });
+      openInBrowser('graph&calc.html', (cmd, args) => {
+        launches.push([cmd, ...args]);
+        return launcher;
+      });
+      openInBrowser('graph.html', (cmd, args) => {
+        launches.push([cmd, ...args]);
+        return launcher;
+      });
       expect(launches).toEqual([['cmd', '/c', 'start', '', 'graph.html']]);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('graph&calc.html'));
       expect(process.exitCode).toBe(1);

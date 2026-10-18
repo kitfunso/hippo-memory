@@ -85,9 +85,9 @@ type DedupResult = ReturnType<typeof deduplicateStore>;
 
 function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason
-  const sameLayerSem = result.pairs.filter(p => p.keptLayer === 'semantic' && p.removedLayer === 'semantic');
-  const sameLayerEpi = result.pairs.filter(p => p.keptLayer === 'episodic' && p.removedLayer === 'episodic');
-  const crossLayer = result.pairs.filter(p => p.keptLayer !== p.removedLayer);
+  const sameLayerSem = result.pairs.filter((p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic');
+  const sameLayerEpi = result.pairs.filter((p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic');
+  const crossLayer = result.pairs.filter((p) => p.keptLayer !== p.removedLayer);
 
   console.log(`${dryRun ? 'Would remove' : 'Removed'} ${result.removed} duplicates:`);
   if (sameLayerSem.length > 0) {
@@ -101,7 +101,6 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   if (crossLayer.length > 0) {
     console.log(`  ${crossLayer.length} cross-layer duplicates (episodic content already consolidated into semantic)`);
   }
-
 }
 
 function printDedupPairs(result: DedupResult, dryRun: boolean): void {
@@ -196,14 +195,16 @@ function printEmbedStatus(ctx: CliContext): void {
 /** The provider to embed with, or null after saying why none is usable. */
 function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingProvider | null {
   // Embedding (unlike status/reset) needs an available provider.
-  const embedProvider = given ?? (() => {
-    try {
-      return resolveEmbeddingProvider(cliConfig(root).embeddings);
-    } catch (err) {
-      printError(errorMessage(err));
-      return null;
-    }
-  })();
+  const embedProvider =
+    given ??
+    (() => {
+      try {
+        return resolveEmbeddingProvider(cliConfig(root).embeddings);
+      } catch (err) {
+        printError(errorMessage(err));
+        return null;
+      }
+    })();
   if (!embedProvider) {
     process.exitCode = 1;
     return null;
@@ -218,9 +219,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
     console.log('  npm install @huggingface/transformers');
     process.exitCode = 1;
   } else {
-    printError(
-      `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
-    );
+    printError(`Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`);
     printError(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
     process.exitCode = 1;
   }

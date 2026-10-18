@@ -41,12 +41,15 @@ beforeEach(async () => {
   home = makeRoot('http-c5');
   // Seed 20 query-matching memories so droppedByBudget > 0 when limit < 20.
   for (let i = 0; i < 20; i++) {
-    writeEntry(home, createMemory(`omega ${i}`, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Buffer,
-      kind: 'raw',
-      tenantId: 'default',
-    }));
+    writeEntry(
+      home,
+      createMemory(`omega ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Buffer,
+        kind: 'raw',
+        tenantId: 'default',
+      }),
+    );
   }
   handle = await serve({ hippoRoot: home, port: 0 });
 });

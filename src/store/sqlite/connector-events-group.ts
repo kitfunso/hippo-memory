@@ -76,8 +76,14 @@ function archiveArtifactAt(
 
 const queueOf = (connector: DeadLetterConnector) => (connector === 'slack' ? SLACK_DLQ : GITHUB_DLQ);
 
-type DeliveryMethods = 'eventRecord' | 'markEventSeen' | 'deletionTarget' | 'archiveDeletedArtifact' | 'slackTeamRoute'
-  | 'githubRouting' | 'parkDeadLetter';
+type DeliveryMethods =
+  | 'eventRecord'
+  | 'markEventSeen'
+  | 'deletionTarget'
+  | 'archiveDeletedArtifact'
+  | 'slackTeamRoute'
+  | 'githubRouting'
+  | 'parkDeadLetter';
 
 function sqliteConnectorState(on: OnHandle): Omit<Sync<ConnectorEvents>, DeliveryMethods> {
   return {

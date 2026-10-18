@@ -35,7 +35,8 @@ interface EntityOwner {
 
 const refused = (status: number, error: string): Reply => ({ status, text: JSON.stringify({ error }) });
 const idsIn = (reply: Reply): string => [...reply.text.matchAll(/\{"id":(\d+),/g)].map((m) => m[1]).join(',');
-const fieldIn = (reply: Reply, key: string): string | undefined => new RegExp(`"${key}":"([^"]+)"`).exec(reply.text)?.[1];
+const fieldIn = (reply: Reply, key: string): string | undefined =>
+  new RegExp(`"${key}":"([^"]+)"`).exec(reply.text)?.[1];
 
 /** One live server on a fresh store, called with a real key so the audit actor is the key and never the default. */
 class ObjectApi {
@@ -79,7 +80,9 @@ class ObjectApi {
     const db = openHippoDb(this.root);
     try {
       // SAFETY: the SELECT names exactly the four audit_log columns AuditRow declares.
-      const rows = db.prepare(`SELECT op, actor, target_id, metadata_json FROM audit_log ORDER BY id`).all() as AuditRow[];
+      const rows = db
+        .prepare(`SELECT op, actor, target_id, metadata_json FROM audit_log ORDER BY id`)
+        .all() as AuditRow[];
       return rows.map((r) => {
         const actor = r.actor === `api_key:${this.keyId}` ? 'key' : r.actor;
         return `${r.op} ${actor} ${r.target_id} ${r.metadata_json}`.replace(/\b[a-z]{3}_[0-9a-f]{12}\b/g, '<mem>');
@@ -94,7 +97,9 @@ class ObjectApi {
     const db = openHippoDb(this.root);
     try {
       // SAFETY: the SELECT names exactly the one entities column EntityOwner declares.
-      const rows = db.prepare(`SELECT source_object_id FROM entities WHERE source_object_type = ? ORDER BY id`).all(type) as EntityOwner[];
+      const rows = db
+        .prepare(`SELECT source_object_id FROM entities WHERE source_object_type = ? ORDER BY id`)
+        .all(type) as EntityOwner[];
       return rows.map((r) => r.source_object_id);
     } finally {
       closeHippoDb(db);
@@ -121,7 +126,9 @@ interface TypeRow {
 
 const TYPES: readonly TypeRow[] = [
   {
-    type: 'decision', path: '/v1/decisions', next: 'supersede',
+    type: 'decision',
+    path: '/v1/decisions',
+    next: 'supersede',
     create: { text: '  Use Postgres  ', context: 'cheaper to run' },
     stored: '"decisionText":"  Use Postgres  "',
     nextBody: { text: 'Use SQLite' },
@@ -138,13 +145,16 @@ const TYPES: readonly TypeRow[] = [
     ],
   },
   {
-    type: 'incident', path: '/v1/incidents', next: 'resolve',
+    type: 'incident',
+    path: '/v1/incidents',
+    next: 'resolve',
     create: { text: '  Checkout returned 500s  ' },
     stored: '"incidentText":"  Checkout returned 500s  "',
     nextBody: { resolutionText: 'rolled back' },
     nextAgain: "resolveIncident: incident 1 is not open (status='resolved'); only open incidents can be resolved.",
     nextMissing: 'resolveIncident: incident 9999 not found for tenant default',
-    closeAgain: "closeIncident: incident 1 is already closed (status='closed'); only open or resolved incidents can be closed.",
+    closeAgain:
+      "closeIncident: incident 1 is already closed (status='closed'); only open or resolved incidents can be closed.",
     audit: [
       'incident_open key 1 {"incident_id":1,"has_context":false,"linked_memory_count":0}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -153,7 +163,9 @@ const TYPES: readonly TypeRow[] = [
     ],
   },
   {
-    type: 'process', path: '/v1/processes', next: 'supersede',
+    type: 'process',
+    path: '/v1/processes',
+    next: 'supersede',
     create: { processName: '  Release  ', steps: ['run the tests'] },
     stored: '"processName":"  Release  "',
     nextBody: { steps: ['sign the build'] },
@@ -170,7 +182,9 @@ const TYPES: readonly TypeRow[] = [
     ],
   },
   {
-    type: 'policy', path: '/v1/policies', next: 'supersede',
+    type: 'policy',
+    path: '/v1/policies',
+    next: 'supersede',
     create: { policyName: '  Retention  ', policyText: 'Delete logs after 90 days' },
     stored: '"policyName":"  Retention  "',
     nextBody: { policyText: 'Delete logs after 30 days' },
@@ -187,7 +201,9 @@ const TYPES: readonly TypeRow[] = [
     ],
   },
   {
-    type: 'skill', path: '/v1/skills', next: 'supersede',
+    type: 'skill',
+    path: '/v1/skills',
+    next: 'supersede',
     create: { skillName: '  Review  ', instructions: 'Check the down path' },
     stored: '"skillName":"Review"',
     nextBody: { instructions: 'Check both paths' },
@@ -204,7 +220,9 @@ const TYPES: readonly TypeRow[] = [
     ],
   },
   {
-    type: 'customer note', path: '/v1/customer-notes', next: 'supersede',
+    type: 'customer note',
+    path: '/v1/customer-notes',
+    next: 'supersede',
     create: { customer: '  Acme Ltd  ', note: 'Prefers email' },
     stored: '"customer":"Acme Ltd"',
     nextBody: { note: 'Prefers a call' },
@@ -221,7 +239,9 @@ const TYPES: readonly TypeRow[] = [
     ],
   },
   {
-    type: 'project brief', path: '/v1/project-briefs', next: 'supersede',
+    type: 'project brief',
+    path: '/v1/project-briefs',
+    next: 'supersede',
     create: { repo: '  acme/web  ', summary: 'Storefront app' },
     stored: '"repo":"acme/web"',
     nextBody: { summary: 'Storefront and admin app' },
@@ -248,7 +268,9 @@ describe('typed objects over HTTP, one fresh store per case', () => {
       expect(made.text).toContain(row.stored);
       await api.send('POST', `${row.path}/1/${row.next}`, row.nextBody);
       expect(await api.send('POST', `${row.path}/1/${row.next}`, row.nextBody)).toEqual(refused(409, row.nextAgain));
-      expect(await api.send('POST', `${row.path}/9999/${row.next}`, row.nextBody)).toEqual(refused(404, row.nextMissing));
+      expect(await api.send('POST', `${row.path}/9999/${row.next}`, row.nextBody)).toEqual(
+        refused(404, row.nextMissing),
+      );
       const last = row.next === 'supersede' ? 2 : 1;
       await api.send('POST', `${row.path}/${last}/close`);
       expect(await api.send('POST', `${row.path}/${last}/close`)).toEqual(refused(409, row.closeAgain));
@@ -264,20 +286,29 @@ describe('typed objects over HTTP, one fresh store per case', () => {
     ['project', '/v1/project-briefs', { repo: 'acme/web', summary: 'Storefront app' }],
   ];
 
-  it.each(MIRRORLESS)('closing a %s object whose mirror memory is gone drops its graph rows and no other', async (source, path, create) => {
-    const api = await ObjectApi.start();
-    try {
-      const first = await api.send('POST', path, create);
-      await api.send('POST', path, create);
-      deleteEntry(api.root, fieldIn(first, 'memoryId') ?? '');
-      for (const id of [1, 2]) insertEntityAt(api.root, 'default', { entityType: source, name: `object ${id}`, sourceObject: { type: source, id } });
-      expect(api.graphOwners(source)).toEqual([1, 2]);
-      expect((await api.send('POST', `${path}/1/close`)).status).toBe(200);
-      expect(api.graphOwners(source)).toEqual([2]);
-    } finally {
-      await api.stop();
-    }
-  });
+  it.each(MIRRORLESS)(
+    'closing a %s object whose mirror memory is gone drops its graph rows and no other',
+    async (source, path, create) => {
+      const api = await ObjectApi.start();
+      try {
+        const first = await api.send('POST', path, create);
+        await api.send('POST', path, create);
+        deleteEntry(api.root, fieldIn(first, 'memoryId') ?? '');
+        for (const id of [1, 2]) {
+          insertEntityAt(api.root, 'default', {
+            entityType: source,
+            name: `object ${id}`,
+            sourceObject: { type: source, id },
+          });
+        }
+        expect(api.graphOwners(source)).toEqual([1, 2]);
+        expect((await api.send('POST', `${path}/1/close`)).status).toBe(200);
+        expect(api.graphOwners(source)).toEqual([2]);
+      } finally {
+        await api.stop();
+      }
+    },
+  );
 });
 
 describe('typed objects over HTTP, one shared store', () => {
@@ -310,24 +341,42 @@ describe('typed objects over HTTP, one shared store', () => {
   });
 
   const FILTERS: readonly (readonly [string, string, Body, Body, string])[] = [
-    ['/v1/customer-notes', 'customer', { customer: 'Acme Ltd', note: 'Prefers email' }, { customer: 'Globex', note: 'Pays monthly' }, 'globex'],
-    ['/v1/project-briefs', 'repo', { repo: 'acme/web', summary: 'Storefront app' }, { repo: 'acme/api', summary: 'Orders service' }, 'ACME/API'],
+    [
+      '/v1/customer-notes',
+      'customer',
+      { customer: 'Acme Ltd', note: 'Prefers email' },
+      { customer: 'Globex', note: 'Pays monthly' },
+      'globex',
+    ],
+    [
+      '/v1/project-briefs',
+      'repo',
+      { repo: 'acme/web', summary: 'Storefront app' },
+      { repo: 'acme/api', summary: 'Orders service' },
+      'ACME/API',
+    ],
   ];
 
-  it.each(FILTERS)('%s: an empty %s filter lists every row and another case matches none', async (path, key, one, two, otherCase) => {
-    await api.send('POST', path, one);
-    await api.send('POST', path, two);
-    expect(idsIn(await api.send('GET', `${path}?${key}=`))).toBe('2,1');
-    const none = await api.send('GET', `${path}?${key}=${otherCase}`);
-    expect([none.status, idsIn(none)]).toEqual([200, '']);
-  });
+  it.each(FILTERS)(
+    '%s: an empty %s filter lists every row and another case matches none',
+    async (path, key, one, two, otherCase) => {
+      await api.send('POST', path, one);
+      await api.send('POST', path, two);
+      expect(idsIn(await api.send('GET', `${path}?${key}=`))).toBe('2,1');
+      const none = await api.send('GET', `${path}?${key}=${otherCase}`);
+      expect([none.status, idsIn(none)]).toEqual([200, '']);
+    },
+  );
 
-  it.each(['/v1/decisions', '/v1/incidents'])('%s takes a text of spaces only when a context comes with it', async (path) => {
-    expect((await api.send('POST', path, { text: '   ' })).status).toBe(400);
-    const made = await api.send('POST', path, { text: '   ', context: 'cheaper to run' });
-    expect(made.status).toBe(201);
-    expect(made.text).toContain('Text":"   "');
-  });
+  it.each(['/v1/decisions', '/v1/incidents'])(
+    '%s takes a text of spaces only when a context comes with it',
+    async (path) => {
+      expect((await api.send('POST', path, { text: '   ' })).status).toBe(400);
+      const made = await api.send('POST', path, { text: '   ', context: 'cheaper to run' });
+      expect(made.status).toBe(201);
+      expect(made.text).toContain('Text":"   "');
+    },
+  );
 
   it('a policy made with no validFrom starts at the instant it was created', async () => {
     const made = await api.send('POST', '/v1/policies', { policyName: 'Access', policyText: 'Two reviewers' });
@@ -350,39 +399,79 @@ interface NounRow {
   readonly reviseAgain?: string;
 }
 
-const strict = (label: string) => (raw: string): string => `exit 1: Invalid ${label} id: "${raw}" (expected a positive integer).`;
+const strict =
+  (label: string) =>
+  (raw: string): string =>
+    `exit 1: Invalid ${label} id: "${raw}" (expected a positive integer).`;
 const again = (fn: string, label: string, plural: string): string =>
   `${fn}: ${label} 1 is not active (status='superseded'); only active ${plural} can be superseded.`;
 
 const NOUNS: readonly NounRow[] = [
   {
-    noun: 'predict', seed: ['predict', 'Ships by Friday', '--class', 'release'], read: 'show',
-    refuses: strict('prediction'), loose: strict('prediction'),
+    noun: 'predict',
+    seed: ['predict', 'Ships by Friday', '--class', 'release'],
+    read: 'show',
+    refuses: strict('prediction'),
+    loose: strict('prediction'),
   },
   {
-    noun: 'decide', seed: ['decide', 'Use Postgres for billing'], read: 'get',
-    refuses: strict('decision'), loose: strict('decision'),
-  },
-  { noun: 'incident', seed: ['incident', 'open', 'Checkout returned 500s'], read: 'get', refuses: strict('incident'), loose: strict('incident') },
-  {
-    noun: 'process', seed: ['process', 'new', 'Release', '--step', 'run the tests'], read: 'get', refuses: strict('process'), loose: strict('process'),
-    revise: ['--step', 'sign the build'], reviseAgain: `exit 1: ${again('saveProcess', 'process', 'processes')}`,
+    noun: 'decide',
+    seed: ['decide', 'Use Postgres for billing'],
+    read: 'get',
+    refuses: strict('decision'),
+    loose: strict('decision'),
   },
   {
-    noun: 'policy', seed: ['policy', 'new', 'Retention', '--text', 'Delete logs after 90 days'], read: 'get', refuses: strict('policy'), loose: strict('policy'),
-    revise: ['--text', 'Delete logs after 30 days'], reviseAgain: `exit 1: ${again('savePolicy', 'policy', 'policies')}`,
+    noun: 'incident',
+    seed: ['incident', 'open', 'Checkout returned 500s'],
+    read: 'get',
+    refuses: strict('incident'),
+    loose: strict('incident'),
   },
   {
-    noun: 'skill', seed: ['skill', 'new', 'Review', '--instructions', 'Check the down path'], read: 'get', refuses: strict('skill'), loose: strict('skill'),
-    revise: ['--instructions', 'Check both paths'], reviseAgain: `exit 1: ${again('saveSkill', 'skill', 'skills')}`,
+    noun: 'process',
+    seed: ['process', 'new', 'Release', '--step', 'run the tests'],
+    read: 'get',
+    refuses: strict('process'),
+    loose: strict('process'),
+    revise: ['--step', 'sign the build'],
+    reviseAgain: `exit 1: ${again('saveProcess', 'process', 'processes')}`,
   },
   {
-    noun: 'brief', seed: ['brief', 'new', 'acme/web', '--summary', 'Storefront app'], read: 'get', refuses: strict('brief'), loose: strict('brief'),
-    revise: ['--summary', 'Storefront and admin app'], reviseAgain: `exit 1: ${again('saveProjectBrief', 'brief', 'briefs')}`,
+    noun: 'policy',
+    seed: ['policy', 'new', 'Retention', '--text', 'Delete logs after 90 days'],
+    read: 'get',
+    refuses: strict('policy'),
+    loose: strict('policy'),
+    revise: ['--text', 'Delete logs after 30 days'],
+    reviseAgain: `exit 1: ${again('savePolicy', 'policy', 'policies')}`,
   },
   {
-    noun: 'note', seed: ['note', 'new', 'Acme Ltd', '--text', 'Prefers email'], read: 'get', refuses: strict('note'), loose: strict('note'),
-    revise: ['--text', 'Prefers a call'], reviseAgain: `exit 1: ${again('saveCustomerNote', 'note', 'notes')}`,
+    noun: 'skill',
+    seed: ['skill', 'new', 'Review', '--instructions', 'Check the down path'],
+    read: 'get',
+    refuses: strict('skill'),
+    loose: strict('skill'),
+    revise: ['--instructions', 'Check both paths'],
+    reviseAgain: `exit 1: ${again('saveSkill', 'skill', 'skills')}`,
+  },
+  {
+    noun: 'brief',
+    seed: ['brief', 'new', 'acme/web', '--summary', 'Storefront app'],
+    read: 'get',
+    refuses: strict('brief'),
+    loose: strict('brief'),
+    revise: ['--summary', 'Storefront and admin app'],
+    reviseAgain: `exit 1: ${again('saveProjectBrief', 'brief', 'briefs')}`,
+  },
+  {
+    noun: 'note',
+    seed: ['note', 'new', 'Acme Ltd', '--text', 'Prefers email'],
+    read: 'get',
+    refuses: strict('note'),
+    loose: strict('note'),
+    revise: ['--text', 'Prefers a call'],
+    reviseAgain: `exit 1: ${again('saveCustomerNote', 'note', 'notes')}`,
   },
 ];
 
@@ -419,12 +508,17 @@ describe('typed-object CLI verbs', () => {
   });
 
   it.each(NOUNS.filter((row) => row.noun !== 'predict'))('hippo $noun list refuses --limit=0', async (row) => {
-    expect(await hippo(row.noun, 'list', '--limit=0')).toBe('exit 1: Invalid --limit: "0". Must be a positive integer.');
+    expect(await hippo(row.noun, 'list', '--limit=0')).toBe(
+      'exit 1: Invalid --limit: "0". Must be a positive integer.',
+    );
   });
 
-  it.each(NOUNS.filter((row) => row.revise))('hippo $noun supersede: what a second supersede of one row prints', async (row) => {
-    const args = [row.noun, 'supersede', '1', ...(row.revise ?? [])];
-    expect(await hippo(...args)).toMatch(/^exit 0: /);
-    expect(await hippo(...args)).toBe(row.reviseAgain);
-  });
+  it.each(NOUNS.filter((row) => row.revise))(
+    'hippo $noun supersede: what a second supersede of one row prints',
+    async (row) => {
+      const args = [row.noun, 'supersede', '1', ...(row.revise ?? [])];
+      expect(await hippo(...args)).toMatch(/^exit 0: /);
+      expect(await hippo(...args)).toBe(row.reviseAgain);
+    },
+  );
 });

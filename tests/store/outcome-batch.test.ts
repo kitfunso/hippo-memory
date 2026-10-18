@@ -7,7 +7,13 @@ import { recordStatements } from '../_helpers/count-statements.js';
 import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
 import { openStore } from '../../src/store/open.js';
 import {
-  CHURN_STALE_TAG, DAG_LEVEL, DEFAULT_HALF_LIFE_DAYS, Layer, createMemory, entryAfterOutcome, type MemoryEntry,
+  CHURN_STALE_TAG,
+  DAG_LEVEL,
+  DEFAULT_HALF_LIFE_DAYS,
+  Layer,
+  createMemory,
+  entryAfterOutcome,
+  type MemoryEntry,
 } from '../../src/core/memory.js';
 import { ownScopeTouches } from '../../src/core/recall-scope.js';
 import { writeEntriesTogetherAt, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/entry-writes.js';
@@ -33,21 +39,28 @@ afterEach(() => {
 
 /** The per-id path outcome ran before the set rewrite, kept as the reference the new path must match. */
 function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeWrite): string[] {
-  const applied = auditingRefusal(db, outcome.actor, () => withWriteScope(db, 'apply_outcome', () => {
-    const live = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
-    const out: MemoryEntry[] = [];
-    for (const id of outcome.ids) {
-      const entry = live.get(id);
-      if (!entry || !ownScopeTouches(outcome.ownScope, entry.scope)) continue;
-      const updated = entryAfterOutcome(entry, outcome.good);
-      writeEntryDbOnly(db, updated, { actor: outcome.actor });
-      live.set(id, updated);
-      appendAuditEvent(db, { tenantId: outcome.tenantId, actor: outcome.actor, op: 'outcome', targetId: id,
-        metadata: { good: outcome.good } });
-      out.push(updated);
-    }
-    return out;
-  }));
+  const applied = auditingRefusal(db, outcome.actor, () =>
+    withWriteScope(db, 'apply_outcome', () => {
+      const live = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
+      const out: MemoryEntry[] = [];
+      for (const id of outcome.ids) {
+        const entry = live.get(id);
+        if (!entry || !ownScopeTouches(outcome.ownScope, entry.scope)) continue;
+        const updated = entryAfterOutcome(entry, outcome.good);
+        writeEntryDbOnly(db, updated, { actor: outcome.actor });
+        live.set(id, updated);
+        appendAuditEvent(db, {
+          tenantId: outcome.tenantId,
+          actor: outcome.actor,
+          op: 'outcome',
+          targetId: id,
+          metadata: { good: outcome.good },
+        });
+        out.push(updated);
+      }
+      return out;
+    }),
+  );
   for (const entry of applied) writeEntryMirrorsIn({ hippoRoot: root }, entry);
   return applied.map((entry) => entry.id);
 }
@@ -62,14 +75,16 @@ function memory(i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
  * row, repeated ids and a missing one. */
 function fixture(count: number) {
   const summaries = [0, 1, 2].map((i) => memory(10_000 + i, { dag_level: DAG_LEVEL.topic, layer: Layer.Semantic }));
-  const rows = Array.from({ length: count }, (_, i) => memory(i, {
-    tags: i % 7 === 0 ? ['alpha', CHURN_STALE_TAG] : ['alpha'],
-    dag_parent_id: i % 10 === 0 ? summaries[i % 3]!.id : null,
-    layer: [Layer.Buffer, Layer.Episodic, Layer.Semantic][i % 3]!,
-    scope: i % 50 === 1 ? 'personal:private:someone-else' : null,
-    outcome_positive: i % 4,
-    outcome_negative: i % 3,
-  }));
+  const rows = Array.from({ length: count }, (_, i) =>
+    memory(i, {
+      tags: i % 7 === 0 ? ['alpha', CHURN_STALE_TAG] : ['alpha'],
+      dag_parent_id: i % 10 === 0 ? summaries[i % 3]!.id : null,
+      layer: [Layer.Buffer, Layer.Episodic, Layer.Semantic][i % 3]!,
+      scope: i % 50 === 1 ? 'personal:private:someone-else' : null,
+      outcome_positive: i % 4,
+      outcome_negative: i % 3,
+    }),
+  );
   const foreign = memory(20_000, { tenant_id: 'other' });
   const repeats = [rows[3]!.id, rows[3]!.id, rows[4]!.id];
   const ids = [...rows.map((row) => row.id), summaries[0]!.id, foreign.id, ...repeats, 'mem_missing'];
@@ -84,8 +99,10 @@ function seeded(label: string, entries: readonly MemoryEntry[]) {
   // The seed's own child writes marked every parent; clear all but one so the outcome has flips to make.
   db.prepare('UPDATE memories SET summary_dirty = (id = ?)').run(entries[2]!.id);
   // A stale copy in another layer, which every mirror write removes.
-  fs.copyFileSync(path.join(root, entries[3]!.layer, `${entries[3]!.id}.md`), path.join(root, Layer.Semantic,
-    `${entries[3]!.id}.md`));
+  fs.copyFileSync(
+    path.join(root, entries[3]!.layer, `${entries[3]!.id}.md`),
+    path.join(root, Layer.Semantic, `${entries[3]!.id}.md`),
+  );
   return { root, db };
 }
 
@@ -101,14 +118,26 @@ function mirrorFiles(root: string) {
   return files;
 }
 
-interface AuditRow { id: number; ts: string; tenant_id: string; actor: string; op: string; target_id: string | null }
-interface FtsRow { id: string; content: string; tags: string }
+interface AuditRow {
+  id: number;
+  ts: string;
+  tenant_id: string;
+  actor: string;
+  op: string;
+  target_id: string | null;
+}
+interface FtsRow {
+  id: string;
+  content: string;
+  tags: string;
+}
 
 /** Every stored value outcome can touch, with each column's storage class; updated_at is SQLite's own clock. */
 function snapshot(root: string, db: DatabaseSyncLike) {
   // SAFETY: PRAGMA table_info answers one row per column, its name in `name`.
   const columns = (db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>)
-    .map((c) => c.name).filter((name) => name !== 'updated_at');
+    .map((c) => c.name)
+    .filter((name) => name !== 'updated_at');
   const types = columns.map((c) => `typeof(${c})`).join(', ');
   return {
     memories: db.prepare(`SELECT ${columns.join(', ')} FROM memories ORDER BY id`).all(),
@@ -171,10 +200,18 @@ describe('outcome that fails mid-batch', () => {
   }
 
   it.each([
-    ['a row update', (id: string) => `CREATE TRIGGER fail_row BEFORE UPDATE ON memories WHEN NEW.id = '${id}' ` +
-      `BEGIN SELECT RAISE(ABORT, 'row refused'); END`],
-    ['an audit row', (id: string) => `CREATE TRIGGER fail_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'outcome' ` +
-      `AND NEW.target_id = '${id}' BEGIN SELECT RAISE(ABORT, 'audit refused'); END`],
+    [
+      'a row update',
+      (id: string) =>
+        `CREATE TRIGGER fail_row BEFORE UPDATE ON memories WHEN NEW.id = '${id}' ` +
+        `BEGIN SELECT RAISE(ABORT, 'row refused'); END`,
+    ],
+    [
+      'an audit row',
+      (id: string) =>
+        `CREATE TRIGGER fail_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'outcome' ` +
+        `AND NEW.target_id = '${id}' BEGIN SELECT RAISE(ABORT, 'audit refused'); END`,
+    ],
   ])('leaves no row, audit row or mirror when %s fails', (_label, trigger) => {
     const { root, db, ids } = failingStore(trigger);
     const before = snapshot(root, db);

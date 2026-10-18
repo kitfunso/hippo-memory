@@ -30,14 +30,25 @@ describe('a nearest-row read on a store over the threshold', () => {
   it('answers the same from the reader with the graph, the reader without it and the store in process', async () => {
     const root = newRoot('vector-graph-lanes');
     const vectors = clusteredVectors(ROWS, DIM, 21);
-    seedVectorRows(root, vectors.map((vector, i) => ({ id: `m-${i}`, tenantId: i % 2 === 0 ? 'even' : 'odd', vector })));
+    seedVectorRows(
+      root,
+      vectors.map((vector, i) => ({ id: `m-${i}`, tenantId: i % 2 === 0 ? 'even' : 'odd', vector })),
+    );
     vi.stubEnv('HIPPO_LOG', 'info');
     const logged = stderrText();
     const executor = createSqliteExecutor(root, { vectorGraphThreshold: 100 });
     const store = workerSqliteStore(root, executor);
     const inProcess = sqliteStore(root);
-    cleanups.push(() => store.close(), () => inProcess.close());
-    const spec = (tenantId: string): VectorCandidateSpec => ({ tenantId, includeSuperseded: false, limit: 10, scope: { mode: 'default-deny' } });
+    cleanups.push(
+      () => store.close(),
+      () => inProcess.close(),
+    );
+    const spec = (tenantId: string): VectorCandidateSpec => ({
+      tenantId,
+      includeSuperseded: false,
+      limit: 10,
+      scope: { mode: 'default-deny' },
+    });
 
     await store.vectors.nearestEntries(vectors[0], spec('even'));
     await until(() => logged().includes(`the vector graph of ${ROWS} vectors of length ${DIM} is ready`));

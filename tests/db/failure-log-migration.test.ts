@@ -18,13 +18,30 @@ describe('schema v46', () => {
     try {
       expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       // SAFETY: PRAGMA table_info rows carry a TEXT name column.
-      const columns = (db.prepare(`PRAGMA table_info(failure_log)`).all() as Array<{ name: string }>).map((c) => c.name);
+      const columns = (db.prepare(`PRAGMA table_info(failure_log)`).all() as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
       // The open runs on to the latest schema, so v54's owner, project and retry columns follow v46's.
-      expect(columns).toEqual(['id', 'ts', 'tenant_id', 'session_id', 'tool', 'outcome', 'skip_rule', 'sig_hash', 'detail_hash', 'owner_subject', 'origin_project', 'request_id']);
+      expect(columns).toEqual([
+        'id',
+        'ts',
+        'tenant_id',
+        'session_id',
+        'tool',
+        'outcome',
+        'skip_rule',
+        'sig_hash',
+        'detail_hash',
+        'owner_subject',
+        'origin_project',
+        'request_id',
+      ]);
       // SAFETY: the SELECT names one TEXT column.
-      const indexes = (db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'failure_log' ORDER BY name`,
-      ).all() as Array<{ name: string }>).map((r) => r.name);
+      const indexes = (
+        db
+          .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'failure_log' ORDER BY name`)
+          .all() as Array<{ name: string }>
+      ).map((r) => r.name);
       expect(indexes).toEqual(['idx_failure_log_request', 'idx_failure_log_tenant', 'idx_failure_log_ts']);
     } finally {
       closeHippoDb(db);

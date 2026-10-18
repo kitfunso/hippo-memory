@@ -34,9 +34,19 @@ describe('readMigrationVersions', () => {
   });
 
   it('reads the version each listed file declares, not the name it is imported under', () => {
-    writeFileSync(join(dir, 'index.ts'), `import { v01 } from './v01.js';\nexport const MIGRATIONS: Migration[] = [\n  v01,\n  v02,\n  v60,\n];\n`);
-    for (const [name, version] of [['v01', 1], ['v02', 2], ['v60', 59]] as const) {
-      writeFileSync(join(dir, `${name}.ts`), `export const ${name}: Migration = {\n    version: ${version},\n    up: () => {},\n};\n`);
+    writeFileSync(
+      join(dir, 'index.ts'),
+      `import { v01 } from './v01.js';\nexport const MIGRATIONS: Migration[] = [\n  v01,\n  v02,\n  v60,\n];\n`,
+    );
+    for (const [name, version] of [
+      ['v01', 1],
+      ['v02', 2],
+      ['v60', 59],
+    ] as const) {
+      writeFileSync(
+        join(dir, `${name}.ts`),
+        `export const ${name}: Migration = {\n    version: ${version},\n    up: () => {},\n};\n`,
+      );
     }
     expect(readMigrationVersions(dir)).toEqual([1, 2, 59]);
   });

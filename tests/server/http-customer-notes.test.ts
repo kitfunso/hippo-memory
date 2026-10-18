@@ -30,7 +30,9 @@ beforeEach(async () => {
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-note', role: 'admin' });
-  } finally { closeHippoDb(db); }
+  } finally {
+    closeHippoDb(db);
+  }
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {
@@ -42,7 +44,11 @@ function authHeaders(key: CreateApiKeyResult = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
 async function createNote(body: { customer: string; note: string }, key: CreateApiKeyResult = apiKey) {
-  return fetch(`${handle.url}/v1/customer-notes`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
+  return fetch(`${handle.url}/v1/customer-notes`, {
+    method: 'POST',
+    headers: authHeaders(key),
+    body: JSON.stringify(body),
+  });
 }
 
 describe('HTTP /v1/customer-notes (entity-scoped first-class object)', () => {
@@ -50,13 +56,21 @@ describe('HTTP /v1/customer-notes (entity-scoped first-class object)', () => {
     await createNote({ customer: 'Acme', note: 'n1' });
     await createNote({ customer: 'Acme', note: 'n2' });
     await createNote({ customer: 'Beta', note: 'b1' });
-    const all = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes`, { headers: authHeaders() }));
+    const all = await jsonAs<{ notes: CustomerNote[] }>(
+      await fetch(`${handle.url}/v1/customer-notes`, { headers: authHeaders() }),
+    );
     expect(all.notes.length).toBe(3);
-    const acme = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes?customer=Acme`, { headers: authHeaders() }));
+    const acme = await jsonAs<{ notes: CustomerNote[] }>(
+      await fetch(`${handle.url}/v1/customer-notes?customer=Acme`, { headers: authHeaders() }),
+    );
     expect(acme.notes.length).toBe(2); // many per customer
-    const acmeActive = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes?customer=Acme&status=active`, { headers: authHeaders() }));
+    const acmeActive = await jsonAs<{ notes: CustomerNote[] }>(
+      await fetch(`${handle.url}/v1/customer-notes?customer=Acme&status=active`, { headers: authHeaders() }),
+    );
     expect(acmeActive.notes.length).toBe(2);
-    const padded = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes?customer=%20Acme%20`, { headers: authHeaders() }));
+    const padded = await jsonAs<{ notes: CustomerNote[] }>(
+      await fetch(`${handle.url}/v1/customer-notes?customer=%20Acme%20`, { headers: authHeaders() }),
+    );
     expect(padded.notes.length).toBe(2); // the filter is trimmed before the lookup
   });
 });

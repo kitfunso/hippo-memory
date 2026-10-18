@@ -10,8 +10,12 @@ const BASELINE = '.caught-error-logs-baseline.json';
 
 describe('check-caught-error-logs', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'caught-error-logs-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'caught-error-logs-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);
@@ -56,8 +60,14 @@ describe('check-caught-error-logs', () => {
   });
 
   it('fails a file with an unfielded log call and passes one that carries errorFields', () => {
-    file('src/bad.ts', 'export function f(): void {\n  try { g(); } catch (err) {\n    log.warn(`g failed: ${errorMessage(err)}`);\n  }\n}\n');
-    file('src/good.ts', 'export function f(): void {\n  try { g(); } catch (err) {\n    log.warn(`g failed`, errorFields(err));\n  }\n}\n');
+    file(
+      'src/bad.ts',
+      'export function f(): void {\n  try { g(); } catch (err) {\n    log.warn(`g failed: ${errorMessage(err)}`);\n  }\n}\n',
+    );
+    file(
+      'src/good.ts',
+      'export function f(): void {\n  try { g(); } catch (err) {\n    log.warn(`g failed`, errorFields(err));\n  }\n}\n',
+    );
     expect(countUnfieldedLogs(join(dir, 'src'))).toEqual({ 'bad.ts': 1 });
     writeFileSync(join(dir, BASELINE), '{}\n');
     const r = run();

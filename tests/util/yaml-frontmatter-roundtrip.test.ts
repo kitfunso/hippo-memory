@@ -32,7 +32,11 @@ describe('dumpFrontmatter then parseFrontmatter', () => {
   });
 
   it('keeps line breaks inside a value on one frontmatter line', () => {
-    const data: Frontmatter = { note: 'line one\nline two\r\nline three', tags: ['multi\nline'], after: 'still parsed' };
+    const data: Frontmatter = {
+      note: 'line one\nline two\r\nline three',
+      tags: ['multi\nline'],
+      after: 'still parsed',
+    };
     const dumped = dumpFrontmatter(data);
     expect(dumped.split('\n')).toHaveLength(5);
     expect(roundTrip(data).data).toEqual(data);
@@ -54,7 +58,9 @@ describe('dumpFrontmatter then parseFrontmatter', () => {
   });
 
   it('keeps the body after the closing fence', () => {
-    expect(roundTrip({ id: 'mem_1' }, 'first line\n---\nnot frontmatter\n').content).toBe('first line\n---\nnot frontmatter\n');
+    expect(roundTrip({ id: 'mem_1' }, 'first line\n---\nnot frontmatter\n').content).toBe(
+      'first line\n---\nnot frontmatter\n',
+    );
   });
 });
 

@@ -33,7 +33,11 @@ function asideFiles(): string[] {
 
 beforeEach(() => {
   root = makeRoot('embed-corrupt');
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
+    'utf8',
+  );
   vi.stubEnv(KEY_ENV, 'test-key-not-real');
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   vi.stubGlobal('fetch', fakeEmbeddings());

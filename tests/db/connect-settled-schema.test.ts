@@ -20,11 +20,18 @@ const FULL_PROBE = /AS meta_keys/;
 function probesPrepared(fn: () => void): number {
   const original = NodeSqlite.prototype.prepare;
   let probes = 0;
-  const spy = vi.spyOn(NodeSqlite.prototype, 'prepare').mockImplementation(function (this: DatabaseSyncLike, ...args: [string]) {
+  const spy = vi.spyOn(NodeSqlite.prototype, 'prepare').mockImplementation(function (
+    this: DatabaseSyncLike,
+    ...args: [string]
+  ) {
     if (FULL_PROBE.test(args[0])) probes++;
     return original.apply(this, args);
   });
-  try { fn(); } finally { spy.mockRestore(); }
+  try {
+    fn();
+  } finally {
+    spy.mockRestore();
+  }
   return probes;
 }
 
@@ -56,7 +63,11 @@ describe('connection open after the schema is proven', () => {
     const root = makeRoot('settled-moved');
     closeHippoDb(openHippoDb(root));
     const raw = new DatabaseSync(join(root, 'hippo.db'));
-    try { raw.exec('PRAGMA user_version = 1'); } finally { raw.close(); }
+    try {
+      raw.exec('PRAGMA user_version = 1');
+    } finally {
+      raw.close();
+    }
     expect(probesPrepared(() => closeHippoDb(openHippoDb(root)))).toBe(1);
   });
 });

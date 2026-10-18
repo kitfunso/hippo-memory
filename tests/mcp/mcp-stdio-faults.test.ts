@@ -49,15 +49,21 @@ function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
       else lines.push(line);
     }
   });
-  proc.stderr.on('data', (chunk: Buffer) => { err += chunk.toString('utf8'); });
+  proc.stderr.on('data', (chunk: Buffer) => {
+    err += chunk.toString('utf8');
+  });
   // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
   const exited = new Promise<number | null>((resolve) => proc.once('close', (code) => resolve(code)));
-  const nextLine = (timeoutMs: number): Promise<string> => new Promise((resolve, reject) => {
-    const cached = lines.shift();
-    if (cached) return resolve(cached);
-    const timer = setTimeout(() => reject(new Error(`no reply in ${timeoutMs} ms`)), timeoutMs);
-    waiters.push((line) => { clearTimeout(timer); resolve(line); });
-  });
+  const nextLine = (timeoutMs: number): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const cached = lines.shift();
+      if (cached) return resolve(cached);
+      const timer = setTimeout(() => reject(new Error(`no reply in ${timeoutMs} ms`)), timeoutMs);
+      waiters.push((line) => {
+        clearTimeout(timer);
+        resolve(line);
+      });
+    });
   return { proc, nextLine, replies: () => written, stderr: () => err, exited };
 }
 
@@ -68,7 +74,9 @@ const toolCall = (id: number | undefined, name: string, args: Record<string, str
 async function heldEmbeddings() {
   let holding = false;
   let asked!: () => void;
-  const queryAsked = new Promise<void>((ok) => { asked = ok; });
+  const queryAsked = new Promise<void>((ok) => {
+    asked = ok;
+  });
   const held: Array<() => void> = [];
   const server = createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -77,7 +85,9 @@ async function heldEmbeddings() {
       // SAFETY: the openai provider posts {model, input: string[]} here.
       const { input } = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: string[] };
       const reply = (): void => {
-        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: input.map(() => ({ embedding: [1, 0, 0] })) }));
+        res
+          .writeHead(200, { 'content-type': 'application/json' })
+          .end(JSON.stringify({ data: input.map(() => ({ embedding: [1, 0, 0] })) }));
       };
       if (!holding) return reply();
       held.push(reply);
@@ -89,14 +99,21 @@ async function heldEmbeddings() {
   const { port } = server.address() as AddressInfo;
   const store = path.join(tmpHome, '.hippo');
   fs.mkdirSync(store, { recursive: true });
-  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', apiBaseUrl: `http://127.0.0.1:${port}` } }));
+  fs.writeFileSync(
+    path.join(store, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', apiBaseUrl: `http://127.0.0.1:${port}` } }),
+  );
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
   return {
     store,
     /** Settles once a held request has arrived, so the call that sent it is running. */
     queryAsked,
-    hold: (): void => { holding = true; },
-    release: (): void => { for (const reply of held.splice(0)) reply(); },
+    hold: (): void => {
+      holding = true;
+    },
+    release: (): void => {
+      for (const reply of held.splice(0)) reply();
+    },
     close: (): void => {
       server.closeAllConnections();
       server.close();
@@ -108,17 +125,23 @@ async function heldEmbeddings() {
 /** A script that wires the real stdio loop, then fails in the way `failure` names. */
 function crashScript(failure: string): string {
   const file = path.join(tmpHome, `crash-${procs.length}.mjs`);
-  fs.writeFileSync(file, [
-    `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
-    `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/cli/api-context.js')).href)});`,
-    'startStdioLoop(cliStdioHost);',
-    `setTimeout(() => { ${failure} }, 50);`,
-  ].join('\n'));
+  fs.writeFileSync(
+    file,
+    [
+      `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
+      `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/cli/api-context.js')).href)});`,
+      'startStdioLoop(cliStdioHost);',
+      `setTimeout(() => { ${failure} }, 50);`,
+    ].join('\n'),
+  );
   return file;
 }
 
 function exitWithin(run: Run, ms: number): Promise<number | null | 'still running'> {
-  return Promise.race([run.exited, new Promise<'still running'>((resolve) => setTimeout(() => resolve('still running'), ms))]);
+  return Promise.race([
+    run.exited,
+    new Promise<'still running'>((resolve) => setTimeout(() => resolve('still running'), ms)),
+  ]);
 }
 
 beforeAll(() => {
@@ -167,7 +190,11 @@ describe('MCP stdio fault handling', () => {
     run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
     expect(JSON.parse(await run.nextLine(5000)).id).toBe(3);
     // stderr is a second pipe with no ordering against stdout, so the warning can land after the reply.
-    const droppedLines = (): string[] => run.stderr().split('\n').filter((l) => l.includes('dropped a frame with no method and no id'));
+    const droppedLines = (): string[] =>
+      run
+        .stderr()
+        .split('\n')
+        .filter((l) => l.includes('dropped a frame with no method and no id'));
     await vi.waitFor(() => expect(droppedLines()).toHaveLength(1), { timeout: 5000 });
     const dropped = droppedLines();
     expect(dropped[0]).toMatch(/^\[hippo\] warn: mcp: dropped a frame with no method and no id/);
@@ -228,10 +255,17 @@ describe('MCP stdio fault handling', () => {
       return start([serverPath], { HIPPO_REQUEST_DEADLINE_MS: '1500' });
     }
 
-    const timeoutLines = (run: Run): string[] => run.stderr().split('\n').filter((l) => l.includes('did not answer within 1500 ms'));
+    const timeoutLines = (run: Run): string[] =>
+      run
+        .stderr()
+        .split('\n')
+        .filter((l) => l.includes('did not answer within 1500 ms'));
 
     /** Lets the held recall finish, then closes stdin, whose drain waits for it: a late reply would be on stdout before the exit. */
-    async function repliesAfterTheLateFinish(embeddings: Awaited<ReturnType<typeof heldEmbeddings>>, run: Run): Promise<unknown[]> {
+    async function repliesAfterTheLateFinish(
+      embeddings: Awaited<ReturnType<typeof heldEmbeddings>>,
+      run: Run,
+    ): Promise<unknown[]> {
       embeddings.release();
       run.proc.stdin.end();
       expect(await run.exited).toBe(0);
@@ -248,13 +282,16 @@ describe('MCP stdio fault handling', () => {
           id: 9,
           error: {
             code: -32001,
-            message: 'Request timed out: tools/call hippo_recall did not finish within 1500 ms; a write it started may or may not be saved',
+            message:
+              'Request timed out: tools/call hippo_recall did not finish within 1500 ms; a write it started may or may not be saved',
             data: { requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
           },
         });
         // stderr is a second pipe with no ordering against stdout, so the warning can land after the reply.
         await vi.waitFor(() => expect(timeoutLines(run)).toHaveLength(1), { timeout: 5000 });
-        expect(timeoutLines(run)[0]).toMatch(/^\[hippo\] warn: mcp: tools\/call hippo_recall did not answer within 1500 ms; .* method=tools\/call/);
+        expect(timeoutLines(run)[0]).toMatch(
+          /^\[hippo\] warn: mcp: tools\/call hippo_recall did not answer within 1500 ms; .* method=tools\/call/,
+        );
 
         run.proc.stdin.write(list(10));
         expect(JSON.parse(await run.nextLine(5000)).id).toBe(10);
@@ -331,13 +368,17 @@ describe('MCP stdio fault handling', () => {
     const run = start([crashScript("throw new Error('boom-uncaught');")]);
     const code = await exitWithin(run, 8000);
     expect(code).toBe(1);
-    expect(run.stderr()).toMatch(/mcp uncaught exception: boom-uncaught .*errorClass=Error stack=Error: boom-uncaught\s+at /);
+    expect(run.stderr()).toMatch(
+      /mcp uncaught exception: boom-uncaught .*errorClass=Error stack=Error: boom-uncaught\s+at /,
+    );
   });
 
   it('exits non-zero and logs the stack on an unhandled rejection', async () => {
     const run = start([crashScript("Promise.reject(new TypeError('boom-rejected'));")]);
     const code = await exitWithin(run, 8000);
     expect(code).toBe(1);
-    expect(run.stderr()).toMatch(/mcp unhandled rejection: boom-rejected .*errorClass=TypeError stack=TypeError: boom-rejected\s+at /);
+    expect(run.stderr()).toMatch(
+      /mcp unhandled rejection: boom-rejected .*errorClass=TypeError stack=TypeError: boom-rejected\s+at /,
+    );
   });
 });

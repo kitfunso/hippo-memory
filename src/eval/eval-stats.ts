@@ -47,11 +47,12 @@ export function addUsage(...usages: Usage[]): Usage {
 /** Dollar cost of `usage` at `prices`. */
 export function priceUsage(usage: Usage, prices: Prices): number {
   return (
-    usage.inputTokens * prices.inputPerMTok
-    + usage.cacheWriteTokens * prices.cacheWritePerMTok
-    + usage.cacheReadTokens * prices.cacheReadPerMTok
-    + usage.outputTokens * prices.outputPerMTok
-  ) / 1_000_000;
+    (usage.inputTokens * prices.inputPerMTok +
+      usage.cacheWriteTokens * prices.cacheWritePerMTok +
+      usage.cacheReadTokens * prices.cacheReadPerMTok +
+      usage.outputTokens * prices.outputPerMTok) /
+    1_000_000
+  );
 }
 
 /**

@@ -29,9 +29,26 @@ const EMPTY: ContainerPlan = {
 
 const note = (key: string, hash: string): PlanItem => ({ key, hash, refused: false });
 const refusedNote = (key: string, hash: string): PlanItem => ({ key, hash, refused: true });
-const tagged = (id: string, key: string, hash: string, created = DAY1): LiveRow => ({ id, key, hash, tagged: true, created });
-const untagged = (id: string, key: string, hash: string, created = DAY1): LiveRow => ({ id, key, hash, tagged: false, created });
-const snapshot = (id: string, key: string, hash: string, dormantAt = DAY1): DormantRow => ({ id, key, hash, dormantAt });
+const tagged = (id: string, key: string, hash: string, created = DAY1): LiveRow => ({
+  id,
+  key,
+  hash,
+  tagged: true,
+  created,
+});
+const untagged = (id: string, key: string, hash: string, created = DAY1): LiveRow => ({
+  id,
+  key,
+  hash,
+  tagged: false,
+  created,
+});
+const snapshot = (id: string, key: string, hash: string, dormantAt = DAY1): DormantRow => ({
+  id,
+  key,
+  hash,
+  dormantAt,
+});
 
 interface Setup {
   readonly textKeyed?: boolean;
@@ -353,7 +370,12 @@ const editCases: readonly PlanCase[] = [
   },
   {
     name: 'a new key that comes back from a snapshot is not an edit',
-    setup: { textKeyed: true, items: [note(NEW, 'hb')], live: [tagged('g1', OLD, 'ha')], dormant: [snapshot('s1', NEW, 'hb')] },
+    setup: {
+      textKeyed: true,
+      items: [note(NEW, 'hb')],
+      live: [tagged('g1', OLD, 'ha')],
+      dormant: [snapshot('s1', NEW, 'hb')],
+    },
     want: { setAside: ['g1'], restores: [{ key: NEW, dormantId: 's1' }] },
   },
   {
@@ -364,7 +386,11 @@ const editCases: readonly PlanCase[] = [
   },
   {
     name: 'a gone key with only untagged rows does not stop the pairing',
-    setup: { textKeyed: true, items: [note(NEW, 'hb')], live: [tagged('g1', OLD, 'ha'), untagged('u1', OLD_TOO, 'hc')] },
+    setup: {
+      textKeyed: true,
+      items: [note(NEW, 'hb')],
+      live: [tagged('g1', OLD, 'ha'), untagged('u1', OLD_TOO, 'hc')],
+    },
     want: { writes: [{ key: NEW, hash: 'hb', supersedes: ['g1'] }] },
     asked: [NEW],
   },

@@ -15,7 +15,9 @@ const FLOORS = [
 function fail(message) {
   console.error('');
   console.error(`BINARY FLOOR: ${message}`);
-  console.error('Fix: in the release that first ships a floor\'s schema, set that constant in src/util/version.ts to that release.');
+  console.error(
+    "Fix: in the release that first ships a floor's schema, set that constant in src/util/version.ts to that release.",
+  );
   console.error('');
   process.exit(1);
 }
@@ -42,7 +44,9 @@ const floors = FLOORS.map(([name, schema]) => {
   const floor = new RegExp(`export const ${name} = '([^']+)'`).exec(versionSource)?.[1];
   if (floor === undefined) fail(`${name} not found in ${VERSION_TS}.`);
   const floorParts = parseVersion(floor);
-  if (!floorParts || !packageParts) fail(`expected plain x.y.z versions, got ${name} ${floor} and package ${packageVersion}.`);
+  if (!floorParts || !packageParts) {
+    fail(`expected plain x.y.z versions, got ${name} ${floor} and package ${packageVersion}.`);
+  }
   // A floor above the running binary would lock the binary out of every store that reaches it.
   if (isAbove(floorParts, packageParts)) fail(`${name} ${floor} is above the package version ${packageVersion}.`);
   return { name, schema, floor };
@@ -51,20 +55,33 @@ const floors = FLOORS.map(([name, schema]) => {
 // With no tags every check below passes by finding nothing, so a shallow clone must fail rather than pass.
 const tagList = git('tag', '--list');
 if (tagList.status !== 0) fail(`git tag --list failed: ${tagList.stderr.trim()}`);
-const tags = new Set(tagList.stdout.split(/\r?\n/).map((t) => t.trim()).filter(Boolean));
-if (tags.size === 0) fail('no git tags in this checkout, so no floor can be checked; fetch with tags (fetch-depth: 0).');
+const tags = new Set(
+  tagList.stdout
+    .split(/\r?\n/)
+    .map((t) => t.trim())
+    .filter(Boolean),
+);
+if (tags.size === 0) {
+  fail('no git tags in this checkout, so no floor can be checked; fetch with tags (fetch-depth: 0).');
+}
 
 for (const { name, schema, floor } of floors) {
   const tag = `v${floor}`;
   // An untagged floor can only be the release being cut; any other untagged version was never checked against a schema.
   if (!tags.has(tag)) {
-    if (floor !== packageVersion) fail(`${name} ${floor} names no release tag and is not the package version ${packageVersion}.`);
+    if (floor !== packageVersion) {
+      fail(`${name} ${floor} names no release tag and is not the package version ${packageVersion}.`);
+    }
     continue;
   }
   const index = git('show', `${tag}:${MIGRATIONS_INDEX}`);
-  if (index.status !== 0 || !new RegExp(`\\bv${schema}\\b`).test(index.stdout)) fail(`release ${tag} does not ship schema v${schema}, so it cannot be ${name}.`);
+  if (index.status !== 0 || !new RegExp(`\\bv${schema}\\b`).test(index.stdout)) {
+    fail(`release ${tag} does not ship schema v${schema}, so it cannot be ${name}.`);
+  }
 }
 
 for (const { name, schema, floor } of floors) {
-  console.log(`${name} ${floor}: at or below package ${packageVersion}, and no release before schema v${schema} carries it. OK.`);
+  console.log(
+    `${name} ${floor}: at or below package ${packageVersion}, and no release before schema v${schema} carries it. OK.`,
+  );
 }

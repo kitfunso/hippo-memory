@@ -80,10 +80,13 @@ export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResu
   // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions
   // git-learn-gate-placement says why.
   const { kept, dropped } = partitionLessons(parsed);
-  return { status: 'scanned', lowInfo: dropped.length, ...await writeLessons(ctx, kept, opts, config) };
+  return { status: 'scanned', lowInfo: dropped.length, ...(await writeLessons(ctx, kept, opts, config)) };
 }
 
-interface QueuedLesson { entry: MemoryEntry; key: string }
+interface QueuedLesson {
+  entry: MemoryEntry;
+  key: string;
+}
 
 /** Where a batch writes and what it has learned so far: `live` and
  * `keys` follow every write, so a later lesson matches against them. */
@@ -101,7 +104,12 @@ interface LessonBatch {
 async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]): Promise<void> {
   if (queued.length === 0) return;
   const { ctx, writes, live, keys, counts } = batch;
-  const written = new Set(await writes.writeSkippingRejected(queued.map((q) => q.entry), ctx.actor.subject));
+  const written = new Set(
+    await writes.writeSkippingRejected(
+      queued.map((q) => q.entry),
+      ctx.actor.subject,
+    ),
+  );
   const landed: MemoryEntry[] = [];
   for (const { entry, key } of queued) {
     if (written.has(entry.id)) {
@@ -158,11 +166,7 @@ interface TenantScan {
 
 /** One pass over the tenant in pages: keeps the rows `targets` match, and from the rows the caller can read only the
  * tag counts, texts and duplicate keys that scoring a lesson needs. */
-async function scanTenant(
-  ctx: Context,
-  targets: readonly InvalidationTarget[],
-  pageRows: number,
-): Promise<TenantScan> {
+async function scanTenant(ctx: Context, targets: readonly InvalidationTarget[], pageRows: number): Promise<TenantScan> {
   const matches = invalidationMatcher(targets);
   const live: MemoryEntry[] = [];
   const tagCounts = new Map<string, number>();
@@ -198,7 +202,11 @@ async function writeLessons(
   const live = scan?.live ?? [];
   const fitSource = scan?.fitSource;
   const batch: LessonBatch = {
-    ctx, writes, live, keys: scan?.keys ?? await knownKeys(ctx, writes, lessons), full: profile.full,
+    ctx,
+    writes,
+    live,
+    keys: scan?.keys ?? (await knownKeys(ctx, writes, lessons)),
+    full: profile.full,
     counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
   };
   const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
@@ -206,7 +214,10 @@ async function writeLessons(
   const queue: QueuedLesson[] = [];
   for (const lesson of lessons) {
     const key = duplicateKey(lesson);
-    if (batch.keys.has(key)) { batch.counts.skipped++; continue; }
+    if (batch.keys.has(key)) {
+      batch.counts.skipped++;
+      continue;
+    }
     const target = profile.full ? extractInvalidationTarget(lesson) : null;
     if (target) {
       await landLessons(batch, queue.splice(0));

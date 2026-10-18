@@ -45,15 +45,22 @@ function churnScript(dbPath: string, goFile: string, stopFile: string): string {
   `;
 }
 
-interface ChurnReport { windowWrites: number; errors: string[] }
+interface ChurnReport {
+  windowWrites: number;
+  errors: string[];
+}
 
 /** Starts a churner; `ready` resolves after its first write attempt, `report` resolves with its counts after it exits. */
 function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
-  const child = spawn(process.execPath, ['-e', churnScript(dbPath, goFile, stopFile)], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const child = spawn(process.execPath, ['-e', churnScript(dbPath, goFile, stopFile)], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
   churners.push(child);
   let out = '';
   let markReady = (): void => {};
-  const ready = new Promise<void>((resolve) => { markReady = resolve; });
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
   child.stdout!.on('data', (chunk: Buffer) => {
     out += chunk.toString();
     if (out.includes('ready\n')) markReady();

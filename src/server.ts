@@ -30,7 +30,8 @@ async function promptHookContext(
 ): ReturnType<typeof renderPromptHook> {
   // Only hippo.db has a global store beside it; an add-on's own store reads as one project.
   const sqliteBacked = hasGroup(ctx.store, 'localFiles');
-  const reach = ctx.reach ??
+  const reach =
+    ctx.reach ??
     (sqliteBacked ? contextReach(sqliteReach(ctx.hippoRoot, ctx.store, opts?.sharedStore), loadConfig) : undefined);
   return renderPromptHook({ ...ctx, reach }, req, opts);
 }

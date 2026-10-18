@@ -3,8 +3,12 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
-  adminActor, extractRememberedFacts, reject, rememberLocally,
-  type LocalRememberInput, type LocalRememberOutcome,
+  adminActor,
+  extractRememberedFacts,
+  reject,
+  rememberLocally,
+  type LocalRememberInput,
+  type LocalRememberOutcome,
 } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
@@ -23,7 +27,9 @@ const roots: string[] = [];
 afterAll(() => {
   for (const root of roots) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
-afterEach(() => { vi.unstubAllEnvs(); });
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function store(config?: MakeRootOptions['config']): FullContext {
   const hippoRoot = makeRoot('local-remember', { config });
@@ -54,18 +60,35 @@ function storedRow(outcome: LocalRememberOutcome): MemoryEntry {
 describe('rememberLocally', () => {
   it('stores the row, counts it once and answers the row as the store holds it', async () => {
     const ctx = store();
-    const outcome = await rememberLocally(ctx, { content: TEXT, tags: ['billing'], layer: Layer.Episodic, source: 'cli', confidence: 'observed', scope: 'team:eng' });
+    const outcome = await rememberLocally(ctx, {
+      content: TEXT,
+      tags: ['billing'],
+      layer: Layer.Episodic,
+      source: 'cli',
+      confidence: 'observed',
+      scope: 'team:eng',
+    });
     const entry = storedRow(outcome);
     expect(outcome).toMatchObject({ status: 'stored', entry });
     expect(entry).toEqual(readEntry(ctx.hippoRoot, entry.id, ctx.tenantId));
-    expect(entry).toMatchObject({ content: TEXT, tags: ['billing'], source: 'cli', confidence: 'observed', scope: 'team:eng', pinned: false });
+    expect(entry).toMatchObject({
+      content: TEXT,
+      tags: ['billing'],
+      source: 'cli',
+      confidence: 'observed',
+      scope: 'team:eng',
+      pinned: false,
+    });
     expect(rows(ctx)).toHaveLength(1);
     expect(counted(ctx)).toBe(1);
   });
 
   it('says in the outcome and the log that a row the embedder could not index is stored without a vector', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('bad key', { status: 401 })),
+    );
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       const ctx = store({ embeddings: { provider: 'openai', model: 'm' } });
@@ -73,7 +96,9 @@ describe('rememberLocally', () => {
       if (outcome.status !== 'stored') throw new Error('expected a stored row');
       expect(await outcome.embedding).toBe('failed');
       expect(rows(ctx)).toHaveLength(1);
-      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain(`memory ${outcome.entry.id} is stored but not in the vector index`);
+      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain(
+        `memory ${outcome.entry.id} is stored but not in the vector index`,
+      );
     } finally {
       warn.mockRestore();
       vi.unstubAllGlobals();
@@ -87,7 +112,10 @@ describe('rememberLocally', () => {
     const typedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
     const storedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
     expect(typedFit).not.toBe(storedFit);
-    expect(storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true })).schema_fit).toBe(typedFit);
+    expect(
+      storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true }))
+        .schema_fit,
+    ).toBe(typedFit);
     const other = store();
     for (const n of [1, 2, 3]) seed(other, `the billing service sends invoice batch ${n}`, ['billing']);
     expect(storedRow(await rememberLocally(other, { content: TEXT, tags: stored })).schema_fit).toBe(storedFit);
@@ -115,7 +143,10 @@ describe('rememberLocally', () => {
     const outcome = await rememberLocally(ctx, FIFTH_ERROR);
     const entry = storedRow(outcome);
     expect(outcome).toMatchObject({ status: 'stored', startedWeak: { strength: 0.3 } });
-    expect(outcome).toHaveProperty('startedWeak.reason', expect.stringMatching(/^repeat_error \(4 recent errors, overlap 100% with mem_/));
+    expect(outcome).toHaveProperty(
+      'startedWeak.reason',
+      expect.stringMatching(/^repeat_error \(4 recent errors, overlap 100% with mem_/),
+    );
     expect(forced.strength).toBeCloseTo(1, 3);
     expect(entry.strength).toBeCloseTo(0.3, 3);
     expect(entry.half_life_days).toBe(forced.half_life_days * 0.5);
@@ -123,7 +154,10 @@ describe('rememberLocally', () => {
     expect(counted(ctx)).toBe(1);
   });
 
-  const BYPASSES: readonly (readonly [string, Pick<LocalRememberInput, 'pinned' | 'force'>])[] = [['pinned', { pinned: true }], ['forced', { force: true }]];
+  const BYPASSES: readonly (readonly [string, Pick<LocalRememberInput, 'pinned' | 'force'>])[] = [
+    ['pinned', { pinned: true }],
+    ['forced', { force: true }],
+  ];
   it.each(BYPASSES)('a %s write is not judged by the gate', async (_label, bypass) => {
     const ctx = store(SALIENCE_ON);
     await rememberLocally(ctx, { content: TEXT, tags: [] });
@@ -151,15 +185,25 @@ describe('rememberLocally', () => {
 
 describe('rememberLocally starts the embedding', () => {
   let embeddings: HashedEmbeddings;
-  beforeAll(async () => { embeddings = await startHashedEmbeddings(); });
-  afterAll(async () => { await embeddings.close(); });
+  beforeAll(async () => {
+    embeddings = await startHashedEmbeddings();
+  });
+  afterAll(async () => {
+    await embeddings.close();
+  });
 
   // The embedding is never awaited by the write, so the test waits for the local server's round trip on a busy box.
   it('leaves a vector for the stored row, and none for a skipped write', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-    const ctx = store({ ...SALIENCE_ON, embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
+    const ctx = store({
+      ...SALIENCE_ON,
+      embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
+    });
     const entry = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [] }));
-    await vi.waitFor(() => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]), { timeout: 20_000, interval: 50 });
+    await vi.waitFor(() => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]), {
+      timeout: 20_000,
+      interval: 50,
+    });
     const asked = embeddings.requests();
     expect((await rememberLocally(ctx, { content: TEXT, tags: [] })).status).toBe('skipped');
     expect(embeddings.requests()).toBe(asked);
@@ -168,35 +212,56 @@ describe('rememberLocally starts the embedding', () => {
 
 describe('extractRememberedFacts', () => {
   const FACTS = [
-    { content: 'Alice owns the billing retry policy for failed charges', tags: ['speaker:Alice', 'topic:billing'], valence: 'neutral' },
-    { content: 'The billing service retries a failed charge three times before paging', tags: ['topic:billing'], valence: 'neutral' },
+    {
+      content: 'Alice owns the billing retry policy for failed charges',
+      tags: ['speaker:Alice', 'topic:billing'],
+      valence: 'neutral',
+    },
+    {
+      content: 'The billing service retries a failed charge three times before paging',
+      tags: ['topic:billing'],
+      valence: 'neutral',
+    },
   ];
-  const answering = (text: string, status = 200): typeof fetch => async () => new Response(JSON.stringify({ content: [{ text }] }), { status });
-  const stored = async (ctx: FullContext): Promise<MemoryEntry> => storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
-  const extracted = (ctx: FullContext, from: MemoryEntry): MemoryEntry[] => rows(ctx).filter((row) => row.extracted_from === from.id);
+  const answering =
+    (text: string, status = 200): typeof fetch =>
+    async () =>
+      new Response(JSON.stringify({ content: [{ text }] }), { status });
+  const stored = async (ctx: FullContext): Promise<MemoryEntry> =>
+    storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
+  const extracted = (ctx: FullContext, from: MemoryEntry): MemoryEntry[] =>
+    rows(ctx).filter((row) => row.extracted_from === from.id);
 
   it('is off unless the caller or the config asks', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const outcome = await extractRememberedFacts(ctx, entry, { requested: false, apiKey: 'no-key', fetcher: answering(JSON.stringify(FACTS)) });
+    const outcome = await extractRememberedFacts(ctx, entry, {
+      requested: false,
+      apiKey: 'no-key',
+      fetcher: answering(JSON.stringify(FACTS)),
+    });
     expect(outcome).toEqual({ status: 'off' });
     expect(extracted(ctx, entry)).toHaveLength(0);
   });
 
-  it.each([['the caller asks', undefined, true], ['the config asks', { extraction: { enabled: true } }, false]])(
-    'answers no_key when %s and there is no key',
-    async (_label, config, requested) => {
-      const ctx = store(config);
-      const entry = await stored(ctx);
-      expect(await extractRememberedFacts(ctx, entry, { requested })).toEqual({ status: 'no_key' });
-      expect(await extractRememberedFacts(ctx, entry, { requested, apiKey: '' })).toEqual({ status: 'no_key' });
-    },
-  );
+  it.each([
+    ['the caller asks', undefined, true],
+    ['the config asks', { extraction: { enabled: true } }, false],
+  ])('answers no_key when %s and there is no key', async (_label, config, requested) => {
+    const ctx = store(config);
+    const entry = await stored(ctx);
+    expect(await extractRememberedFacts(ctx, entry, { requested })).toEqual({ status: 'no_key' });
+    expect(await extractRememberedFacts(ctx, entry, { requested, apiKey: '' })).toEqual({ status: 'no_key' });
+  });
 
   it('stores the facts the model gives beside the row and counts them', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const outcome = await extractRememberedFacts(ctx, entry, { requested: true, apiKey: 'no-key', fetcher: answering(JSON.stringify(FACTS)) });
+    const outcome = await extractRememberedFacts(ctx, entry, {
+      requested: true,
+      apiKey: 'no-key',
+      fetcher: answering(JSON.stringify(FACTS)),
+    });
     expect(outcome).toEqual({ status: 'ran', facts: 2, failures: [] });
     expect(extracted(ctx, entry).map((row) => row.content)).toEqual(FACTS.map((fact) => fact.content));
     expect(extracted(ctx, entry)[0]?.tags).toContain('scope:eng');
@@ -205,10 +270,18 @@ describe('extractRememberedFacts', () => {
   it('names a failed model call and a thrown one in the result, and stores nothing', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const refused = await extractRememberedFacts(ctx, entry, { requested: true, apiKey: 'no-key', fetcher: answering('ignored', 500) });
+    const refused = await extractRememberedFacts(ctx, entry, {
+      requested: true,
+      apiKey: 'no-key',
+      fetcher: answering('ignored', 500),
+    });
     expect(refused).toMatchObject({ status: 'ran', facts: 0 });
     expect(refused).toHaveProperty('failures.length', 1);
-    const unparseable = await extractRememberedFacts(ctx, entry, { requested: true, apiKey: 'no-key', fetcher: answering('not json') });
+    const unparseable = await extractRememberedFacts(ctx, entry, {
+      requested: true,
+      apiKey: 'no-key',
+      fetcher: answering('not json'),
+    });
     expect(unparseable).toHaveProperty('failures.0', expect.stringMatching(/^unparseable response: /));
     expect(extracted(ctx, entry)).toHaveLength(0);
   });

@@ -85,7 +85,7 @@ export function isCopilotPresent(home: string = os.homedir()): boolean {
  */
 export const CODEX_TRUST_LINE =
   "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only " +
-  "after you trust them once in `/hooks`.";
+  'after you trust them once in `/hooks`.';
 
 /** Default log path consumed by `hippo last-sleep` when a caller passes no --path. */
 export function defaultSleepLogPath(): string {

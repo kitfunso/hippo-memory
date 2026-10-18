@@ -1,7 +1,15 @@
 // A request scope owns one handle per store; code that outlives the scope, or runs beside it, never gets or closes that handle.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { openHippoDb, closeHippoDb, noteStoreBusy, runWithRequestStores, currentRequestStores, outsideRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  noteStoreBusy,
+  runWithRequestStores,
+  currentRequestStores,
+  outsideRequestStores,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 let root: string;
@@ -10,15 +18,19 @@ beforeEach(() => {
   ({ root } = makeStore('request-stores'));
 });
 
-const busyTimeout = (db: DatabaseSyncLike): number => Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout);
+const busyTimeout = (db: DatabaseSyncLike): number =>
+  Number(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>().timeout);
 
 describe('runWithRequestStores', () => {
   it('a timer that outlives its scope gets a connection of its own, which closeHippoDb closes', async () => {
     let late: Promise<DatabaseSyncLike> | undefined;
-    const scoped = await runWithRequestStores(() => {
-      late = sleep(20).then(() => openHippoDb(root));
-      return openHippoDb(root);
-    }, { busyWaitMs: 250 });
+    const scoped = await runWithRequestStores(
+      () => {
+        late = sleep(20).then(() => openHippoDb(root));
+        return openHippoDb(root);
+      },
+      { busyWaitMs: 250 },
+    );
     expect(scoped.isOpen).toBe(false);
     const db = await late!;
     try {
@@ -33,7 +45,10 @@ describe('runWithRequestStores', () => {
   });
 
   it('an open outside the scope survives the scope closing', async () => {
-    const [held, scoped] = await runWithRequestStores(() => [outsideRequestStores(() => openHippoDb(root)), openHippoDb(root)]);
+    const [held, scoped] = await runWithRequestStores(() => [
+      outsideRequestStores(() => openHippoDb(root)),
+      openHippoDb(root),
+    ]);
     try {
       expect(held === scoped).toBe(false);
       expect(scoped.isOpen).toBe(false);
@@ -43,7 +58,7 @@ describe('runWithRequestStores', () => {
     }
   });
 
-  it('interleaved scopes never share or close each other\'s handles', async () => {
+  it("interleaved scopes never share or close each other's handles", async () => {
     let first: DatabaseSyncLike | undefined;
     const a = runWithRequestStores(async () => {
       first = openHippoDb(root);
@@ -65,10 +80,13 @@ describe('runWithRequestStores', () => {
     await runWithRequestStores(async () => {
       const outer = currentRequestStores();
       const db = openHippoDb(root);
-      await runWithRequestStores(() => {
-        expect(currentRequestStores()).toBe(outer);
-        expect(openHippoDb(root)).toBe(db);
-      }, { busyWaitMs: 1 });
+      await runWithRequestStores(
+        () => {
+          expect(currentRequestStores()).toBe(outer);
+          expect(openHippoDb(root)).toBe(db);
+        },
+        { busyWaitMs: 1 },
+      );
       expect(db.isOpen).toBe(true);
     });
   });
@@ -81,11 +99,15 @@ describe('runWithRequestStores', () => {
   });
 
   it('a busy store drops the lock wait only in a fail-fast scope', async () => {
-    const waits = async (failFastWhenBusy: boolean) => runWithRequestStores(() => {
-      const db = openHippoDb(root);
-      noteStoreBusy('test write skipped');
-      return busyTimeout(db);
-    }, { busyWaitMs: 1000, failFastWhenBusy });
+    const waits = async (failFastWhenBusy: boolean) =>
+      runWithRequestStores(
+        () => {
+          const db = openHippoDb(root);
+          noteStoreBusy('test write skipped');
+          return busyTimeout(db);
+        },
+        { busyWaitMs: 1000, failFastWhenBusy },
+      );
     expect(await waits(true)).toBe(0);
     expect(await waits(false)).toBe(1000);
   });

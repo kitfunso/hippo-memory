@@ -124,7 +124,15 @@ export type { AuditMaintenance } from './port/audit-maintenance.js';
 export type { LessonWrites } from './port/lesson-writes.js';
 
 export type {
-  AgentImport, Captures, CompactionHooks, Consolidation, ContainerTx, EmbeddingIndex, FolderFiles, ImportTarget, Ledger,
+  AgentImport,
+  Captures,
+  CompactionHooks,
+  Consolidation,
+  ContainerTx,
+  EmbeddingIndex,
+  FolderFiles,
+  ImportTarget,
+  Ledger,
   LocalFiles,
 } from './port/local-files.js';
 
@@ -258,8 +266,13 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
 
 /** `T` with each method answering its value instead of a Promise of it, groups included: the port as a synchronous
  * store has it. */
-export type Sync<T> = T extends (...args: infer A) => Promise<infer R> ? (...args: A) => R
-  : T extends (...args: never) => void ? T : T extends object ? { [K in keyof T]: Sync<T[K]> } : T;
+export type Sync<T> = T extends (...args: infer A) => Promise<infer R>
+  ? (...args: A) => R
+  : T extends (...args: never) => void
+    ? T
+    : T extends object
+      ? { [K in keyof T]: Sync<T[K]> }
+      : T;
 
 export interface ContinuityBlock {
   activeSnapshot: TaskSnapshot | null;

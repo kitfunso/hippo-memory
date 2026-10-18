@@ -56,14 +56,16 @@ async function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: 
   noteMintDefaults(role !== undefined, ttlFlag !== undefined || noExpiry);
 
   if (asJson) {
-    console.log(JSON.stringify({
-      keyId: result.keyId,
-      plaintext: result.plaintext,
-      tenantId: result.tenantId,
-      label: labelFlag ?? null,
-      role: result.role,
-      expiresAt: result.expiresAt,
-    }));
+    console.log(
+      JSON.stringify({
+        keyId: result.keyId,
+        plaintext: result.plaintext,
+        tenantId: result.tenantId,
+        label: labelFlag ?? null,
+        role: result.role,
+        expiresAt: result.expiresAt,
+      }),
+    );
     return;
   }
 
@@ -108,11 +110,7 @@ async function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags)
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-async function keyContext(
-  root: string,
-  tenantId: string,
-  keyId: string,
-): Promise<api.Context> {
+async function keyContext(root: string, tenantId: string, keyId: string): Promise<api.Context> {
   const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {

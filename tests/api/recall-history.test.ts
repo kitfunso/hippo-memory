@@ -130,10 +130,7 @@ describe('buildSessionKey', () => {
 
 describe('detectAnchoring — R1 query_repeat', () => {
   it('fires when query+top repeats within recentRepeatWindow', () => {
-    const hist: RecallHistorySnapshot = [
-      entry(100, 'mem_a'),
-      entry(200, 'mem_b'),
-    ];
+    const hist: RecallHistorySnapshot = [entry(100, 'mem_a'), entry(200, 'mem_b')];
     const hint = detectAnchoring(hist, 100, 'mem_a');
     expect(hint).not.toBeNull();
     expect(hint!.reason).toBe('query_repeat');
@@ -149,7 +146,11 @@ describe('detectAnchoring — R1 query_repeat', () => {
     // Default window = 5. Put the matching entry 6 back.
     const hist: RecallHistorySnapshot = [
       entry(100, 'mem_a'), // [0] — outside window=5 when slice(-5) runs on 6+ entries
-      entry(201, 'x'), entry(202, 'x'), entry(203, 'x'), entry(204, 'x'), entry(205, 'x'),
+      entry(201, 'x'),
+      entry(202, 'x'),
+      entry(203, 'x'),
+      entry(204, 'x'),
+      entry(205, 'x'),
     ];
     expect(detectAnchoring(hist, 100, 'mem_a')).toBeNull();
   });
@@ -162,10 +163,7 @@ describe('detectAnchoring — R1 query_repeat', () => {
 
 describe('detectAnchoring — R2 memory_dominance', () => {
   it('fires when same memory wins >=3 distinct queries (including current)', () => {
-    const hist: RecallHistorySnapshot = [
-      entry(100, 'mem_a'),
-      entry(200, 'mem_a'),
-    ];
+    const hist: RecallHistorySnapshot = [entry(100, 'mem_a'), entry(200, 'mem_a')];
     const hint = detectAnchoring(hist, 300, 'mem_a');
     expect(hint).not.toBeNull();
     expect(hint!.reason).toBe('memory_dominance');
@@ -194,11 +192,7 @@ describe('detectAnchoring — tie precedence + cooldown', () => {
     // queryHash 100 + top mem_a → R1 fires (query 100 in window).
     // R2 also fires (distinct queries returning mem_a = {100, 200, 300} = 3).
     // Spec: R2 wins.
-    const hist: RecallHistorySnapshot = [
-      entry(100, 'mem_a'),
-      entry(200, 'mem_a'),
-      entry(300, 'mem_a'),
-    ];
+    const hist: RecallHistorySnapshot = [entry(100, 'mem_a'), entry(200, 'mem_a'), entry(300, 'mem_a')];
     const hint = detectAnchoring(hist, 100, 'mem_a');
     expect(hint).not.toBeNull();
     expect(hint!.reason).toBe('memory_dominance');

@@ -49,17 +49,22 @@ describe.each([
   ['a null hooks value', '{"hooks":null}'],
   ['broken JSON', '{ "hooks": { "SessionEnd": [ }'],
 ])('a settings.json of %s', (_label, text) => {
-  it.each([['init'], ['hook install claude-code'], ['hook uninstall claude-code'], ['setup']])('hippo %s warns once and leaves it unchanged', async (command) => {
-    fs.writeFileSync(settings, text);
+  it.each([['init'], ['hook install claude-code'], ['hook uninstall claude-code'], ['setup']])(
+    'hippo %s warns once and leaves it unchanged',
+    async (command) => {
+      fs.writeFileSync(settings, text);
 
-    const out = await hippo(...command.split(' '));
+      const out = await hippo(...command.split(' '));
 
-    expect(out.match(/left unchanged/g)).toHaveLength(1);
-    expect(out).toContain(settings);
-    expect(out).toContain(command.startsWith('hook uninstall') ? 'hippo hook uninstall claude-code' : 'hippo hook install claude-code');
-    expect(out).not.toContain('already configured');
-    expect(fs.readFileSync(settings, 'utf8')).toBe(text);
-  });
+      expect(out.match(/left unchanged/g)).toHaveLength(1);
+      expect(out).toContain(settings);
+      expect(out).toContain(
+        command.startsWith('hook uninstall') ? 'hippo hook uninstall claude-code' : 'hippo hook install claude-code',
+      );
+      expect(out).not.toContain('already configured');
+      expect(fs.readFileSync(settings, 'utf8')).toBe(text);
+    },
+  );
 });
 
 describe('hippo hook uninstall on a settings.json it can edit', () => {

@@ -7,8 +7,15 @@ import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 import {
-  countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
-  pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals,
+  countSkipsAfter,
+  deleteRereadRows,
+  injectedBlocks,
+  insertTokenRow,
+  latestInjectOrReset,
+  pruneTokenRowsBefore,
+  sessionTokenRows,
+  sessionTotals,
+  surfaceTotals,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -29,8 +36,16 @@ export type TokenSurface =
 
 /** All surfaces, in report order. */
 export const TOKEN_SURFACES: readonly TokenSurface[] = [
-  'hook', 'hook_recall', 'compact_resume', 'context', 'recall', 'mcp_recall', 'mcp_context',
-  'http_recall', 'http_context', 'http_assemble',
+  'hook',
+  'hook_recall',
+  'compact_resume',
+  'context',
+  'recall',
+  'mcp_recall',
+  'mcp_context',
+  'http_recall',
+  'http_context',
+  'http_assemble',
 ];
 
 /** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry

@@ -16,23 +16,33 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer} from '../../src/core/memory.js';
+import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { VALID_CLOSURE_STATES } from '../../src/core/prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  deleteEntry, closePrediction, loadPredictionById, loadPredictionsByClass, loadOpenPredictions,
+  deleteEntry,
+  closePrediction,
+  loadPredictionById,
+  loadPredictionsByClass,
+  loadOpenPredictions,
 } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 describe('predictions store (first-class object)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('predictions'); });
+  beforeEach(() => {
+    home = makeRoot('predictions');
+  });
   afterEach(() => safeRmSync(home));
 
   it('savePrediction creates both memory and predictions row', () => {
@@ -61,7 +71,9 @@ describe('predictions store (first-class object)', () => {
     try {
       // SAFETY: the query selects the id/content/tags_json columns from memories,
       // whose schema types those as TEXT/TEXT/TEXT (JSON-encoded array) respectively.
-      const memRow = db.prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`).get(pred.memoryId!) as { id: string; content: string; tags_json: string } | undefined;
+      const memRow = db.prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`).get(pred.memoryId!) as
+        | { id: string; content: string; tags_json: string }
+        | undefined;
       expect(memRow).toBeDefined();
       expect(memRow!.content).toBe('migration takes 2 days');
       // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
@@ -99,13 +111,17 @@ describe('predictions store (first-class object)', () => {
     try {
       // SAFETY: the query selects op/target_id/metadata_json from audit_log, whose
       // schema types those columns TEXT/TEXT/TEXT.
-      const auditRows = db.prepare(
-        `SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
-      ).all(String(pred.id)) as Array<{ op: string; target_id: string; metadata_json: string }>;
+      const auditRows = db
+        .prepare(`SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_close' AND target_id = ?`)
+        .all(String(pred.id)) as Array<{ op: string; target_id: string; metadata_json: string }>;
       expect(auditRows.length).toBe(1);
       // SAFETY: predict_close audit metadata is always the flat object built at the
       // predict_close appendAuditEvent call site with these three fields.
-      const meta = JSON.parse(auditRows[0].metadata_json) as { prediction_id: number; closure_state: string; has_actual: boolean };
+      const meta = JSON.parse(auditRows[0].metadata_json) as {
+        prediction_id: number;
+        closure_state: string;
+        has_actual: boolean;
+      };
       expect(meta.closure_state).toBe('closed');
       expect(meta.has_actual).toBe(true);
     } finally {
@@ -253,9 +269,9 @@ describe('predictions store (first-class object)', () => {
     try {
       // SAFETY: the query selects only the id column from audit_log, an INTEGER
       // primary key.
-      const auditRows = db.prepare(
-        `SELECT id FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
-      ).all(String(pred.id)) as Array<{ id: number }>;
+      const auditRows = db
+        .prepare(`SELECT id FROM audit_log WHERE op = 'predict_close' AND target_id = ?`)
+        .all(String(pred.id)) as Array<{ id: number }>;
       expect(auditRows.length).toBe(1);
     } finally {
       closeHippoDb(db);

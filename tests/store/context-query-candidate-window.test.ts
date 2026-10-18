@@ -24,7 +24,10 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
   db.exec('BEGIN');
   try {
     for (let i = 0; i < count; i++) {
-      writeEntryDbOnly(db, { ...createMemory(`${label} note ${i} about the deploy step w${i % 97}`, { tags: [`t${i % 7}`] }), origin_project: origin(i) });
+      writeEntryDbOnly(db, {
+        ...createMemory(`${label} note ${i} about the deploy step w${i % 97}`, { tags: [`t${i % 7}`] }),
+        origin_project: origin(i),
+      });
     }
     db.exec('COMMIT');
   } catch (error) {
@@ -48,7 +51,18 @@ function admitCounter() {
   let calls = 0;
   const noop = (): void => undefined;
   const obs: DeliveryObserver = {
-    facts: noop, sections: noop, filtered: noop, qualityDropped: noop, disabled: noop, offer: noop, reject: noop, dropMissing: noop, gated: noop, selected: noop, queried: noop, traced: noop,
+    facts: noop,
+    sections: noop,
+    filtered: noop,
+    qualityDropped: noop,
+    disabled: noop,
+    offer: noop,
+    reject: noop,
+    dropMissing: noop,
+    gated: noop,
+    selected: noop,
+    queried: noop,
+    traced: noop,
     watchAdmit: (admit) => (e: MemoryEntry) => {
       calls++;
       seen.add(e.id);
@@ -104,7 +118,12 @@ describe('getContext with a query reads the FTS candidate window', () => {
   it("keeps other projects out of the window, so they cannot crowd out this project's rows", async () => {
     vi.stubEnv('HIPPO_HOME', join(local, 'no-global'));
     const counter = admitCounter();
-    const result = await getContext(ctxNow(), { q: QUERY, currentProject: 'proj', budget: 5000, deliveryObserver: counter.obs });
+    const result = await getContext(ctxNow(), {
+      q: QUERY,
+      currentProject: 'proj',
+      budget: 5000,
+      deliveryObserver: counter.obs,
+    });
 
     expect(result.entries).toHaveLength(OWN_ROWS);
     expect(result.entries.every((r) => r.entry.origin_project === 'proj')).toBe(true);
@@ -117,7 +136,9 @@ describe('getContext with a query labels each result local or global', () => {
 
   it('reads no index of the 10k-row local store to do it', async () => {
     vi.stubEnv('HIPPO_HOME', global);
-    const { result, statements, rowsRead } = await recordStatementsAsync(() => getContext(ctxNow(), { q: QUERY, currentProject: '' }));
+    const { result, statements, rowsRead } = await recordStatementsAsync(() =>
+      getContext(ctxNow(), { q: QUERY, currentProject: '' }),
+    );
 
     expectBudgetFilled(result.entries.length);
     expect(countMatching(statements, INDEX_READ)).toBe(0);
@@ -128,7 +149,8 @@ describe('getContext with a query labels each result local or global', () => {
     const small = makeRoot('ctx-window-small-global');
     try {
       // Long rows rank under the 10k short local matches, so the local window leaves the copy out.
-      const padded = (label: string): MemoryEntry => createMemory(`${label} about the deploy step ${'filler '.repeat(60)}`);
+      const padded = (label: string): MemoryEntry =>
+        createMemory(`${label} about the deploy step ${'filler '.repeat(60)}`);
       const synced = padded('synced quokka note');
       const globalOnly = padded('unsynced wombat note');
       fill(small, 0, 'none', () => '');
@@ -147,7 +169,12 @@ describe('getContext with a query labels each result local or global', () => {
       }
       vi.stubEnv('HIPPO_HOME', small);
       const counter = admitCounter();
-      const result = await getContext(ctxNow(), { q: QUERY, currentProject: '', budget: 1_000_000, deliveryObserver: counter.obs });
+      const result = await getContext(ctxNow(), {
+        q: QUERY,
+        currentProject: '',
+        budget: 1_000_000,
+        deliveryObserver: counter.obs,
+      });
 
       const labels = new Map(result.entries.map((r) => [r.entry.id, r.isGlobal]));
       expect(labels.get(synced.id)).toBe(false);

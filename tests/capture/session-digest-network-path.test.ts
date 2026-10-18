@@ -2,7 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { _setDigestExistsProbeForTests, recordSessionDigest, type DigestEdit } from '../../src/capture/session-digest.js';
+import {
+  _setDigestExistsProbeForTests,
+  recordSessionDigest,
+  type DigestEdit,
+} from '../../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
@@ -42,10 +46,20 @@ function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   initStore(hippoRoot);
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, syncStore(hippoRoot), { turns: [{ role: 'user', text: 'go' }], finalText, cwd, edits }, {
-    key: 's1', tenantId: 'default', log: (line) => log.push(line),
-  });
-  return { line: log.join('\n'), content: loadAllEntries(hippoRoot, 'default').find(isSessionDigestRow)?.content ?? '' };
+  recordSessionDigest(
+    hippoRoot,
+    syncStore(hippoRoot),
+    { turns: [{ role: 'user', text: 'go' }], finalText, cwd, edits },
+    {
+      key: 's1',
+      tenantId: 'default',
+      log: (line) => log.push(line),
+    },
+  );
+  return {
+    line: log.join('\n'),
+    content: loadAllEntries(hippoRoot, 'default').find(isSessionDigestRow)?.content ?? '',
+  };
 }
 const digest = (finalText: string, edits: DigestEdit[] = []): string => end(finalText, edits).content;
 
@@ -83,7 +97,9 @@ describe('network paths in a digest', () => {
     '\\\\?\\UNC\\fileserver\\share\\x.ts',
     '\\\\.\\UNC\\fileserver\\share\\x.ts',
   ])('%s as the working directory resolves to no repo path without a probe', (p) => {
-    expect(end('Fixed `sync()` because the share moved.', [], p).line).toBe('digest: skip: the session ran outside this repo');
+    expect(end('Fixed `sync()` because the share moved.', [], p).line).toBe(
+      'digest: skip: the session ran outside this repo',
+    );
     expect(touched()).toEqual([]);
   });
 });

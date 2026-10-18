@@ -47,10 +47,26 @@ describe('merge pass partitions by tenant before clustering', () => {
     const shortText = 'rotate the staging tls certificates before expiry';
     const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
 
-    const aShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
-    const aLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
-    const bShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
-    const bLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
+    const aShort = createMemory(shortText, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      tenantId: 'tenant-a',
+    });
+    const aLong = createMemory(longText, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      tenantId: 'tenant-a',
+    });
+    const bShort = createMemory(shortText, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      tenantId: 'tenant-b',
+    });
+    const bLong = createMemory(longText, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      tenantId: 'tenant-b',
+    });
     writeEntry(home, aShort);
     writeEntry(home, aLong);
     writeEntry(home, bShort);
@@ -94,7 +110,10 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
 
     const sid = 'test-session-tenant-x';
     appendSessionEvent(home, 'tenant-x', {
-      session_id: sid, event_type: 'action', content: 'rotate the deploy key', source: 'agent',
+      session_id: sid,
+      event_type: 'action',
+      content: 'rotate the deploy key',
+      source: 'agent',
     });
     appendSessionEvent(home, 'tenant-x', {
       session_id: sid,
@@ -141,7 +160,12 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = storeExtractedFacts(sqliteSyncStore(home).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const stored = storeExtractedFacts(
+      sqliteSyncStore(home).localFiles.learning,
+      source,
+      facts,
+      DEFAULT_HALF_LIFE_DAYS,
+    );
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.tenant_id).toBe('tenant-extract');

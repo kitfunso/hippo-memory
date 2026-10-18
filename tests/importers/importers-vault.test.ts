@@ -59,9 +59,10 @@ function archivedRows(): Array<{ memory_id: string; reason: string }> {
   try {
     // SAFETY: query selects only the memory_id and reason text columns from
     // raw_archive, so every row in the result has exactly this shape.
-    return db
-      .prepare(`SELECT memory_id, reason FROM raw_archive ORDER BY archived_at ASC`)
-      .all() as Array<{ memory_id: string; reason: string }>;
+    return db.prepare(`SELECT memory_id, reason FROM raw_archive ORDER BY archived_at ASC`).all() as Array<{
+      memory_id: string;
+      reason: string;
+    }>;
   } finally {
     closeHippoDb(db);
   }
@@ -82,9 +83,7 @@ describe('importVault (a) — fixture vault → kind=raw with source:vault tags'
     expect(all.length).toBe(result.total);
     const raws = all.filter((e) => e.kind === 'raw');
     // ≥95% as kind='raw' with both provenance tags.
-    const provenanced = raws.filter(
-      (e) => e.tags.includes('source:vault') && e.tags.includes('vault:obs'),
-    );
+    const provenanced = raws.filter((e) => e.tags.includes('source:vault') && e.tags.includes('vault:obs'));
     expect(provenanced.length / all.length).toBeGreaterThanOrEqual(0.95);
     // Every imported row carries an artifactRef under the vault prefix.
     for (const e of all) {
@@ -165,9 +164,7 @@ describe('importVault (d) — deleted source file archives the raw row', () => {
     const first = await importVault(vaultDir, opts({ name: 'v' }));
     expect(first.imported).toBe(2);
 
-    const dropId = loadAllEntries(tmpDir, 'default').find((e) =>
-      e.artifact_ref === 'vault:v:drop.md',
-    )!.id;
+    const dropId = loadAllEntries(tmpDir, 'default').find((e) => e.artifact_ref === 'vault:v:drop.md')!.id;
 
     // Remove one note from the source folder.
     fs.rmSync(path.join(vaultDir, 'drop.md'));
@@ -207,12 +204,7 @@ describe('importVault (e) — wikilinks become wikilink-candidate tags', () => {
     expect(wlCount).toBe(1);
     // Full expected provenance + wikilink set (order-independent).
     expect(e.tags).toEqual(
-      expect.arrayContaining([
-        'source:vault',
-        'vault:v',
-        'wikilink-candidate:plain-target',
-        'wikilink-candidate:real',
-      ]),
+      expect.arrayContaining(['source:vault', 'vault:v', 'wikilink-candidate:plain-target', 'wikilink-candidate:real']),
     );
   });
 });
@@ -223,10 +215,7 @@ describe('importVault (e) — wikilinks become wikilink-candidate tags', () => {
 
 describe('importVault (f) — frontmatter tags and aliases map to tags', () => {
   it('maps flow-list + block-list tags and aliases (alias:<x>) with no dup surprises', async () => {
-    writeNote(
-      'fm.md',
-      '---\ntags: [alpha, beta]\naliases: [Nick, Other]\n---\n# FM\nbody no links',
-    );
+    writeNote('fm.md', '---\ntags: [alpha, beta]\naliases: [Nick, Other]\n---\n# FM\nbody no links');
     await importVault(vaultDir, opts({ name: 'v' }));
     const e = loadAllEntries(tmpDir, 'default')[0];
 
@@ -242,9 +231,7 @@ describe('importVault (f) — frontmatter tags and aliases map to tags', () => {
     const uniq = new Set(e.tags);
     expect(uniq.size).toBe(e.tags.length);
     const nonHash = e.tags.filter((t) => !t.startsWith('content-hash:')).sort();
-    expect(nonHash).toEqual(
-      ['alias:Nick', 'alias:Other', 'alpha', 'beta', 'source:vault', 'vault:v'].sort(),
-    );
+    expect(nonHash).toEqual(['alias:Nick', 'alias:Other', 'alpha', 'beta', 'source:vault', 'vault:v'].sort());
   });
 
   it('parses block-style (indented dash) frontmatter tag lists', async () => {
@@ -327,9 +314,7 @@ describe('importVault (i) — LIKE-escape isolation on vault name', () => {
     // Build vault "ab" with one note.
     writeNote('n.md', '# N\nab vault note');
     await importVault(vaultDir, opts({ name: 'ab' }));
-    const abId = loadAllEntries(tmpDir, 'default').find(
-      (e) => e.artifact_ref === 'vault:ab:n.md',
-    )!.id;
+    const abId = loadAllEntries(tmpDir, 'default').find((e) => e.artifact_ref === 'vault:ab:n.md')!.id;
 
     // Build vault "a%" with its own note in a SEPARATE source folder.
     const otherVault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-pct-'));
@@ -439,7 +424,10 @@ describe('importVault (m) — dryRun previews without mutating', () => {
 
 describe('importVault (n) — block-style frontmatter lists are parsed', () => {
   it('maps tags + aliases written as indented `- item` lists', async () => {
-    writeNote('n.md', '---\ntags:\n  - project\n  - urgent\naliases:\n  - Nickname\n---\nBody content here, long enough.');
+    writeNote(
+      'n.md',
+      '---\ntags:\n  - project\n  - urgent\naliases:\n  - Nickname\n---\nBody content here, long enough.',
+    );
     await importVault(vaultDir, opts({ name: 'v' }));
     const row = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v'))[0];
     expect(row.tags).toContain('project');
@@ -481,7 +469,11 @@ describe('importVault (r): does not import the Hippo store mirror files', () => 
     writeNote('real-note.md', 'a genuine vault note, long enough to store');
     // markdown mirror file inside a .hippo store dir under the vault
     fs.mkdirSync(path.join(vaultDir, '.hippo', 'episodic'), { recursive: true });
-    fs.writeFileSync(path.join(vaultDir, '.hippo', 'episodic', 'mirror.md'), 'self-import mirror content must not be ingested', 'utf8');
+    fs.writeFileSync(
+      path.join(vaultDir, '.hippo', 'episodic', 'mirror.md'),
+      'self-import mirror content must not be ingested',
+      'utf8',
+    );
     // and a .git internal markdown
     fs.mkdirSync(path.join(vaultDir, '.git'), { recursive: true });
     fs.writeFileSync(path.join(vaultDir, '.git', 'COMMIT_NOTE.md'), 'git internal not a note', 'utf8');
@@ -511,7 +503,7 @@ describe('importVault (s): vault root IS the store imports nothing', () => {
 //     archive EVERY matching row, not just the last one scanned.
 // ---------------------------------------------------------------------------
 
-const vaultCtx = (): FullContext => (apiCtx(tmpDir, 'default', { subject: 'connector:vault', role: 'admin' }));
+const vaultCtx = (): FullContext => apiCtx(tmpDir, 'default', { subject: 'connector:vault', role: 'admin' });
 
 /** Inject a SECOND live raw row sharing dup.md's artifactRef + content-hash,
  *  exactly as a concurrent importVault run would. Returns both live row ids. */
@@ -564,9 +556,7 @@ describe('importVault (t) — duplicate raw rows for one artifactRef archive ALL
     expect(second.total).toBe(0); // vault now empty
     expect(second.archived).toBe(2); // BOTH rows archived on deletion-sync
 
-    const live = loadAllEntries(tmpDir, 'default').filter(
-      (e) => e.artifact_ref === 'vault:v:dup.md',
-    );
+    const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref === 'vault:v:dup.md');
     expect(live.length).toBe(0);
 
     const archived = archivedRows();
@@ -603,9 +593,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     // A real import first, so live vault rows exist to be (wrongly) archived.
     writeNote('keep.md', '# Keep\na genuine vault note worth keeping');
     expect((await importVault(vaultDir, opts({ name: 'v' }))).imported).toBe(1);
-    const before = loadAllEntries(tmpDir, 'default').filter((e) =>
-      e.artifact_ref?.startsWith('vault:v:'),
-    );
+    const before = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:'));
     expect(before.length).toBe(1);
 
     // Now point the importer at the STORE itself. This must be a no-op, NOT a
@@ -615,9 +603,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     expect(selfImport.imported).toBe(0);
     expect(selfImport.archived).toBe(0); // the regression guard
 
-    const after = loadAllEntries(tmpDir, 'default').filter((e) =>
-      e.artifact_ref?.startsWith('vault:v:'),
-    );
+    const after = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:'));
     expect(after.length).toBe(1); // row survived
     expect(after[0].id).toBe(before[0].id);
     expect(archivedRows().length).toBe(0); // nothing archived at all
@@ -657,9 +643,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
         const aliased = await importVault(link, opts({ name: 'v' }));
         expect(aliased.total).toBe(0);
         expect(aliased.archived).toBe(0); // the regression guard
-        const live = loadAllEntries(tmpDir, 'default').filter((e) =>
-          e.artifact_ref?.startsWith('vault:v:'),
-        );
+        const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:'));
         expect(live.length).toBe(1);
         expect(archivedRows().length).toBe(0);
       }
@@ -730,14 +714,10 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
         // Only the real note imports; the nested store's mirror file is skipped.
         expect(result.total).toBe(1);
         expect(result.imported).toBe(1);
-        const rows = loadAllEntries(hippoAlias, 'default').filter((e) =>
-          e.tags.includes('vault:v'),
-        );
+        const rows = loadAllEntries(hippoAlias, 'default').filter((e) => e.tags.includes('vault:v'));
         expect(rows.length).toBe(1);
         expect(rows[0].artifact_ref).toBe('vault:v:realnote.md');
-        expect(
-          rows.some((e) => (e.artifact_ref ?? '').includes('Store/')),
-        ).toBe(false);
+        expect(rows.some((e) => (e.artifact_ref ?? '').includes('Store/'))).toBe(false);
       }
     } finally {
       // Remove ONLY the junction link, never recurse into realStore (which lives
@@ -826,9 +806,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
 
   it('re-imports an unchanged file when an extra tag is REMOVED', async () => {
     writeNote('note.md', '# Note\nstable content across the tag removal');
-    expect(
-      (await importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }))).imported,
-    ).toBe(1);
+    expect((await importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }))).imported).toBe(1);
     expect(loadAllEntries(tmpDir, 'default')[0].tags).toContain('campaign:q3');
 
     // Re-import the SAME bytes WITHOUT the extra tag: a subset check would skip

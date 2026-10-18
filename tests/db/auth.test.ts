@@ -57,7 +57,7 @@ describe('auth', () => {
       const b = createApiKey(db, { tenantId: 'default', label: 'b' });
       revokeApiKey(db, b.keyId);
       const active = listApiKeys(home, { active: true });
-      expect(active.map(k => k.keyId)).toEqual([a.keyId]);
+      expect(active.map((k) => k.keyId)).toEqual([a.keyId]);
       const all = listApiKeys(home, { active: false });
       expect(all.length).toBe(2);
     } finally {

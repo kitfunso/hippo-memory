@@ -10,7 +10,13 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { appendSessionEvent } from '../../src/store/sessions.js';
-import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import {
+  createMemory,
+  deriveHalfLife,
+  DEFAULT_HALF_LIFE_DAYS,
+  Layer,
+  type MemoryEntry,
+} from '../../src/core/memory.js';
 import * as api from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { buildDag, buildEntityProfiles } from '../../src/consolidate/dag.js';
@@ -45,7 +51,10 @@ function tmp(): string {
 function store(): string {
   const root = path.join(tmp(), '.hippo');
   initStore(root);
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: CONFIGURED, replay: { count: 0 } }));
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ defaultHalfLifeDays: CONFIGURED, replay: { count: 0 } }),
+  );
   return root;
 }
 
@@ -66,10 +75,13 @@ async function hippo(root: string, ...args: string[]): Promise<void> {
 }
 
 function fetcher(text: string) {
-  return vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text }] }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  }));
+  return vi.fn<typeof fetch>(
+    async () =>
+      new Response(JSON.stringify({ content: [{ text }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  );
 }
 
 function seed(root: string, content: string, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
@@ -86,88 +98,193 @@ async function added<T>(root: string, write: () => T): Promise<MemoryEntry[]> {
 }
 
 const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
-  ['api supersede', (root) => {
-    const old = seed(root, 'the deploy window is Tuesday afternoon');
-    const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
-    return added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
-  }],
-  ['CLI supersede', (root) => {
-    const old = seed(root, 'the staging database lives in eu-west-1');
-    return added(root, () => hippo(root, 'supersede', old.id, 'the staging database lives in eu-central-1'));
-  }],
-  ['CLI trace record', (root) => added(root, () =>
-    hippo(root, 'trace', 'record', '--task', 'deploy', '--steps', '[{"action":"build","observation":"ok"}]', '--outcome', 'success'))],
-  ['CLI learn --git', (root) => {
-    const repo = path.dirname(root);
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
-    git('init', '-q');
-    git('config', 'user.email', 'test@example.com');
-    git('config', 'user.name', 'Test');
-    git('config', 'commit.gpgsign', 'false');
-    fs.writeFileSync(path.join(repo, 'a.txt'), 'x');
-    git('add', 'a.txt');
-    git('commit', '-q', '-m', 'fix: the parser dropped the trailing newline on windows paths during export');
-    // A fresh process names the project from the repo made after the store; in process that git config is never read.
-    return added(root, () => execFileSync(process.execPath, [HIPPO_BIN, 'learn', '--git', '--days', '30'], {
-      cwd: repo,
-      env: { ...process.env, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
-      stdio: 'ignore',
-    }));
-  }],
-  ['CLI watch', (root) => added(root, async () => {
-    // watch exits with the watched command's code.
-    expect(await hippoStatus(root, 'watch', '--', 'node', '-e', 'process.exit(3)')).toBe(3);
-  })],
-  ['Claude Code memory import', (root) => {
-    const home = tmp();
-    const project = fs.realpathSync.native(path.dirname(root)).replace(/[^a-zA-Z0-9]/g, '-');
-    const memDir = path.join(home, '.claude', 'projects', project, 'memory');
-    fs.mkdirSync(memDir, { recursive: true });
-    fs.writeFileSync(path.join(memDir, 'lesson.md'), '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n');
-    return added(root, () => importProjectMemories(root, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: { home, env: {}, platform: process.platform } }));
-  }],
-  ['capture', (root) => {
-    const file = path.join(tmp(), 'session.txt');
-    fs.writeFileSync(file, 'decision: rotate deploy keys every 90 days\n');
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    return added(root, () => cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false }));
-  }],
-  ['file import', (root) => {
-    const file = path.join(tmp(), 'notes.txt');
-    fs.writeFileSync(file, 'The nightly backup runs at 02:00 UTC.\n\nRestores are tested every quarter.\n');
-    return added(root, () => importGenericFile(file, { hippoRoot: root }));
-  }],
-  ['vault import result', async (root) => {
-    const vault = tmp();
-    fs.writeFileSync(path.join(vault, 'note.md'), 'The on-call rota changes every Monday at 09:00.\n');
-    // The row itself goes through remember(); the result's copy must say what was stored.
-    return (await importVault(vault, { hippoRoot: root, name: 'notes' })).entries;
-  }],
-  ['extracted facts', (root) => {
-    const source = seed(root, 'Alice prefers dark mode and vim keybindings');
-    return added(root, () => storeExtractedFacts(sqliteSyncStore(root).localFiles.learning, source, [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }], loadConfig(root).defaultHalfLifeDays));
-  }],
-  ['sleep: auto-promoted trace', (root) => {
-    appendSessionEvent(root, 'default', { session_id: 's1', event_type: 'action', content: 'ran the migration', source: 'agent' });
-    appendSessionEvent(root, 'default', { session_id: 's1', event_type: 'session_complete', content: 'success', source: 'agent', metadata: { summary: 'migrated the billing table' } });
-    return added(root, () => consolidate(root, { now: new Date() }));
-  }],
-  ['sleep: merged semantic', (root) => {
-    const backbone = 'rotate the staging tls certificates before expiry';
-    seed(root, backbone, { layer: Layer.Episodic });
-    seed(root, `${backbone} and notify the on-call channel`, { layer: Layer.Episodic });
-    return added(root, () => consolidate(root, { dryRun: false }));
-  }],
-  ['DAG summary', (root) => {
-    const facts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-      seed(root, c, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
-    return added(root, () => buildDag(sqliteSyncStore(root).localFiles, facts, { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }));
-  }],
-  ['DAG entity profile', (root) => {
-    const l2s = ['alice prefers python type hints', 'alice owns the API layer'].map((c) =>
-      seed(root, c, { layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2 }));
-    return added(root, () => buildEntityProfiles(sqliteSyncStore(root).localFiles, l2s, { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }));
-  }],
+  [
+    'api supersede',
+    (root) => {
+      const old = seed(root, 'the deploy window is Tuesday afternoon');
+      const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
+      return added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
+    },
+  ],
+  [
+    'CLI supersede',
+    (root) => {
+      const old = seed(root, 'the staging database lives in eu-west-1');
+      return added(root, () => hippo(root, 'supersede', old.id, 'the staging database lives in eu-central-1'));
+    },
+  ],
+  [
+    'CLI trace record',
+    (root) =>
+      added(root, () =>
+        hippo(
+          root,
+          'trace',
+          'record',
+          '--task',
+          'deploy',
+          '--steps',
+          '[{"action":"build","observation":"ok"}]',
+          '--outcome',
+          'success',
+        ),
+      ),
+  ],
+  [
+    'CLI learn --git',
+    (root) => {
+      const repo = path.dirname(root);
+      const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+      git('init', '-q');
+      git('config', 'user.email', 'test@example.com');
+      git('config', 'user.name', 'Test');
+      git('config', 'commit.gpgsign', 'false');
+      fs.writeFileSync(path.join(repo, 'a.txt'), 'x');
+      git('add', 'a.txt');
+      git('commit', '-q', '-m', 'fix: the parser dropped the trailing newline on windows paths during export');
+      // A fresh process names the project from the repo made after the store; in process that git config is never read.
+      return added(root, () =>
+        execFileSync(process.execPath, [HIPPO_BIN, 'learn', '--git', '--days', '30'], {
+          cwd: repo,
+          env: { ...process.env, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+          stdio: 'ignore',
+        }),
+      );
+    },
+  ],
+  [
+    'CLI watch',
+    (root) =>
+      added(root, async () => {
+        // watch exits with the watched command's code.
+        expect(await hippoStatus(root, 'watch', '--', 'node', '-e', 'process.exit(3)')).toBe(3);
+      }),
+  ],
+  [
+    'Claude Code memory import',
+    (root) => {
+      const home = tmp();
+      const project = fs.realpathSync.native(path.dirname(root)).replace(/[^a-zA-Z0-9]/g, '-');
+      const memDir = path.join(home, '.claude', 'projects', project, 'memory');
+      fs.mkdirSync(memDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(memDir, 'lesson.md'),
+        '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n',
+      );
+      return added(root, () =>
+        importProjectMemories(root, {
+          configAt: loadConfig,
+          agentImport: sqliteAgentImport,
+          machine: { home, env: {}, platform: process.platform },
+        }),
+      );
+    },
+  ],
+  [
+    'capture',
+    (root) => {
+      const file = path.join(tmp(), 'session.txt');
+      fs.writeFileSync(file, 'decision: rotate deploy keys every 90 days\n');
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      return added(root, () =>
+        cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false }),
+      );
+    },
+  ],
+  [
+    'file import',
+    (root) => {
+      const file = path.join(tmp(), 'notes.txt');
+      fs.writeFileSync(file, 'The nightly backup runs at 02:00 UTC.\n\nRestores are tested every quarter.\n');
+      return added(root, () => importGenericFile(file, { hippoRoot: root }));
+    },
+  ],
+  [
+    'vault import result',
+    async (root) => {
+      const vault = tmp();
+      fs.writeFileSync(path.join(vault, 'note.md'), 'The on-call rota changes every Monday at 09:00.\n');
+      // The row itself goes through remember(); the result's copy must say what was stored.
+      return (await importVault(vault, { hippoRoot: root, name: 'notes' })).entries;
+    },
+  ],
+  [
+    'extracted facts',
+    (root) => {
+      const source = seed(root, 'Alice prefers dark mode and vim keybindings');
+      return added(root, () =>
+        storeExtractedFacts(
+          sqliteSyncStore(root).localFiles.learning,
+          source,
+          [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }],
+          loadConfig(root).defaultHalfLifeDays,
+        ),
+      );
+    },
+  ],
+  [
+    'sleep: auto-promoted trace',
+    (root) => {
+      appendSessionEvent(root, 'default', {
+        session_id: 's1',
+        event_type: 'action',
+        content: 'ran the migration',
+        source: 'agent',
+      });
+      appendSessionEvent(root, 'default', {
+        session_id: 's1',
+        event_type: 'session_complete',
+        content: 'success',
+        source: 'agent',
+        metadata: { summary: 'migrated the billing table' },
+      });
+      return added(root, () => consolidate(root, { now: new Date() }));
+    },
+  ],
+  [
+    'sleep: merged semantic',
+    (root) => {
+      const backbone = 'rotate the staging tls certificates before expiry';
+      seed(root, backbone, { layer: Layer.Episodic });
+      seed(root, `${backbone} and notify the on-call channel`, { layer: Layer.Episodic });
+      return added(root, () => consolidate(root, { dryRun: false }));
+    },
+  ],
+  [
+    'DAG summary',
+    (root) => {
+      const facts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
+        seed(root, c, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }),
+      );
+      return added(root, () =>
+        buildDag(sqliteSyncStore(root).localFiles, facts, {
+          baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+          apiKey: 'test-key',
+          fetcher: fetcher('alice files, notes and closes tickets'),
+        }),
+      );
+    },
+  ],
+  [
+    'DAG entity profile',
+    (root) => {
+      const l2s = ['alice prefers python type hints', 'alice owns the API layer'].map((c) =>
+        seed(root, c, {
+          layer: Layer.Semantic,
+          tags: ['speaker:alice', 'dag-summary'],
+          confidence: 'inferred',
+          dagLevel: 2,
+        }),
+      );
+      return added(root, () =>
+        buildEntityProfiles(sqliteSyncStore(root).localFiles, l2s, {
+          baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+          apiKey: 'test-key',
+          fetcher: fetcher('alice is the typed-python API owner'),
+        }),
+      );
+    },
+  ],
 ];
 
 describe('writers on a configured default half-life', () => {
@@ -190,7 +307,10 @@ describe('writers on a configured default half-life', () => {
 describe('an invalid configured default half-life', () => {
   it.each([0, -30, 'forever'])('%s warns, and writers fall back to the built-in default', async (value) => {
     const root = store();
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }));
+    fs.writeFileSync(
+      path.join(root, 'config.json'),
+      JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }),
+    );
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const old = seed(root, 'the deploy window is Tuesday afternoon');
     const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));

@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -22,7 +22,11 @@ afterEach(() => {
 type DrillArgs = { summary_id: string; depth?: number };
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 async function callTool(
@@ -65,7 +69,15 @@ describe('mcp hippo_drill', () => {
   it('hippo_drill is registered in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home), config: loadConfig(home) },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: loadConfig(home),
+      },
     );
     // SAFETY: `tools/list` responses always carry `result.tools` as the
     // catalogue array; each entry at minimum has its registered `name`.
@@ -93,11 +105,16 @@ describe('mcp hippo_drill', () => {
       writeEntry(home, c);
     }
 
-    const res = await callTool(2, 'hippo_drill', { summary_id: summary.id }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      2,
+      'hippo_drill',
+      { summary_id: summary.id },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text).toContain(summary.id);
     expect(text).toContain('3 descendants');
@@ -111,11 +128,16 @@ describe('mcp hippo_drill', () => {
       dagLevel: 0,
     });
     writeEntry(home, leaf);
-    const res = await callTool(3, 'hippo_drill', { summary_id: leaf.id }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      3,
+      'hippo_drill',
+      { summary_id: leaf.id },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('leaf row');
   });
@@ -129,31 +151,46 @@ describe('mcp hippo_drill', () => {
       tenantId: 'other',
     });
     writeEntry(home, summary);
-    const res = await callTool(4, 'hippo_drill', { summary_id: summary.id }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      4,
+      'hippo_drill',
+      { summary_id: summary.id },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('no drillable summary');
   });
 
   it('rejects empty summary_id', async () => {
-    const res = await callTool(5, 'hippo_drill', { summary_id: '' }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      5,
+      'hippo_drill',
+      { summary_id: '' },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('no summary_id');
   });
 
   it('rejects fractional depth', async () => {
-    const res = await callTool(6, 'hippo_drill', { summary_id: 'missing', depth: 1.5 }, {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: 'mcp',
-    });
+    const res = await callTool(
+      6,
+      'hippo_drill',
+      { summary_id: 'missing', depth: 1.5 },
+      {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+      },
+    );
     expect(extractText(res)).toContain('depth must be an integer');
   });
 });

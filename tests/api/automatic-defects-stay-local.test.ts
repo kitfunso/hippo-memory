@@ -29,7 +29,12 @@ beforeEach(() => {
 
 describe('automatic rows with a certain defect stay local', () => {
   it('auto-share passes over a captured defect but shares the same text a person wrote', () => {
-    const captured = createMemory(DEFECT, { tags: ['error', 'captured'], source: 'capture', confidence: 'observed', layer: Layer.Episodic });
+    const captured = createMemory(DEFECT, {
+      tags: ['error', 'captured'],
+      source: 'capture',
+      confidence: 'observed',
+      layer: Layer.Episodic,
+    });
     const typed = createMemory(DEFECT, { tags: ['error'], layer: Layer.Episodic });
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
@@ -41,14 +46,27 @@ describe('automatic rows with a certain defect stay local', () => {
     const source = createMemory('Notes on the uploader and its storage token handling.', { layer: Layer.Episodic });
     writeEntry(root, source);
     const fact = (content: string) => ({
-      ...createMemory(content, { layer: Layer.Semantic, tags: ['extracted', 'topic:upload'], source: 'capture', confidence: 'inferred', extractedFrom: source.id }),
+      ...createMemory(content, {
+        layer: Layer.Semantic,
+        tags: ['extracted', 'topic:upload'],
+        source: 'capture',
+        confidence: 'inferred',
+        extractedFrom: source.id,
+      }),
       dag_level: 1,
     });
-    for (const content of [1, 2, 3].map((n) => `Upload fact ${n}: the storage token can expire mid-transfer.`).concat(DEFECT)) writeEntry(root, fact(content));
+    for (const content of [1, 2, 3]
+      .map((n) => `Upload fact ${n}: the storage token can expire mid-transfer.`)
+      .concat(DEFECT)) {
+      writeEntry(root, fact(content));
+    }
     const prompts: string[] = [];
     const fetcher = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       prompts.push(String(init?.body ?? ''));
-      return new Response(JSON.stringify({ content: [{ text: 'Upload retries cover a storage token that expires mid-transfer.' }] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ content: [{ text: 'Upload retries cover a storage token that expires mid-transfer.' }] }),
+        { status: 200 },
+      );
     };
     await consolidate(root, { fetcher });
     expect(prompts.some((body) => body.includes('Upload fact 1'))).toBe(true);

@@ -64,12 +64,11 @@ export function ambientRefusal(e: MemoryEntry, a: AmbientAdmission): AmbientRefu
   return e.pinned || isWorthSurfacing(e) ? null : 'quality';
 }
 
-export function descendantAdmits(
-  row: Pick<MemoryEntry, 'scope' | 'origin_project'>,
-  a: DescendantAdmission,
-): boolean {
-  return passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope)
-    && (!a.project || classifyOriginProject(row.origin_project, a.project) !== 'cross-project');
+export function descendantAdmits(row: Pick<MemoryEntry, 'scope' | 'origin_project'>, a: DescendantAdmission): boolean {
+  return (
+    passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope) &&
+    (!a.project || classifyOriginProject(row.origin_project, a.project) !== 'cross-project')
+  );
 }
 
 function isOwnCompactionItem(e: MemoryEntry, ownSessionId: string | undefined): boolean {

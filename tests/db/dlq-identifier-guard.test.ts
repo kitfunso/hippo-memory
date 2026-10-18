@@ -44,9 +44,14 @@ describe('dlq identifier guard', () => {
 
   it('refuses a column that is not a plain identifier', () => {
     const injected = (column: string): DlqColumn[] => [{ field: 'x', column, kind: 'text', insert: true }];
-    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('tenant_id) VALUES (1); --')).insert(db, { x: 't' }))
-      .toThrow(/Invalid DLQ column/);
-    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('(SELECT 1)')).list(db, 't', 1)).toThrow(/Invalid DLQ column/);
-    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('id FROM memories --')).get(db, 1)).toThrow(/Invalid DLQ column/);
+    expect(() =>
+      dlqAccess<Row, Insert>('slack_dlq', injected('tenant_id) VALUES (1); --')).insert(db, { x: 't' }),
+    ).toThrow(/Invalid DLQ column/);
+    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('(SELECT 1)')).list(db, 't', 1)).toThrow(
+      /Invalid DLQ column/,
+    );
+    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('id FROM memories --')).get(db, 1)).toThrow(
+      /Invalid DLQ column/,
+    );
   });
 });

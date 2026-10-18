@@ -34,8 +34,12 @@ export function findFloatingPromises(program, srcDir) {
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || !sf.fileName.startsWith(`${root}/`)) continue;
     const visit = (node) => {
-      if (ts.isExpressionStatement(node) && ts.isCallExpression(node.expression)
-        && !isHandled(node.expression) && isPromise(checker.getTypeAtLocation(node.expression))) {
+      if (
+        ts.isExpressionStatement(node) &&
+        ts.isCallExpression(node.expression) &&
+        !isHandled(node.expression) &&
+        isPromise(checker.getTypeAtLocation(node.expression))
+      ) {
         const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
         hits.push({ file: sf.fileName.slice(root.length + 1), line: line + 1, text: node.getText(sf).split('\n')[0] });
       }
@@ -48,7 +52,11 @@ export function findFloatingPromises(program, srcDir) {
 
 /** The program tsconfig.json describes. */
 export function programFromConfig(configPath) {
-  const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} });
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    configPath,
+    {},
+    { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} },
+  );
   if (!parsed) throw new Error(`cannot read ${configPath}`);
   return ts.createProgram(parsed.fileNames, parsed.options);
 }
@@ -59,7 +67,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error('\nPromise calls in src/ that nothing awaits or handles:');
     for (const h of hits) console.error(`  src/${h.file}:${h.line}  ${h.text}`);
-    console.error('\nFix: `await` it. A call meant to run on its own ends in `.catch(...)`, or `void` if a rejection cannot happen.\n');
+    console.error(
+      '\nFix: `await` it. A call meant to run on its own ends in `.catch(...)`, or `void` if a rejection cannot happen.\n',
+    );
     process.exit(1);
   }
   console.log('Every promise call in src/ is awaited or handled. OK.');

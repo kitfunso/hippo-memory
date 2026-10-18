@@ -2,15 +2,31 @@
 // Pure build functions plus one cache; the queries over it live in dashboard-queries.ts.
 
 import {
-  calculateStrength, confidenceFacets, netWrong, Layer as MemoryLayer,
-  type ConfidenceInputs, type MemoryEntry, type StrengthInputs,
+  calculateStrength,
+  confidenceFacets,
+  netWrong,
+  Layer as MemoryLayer,
+  type ConfidenceInputs,
+  type MemoryEntry,
+  type StrengthInputs,
 } from '../core/memory.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import type {
-  ConflictPair, DashboardReads, DashboardRow, DashboardText, ExcludedCounts,
+  ConflictPair,
+  DashboardReads,
+  DashboardRow,
+  DashboardText,
+  ExcludedCounts,
 } from '../store/port/dashboard-reads.js';
 import type {
-  Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints,
+  Band,
+  ChipCounts,
+  Layer,
+  Overview,
+  ProjectKind,
+  ProjectSummary,
+  ScatterGrid,
+  ScatterPoints,
 } from './dashboard-types.js';
 import { DAY_MS } from '../util/time.js';
 import { round1 } from '../util/format.js';
@@ -33,7 +49,9 @@ const TTL_MS = 5 * 60_000;
 
 /** The one predicate for "shown on the dashboard": not superseded, not archived, not quarantined. */
 export function isLiveMemory(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): boolean {
-  return !entry.superseded_by && (entry.kind === 'raw' || entry.kind === 'distilled') && !isQuarantineScope(entry.scope);
+  return (
+    !entry.superseded_by && (entry.kind === 'raw' || entry.kind === 'distilled') && !isQuarantineScope(entry.scope)
+  );
 }
 
 /** Wire key, display name and kind of a project. */
@@ -53,10 +71,14 @@ export function projectIdentity(origin: string | null | undefined): ProjectIdent
 /** Index of a layer in the wire order `LAYERS`. */
 export function layerIndex(layer: MemoryLayer): number {
   switch (layer) {
-    case MemoryLayer.Buffer: return 0;
-    case MemoryLayer.Episodic: return 1;
-    case MemoryLayer.Semantic: return 2;
-    case MemoryLayer.Trace: return 3;
+    case MemoryLayer.Buffer:
+      return 0;
+    case MemoryLayer.Episodic:
+      return 1;
+    case MemoryLayer.Semantic:
+      return 2;
+    case MemoryLayer.Trace:
+      return 3;
   }
 }
 
@@ -89,7 +111,13 @@ export function memoryFacts(
   const strength7d = calculateStrength(entry, new Date(nowMs + 7 * DAY_MS));
   const strength30d = calculateStrength(entry, new Date(nowMs + 30 * DAY_MS));
   const facets = confidenceFacets(entry, now);
-  const band = entry.pinned ? BAND_PINNED : strength30d < 0.2 ? BAND_AT_RISK : strength >= 0.5 ? BAND_STRONG : BAND_FADING;
+  const band = entry.pinned
+    ? BAND_PINNED
+    : strength30d < 0.2
+      ? BAND_AT_RISK
+      : strength >= 0.5
+        ? BAND_STRONG
+        : BAND_FADING;
   return {
     strength,
     strength7d,
@@ -141,7 +169,12 @@ export type Chip = 'all' | 'risk' | 'pinned' | 'conflict';
 export interface FilteredSet {
   idx: Int32Array;
   counts: ChipCounts;
-  decay: { now: [number, number, number]; in7d: [number, number, number]; in30d: [number, number, number]; pinned: number };
+  decay: {
+    now: [number, number, number];
+    in7d: [number, number, number];
+    in30d: [number, number, number];
+    pinned: number;
+  };
   byChip: Map<Chip, Int32Array>;
 }
 
@@ -235,7 +268,14 @@ interface ProjectDraft {
 function newDraft(identity: { key: string; name: string; kind: ProjectKind }): ProjectDraft {
   return {
     summary: {
-      ...identity, live: 0, atRisk: 0, share: 0, pinned: 0, embedded: 0, openConflicts: 0, lastRetrievedDays: null,
+      ...identity,
+      live: 0,
+      atRisk: 0,
+      share: 0,
+      pinned: 0,
+      embedded: 0,
+      openConflicts: 0,
+      lastRetrievedDays: null,
       bands: { pinned: 0, strong: 0, fading: 0, atRisk: 0 },
       layers: { buffer: 0, episodic: 0, semantic: 0, trace: 0 },
     },
@@ -303,7 +343,10 @@ class SnapshotDraft {
   private readonly drafts: ProjectDraft[] = [];
   private openConflicts = 0;
 
-  constructor(private readonly nowMs: number, private readonly excluded: ExcludedCounts) {}
+  constructor(
+    private readonly nowMs: number,
+    private readonly excluded: ExcludedCounts,
+  ) {}
 
   addRow(row: DashboardRow): void {
     if (!isLiveMemory(row)) return tallyExcluded(row, this.excluded);
@@ -378,12 +421,18 @@ interface CachedSnapshot {
   builtAtMs: number;
 }
 
-function cacheStillServes(hit: CachedSnapshot, want: { tenantId: string; dataVersion: number | null }, wallMs: number): boolean {
+function cacheStillServes(
+  hit: CachedSnapshot,
+  want: { tenantId: string; dataVersion: number | null },
+  wallMs: number,
+): boolean {
   const age = wallMs - hit.builtAtMs;
-  return hit.snapshot.tenantId === want.tenantId
-    && (hit.dataVersion !== null || want.dataVersion === null)
-    && age < TTL_MS
-    && (hit.dataVersion === want.dataVersion || age < COALESCE_MS);
+  return (
+    hit.snapshot.tenantId === want.tenantId &&
+    (hit.dataVersion !== null || want.dataVersion === null) &&
+    age < TTL_MS &&
+    (hit.dataVersion === want.dataVersion || age < COALESCE_MS)
+  );
 }
 
 export interface SnapshotService {
@@ -416,10 +465,12 @@ class SnapshotCacheService implements SnapshotService {
   private build(tenantId: string, dv: number | null, nowMs: number): Snapshot {
     const draft = new SnapshotDraft(nowMs, noneExcluded());
     if (dv !== null) {
-      draft.addExcluded(this.reads.scan(tenantId, {
-        rows: (page) => page.forEach((row) => draft.addRow(row)),
-        conflicts: (page) => page.forEach((pair) => draft.addConflict(pair)),
-      }));
+      draft.addExcluded(
+        this.reads.scan(tenantId, {
+          rows: (page) => page.forEach((row) => draft.addRow(row)),
+          conflicts: (page) => page.forEach((pair) => draft.addConflict(pair)),
+        }),
+      );
     }
     this.lastId += 1;
     highestIssuedId = Math.max(highestIssuedId, this.lastId);

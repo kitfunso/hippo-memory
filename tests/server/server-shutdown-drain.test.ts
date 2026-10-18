@@ -17,7 +17,10 @@ function trackedRoot(): string {
 }
 
 function delayedResolver(ms: number): AuthResolver {
-  return () => new Promise((resolve) => setTimeout(() => resolve({ tenantId: 'default', subject: 'drain-test', role: 'admin' }), ms));
+  return () =>
+    new Promise((resolve) =>
+      setTimeout(() => resolve({ tenantId: 'default', subject: 'drain-test', role: 'admin' }), ms),
+    );
 }
 
 const neverResolves: AuthResolver = () => new Promise(() => undefined);
@@ -28,8 +31,13 @@ const dist = (file: string): string => JSON.stringify(pathToFileURL(resolve('dis
 /** The resolver, plus a promise that settles once a request is held inside it: the request is then in flight on the server. */
 function watched(inner: AuthResolver) {
   let mark!: () => void;
-  const asked = new Promise<void>((ok) => { mark = ok; });
-  const resolver: AuthResolver = (token) => { mark(); return inner(token); };
+  const asked = new Promise<void>((ok) => {
+    mark = ok;
+  });
+  const resolver: AuthResolver = (token) => {
+    mark();
+    return inner(token);
+  };
   return { resolver, asked };
 }
 
@@ -65,12 +73,17 @@ describe('serve() graceful stop', () => {
       authResolverTimeoutMs: 60_000,
       shutdownDrainMs: 200,
     });
-    const pending = slowRecall(handle).then(() => 'answered', () => 'reset');
+    const pending = slowRecall(handle).then(
+      () => 'answered',
+      () => 'reset',
+    );
     await asked;
     const warn = vi.spyOn(log, 'warn');
     await handle.stop();
     // The line names the window stop() waited, so the short one given above is the one it used.
-    expect(warn.mock.calls.map(([line]) => line)).toContain('shutdown: 1 request(s) still running after 200 ms; closing them');
+    expect(warn.mock.calls.map(([line]) => line)).toContain(
+      'shutdown: 1 request(s) still running after 200 ms; closing them',
+    );
     expect(await pending).toBe('reset');
   });
 
@@ -78,15 +91,20 @@ describe('serve() graceful stop', () => {
     const home = trackedRoot();
     const script = join(home, 'failing-stop.mjs');
     // Closing the server first makes stop()'s own close fail with ERR_SERVER_NOT_RUNNING.
-    writeFileSync(script, [
-      `const { serve } = await import(${dist('server.js')});`,
-      `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true });`,
-      'handle.server.close();',
-      "process.emit('SIGTERM');",
-    ].join('\n'));
+    writeFileSync(
+      script,
+      [
+        `const { serve } = await import(${dist('server.js')});`,
+        `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true });`,
+        'handle.server.close();',
+        "process.emit('SIGTERM');",
+      ].join('\n'),
+    );
     const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
     let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
     const code = await new Promise<number | null>((done) => child.once('exit', done));
     expect(stderr).toMatch(/serve shutdown after SIGTERM failed: .*errorClass=/);
     expect(code).toBe(1);
@@ -96,23 +114,34 @@ describe('serve() graceful stop', () => {
     const home = trackedRoot();
     const script = join(home, 'crash-mid-request.mjs');
     // The throw is scheduled by the auth step, so it always lands while that request is in flight.
-    writeFileSync(script, [
-      `const { serve } = await import(${dist('server.js')});`,
-      'const authResolver = () => {',
-      "  setTimeout(() => { throw new Error('boom-serve'); }, 0);",
-      "  return new Promise((done) => setTimeout(() => done({ tenantId: 'default', subject: 'drain-test', role: 'admin' }), 300));",
-      '};',
-      `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true, authResolver });`,
-      'console.log(handle.url);',
-    ].join('\n'));
+    writeFileSync(
+      script,
+      [
+        `const { serve } = await import(${dist('server.js')});`,
+        'const authResolver = () => {',
+        "  setTimeout(() => { throw new Error('boom-serve'); }, 0);",
+        "  return new Promise((done) => setTimeout(() => done({ tenantId: 'default', subject: 'drain-test', role: 'admin' }), 300));",
+        '};',
+        `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true, authResolver });`,
+        'console.log(handle.url);',
+      ].join('\n'),
+    );
     const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
     let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
     const closed = new Promise<number | null>((done) => child.once('close', done));
-    const url = await new Promise<string>((done) => child.stdout.once('data', (chunk: Buffer) => done(chunk.toString('utf8').trim())));
+    const url = await new Promise<string>((done) =>
+      child.stdout.once('data', (chunk: Buffer) => done(chunk.toString('utf8').trim())),
+    );
 
-    const answer = await fetch(`${url}/v1/memories?q=anything`, { headers: { authorization: 'Bearer slow-idp-token' } })
-      .then((res) => res.status, () => 'connection cut');
+    const answer = await fetch(`${url}/v1/memories?q=anything`, {
+      headers: { authorization: 'Bearer slow-idp-token' },
+    }).then(
+      (res) => res.status,
+      () => 'connection cut',
+    );
 
     expect(answer).toBe(200);
     expect(await closed).toBe(1);

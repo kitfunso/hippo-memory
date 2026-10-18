@@ -40,7 +40,12 @@ function flaggedStore(): string {
   return store;
 }
 
-async function mcp<T>(h: ServerHandle, method: string, params?: Record<string, JsonValue>, headers: Record<string, string> = {}): Promise<T> {
+async function mcp<T>(
+  h: ServerHandle,
+  method: string,
+  params?: Record<string, JsonValue>,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const res = await fetch(`${h.url}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
@@ -54,7 +59,9 @@ async function mcp<T>(h: ServerHandle, method: string, params?: Record<string, J
 function repoWithOneFix(): string {
   const repo = path.join(tmp, 'repo');
   fs.mkdirSync(repo, { recursive: true });
-  const git = (...args: string[]): void => { execFileSync('git', args, { cwd: repo, stdio: 'ignore' }); };
+  const git = (...args: string[]): void => {
+    execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+  };
   git('init');
   git('config', 'user.name', 'Test User');
   git('config', 'user.email', 'test@example.com');
@@ -86,17 +93,24 @@ describe('MCP writes on a shared store', () => {
       arguments: { text: 'the staging database restarts at noon on sundays' },
     });
     expect(body.result?.isError).toBe(true);
-    expect(body.result?.content[0]?.text).toBe("hippo_remember needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header");
+    expect(body.result?.content[0]?.text).toBe(
+      "hippo_remember needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header",
+    );
     expect(loadAllEntries(store, 'default')).toEqual([]);
   });
 
   it('HTTP MCP hippo_remember stamps the X-Hippo-Project name', async () => {
     const store = flaggedStore();
     handle = await serve({ hippoRoot: store, port: 0 });
-    const body = await mcp<ToolReply>(handle, 'tools/call', {
-      name: 'hippo_remember',
-      arguments: { text: 'the staging database restarts at noon on sundays' },
-    }, { 'x-hippo-project': 'acme' });
+    const body = await mcp<ToolReply>(
+      handle,
+      'tools/call',
+      {
+        name: 'hippo_remember',
+        arguments: { text: 'the staging database restarts at noon on sundays' },
+      },
+      { 'x-hippo-project': 'acme' },
+    );
     expect(body.result?.content[0]?.text).toMatch(/Remembered/);
     expect(loadAllEntries(store, 'default').map((e) => e.origin_project)).toEqual(['acme']);
   });
@@ -113,7 +127,10 @@ describe('MCP writes on a shared store', () => {
 
   it('hippo_remember takes exactly text, error, pin, tag and personal', async () => {
     handle = await serve({ hippoRoot: flaggedStore(), port: 0 });
-    const body = await mcp<{ result?: { tools: Array<{ name: string; inputSchema: { properties: object } }> } }>(handle, 'tools/list');
+    const body = await mcp<{ result?: { tools: Array<{ name: string; inputSchema: { properties: object } }> } }>(
+      handle,
+      'tools/list',
+    );
     const tool = body.result?.tools.find((t) => t.name === 'hippo_remember');
     expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual(['error', 'personal', 'pin', 'tag', 'text']);
   });
@@ -127,7 +144,8 @@ describe('the MCP tool gate on a shared store', () => {
     for (const { name } of TOOLS) {
       for (const headers of headerSets) {
         const label = `${name} ${'x-hippo-project' in headers ? 'with' : 'without'} a project`;
-        const reply = (await mcp<ToolReply>(handle, 'tools/call', { name, arguments: OPEN.get(name) ?? {} }, headers)).result;
+        const reply = (await mcp<ToolReply>(handle, 'tools/call', { name, arguments: OPEN.get(name) ?? {} }, headers))
+          .result;
         const text = reply?.content[0]?.text ?? '';
         if (OFF.includes(name)) {
           expect(reply?.isError, label).toBe(true);
@@ -136,7 +154,9 @@ describe('the MCP tool gate on a shared store', () => {
           expect(text, label).not.toMatch(/on a shared store/);
         } else {
           expect(reply?.isError, label).toBe(true);
-          expect(text, label).toBe(`${name} needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header`);
+          expect(text, label).toBe(
+            `${name} needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header`,
+          );
         }
       }
     }

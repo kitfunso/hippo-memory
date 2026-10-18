@@ -1,12 +1,22 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
 import {
-  loadHandoffByIdAt, loadLatestHandoffAt, saveSessionHandoffAt, stampHandoffOutcomeAt, writeSessionEndHandoffAt,
+  loadHandoffByIdAt,
+  loadLatestHandoffAt,
+  saveSessionHandoffAt,
+  stampHandoffOutcomeAt,
+  writeSessionEndHandoffAt,
 } from '../handoffs.js';
 import type { Sessions } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import {
-  appendSessionEventAt, clearActiveTaskSnapshotAt, closeTaskSnapshotsForSessionAt, listSessionEventsAt,
-  loadActiveTaskSnapshotAt, loadFreshActiveTaskSnapshotAt, saveActiveTaskSnapshotAt, sessionOwnerOrBindAt,
+  appendSessionEventAt,
+  clearActiveTaskSnapshotAt,
+  closeTaskSnapshotsForSessionAt,
+  listSessionEventsAt,
+  loadActiveTaskSnapshotAt,
+  loadFreshActiveTaskSnapshotAt,
+  saveActiveTaskSnapshotAt,
+  sessionOwnerOrBindAt,
 } from '../sessions.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../working-memory.js';
 import { type OnHandle, openStore } from '../open.js';

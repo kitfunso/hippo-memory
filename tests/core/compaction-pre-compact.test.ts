@@ -32,20 +32,42 @@ beforeEach(() => {
   logFile = path.join(s.dir, 'logs', 'pre-compact.log');
   fs.writeFileSync(
     transcript,
-    JSON.stringify({ type: 'user', message: { role: 'user', content: 'Fix the flaky login test. Never run npm install in the billing service; the lockfile is pnpm-lock.yaml.' } }) + '\n' +
-      JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Looking at the login test now.' }] } }) + '\n',
+    JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content:
+          'Fix the flaky login test. Never run npm install in the billing service; the lockfile is pnpm-lock.yaml.',
+      },
+    }) +
+      '\n' +
+      JSON.stringify({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Looking at the login test now.' }] },
+      }) +
+      '\n',
   );
 });
 afterEach(() => removeScratch(s));
 
 function payloadFor(session: string | null, transcriptPath: string, trigger: string): string {
   // JSON.stringify leaves out an undefined session_id.
-  return JSON.stringify({ transcript_path: transcriptPath, cwd: s.proj, hook_event_name: 'PreCompact', trigger, session_id: session ?? undefined });
+  return JSON.stringify({
+    transcript_path: transcriptPath,
+    cwd: s.proj,
+    hook_event_name: 'PreCompact',
+    trigger,
+    session_id: session ?? undefined,
+  });
 }
 
 // In process: the cases read rows, the log and fd 1, which run-cli-as routes; only the lock-wait case needs a child pid.
 function preCompact(session: string | null, transcriptPath: string = transcript, trigger = 'auto') {
-  return runCliAs(['pre-compact', '--log-file', logFile], { cwd: s.proj, env: s.env, input: payloadFor(session, transcriptPath, trigger) });
+  return runCliAs(['pre-compact', '--log-file', logFile], {
+    cwd: s.proj,
+    env: s.env,
+    input: payloadFor(session, transcriptPath, trigger),
+  });
 }
 
 describe('hippo pre-compact leaves a record and asks for memories', () => {
@@ -100,7 +122,11 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
 
   it('prints nothing and writes nothing for a malformed payload', async () => {
     initStore(s.hippoRoot);
-    for (const input of ['not json', '{"session_id":"s1"}', JSON.stringify({ session_id: 's1', transcript_path: null })]) {
+    for (const input of [
+      'not json',
+      '{"session_id":"s1"}',
+      JSON.stringify({ session_id: 's1', transcript_path: null }),
+    ]) {
       const result = await runCliAs(['pre-compact', '--log-file', logFile], { cwd: s.proj, env: s.env, input });
       expect(result.status).toBe(0);
       expect(result.stdout).toBe('');
@@ -124,14 +150,23 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     expect((await preCompact('s2', empty)).status).toBe(0);
 
     const rows = compactionRows(s.hippoRoot);
-    expect(rows.map((r) => [r.session_id, r.snapshot_saved])).toEqual([['s1', 1], ['s2', 0]]);
+    expect(rows.map((r) => [r.session_id, r.snapshot_saved])).toEqual([
+      ['s1', 1],
+      ['s2', 0],
+    ]);
 
     const post = (session: string, item: string) =>
-      runCliAs(['post-compact', '--log-file', logFile], { cwd: s.proj, env: s.env, input: postCompactPayload(session, s.proj, summaryWith([item])) });
-    expect(oneLine((await post('s2', 'Session two keeps its own memories, whatever session one saved.')).stdout))
-      .toBe('Hippo saved 1 memory from this compaction.');
-    expect(oneLine((await post('s1', 'Session one restores its own snapshot after compaction.')).stdout))
-      .toBe('Hippo saved 1 memory from this compaction and restored your task snapshot.');
+      runCliAs(['post-compact', '--log-file', logFile], {
+        cwd: s.proj,
+        env: s.env,
+        input: postCompactPayload(session, s.proj, summaryWith([item])),
+      });
+    expect(oneLine((await post('s2', 'Session two keeps its own memories, whatever session one saved.')).stdout)).toBe(
+      'Hippo saved 1 memory from this compaction.',
+    );
+    expect(oneLine((await post('s1', 'Session one restores its own snapshot after compaction.')).stdout)).toBe(
+      'Hippo saved 1 memory from this compaction and restored your task snapshot.',
+    );
   });
 
   it('exits 0 and still asks for memories when the store is locked', async () => {
@@ -141,7 +176,12 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
       db.exec('BEGIN IMMEDIATE');
       const waits = path.join(s.dir, 'lock-waits');
       s.env = tracingLockWaits(s.env, waits);
-      const result = runHippo(['pre-compact', '--log-file', logFile], s.proj, s.env, payloadFor('s1', transcript, 'auto'));
+      const result = runHippo(
+        ['pre-compact', '--log-file', logFile],
+        s.proj,
+        s.env,
+        payloadFor('s1', transcript, 'auto'),
+      );
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(`${INSTRUCTION}\n`);
       // One wait for the token-ledger row and one for the record, then none: far inside the 30 s Claude Code gives PreCompact.

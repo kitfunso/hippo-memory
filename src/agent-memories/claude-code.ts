@@ -126,7 +126,10 @@ function transcriptStartCwd(transcriptPath: string): string | null {
   }
   try {
     const buf = Buffer.alloc(START_SCAN_BYTES);
-    const lines = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').split('\n');
+    const lines = buf
+      .subarray(0, fs.readSync(fd, buf, 0, buf.length, 0))
+      .toString('utf8')
+      .split('\n');
     for (const line of lines) {
       const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
       if (cwd === undefined) continue;

@@ -2,13 +2,7 @@
 
 import type { SearchResult } from '../../core/search-types.js';
 import { estimateTokens } from '../../util/token-text.js';
-import {
-  detectAnchoring,
-  biasHintEnabled,
-  snapshotRing,
-  type AnchoringHint,
-  type RingBuffer,
-} from './finish.js';
+import { detectAnchoring, biasHintEnabled, snapshotRing, type AnchoringHint, type RingBuffer } from './finish.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import type { RecallSuppressionSummary } from './types.js';
 

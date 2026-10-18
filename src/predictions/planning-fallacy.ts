@@ -74,8 +74,7 @@ export function detectPlanningClaim(
 ): ForwardClaimMatch | null {
   // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module
   // reload.
-  const mode: AutodebiasMode =
-    opts.mode ?? (envAutodebiasOff() ? 'off' : 'regex');
+  const mode: AutodebiasMode = opts.mode ?? (envAutodebiasOff() ? 'off' : 'regex');
   if (mode === 'off') return null;
   if (!queryText) return null;
   return detectForwardClaim(queryText);

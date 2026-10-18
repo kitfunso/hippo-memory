@@ -166,7 +166,9 @@ describe('a rename the platform refuses (a bind-mounted file, a mount point)', (
     });
     syncBuiltinESMExports();
 
-    expect(() => installJsonHooks('claude-code')).toThrow(new RegExp(`${escapeRegex(target)} could not be replaced \\(EACCES\\)`));
+    expect(() => installJsonHooks('claude-code')).toThrow(
+      new RegExp(`${escapeRegex(target)} could not be replaced \\(EACCES\\)`),
+    );
 
     expect(fs.readFileSync(file, 'utf8')).toBe('{"theme":"dark"}');
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
@@ -215,24 +217,57 @@ function seedFile(file: string, text: string): string {
 }
 
 const OTHER_CONFIG_FILES: ReadonlyArray<readonly [string, (home: string) => Rewrite]> = [
-  ['opencode.json', (home) => ({
-    file: seedFile(path.join(home, '.config', 'opencode', 'opencode.json'), JSON.stringify({
-      theme: 'dark',
-      hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] }] },
-    }, null, 2)),
-    rewrite: () => { installOpencodePlugin(); },
-  })],
-  ['the workspace registry', (home) => {
-    const globalRoot = path.join(home, '.hippo');
-    registerWorkspace(globalRoot, path.join(home, 'repo-a'));
-    return { file: workspaceRegistryPath(globalRoot), rewrite: () => { registerWorkspace(globalRoot, path.join(home, 'repo-b')); } };
-  }],
-  ['copilot-instructions.md', (home) => {
-    // A first install leaves the hooks and MCP files current, so the rerun's only write is the instructions file.
-    fs.mkdirSync(path.join(home, '.copilot'));
-    const file = seedFile(installCopilot().paths.instructions, '# House rules\n\nAlways run the linter before a commit.\n');
-    return { file, rewrite: () => { installCopilot(); } };
-  }],
+  [
+    'opencode.json',
+    (home) => ({
+      file: seedFile(
+        path.join(home, '.config', 'opencode', 'opencode.json'),
+        JSON.stringify(
+          {
+            theme: 'dark',
+            hooks: {
+              SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] }],
+            },
+          },
+          null,
+          2,
+        ),
+      ),
+      rewrite: () => {
+        installOpencodePlugin();
+      },
+    }),
+  ],
+  [
+    'the workspace registry',
+    (home) => {
+      const globalRoot = path.join(home, '.hippo');
+      registerWorkspace(globalRoot, path.join(home, 'repo-a'));
+      return {
+        file: workspaceRegistryPath(globalRoot),
+        rewrite: () => {
+          registerWorkspace(globalRoot, path.join(home, 'repo-b'));
+        },
+      };
+    },
+  ],
+  [
+    'copilot-instructions.md',
+    (home) => {
+      // A first install leaves the hooks and MCP files current, so the rerun's only write is the instructions file.
+      fs.mkdirSync(path.join(home, '.copilot'));
+      const file = seedFile(
+        installCopilot().paths.instructions,
+        '# House rules\n\nAlways run the linter before a commit.\n',
+      );
+      return {
+        file,
+        rewrite: () => {
+          installCopilot();
+        },
+      };
+    },
+  ],
 ];
 
 describe('a write that dies halfway, as on a full disk', () => {

@@ -12,7 +12,12 @@ import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } 
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { HASHED_DIM, hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  HASHED_DIM,
+  hashedVector,
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -30,7 +35,10 @@ const roots: string[] = [];
 function vectorRoot(vectors: Record<string, readonly number[]>): string {
   const root = makeRoot('hybrid');
   roots.push(root);
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }));
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }),
+  );
   const db = openHippoDb(root);
   try {
     setMeta(db, EMBEDDING_MODEL_META_KEY, IDENTITY);
@@ -64,7 +72,9 @@ function withCosine(q: readonly number[], away: readonly number[], cos: number):
 
 const memory = (content: string): MemoryEntry => createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
-beforeAll(async () => { embeddings = await startHashedEmbeddings(); });
+beforeAll(async () => {
+  embeddings = await startHashedEmbeddings();
+});
 afterAll(async () => {
   await embeddings.close();
   for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
@@ -75,8 +85,12 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('hybridSearch over stored vectors', () => {
-  beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret'); });
-  afterEach(() => { vi.unstubAllEnvs(); });
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   it('finds a row no query word matches through its stored vector alone', async () => {
     const query = 'deployment broke';
@@ -87,7 +101,12 @@ describe('hybridSearch over stored vectors', () => {
     const root = vectorRoot({ [related.id]: withCosine(q, near!, 0.95), [unrelated.id]: withCosine(q, far!, -0.1) });
 
     expect(await hybridSearch(query, [related, unrelated], { budget: 10_000 })).toEqual([]);
-    const results = await hybridSearch(query, [related, unrelated], { hippoRoot: root, budget: 10_000, scope: null, explain: true });
+    const results = await hybridSearch(query, [related, unrelated], {
+      hippoRoot: root,
+      budget: 10_000,
+      scope: null,
+      explain: true,
+    });
     expect(results.map((r) => r.entry.id)).toEqual([related.id]);
     expect(results[0]!.bm25).toBe(0);
     expect(results[0]!.cosine).toBeCloseTo(0.95, 5);
@@ -102,9 +121,19 @@ describe('hybridSearch over stored vectors', () => {
     const semantic = memory('the cache went stale overnight');
     const root = vectorRoot({ [keyword.id]: withCosine(q, a!, 0.1), [semantic.id]: withCosine(q, b!, 0.9) });
     const run = (embeddingWeight?: number) =>
-      hybridSearch(query, [keyword, semantic], { hippoRoot: root, budget: 10_000, scope: null, explain: true, embeddingWeight });
+      hybridSearch(query, [keyword, semantic], {
+        hippoRoot: root,
+        budget: 10_000,
+        scope: null,
+        explain: true,
+        embeddingWeight,
+      });
 
-    for (const [weight, expected] of [[undefined, 0.6], [0.1, 0.1], [0.9, 0.9]] as const) {
+    for (const [weight, expected] of [
+      [undefined, 0.6],
+      [0.1, 0.1],
+      [0.9, 0.9],
+    ] as const) {
       const results = await run(weight);
       expect(results.map((r) => r.cosine).sort()).toEqual([expect.closeTo(0.1, 5), expect.closeTo(0.9, 5)]);
       for (const r of results) {
@@ -141,7 +170,9 @@ describe('hybridSearch with embeddings', () => {
 
   it('respects token budget in hybrid mode', async () => {
     const entries = Array.from({ length: 20 }, (_, i) =>
-      createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })
+      createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
     );
 
     const results = await hybridSearch('cache error', entries, { budget: 300 });
@@ -187,14 +218,18 @@ describe('hybridSearch with embeddings', () => {
 
 describe('hybridSearch explain breakdown', () => {
   it('omits breakdown when explain flag is not set', async () => {
-    const entries = [createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
+    const entries = [
+      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    ];
     const results = await hybridSearch('FRED cache', entries, { budget: 10000 });
     expect(results.length).toBe(1);
     expect(results[0].breakdown).toBeUndefined();
   });
 
   it('populates breakdown when explain=true', async () => {
-    const entries = [createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })];
+    const entries = [
+      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    ];
     const results = await hybridSearch('FRED cache failure', entries, {
       budget: 10000,
       explain: true,
@@ -230,13 +265,13 @@ describe('hybridSearch explain breakdown', () => {
       expect(b).toBeDefined();
       if (!b) continue;
       const expected =
-        b.base
-        * b.strengthMultiplier
-        * b.recencyMultiplier
-        * b.decisionBoost
-        * b.pathBoost
-        * b.sourceBump
-        * b.outcomeBoost;
+        b.base *
+        b.strengthMultiplier *
+        b.recencyMultiplier *
+        b.decisionBoost *
+        b.pathBoost *
+        b.sourceBump *
+        b.outcomeBoost;
       expect(b.final).toBeCloseTo(expected, 5);
       expect(r.score).toBeCloseTo(b.final, 5);
       expect(b.sourceBump).toBe(1);
@@ -383,27 +418,27 @@ describe('mmrRerank', () => {
   it('de-clusters near-duplicates at lambda=0.5', () => {
     // a and b are near-duplicates; c is diverse. MMR should prefer c over b
     // for the second slot even though b has the higher raw score.
-    const a = makeResult('a', 1.00);
+    const a = makeResult('a', 1.0);
     const b = makeResult('b', 0.95);
-    const c = makeResult('c', 0.70);
+    const c = makeResult('c', 0.7);
     a.entry.id = 'a';
     b.entry.id = 'b';
     c.entry.id = 'c';
     const idx = {
       a: [1, 0, 0],
-      b: [0.99, 0.14, 0],     // cos(a, b) ≈ 0.99 — duplicates
-      c: [0, 0, 1],            // orthogonal — diverse
+      b: [0.99, 0.14, 0], // cos(a, b) ≈ 0.99 — duplicates
+      c: [0, 0, 1], // orthogonal — diverse
     };
     const ranked = mmrRerank([a, b, c], idx, 0.5, false);
     expect(ranked[0].entry.id).toBe('a');
-    expect(ranked[1].entry.id).toBe('c');    // diversity wins over raw rank
+    expect(ranked[1].entry.id).toBe('c'); // diversity wins over raw rank
     expect(ranked[2].entry.id).toBe('b');
   });
 
   it('attaches pre/post MMR ranks to breakdowns when explain=true', () => {
-    const a = makeResult('a', 1.00);
+    const a = makeResult('a', 1.0);
     const b = makeResult('b', 0.95);
-    const c = makeResult('c', 0.70);
+    const c = makeResult('c', 0.7);
     a.entry.id = 'a';
     b.entry.id = 'b';
     c.entry.id = 'c';
@@ -420,8 +455,8 @@ describe('mmrRerank', () => {
     const ranked = mmrRerank([a, b, c], idx, 0.5, true);
     expect(ranked[0].breakdown?.preMmrRank).toBe(1);
     expect(ranked[0].breakdown?.postMmrRank).toBe(1);
-    expect(ranked[1].breakdown?.preMmrRank).toBe(3);   // c was 3rd by relevance
-    expect(ranked[1].breakdown?.postMmrRank).toBe(2);  // now 2nd after MMR
+    expect(ranked[1].breakdown?.preMmrRank).toBe(3); // c was 3rd by relevance
+    expect(ranked[1].breakdown?.postMmrRank).toBe(2); // now 2nd after MMR
   });
 
   it('leaves order unchanged when no embeddings are available for any doc', () => {
@@ -440,8 +475,12 @@ describe('mmrRerank', () => {
 // ---------------------------------------------------------------------------
 
 describe('hybridSearch MMR cap on large candidate sets', () => {
-  beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret'); });
-  afterEach(() => { vi.unstubAllEnvs(); });
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   it('re-ranks only the top 100 by relevance and keeps the rest in relevance order', async () => {
     const query = 'topic content about';
@@ -451,12 +490,20 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
     const entries = Array.from({ length: 150 }, (_, i) => memory(`topic ${String(i).padStart(3, '0')} about content`));
     const HEAD_OUTLIER = 50;
     const TAIL_OUTLIER = 149;
-    const vectors = Object.fromEntries(entries.map((e, i) => {
-      const away = i === HEAD_OUTLIER ? headAway! : i === TAIL_OUTLIER ? tailAway! : cluster!;
-      return [e.id, withCosine(q, away, i === TAIL_OUTLIER ? 0.5 : 0.99 - i * 0.001)];
-    }));
+    const vectors = Object.fromEntries(
+      entries.map((e, i) => {
+        const away = i === HEAD_OUTLIER ? headAway! : i === TAIL_OUTLIER ? tailAway! : cluster!;
+        return [e.id, withCosine(q, away, i === TAIL_OUTLIER ? 0.5 : 0.99 - i * 0.001)];
+      }),
+    );
 
-    const results = await hybridSearch(query, entries, { hippoRoot: vectorRoot(vectors), budget: 1_000_000, scope: null, explain: true, mmrLambda: 0.5 });
+    const results = await hybridSearch(query, entries, {
+      hippoRoot: vectorRoot(vectors),
+      budget: 1_000_000,
+      scope: null,
+      explain: true,
+      mmrLambda: 0.5,
+    });
 
     expect(results).toHaveLength(150);
     expect(results.filter((r) => r.breakdown?.preMmrRank !== undefined)).toHaveLength(100);
@@ -471,7 +518,9 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
 describe('hybridSearch minResults', () => {
   it('returns at least minResults entries even when budget is tight', async () => {
     const entries = Array.from({ length: 20 }, (_, i) =>
-      createMemory(`important topic ${i} with enough content to exceed a small budget ${'x'.repeat(200)}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory(`important topic ${i} with enough content to exceed a small budget ${'x'.repeat(200)}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
     );
     const withMin = await hybridSearch('important topic', entries, {
       budget: 100,

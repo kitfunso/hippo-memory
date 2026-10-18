@@ -54,19 +54,38 @@ describe('capture retains complete supported assertions', () => {
   });
 
   it('excludes fenced and quoted output while retaining inline code', () => {
-    const text = ['```text', 'Error: migrate users to the production database.', '```', '> Never touch the generated config, because the deploy step rewrites it.', 'Never call `write(a, b)` before validating the tenant.'].join('\n');
-    expect(extractFromTexts([text]).map((item) => item.content)).toEqual(['Never call `write(a, b)` before validating the tenant']);
+    const text = [
+      '```text',
+      'Error: migrate users to the production database.',
+      '```',
+      '> Never touch the generated config, because the deploy step rewrites it.',
+      'Never call `write(a, b)` before validating the tenant.',
+    ].join('\n');
+    expect(extractFromTexts([text]).map((item) => item.content)).toEqual([
+      'Never call `write(a, b)` before validating the tenant',
+    ]);
   });
 
   it('joins wrapped reasons and conditions without mining a wrapped error log', () => {
-    const text = ['The API must retry after HTTP 429', 'because the provider enforces a per-account quota.', '', 'LegacyDbPushMissingRemoteError: Found local migration files to be', 'inserted before the last migration on remote database.'].join('\n');
-    expect(extractFromTexts([text]).map((item) => item.content)).toEqual(['The API must retry after HTTP 429 because the provider enforces a per-account quota']);
+    const text = [
+      'The API must retry after HTTP 429',
+      'because the provider enforces a per-account quota.',
+      '',
+      'LegacyDbPushMissingRemoteError: Found local migration files to be',
+      'inserted before the last migration on remote database.',
+    ].join('\n');
+    expect(extractFromTexts([text]).map((item) => item.content)).toEqual([
+      'The API must retry after HTTP 429 because the provider enforces a per-account quota',
+    ]);
   });
 
   it('does not manufacture a source assertion by clipping a transcript turn', () => {
     const user = `Decision: the release app ${'uses the shared configuration '.repeat(22)}because the signed package must match the manifest.`;
     const assistant = `The storage service must ${'retain the source details '.repeat(95)}until verification finishes.`;
-    const turns: SessionTurn[] = [{ role: 'user', text: user }, { role: 'assistant', text: assistant }];
+    const turns: SessionTurn[] = [
+      { role: 'user', text: user },
+      { role: 'assistant', text: assistant },
+    ];
     const summary = summarizeSessionTurns(turns);
     expect(summary).toContain(user);
     expect(summary).toContain(assistant);
@@ -78,7 +97,10 @@ describe('capture retains complete supported assertions', () => {
       { role: 'user', text: 'Never edit the lockfile by hand' },
       { role: 'user', text: 'thanks' },
       { role: 'user', text: '```\nNever push from the VM\n```' },
-      { role: 'assistant', text: 'You must never run the migration twice, because the second run deletes the seed rows' },
+      {
+        role: 'assistant',
+        text: 'You must never run the migration twice, because the second run deletes the seed rows',
+      },
       { role: 'assistant', text: 'succeeds (inserts or updates)' },
       { role: 'assistant', text: 'Here is the file:' },
     ];
@@ -96,7 +118,11 @@ describe('capture retains complete supported assertions', () => {
       { role: 'assistant', text: '- the deploy script lives in scripts/deploy.sh' },
     ];
     expect(captureTurns(turns)).toEqual([
-      { content: 'Never deploy on Fridays because the on-call rota is thin', category: 'rule', tags: ['rule', 'captured'] },
+      {
+        content: 'Never deploy on Fridays because the on-call rota is thin',
+        category: 'rule',
+        tags: ['rule', 'captured'],
+      },
       { content: 'Move the cache to Redis', category: 'spec', tags: ['spec', 'captured'] },
     ]);
   });
@@ -151,14 +177,31 @@ describe('automatic quality does not govern manual or trusted import storage', (
   });
 
   it('keeps complete manual/import preferences in recent context and keeps pins under existing rules', async () => {
-    const manual = createMemory('Prefer pnpm for dependency installs', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic });
-    const imported = createMemory('Use SQLite for the offline cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'claude-code', tags: ['agent-memory'], layer: Layer.Episodic });
+    const manual = createMemory('Prefer pnpm for dependency installs', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      source: 'cli',
+      layer: Layer.Episodic,
+    });
+    const imported = createMemory('Use SQLite for the offline cache', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      source: 'claude-code',
+      tags: ['agent-memory'],
+      layer: Layer.Episodic,
+    });
     const pin = { ...createMemory('Use tabs', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true };
-    const noise = createMemory('Found local migration files to be', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'capture', confidence: 'observed', layer: Layer.Episodic });
+    const noise = createMemory('Found local migration files to be', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      source: 'capture',
+      confidence: 'observed',
+      layer: Layer.Episodic,
+    });
     for (const entry of [manual, pin, noise]) writeEntry(root, entry);
     const db = openStore(root);
-    try { expect(gatedWrite(db, root, imported, { worthCheck: false })).toBe('written'); }
-    finally { closeHippoDb(db); }
+    try {
+      expect(gatedWrite(db, root, imported, { worthCheck: false })).toBe('written');
+    } finally {
+      closeHippoDb(db);
+    }
     const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project' });
     const ids = recent.entries.map(({ entry }) => entry.id);
     expect(ids).toContain(manual.id);
@@ -174,7 +217,9 @@ describe('automatic quality does not govern manual or trusted import storage', (
       'Always check which branch the PR merges into',
       'To deploy the site run npm run deploy in website/',
     ];
-    const manual = texts.map((text) => createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic }));
+    const manual = texts.map((text) =>
+      createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic }),
+    );
     for (const entry of manual) writeEntry(root, entry);
     const recent = await getContext(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
     expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
@@ -186,6 +231,8 @@ describe('automatic quality does not govern manual or trusted import storage', (
       { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
     ];
     cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
-    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual([
+      'Never deploy on Fridays because the on-call rota is thin',
+    ]);
   });
 });

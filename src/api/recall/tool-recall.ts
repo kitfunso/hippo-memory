@@ -92,7 +92,13 @@ function fitToolRecall(
   render: (cut: SearchResult[]) => RenderedRecall,
 ): RenderedRecall {
   const fitted = fitBudget(ranked, Math.max(0, limits.room), 1, memoryCost);
-  return shrinkToFit(fitted.length, 1, limits.budget, (n) => render(fitted.slice(0, n)), (r) => r.text);
+  return shrinkToFit(
+    fitted.length,
+    1,
+    limits.budget,
+    (n) => render(fitted.slice(0, n)),
+    (r) => r.text,
+  );
 }
 
 function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOptions['showRanked']> {
@@ -155,7 +161,11 @@ export interface ToolRecallRequest {
  * raw, as mcp-recall-fresh-tail-policy.test.ts pins. */
 export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Promise<string> {
   const { opts, project, clientKey } = req;
-  const { query, window: { includeContinuity }, boost: { sessionId } } = opts;
+  const {
+    query,
+    window: { includeContinuity },
+    boost: { sessionId },
+  } = opts;
   const budget = req.budget ?? ctx.config.defaultBudget;
   const anchorRing = sessionRing('mcp', ctx.tenantId, sessionId);
   const who = callerOf(ctx);
@@ -179,7 +189,10 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   });
   const { rendered } = out;
   if (!rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
-  lastRecalledIds.set(clientKey, rendered.list.map((r) => r.entry.id));
+  lastRecalledIds.set(
+    clientKey,
+    rendered.list.map((r) => r.entry.id),
+  );
   // Fed once the recall's rows are written, after the final detect: anchoredOn feeds the cooldown for the next recall
   // on this session.
   if (anchorRing) noteRecall(anchorRing, query, rendered.list[0]?.entry.id ?? null, rendered.anchoring?.memoryId);

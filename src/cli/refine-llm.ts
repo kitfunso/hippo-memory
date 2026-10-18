@@ -18,10 +18,7 @@ const REFINE_SOURCE_CHARS = 400;
 // Output budget for one refined memory, and the shortest reply kept as a refinement.
 const REFINE_MAX_TOKENS = 800;
 const REFINE_MIN_CHARS = 10;
-const CONSOLIDATED_MARKERS = [
-  '[Consolidated from',
-  '[Consolidated pattern from',
-];
+const CONSOLIDATED_MARKERS = ['[Consolidated from', '[Consolidated pattern from'];
 
 export interface RefineOptions {
   apiKey: string;
@@ -61,7 +58,8 @@ export async function refineSemanticMemory(
     .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
     .join('\n\n');
 
-  const prompt = `You are refining a semantic memory in an agent's memory store. ` +
+  const prompt =
+    `You are refining a semantic memory in an agent's memory store. ` +
     `The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. ` +
     `Produce a single coherent semantic memory that captures the underlying principle.
 
@@ -98,10 +96,14 @@ ${sourceBlock}`;
 
 function describeRefineFailure(failure: AnthropicMessageFailure): string {
   switch (failure.kind) {
-    case 'request': return `refine: request failed: ${failure.message}`;
-    case 'http': return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
-    case 'unreadable': return `refine: unreadable response: ${failure.message}`;
-    case 'empty': return 'refine: response held no text';
+    case 'request':
+      return `refine: request failed: ${failure.message}`;
+    case 'http':
+      return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
+    case 'unreadable':
+      return `refine: unreadable response: ${failure.message}`;
+    case 'empty':
+      return 'refine: response held no text';
   }
 }
 
@@ -114,10 +116,7 @@ function isConsolidated(entry: MemoryEntry): boolean {
  * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it
  * (unless `all`).
  */
-export async function refineStore(
-  hippoRoot: string,
-  opts: RefineOptions,
-): Promise<RefineResult> {
+export async function refineStore(hippoRoot: string, opts: RefineOptions): Promise<RefineResult> {
   const result: RefineResult = {
     scanned: 0,
     refined: 0,

@@ -13,11 +13,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import {
-  recordSessionDigest,
-  sessionDigestId,
-  type SessionScan,
-} from '../../src/capture/session-digest.js';
+import { recordSessionDigest, sessionDigestId, type SessionScan } from '../../src/capture/session-digest.js';
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
@@ -63,7 +59,11 @@ function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {
 /** The line recordSessionDigest logs for one run: what it wrote, or why it skipped. */
 function write(key: string, s: SessionScan): string {
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, sqliteSyncStore(hippoRoot), s, { key, tenantId: 'default', log: (line) => log.push(line) });
+  recordSessionDigest(hippoRoot, sqliteSyncStore(hippoRoot), s, {
+    key,
+    tenantId: 'default',
+    log: (line) => log.push(line),
+  });
   return log.join('\n');
 }
 const WROTE = /^digest: wrote /;
@@ -88,7 +88,9 @@ describe('writing the digest row', () => {
   it('replaces the row on a second run for the same session', () => {
     write('s1', scan(REPLY));
     write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'));
-    expect(digests().map((d) => d.content)).toEqual(['Pinned `retry()` to three attempts because the queue backs up.\nChanged: src/upload.ts']);
+    expect(digests().map((d) => d.content)).toEqual([
+      'Pinned `retry()` to three attempts because the queue backs up.\nChanged: src/upload.ts',
+    ]);
     expect(sessionDigestId('default', 's1')).not.toBe(sessionDigestId('other-tenant', 's1'));
   });
 
@@ -105,14 +107,20 @@ describe('writing the digest row', () => {
 
   it('skips a digest whose text was rejected', async () => {
     write('s1', scan(REPLY));
-    await reject(apiCtx(hippoRoot, 'default', adminActor('test')), { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    await reject(apiCtx(hippoRoot, 'default', adminActor('test')), {
+      memoryId: sessionDigestId('default', 's1'),
+      reason: 'not useful',
+    });
     expect(write('s1', scan(REPLY))).toBe('digest: skip: it matches a rejected value');
     expect(digests()).toEqual([]);
   });
 
   it('a reject blocks that text only, so a re-run with a new reply writes the row again', async () => {
     write('s1', scan(REPLY));
-    await reject(apiCtx(hippoRoot, 'default', adminActor('test')), { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    await reject(apiCtx(hippoRoot, 'default', adminActor('test')), {
+      memoryId: sessionDigestId('default', 's1'),
+      reason: 'not useful',
+    });
     expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'))).toMatch(WROTE);
     expect(digests()).toHaveLength(1);
   });
@@ -157,7 +165,9 @@ describe('text hippo injected is not stored again', () => {
 
   it('drops a sentence restating the ambient handoff of another session, but not its own', () => {
     saveSessionHandoff(hippoRoot, 'default', {
-      version: 1, sessionId: 'other', summary: 'Moved the lock into the pool so two writers stop racing on the index.',
+      version: 1,
+      sessionId: 'other',
+      summary: 'Moved the lock into the pool so two writers stop racing on the index.',
     });
     const restated = 'Moved the lock into the pool so two writers stop racing, in `pool.ts`.';
     expect(write('s2', scan(restated, { edits: [] }))).toBe(LEFT_NOTHING);
@@ -168,10 +178,15 @@ describe('text hippo injected is not stored again', () => {
 describe('sharing', () => {
   it('autoShare never copies a digest, even with no score bar', () => {
     write('s1', scan(REPLY));
-    writeEntry(hippoRoot, createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }));
+    writeEntry(
+      hippoRoot,
+      createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }),
+    );
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
     autoShare(...sharingStores(hippoRoot), { minScore: 0, stats });
-    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(['gotcha: powershell 5.1 has no pipeline chain operators']);
+    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([
+      'gotcha: powershell 5.1 has no pipeline chain operators',
+    ]);
     expect(stats.neverAutoShareSkipped).toBe(1);
   });
 
@@ -179,9 +194,18 @@ describe('sharing', () => {
     write('s1', scan(REPLY));
     const [digest] = digests();
     expect(neverAutoShareTags([digest])).toEqual([SESSION_DIGEST_TAG]);
-    const [fact] = storeExtractedFacts(sqliteSyncStore(hippoRoot).localFiles.learning, digest, [
-      { content: 'The uploader retries with backoff when the storage token expires.', tags: ['topic:upload'], valence: 'neutral' },
-    ], DEFAULT_HALF_LIFE_DAYS);
+    const [fact] = storeExtractedFacts(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      digest,
+      [
+        {
+          content: 'The uploader retries with backoff when the storage token expires.',
+          tags: ['topic:upload'],
+          valence: 'neutral',
+        },
+      ],
+      DEFAULT_HALF_LIFE_DAYS,
+    );
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
     autoShare(...sharingStores(hippoRoot), { minScore: 0 });
@@ -192,7 +216,12 @@ describe('sharing', () => {
 describe('consolidation leaves digests alone', () => {
   const base = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';
   const row = (content: string, digest: boolean): MemoryEntry =>
-    createMemory(content, { layer: Layer.Episodic, tenantId: 'default', tags: digest ? [SESSION_DIGEST_TAG] : [], source: digest ? SESSION_DIGEST_TAG : undefined });
+    createMemory(content, {
+      layer: Layer.Episodic,
+      tenantId: 'default',
+      tags: digest ? [SESSION_DIGEST_TAG] : [],
+      source: digest ? SESSION_DIGEST_TAG : undefined,
+    });
 
   it.each([true, false])('merge pass, digest rows: %s', async (digest) => {
     const rows = [base, `${base} again today`, `${base} once more`].map((c) => row(c, digest));

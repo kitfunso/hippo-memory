@@ -68,17 +68,28 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
   it('migrates the legacy pinned-only hook to include the fresh write tail', () => {
     const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
-    fs.writeFileSync(settingsPath, JSON.stringify({
-      hooks: {
-        UserPromptSubmit: [{
-          hooks: [{
-            type: 'command',
-            command: 'hippo context --pinned-only --format additional-context',
-            timeout: 5,
-          }],
-        }],
-      },
-    }, null, 2));
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          hooks: {
+            UserPromptSubmit: [
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command: 'hippo context --pinned-only --format additional-context',
+                    timeout: 5,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+    );
 
     const result = installJsonHooks('claude-code');
     expect(result.installedUserPromptSubmit).toBe(false);
@@ -92,7 +103,10 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
   it('migration edits only a hippo handler: a user command that merely mentions the pinned-only command is left as written', () => {
     const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
-    const mine = { type: 'command', command: 'node ~/hooks/ctx.js --note "hippo context --pinned-only-report" --format json' };
+    const mine = {
+      type: 'command',
+      command: 'node ~/hooks/ctx.js --note "hippo context --pinned-only-report" --format json',
+    };
     fs.writeFileSync(settingsPath, JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [mine] }] } }));
 
     const result = installJsonHooks('claude-code');
@@ -107,9 +121,21 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
   it('migration edits the hippo handler of a group it shares with a user handler, and only that one', () => {
     const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
     const mine = { type: 'command', command: 'node ~/hooks/redact.js --format json' };
-    fs.writeFileSync(settingsPath, JSON.stringify({
-      hooks: { UserPromptSubmit: [{ hooks: [mine, { type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 }] }] },
-    }));
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          UserPromptSubmit: [
+            {
+              hooks: [
+                mine,
+                { type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 },
+              ],
+            },
+          ],
+        },
+      }),
+    );
 
     const result = installJsonHooks('claude-code');
     expect(result.migratedPinnedInjectRecent).toBe(true);
@@ -117,7 +143,9 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
     const groups = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.UserPromptSubmit;
     expect(groups).toHaveLength(1);
     expect(groups[0].hooks[0]).toEqual(mine);
-    expect(groups[0].hooks[1].command).toBe('hippo context --pinned-only --include-recent 5 --format additional-context');
+    expect(groups[0].hooks[1].command).toBe(
+      'hippo context --pinned-only --include-recent 5 --format additional-context',
+    );
   });
 
   it('uninstallJsonHooks removes the UserPromptSubmit pinned-inject entry', () => {

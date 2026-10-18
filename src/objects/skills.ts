@@ -14,11 +14,7 @@ import { CLI_ACTOR } from '../core/actor.js';
 
 export type { Skill, SkillStatus } from '../core/object-types.js';
 
-export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>([
-  'active',
-  'superseded',
-  'closed',
-]);
+export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>(['active', 'superseded', 'closed']);
 
 /** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a
  *  larger cap than the 4096 short-field convention. */
@@ -112,28 +108,15 @@ export function saveSkill(
 }
 
 /** Close (retire) an active skill; a superseded row is terminal. */
-export function closeSkill(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-  actor: string = CLI_ACTOR,
-): Promise<Skill> {
+export function closeSkill(objects: Objects, tenantId: string, id: number, actor: string = CLI_ACTOR): Promise<Skill> {
   return closeObject(objects, SKILL, tenantId, id, actor);
 }
 
-export function loadSkillById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<Skill | null> {
+export function loadSkillById(objects: Objects, tenantId: string, id: number): Promise<Skill | null> {
   return objectById(objects, SKILL, tenantId, id);
 }
 
-export function loadSkills(
-  objects: Objects,
-  tenantId: string,
-  opts: ListSkillsOptions = {},
-): Promise<Skill[]> {
+export function loadSkills(objects: Objects, tenantId: string, opts: ListSkillsOptions = {}): Promise<Skill[]> {
   return listObjects(objects, SKILL, tenantId, opts);
 }
 

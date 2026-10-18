@@ -29,7 +29,9 @@ function settingsAsWritten(file: string): string {
 
 /** Every JSON string in a hooks file that runs hippo, whatever key holds it, so a new hook form is covered unnamed. */
 function hippoCommandsIn(file: string): string[] {
-  const strings = [...fs.readFileSync(file, 'utf8').matchAll(/"(?:[^"\\]|\\.)*"/g)].map((m) => String(JSON.parse(m[0])));
+  const strings = [...fs.readFileSync(file, 'utf8').matchAll(/"(?:[^"\\]|\\.)*"/g)].map((m) =>
+    String(JSON.parse(m[0])),
+  );
   return strings.filter((text) => /^hippo(\.cmd)? /.test(text));
 }
 
@@ -49,7 +51,11 @@ describe('first-party hook command lines', () => {
       installJsonHooks(target);
       lines.push(...hippoCommandsIn(settings));
     }
-    lines.push(...hippoCommandsIn(path.resolve(__dirname, '..', '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json')));
+    lines.push(
+      ...hippoCommandsIn(
+        path.resolve(__dirname, '..', '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json'),
+      ),
+    );
     installOpencodePlugin();
     const opencodePlugin = fs.readFileSync(resolveOpencodePluginPath(), 'utf8');
     for (const text of [...Object.values(HOOKS).map((hook) => hook.content), opencodePlugin]) {
@@ -62,12 +68,22 @@ describe('first-party hook command lines', () => {
       const { command, flags } = parseArgs(['node', 'hippo', ...hookArgv(line).slice(1)]);
       verbs.add(command);
       const row = rows[command];
-      return row ? undeclaredFlags(row.flags, Object.keys(flags)).map((flag) => `${line}: --${flag}`) : [`${line}: no such verb`];
+      return row
+        ? undeclaredFlags(row.flags, Object.keys(flags)).map((flag) => `${line}: --${flag}`)
+        : [`${line}: no such verb`];
     });
 
     expect(ignored).toEqual([]);
     expect([...verbs].sort()).toEqual([
-      'capture', 'capture-error', 'compact-resume', 'context', 'last-sleep', 'post-compact', 'pre-compact', 'recall', 'remember',
+      'capture',
+      'capture-error',
+      'compact-resume',
+      'context',
+      'last-sleep',
+      'post-compact',
+      'pre-compact',
+      'recall',
+      'remember',
       'session-end',
     ]);
   });
@@ -77,25 +93,34 @@ describe('installJsonHooks(claude-code) settings shape', () => {
   it('migrates a legacy file in one write and keeps the user hooks in place', () => {
     const { settings } = resolveJsonHookPaths('claude-code');
     fs.mkdirSync(path.dirname(settings), { recursive: true });
-    fs.writeFileSync(settings, JSON.stringify({
-      theme: 'dark',
-      hooks: {
-        Stop: [
-          { hooks: [{ type: 'command', command: 'hippo sleep' }] },
-          { hooks: [{ type: 'command', command: 'echo user-stop' }] },
-        ],
-        SessionEnd: [
-          { hooks: [{ type: 'command', command: 'hippo sleep --log-file "x.log"' }] },
-          { hooks: [{ type: 'command', command: 'hippo capture --last-session --log-file "x.log"' }] },
-        ],
-        UserPromptSubmit: [
-          { hooks: [{ type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 }] },
-        ],
-      },
-    }), 'utf8');
+    fs.writeFileSync(
+      settings,
+      JSON.stringify({
+        theme: 'dark',
+        hooks: {
+          Stop: [
+            { hooks: [{ type: 'command', command: 'hippo sleep' }] },
+            { hooks: [{ type: 'command', command: 'echo user-stop' }] },
+          ],
+          SessionEnd: [
+            { hooks: [{ type: 'command', command: 'hippo sleep --log-file "x.log"' }] },
+            { hooks: [{ type: 'command', command: 'hippo capture --last-session --log-file "x.log"' }] },
+          ],
+          UserPromptSubmit: [
+            {
+              hooks: [
+                { type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 },
+              ],
+            },
+          ],
+        },
+      }),
+      'utf8',
+    );
 
     const first = installJsonHooks('claude-code');
-    expect({ ...first, settingsPath: path.relative(env.home, first.settingsPath).replace(/\\/g, '/') }).toMatchInlineSnapshot(`
+    expect({ ...first, settingsPath: path.relative(env.home, first.settingsPath).replace(/\\/g, '/') })
+      .toMatchInlineSnapshot(`
       {
         "installedCaptureError": true,
         "installedCompactResume": true,

@@ -22,7 +22,11 @@ export interface AuditListOptions {
 /** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no audit emit. */
 export async function auditList(ctx: Context, opts: AuditListOptions): Promise<AuditEvent[]> {
   return ctx.store.auditLog.listAuditEvents({
-    tenantId: ctx.tenantId, op: opts.op, since: opts.since, limit: opts.limit, after: opts.after,
+    tenantId: ctx.tenantId,
+    op: opts.op,
+    since: opts.since,
+    limit: opts.limit,
+    after: opts.after,
   });
 }
 
@@ -63,17 +67,12 @@ export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number
 
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage
  * behind a backup. */
-export async function repairMemoryQuality(
-  ctx: Context,
-  apply: boolean,
-): Promise<QualityRepairResult> {
+export async function repairMemoryQuality(ctx: Context, apply: boolean): Promise<QualityRepairResult> {
   return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply, PROTECTED_ROWS);
 }
 
 /** The repair sleep and the daily runner apply once per store after an upgrade; null when it already ran there. */
-export async function repairMemoryQualityOnce(
-  ctx: Context,
-): Promise<QualityRepairResult | null> {
+export async function repairMemoryQualityOnce(ctx: Context): Promise<QualityRepairResult | null> {
   return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId, PROTECTED_ROWS);
 }
 
@@ -102,10 +101,7 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
 /** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an `audit_prune` row as
  * `ctx.actor`; opt-in, since retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call
  * never prunes its own record. Throws on non-positive days or an empty tenant. */
-export async function pruneAuditLog(
-  ctx: Context,
-  opts: PruneAuditOptions,
-): Promise<PruneAuditResult> {
+export async function pruneAuditLog(ctx: Context, opts: PruneAuditOptions): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(`pruneAuditLog: olderThanDays must be a positive number, got ${opts.olderThanDays}`);
   }

@@ -24,8 +24,12 @@ const MINIMAL_LIB = [
 // The checker's cold start is pure CPU, so a loaded runner stretched the first compile past the 5 s unit default even with the small lib.
 describe('check-floating-promises', { timeout: 30_000 }, () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'floating-promises-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'floating-promises-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   /** The hits for one source file, compiled on its own. */
   function hitsFor(body: string): { line: number; text: string }[] {
@@ -35,7 +39,12 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
     const lib = join(dir, 'lib.d.ts');
     writeFileSync(file, body, 'utf8');
     writeFileSync(lib, MINIMAL_LIB, 'utf8');
-    const program = ts.createProgram([lib, file], { target: ts.ScriptTarget.ES2022, strict: true, noEmit: true, noLib: true });
+    const program = ts.createProgram([lib, file], {
+      target: ts.ScriptTarget.ES2022,
+      strict: true,
+      noEmit: true,
+      noLib: true,
+    });
     return findFloatingPromises(program, src).map(({ line, text }) => ({ line, text }));
   }
 
@@ -79,8 +88,12 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
 
 describe('check-floating-api', { timeout: 30_000 }, () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'floating-api-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'floating-api-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   /** The hits for one test file that imports a stand-in forget from src/api/memories/forget.ts. */
   function hitsFor(body: string): { file: string; line: number; why: string }[] {
@@ -88,13 +101,21 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
     mkdirSync(join(dir, 'tests'));
     const files = {
       'lib.d.ts': `${MINIMAL_LIB}\ndeclare function expect(x: unknown): { rejects: unknown; toThrow(): void };`,
-      'src/api/memories/forget.ts': 'export async function forget(id: string): Promise<string> { return id; }\nexport async function other(): Promise<number> { return 1; }\n',
+      'src/api/memories/forget.ts':
+        'export async function forget(id: string): Promise<string> { return id; }\nexport async function other(): Promise<number> { return 1; }\n',
       'tests/use.test.ts': `import { forget, other } from '../src/api/memories/forget';\n${body}`,
     };
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text, 'utf8');
-    const program = ts.createProgram(Object.keys(files).map((name) => join(dir, name)), {
-      target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, strict: true, noEmit: true, noLib: true,
-    });
+    const program = ts.createProgram(
+      Object.keys(files).map((name) => join(dir, name)),
+      {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        strict: true,
+        noEmit: true,
+        noLib: true,
+      },
+    );
     return findFloatingApiCalls(program, dir).map(({ file, line, why }) => ({ file, line, why }));
   }
 

@@ -13,7 +13,10 @@ import { syncStore } from '../_helpers/cli-stores.js';
 // The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
 // A run that stores nothing for one of these reasons did so because of its text, never its setup.
-const TEXT_SKIPS = new Set(['digest: skip: nothing left after the filters', 'digest: skip: no final message and no edits']);
+const TEXT_SKIPS = new Set([
+  'digest: skip: nothing left after the filters',
+  'digest: skip: no final message and no edits',
+]);
 
 let tmp: string;
 let repo: string;
@@ -37,9 +40,16 @@ function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[]
   initStore(hippoRoot);
   const turns = (opts.echo ?? ['go']).map((text) => ({ role: 'user' as const, text }));
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, syncStore(hippoRoot), { turns, finalText, cwd: repo, edits: opts.edits ?? [] }, {
-    key: 's1', tenantId: 'default', log: (line) => log.push(line),
-  });
+  recordSessionDigest(
+    hippoRoot,
+    syncStore(hippoRoot),
+    { turns, finalText, cwd: repo, edits: opts.edits ?? [] },
+    {
+      key: 's1',
+      tenantId: 'default',
+      log: (line) => log.push(line),
+    },
+  );
   const line = log.join('\n');
   if (!line.startsWith('digest: wrote ') && !TEXT_SKIPS.has(line)) throw new Error(line);
   return loadAllEntries(hippoRoot, 'default').find(isSessionDigestRow)?.content ?? '';
@@ -89,7 +99,9 @@ describe('which sentences a digest keeps', () => {
 
   it('drops sentences that open on a referent, and keeps There', () => {
     expect(digest('This fixes the lock in `a.ts`. All 9 pass in `b.ts`. Both tests use `c.ts` now.')).toBe('');
-    expect(digest('There is a race in `a.ts` because the lock is shared.')).toBe('There is a race in `a.ts` because the lock is shared.');
+    expect(digest('There is a race in `a.ts` because the lock is shared.')).toBe(
+      'There is a race in `a.ts` because the lock is shared.',
+    );
   });
 
   it('ranks anchored or reasoned sentences first and prints them in reply order', () => {
@@ -113,7 +125,9 @@ describe('which sentences a digest keeps', () => {
 
   it('keeps at most five sentences', () => {
     const text = Array.from({ length: 8 }, (_, i) => `Fixed \`step${i}()\` because input ${i} was empty.`).join(' ');
-    expect(lines(digest(text))).toEqual(Array.from({ length: 5 }, (_, i) => `Fixed \`step${i}()\` because input ${i} was empty.`));
+    expect(lines(digest(text))).toEqual(
+      Array.from({ length: 5 }, (_, i) => `Fixed \`step${i}()\` because input ${i} was empty.`),
+    );
   });
 
   it('drops a sentence over 300 chars', () => {
@@ -146,17 +160,23 @@ describe('secrets and paths in sentences', () => {
 
   it('redacts before the total cap, so a kept secret is masked and costs no other sentence its place', () => {
     const top = 'Switched `retry()` to backoff because the API rate limits.';
-    const filler = (i: number): string => `Plain filler sentence number ${i} ${'with some more words '.repeat(12)}here.`;
+    const filler = (i: number): string =>
+      `Plain filler sentence number ${i} ${'with some more words '.repeat(12)}here.`;
     const secret = jwt(80);
     const second = `Fixed \`last()\` with ${secret} because staging needed it.`;
     const kept = [top, filler(1), filler(2), filler(3), second];
     expect(kept.join('\n').length).toBeGreaterThan(MAX_DIGEST_CHARS);
-    expect(lines(digest(kept.join(' ')))).toEqual([...kept.slice(0, 4), 'Fixed `last()` with [REDACTED] because staging needed it.']);
+    expect(lines(digest(kept.join(' ')))).toEqual([
+      ...kept.slice(0, 4),
+      'Fixed `last()` with [REDACTED] because staging needed it.',
+    ]);
   });
 
   it('redacts a private key block that spans lines', () => {
     const pem = `-----BEGIN RSA PRIVATE KEY-----\n${'A'.repeat(64)}\n${'B'.repeat(64)}\n-----END RSA PRIVATE KEY-----`;
-    const out = digest(`Rotated the key in \`sign()\` because it leaked.\n${pem}\nMoved it to the vault because \`deploy()\` reads it there.`);
+    const out = digest(
+      `Rotated the key in \`sign()\` because it leaked.\n${pem}\nMoved it to the vault because \`deploy()\` reads it there.`,
+    );
     expect(out).toContain('Rotated the key');
     expect(out).not.toMatch(/AAAA|BBBB|PRIVATE KEY/);
   });
@@ -167,7 +187,10 @@ describe('secrets and paths in sentences', () => {
       edits: [{ filePath: file, base: null }],
     });
     expect(out).not.toContain('AKIAIOSFODNN7EXAMPLE');
-    expect(lines(out)).toEqual(['Moved the loader into src/[REDACTED].ts because `load()` reads it.', 'Changed: src/[REDACTED].ts']);
+    expect(lines(out)).toEqual([
+      'Moved the loader into src/[REDACTED].ts because `load()` reads it.',
+      'Changed: src/[REDACTED].ts',
+    ]);
   });
 
   it('rewrites an absolute path inside the repo to a repo-relative one', () => {
@@ -192,7 +215,9 @@ describe('secrets and paths in sentences', () => {
   });
 
   it('keeps git revision syntax such as HEAD~1', () => {
-    expect(digest('Reverted HEAD~1 because `merge()` dropped a row.')).toBe('Reverted HEAD~1 because `merge()` dropped a row.');
+    expect(digest('Reverted HEAD~1 because `merge()` dropped a row.')).toBe(
+      'Reverted HEAD~1 because `merge()` dropped a row.',
+    );
   });
 });
 
@@ -220,8 +245,13 @@ describe('the Changed line', () => {
   });
 
   it('lists deleted files differing only in case once on Windows, twice elsewhere', () => {
-    const edits: DigestEdit[] = [{ filePath: at('src', 'Old.ts'), base: null }, { filePath: at('src', 'old.ts'), base: null }];
-    expect(digest('', { edits })).toBe(process.platform === 'win32' ? 'Changed: src/Old.ts' : 'Changed: src/Old.ts, src/old.ts');
+    const edits: DigestEdit[] = [
+      { filePath: at('src', 'Old.ts'), base: null },
+      { filePath: at('src', 'old.ts'), base: null },
+    ];
+    expect(digest('', { edits })).toBe(
+      process.platform === 'win32' ? 'Changed: src/Old.ts' : 'Changed: src/Old.ts, src/old.ts',
+    );
   });
 
   it('caps the list at ten files', () => {
@@ -231,8 +261,14 @@ describe('the Changed line', () => {
   });
 
   it('keeps the Changed line when the sentences fill the cap', () => {
-    const text = Array.from({ length: 5 }, (_, i) => `Fixed \`part${i}()\` because ${'the input was empty and '.repeat(10)}done.`).join(' ');
-    const edits = Array.from({ length: 12 }, (_, i): DigestEdit => ({ filePath: at('src', `file-${i}.ts`), base: null }));
+    const text = Array.from(
+      { length: 5 },
+      (_, i) => `Fixed \`part${i}()\` because ${'the input was empty and '.repeat(10)}done.`,
+    ).join(' ');
+    const edits = Array.from({ length: 12 }, (_, i): DigestEdit => ({
+      filePath: at('src', `file-${i}.ts`),
+      base: null,
+    }));
     const out = digest(text, { edits });
     expect(out.length).toBeLessThanOrEqual(MAX_DIGEST_CHARS);
     expect(lines(out).at(-1)).toMatch(/^Changed: src\/file-0\.ts, .* \(\+2 more\)$/);

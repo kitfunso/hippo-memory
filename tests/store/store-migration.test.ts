@@ -21,7 +21,9 @@ const { DatabaseSync } = require('node:sqlite') as {
 
 let tmpDir: string;
 
-beforeEach(() => { tmpDir = makeRoot('sch', { init: false }); });
+beforeEach(() => {
+  tmpDir = makeRoot('sch', { init: false });
+});
 
 describe('schema v3: trace columns', () => {
   it('round-trips trace_outcome + source_session_id on a fresh store', () => {

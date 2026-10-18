@@ -136,8 +136,10 @@ function printPhysicsStatus(ctx: CliContext): void {
       for (const p of particles) sumVelMag += vecNorm(p.velocity);
       const avgVelMag = sumVelMag / particles.length;
       console.log('');
-      console.log(`Physics: ${particles.length} particles, ` +
-        `${physicsEnergyText(particles, cliConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
+      console.log(
+        `Physics: ${particles.length} particles, ` +
+          `${physicsEnergyText(particles, cliConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`,
+      );
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.
@@ -185,9 +187,7 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   const rewardFactor = calculateRewardFactor(entry, strengthAblation());
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
-  const outcomeLabel = pos === 0 && neg === 0
-    ? 'none'
-    : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
+  const outcomeLabel = pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
   console.log(`Outcomes:         ${outcomeLabel}`);
   if (entry.conflicts_with.length > 0) {
     console.log(`Conflicts with:   ${entry.conflicts_with.join(', ')}`);
@@ -217,14 +217,14 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
   console.log(`Memory text handed to agents, last ${windowDays} days (estimated tokens, characters / 4)\n`);
   console.log(
     `  ${'surface'.padEnd(14)}${'sent'.padStart(8)}${'tokens'.padStart(12)}${'skipped'.padStart(10)}` +
-    `${'saved'.padStart(12)}`
-    + `${'re-read'.padStart(12)}`,
+      `${'saved'.padStart(12)}` +
+      `${'re-read'.padStart(12)}`,
   );
   for (const row of summary.surfaces) {
     console.log(
-      `  ${row.surface.padEnd(14)}${String(row.injected).padStart(8)}${String(row.tokens).padStart(12)}`
-      + `${String(row.skipped).padStart(10)}${String(row.tokensAvoided).padStart(12)}`
-      + `${String(row.tokensReread).padStart(12)}`,
+      `  ${row.surface.padEnd(14)}${String(row.injected).padStart(8)}${String(row.tokens).padStart(12)}` +
+        `${String(row.skipped).padStart(10)}${String(row.tokensAvoided).padStart(12)}` +
+        `${String(row.tokensReread).padStart(12)}`,
     );
   }
   console.log('');
@@ -232,8 +232,8 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
     `  Total sent: ${summary.totalTokens} tokens. Saved by skipping unchanged blocks: ${summary.totalTokensAvoided}.`,
   );
   console.log(
-    `  Re-read by later model calls until compaction: ${summary.totalTokensReread} tokens,`
-    + ` counted for ${summary.rereadSessions} of ${summary.hookSessions} sessions.`,
+    `  Re-read by later model calls until compaction: ${summary.totalTokensReread} tokens,` +
+      ` counted for ${summary.rereadSessions} of ${summary.hookSessions} sessions.`,
   );
   if (summary.meanTokensPerSession > 0) {
     console.log(`  Mean per session (rows with a session id): ${summary.meanTokensPerSession} tokens.`);
@@ -356,7 +356,12 @@ export function handleSupportBundle({ flags }: CommandContext): void {
   const home = envHomeDir() || os.homedir();
   const now = new Date();
   const bundle = buildSupportBundle({
-    cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now, diagnosticsAt,
+    cwd: process.cwd(),
+    home,
+    version: PACKAGE_VERSION,
+    includeLogs,
+    now,
+    diagnosticsAt,
   });
   const stamp = now.toISOString().replace(/[:.]/g, '-');
   const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);
@@ -373,13 +378,15 @@ export function handleSupportBundle({ flags }: CommandContext): void {
   }
   const kb = Math.round(Buffer.byteLength(json) / 1024);
   console.log(`Wrote ${file} (${kb} KB).`);
-  console.log(includeLogs
-    ? `It holds versions, doctor checks, config with secrets removed, store counts, ` +
-      `and the last ${TAIL_MAX_LINES} lines of ` +
-      'each hippo log with known secret shapes removed. Those log lines can quote memory text. ' +
-      'Read it before you attach it to a ticket.'
-    : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. ' +
-      'It never holds memory text. Read it before you attach it to a ticket.');
+  console.log(
+    includeLogs
+      ? `It holds versions, doctor checks, config with secrets removed, store counts, ` +
+          `and the last ${TAIL_MAX_LINES} lines of ` +
+          'each hippo log with known secret shapes removed. Those log lines can quote memory text. ' +
+          'Read it before you attach it to a ticket.'
+      : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. ' +
+          'It never holds memory text. Read it before you attach it to a ticket.',
+  );
 }
 
 export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {

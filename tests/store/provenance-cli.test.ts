@@ -29,10 +29,7 @@ async function runHippo(args: string[]): Promise<RunResult> {
 describe('hippo provenance CLI', () => {
   it('reports the trivially-satisfied gate when no raw rows exist', async () => {
     initStore(hippoDir);
-    writeEntry(
-      hippoDir,
-      createMemory('legacy distilled memory predating envelope', { kind: 'distilled' }),
-    );
+    writeEntry(hippoDir, createMemory('legacy distilled memory predating envelope', { kind: 'distilled' }));
 
     const r = await runHippo(['provenance', '--strict']);
     expect(r.status).toBe(0);
@@ -71,10 +68,7 @@ describe('hippo provenance CLI', () => {
 
   it('exits non-zero under --strict when raw coverage drops below 100%', async () => {
     initStore(hippoDir);
-    writeEntry(
-      hippoDir,
-      createMemory('raw row missing envelope', { kind: 'raw' }),
-    );
+    writeEntry(hippoDir, createMemory('raw row missing envelope', { kind: 'raw' }));
 
     const r = await runHippo(['provenance', '--strict']);
     expect(r.status).toBe(1);

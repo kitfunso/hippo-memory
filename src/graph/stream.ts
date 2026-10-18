@@ -86,9 +86,13 @@ function bestStrengthAtDepth(
     const toIn = frontierSet.has(rel.toEntityId);
     let neighborId: number;
     let reacherId: number;
-    if (fromIn && !toIn) { neighborId = rel.toEntityId; reacherId = rel.fromEntityId; }
-    else if (toIn && !fromIn) { neighborId = rel.fromEntityId; reacherId = rel.toEntityId; }
-    else continue;
+    if (fromIn && !toIn) {
+      neighborId = rel.toEntityId;
+      reacherId = rel.fromEntityId;
+    } else if (toIn && !fromIn) {
+      neighborId = rel.fromEntityId;
+      reacherId = rel.toEntityId;
+    } else continue;
     if (visited.has(neighborId)) continue;
     const seedStrength = frontierStrength.get(reacherId) ?? originStrength.get(reacherId) ?? 0;
     bestStrengthThisDepth.set(neighborId, Math.max(bestStrengthThisDepth.get(neighborId) ?? 0, seedStrength));
@@ -112,9 +116,9 @@ async function reachedEntityScores(
 ): Promise<Map<number, number>> {
   const { hops, decay, maxNeighbors } = options;
   const visited = new Set<number>(seedIds); // seeds never re-reached
-  const reachedScore = new Map<number, number>();                 // entityId -> best score
+  const reachedScore = new Map<number, number>(); // entityId -> best score
   let frontier: number[] = seedIds;
-  let frontierStrength = new Map<number, number>(originStrength);  // entityId -> seed strength
+  let frontierStrength = new Map<number, number>(originStrength); // entityId -> seed strength
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
@@ -199,9 +203,9 @@ async function accumulateForStore(
   // Reached entity ids -> source memory ids -> in-pool entry indices.
   const reachedEntities = await store.graphReads.entitiesByIds(tenantId, [...reachedScore.keys()]);
   for (const ent of reachedEntities) {
-    if (ent.memoryId === null) continue;         // mirror-less node: no pool memory to re-rank
+    if (ent.memoryId === null) continue; // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);
-    if (idx === undefined) continue;             // reached memory is not in the candidate pool
+    if (idx === undefined) continue; // reached memory is not in the candidate pool
     const score = reachedScore.get(ent.id) ?? 0;
     if (score <= 0) continue;
     graphScore.set(idx, Math.max(graphScore.get(idx) ?? 0, score));

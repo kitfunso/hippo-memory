@@ -27,9 +27,7 @@ export interface FactCluster {
 export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
   if (facts.length === 0) return [];
 
-  const entityTags = facts.map((f) =>
-    f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')),
-  );
+  const entityTags = facts.map((f) => f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')));
 
   const tagSets = entityTags.map((tags) => new Set(tags));
   // Every tag indexed, not a prefix: a repeated tag counts twice in `shared`, so the prefix-filter bound would not
@@ -54,12 +52,9 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
     }
 
     const members = cluster.map((idx) => facts[idx]);
-    const sharedTags = entityTags[cluster[0]].filter((t) =>
-      cluster.every((idx) => tagSets[idx].has(t)),
-    );
-    const label = sharedTags
-      .map((t) => t.split(':')[1])
-      .join(': ') || members[0].content.slice(0, SUMMARY_FALLBACK_CHARS);
+    const sharedTags = entityTags[cluster[0]].filter((t) => cluster.every((idx) => tagSets[idx].has(t)));
+    const label =
+      sharedTags.map((t) => t.split(':')[1]).join(': ') || members[0].content.slice(0, SUMMARY_FALLBACK_CHARS);
 
     clusters.push({ label, members, entityTags: sharedTags });
   }
@@ -100,8 +95,8 @@ interface PartitionHome {
 /** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
 function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-    // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant,
-    // not 'default'.
+  // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant,
+  // not 'default'.
   const summaryEntry = createMemory(summary, {
     layer: Layer.Semantic,
     tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
@@ -158,11 +153,7 @@ async function summarizeCluster(
   store.clearSummaryDirty(summaryEntry.id, summaryEntry.tenant_id, 'buildDag');
 }
 
-export async function buildDag(
-  local: DagStore,
-  facts: MemoryEntry[],
-  opts: DagBuildOptions,
-): Promise<DagBuildResult> {
+export async function buildDag(local: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
   const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
   const { baseHalfLifeDays } = opts;
 
@@ -192,12 +183,12 @@ export async function buildDag(
 // rebuildDirtySummaries orchestrator
 
 export interface DagRebuildResult {
-  attempted: number;            // summaries we tried (<= cap)
-  rebuilt: number;              // successful regenerations
-  refused: number;              // tombstone-hit refusals: dirty cleared, content NOT written
-  zeroChildSkipped: number;     // dirty-cleared without LLM (descendants all gone)
-  failed: number;               // LLM null, fetch error, or applyRebuildResult throw
-  capped: boolean;              // true if queue had more than cap entries
+  attempted: number; // summaries we tried (<= cap)
+  rebuilt: number; // successful regenerations
+  refused: number; // tombstone-hit refusals: dirty cleared, content NOT written
+  zeroChildSkipped: number; // dirty-cleared without LLM (descendants all gone)
+  failed: number; // LLM null, fetch error, or applyRebuildResult throw
+  capped: boolean; // true if queue had more than cap entries
 }
 
 /** Regenerate one dirty summary from its children and tally the outcome; throws reach the caller's isolation. */
@@ -268,9 +259,7 @@ function clearZeroChildSummary(store: Consolidation, summary: MemoryEntry, resul
 
 // Derive label from summary's existing entity tags (mirrors clusterFacts)
 function summaryLabel(summary: MemoryEntry): string {
-  const entityTags = summary.tags.filter(
-    (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
-  );
+  const entityTags = summary.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:'));
   return entityTags.length > 0
     ? entityTags.map((t) => t.split(':')[1]).join(': ')
     : summary.content.slice(0, SUMMARY_FALLBACK_CHARS);
@@ -314,9 +303,7 @@ export async function rebuildDirtySummaries(
       // failure (SQLite I/O, prepare), since audit() already catches its own.
       result.failed++;
       log.error(
-        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenant_id}) failed: ${
-          errorMessage(err)
-        }`,
+        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenant_id}) failed: ${errorMessage(err)}`,
         errorFields(err),
       );
     }
@@ -399,12 +386,7 @@ async function profileCluster(
   );
   // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
   // The distinct source tags the audit row.
-  store.clearSummaryDirty(
-    profileEntry.id,
-    home.tenantId,
-    'buildEntityProfiles',
-    'buildEntityProfiles-clean',
-  );
+  store.clearSummaryDirty(profileEntry.id, home.tenantId, 'buildEntityProfiles', 'buildEntityProfiles-clean');
 }
 
 /** Build L3 entity profiles by clustering L2 summaries sharing entity tags (2+ L2s per entity).
@@ -424,9 +406,7 @@ export async function buildEntityProfiles(
   const { baseHalfLifeDays } = opts;
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
-  const unparented = l2Summaries.filter(
-    (s) => s.dag_level === DAG_LEVEL.topic && !s.dag_parent_id,
-  );
+  const unparented = l2Summaries.filter((s) => s.dag_level === DAG_LEVEL.topic && !s.dag_parent_id);
 
   for (const [, tenantL2s] of partitionFactsByTenant(unparented)) {
     const home: PartitionHome = {

@@ -25,7 +25,6 @@ function fakeReq(headers: Record<string, string>, remoteAddress: string): Incomi
 }
 
 describe('clientIpForRateLimit behind a trusted proxy', () => {
-
   beforeEach(() => {
     for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
   });
@@ -49,7 +48,9 @@ describe('clientIpForRateLimit behind a trusted proxy', () => {
   it('honours the header from a listed peer', () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '10.0.0.9');
-    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9'))).toBe('203.0.113.7');
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9'))).toBe(
+      '203.0.113.7',
+    );
   });
 
   it('skips trusted proxy hops when walking the chain from the right', () => {
@@ -102,11 +103,24 @@ describe('the MCP client key, which scopes the last recall per client, behind a 
 
   async function newRecallKeys(): Promise<string[]> {
     handle = await serve({ hippoRoot: root, port: 0 });
-    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.7' };
-    const remembered = await fetch(`${handle.url}/v1/memories`, { method: 'POST', headers, body: JSON.stringify({ content: 'proxy canary memory' }) });
+    const headers = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'x-forwarded-for': '203.0.113.7',
+    };
+    const remembered = await fetch(`${handle.url}/v1/memories`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content: 'proxy canary memory' }),
+    });
     expect(remembered.status).toBe(200);
     const before = new Set(lastRecalledIds.keys());
-    const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'proxy canary' } } };
+    const call = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'hippo_recall', arguments: { query: 'proxy canary' } },
+    };
     const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body: JSON.stringify(call) });
     expect(res.status).toBe(200);
     return [...lastRecalledIds.keys()].filter((key) => !before.has(key));
@@ -144,7 +158,9 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
     handle = await serve({ hippoRoot: root, port: 0 });
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
-      const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { 'x-forwarded-for': `198.51.100.${i + 1}` } });
+      const res = await fetch(`${handle.url}/v1/memories?q=x`, {
+        headers: { 'x-forwarded-for': `198.51.100.${i + 1}` },
+      });
       statuses.push(res.status);
     }
     return statuses;
@@ -170,7 +186,9 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     await expect(serve({ hippoRoot: root, port: 0 })).rejects.toMatchObject({
       name: 'UntrustedClientIpHeaderError',
-      message: expect.stringMatching(/HIPPO_CLIENT_IP_HEADER is x-forwarded-for but HIPPO_TRUSTED_PROXIES is unset.*addresses or CIDRs/),
+      message: expect.stringMatching(
+        /HIPPO_CLIENT_IP_HEADER is x-forwarded-for but HIPPO_TRUSTED_PROXIES is unset.*addresses or CIDRs/,
+      ),
     });
   });
 

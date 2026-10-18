@@ -22,7 +22,7 @@ export function openInBrowser(out: string, launch: Launcher = spawn): void {
   if (process.platform === 'win32' && CMD_METACHARS.test(out)) {
     log.warn(
       `graph view: not opening ${out} in the browser, since cmd.exe would run part of its name as a command; open ` +
-      `the file by hand`,
+        `the file by hand`,
     );
     process.exitCode = 1;
     return;

@@ -17,9 +17,7 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool(
-  { args, ctx }: ToolCall
-): Promise<string> {
+export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
   if (!classTag) {
@@ -39,16 +37,14 @@ export async function runPredictBaserateTool(
   if (baserate.meanEstimate !== null) {
     lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
   }
-  if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.mae !== null)          lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanActual !== null) lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanRatio !== null) lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null) lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.mae !== null) lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
   return lines.join('\n');
 }
 
-export async function runStatusTool(
-  { ctx, config }: ToolCall,
-): Promise<string> {
+export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const tallies = await getMemoryStatus(mcpApiContext(ctx), evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
@@ -66,14 +62,12 @@ export async function runConflictsTool(call: ToolCall): Promise<string> {
   const apiCtx = mcpApiContext(ctx);
   const conflicts = await everyConflict((page) => listOpenConflicts(apiCtx, { ...page, project: ctx?.project }));
   if (conflicts.length === 0) return 'No open conflicts.';
-  return conflicts.map((c) =>
-    `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
-  ).join('\n');
+  return conflicts
+    .map((c) => `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`)
+    .join('\n');
 }
 
-export async function runResolveTool(
-  { args, ctx }: ToolCall,
-): Promise<string> {
+export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');
   const forget = Boolean(args.forget);

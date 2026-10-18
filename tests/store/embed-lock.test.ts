@@ -19,7 +19,11 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   root = makeRoot('embed-lock');
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
+    'utf8',
+  );
   writeEntry(root, createMemory('embed lock test memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
   vi.stubEnv(KEY_ENV, ['sk', 'test'].join('-'));
   fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] })));

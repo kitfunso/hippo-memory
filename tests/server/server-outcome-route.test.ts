@@ -199,7 +199,9 @@ describe('POST /v1/outcome', () => {
 
   // v1.11.5: DoS caps + body-cap interaction
   it('1001 ids returns 400 with cap-exceeded message', async () => {
-    const ids = Array(1001).fill(0).map((_, i) => `mem_fake_${i}`);
+    const ids = Array(1001)
+      .fill(0)
+      .map((_, i) => `mem_fake_${i}`);
     const res = await fetch(`${handle.url}/v1/outcome`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -217,7 +219,14 @@ describe('POST /v1/outcome', () => {
     const m2 = await remember(ctx, { content: 'boundary-mem-2' });
     const m3 = await remember(ctx, { content: 'boundary-mem-3' });
     // Pad with fake ids that will silently miss (still within cap).
-    const ids = [m1.id, m2.id, m3.id, ...Array(997).fill(0).map((_, i) => `mem_pad_${i}`)];
+    const ids = [
+      m1.id,
+      m2.id,
+      m3.id,
+      ...Array(997)
+        .fill(0)
+        .map((_, i) => `mem_pad_${i}`),
+    ];
     expect(ids.length).toBe(1000);
     const res = await fetch(`${handle.url}/v1/outcome`, {
       method: 'POST',
@@ -235,7 +244,9 @@ describe('POST /v1/outcome', () => {
     // cap < id cap, attack vectors can't slip through by sending huge
     // payloads with <=1000 ids. BodyTooLargeError returns HTTP 413
     // (Payload Too Large), distinct from the route-level 400.
-    const giantIds = Array(50000).fill(0).map((_, i) => `mem_giant_${i.toString().padStart(20, '0')}`);
+    const giantIds = Array(50000)
+      .fill(0)
+      .map((_, i) => `mem_giant_${i.toString().padStart(20, '0')}`);
     const payload = JSON.stringify({ ids: giantIds, good: true });
     expect(payload.length).toBeGreaterThan(1_000_000);
     const res = await fetch(`${handle.url}/v1/outcome`, {

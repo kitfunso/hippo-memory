@@ -64,11 +64,7 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
 }
 
 // If session-end never fires (crash, kill -9), the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
-async function closeSnapshot(
-  ctx: Context,
-  sessionId: string | null,
-  line: (message: string) => void,
-): Promise<void> {
+async function closeSnapshot(ctx: Context, sessionId: string | null, line: (message: string) => void): Promise<void> {
   try {
     if (sessionId) {
       const closed = await ctx.store.sessions.closeSessionSnapshots(ctx.tenantId, sessionId, 'session-ended', null);
@@ -86,7 +82,10 @@ function rereadLedgers(ctx: Context): LocalFiles[] {
   const local = (ctx.reach?.hasLocal ?? true) ? ctx.store.localFiles : undefined;
   const global = ctx.reach?.global;
   const byRoot = new Map<string, LocalFiles>();
-  for (const [root, files] of [[ctx.hippoRoot, local], [global?.root, global?.store.localFiles]] as const) {
+  for (const [root, files] of [
+    [ctx.hippoRoot, local],
+    [global?.root, global?.store.localFiles],
+  ] as const) {
     if (root !== undefined && files !== undefined) byRoot.set(path.resolve(root), files);
   }
   return [...byRoot.values()];
@@ -122,10 +121,7 @@ export async function bookSessionRereads(
 
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none or another session's
  * snapshot. */
-export async function compactResumeBlock(
-  ctx: Context,
-  payloadSessionId: string | null,
-): Promise<string | null> {
+export async function compactResumeBlock(ctx: Context, payloadSessionId: string | null): Promise<string | null> {
   const { sessions } = ctx.store;
   const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, null);
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no
@@ -187,7 +183,11 @@ function endStore(ctx: Context): Context | null {
   const global = ctx.reach?.global;
   if (global === undefined) return null;
   return {
-    hippoRoot: global.root, tenantId: ctx.tenantId, actor: ctx.actor, store: global.store, config: global.config,
+    hippoRoot: global.root,
+    tenantId: ctx.tenantId,
+    actor: ctx.actor,
+    store: global.store,
+    config: global.config,
   };
 }
 
@@ -257,8 +257,9 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
   ctx: Context,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
-  const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId)
-    .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
+  const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId).catch((err) => [
+    `re-read count failed: ${errorMessage(err)}`,
+  ]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process. A
   // flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines
   // wait.

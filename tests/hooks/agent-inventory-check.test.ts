@@ -51,13 +51,28 @@ function baseEntry(): Entry {
     integration: ['native-hooks', 'mcp-recipe'],
     sources: ['extensions/mcp', 'integrations/alpha.md'],
     claims: ['README.md'],
-    routes: { promptContext: 'hook', toolFailureCapture: null, preLossSave: 'hook', postCompactExtract: null, sessionEndCapture: null, compactResume: null },
+    routes: {
+      promptContext: 'hook',
+      toolFailureCapture: null,
+      preLossSave: 'hook',
+      postCompactExtract: null,
+      sessionEndCapture: null,
+      compactResume: null,
+    },
     upstream: { preLossEvent: 'PreCompact', beforeTrimOrReset: null },
     setup: null,
     store: null,
     maxSaveDelay: null,
     interface: null,
-    modes: [{ name: 'local', checkpointBeforeLoss: 'shipped', lessonsBeforeLoss: 'planned', fixtureEvidence: ['tests/alpha.test.ts'], liveEvidence: [] }],
+    modes: [
+      {
+        name: 'local',
+        checkpointBeforeLoss: 'shipped',
+        lessonsBeforeLoss: 'planned',
+        fixtureEvidence: ['tests/alpha.test.ts'],
+        liveEvidence: [],
+      },
+    ],
     owner: 'maintainer',
     nextAction: 'record a live run',
     roadmap: 'AZ4',
@@ -68,7 +83,8 @@ function baseParts(): RootParts {
   return {
     entry: baseEntry(),
     frameworks: FRAMEWORKS,
-    mcpReadme: 'Works with any MCP-compatible client: Alpha, Zulu Desktop, etc.\n\n## Setup\n\n### Alpha\n\n### Zulu Desktop / Any MCP Client\n\n## Tools\n',
+    mcpReadme:
+      'Works with any MCP-compatible client: Alpha, Zulu Desktop, etc.\n\n## Setup\n\n### Alpha\n\n### Zulu Desktop / Any MCP Client\n\n## Tools\n',
     keywords: ['memory', 'alpha'],
     integrationDocs: ['alpha.md'],
   };
@@ -86,8 +102,14 @@ function writeRoot(parts: RootParts): string {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
     fs.writeFileSync(path.join(root, rel), text);
   };
-  put('docs/integrations/agent-inventory.json', JSON.stringify({ schemaVersion: 1, nonAgentKeywords: ['memory'], entries: [parts.entry] }));
-  put('README.md', ['| Framework | Install |', '|---|---|', ...parts.frameworks.map((f) => `| ${f} | x |`), ''].join('\n'));
+  put(
+    'docs/integrations/agent-inventory.json',
+    JSON.stringify({ schemaVersion: 1, nonAgentKeywords: ['memory'], entries: [parts.entry] }),
+  );
+  put(
+    'README.md',
+    ['| Framework | Install |', '|---|---|', ...parts.frameworks.map((f) => `| ${f} | x |`), ''].join('\n'),
+  );
   put('extensions/mcp/README.md', parts.mcpReadme);
   put('package.json', JSON.stringify({ keywords: parts.keywords }));
   put('tests/alpha.test.ts', '');
@@ -125,7 +147,10 @@ describe('check-agent-inventory', () => {
   });
 
   it('fails when the MCP client sentence is gone', () => {
-    failsWith({ mcpReadme: '## Setup\n\n### Alpha\n\n## Tools\n' }, '"Works with any MCP-compatible client:" list not found');
+    failsWith(
+      { mcpReadme: '## Setup\n\n### Alpha\n\n## Tools\n' },
+      '"Works with any MCP-compatible client:" list not found',
+    );
   });
 
   it('fails on an unlisted MCP setup heading or package keyword', () => {
@@ -134,7 +159,10 @@ describe('check-agent-inventory', () => {
   });
 
   it('fails when a cited path does not exist', () => {
-    failsWith({ entry: { ...baseEntry(), sources: ['extensions/mcp', 'integrations/alpha.md', 'src/gone.ts'] } }, 'path does not exist: src/gone.ts');
+    failsWith(
+      { entry: { ...baseEntry(), sources: ['extensions/mcp', 'integrations/alpha.md', 'src/gone.ts'] } },
+      'path does not exist: src/gone.ts',
+    );
   });
 
   it('fails when an integration doc is cited by no entry', () => {
@@ -142,20 +170,34 @@ describe('check-agent-inventory', () => {
   });
 
   it('fails verified without live evidence and shipped without a pre-loss route', () => {
-    const mode = { name: 'local', checkpointBeforeLoss: 'verified', lessonsBeforeLoss: 'planned', fixtureEvidence: ['tests/alpha.test.ts'], liveEvidence: [] };
+    const mode = {
+      name: 'local',
+      checkpointBeforeLoss: 'verified',
+      lessonsBeforeLoss: 'planned',
+      fixtureEvidence: ['tests/alpha.test.ts'],
+      liveEvidence: [],
+    };
     failsWith({ entry: { ...baseEntry(), modes: [mode] } }, 'checkpointBeforeLoss verified needs liveEvidence');
-    failsWith({ entry: { ...baseEntry(), routes: { ...baseEntry().routes, preLossSave: null } } }, 'checkpointBeforeLoss shipped needs a preLossSave route');
+    failsWith(
+      { entry: { ...baseEntry(), routes: { ...baseEntry().routes, preLossSave: null } } },
+      'checkpointBeforeLoss shipped needs a preLossSave route',
+    );
   });
 
   it('fails integration none with sources, and a missing nullable field', () => {
-    failsWith({ entry: { ...baseEntry(), integration: ['none'] } }, 'integration none stands alone and lists no sources');
+    failsWith(
+      { entry: { ...baseEntry(), integration: ['none'] } },
+      'integration none stands alone and lists no sources',
+    );
     const { store: _store, ...withoutStore } = baseEntry();
     failsWith({ entry: withoutStore }, 'store must be present, a string or null');
   });
 
   it('lists every tool hippo setup detects, with the matching integration kind', () => {
     // SAFETY: the check script run in the first test validates this file's schema.
-    const inventory = JSON.parse(fs.readFileSync(path.join(REPO, 'docs', 'integrations', 'agent-inventory.json'), 'utf8')) as {
+    const inventory = JSON.parse(
+      fs.readFileSync(path.join(REPO, 'docs', 'integrations', 'agent-inventory.json'), 'utf8'),
+    ) as {
       entries: { id: string; integration: string[] }[];
     };
     const kindToIntegration = {

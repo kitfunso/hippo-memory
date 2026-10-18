@@ -51,12 +51,18 @@ export function int(min: number, max: number): Gen<number> {
 }
 
 export function map<T, U>(gen: Gen<T>, f: (value: T) => U): Gen<U> {
-  const lift = (sample: Sample<T>): Sample<U> => ({ value: f(sample.value), smaller: () => sample.smaller().map(lift) });
+  const lift = (sample: Sample<T>): Sample<U> => ({
+    value: f(sample.value),
+    smaller: () => sample.smaller().map(lift),
+  });
   return (rng) => lift(gen(rng));
 }
 
 function pairSample<A, B>(a: Sample<A>, b: Sample<B>): Sample<[A, B]> {
-  return { value: [a.value, b.value], smaller: () => [...a.smaller().map((s) => pairSample(s, b)), ...b.smaller().map((s) => pairSample(a, s))] };
+  return {
+    value: [a.value, b.value],
+    smaller: () => [...a.smaller().map((s) => pairSample(s, b)), ...b.smaller().map((s) => pairSample(a, s))],
+  };
 }
 
 /** Two values drawn in order; nest it for three or more. */
@@ -71,12 +77,28 @@ function arrSample<T>(items: readonly Sample<T>[], min: number): Sample<T[]> {
   const smaller = (): Sample<T[]>[] => {
     const out: Sample<T[]>[] = [];
     const half = Math.ceil(items.length / 2);
-    if (half > 0 && items.length - half >= min) out.push(arrSample(items.slice(half), min), arrSample(items.slice(0, items.length - half), min));
+    if (half > 0 && items.length - half >= min) {
+      out.push(arrSample(items.slice(half), min), arrSample(items.slice(0, items.length - half), min));
+    }
     if (items.length > min) {
-      for (let i = 0; i < Math.min(items.length, DROP_LIMIT); i++) out.push(arrSample(items.filter((_, j) => j !== i), min));
+      for (let i = 0; i < Math.min(items.length, DROP_LIMIT); i++) {
+        out.push(
+          arrSample(
+            items.filter((_, j) => j !== i),
+            min,
+          ),
+        );
+      }
     }
     items.forEach((item, i) => {
-      for (const simpler of item.smaller()) out.push(arrSample(items.map((kept, j) => (j === i ? simpler : kept)), min));
+      for (const simpler of item.smaller()) {
+        out.push(
+          arrSample(
+            items.map((kept, j) => (j === i ? simpler : kept)),
+            min,
+          ),
+        );
+      }
     });
     return out;
   };
@@ -87,7 +109,10 @@ function arrSample<T>(items: readonly Sample<T>[], min: number): Sample<T[]> {
 export function arr<T>(gen: Gen<T>, min: number, max: number): Gen<T[]> {
   return (rng) => {
     const length = min + Math.floor(rng() * (max - min + 1));
-    return arrSample(Array.from({ length }, () => gen(rng)), min);
+    return arrSample(
+      Array.from({ length }, () => gen(rng)),
+      min,
+    );
   };
 }
 
@@ -132,8 +157,10 @@ async function shrink<T>(start: Sample<T>, startError: Error, check: Check<T>) {
 
 /** Printable ASCII only, so an invisible or look-alike character in a failing input can be read and pasted back. */
 function show<T>(value: T): string {
-  return inspect(value, { depth: 8, breakLength: Infinity, maxArrayLength: 200, maxStringLength: 4000 })
-    .replace(/[^\x20-\x7e\n]/gu, (ch) => `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`);
+  return inspect(value, { depth: 8, breakLength: Infinity, maxArrayLength: 200, maxStringLength: 4000 }).replace(
+    /[^\x20-\x7e\n]/gu,
+    (ch) => `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`,
+  );
 }
 
 /** Runs `check` on `runs` inputs drawn from `gen`; a throw fails the property, naming the seed, the run and the smallest input that still fails. */
@@ -144,6 +171,9 @@ export async function forAll<T>(seed: number, runs: number, gen: Gen<T>, check: 
     const first = await failureOf(check, drawn.value);
     if (first === null) continue;
     const { sample, error } = await shrink(drawn, first, check);
-    throw new Error(`property failed (seed ${seed}, run ${run}); smallest failing input: ${show(sample.value)}\n${error.message}`, { cause: error });
+    throw new Error(
+      `property failed (seed ${seed}, run ${run}); smallest failing input: ${show(sample.value)}\n${error.message}`,
+      { cause: error },
+    );
   }
 }

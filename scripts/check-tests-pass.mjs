@@ -39,7 +39,14 @@ function runGate() {
     // process.execPath + the bin file: no npm shim (ENOENT on Windows) and no pretest rebuild.
     const run = spawnSync(
       process.execPath,
-      [vitestBin, 'run', '--reporter=default', '--reporter=json', `--outputFile.json=${reportPath}`, ...process.argv.slice(2)],
+      [
+        vitestBin,
+        'run',
+        '--reporter=default',
+        '--reporter=json',
+        `--outputFile.json=${reportPath}`,
+        ...process.argv.slice(2),
+      ],
       { stdio: 'inherit' },
     );
 

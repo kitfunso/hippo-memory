@@ -145,7 +145,13 @@ export function applyRankBoosts(score: number, entry: MemoryEntry, ctx: BoostCon
   s *= temporalBoost(entry, ctx.temporal.direction, ctx.temporal.range);
   s *= summary.deboost * summary.freshness;
   return {
-    score: s, decisionBoost, churnStaleMultiplier, pathBoost, outcomeBoost, scopeBoost,
-    summaryDeboost: summary.deboost, summaryFreshnessBoost: summary.freshness,
+    score: s,
+    decisionBoost,
+    churnStaleMultiplier,
+    pathBoost,
+    outcomeBoost,
+    scopeBoost,
+    summaryDeboost: summary.deboost,
+    summaryFreshnessBoost: summary.freshness,
   };
 }

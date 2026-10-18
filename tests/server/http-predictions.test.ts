@@ -51,7 +51,7 @@ afterEach(async () => {
 });
 
 function authHeaders() {
-  return { 'authorization': `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
+  return { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
 }
 
 describe('HTTP /v1/predictions (prediction first-class object)', () => {
@@ -101,12 +101,21 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
 
   it('GET /v1/predictions with no class and no status lists closed predictions too', async () => {
     const open = savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
-    const done = savePrediction(home, 'default', { classTag: 'migrate', claimText: 'the migration takes two days', estimateValue: 2 });
+    const done = savePrediction(home, 'default', {
+      classTag: 'migrate',
+      claimText: 'the migration takes two days',
+      estimateValue: 2,
+    });
     closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
     const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders() });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ predictions: Prediction[] }>(res);
-    expect(body.predictions.map((p) => [p.id, p.closureState]).sort()).toEqual([[open.id, 'open'], [done.id, 'closed']].sort());
+    expect(body.predictions.map((p) => [p.id, p.closureState]).sort()).toEqual(
+      [
+        [open.id, 'open'],
+        [done.id, 'closed'],
+      ].sort(),
+    );
   });
 
   it('GET /v1/predictions/:id returns single + 404 on missing', async () => {

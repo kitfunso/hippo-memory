@@ -13,7 +13,14 @@ const FETCH_UNAUTHORISED = resolve(__dirname, '..', '_helpers', 'fetch-unauthori
 const FAILING_COMMAND = ['--', 'node', '-e', 'process.exit(3)'];
 const SPAWN_TIMEOUT_MS = 60_000;
 // Each exit code once through the real entry, the preload a child reads from NODE_OPTIONS, and serve, which arms process handlers.
-const SPAWNED = new Set(['version', 'unknown verb', 'dry-run on a verb without one', 'github backfill refused by the server', 'watch of a failing command', 'serve with one TLS file']);
+const SPAWNED = new Set([
+  'version',
+  'unknown verb',
+  'dry-run on a verb without one',
+  'github backfill refused by the server',
+  'watch of a failing command',
+  'serve with one TLS file',
+]);
 
 interface Case {
   readonly name: string;
@@ -76,7 +83,15 @@ const CASES: readonly Case[] = [
   inStore('brief refresh without a repo', 'brief', 'refresh'),
 ];
 
-const DROPPED_ENV = ['GITHUB_TOKEN', 'SLACK_BOT_TOKEN', 'ANTHROPIC_API_KEY', 'HIPPO_API_KEY', 'HIPPO_LOG_LEVEL', 'HIPPO_TENANT', 'HIPPO_SESSION_ID'];
+const DROPPED_ENV = [
+  'GITHUB_TOKEN',
+  'SLACK_BOT_TOKEN',
+  'ANTHROPIC_API_KEY',
+  'HIPPO_API_KEY',
+  'HIPPO_LOG_LEVEL',
+  'HIPPO_TENANT',
+  'HIPPO_SESSION_ID',
+];
 
 let store = '';
 let bare = '';
@@ -99,7 +114,13 @@ afterAll(() => {
 });
 
 function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: home, HIPPO_SKIP_AUTO_INTEGRATIONS: '1', NO_COLOR: '1', NODE_NO_WARNINGS: '1' };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HIPPO_HOME: home,
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    NO_COLOR: '1',
+    NODE_NO_WARNINGS: '1',
+  };
   for (const key of DROPPED_ENV) delete env[key];
   return { ...env, ...extra };
 }
@@ -107,17 +128,28 @@ function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessE
 /** Folder names differ per run and per platform, so each one prints as its label with forward slashes. */
 function masked(text: string): string {
   // The version line moves with every release.
-  let out = text.replace(/\r\n/g, '\n').replaceAll('\\', '/').replace(/^\d+\.\d+\.\d+\n$/, '<version>\n');
-  const labels: ReadonlyArray<readonly [string, string]> = [[store, '<store>'], [bare, '<bare>'], [home, '<home>']];
+  let out = text
+    .replace(/\r\n/g, '\n')
+    .replaceAll('\\', '/')
+    .replace(/^\d+\.\d+\.\d+\n$/, '<version>\n');
+  const labels: ReadonlyArray<readonly [string, string]> = [
+    [store, '<store>'],
+    [bare, '<bare>'],
+    [home, '<home>'],
+  ];
   for (const [dir, label] of labels) {
-    for (const form of new Set([dir, realpathSync.native(dir), realpathSync(dir)])) out = out.replaceAll(form.replaceAll('\\', '/'), label);
+    for (const form of new Set([dir, realpathSync.native(dir), realpathSync(dir)])) {
+      out = out.replaceAll(form.replaceAll('\\', '/'), label);
+    }
   }
   return out;
 }
 
 async function run(c: Case) {
   const opts = { cwd: c.cwd === 'store' ? store : bare, env: childEnv(c.env), input: '' };
-  const r = SPAWNED.has(c.name) ? hippoRun(c.args, { ...opts, timeout: SPAWN_TIMEOUT_MS }) : await runCliAs(c.args, opts);
+  const r = SPAWNED.has(c.name)
+    ? hippoRun(c.args, { ...opts, timeout: SPAWN_TIMEOUT_MS })
+    : await runCliAs(c.args, opts);
   codes.add(r.status);
   // The usage text grows with every verb; `hippo help` prints it, so only its presence is pinned here.
   const stdout = usage.length > 0 ? r.stdout.replace(usage, '<the text of hippo help>\n') : r.stdout;
@@ -127,7 +159,9 @@ async function run(c: Case) {
 describe('hippo exit codes and output of failing invocations (built CLI)', () => {
   it.each(CASES)('$name', async (c) => {
     const r = await run(c);
-    expect(`$ hippo ${c.args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr}`).toMatchSnapshot();
+    expect(
+      `$ hippo ${c.args.join(' ')} -> ${r.status}\n--- stdout\n${r.stdout}--- stderr\n${r.stderr}`,
+    ).toMatchSnapshot();
   });
 
   // Reads what the cases above recorded, so it holds only on a whole-file run.

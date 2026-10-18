@@ -51,15 +51,31 @@ describe('maskEmails', () => {
 describe('no stored text holds an email address', () => {
   it('in the session digest', () => {
     const edits = [{ filePath: path.join(repo, 'exports', `${EMAIL}.csv`), base: null }];
-    const scan = { turns: [{ role: 'user' as const, text: 'the export keeps failing' }], finalText: REPLY, cwd: repo, edits };
+    const scan = {
+      turns: [{ role: 'user' as const, text: 'the export keeps failing' }],
+      finalText: REPLY,
+      cwd: repo,
+      edits,
+    };
     const log: string[] = [];
-    recordSessionDigest(hippoRoot, syncStore(hippoRoot), scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) });
+    recordSessionDigest(hippoRoot, syncStore(hippoRoot), scan, {
+      key: 's1',
+      tenantId: 'default',
+      log: (line) => log.push(line),
+    });
     expect(log.join('\n')).toMatch(/^digest: wrote /);
-    expect(loadAllEntries(hippoRoot, 'default').map((e) => e.content)).toEqual(['Updated [email] in customer.ts because the export failed.\nChanged: exports/[email]']);
+    expect(loadAllEntries(hippoRoot, 'default').map((e) => e.content)).toEqual([
+      'Updated [email] in customer.ts because the export failed.\nChanged: exports/[email]',
+    ]);
   });
 
   it('in capture from a transcript', () => {
-    cmdCapture(captureTarget(hippoRoot), { source: 'last-session', transcriptPath: transcript(), dryRun: false, global: false });
+    cmdCapture(captureTarget(hippoRoot), {
+      source: 'last-session',
+      transcriptPath: transcript(),
+      dryRun: false,
+      global: false,
+    });
     const rows = JSON.stringify(loadAllEntries(hippoRoot, 'default'));
     expect(rows).toContain('[email]');
     expect(rows).not.toContain(EMAIL);

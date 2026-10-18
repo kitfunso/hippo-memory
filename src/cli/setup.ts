@@ -131,10 +131,7 @@ function patchAgentFile(hook: HookSpec, target: string): void {
     if (existing.includes(HOOK_MARKERS.start) && othersBlock(target, existing)) {
       console.log(`${hook.file} already has a hippo block, which Cursor reads; left it as is.`);
     } else if (existing.includes(HOOK_MARKERS.start)) {
-      const re = new RegExp(
-        `${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}`,
-        'g',
-      );
+      const re = new RegExp(`${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}`, 'g');
       const updated = existing.replace(re, block);
       writeFileAtomic(filepath, updated);
       console.log(`Updated Hippo hook in ${hook.file}`);
@@ -146,9 +143,7 @@ function patchAgentFile(hook: HookSpec, target: string): void {
   } else {
     // Do not create an agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories without one, to avoid
     // polluting cwd; the settings.json hook below is still installed for claude-code.
-    console.log(
-      `${hook.file} not found in ${process.cwd()} — skipping agent-instructions patch.`,
-    );
+    console.log(`${hook.file} not found in ${process.cwd()} — skipping agent-instructions patch.`);
     console.log(`   Create ${hook.file} and re-run \`hippo hook install ${target}\` if you want the agent prompt.`);
   }
 }
@@ -213,14 +208,14 @@ const MCP_MERGE_LINES = {
   'user-owned': (file: string) => `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
   unreadable: (file: string, host: McpHost) =>
     `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ` +
-      addByHand(host),
+    addByHand(host),
 } as const satisfies Record<McpMergeStatus, (file: string, host: McpHost) => string>;
 
 const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
   `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
 const unclosedLine = (file: string): string =>
   `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; ` +
-    'fix the markers by hand';
+  'fix the markers by hand';
 
 const INSTRUCTIONS_INSTALL_LINES = {
   written: (file: string) => `Wrote the hippo block -> ${file}`,
@@ -253,7 +248,8 @@ const VSCODE_INSTRUCTIONS_REMOVE_LINES = {
   kept: (file: string) => `Left ${file}: it is not the text hippo wrote. Delete it by hand if no agent needs it.`,
 } as const satisfies Record<VscodeInstructionsRemoveStatus, (file: string) => string>;
 
-const VSCODE_HOOKS_LINE = 'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); ' +
+const VSCODE_HOOKS_LINE =
+  'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); ' +
   'older versions get the MCP server and the instructions file only.';
 
 function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpHost): string {
@@ -266,9 +262,11 @@ function printVscodeInstall(result: VscodeInstallResult, indent: string): void {
   console.log(`${indent}${VSCODE_INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
   if (paths.profiles.length > 0) {
     const names = paths.profiles.map((dir) => path.basename(dir)).join(', ');
-    console.log(`${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: ` +
-      'hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md ' +
-        'into a profile to use hippo there.');
+    console.log(
+      `${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: ` +
+        'hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md ' +
+        'into a profile to use hippo there.',
+    );
   }
 }
 
@@ -279,8 +277,10 @@ function printCopilotInstall(result: CopilotInstallResult, indent: string): void
     : "hippo's Copilot hooks are already in";
   console.log(`${indent}${hooks} ${paths.hooks}`);
   if (result.mcp === null || result.instructions === null) {
-    console.log(`${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, ` +
-      'so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads');
+    console.log(
+      `${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, ` +
+        'so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads',
+    );
   } else {
     console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, COPILOT_CLI_MCP)}`);
     console.log(`${indent}${INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
@@ -296,8 +296,10 @@ function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string
   if (mcp === 'removed') return [`Removed the "hippo" MCP server from ${file}`];
   if (mcp === 'user-owned') return [`Left the "hippo" MCP server in ${file}: hippo did not write it`];
   if (mcp === 'unreadable') {
-    return [`WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; ` +
-      'remove the "hippo" server by hand if hippo added it'];
+    return [
+      `WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; ` +
+        'remove the "hippo" server by hand if hippo added it',
+    ];
   }
   return [];
 }
@@ -376,9 +378,11 @@ function removeLegacyCursorRules(): void {
     const left = withoutHookBlock(old);
     if (left) writeFileAtomic(legacy, left + '\n');
     else fs.unlinkSync(legacy);
-    console.log(left
-      ? 'Removed the old Hippo hook from .cursorrules'
-      : 'Deleted .cursorrules, which held only the old Hippo hook');
+    console.log(
+      left
+        ? 'Removed the old Hippo hook from .cursorrules'
+        : 'Deleted .cursorrules, which held only the old Hippo hook',
+    );
   }
 }
 
@@ -596,8 +600,10 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     }
   });
 
-  console.log(`Daily maintenance complete: ${plural(processed, 'workspace')} processed, ` +
-    `${plural(failed, 'command failure')}.`);
+  console.log(
+    `Daily maintenance complete: ${plural(processed, 'workspace')} processed, ` +
+      `${plural(failed, 'command failure')}.`,
+  );
   // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
   if (failed > 0) process.exitCode = 1;
 }

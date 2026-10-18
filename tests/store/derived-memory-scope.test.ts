@@ -23,10 +23,13 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/open.js';
 
 function makeOkFetcher(content: string) {
-  return vi.fn<typeof fetch>(async () => new Response(
-    JSON.stringify({ content: [{ text: content }] }),
-    { status: 200, headers: { 'content-type': 'application/json' } },
-  ));
+  return vi.fn<typeof fetch>(
+    async () =>
+      new Response(JSON.stringify({ content: [{ text: content }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  );
 }
 
 describe('derivationScope / commonDerivationScope', () => {
@@ -42,7 +45,10 @@ describe('derivationScope / commonDerivationScope', () => {
   });
 
   it('agrees on one scope shared by every source', () => {
-    expect(commonDerivationScope(['slack:private:C1', 'slack:private:C1'])).toEqual({ ok: true, scope: 'slack:private:C1' });
+    expect(commonDerivationScope(['slack:private:C1', 'slack:private:C1'])).toEqual({
+      ok: true,
+      scope: 'slack:private:C1',
+    });
     expect(commonDerivationScope([null, 'github:public:x'])).toEqual({ ok: true, scope: null });
   });
 
@@ -58,13 +64,21 @@ describe('consolidate() merge pass partitions by scope', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
     const backbone = 'rotate the staging tls certificates before expiry';
-    const privShort = createMemory(backbone, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, scope: 'slack:private:C1' });
+    const privShort = createMemory(backbone, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      scope: 'slack:private:C1',
+    });
     const privLong = createMemory(`${backbone} zzzprivatemarkerzzz notify the on-call channel`, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       scope: 'slack:private:C1',
     });
-    const pubShort = createMemory(backbone, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, scope: null });
+    const pubShort = createMemory(backbone, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      scope: null,
+    });
     const pubLong = createMemory(`${backbone} notify the on-call channel of the change`, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
@@ -96,13 +110,21 @@ describe('dedupe partitions by restricted scope', () => {
   it('a private near-duplicate never deletes the unrestricted copy', () => {
     const home = makeRoot('derived-scope');
     const text = 'rotate the staging tls certificates before expiry and notify on-call';
-    const priv = createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, scope: 'slack:private:C1' });
+    const priv = createMemory(text, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+      scope: 'slack:private:C1',
+    });
     const pub = createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, scope: null });
     writeEntry(home, { ...priv, strength: 0.9 });
     writeEntry(home, { ...pub, strength: 0.1 });
 
     expect(deduplicateStore(sqliteConsolidation(handlesOf(home))).removed).toBe(0);
-    expect(loadAllEntries(home, 'default').map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
+    expect(
+      loadAllEntries(home, 'default')
+        .map((e) => e.scope)
+        .sort(),
+    ).toEqual([null, 'slack:private:C1'].sort());
   });
 });
 
@@ -111,11 +133,19 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
     const home = makeRoot('derived-scope');
     const sid = 'sess-private-uniform';
     appendSessionEvent(home, 'default', {
-      session_id: sid, event_type: 'action', content: 'read the private doc', source: 'agent', scope: 'slack:private:C1',
+      session_id: sid,
+      event_type: 'action',
+      content: 'read the private doc',
+      source: 'agent',
+      scope: 'slack:private:C1',
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid, event_type: 'session_complete', content: 'success', source: 'agent',
-      scope: 'slack:private:C1', metadata: { summary: 'handled the private request' },
+      session_id: sid,
+      event_type: 'session_complete',
+      content: 'success',
+      source: 'agent',
+      scope: 'slack:private:C1',
+      metadata: { summary: 'handled the private request' },
     });
 
     const result = await consolidate(home, { now: new Date() });
@@ -131,13 +161,24 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
     const home = makeRoot('derived-scope');
     const sid = 'sess-mixed';
     appendSessionEvent(home, 'default', {
-      session_id: sid, event_type: 'action', content: 'read the private doc', source: 'agent', scope: 'slack:private:C1',
+      session_id: sid,
+      event_type: 'action',
+      content: 'read the private doc',
+      source: 'agent',
+      scope: 'slack:private:C1',
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid, event_type: 'action', content: 'post the public update', source: 'agent', scope: null,
+      session_id: sid,
+      event_type: 'action',
+      content: 'post the public update',
+      source: 'agent',
+      scope: null,
     });
     appendSessionEvent(home, 'default', {
-      session_id: sid, event_type: 'session_complete', content: 'success', source: 'agent',
+      session_id: sid,
+      event_type: 'session_complete',
+      content: 'success',
+      source: 'agent',
       metadata: { summary: 'mixed session' },
     });
 
@@ -154,15 +195,31 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
   it('buildDag never parents a private fact and a public fact under the same L2, and the private L2 carries the scope', async () => {
     const home = makeRoot('derived-scope');
     const privFacts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-      createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
+      createMemory(c, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+        dagLevel: 1,
+        tags: ['extracted', 'speaker:alice'],
+        scope: 'slack:private:C1',
+      }),
     );
     const pubFacts = ['alice shipped P', 'alice reviewed Q', 'alice merged R'].map((c) =>
-      createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
+      createMemory(c, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+        dagLevel: 1,
+        tags: ['extracted', 'speaker:alice'],
+        scope: null,
+      }),
     );
     for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
-    const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test-key', fetcher });
+    const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'test-key',
+      fetcher,
+    });
 
     expect(result.candidateClusters).toBe(2);
     expect(result.summariesCreated).toBe(2);
@@ -171,7 +228,10 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     const db = openHippoDb(home);
     try {
       // SAFETY: SELECT projects exactly id, scope; .all() returns rows in that shape.
-      const l2s = db.prepare(`SELECT id, scope FROM memories WHERE dag_level = 2`).all() as Array<{ id: string; scope: string | null }>;
+      const l2s = db.prepare(`SELECT id, scope FROM memories WHERE dag_level = 2`).all() as Array<{
+        id: string;
+        scope: string | null;
+      }>;
       expect(l2s).toHaveLength(2);
       const privateL2 = l2s.find((s) => s.scope === 'slack:private:C1');
       const publicL2 = l2s.find((s) => s.scope === null);
@@ -179,10 +239,12 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       expect(publicL2).toBeDefined();
 
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
-      const privParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privFacts.length)})`)
+      const privParents = db
+        .prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privFacts.length)})`)
         .all(...privFacts.map((f) => f.id)) as Array<{ dag_parent_id: string }>;
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
-      const pubParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(pubFacts.length)})`)
+      const pubParents = db
+        .prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(pubFacts.length)})`)
         .all(...pubFacts.map((f) => f.id)) as Array<{ dag_parent_id: string }>;
       expect(privParents).toHaveLength(1);
       expect(pubParents).toHaveLength(1);
@@ -195,10 +257,15 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
 
   it('buildEntityProfiles never parents a private L2 and a public L2 under the same L3, and the private L3 carries the scope', async () => {
     const home = makeRoot('derived-scope');
-    const makeL2 = (content: string, scope: string | null) => createMemory(content, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2, scope,
-    });
+    const makeL2 = (content: string, scope: string | null) =>
+      createMemory(content, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Semantic,
+        tags: ['speaker:alice', 'dag-summary'],
+        confidence: 'inferred',
+        dagLevel: 2,
+        scope,
+      });
     const privL2s = [
       'alice prefers python type hints privately',
       'alice ships features in 2-week cycles privately',
@@ -212,7 +279,11 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     for (const l2 of [...privL2s, ...pubL2s]) writeEntry(home, l2);
 
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
-    const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'k', fetcher });
+    const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      apiKey: 'k',
+      fetcher,
+    });
 
     expect(result.profilesCreated).toBe(2);
     expect(result.l2sLinked).toBe(6);
@@ -220,7 +291,10 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     const db = openHippoDb(home);
     try {
       // SAFETY: SELECT projects exactly id, scope; .all() returns rows in that shape.
-      const l3s = db.prepare(`SELECT id, scope FROM memories WHERE dag_level = 3`).all() as Array<{ id: string; scope: string | null }>;
+      const l3s = db.prepare(`SELECT id, scope FROM memories WHERE dag_level = 3`).all() as Array<{
+        id: string;
+        scope: string | null;
+      }>;
       expect(l3s).toHaveLength(2);
       const privateL3 = l3s.find((s) => s.scope === 'slack:private:C1');
       const publicL3 = l3s.find((s) => s.scope === null);
@@ -228,7 +302,8 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       expect(publicL3).toBeDefined();
 
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
-      const privParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privL2s.length)})`)
+      const privParents = db
+        .prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privL2s.length)})`)
         .all(...privL2s.map((l2) => l2.id)) as Array<{ dag_parent_id: string }>;
       expect(privParents).toHaveLength(1);
       expect(privParents[0]!.dag_parent_id).toBe(privateL3!.id);
@@ -251,7 +326,12 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = storeExtractedFacts(sqliteSyncStore(home).localFiles.learning, source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const stored = storeExtractedFacts(
+      sqliteSyncStore(home).localFiles.learning,
+      source,
+      facts,
+      DEFAULT_HALF_LIFE_DAYS,
+    );
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.scope).toBe('slack:private:C1');
@@ -276,7 +356,10 @@ describe('assembleBriefFromReceipts excludes restricted receipts', () => {
 
   it('quotes the public receipt only, excluding a slack:private and a mixed-case Slack:Private receipt', async () => {
     const home = makeRoot('derived-scope');
-    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'seed' });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      repo: 'hippo',
+      summary: 'seed',
+    });
     addReceipt(home, 'hippo', 'the public deploy went out on schedule', null);
     addReceipt(home, 'hippo', 'the private incident channel discussed the outage', 'slack:private:C1');
     addReceipt(home, 'hippo', 'another restricted note in mixed case', 'Slack:Private:C9');

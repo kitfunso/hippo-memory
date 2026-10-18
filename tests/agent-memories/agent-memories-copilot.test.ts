@@ -23,7 +23,11 @@ function write(file: string, content: string | Buffer = 'a remembered fact'): st
   return file;
 }
 
-function ctxOf(env: Record<string, string>, projectRoot?: string, platform: NodeJS.Platform = process.platform): AdapterContext {
+function ctxOf(
+  env: Record<string, string>,
+  projectRoot?: string,
+  platform: NodeJS.Platform = process.platform,
+): AdapterContext {
   return { home: tmp, env, platform, projectRoot };
 }
 
@@ -261,7 +265,11 @@ describe('copilot project containers', () => {
 
   it.skipIf(process.platform === 'win32')('compares case-sensitively off win32', () => {
     fs.mkdirSync(projectRoot(), { recursive: true });
-    addWorkspace(data(), 'w1', JSON.stringify({ folder: fileUri(projectRoot()).toUpperCase().replace('FILE://', 'file://') }));
+    addWorkspace(
+      data(),
+      'w1',
+      JSON.stringify({ folder: fileUri(projectRoot()).toUpperCase().replace('FILE://', 'file://') }),
+    );
     expect(paths(ctxOf(env(), projectRoot(), 'linux'))).toEqual([]);
   });
 });

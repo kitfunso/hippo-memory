@@ -38,21 +38,28 @@ interface LogRow {
 }
 
 function logRows(root: string): LogRow[] {
-  return withDb(root, (db) =>
-    // SAFETY: the SELECT names exactly the LogRow columns.
-    db.prepare(`SELECT session_id, tool, outcome, skip_rule, sig_hash, detail_hash FROM failure_log ORDER BY id`).all() as LogRow[]);
+  return withDb(
+    root,
+    (db) =>
+      // SAFETY: the SELECT names exactly the LogRow columns.
+      db
+        .prepare(`SELECT session_id, tool, outcome, skip_rule, sig_hash, detail_hash FROM failure_log ORDER BY id`)
+        .all() as LogRow[],
+  );
 }
 
 /** Tombstone a lesson text the way `hippo reject` does, so storing it again throws. */
 function rejectLesson(root: string, text: string): void {
-  withDb(root, (db) => insertRejectedValue(db, {
-    tenantId: 'default',
-    digest: rejectionDigest(text),
-    reason: 'test',
-    rejectedBy: 'cli',
-    rejectedAt: new Date().toISOString(),
-    normalizedChars: normalizeValueForRejection(text).length,
-  }));
+  withDb(root, (db) =>
+    insertRejectedValue(db, {
+      tenantId: 'default',
+      digest: rejectionDigest(text),
+      reason: 'test',
+      rejectedBy: 'cli',
+      rejectedAt: new Date().toISOString(),
+      normalizedChars: normalizeValueForRejection(text).length,
+    }),
+  );
 }
 
 async function capturedInOrder(home: string, payloads: readonly JsonValue[]): Promise<string[]> {
@@ -95,7 +102,12 @@ describe('repeat-error rate', () => {
         repeats: 2,
         sessions: 4,
         outcomes: {
-          stored: 2, duplicate: 4, 'store-failed': 1, 'skipped-interrupt': 0, 'skipped-routine': 1, 'skipped-invalid': 0,
+          stored: 2,
+          duplicate: 4,
+          'store-failed': 1,
+          'skipped-interrupt': 0,
+          'skipped-routine': 1,
+          'skipped-invalid': 0,
         },
       });
     });
@@ -145,7 +157,12 @@ describe('capture-error logs every failure, never its text', () => {
       { session_id: ' ', tool_name: 'Edit', error: 'String to replace not found in file.' },
     ];
     expect(await capturedInOrder(home, payloads)).toEqual([
-      'stored', 'duplicate', 'skipped-routine', 'skipped-interrupt', 'skipped-invalid', 'stored',
+      'stored',
+      'duplicate',
+      'skipped-routine',
+      'skipped-interrupt',
+      'skipped-invalid',
+      'stored',
     ]);
     const rows = logRows(home);
     expect(rows.map((r) => [r.session_id, r.tool, r.outcome, r.skip_rule])).toEqual([
@@ -158,7 +175,12 @@ describe('capture-error logs every failure, never its text', () => {
     ]);
     const hex = (h: string | null): boolean | null => (h === null ? null : /^[0-9a-f]{16}$/.test(h));
     expect(rows.map((r) => [hex(r.sig_hash), hex(r.detail_hash)])).toEqual([
-      [true, true], [true, true], [true, true], [null, null], [null, null], [true, true],
+      [true, true],
+      [true, true],
+      [true, true],
+      [null, null],
+      [null, null],
+      [true, true],
     ]);
     expect(rows[1]).toMatchObject({ sig_hash: rows[0]!.sig_hash, detail_hash: rows[0]!.detail_hash });
     const everything = JSON.stringify(withDb(home, (db) => db.prepare(`SELECT * FROM failure_log`).all()));
@@ -167,7 +189,12 @@ describe('capture-error logs every failure, never its text', () => {
   });
 
   it('keeps a finer detail hash that tells apart failures the lesson text merges', async () => {
-    const silent = (command: string) => ({ session_id: 's1', tool_name: 'Bash', tool_input: { command }, error: 'Exit code 1 (no output)' });
+    const silent = (command: string) => ({
+      session_id: 's1',
+      tool_name: 'Bash',
+      tool_input: { command },
+      error: 'Exit code 1 (no output)',
+    });
     const banner = `Error: ${'build banner line '.repeat(12)}`;
     const payloads: JsonValue[] = [
       silent('npm test'),
@@ -187,16 +214,24 @@ describe('capture-error logs every failure, never its text', () => {
     const payload = { session_id: 's1', tool_name: 'Bash', error: 'Exit code 2\nerror TS2304: Cannot find name foo' };
     rejectLesson(home, lessonFromFailure(payload).text!);
     await expect(captureToolFailure(failureTarget(home), payload)).rejects.toThrow(RejectedValueError);
-    expect(logRows(home).map((r) => [r.session_id, r.outcome, r.sig_hash !== null])).toEqual([['s1', 'store-failed', true]]);
+    expect(logRows(home).map((r) => [r.session_id, r.outcome, r.sig_hash !== null])).toEqual([
+      ['s1', 'store-failed', true],
+    ]);
     withDb(home, (db) => expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ total: 1, rated: 1 }));
   });
 
   it('pins the signature hash, because logged hashes cannot be recomputed after a change', () => {
-    expect(blockHash(failureSignature('Bash: Exit code 2 src/a.ts(12,3): error TS2304: Cannot find name foo'))).toBe('19e1075d4670c921');
+    expect(blockHash(failureSignature('Bash: Exit code 2 src/a.ts(12,3): error TS2304: Cannot find name foo'))).toBe(
+      '19e1075d4670c921',
+    );
   });
 
   it('caps the session id and tool name it keeps', async () => {
-    await captureToolFailure(failureTarget(home), { session_id: 's'.repeat(500), tool_name: 't'.repeat(500), error: 'Exit code 1\nError: something real broke' });
+    await captureToolFailure(failureTarget(home), {
+      session_id: 's'.repeat(500),
+      tool_name: 't'.repeat(500),
+      error: 'Exit code 1\nError: something real broke',
+    });
     const [row] = logRows(home);
     expect([row!.session_id!.length, row!.tool!.length]).toEqual([128, 128]);
   });
@@ -222,15 +257,21 @@ describe('hippo failures', () => {
 
   it('reports outcomes and repeats from what the hook logged, including a lesson it could not save', async () => {
     expect(await run(['failures'])).toContain('No failed tool calls recorded in the last 30 days.');
-    const build = (session: string): string => JSON.stringify({
-      session_id: session, tool_name: 'Bash', tool_input: { command: 'npm run build' },
-      error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
-    });
+    const build = (session: string): string =>
+      JSON.stringify({
+        session_id: session,
+        tool_name: 'Bash',
+        tool_input: { command: 'npm run build' },
+        error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
+      });
     const refused = { session_id: 's3', tool_name: 'Bash', error: 'Exit code 1\nError: Cannot find module express' };
     rejectLesson(join(dir, '.hippo'), lessonFromFailure(refused).text!);
     await run(['capture-error'], build('s1'));
     await run(['capture-error'], build('s2'));
-    await run(['capture-error'], JSON.stringify({ session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' }));
+    await run(
+      ['capture-error'],
+      JSON.stringify({ session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' }),
+    );
     // Storing this one throws; the hook still exits 0 (run would throw otherwise) and the log keeps it.
     await run(['capture-error'], JSON.stringify(refused));
 
@@ -248,7 +289,9 @@ describe('hippo failures', () => {
     const root = join(dir, '.hippo');
     withDb(root, (db) => db.exec('DROP TABLE failure_log'));
     await run(['capture-error'], broke('s1'));
-    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['Bash: Exit code 1 Error: something real broke']);
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([
+      'Bash: Exit code 1 Error: something real broke',
+    ]);
   });
 
   it('reads the store the hook fell back to, never creates one, and names errors without a session', async () => {
@@ -258,7 +301,14 @@ describe('hippo failures', () => {
     initStore(join(bare, 'global'));
     await run(['capture-error'], broke('s1'), bare);
     await run(['capture-error'], broke(undefined, 'another thing broke'), bare);
-    expect(JSON.parse(await run(['failures', '--json'], '', bare))).toMatchObject({ total: 2, rated: 1, repeats: 0, sessions: 1 });
-    expect(await run(['failures'], '', bare)).toContain('Repeats: 0 of 1 errors first happened in another session. 1 more had no session id.');
+    expect(JSON.parse(await run(['failures', '--json'], '', bare))).toMatchObject({
+      total: 2,
+      rated: 1,
+      repeats: 0,
+      sessions: 1,
+    });
+    expect(await run(['failures'], '', bare)).toContain(
+      'Repeats: 0 of 1 errors first happened in another session. 1 more had no session id.',
+    );
   });
 });

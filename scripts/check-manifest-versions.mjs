@@ -137,4 +137,6 @@ if (drifts.length > 0) {
   process.exit(1);
 }
 
-console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/util/version.ts + the two package-lock.json root fields at version ${expectedVersion}. OK.`);
+console.log(
+  `All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/util/version.ts + the two package-lock.json root fields at version ${expectedVersion}. OK.`,
+);

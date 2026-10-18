@@ -13,11 +13,7 @@ afterEach(() => {
 });
 
 function writeConfig(hippoRoot: string, model: string): void {
-  fs.writeFileSync(
-    path.join(hippoRoot, 'config.json'),
-    JSON.stringify({ embeddings: { model } }, null, 2),
-    'utf8',
-  );
+  fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { model } }, null, 2), 'utf8');
 }
 
 /**

@@ -1,7 +1,10 @@
 // Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
 import {
-  canTouchScope, isPersonalScope, passesScopeFilterForRecall, personalScopeOf,
+  canTouchScope,
+  isPersonalScope,
+  passesScopeFilterForRecall,
+  personalScopeOf,
 } from '../../core/recall-scope.js';
 import type { MemoryConflict } from '../../store/rows.js';
 import type { ConflictMember, ConflictRow, ConflictSide, LoserFate } from '../../store/port/conflicts.js';
@@ -43,8 +46,12 @@ export interface ResolveMemoryConflictResult {
 }
 
 function isLive(member: ConflictMember | null): boolean {
-  return member !== null && !member.superseded_by && (member.kind === 'raw' || member.kind === 'distilled') &&
-    !isQuarantineScope(member.scope);
+  return (
+    member !== null &&
+    !member.superseded_by &&
+    (member.kind === 'raw' || member.kind === 'distilled') &&
+    !isQuarantineScope(member.scope)
+  );
 }
 
 /** Someone else's personal row hides its whole pair. */
@@ -86,7 +93,12 @@ export async function resolveMemoryConflict(
   const reason = opts.reason ?? `resolveConflict ${conflictId}: kept ${keep.id}`;
   const fate = loserFate(ctx.actor, loser, opts);
   const resolved = await ctx.store.conflicts.resolve(ctx.tenantId, {
-    conflictId, keep, loser, fate, actor: ctx.actor.subject, reason,
+    conflictId,
+    keep,
+    loser,
+    fate,
+    actor: ctx.actor.subject,
+    reason,
   });
   // Every check passed above, so false here is another resolver, or a scope change, getting there first.
   if (!resolved) throw new ConflictError(`conflict ${conflictId} is already resolved`);
@@ -129,12 +141,17 @@ export async function listOpenConflicts(
 ): Promise<ConflictPage> {
   const { project } = opts;
   const page = await ctx.store.conflicts.list({
-    tenantId: ctx.tenantId, status: 'open', limit: pageLimit(opts.limit), after: opts.after,
+    tenantId: ctx.tenantId,
+    status: 'open',
+    limit: pageLimit(opts.limit),
+    after: opts.after,
   });
   const own = personalScopeOf(ctx.actor);
-  const recallable = (member: ConflictMember | null): boolean => !project || (member !== null &&
-    classifyOriginProject(member.origin_project, project) !== 'cross-project' &&
-    passesScopeFilterForRecall(member.scope, undefined, own));
+  const recallable = (member: ConflictMember | null): boolean =>
+    !project ||
+    (member !== null &&
+      classifyOriginProject(member.origin_project, project) !== 'cross-project' &&
+      passesScopeFilterForRecall(member.scope, undefined, own));
   const shown = (row: ConflictRow): boolean => touchable(ctx.actor, row) && recallable(row.a) && recallable(row.b);
   return { conflicts: page.rows.filter(shown).map((row) => row.conflict), next: page.next };
 }
@@ -149,7 +166,10 @@ export async function listConflicts(
 ): Promise<ConflictPage> {
   requireHostAdmin(ctx, 'Listing conflicts past the scope check');
   const page = await ctx.store.conflicts.list({
-    tenantId: reach.everyTenant ? null : ctx.tenantId, status, limit: pageLimit(opts.limit), after: opts.after,
+    tenantId: reach.everyTenant ? null : ctx.tenantId,
+    status,
+    limit: pageLimit(opts.limit),
+    after: opts.after,
   });
   return { conflicts: page.rows.map((row) => row.conflict), next: page.next };
 }

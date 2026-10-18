@@ -23,8 +23,16 @@ describe('check-graph-writes lint', () => {
 
   describe('fixture behavior', () => {
     let dir: string;
-    beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'graph-lint-')); });
-    afterEach(() => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ } });
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'graph-lint-'));
+    });
+    afterEach(() => {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    });
 
     function file(name: string, body: string): void {
       const p = join(dir, name);
@@ -76,17 +84,26 @@ describe('check-graph-writes lint', () => {
       file('bracketed.ts', `db.prepare('UPDATE [graph_extraction_queue] SET status = ?').run(s);\n`);
       const files = findGraphWriteViolations(dir).map((x) => x.file.replace(/\\/g, '/'));
       for (const f of ['or-ignore.ts', 'or-replace.ts', 'quoted.ts', 'bracketed.ts']) {
-        expect(files.some((x) => x.endsWith(f)), `expected ${f} flagged`).toBe(true);
+        expect(
+          files.some((x) => x.endsWith(f)),
+          `expected ${f} flagged`,
+        ).toBe(true);
       }
     });
 
     it('does NOT flag comments (block /* */ + line //) that merely mention the pattern', () => {
-      file('doc.ts', `/*\n * UPDATE graph_extraction_queue is off-limits here\n * only graph.ts may INSERT INTO entities\n */\n// DELETE FROM relations is also only allowed in graph.ts\nexport const y = 2;\n`);
+      file(
+        'doc.ts',
+        `/*\n * UPDATE graph_extraction_queue is off-limits here\n * only graph.ts may INSERT INTO entities\n */\n// DELETE FROM relations is also only allowed in graph.ts\nexport const y = 2;\n`,
+      );
       expect(findGraphWriteViolations(dir)).toEqual([]);
     });
 
     it('does NOT false-match a table whose name contains a graph-table name (correlations)', () => {
-      file('corr.ts', `db.prepare('INSERT INTO correlations(a, b) VALUES (?, ?)').run(a, b);\nconst u = 'UPDATE correlations SET a = ?';\n`);
+      file(
+        'corr.ts',
+        `db.prepare('INSERT INTO correlations(a, b) VALUES (?, ?)').run(a, b);\nconst u = 'UPDATE correlations SET a = ?';\n`,
+      );
       expect(findGraphWriteViolations(dir)).toEqual([]);
     });
 
@@ -98,11 +115,14 @@ describe('check-graph-writes lint', () => {
     });
 
     it('does NOT flag DDL forms (CREATE TABLE / BEFORE INSERT ON / BEFORE UPDATE ON)', () => {
-      file('ddl.ts', [
-        `db.exec('CREATE TABLE entities (id INTEGER PRIMARY KEY)');`,
-        `db.exec('CREATE TRIGGER t BEFORE INSERT ON entities BEGIN SELECT 1; END');`,
-        `db.exec('CREATE TRIGGER u BEFORE UPDATE ON relations BEGIN SELECT 1; END');`,
-      ].join('\n') + '\n');
+      file(
+        'ddl.ts',
+        [
+          `db.exec('CREATE TABLE entities (id INTEGER PRIMARY KEY)');`,
+          `db.exec('CREATE TRIGGER t BEFORE INSERT ON entities BEGIN SELECT 1; END');`,
+          `db.exec('CREATE TRIGGER u BEFORE UPDATE ON relations BEGIN SELECT 1; END');`,
+        ].join('\n') + '\n',
+      );
       expect(findGraphWriteViolations(dir)).toEqual([]);
     });
   });

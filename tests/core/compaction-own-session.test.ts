@@ -31,12 +31,22 @@ let ctx: FullContext;
 const minute = (base: number, i: number): string => new Date(Date.UTC(2026, base, 1, 0, i)).toISOString();
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
+  const entry = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    origin_project: PROJECT,
+    ...extra,
+  };
   writeEntry(root, entry);
   return entry;
 }
 
-function seedItem(root: string, sessionId: string, content: string, created: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+function seedItem(
+  root: string,
+  sessionId: string,
+  content: string,
+  created: string,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry {
   return seed(root, content, {
     tags: [COMPACTION_MEMORY_TAG],
     source: `${COMPACTION_SOURCE_PREFIX}${sessionId}`,
@@ -49,9 +59,17 @@ function seedItem(root: string, sessionId: string, content: string, created: str
 const ids = (result: { entries: Array<{ entry: { id: string } }> }): string[] => result.entries.map((e) => e.entry.id);
 
 function enablePromptRecall(root: string): void {
-  writeFileSync(join(root, 'config.json'), JSON.stringify({
-    pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1, promptRecallMaxItems: 10 },
-  }));
+  writeFileSync(
+    join(root, 'config.json'),
+    JSON.stringify({
+      pinnedInject: {
+        promptRecall: true,
+        promptRecallThreshold: 0.1,
+        promptRecallMinShared: 1,
+        promptRecallMaxItems: 10,
+      },
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -76,9 +94,16 @@ describe('own-session compaction items in recent context', () => {
   // 40 items outnumber the loader's first window (32), so admit has to reject them for the load to widen.
   function seedFortyItemsAndOlderRows() {
     const older = Array.from({ length: 8 }, (_, i) =>
-      seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }));
+      seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }),
+    );
     const items = Array.from({ length: 40 }, (_, i) =>
-      seedItem(local, OWN, `compaction item ${i} says the deploy job must run the migration check before it ships`, minute(5, i)));
+      seedItem(
+        local,
+        OWN,
+        `compaction item ${i} says the deploy job must run the migration check before it ships`,
+        minute(5, i),
+      ),
+    );
     return { items, older };
   }
 
@@ -86,21 +111,36 @@ describe('own-session compaction items in recent context', () => {
     const { older } = seedFortyItemsAndOlderRows();
 
     const result = await getContext(ctx, {
-      pinnedOnly: true, includeRecent: 5, budget: 2000, currentProject: PROJECT, currentSessionId: OWN,
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 2000,
+      currentProject: PROJECT,
+      currentSessionId: OWN,
     });
 
-    const newestOlder = [...older].sort((a, b) => b.created.localeCompare(a.created)).slice(0, 5).map((e) => e.id);
+    const newestOlder = [...older]
+      .sort((a, b) => b.created.localeCompare(a.created))
+      .slice(0, 5)
+      .map((e) => e.id);
     expect(ids(result).sort()).toEqual(newestOlder.sort());
     expect(result.entries.some((e) => e.entry.tags.includes(COMPACTION_MEMORY_TAG))).toBe(false);
   });
 
   it('shows the same items to a different session, and to a caller with no session id', async () => {
     const { items } = seedFortyItemsAndOlderRows();
-    const newestItems = [...items].sort((a, b) => b.created.localeCompare(a.created)).slice(0, 5).map((e) => e.id).sort();
+    const newestItems = [...items]
+      .sort((a, b) => b.created.localeCompare(a.created))
+      .slice(0, 5)
+      .map((e) => e.id)
+      .sort();
 
     for (const currentSessionId of [OTHER, '', null, undefined]) {
       const result = await getContext(ctx, {
-        pinnedOnly: true, includeRecent: 5, budget: 2000, currentProject: PROJECT, currentSessionId,
+        pinnedOnly: true,
+        includeRecent: 5,
+        budget: 2000,
+        currentProject: PROJECT,
+        currentSessionId,
       });
       expect(ids(result).sort()).toEqual(newestItems);
     }
@@ -116,11 +156,16 @@ describe('own-session compaction items in recent context', () => {
 
   it('keeps an untagged row from the same session', async () => {
     const plain = seed(local, 'a plain note from the same session about the deploy migration check', {
-      source_session_id: OWN, created: minute(6, 0),
+      source_session_id: OWN,
+      created: minute(6, 0),
     });
 
     const result = await getContext(ctx, {
-      pinnedOnly: true, includeRecent: 5, budget: 2000, currentProject: PROJECT, currentSessionId: OWN,
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 2000,
+      currentProject: PROJECT,
+      currentSessionId: OWN,
     });
 
     expect(ids(result)).toEqual([plain.id]);
@@ -131,9 +176,17 @@ describe('own-session compaction items under prompt recall', () => {
   const prompt = 'how should the postgres migration rollback plan work';
 
   function seedRecallRows() {
-    const older = seed(local, 'the postgres migration script needs a rollback plan before deploy', { created: minute(0, 0) });
+    const older = seed(local, 'the postgres migration script needs a rollback plan before deploy', {
+      created: minute(0, 0),
+    });
     const items = ['first', 'second', 'third'].map((word, i) =>
-      seedItem(local, OWN, `the ${word} lesson from this session is that the postgres migration rollback plan needs a dry run`, minute(5, i)));
+      seedItem(
+        local,
+        OWN,
+        `the ${word} lesson from this session is that the postgres migration rollback plan needs a dry run`,
+        minute(5, i),
+      ),
+    );
     return { items, older };
   }
 
@@ -151,7 +204,12 @@ describe('own-session compaction items under prompt recall', () => {
     enablePromptRecall(local);
     const { items, older } = seedRecallRows();
 
-    const result = await getContext(ctx, { pinnedOnly: true, currentProject: PROJECT, currentSessionId: OTHER, prompt });
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      currentSessionId: OTHER,
+      prompt,
+    });
 
     expect(ids(result).sort()).toEqual([older.id, ...items.map((e) => e.id)].sort());
     expect(result.entries.every((e) => e.promptRecall === true)).toBe(true);
@@ -160,8 +218,15 @@ describe('own-session compaction items under prompt recall', () => {
 
 describe('explicit recall is not filtered', () => {
   function seedThree(root: string): string[] {
-    return ['alpha', 'beta', 'gamma'].map((word, i) =>
-      seedItem(root, OWN, `the ${word} lesson from this session is that the ledger export needs a dry run`, minute(5, i)).id);
+    return ['alpha', 'beta', 'gamma'].map(
+      (word, i) =>
+        seedItem(
+          root,
+          OWN,
+          `the ${word} lesson from this session is that the ledger export needs a dry run`,
+          minute(5, i),
+        ).id,
+    );
   }
 
   it('api recall returns the session own items', async () => {

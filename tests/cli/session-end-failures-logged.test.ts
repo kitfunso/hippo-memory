@@ -11,7 +11,8 @@ let repo: string;
 let log: string;
 let env: NodeJS.ProcessEnv;
 
-const hippo = (args: readonly string[], input?: string): SpawnSyncReturns<string> => hippoRun(args, { cwd: repo, env, input });
+const hippo = (args: readonly string[], input?: string): SpawnSyncReturns<string> =>
+  hippoRun(args, { cwd: repo, env, input });
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-failures-'));
@@ -20,11 +21,27 @@ beforeEach(() => {
   fs.mkdirSync(repo);
   fs.mkdirSync(home);
   log = path.join(tmp, 'worker.log');
-  const drop = new Set(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'HIPPO_TENANT', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID',
-    'XDG_DATA_HOME', 'HIPPO_HOME', 'HOME', 'USERPROFILE', 'HIPPO_LOG', 'HIPPO_LOG_FORMAT']);
+  const drop = new Set([
+    'ANTHROPIC_API_KEY',
+    'OPENAI_API_KEY',
+    'HIPPO_TENANT',
+    'HIPPO_SESSION_ID',
+    'CLAUDE_CODE_SESSION_ID',
+    'XDG_DATA_HOME',
+    'HIPPO_HOME',
+    'HOME',
+    'USERPROFILE',
+    'HIPPO_LOG',
+    'HIPPO_LOG_FORMAT',
+  ]);
   env = {};
   for (const [key, value] of Object.entries(process.env)) if (!drop.has(key.toUpperCase())) env[key] = value;
-  Object.assign(env, { HIPPO_HOME: path.join(tmp, 'global'), HOME: home, USERPROFILE: home, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' });
+  Object.assign(env, {
+    HIPPO_HOME: path.join(tmp, 'global'),
+    HOME: home,
+    USERPROFILE: home,
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+  });
   expect(hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']).status).toBe(0);
 });
 
@@ -42,14 +59,25 @@ describe('a session-end step that fails', () => {
     // A folder where the history file should be: it exists, and reading it throws.
     fs.mkdirSync(unreadable, { recursive: true });
 
-    const run = hippo(['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', unreadable,
-      '--started-at', '1', '--log-file', log]);
+    const run = hippo([
+      '__codex-session-end-worker',
+      '--codex-home',
+      codexHome,
+      '--history-path',
+      unreadable,
+      '--started-at',
+      '1',
+      '--log-file',
+      log,
+    ]);
 
     expect(run.status).toBe(0);
     const failure = 'codex session-end: transcript scan or digest failed: ';
     const logged = linesWith(fs.readFileSync(log, 'utf8'), failure);
     expect(logged).toHaveLength(1);
-    expect(logged[0]).toMatch(/^\[hippo\] \d{4}-\d\d-\d\dT[\d:.]+Z codex session-end: transcript scan or digest failed: \S/);
+    expect(logged[0]).toMatch(
+      /^\[hippo\] \d{4}-\d\d-\d\dT[\d:.]+Z codex session-end: transcript scan or digest failed: \S/,
+    );
     expect(linesWith(run.stderr, `[hippo] warn: ${failure}`)).toHaveLength(1);
   });
 

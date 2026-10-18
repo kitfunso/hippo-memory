@@ -18,7 +18,14 @@ import type { SpoolFs } from '../../src/capture/compaction-spool.js';
 import { startCompaction } from '../../src/store/compactions-record.js';
 import { repairProjectNames } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  openHippoDbReadOnly,
+  closeHippoDb,
+  getSchemaVersion,
+  getCurrentSchemaVersion,
+  setMeta,
+} from '../../src/db/index.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -55,20 +62,47 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-ok-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
-    writeEntry(join(cwd, '.hippo'), createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      join(cwd, '.hippo'),
+      createMemory('the staging deploy needs the VPN to reach the health check', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+    );
     mkdirSync(join(cwd, '.claude'));
-    writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ hooks: {
-      UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'hippo context --pinned-only --include-recent 5 --format additional-context' }] }],
-      SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }],
-      PreCompact: [{ hooks: [{ type: 'command', command: 'hippo pre-compact --log-file x' }] }],
-      SessionStart: [{ matcher: 'compact', hooks: [{ type: 'command', command: 'hippo compact-resume' }] }],
-      PostCompact: [{ hooks: [{ type: 'command', command: 'hippo post-compact' }] }],
-      PostToolUseFailure: [{ matcher: '.*', hooks: [{ type: 'command', command: 'hippo capture-error' }] }],
-    } }));
+    writeFileSync(
+      join(cwd, '.claude', 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          UserPromptSubmit: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'hippo context --pinned-only --include-recent 5 --format additional-context',
+                },
+              ],
+            },
+          ],
+          SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }],
+          PreCompact: [{ hooks: [{ type: 'command', command: 'hippo pre-compact --log-file x' }] }],
+          SessionStart: [{ matcher: 'compact', hooks: [{ type: 'command', command: 'hippo compact-resume' }] }],
+          PostCompact: [{ hooks: [{ type: 'command', command: 'hippo post-compact' }] }],
+          PostToolUseFailure: [{ matcher: '.*', hooks: [{ type: 'command', command: 'hippo capture-error' }] }],
+        },
+      }),
+    );
     const r = runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(true);
     const status = Object.fromEntries(r.checks.map((c) => [c.id, c.status]));
-    expect(status).toMatchObject({ node: 'pass', store: 'pass', schema: 'pass', memories: 'info', failures: 'info', 'claude-code': 'pass', sleep: 'warn' });
+    expect(status).toMatchObject({
+      node: 'pass',
+      store: 'pass',
+      schema: 'pass',
+      memories: 'info',
+      failures: 'info',
+      'claude-code': 'pass',
+      sleep: 'warn',
+    });
     expect(formatDoctor(r)).toContain('fix: hippo sleep');
   });
 
@@ -79,7 +113,9 @@ describe('hippo doctor', () => {
     const db = openHippoDb(join(cwd, '.hippo'));
     db.exec('DROP TABLE failure_log');
     closeHippoDb(db);
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'warn' });
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'failures'),
+    ).toMatchObject({ status: 'warn' });
   });
 
   it('names compactions left unfinished for over 10 minutes and points at sleep, ignoring live, finished and closed ones', () => {
@@ -88,12 +124,19 @@ describe('hippo doctor', () => {
     const hippoRoot = join(cwd, '.hippo');
     initStore(hippoRoot);
     const now = new Date('2026-09-29T12:00:00.000Z');
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions'),
+    ).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
 
     const ago = (minutes: number): Date => new Date(now.getTime() - minutes * 60_000);
     const db = openHippoDb(hippoRoot);
     const begin = (session: string, at: Date, transcript: string | null = '/t.jsonl'): string =>
-      startCompaction(db, 'default', { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: transcript }, at);
+      startCompaction(
+        db,
+        'default',
+        { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: transcript },
+        at,
+      );
     begin('started-stuck', ago(20));
     begin('started-live', ago(2));
     begin('started-transcript-gone', ago(40 * 24 * 60));
@@ -109,9 +152,13 @@ describe('hippo doctor', () => {
     setStatus.run('no-summary', ago(20).toISOString(), closed);
     closeHippoDb(db);
 
-    const check = runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')!;
+    const check = runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test', now }).checks.find(
+      (c) => c.id === 'compactions',
+    )!;
     expect(check).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo sleep') });
-    expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet)');
+    expect(check.detail).toBe(
+      '2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet)',
+    );
   });
 
   describe('compaction spool counts', () => {
@@ -136,14 +183,26 @@ describe('hippo doctor', () => {
       };
       return { cwd, hippoRoot, spoolAt };
     };
-    const compactions = (cwd: string, spoolFs?: SpoolFs) => runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test', now, spoolFs }).checks.find((c) => c.id === 'compactions')!;
+    const compactions = (cwd: string, spoolFs?: SpoolFs) =>
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test', now, spoolFs }).checks.find(
+        (c) => c.id === 'compactions',
+      )!;
 
     it('adds waiting, stale and .bad spool counts to unfinished compactions', () => {
       const { cwd, hippoRoot, spoolAt } = setup('doctor-spool-');
       const db = openHippoDb(hippoRoot);
-      const begin = (session: string): string => startCompaction(db, 'default', { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: '/t.jsonl' }, ago(30));
+      const begin = (session: string): string =>
+        startCompaction(
+          db,
+          'default',
+          { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: '/t.jsonl' },
+          ago(30),
+        );
       begin('started-stuck');
-      db.prepare(`UPDATE compactions SET status = 'summarised', summarised_at = ? WHERE id = ?`).run(ago(20).toISOString(), begin('summarised-stuck'));
+      db.prepare(`UPDATE compactions SET status = 'summarised', summarised_at = ? WHERE id = ?`).run(
+        ago(20).toISOString(),
+        begin('summarised-stuck'),
+      );
       closeHippoDb(db);
       spoolAt(`${stamp(ago(20))}-aaaaaaa1.a0.json`, ago(1));
       spoolAt('s1-1.json', ago(20));
@@ -160,8 +219,12 @@ describe('hippo doctor', () => {
 
       const check = compactions(cwd);
       expect(check.status).toBe('warn');
-      expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet); spool: 2 waiting, 2 left by a replay that stopped, 2 .bad');
-      expect(check.fix).toMatch(/^hippo sleep {3}\(replays them\); open the \.bad files in .+[\\/]\.hippo[\\/]compactions-spool, save what you still need with hippo remember, then delete them$/);
+      expect(check.detail).toBe(
+        '2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet); spool: 2 waiting, 2 left by a replay that stopped, 2 .bad',
+      );
+      expect(check.fix).toMatch(
+        /^hippo sleep {3}\(replays them\); open the \.bad files in .+[\\/]\.hippo[\\/]compactions-spool, save what you still need with hippo remember, then delete them$/,
+      );
     });
 
     it('warns on .bad spool files alone', () => {
@@ -169,7 +232,9 @@ describe('hippo doctor', () => {
       spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
       const check = compactions(cwd);
       expect(check.status).toBe('warn');
-      expect(check.detail).toBe('0 compactions recorded, none stuck in the store; spool: 0 waiting, 0 left by a replay that stopped, 1 .bad');
+      expect(check.detail).toBe(
+        '0 compactions recorded, none stuck in the store; spool: 0 waiting, 0 left by a replay that stopped, 1 .bad',
+      );
       expect(check.fix).toContain('.bad files in');
       expect(check.fix).not.toContain('hippo sleep');
     });
@@ -190,7 +255,10 @@ describe('hippo doctor', () => {
           return fs.readdirSync(dir);
         },
       };
-      expect(compactions(cwd, unlistable)).toMatchObject({ status: 'warn', detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated' });
+      expect(compactions(cwd, unlistable)).toMatchObject({
+        status: 'warn',
+        detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated',
+      });
     });
   });
 
@@ -205,8 +273,13 @@ describe('hippo doctor', () => {
     expect(r.checks.find((c) => c.id === 'claude-code')!.fix).toBe('hippo hook install claude-code');
     expect(r.checks.find((c) => c.id === 'memories')!.status).toBe('warn');
 
-    writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'hippo-memory@hippo-memory': true } }));
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
+    writeFileSync(
+      join(cwd, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { 'hippo-memory@hippo-memory': true } }),
+    );
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status,
+    ).toBe('pass');
   });
 
   it('reads the Claude Code settings from CLAUDE_CONFIG_DIR when it is set, not from <home>/.claude', () => {
@@ -217,7 +290,9 @@ describe('hippo doctor', () => {
     mkdirSync(config);
     writeFileSync(join(config, 'settings.json'), '{}');
     vi.stubEnv('CLAUDE_CONFIG_DIR', config);
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')).toMatchObject({ status: 'warn', fix: 'hippo hook install claude-code' });
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code'),
+    ).toMatchObject({ status: 'warn', fix: 'hippo hook install claude-code' });
   });
 
   it('reads a Claude Code settings.json saved with a byte order mark, which install also reads', () => {
@@ -225,15 +300,27 @@ describe('hippo doctor', () => {
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     initStore(join(cwd, '.hippo'));
     mkdirSync(join(cwd, '.claude'));
-    const commands = ['hippo context --pinned-only', 'hippo session-end', 'hippo pre-compact', 'hippo compact-resume', 'hippo post-compact', 'hippo capture-error'];
+    const commands = [
+      'hippo context --pinned-only',
+      'hippo session-end',
+      'hippo pre-compact',
+      'hippo compact-resume',
+      'hippo post-compact',
+      'hippo capture-error',
+    ];
     const hooks = { Mixed: commands.map((command) => ({ hooks: [{ type: 'command', command }] })) };
     writeFileSync(join(cwd, '.claude', 'settings.json'), String.fromCodePoint(0xfeff) + JSON.stringify({ hooks }));
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status,
+    ).toBe('pass');
   });
 
   it('exits 1 with --json when a check fails', async () => {
     const cwd = tmp('doctor-cli-');
-    const { stdout: out, status } = await runCliAs(['doctor', '--json'], { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd } });
+    const { stdout: out, status } = await runCliAs(['doctor', '--json'], {
+      cwd,
+      env: { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd },
+    });
     expect(status).toBe(1);
     expect(JSON.parse(out).checks.find((c: { id: string }) => c.id === 'store').status).toBe('fail');
   });
@@ -250,8 +337,14 @@ describe('hippo doctor', () => {
 
     const before = sha256(join(hippoRoot, 'hippo.db'));
     const r = runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' });
-    expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'info', detail: expect.stringContaining(`v${getCurrentSchemaVersion()}`) });
-    expect(r.checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'info', detail: 'no failure log yet (hippo creates it on the next write)' });
+    expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({
+      status: 'info',
+      detail: expect.stringContaining(`v${getCurrentSchemaVersion()}`),
+    });
+    expect(r.checks.find((c) => c.id === 'failures')).toMatchObject({
+      status: 'info',
+      detail: 'no failure log yet (hippo creates it on the next write)',
+    });
     expect(sha256(join(hippoRoot, 'hippo.db'))).toBe(before);
 
     const check = openHippoDbReadOnly(hippoRoot);
@@ -291,7 +384,10 @@ describe('hippo doctor', () => {
     closeHippoDb(seed);
 
     const r = runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' });
-    expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'fail', fix: 'npm install -g hippo-memory@latest' });
+    expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({
+      status: 'fail',
+      fix: 'npm install -g hippo-memory@latest',
+    });
   });
 
   it('a hippo.db that is not a database is one failed schema check and no other database check', () => {
@@ -303,7 +399,12 @@ describe('hippo doctor', () => {
     const r = runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(false);
     expect(r.checks.filter((c) => !['node', 'store', 'claude-code', 'embeddings'].includes(c.id))).toEqual([
-      { id: 'schema', status: 'fail', detail: 'cannot open the database: file is not a database', fix: 'check file permissions on the .hippo folder' },
+      {
+        id: 'schema',
+        status: 'fail',
+        detail: 'cannot open the database: file is not a database',
+        fix: 'check file permissions on the .hippo folder',
+      },
     ]);
   });
 
@@ -312,14 +413,25 @@ describe('hippo doctor', () => {
     const global = join(cwd, 'global');
     vi.stubEnv('HIPPO_HOME', global);
     initStore(global);
-    const parent = { ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-b' };
+    const parent = {
+      ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      origin_project: 'proj-b',
+    };
     writeEntry(global, parent);
-    writeEntry(global, { ...createMemory('merged: the proj-b deploy needs the VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), source: 'consolidation', parents: [parent.id], origin_project: '' });
+    writeEntry(global, {
+      ...createMemory('merged: the proj-b deploy needs the VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      source: 'consolidation',
+      parents: [parent.id],
+      origin_project: '',
+    });
 
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'))
-      .toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'),
+    ).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
 
     repairProjectNames(cliApiContext(global, 'default'), { dryRun: false });
-    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects')!.status).toBe('pass');
+    expect(
+      runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects')!.status,
+    ).toBe('pass');
   });
 });

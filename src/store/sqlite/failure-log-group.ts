@@ -8,7 +8,6 @@ export function sqliteFailureLog(on: OnHandle): Sync<FailureLog> {
   return {
     record: (event) => on((db) => recordFailure(db, event)),
     requestOutcome: (tenantId, requestId, sessionId) => on((db) => requestOutcome(db, tenantId, requestId, sessionId)),
-    settleOutcome: (tenantId, requestId, outcome) =>
-      on((db) => settleFailureOutcome(db, tenantId, requestId, outcome)),
+    settleOutcome: (tenantId, requestId, outcome) => on((db) => settleFailureOutcome(db, tenantId, requestId, outcome)),
   };
 }

@@ -91,12 +91,12 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   it('phase 1 (consolidate) throw → partial:true + errorMessage', async () => {
     const err = new Error('phase 1 fault: consolidate threw');
     const stubPhases: Partial<SleepPhases> = {
-      consolidate: async () => { throw err; },
+      consolidate: async () => {
+        throw err;
+      },
     };
 
-    await expect(
-      runSleep(testCtx.ctx, {}, stubPhases),
-    ).rejects.toThrow('phase 1 fault: consolidate threw');
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 1 fault: consolidate threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -110,12 +110,12 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   it('phase 2 (deduplicateStore) throw → partial:true + earlier phase counters preserved', async () => {
     const err = new Error('phase 2 fault: deduplicateStore threw');
     const stubPhases: Partial<SleepPhases> = {
-      deduplicateStore: () => { throw err; },
+      deduplicateStore: () => {
+        throw err;
+      },
     };
 
-    await expect(
-      runSleep(testCtx.ctx, {}, stubPhases),
-    ).rejects.toThrow('phase 2 fault: deduplicateStore threw');
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 2 fault: deduplicateStore threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -131,12 +131,12 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   it('phase 3 (auditMemories) throw → partial:true + dedupCount preserved', async () => {
     const err = new Error('phase 3 fault: auditMemories threw');
     const stubPhases: Partial<SleepPhases> = {
-      auditMemories: () => { throw err; },
+      auditMemories: () => {
+        throw err;
+      },
     };
 
-    await expect(
-      runSleep(testCtx.ctx, {}, stubPhases),
-    ).rejects.toThrow('phase 3 fault: auditMemories threw');
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 3 fault: auditMemories threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -151,15 +151,15 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   it('phase 4 (autoShare) throw → partial:true + audit counters preserved', async () => {
     const err = new Error('phase 4 fault: autoShare threw');
     const stubPhases: Partial<SleepPhases> = {
-      autoShare: () => { throw err; },
+      autoShare: () => {
+        throw err;
+      },
     };
 
     // Phase 4 only runs if config.autoShareOnSleep is true, so the Context turns the flag on.
     const ctx = { ...testCtx.ctx, config: { ...testCtx.ctx.config, autoShareOnSleep: true } };
 
-    await expect(
-      runSleep(ctx, {}, stubPhases),
-    ).rejects.toThrow('phase 4 fault: autoShare threw');
+    await expect(runSleep(ctx, {}, stubPhases)).rejects.toThrow('phase 4 fault: autoShare threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -174,12 +174,12 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   it('phase 5 (computeAmbientState) throw → partial:true + all earlier counters preserved', async () => {
     const err = new Error('phase 5 fault: computeAmbientState threw');
     const stubPhases: Partial<SleepPhases> = {
-      computeAmbientState: () => { throw err; },
+      computeAmbientState: () => {
+        throw err;
+      },
     };
 
-    await expect(
-      runSleep(testCtx.ctx, {}, stubPhases),
-    ).rejects.toThrow('phase 5 fault: computeAmbientState threw');
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 5 fault: computeAmbientState threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -202,7 +202,10 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   });
 
   it('a store without local files throws at the package root before any phase runs, leaving no audit row', async () => {
-    const ctx = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres', localFiles: undefined } };
+    const ctx = {
+      ...testCtx.ctx,
+      store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres', localFiles: undefined },
+    };
 
     await expect(async () => packageSleep(ctx)).rejects.toThrow("the 'postgres' store has no 'localFiles' group");
 

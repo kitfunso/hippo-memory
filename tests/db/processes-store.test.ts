@@ -28,7 +28,11 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 
 function countRows(home: string, table: string): number {
@@ -36,12 +40,16 @@ function countRows(home: string, table: string): number {
   try {
     // SAFETY: `SELECT COUNT(*) as c` always returns exactly one row shaped { c: number }.
     return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
-  } finally { closeHippoDb(db); }
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 describe('processes store (first-class object)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot('processes'); });
+  beforeEach(() => {
+    home = makeRoot('processes');
+  });
   afterEach(() => safeRmSync(home));
 
   it('saveProcess creates both memory and processes row + process_create audit, version 1', async () => {
@@ -66,8 +74,9 @@ describe('processes store (first-class object)', () => {
       // SAFETY: proc.memoryId is the id just returned by saveProcess's memory
       // mirror write; the row may not exist only if that write failed, which
       // the toBeDefined() assertion below checks before any further access.
-      const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`)
-        .get(proc.memoryId!) as { content: string; tags_json: string; source: string } | undefined;
+      const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`).get(proc.memoryId!) as
+        | { content: string; tags_json: string; source: string }
+        | undefined;
       expect(memRow).toBeDefined();
       expect(memRow!.content).toContain('Release');
       expect(memRow!.content).toContain('1. run tests');
@@ -75,16 +84,21 @@ describe('processes store (first-class object)', () => {
       expect(memRow!.source).toBe('process');
       // SAFETY: tags_json is always written as a JSON array of strings (see
       // src/store/entry-writes.ts writeEntry serialization); never any other JSON shape.
-      expect((JSON.parse(memRow!.tags_json) as string[])).toContain('process');
+      expect(JSON.parse(memRow!.tags_json) as string[]).toContain('process');
 
       // SAFETY: metadata_json for a process_create audit row is always a JSON
       // object with these fields (see src/objects/processes.ts saveProcess audit write).
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`)
+      const rows = db
+        .prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: metadata_json for a process_create audit row always includes
       // these fields, written by saveProcess (see src/objects/processes.ts).
-      const meta = JSON.parse(rows[0].metadata_json) as { version: number; step_count: number; has_description: boolean };
+      const meta = JSON.parse(rows[0].metadata_json) as {
+        version: number;
+        step_count: number;
+        has_description: boolean;
+      };
       expect(meta.version).toBe(1);
       expect(meta.step_count).toBe(3);
       expect(meta.has_description).toBe(true);
@@ -94,7 +108,10 @@ describe('processes store (first-class object)', () => {
   });
 
   it('saveProcess without steps/description: bare name content', async () => {
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Empty', steps: [] });
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'Empty',
+      steps: [],
+    });
     expect(proc.steps).toEqual([]);
     expect(proc.description).toBeNull();
     const db = openHippoDb(home);
@@ -103,14 +120,29 @@ describe('processes store (first-class object)', () => {
       // mirror write, so the row exists with a content column.
       const memRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(proc.memoryId!) as { content: string };
       expect(memRow.content).toBe('Empty');
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('loadProcesses status filter; status active excludes non-active', async () => {
-    const a = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'active-1', steps: ['a'] });
-    const b = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-supersede', steps: ['b'] });
-    const c = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-close', steps: ['c'] });
-    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-supersede', steps: ['b', 'b2'], supersedesProcessId: b.id });
+    const a = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'active-1',
+      steps: ['a'],
+    });
+    const b = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'to-supersede',
+      steps: ['b'],
+    });
+    const c = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'to-close',
+      steps: ['c'],
+    });
+    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'to-supersede',
+      steps: ['b', 'b2'],
+      supersedesProcessId: b.id,
+    });
     await closeProcess(objectsAt(home), 'default', c.id);
 
     const active = await loadProcesses(objectsAt(home), 'default', { status: 'active' });
@@ -119,7 +151,9 @@ describe('processes store (first-class object)', () => {
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
 
-    expect((await loadProcesses(objectsAt(home), 'default', { status: 'superseded' })).map((x) => x.id)).toEqual([b.id]);
+    expect((await loadProcesses(objectsAt(home), 'default', { status: 'superseded' })).map((x) => x.id)).toEqual([
+      b.id,
+    ]);
     expect((await loadProcesses(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
     // a (active), b (superseded), c (closed), b-v2 (active) = 4 total rows.
     expect((await loadProcesses(objectsAt(home), 'default')).length).toBe(4);
@@ -134,23 +168,39 @@ describe('processes store (first-class object)', () => {
     // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Trim', steps: ['  lead/trail  '] });
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'Trim',
+      steps: ['  lead/trail  '],
+    });
     expect(proc.steps).toEqual(['lead/trail']);
     expect((await loadProcessById(objectsAt(home), 'default', proc.id))!.steps).toEqual(['lead/trail']);
     // saveProcess rejects bad steps and writes nothing.
     const before = countRows(home, 'processes');
-    await expect(saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Bad', steps: ['', 'x'] })).rejects.toThrow(/is empty/);
+    await expect(
+      saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        processName: 'Bad',
+        steps: ['', 'x'],
+      }),
+    ).rejects.toThrow(/is empty/);
     expect(countRows(home, 'processes')).toBe(before);
   });
 
   it('a damaged steps column reads as no steps and warns once per shape', async () => {
-    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Damaged', steps: ['a'] });
-    const other = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'WrongShape', steps: ['a'] });
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'Damaged',
+      steps: ['a'],
+    });
+    const other = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      processName: 'WrongShape',
+      steps: ['a'],
+    });
     const db = openHippoDb(home);
     try {
       db.prepare(`UPDATE processes SET steps = '[private-step' WHERE id = ?`).run(proc.id);
       db.prepare(`UPDATE processes SET steps = '{"a":1}' WHERE id = ?`).run(other.id);
-    } finally { closeHippoDb(db); }
+    } finally {
+      closeHippoDb(db);
+    }
 
     _resetLogOnceForTests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

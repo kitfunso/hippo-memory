@@ -121,7 +121,10 @@ export async function physicsSearch(
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */
 async function physicsQueryVector(
-  query: string, source: VectorSource, deadline: AbortSignal, given: number[] | undefined,
+  query: string,
+  source: VectorSource,
+  deadline: AbortSignal,
+  given: number[] | undefined,
 ): Promise<number[] | null> {
   if (given && given.length > 0) return given;
   // Physics scores against particle positions, not the stored vector index, so a pruned index must not block it.
@@ -141,11 +144,14 @@ async function physicsQueryVector(
 }
 
 async function withVectorCandidates(
-  reads: VectorReads, entries: MemoryEntry[], queryVector: number[], spec: HybridVectorCandidates | undefined,
+  reads: VectorReads,
+  entries: MemoryEntry[],
+  queryVector: number[],
+  spec: HybridVectorCandidates | undefined,
 ): Promise<MemoryEntry[]> {
   if (!spec) return entries;
   try {
-    return [...entries, ...await vectorCandidatesOutside(reads, entries, queryVector, spec)];
+    return [...entries, ...(await vectorCandidatesOutside(reads, entries, queryVector, spec))];
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.warn(
@@ -171,15 +177,19 @@ async function loadCandidateParticles(
 }
 
 function splitByParticle(
-  pool: MemoryEntry[], physicsMap: Map<string, PhysicsParticle>, queryVector: number[], now: Date,
+  pool: MemoryEntry[],
+  physicsMap: Map<string, PhysicsParticle>,
+  queryVector: number[],
+  now: Date,
 ): PhysicsPools {
   const pools: PhysicsPools = { entries: [], particles: [], classic: [] };
   for (const entry of pool) {
     const particle = physicsMap.get(entry.id);
-    const usable = particle
-      && particle.position.length > 0
-      && particle.position.length === queryVector.length
-      && particle.velocity.length === queryVector.length;
+    const usable =
+      particle &&
+      particle.position.length > 0 &&
+      particle.position.length === queryVector.length &&
+      particle.velocity.length === queryVector.length;
     if (!usable) {
       pools.classic.push(entry);
       continue;

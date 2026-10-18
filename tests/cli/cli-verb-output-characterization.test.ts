@@ -39,7 +39,14 @@ async function remember(text: string, ...extra: string[]): Promise<string> {
 
 describe('hippo remember output', () => {
   it('prints the receipt lines in order', async () => {
-    const r = await run('remember', 'the deploy script needs the staging flag set first', '--tag', 'ops', '--pin', '--observed');
+    const r = await run(
+      'remember',
+      'the deploy script needs the staging flag set first',
+      '--tag',
+      'ops',
+      '--pin',
+      '--observed',
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(
       /^Remembered \[[^\]]+\]\n {3}Layer: episodic \| Strength: [\d.]+ \| Half-life: [\d.]+d \| Confidence: observed\n {3}Tags: ops[^\n]*\n {3}Pinned \(no decay\)\n$/,
@@ -64,7 +71,13 @@ describe('hippo trace <id>', () => {
     expect(lines[1]).toBe('='.repeat(50));
     expect(lines[2]).toBe('Content:   haddock quotas changed in the spring review');
     expect(lines[3]).toMatch(/^Layer: {5}episodic {3}Confidence: \S+ +Pinned: no$/);
-    for (const head of ['Strength trajectory:', 'Retrieval:', '  in 30 days: ', '  in 90 days: ', 'Outcomes:   +0 / -0']) {
+    for (const head of [
+      'Strength trajectory:',
+      'Retrieval:',
+      '  in 30 days: ',
+      '  in 90 days: ',
+      'Outcomes:   +0 / -0',
+    ]) {
       expect(r.stdout).toContain(head);
     }
   });
@@ -73,10 +86,30 @@ describe('hippo trace <id>', () => {
     const id = await remember('cod quotas stayed flat this year');
     const out: object = JSON.parse((await run('trace', id, '--json')).stdout);
     expect(Object.keys(out)).toEqual([
-      'id', 'source', 'layer', 'confidence', 'aged_out', 'pinned', 'starred', 'tags', 'content', 'created',
-      'age_days', 'last_retrieved', 'days_since_last_retrieval', 'retrieval_count', 'strength_now', 'half_life_days',
-      'reward_factor', 'effective_half_life_days', 'projected_strength_30d', 'projected_strength_90d',
-      'outcome_positive', 'outcome_negative', 'parents', 'open_conflicts',
+      'id',
+      'source',
+      'layer',
+      'confidence',
+      'aged_out',
+      'pinned',
+      'starred',
+      'tags',
+      'content',
+      'created',
+      'age_days',
+      'last_retrieved',
+      'days_since_last_retrieval',
+      'retrieval_count',
+      'strength_now',
+      'half_life_days',
+      'reward_factor',
+      'effective_half_life_days',
+      'projected_strength_30d',
+      'projected_strength_90d',
+      'outcome_positive',
+      'outcome_negative',
+      'parents',
+      'open_conflicts',
     ]);
   });
 
@@ -93,7 +126,16 @@ describe('hippo explain', () => {
     const json: { results: object[] } = JSON.parse((await run('explain', 'haddock', '--json')).stdout);
     expect(Object.keys(json)).toEqual(['query', 'mode', 'candidates', 'returned', 'results']);
     expect(Object.keys(json.results[0])).toEqual([
-      'rank', 'id', 'layer', 'confidence', 'aged_out', 'score', 'tokens', 'tags', 'content', 'breakdown',
+      'rank',
+      'id',
+      'layer',
+      'confidence',
+      'aged_out',
+      'score',
+      'tokens',
+      'tags',
+      'content',
+      'breakdown',
     ]);
     const text = (await run('explain', 'haddock')).stdout;
     expect(text.startsWith('Query: "haddock"\nMode:  ')).toBe(true);
@@ -120,10 +162,21 @@ describe('hippo embed --status', () => {
 
 describe('hippo wm', () => {
   it('push then read prints the entry', async () => {
-    const push = await run('wm', 'push', '--scope', 'repo', '--content', 'check the flaky test first', '--importance', '0.8');
+    const push = await run(
+      'wm',
+      'push',
+      '--scope',
+      'repo',
+      '--content',
+      'check the flaky test first',
+      '--importance',
+      '0.8',
+    );
     expect(push.stdout).toMatch(/^Pushed working memory #\d+ \(scope=repo, importance=0\.8\)\n$/);
     const read = (await run('wm', 'read')).stdout;
-    expect(read).toMatch(/^Working memory \(1 entries\):\n\n {2}#\d+ \[repo\] importance=0\.8\n {4}check the flaky test first\n {4}created=/);
+    expect(read).toMatch(
+      /^Working memory \(1 entries\):\n\n {2}#\d+ \[repo\] importance=0\.8\n {4}check the flaky test first\n {4}created=/,
+    );
     expect((await run('wm', 'push')).status).toBe(1);
   });
 });
@@ -157,7 +210,11 @@ describe('hippo status', () => {
   it('prints the count block and the embedding line', async () => {
     await remember('status counts every layer');
     const out = (await run('status')).stdout;
-    expect(out.startsWith('Hippo Status\n---------------------------\nTotal memories:    1\n  Buffer:          0\n  Episodic:        1\n')).toBe(true);
+    expect(
+      out.startsWith(
+        'Hippo Status\n---------------------------\nTotal memories:    1\n  Buffer:          0\n  Episodic:        1\n',
+      ),
+    ).toBe(true);
     expect(out).toContain('Last sleep:        never');
     expect(out).toMatch(/\nEmbeddings: {8}\S/);
   });

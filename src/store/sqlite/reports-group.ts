@@ -17,10 +17,14 @@ export function sqliteReports(on: OnHandle): Sync<Reports> {
     failures: (tenantId, sinceIso) => on((db) => failureLogSummaryAt(db, tenantId, sinceIso)),
     memoryStatus(tenantId, now, atRiskBelow) {
       // One snapshot, so the tallies and the conflict count never straddle another process's write.
-      return on((db) => withReadSnapshot(db, () => ({
-        ...strengthTalliesAt(db, tenantId, now, atRiskBelow),
-        openConflicts: countOpenConflictsAt(db, tenantId),
-      })), openStore);
+      return on(
+        (db) =>
+          withReadSnapshot(db, () => ({
+            ...strengthTalliesAt(db, tenantId, now, atRiskBelow),
+            openConflicts: countOpenConflictsAt(db, tenantId),
+          })),
+        openStore,
+      );
     },
     entriesPage: (tenantId, page) => on((db) => loadEntriesPageAt(db, tenantId ?? undefined, page), openStore),
     countEntries: () => on((db) => countAllEntriesAt(db), openStore),

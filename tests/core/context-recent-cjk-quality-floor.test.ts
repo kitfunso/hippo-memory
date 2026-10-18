@@ -45,7 +45,11 @@ function tmpHome() {
 }
 
 function seed(home: string, content: string, opts: { created?: string } = {}) {
-  const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'default' });
+  const entry = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    layer: Layer.Episodic,
+    tenantId: 'default',
+  });
   if (opts.created) entry.created = opts.created;
   writeEntry(home, entry);
   return entry;
@@ -64,7 +68,12 @@ describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       seed(home, CJK_SENTENCE, { created: '2026-08-20T10:00:00.000Z' });
 
-      const result = await getContext(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 1, budget: 500 });
+      const result = await getContext(ctx, {
+        currentProject: cwdProject(),
+        pinnedOnly: true,
+        includeRecent: 1,
+        budget: 500,
+      });
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain(CJK_SENTENCE);

@@ -6,7 +6,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality,
+  adminActor,
+  auditMemoryQuality,
+  CLI_LEARN,
+  learn,
+  pruneAuditLog,
+  removeAuditErrors,
+  repairMemoryQuality,
   repairMemoryQualityOnce,
 } from '../../src/api/index.js';
 import { sleep } from '../../src/index.js';
@@ -30,7 +36,9 @@ const NO_EMBEDDINGS = { embeddings: { enabled: false } };
 function repoWithOneFix(root: string): string {
   const repo = join(root, 'repo');
   mkdirSync(repo);
-  const git = (...args: string[]): void => { execFileSync('git', args, { cwd: repo, stdio: 'ignore' }); };
+  const git = (...args: string[]): void => {
+    execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+  };
   git('init');
   git('config', 'user.name', 'Test User');
   git('config', 'user.email', 'test@example.com');
@@ -44,7 +52,13 @@ function rootWithConfig(label: string): string {
   return root;
 }
 
-const ctxOn = (root: string, store: HippoStore): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store, config: loadConfig(root) });
+const ctxOn = (root: string, store: HippoStore): Context => ({
+  hippoRoot: root,
+  tenantId: 'default',
+  actor: adminActor('capability-test'),
+  store,
+  config: loadConfig(root),
+});
 
 describe.each([
   ['sqliteStore', sqliteStore],
@@ -84,10 +98,12 @@ describe.each([
       const pinned = createMemory('Found local migration files to be', { ...automatic, pinned: true });
       for (const entry of [bad, pinned]) writeEntry(root, entry);
 
-      expect((await repairMemoryQuality(ctx, false)).issues).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: bad.id, disposition: 'set-aside' }),
-        expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
-      ]));
+      expect((await repairMemoryQuality(ctx, false)).issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: bad.id, disposition: 'set-aside' }),
+          expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
+        ]),
+      );
       expect((await repairMemoryQuality(ctx, true)).appliedIds).toEqual([bad.id]);
       expect(loadAllEntries(root, 'default').map((e) => e.id)).toEqual([pinned.id]);
       expect(await repairMemoryQualityOnce(ctx)).toMatchObject({ supported: true, appliedIds: [] });
@@ -101,7 +117,9 @@ describe.each([
 describe('package-root sleep under a store without local files', () => {
   it('answers StoreNotPortedError', async () => {
     const root = newRoot('capability-sleep-api');
-    await expect(async () => sleep(ctxOn(root, portOnlyStore(root)))).rejects.toThrow(new StoreNotPortedError('port-only', 'localFiles'));
+    await expect(async () => sleep(ctxOn(root, portOnlyStore(root)))).rejects.toThrow(
+      new StoreNotPortedError('port-only', 'localFiles'),
+    );
   });
 });
 
@@ -110,7 +128,11 @@ describe('serve() under a store without local files', () => {
     const root = newRoot('capability-sleep-http');
     const { plaintext } = keyFor(root, 'default');
     const handle = await start(root, portOnlyStore(root));
-    const res = await fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: jsonHeaders(plaintext), body: JSON.stringify({ dry_run: true }) });
+    const res = await fetch(`${handle.url}/v1/sleep`, {
+      method: 'POST',
+      headers: jsonHeaders(plaintext),
+      body: JSON.stringify({ dry_run: true }),
+    });
     expect(res.status).toBe(501);
   });
 
@@ -118,7 +140,10 @@ describe('serve() under a store without local files', () => {
     const root = newRoot('capability-promote-http');
     const { plaintext } = keyFor(root, 'default');
     const handle = await start(root, portOnlyStore(root));
-    const res = await fetch(`${handle.url}/v1/memories/m1/promote`, { method: 'POST', headers: jsonHeaders(plaintext) });
+    const res = await fetch(`${handle.url}/v1/memories/m1/promote`, {
+      method: 'POST',
+      headers: jsonHeaders(plaintext),
+    });
     expect(res.status).toBe(501);
   });
 
@@ -151,8 +176,22 @@ describe('MCP hippo_remember', () => {
     const store = sqliteStore(root);
     const reads = vi.spyOn(store, 'entriesByIds');
     const res: McpResponse | null = await handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: 'the deploy window opens at nine', tag: 'ops' } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store, autoSleep: false, config: loadConfig(root) },
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_remember', arguments: { text: 'the deploy window opens at nine', tag: 'ops' } },
+      },
+      {
+        hippoRoot: root,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store,
+        autoSleep: false,
+        config: loadConfig(root),
+      },
     );
     // SAFETY: a tools/call reply carries result.content[0].text.
     const text = (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;

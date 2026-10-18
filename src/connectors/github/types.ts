@@ -58,13 +58,7 @@ export interface GitHubIssueCommentEvent extends GitHubWebhookEnvelope {
 }
 
 export interface GitHubPullRequestEvent extends GitHubWebhookEnvelope {
-  action:
-    | 'opened'
-    | 'edited'
-    | 'closed'
-    | 'reopened'
-    | 'synchronize'
-    | 'ready_for_review';
+  action: 'opened' | 'edited' | 'closed' | 'reopened' | 'synchronize' | 'ready_for_review';
   pull_request: {
     number: number;
     title: string;
@@ -100,10 +94,7 @@ export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWe
   return isJsonString(x.action) || isObjectOrArray(x.repository);
 }
 
-export function isGitHubIssueEvent(
-  x: JsonValue,
-  evtHeader: string,
-): x is JsonValue & GitHubIssueEvent {
+export function isGitHubIssueEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubIssueEvent {
   if (evtHeader !== 'issues') return false;
   if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
@@ -114,10 +105,7 @@ export function isGitHubIssueEvent(
   return true;
 }
 
-export function isGitHubIssueCommentEvent(
-  x: JsonValue,
-  evtHeader: string,
-): x is JsonValue & GitHubIssueCommentEvent {
+export function isGitHubIssueCommentEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubIssueCommentEvent {
   if (evtHeader !== 'issue_comment') return false;
   if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
@@ -130,10 +118,7 @@ export function isGitHubIssueCommentEvent(
   return true;
 }
 
-export function isGitHubPullRequestEvent(
-  x: JsonValue,
-  evtHeader: string,
-): x is JsonValue & GitHubPullRequestEvent {
+export function isGitHubPullRequestEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubPullRequestEvent {
   if (evtHeader !== 'pull_request') return false;
   if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;

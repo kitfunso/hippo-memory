@@ -14,7 +14,9 @@ import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
 import { hippo, hippoIn, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';
 import type { InProcessResult } from './run-in-process.js';
 
-interface Json { [key: string]: JsonValue }
+interface Json {
+  [key: string]: JsonValue;
+}
 
 /** What the exit tests hand the reader beyond the store, session and memory. */
 export interface ReadOptions {
@@ -86,7 +88,10 @@ export interface Oracle {
 }
 
 /** The eight registered fields in one comparison, so no case can score fewer. */
-export function expectVerdict(v: Verdict, want: Oracle & { store: string; session: string; memory: string | null; tenant?: string }): void {
+export function expectVerdict(
+  v: Verdict,
+  want: Oracle & { store: string; session: string; memory: string | null; tenant?: string },
+): void {
   const tenant = want.tenant ?? 'default';
   const db = openHippoDbReadOnly(want.store);
   let hooked: string | undefined;
@@ -98,11 +103,23 @@ export function expectVerdict(v: Verdict, want: Oracle & { store: string; sessio
   // A session with no row has no hook hash to read, so the reader's no-row rule stands in.
   const storeHash = hooked ?? blockHash(realpathOrResolve(path.resolve(want.store)));
   expect({
-    class: v.class, reason: v.reason, store_hash: v.store_hash, tenant_id: v.tenant_id,
-    session_id: v.session_id, turn: v.turn, stage: v.stage, memory_id: v.memory_id,
+    class: v.class,
+    reason: v.reason,
+    store_hash: v.store_hash,
+    tenant_id: v.tenant_id,
+    session_id: v.session_id,
+    turn: v.turn,
+    stage: v.stage,
+    memory_id: v.memory_id,
   }).toEqual({
-    class: want.class, reason: want.reason, store_hash: storeHash, tenant_id: tenant,
-    session_id: want.session, turn: want.turn, stage: want.stage, memory_id: want.memory,
+    class: want.class,
+    reason: want.reason,
+    store_hash: storeHash,
+    tenant_id: tenant,
+    session_id: want.session,
+    turn: want.turn,
+    stage: want.stage,
+    memory_id: want.memory,
   });
 }
 
@@ -120,7 +137,12 @@ export function verdictOf(opts: VerdictOptions): Verdict {
 }
 
 /** The reader's tool-failure listing, typed here because the script is plain JavaScript. */
-export function listingOf(opts: { store: string; session: string; tenant?: string; global?: string | false }): ToolFailureListing {
+export function listingOf(opts: {
+  store: string;
+  session: string;
+  tenant?: string;
+  global?: string | false;
+}): ToolFailureListing {
   // SAFETY: toolFailures returns exactly the listing shape the script documents.
   return toolFailures({ global: false, ...opts }) as ToolFailureListing;
 }
@@ -149,11 +171,19 @@ export interface TranscriptOptions {
 }
 
 const line = (value: Json): string => JSON.stringify(value);
-const user = (content: string | Json[], extra: Json = {}): string => line({ type: 'user', message: { role: 'user', content }, ...extra });
-const hookLine = (text: string, hookName = 'UserPromptSubmit'): string => line({
-  type: 'attachment',
-  attachment: { type: 'hook_additional_context', content: [text], hookName, toolUseID: `toolu_${hookName}`, hookEvent: 'UserPromptSubmit' },
-});
+const user = (content: string | Json[], extra: Json = {}): string =>
+  line({ type: 'user', message: { role: 'user', content }, ...extra });
+const hookLine = (text: string, hookName = 'UserPromptSubmit'): string =>
+  line({
+    type: 'attachment',
+    attachment: {
+      type: 'hook_additional_context',
+      content: [text],
+      hookName,
+      toolUseID: `toolu_${hookName}`,
+      hookEvent: 'UserPromptSubmit',
+    },
+  });
 
 export const additionalContextOf = (stdout: string): string => JSON.parse(stdout).hookSpecificOutput.additionalContext;
 
@@ -164,14 +194,23 @@ const queuedLines = (prompt: string): string[] => [
   line({ type: 'queue-operation', operation: 'enqueue', content: prompt }),
   toolResult('t1'),
   line({ type: 'queue-operation', operation: 'remove', content: prompt }),
-  line({ type: 'attachment', attachment: { type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, humanTurn: true } }),
+  line({
+    type: 'attachment',
+    attachment: { type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, humanTurn: true },
+  }),
 ];
 
 function turnLines(turn: TurnSpec): string[] {
   const content: string | Json[] = turn.image
-    ? [{ type: 'text', text: turn.prompt }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }]
+    ? [
+        { type: 'text', text: turn.prompt },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
+      ]
     : turn.prompt;
-  const out = [...(turn.compactBefore ? [line({ type: 'system', subtype: 'compact_boundary' })] : []), ...(turn.queued ? queuedLines(turn.prompt) : [user(content)])];
+  const out = [
+    ...(turn.compactBefore ? [line({ type: 'system', subtype: 'compact_boundary' })] : []),
+    ...(turn.queued ? queuedLines(turn.prompt) : [user(content)]),
+  ];
   if (turn.fired === false) return out;
   out.push(hookLine('decoy: another hook wrote this', 'DecoyHook'));
   const attach = turn.attach !== undefined ? turn.attach : turn.stdout ? additionalContextOf(turn.stdout) : null;
@@ -223,7 +262,12 @@ export function seed(root: string, content: string, extra: Partial<MemoryEntry> 
 }
 
 /** One per-prompt hook call; the run must exit 0. */
-export function fire(p: Project, sessionId: string, prompt: string, opts: RunOptions & { args?: string[] } = {}): SpawnSyncReturns<string> {
+export function fire(
+  p: Project,
+  sessionId: string,
+  prompt: string,
+  opts: RunOptions & { args?: string[] } = {},
+): SpawnSyncReturns<string> {
   const { args = PROMPT_HOOK, ...run } = opts;
   const r = hippo(p, args, { ...run, input: promptPayload(sessionId, prompt) });
   expect(r.status).toBe(0);
@@ -231,7 +275,12 @@ export function fire(p: Project, sessionId: string, prompt: string, opts: RunOpt
 }
 
 /** `fire` run through runCli in this process. */
-export async function fireIn(p: Project, sessionId: string, prompt: string, opts: RunOptions & { args?: string[] } = {}): Promise<InProcessResult> {
+export async function fireIn(
+  p: Project,
+  sessionId: string,
+  prompt: string,
+  opts: RunOptions & { args?: string[] } = {},
+): Promise<InProcessResult> {
   const { args = PROMPT_HOOK, ...run } = opts;
   const r = await hippoIn(p, args, { ...run, input: promptPayload(sessionId, prompt) });
   expect(r.status).toBe(0);

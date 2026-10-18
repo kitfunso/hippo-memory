@@ -6,12 +6,14 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { MemoryEntry } from '../core/memory.js';
 import { initializeParticle } from '../core/physics.js';
-import {
-  resolveEmbeddingProvider, type EmbeddingProvider,
-} from '../embeddings/provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
 import {
-  embeddingIndexIdentity, embeddingInputText, indexedModel, indexNeedsRebuild, replacesIndex,
+  embeddingIndexIdentity,
+  embeddingInputText,
+  indexedModel,
+  indexNeedsRebuild,
+  replacesIndex,
 } from '../embeddings/index-identity.js';
 import type {
   EmbeddingIndex,
@@ -51,7 +53,10 @@ async function rebuildEmbeddingIndex(
   for (const entries of entryPages(index, ids)) {
     // On a hard transport/auth failure provider.embed throws, so the caller aborts WITHOUT saving
     // a partial index (atomic reindex: the old index + stored identity are preserved).
-    const vectors = await provider.embed(entries.map((e) => embeddingInputText(e)), 'passage');
+    const vectors = await provider.embed(
+      entries.map((e) => embeddingInputText(e)),
+      'passage',
+    );
     for (let i = 0; i < entries.length; i++) {
       const vec = vectors[i];
       if (vec && vec.length > 0) {
@@ -65,11 +70,7 @@ async function rebuildEmbeddingIndex(
   return rebuilt;
 }
 
-function resetPhysicsFromIndex(
-  index: EmbeddingIndex,
-  ids: readonly string[],
-  rebuilt: Record<string, number[]>,
-): void {
+function resetPhysicsFromIndex(index: EmbeddingIndex, ids: readonly string[], rebuilt: Record<string, number[]>): void {
   try {
     index.resetParticles(ids, rebuilt);
   } catch (err) {
@@ -160,7 +161,9 @@ async function withEmbedLock<T>(hippoRoot: string, fn: () => Promise<T>): Promis
 // lock file in hippoRoot would not reach a worker on another host.
 async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   let resolve!: () => void;
-  const next = new Promise<void>(r => { resolve = r; });
+  const next = new Promise<void>((r) => {
+    resolve = r;
+  });
   const prev = _embedWriteLock;
   _embedWriteLock = next;
   await prev;
@@ -289,14 +292,17 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
     const { vectors: reads, vectorWrites: writes } = store;
     const model = embeddingIndexIdentity(provider.id);
     try {
-      const refused = replacesIndex(await reads.embeddingIndexState(), model)
-        || (await writeVectorPage(
-          writes,
-          { model, replaceIndex: false },
-          [entry],
-          await provider.embed([embeddingInputText(entry)], 'passage'),
-          true
-        )).modelMismatch;
+      const refused =
+        replacesIndex(await reads.embeddingIndexState(), model) ||
+        (
+          await writeVectorPage(
+            writes,
+            { model, replaceIndex: false },
+            [entry],
+            await provider.embed([embeddingInputText(entry)], 'passage'),
+            true,
+          )
+        ).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
       return refused ? 'failed' : 'indexed';
     } catch (err) {
@@ -334,11 +340,7 @@ export function folderIndex({ root, store, config }: ConfiguredFolder): EmbedTar
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
  * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory
  * reached the index. */
-export async function embedMemory(
-  on: EmbedTarget,
-  entry: MemoryEntry,
-  model?: string,
-): Promise<EmbedOutcome> {
+export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: string): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
@@ -427,15 +429,8 @@ function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingPro
   // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported
   // embedAll() learn nothing was written.
   // Local-not-installed and an explicit enabled=false stay silent no-ops.
-  if (
-    provider.kind !== 'local' &&
-    cfg.enabled !== false &&
-    provider.keyEnv &&
-    !envByName(provider.keyEnv)?.trim()
-  ) {
-    throw new Error(
-      `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,
-    );
+  if (provider.kind !== 'local' && cfg.enabled !== false && provider.keyEnv && !envByName(provider.keyEnv)?.trim()) {
+    throw new Error(`Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`);
   }
 }
 
@@ -497,11 +492,7 @@ async function backfillAllPending(
 /** Embeds every entry with no cached vector, prunes vectors of deleted memories, and returns how many it embedded;
  * `provider` defaults to the configured one. With a store, every tenant's memories with no vector for the provider's
  * model go through its `vectorWrites`. */
-export async function embedAll(
-  on: EmbedTarget,
-  model?: string,
-  givenProvider?: EmbeddingProvider,
-): Promise<number> {
+export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: EmbeddingProvider): Promise<number> {
   const cfg = on.embeddings;
   const provider = givenProvider ?? resolveEmbeddingProvider(cfg, { model });
   if (!provider.isAvailable()) {

@@ -6,10 +6,7 @@ import type { SlackTeamRoute } from '../../store/port/connectors.js';
  * (single-workspace install).
  * An unknown team on a multi-workspace install returns null (fail closed); SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1 is
  * the emergency escape. */
-export async function resolveTenantForSlackTeam(
-  store: HippoStore,
-  teamId: string,
-): Promise<string | null> {
+export async function resolveTenantForSlackTeam(store: HippoStore, teamId: string): Promise<string | null> {
   return tenantForRoute(await store.connectorEvents.slackTeamRoute(teamId));
 }
 

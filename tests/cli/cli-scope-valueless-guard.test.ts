@@ -15,7 +15,8 @@ const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:privat
 const savedCwd = process.cwd();
 let home = '';
 
-const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
+const hippoRun = (...args: string[]): Promise<InProcessResult> =>
+  runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function hippo(...args: string[]): Promise<string> {
   const res = await hippoRun(...args);
@@ -85,13 +86,14 @@ describe('valued --scope regression coverage', () => {
   it('assemble --scope X pins CURRENT exact-narrowing behavior (api.assemble -> passesScopeFilterForRecall)', async () => {
     const hippoDir = join(home, '.hippo');
     const sessionId = 'sess-scope-pin';
-    const mkRaw = (text: string, scope: string | null) => createMemory(text, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      kind: 'raw',
-      tenantId: 'default',
-      sourceSessionId: sessionId,
-      scope,
-    });
+    const mkRaw = (text: string, scope: string | null) =>
+      createMemory(text, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        kind: 'raw',
+        tenantId: 'default',
+        sourceSessionId: sessionId,
+        scope,
+      });
     writeEntry(hippoDir, mkRaw('null scope row content here', null));
     writeEntry(hippoDir, mkRaw('projx scope row content here', 'projX'));
     writeEntry(hippoDir, mkRaw('projy scope row content here', 'projY'));

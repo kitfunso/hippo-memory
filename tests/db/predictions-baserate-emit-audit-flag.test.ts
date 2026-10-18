@@ -25,7 +25,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { computePredictionBaserate, closePrediction } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function countPredictBaserateAudits(root: string): number {
   const db = openHippoDb(root);
@@ -41,7 +45,9 @@ function countPredictBaserateAudits(root: string): number {
 
 describe('computePredictionBaserate emitAudit flag', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('emitaudit'); });
+  beforeEach(() => {
+    root = makeRoot('emitaudit');
+  });
   afterEach(() => safeRmSync(root));
 
   it('default emitAudit=true on n=0 path: emits exactly one predict_baserate audit', () => {
@@ -82,7 +88,9 @@ describe('computePredictionBaserate emitAudit flag', () => {
     try {
       // SAFETY: literal SELECT of the actor column for the predict_baserate
       // row this test's computePredictionBaserate call just wrote.
-      const row = db.prepare(`SELECT actor FROM audit_log WHERE op = 'predict_baserate' ORDER BY id DESC LIMIT 1`).get() as { actor: string };
+      const row = db
+        .prepare(`SELECT actor FROM audit_log WHERE op = 'predict_baserate' ORDER BY id DESC LIMIT 1`)
+        .get() as { actor: string };
       expect(row.actor).toBe('mcp');
     } finally {
       closeHippoDb(db);

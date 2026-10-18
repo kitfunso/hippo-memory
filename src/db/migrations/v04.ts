@@ -2,13 +2,13 @@ import { tableHasColumn } from '../tables.js';
 import type { Migration } from './types.js';
 
 export const v04: Migration = {
-    version: 4,
-    up: (db) => {
-      if (!tableHasColumn(db, 'task_snapshots', 'session_id')) {
-        db.exec(`ALTER TABLE task_snapshots ADD COLUMN session_id TEXT`);
-      }
+  version: 4,
+  up: (db) => {
+    if (!tableHasColumn(db, 'task_snapshots', 'session_id')) {
+      db.exec(`ALTER TABLE task_snapshots ADD COLUMN session_id TEXT`);
+    }
 
-      db.exec(`
+    db.exec(`
         CREATE TABLE IF NOT EXISTS session_events (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           session_id TEXT NOT NULL,
@@ -26,5 +26,5 @@ export const v04: Migration = {
         CREATE INDEX IF NOT EXISTS idx_session_events_task_created
         ON session_events(task, created_at DESC, id DESC);
       `);
-    },
+  },
 };

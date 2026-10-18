@@ -98,11 +98,7 @@ export function closeDecision(
   return closeObject(objects, DECISION, tenantId, id, actor);
 }
 
-export function loadDecisionById(
-  objects: Objects,
-  tenantId: string,
-  id: number,
-): Promise<Decision | null> {
+export function loadDecisionById(objects: Objects, tenantId: string, id: number): Promise<Decision | null> {
   return objectById(objects, DECISION, tenantId, id);
 }
 

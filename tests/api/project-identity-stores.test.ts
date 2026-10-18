@@ -19,7 +19,17 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { initStore } from '../../src/store/open.js';
-import { closeWorld, ctxFor, liveRows, note, openWorld, projectNotes, toolTally, withDb, type World } from '../_helpers/agent-memories-world.js';
+import {
+  closeWorld,
+  ctxFor,
+  liveRows,
+  note,
+  openWorld,
+  projectNotes,
+  toolTally,
+  withDb,
+  type World,
+} from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
@@ -49,24 +59,35 @@ function checkout(url: string, ...segments: string[]): string {
 
 function globalConfig(remote: boolean): void {
   mkdirSync(w.global, { recursive: true });
-  writeFileSync(join(w.global, 'config.json'), JSON.stringify({ projectIdentity: { remote }, embeddings: { enabled: false } }));
+  writeFileSync(
+    join(w.global, 'config.json'),
+    JSON.stringify({ projectIdentity: { remote }, embeddings: { enabled: false } }),
+  );
   _resetProjectIdentityCacheForTests();
 }
 
 function pinned(root: string, content: string, origin: string): MemoryEntry {
-  const entry = { ...createMemory(content, { tenantId: T, baseHalfLifeDays: 30, pinned: true }), origin_project: origin };
+  const entry = {
+    ...createMemory(content, { tenantId: T, baseHalfLifeDays: 30, pinned: true }),
+    origin_project: origin,
+  };
   writeEntry(root, entry);
   return entry;
 }
 
 function compaction(id: string, origin: string, cwd: string): void {
-  withDb(w.global, (db) => db.prepare(
-    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, ?, ?, ?, 'auto', ?, NULL, ?)`,
-  ).run(T, id, `s-${id}`, origin, cwd, new Date().toISOString()));
+  withDb(w.global, (db) =>
+    db
+      .prepare(
+        `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, ?, ?, ?, 'auto', ?, NULL, ?)`,
+      )
+      .run(T, id, `s-${id}`, origin, cwd, new Date().toISOString()),
+  );
 }
 
 const texts = (r: Awaited<ReturnType<typeof getContext>>): string[] => r.entries.map((e) => e.entry.content);
-const sync = (cwd: string) => importAtSessionEnd(cwd, undefined, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
+const sync = (cwd: string) =>
+  importAtSessionEnd(cwd, undefined, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
 const prefixFor = (cwd: string, origin: string): string =>
   containerPrefix('claude-code', containerId(projectNotes(w, cwd), 'project', process.platform, origin));
 
@@ -104,7 +125,9 @@ describe('two repos named api in one global store', () => {
     const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
     expect(plan.folds).toEqual([]);
     expect(plan.collisions).toEqual([{ name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] }]);
-    const check = runDoctor({ diagnosticsAt, cwd: a, home: w.home, version: 'test' }).checks.find((c) => c.id === 'projects');
+    const check = runDoctor({ diagnosticsAt, cwd: a, home: w.home, version: 'test' }).checks.find(
+      (c) => c.id === 'projects',
+    );
     expect(check).toMatchObject({ status: 'warn' });
     expect(check?.detail).toContain('api (github.com/acme-pay/api, github.com/acme-search/api)');
   });
@@ -117,102 +140,176 @@ describe('two repos named api in one global store', () => {
   });
 
   it('a compaction item the legacy rows already hold is a repeat, not a new row', () => {
-    const written = withDb(w.global, (db) => saveItems(db, w.global, {
-      tenantId: T, recordId: null, sessionId: 's1', originProject: resolveProjectIdentity(a).name, cwd: a, items: [OLD],
-    }, () => undefined, DEFAULT_HALF_LIFE_DAYS));
+    const written = withDb(w.global, (db) =>
+      saveItems(
+        db,
+        w.global,
+        {
+          tenantId: T,
+          recordId: null,
+          sessionId: 's1',
+          originProject: resolveProjectIdentity(a).name,
+          cwd: a,
+          items: [OLD],
+        },
+        () => undefined,
+        DEFAULT_HALF_LIFE_DAYS,
+      ),
+    );
     expect(written).toBe(0);
   });
 
   it('a record saved under the old name still sees the rows its project holds under the id', () => {
-    const written = withDb(w.global, (db) => saveItems(db, w.global, {
-      tenantId: T, recordId: null, sessionId: 's2', originProject: 'api', cwd: a, items: [NEW_A],
-    }, () => undefined, DEFAULT_HALF_LIFE_DAYS));
+    const written = withDb(w.global, (db) =>
+      saveItems(
+        db,
+        w.global,
+        {
+          tenantId: T,
+          recordId: null,
+          sessionId: 's2',
+          originProject: 'api',
+          cwd: a,
+          items: [NEW_A],
+        },
+        () => undefined,
+        DEFAULT_HALF_LIFE_DAYS,
+      ),
+    );
     expect(written).toBe(0);
   });
 
   it('recall still takes one project name as a string, the shape published callers pass', () => {
-    const rows = loadRecallSearchEntries(w.global, 'api', undefined, T, undefined, 'exact', true, resolveProjectIdentity(a).name);
+    const rows = loadRecallSearchEntries(
+      w.global,
+      'api',
+      undefined,
+      T,
+      undefined,
+      'exact',
+      true,
+      resolveProjectIdentity(a).name,
+    );
     expect(rows.map((e) => e.content)).toContain(NEW_A);
     expect(rows.map((e) => e.content)).not.toContain(NEW_B);
   });
 });
 
 describe('the upgrade re-sync', () => {
-  const NOTES = ['Deploys need the schema check first.', 'The queue drains at midnight UTC.', 'Retries back off from two seconds.'];
+  const NOTES = [
+    'Deploys need the schema check first.',
+    'The queue drains at midnight UTC.',
+    'Retries back off from two seconds.',
+  ];
 
-  it('moves folder-named imports and their dormant snapshots under the id, importing nothing twice', () => {
-    const api = checkout('git@github.com:acme/api.git', 'api');
-    NOTES.forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
-    globalConfig(false);
-    sync(api);
-    unlinkSync(join(projectNotes(w, api), 'n2.md'));
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
-    const before = liveRows(w.global);
-    expect(before.map((e) => e.origin_project)).toEqual(['api', 'api']);
+  it(
+    'moves folder-named imports and their dormant snapshots under the id, importing nothing twice',
+    () => {
+      const api = checkout('git@github.com:acme/api.git', 'api');
+      NOTES.forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
+      globalConfig(false);
+      sync(api);
+      unlinkSync(join(projectNotes(w, api), 'n2.md'));
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+      const before = liveRows(w.global);
+      expect(before.map((e) => e.origin_project)).toEqual(['api', 'api']);
 
-    globalConfig(true);
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
-    const after = liveRows(w.global);
-    expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
-    for (const e of after) expect(e).toMatchObject({ origin_project: 'github.com/acme/api', source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')) });
-    const [snap] = withDb(w.global, (db) => listDormantSnapshots(db, T));
-    expect(snap.entry).toMatchObject({ origin_project: 'github.com/acme/api', source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')) });
+      globalConfig(true);
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
+      const after = liveRows(w.global);
+      expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
+      for (const e of after) {
+        expect(e).toMatchObject({
+          origin_project: 'github.com/acme/api',
+          source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
+        });
+      }
+      const [snap] = withDb(w.global, (db) => listDormantSnapshots(db, T));
+      expect(snap.entry).toMatchObject({
+        origin_project: 'github.com/acme/api',
+        source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
+      });
 
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
-    note(projectNotes(w, api), 'n2.md', NOTES[2]);
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
-  }, RESYNC_MS);
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
+      note(projectNotes(w, api), 'n2.md', NOTES[2]);
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+    },
+    RESYNC_MS,
+  );
 
-  it('moves a dormant-only folder-named import, so a returning note is restored, not imported again', () => {
-    const api = checkout('git@github.com:acme/api.git', 'api');
-    note(projectNotes(w, api), 'n0.md', NOTES[0]);
-    globalConfig(false);
-    sync(api);
-    unlinkSync(join(projectNotes(w, api), 'n0.md'));
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
+  it(
+    'moves a dormant-only folder-named import, so a returning note is restored, not imported again',
+    () => {
+      const api = checkout('git@github.com:acme/api.git', 'api');
+      note(projectNotes(w, api), 'n0.md', NOTES[0]);
+      globalConfig(false);
+      sync(api);
+      unlinkSync(join(projectNotes(w, api), 'n0.md'));
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ setAside: 1 });
 
-    globalConfig(true);
-    note(projectNotes(w, api), 'n0.md', NOTES[0]);
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
-    expect(liveRows(w.global)).toMatchObject([{ origin_project: 'github.com/acme/api', source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')) }]);
-  }, RESYNC_MS);
+      globalConfig(true);
+      note(projectNotes(w, api), 'n0.md', NOTES[0]);
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
+      expect(liveRows(w.global)).toMatchObject([
+        {
+          origin_project: 'github.com/acme/api',
+          source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
+        },
+      ]);
+    },
+    RESYNC_MS,
+  );
 
-  it('repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them', () => {
-    const api = checkout('git@github.com:acme/api.git', 'api');
-    NOTES.slice(0, 2).forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
-    globalConfig(false);
-    sync(api);
-    globalConfig(true);
-    const transcript = join(dirname(projectNotes(w, api)), 's.jsonl');
-    writeFileSync(transcript, `${JSON.stringify({ cwd: api })}\n`);
-    withDb(w.global, (db) => db.prepare(
-      `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'api', 'auto', ?, ?, ?)`,
-    ).run(T, api, transcript, new Date().toISOString()));
+  it(
+    'repair keeps folder-named imports in their own session folder, folds the name, and the next sync moves them',
+    () => {
+      const api = checkout('git@github.com:acme/api.git', 'api');
+      NOTES.slice(0, 2).forEach((text, i) => note(projectNotes(w, api), `n${i}.md`, text));
+      globalConfig(false);
+      sync(api);
+      globalConfig(true);
+      const transcript = join(dirname(projectNotes(w, api)), 's.jsonl');
+      writeFileSync(transcript, `${JSON.stringify({ cwd: api })}\n`);
+      withDb(w.global, (db) =>
+        db
+          .prepare(
+            `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'api', 'auto', ?, ?, ?)`,
+          )
+          .run(T, api, transcript, new Date().toISOString()),
+      );
 
-    const r = repairProjectNames(cliApiContext(w.global, T), { dryRun: false });
-    expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
-    expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
-    expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).copies).toEqual([]);
-  }, RESYNC_MS);
+      const r = repairProjectNames(cliApiContext(w.global, T), { dryRun: false });
+      expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
+      expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
+      expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).copies).toEqual([]);
+    },
+    RESYNC_MS,
+  );
 
-  it('follows a merge: imports under the merged name move on the next sync instead of coming back as copies', () => {
-    const svc = checkout('file:///srv/git/svc.git', 'svc');
-    note(projectNotes(w, svc), 'a.md', NOTES[0]);
-    writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
-    _resetProjectIdentityCacheForTests();
-    sync(svc);
-    writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
-    _resetProjectIdentityCacheForTests();
-    const merged = mergeProjectNames(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
-    expect(merged.setAside).toEqual([]);
+  it(
+    'follows a merge: imports under the merged name move on the next sync instead of coming back as copies',
+    () => {
+      const svc = checkout('file:///srv/git/svc.git', 'svc');
+      note(projectNotes(w, svc), 'a.md', NOTES[0]);
+      writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
+      _resetProjectIdentityCacheForTests();
+      sync(svc);
+      writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
+      _resetProjectIdentityCacheForTests();
+      const merged = mergeProjectNames(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
+      expect(merged.setAside).toEqual([]);
 
-    expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
-    expect(liveRows(w.global)).toMatchObject([{ content: NOTES[0], origin_project: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) }]);
-  }, RESYNC_MS);
+      expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
+      expect(liveRows(w.global)).toMatchObject([
+        { content: NOTES[0], origin_project: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
+      ]);
+    },
+    RESYNC_MS,
+  );
 });
 
 describe('a project store with an id', () => {
-  it('repair folds the store\'s own folder name into its id; nothing runs it unasked', () => {
+  it("repair folds the store's own folder name into its id; nothing runs it unasked", () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
     initStore(store);
@@ -229,10 +326,16 @@ describe('a project store with an id', () => {
     const svc = checkout('git@github.com:acme/svc.git', 'svc');
     const store = join(svc, '.hippo');
     initStore(store);
-    withDb(store, (db) => db.prepare(
-      `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'svc', 'auto', ?, NULL, ?)`,
-    ).run(T, svc, new Date().toISOString()));
-    expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
+    withDb(store, (db) =>
+      db
+        .prepare(
+          `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'svc', 'auto', ?, NULL, ?)`,
+        )
+        .run(T, svc, new Date().toISOString()),
+    );
+    expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([
+      { from: 'svc', into: 'github.com/acme/svc' },
+    ]);
   });
 });
 
@@ -256,6 +359,8 @@ describe('repair on sleep', () => {
     compaction('c-a', 'api', a);
     expect(repairProjectNamesOnce(cliApiContext(w.global, T))).toBeNull();
     expect(loadAllEntries(w.global, 'default').map((e) => e.origin_project)).toEqual(['api']);
-    expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
+    expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([
+      { from: 'api', into: 'github.com/acme-pay/api' },
+    ]);
   });
 });

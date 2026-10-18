@@ -51,11 +51,14 @@ beforeEach(() => {
 
 describe('importChatGPT - JSON array of strings', () => {
   it('imports each string as a memory', () => {
-    const file = writeTmp('memories.json', JSON.stringify([
-      'I prefer TypeScript over JavaScript',
-      'Use pnpm instead of npm for speed',
-      'Always write tests before shipping',
-    ]));
+    const file = writeTmp(
+      'memories.json',
+      JSON.stringify([
+        'I prefer TypeScript over JavaScript',
+        'Use pnpm instead of npm for speed',
+        'Always write tests before shipping',
+      ]),
+    );
 
     const result = importChatGPT(file, makeOpts());
     expect(result.total).toBe(3);
@@ -74,12 +77,15 @@ describe('importChatGPT - JSON array of strings', () => {
 
 describe('importChatGPT - object format with memories key', () => {
   it('parses the ChatGPT export envelope format', () => {
-    const file = writeTmp('chatgpt-export.json', JSON.stringify({
-      memories: [
-        { content: 'Prefer concise answers', created_at: '2024-01-01T00:00:00Z' },
-        { content: 'Use dark mode everywhere', created_at: '2024-01-02T00:00:00Z' },
-      ],
-    }));
+    const file = writeTmp(
+      'chatgpt-export.json',
+      JSON.stringify({
+        memories: [
+          { content: 'Prefer concise answers', created_at: '2024-01-01T00:00:00Z' },
+          { content: 'Use dark mode everywhere', created_at: '2024-01-02T00:00:00Z' },
+        ],
+      }),
+    );
 
     const result = importChatGPT(file, makeOpts());
     expect(result.total).toBe(2);
@@ -93,12 +99,10 @@ describe('importChatGPT - object format with memories key', () => {
 
 describe('importChatGPT - plain text', () => {
   it('treats each non-empty line as a memory', () => {
-    const file = writeTmp('memories.txt', [
-      'I like jazz music',
-      '',
-      'Python is my main language',
-      'Berlin is a great city',
-    ].join('\n'));
+    const file = writeTmp(
+      'memories.txt',
+      ['I like jazz music', '', 'Python is my main language', 'Berlin is a great city'].join('\n'),
+    );
 
     const result = importChatGPT(file, makeOpts());
     expect(result.total).toBe(3);
@@ -116,22 +120,25 @@ describe('importChatGPT - plain text', () => {
 
 describe('importClaude - CLAUDE.md', () => {
   it('imports bullet points from markdown and skips hippo hook block', () => {
-    const file = writeTmp('CLAUDE.md', [
-      '# Project Context',
-      '',
-      '- Always run tests before committing',
-      '- Use conventional commit messages',
-      '',
-      '<!-- hippo:start -->',
-      '## Project Memory (Hippo)',
-      'hippo context --auto --budget 1500',
-      '<!-- hippo:end -->',
-      '',
-      '## Stack',
-      '',
-      '- TypeScript + Node 20',
-      '- Vitest for testing',
-    ].join('\n'));
+    const file = writeTmp(
+      'CLAUDE.md',
+      [
+        '# Project Context',
+        '',
+        '- Always run tests before committing',
+        '- Use conventional commit messages',
+        '',
+        '<!-- hippo:start -->',
+        '## Project Memory (Hippo)',
+        'hippo context --auto --budget 1500',
+        '<!-- hippo:end -->',
+        '',
+        '## Stack',
+        '',
+        '- TypeScript + Node 20',
+        '- Vitest for testing',
+      ].join('\n'),
+    );
 
     const result = importClaude(file, makeOpts());
     // The heading and four bullets; '## Stack' is under the 10-character floor and the hook block is cut.
@@ -163,15 +170,18 @@ describe('importClaude - CLAUDE.md', () => {
 
 describe('importCursor - .cursorrules', () => {
   it('splits on numbered items and bullet points', () => {
-    const file = writeTmp('.cursorrules', [
-      '# Cursor rules for this project',
-      '1. Write tests for every new function',
-      '2. Never use var, prefer const',
-      '3. Keep functions under 30 lines',
-      '',
-      '- Use named exports over default exports',
-      '- Avoid magic numbers',
-    ].join('\n'));
+    const file = writeTmp(
+      '.cursorrules',
+      [
+        '# Cursor rules for this project',
+        '1. Write tests for every new function',
+        '2. Never use var, prefer const',
+        '3. Keep functions under 30 lines',
+        '',
+        '- Use named exports over default exports',
+        '- Avoid magic numbers',
+      ].join('\n'),
+    );
 
     const result = importCursor(file, makeOpts());
     expect(result.imported).toBeGreaterThanOrEqual(4);
@@ -192,21 +202,28 @@ describe('importCursor - .cursor/rules folder', () => {
   it('imports every .mdc and .md rule under the folder, without front matter', () => {
     const rules = path.join(tmpDir, '.cursor', 'rules');
     fs.mkdirSync(path.join(rules, 'frontend'), { recursive: true });
-    fs.writeFileSync(path.join(rules, 'style.mdc'), [
-      '---',
-      'description: TypeScript style rules',
-      'globs: src/**/*.ts',
-      'alwaysApply: false',
-      '---',
-      '- Prefer named exports over default exports',
-    ].join('\n'));
+    fs.writeFileSync(
+      path.join(rules, 'style.mdc'),
+      [
+        '---',
+        'description: TypeScript style rules',
+        'globs: src/**/*.ts',
+        'alwaysApply: false',
+        '---',
+        '- Prefer named exports over default exports',
+      ].join('\n'),
+    );
     fs.writeFileSync(path.join(rules, 'workflow.mdc'), '- Run the full test suite before every push\n');
     fs.writeFileSync(path.join(rules, 'frontend', 'components.md'), '- Keep React components under 200 lines\n');
 
     const result = importCursor(rules, makeOpts());
 
     expect(result.imported).toBe(3);
-    expect(loadAllEntries(tmpDir, 'default').map((e) => e.content).sort()).toEqual([
+    expect(
+      loadAllEntries(tmpDir, 'default')
+        .map((e) => e.content)
+        .sort(),
+    ).toEqual([
       'Keep React components under 200 lines',
       'Prefer named exports over default exports',
       'Run the full test suite before every push',
@@ -220,17 +237,20 @@ describe('importCursor - .cursor/rules folder', () => {
 
 describe('importGenericFile - markdown', () => {
   it('splits a markdown file on headings and bullets', () => {
-    const file = writeTmp('notes.md', [
-      '## API Design',
-      '',
-      '- REST endpoints use plural nouns',
-      '- Always version the API',
-      '',
-      '## Database',
-      '',
-      '- Use connection pooling',
-      '- Index foreign keys',
-    ].join('\n'));
+    const file = writeTmp(
+      'notes.md',
+      [
+        '## API Design',
+        '',
+        '- REST endpoints use plural nouns',
+        '- Always version the API',
+        '',
+        '## Database',
+        '',
+        '- Use connection pooling',
+        '- Index foreign keys',
+      ].join('\n'),
+    );
 
     const result = importGenericFile(file, makeOpts());
     expect(result.imported).toBeGreaterThanOrEqual(4);
@@ -248,15 +268,18 @@ describe('importGenericFile - markdown', () => {
 
 describe('importGenericFile - plain text', () => {
   it('splits a plain text file on double newlines', () => {
-    const file = writeTmp('lessons.txt', [
-      'Always validate user input at the boundary.',
-      '',
-      '',
-      'Prefer immutable data structures where possible.',
-      '',
-      '',
-      'Log errors with enough context to reproduce them.',
-    ].join('\n'));
+    const file = writeTmp(
+      'lessons.txt',
+      [
+        'Always validate user input at the boundary.',
+        '',
+        '',
+        'Prefer immutable data structures where possible.',
+        '',
+        '',
+        'Log errors with enough context to reproduce them.',
+      ].join('\n'),
+    );
 
     const result = importGenericFile(file, makeOpts());
     expect(result.imported).toBe(3);
@@ -272,19 +295,22 @@ describe('importGenericFile - plain text', () => {
 
 describe('importMarkdown - MEMORY.md format', () => {
   it('parses sections and tags entries with slugified heading', () => {
-    const file = writeTmp('MEMORY.md', [
-      '# Project Memory',
-      '',
-      '## Data Pipeline & Cache',
-      '',
-      '- FRED cache can silently drop series without error',
-      '- Always check cache freshness before model run',
-      '',
-      '## Testing',
-      '',
-      '- Run full test suite before any deploy',
-      '- Use --coverage flag to catch regressions',
-    ].join('\n'));
+    const file = writeTmp(
+      'MEMORY.md',
+      [
+        '# Project Memory',
+        '',
+        '## Data Pipeline & Cache',
+        '',
+        '- FRED cache can silently drop series without error',
+        '- Always check cache freshness before model run',
+        '',
+        '## Testing',
+        '',
+        '- Run full test suite before any deploy',
+        '- Use --coverage flag to catch regressions',
+      ].join('\n'),
+    );
 
     const result = importMarkdown(file, makeOpts());
     expect(result.imported).toBeGreaterThanOrEqual(4);
@@ -312,10 +338,10 @@ describe('importMarkdown - MEMORY.md format', () => {
 
 describe('dedup: import same file twice', () => {
   it('second import gets 0 new entries', () => {
-    const file = writeTmp('data.json', JSON.stringify([
-      'Cache refresh should run before market open',
-      'Use UTC for all timestamps in pipelines',
-    ]));
+    const file = writeTmp(
+      'data.json',
+      JSON.stringify(['Cache refresh should run before market open', 'Use UTC for all timestamps in pipelines']),
+    );
 
     const r1 = importChatGPT(file, makeOpts());
     expect(r1.imported).toBe(2);
@@ -335,10 +361,10 @@ describe('dedup: import same file twice', () => {
 
 describe('dry-run: nothing written', () => {
   it('returns entries but does not persist to disk', () => {
-    const file = writeTmp('rules.txt', [
-      'Always write integration tests for external APIs',
-      'Never store credentials in source code',
-    ].join('\n'));
+    const file = writeTmp(
+      'rules.txt',
+      ['Always write integration tests for external APIs', 'Never store credentials in source code'].join('\n'),
+    );
 
     const result = importGenericFile(file, makeOpts({ dryRun: true }));
     expect(result.imported).toBe(2);
@@ -361,10 +387,10 @@ describe('--global: writes to global store', () => {
     // developer's real ~/.hippo store.
     vi.stubEnv('HIPPO_HOME', globalRoot);
 
-    const file = writeTmp('prefs.json', JSON.stringify([
-      'Prefer explicit over implicit in all code',
-      'Document public APIs with JSDoc',
-    ]));
+    const file = writeTmp(
+      'prefs.json',
+      JSON.stringify(['Prefer explicit over implicit in all code', 'Document public APIs with JSDoc']),
+    );
 
     importChatGPT(file, {
       hippoRoot: tmpDir,
@@ -391,13 +417,16 @@ describe('--global: writes to global store', () => {
 
 describe('min length filter', () => {
   it('skips chunks shorter than 10 characters', () => {
-    const file = writeTmp('mixed.txt', [
-      'ok',       // too short (2 chars)
-      'yes',      // too short (3 chars)
-      'hi there', // too short (8 chars)
-      'This is a valid memory entry that is long enough',
-      'Another valid entry with sufficient length to pass the filter',
-    ].join('\n'));
+    const file = writeTmp(
+      'mixed.txt',
+      [
+        'ok', // too short (2 chars)
+        'yes', // too short (3 chars)
+        'hi there', // too short (8 chars)
+        'This is a valid memory entry that is long enough',
+        'Another valid entry with sufficient length to pass the filter',
+      ].join('\n'),
+    );
 
     const result = importGenericFile(file, makeOpts());
     // Only the 2 long entries should be imported
@@ -416,10 +445,10 @@ describe('min length filter', () => {
 
 describe('confidence tiers on imported memories', () => {
   it('sets confidence to observed for all imported entries', () => {
-    const file = writeTmp('facts.json', JSON.stringify([
-      'Never use process.exit in library code',
-      'Prefer composition over inheritance',
-    ]));
+    const file = writeTmp(
+      'facts.json',
+      JSON.stringify(['Never use process.exit in library code', 'Prefer composition over inheritance']),
+    );
 
     importChatGPT(file, makeOpts());
 
@@ -436,10 +465,10 @@ describe('confidence tiers on imported memories', () => {
 
 describe('extraTags option', () => {
   it('adds extra tags to all imported memories', () => {
-    const file = writeTmp('lessons.txt', [
-      'Deploy only from main branch',
-      'Use feature flags for risky changes',
-    ].join('\n'));
+    const file = writeTmp(
+      'lessons.txt',
+      ['Deploy only from main branch', 'Use feature flags for risky changes'].join('\n'),
+    );
 
     importGenericFile(file, makeOpts({ extraTags: ['project-x', 'ops'] }));
 

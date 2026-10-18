@@ -71,7 +71,7 @@ export async function searchBothHybrid(
   query: string,
   local: ConfiguredFolder,
   global: ConfiguredFolder,
-  options: HybridSearchOptions = {}
+  options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
@@ -170,14 +170,38 @@ export async function rankBothStores(
   options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
   const {
-    budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda,
-    localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
+    budget = DEFAULT_RECALL_BUDGET,
+    now = evalNow(),
+    embeddingWeight,
+    explain,
+    mmr,
+    mmrLambda,
+    localBump = DEFAULT_LOCAL_BUMP,
+    minResults,
+    cost,
+    scope,
+    includeSuperseded,
+    asOf,
+    summaryDeboost,
+    summaryFreshness,
   } = options;
   if (entries.local.length === 0 && entries.global.length === 0) return [];
   // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
   const shared = {
-    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
-    summaryDeboost, summaryFreshness, vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
+    budget,
+    now,
+    embeddingWeight,
+    explain,
+    mmr,
+    mmrLambda,
+    minResults,
+    scope,
+    includeSuperseded,
+    asOf,
+    summaryDeboost,
+    summaryFreshness,
+    vectorCandidates,
+    queryEmbedDeadline: startQueryEmbedDeadline(),
   };
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
   const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });

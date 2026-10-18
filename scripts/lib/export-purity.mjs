@@ -6,8 +6,10 @@ import { join, posix } from 'node:path';
 import ts from 'typescript';
 import { analyze } from './module-facts.mjs';
 
-const IO_BUILTIN = /^(node:)?(fs|child_process|sqlite|http|https|http2|net|dgram|tls|dns|os|cluster|worker_threads|module|readline|process)(\/.*)?$/;
-const PURE_BUILTIN = /^(node:)?(path|url|crypto|util|buffer|events|assert|zlib|string_decoder|perf_hooks|timers|stream)(\/.*)?$/;
+const IO_BUILTIN =
+  /^(node:)?(fs|child_process|sqlite|http|https|http2|net|dgram|tls|dns|os|cluster|worker_threads|module|readline|process)(\/.*)?$/;
+const PURE_BUILTIN =
+  /^(node:)?(path|url|crypto|util|buffer|events|assert|zlib|string_decoder|perf_hooks|timers|stream)(\/.*)?$/;
 const CONTAINERS = /^(Map|Set|WeakMap|WeakSet|Array)$/;
 
 const factsOf = (unit) => (unit.facts ??= analyze(unit.node));
@@ -24,9 +26,16 @@ function declareImport(decls, st) {
   const typeOnly = !!clause.isTypeOnly;
   if (clause.name) decls.set(clause.name.text, { kind: 'import', spec, imported: 'default', typeOnly });
   const bound = clause.namedBindings;
-  if (bound && ts.isNamespaceImport(bound)) decls.set(bound.name.text, { kind: 'import', spec, imported: '*', typeOnly });
-  for (const el of (bound && ts.isNamedImports(bound) ? bound.elements : [])) {
-    decls.set(el.name.text, { kind: 'import', spec, imported: (el.propertyName ?? el.name).text, typeOnly: typeOnly || !!el.isTypeOnly });
+  if (bound && ts.isNamespaceImport(bound)) {
+    decls.set(bound.name.text, { kind: 'import', spec, imported: '*', typeOnly });
+  }
+  for (const el of bound && ts.isNamedImports(bound) ? bound.elements : []) {
+    decls.set(el.name.text, {
+      kind: 'import',
+      spec,
+      imported: (el.propertyName ?? el.name).text,
+      typeOnly: typeOnly || !!el.isTypeOnly,
+    });
   }
 }
 
@@ -40,7 +49,14 @@ function declareReExport(mod, st) {
     mod.decls.set(clause.name.text, { kind: 'import', spec, imported: '*', typeOnly: !!st.isTypeOnly });
   } else {
     for (const el of clause.elements) {
-      if (!mod.decls.has(el.name.text)) mod.decls.set(el.name.text, { kind: 'import', spec, imported: (el.propertyName ?? el.name).text, typeOnly: !!st.isTypeOnly || !!el.isTypeOnly });
+      if (!mod.decls.has(el.name.text)) {
+        mod.decls.set(el.name.text, {
+          kind: 'import',
+          spec,
+          imported: (el.propertyName ?? el.name).text,
+          typeOnly: !!st.isTypeOnly || !!el.isTypeOnly,
+        });
+      }
     }
   }
 }
@@ -54,7 +70,13 @@ function declareVariables(mod, st) {
   }
 }
 
-const KIND_OF = [[ts.isFunctionDeclaration, 'function'], [ts.isClassDeclaration, 'class'], [ts.isEnumDeclaration, 'enum'], [ts.isInterfaceDeclaration, 'type'], [ts.isTypeAliasDeclaration, 'type']];
+const KIND_OF = [
+  [ts.isFunctionDeclaration, 'function'],
+  [ts.isClassDeclaration, 'class'],
+  [ts.isEnumDeclaration, 'enum'],
+  [ts.isInterfaceDeclaration, 'type'],
+  [ts.isTypeAliasDeclaration, 'type'],
+];
 
 function declare(mod, st) {
   if (ts.isImportDeclaration(st)) return declareImport(mod.decls, st);
@@ -65,7 +87,9 @@ function declare(mod, st) {
   mod.units.push(unit);
   const kind = KIND_OF.find(([is]) => is(st))?.[1];
   // A type may share its name with a value (`const X` plus `type X`); the value is the one that can hold state.
-  if (kind && st.name && !(kind === 'type' && mod.decls.has(st.name.text))) mod.decls.set(st.name.text, { kind, node: st, unit });
+  if (kind && st.name && !(kind === 'type' && mod.decls.has(st.name.text))) {
+    mod.decls.set(st.name.text, { kind, node: st, unit });
+  }
   return undefined;
 }
 
@@ -90,7 +114,9 @@ function resolveExport(mods, file, name, depth = 0) {
   if (d && d.kind !== 'import') return { file, name };
   if (d) {
     const target = resolveSpec(mods, file, d.spec);
-    return target && d.imported !== '*' && d.imported !== 'default' ? resolveExport(mods, target, d.imported, depth + 1) : null;
+    return target && d.imported !== '*' && d.imported !== 'default'
+      ? resolveExport(mods, target, d.imported, depth + 1)
+      : null;
   }
   for (const spec of mod.stars) {
     const target = resolveSpec(mods, file, spec);
@@ -106,7 +132,10 @@ function markWrites(mods) {
     for (const w of mod.units.flatMap((u) => factsOf(u).writes)) {
       const d = mod.decls.get(w.name);
       if (!d) continue;
-      if (d.kind !== 'import') { mod.written.add(w.name); continue; }
+      if (d.kind !== 'import') {
+        mod.written.add(w.name);
+        continue;
+      }
       const target = resolveSpec(mods, file, d.spec);
       const name = d.imported === '*' ? w.prop : d.imported;
       const at = target && name ? resolveExport(mods, target, name) : null;
@@ -118,12 +147,20 @@ function markWrites(mods) {
 function isEmptyContainer(d) {
   const init = d.node.initializer;
   if (!init) return false;
-  if (ts.isNewExpression(init)) return ts.isIdentifier(init.expression) && CONTAINERS.test(init.expression.text) && (init.arguments?.length ?? 0) === 0;
-  return (ts.isArrayLiteralExpression(init) && init.elements.length === 0) || (ts.isObjectLiteralExpression(init) && init.properties.length === 0);
+  if (ts.isNewExpression(init)) {
+    return (
+      ts.isIdentifier(init.expression) && CONTAINERS.test(init.expression.text) && (init.arguments?.length ?? 0) === 0
+    );
+  }
+  return (
+    (ts.isArrayLiteralExpression(init) && init.elements.length === 0) ||
+    (ts.isObjectLiteralExpression(init) && init.properties.length === 0)
+  );
 }
 
 // The `let` keyword alone misses a const object or container that code writes to (a counter object, a cache map).
-const isState = (mod, name, d) => d.kind === 'let' || mod.written.has(name) || (d.kind === 'const' && isEmptyContainer(d));
+const isState = (mod, name, d) =>
+  d.kind === 'let' || mod.written.has(name) || (d.kind === 'const' && isEmptyContainer(d));
 
 function layerReader(root) {
   const path = join(root, 'layers.json');
@@ -172,7 +209,10 @@ function purityJudge(mods, layerOf) {
     const key = `${file}:${name}`;
     if (memo.has(key)) return memo.get(key);
     const depth = stack.indexOf(key);
-    if (depth >= 0) { cut = Math.min(cut, depth); return null; }
+    if (depth >= 0) {
+      cut = Math.min(cut, depth);
+      return null;
+    }
     const outer = cut;
     cut = Infinity;
     stack.push(key);
@@ -207,7 +247,9 @@ export function createPurityRule(root, srcFiles) {
     const mod = mods.get(file);
     const d = mod?.decls.get(name);
     if (!d || !isCallable(d)) return { exempt: false, why: 'not a function or class' };
-    if (!mod.units.some((u) => u !== d.unit && factsOf(u).valueUsed.has(name))) return { exempt: false, why: 'no caller in its own module' };
+    if (!mod.units.some((u) => u !== d.unit && factsOf(u).valueUsed.has(name))) {
+      return { exempt: false, why: 'no caller in its own module' };
+    }
     const reason = impure(file, name);
     return reason ? { exempt: false, why: reason } : { exempt: true, why: 'pure, and its own module calls it' };
   };

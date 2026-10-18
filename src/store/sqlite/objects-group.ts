@@ -91,7 +91,7 @@ function idByMemory<K extends ObjectKind>(
   const row = db
     .prepare(
       `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
-      `LIMIT 1`,
+        `LIMIT 1`,
     )
     .get<{ id: number } | undefined>(memoryId, tenantId, status);
   return row ? row.id : null;
@@ -155,7 +155,7 @@ function closeRow<K extends ObjectKind>(
     const updated = db
       .prepare(
         `UPDATE ${spec.table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
-        `(${marks})`,
+          `(${marks})`,
       )
       .run(close.at, id, tenantId, ...close.from);
     if (updated.changes === 0) {
@@ -216,7 +216,7 @@ function successorVersion(
   const pred = db
     .prepare(
       `SELECT status, ${insertSpec(kind).versioned ? 'version' : '0 AS version'} FROM ${rowSpec(kind).table} WHERE ` +
-      `id = ? AND tenant_id = ?`,
+        `id = ? AND tenant_id = ?`,
     )
     .get<{ status: string; version: number } | undefined>(replaced, tenantId);
   if (!pred) return { refused: 'missing' };
@@ -230,7 +230,7 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   const values: ColumnValue[] = [row.memoryId, row.tenantId, ...insert.values(row.save.fields)];
   if (insert.versioned) {
     cols.push('version', 'change_summary');
-    values.push(row.version, row.save.supersedesId === undefined ? null : row.save.changeSummary ?? null);
+    values.push(row.version, row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null));
   }
   const result = db
     .prepare(
@@ -284,7 +284,7 @@ function writeObjectRow<K extends SavableKind>(
   tenantId: string,
   kind: K,
   memoryId: string,
-  save: ObjectSave<K>
+  save: ObjectSave<K>,
 ): RowByKind[K] | ObjectRefusal {
   const replaced = save.supersedesId;
   const next = replaced === undefined ? { version: 1 } : successorVersion(db, tenantId, kind, replaced);
@@ -333,24 +333,28 @@ function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry
 function withMirror<R extends object, F extends Refused>(
   on: OnHandle,
   write: MirroredWrite,
-  writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F
+  writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F,
 ): R | F {
-  return on((db, files) => auditingRefusal(db, write.actor, () => {
-    let mirror = stampOriginProjectIn(files, write.mirror);
-    const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
-      mirror = onStoreHalfLife(db, mirror);
-      upsertEntryRow(db, mirror);
-      const row = writeRow(db, mirror.id);
-      if (refusalOf<R, F>(row)) return rollback(row);
-      auditEntryWrite(db, mirror, write.actor);
-      return row;
-    });
-    if (refusalOf<R, F>(written)) return written;
-    // The graph mark takes its own write lock, so it waits for the commit.
-    if (write.graphTenant !== undefined) markGraphDirtyAt(db, write.graphTenant, mirror.id);
-    writeEntryMirrorsIn(files, mirror);
-    return written;
-  }), openStore);
+  return on(
+    (db, files) =>
+      auditingRefusal(db, write.actor, () => {
+        let mirror = stampOriginProjectIn(files, write.mirror);
+        const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
+          mirror = onStoreHalfLife(db, mirror);
+          upsertEntryRow(db, mirror);
+          const row = writeRow(db, mirror.id);
+          if (refusalOf<R, F>(row)) return rollback(row);
+          auditEntryWrite(db, mirror, write.actor);
+          return row;
+        });
+        if (refusalOf<R, F>(written)) return written;
+        // The graph mark takes its own write lock, so it waits for the commit.
+        if (write.graphTenant !== undefined) markGraphDirtyAt(db, write.graphTenant, mirror.id);
+        writeEntryMirrorsIn(files, mirror);
+        return written;
+      }),
+    openStore,
+  );
 }
 
 function saveAt<K extends SavableKind>(
@@ -471,7 +475,8 @@ function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: Policies
   const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
   if (name !== undefined) params.push(name);
   // SAFETY: the SELECT names the policy row's own columns, each under the alias p.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
       SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
              p.valid_from, p.valid_to, p.version, p.status, p.superseded_by,
              p.superseded_at, p.change_summary, p.closed_at, p.created_at
@@ -483,18 +488,21 @@ function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: Policies
         ${nameClause}
       ORDER BY p.valid_from DESC, p.id DESC
       LIMIT ?
-    `).all(...params, query.limit) as RowByKind['policy'][];
+    `)
+    .all(...params, query.limit) as RowByKind['policy'][];
   return rows.map(rowSpec('policy').rowTo);
 }
 
 function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: number): Skill[] {
   // SAFETY: the SELECT names the skill row's own column list.
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
       SELECT ${rowSpec('skill').cols} FROM skills
       WHERE tenant_id = ? AND status = 'active'
       ORDER BY skill_name ASC, id ASC
       LIMIT ?
-    `).all(tenantId, limit) as RowByKind['skill'][];
+    `)
+    .all(tenantId, limit) as RowByKind['skill'][];
   return rows.map(rowSpec('skill').rowTo);
 }
 
@@ -502,7 +510,8 @@ function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: numbe
 function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limit: number): BriefReceipt[] {
   const admit = scopeAdmitSql('');
   // SAFETY: the SELECT names the four columns a receipt holds.
-  return db.prepare(`
+  return db
+    .prepare(`
       SELECT id, created, source, content FROM memories
       WHERE tenant_id = ?
         AND source != 'project_brief'
@@ -510,5 +519,6 @@ function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limi
         AND ${admit.sql}
       ORDER BY created DESC, id DESC
       LIMIT ?
-    `).all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceipt[];
+    `)
+    .all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceipt[];
 }

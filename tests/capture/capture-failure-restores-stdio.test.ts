@@ -26,9 +26,15 @@ describe('cmdCapture failure', () => {
     const root = makeRoot();
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
     const log = path.join(dir, 'tee.log');
-    expect(() => cmdCapture(captureTarget(root), {
-      source: 'file', filePath: path.join(dir, 'absent.md'), logFile: log, dryRun: false, global: false,
-    })).not.toThrow();
+    expect(() =>
+      cmdCapture(captureTarget(root), {
+        source: 'file',
+        filePath: path.join(dir, 'absent.md'),
+        logFile: log,
+        dryRun: false,
+        global: false,
+      }),
+    ).not.toThrow();
     expect(errs).toHaveBeenCalled();
     expect(process.exitCode).toBe(1);
     process.stdout.write('after-capture-marker');

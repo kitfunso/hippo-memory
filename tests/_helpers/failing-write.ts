@@ -9,7 +9,7 @@ export function writeEntryThenFail(hippoRoot: string, entry: MemoryEntry): void 
   try {
     db.exec(
       `CREATE TRIGGER test_force_promote_failure BEFORE INSERT ON audit_log WHEN NEW.op = 'promote' ` +
-      `BEGIN SELECT RAISE(ABORT, 'forced'); END`,
+        `BEGIN SELECT RAISE(ABORT, 'forced'); END`,
     );
     try {
       writePromotedEntry(hippoRoot, entry, {

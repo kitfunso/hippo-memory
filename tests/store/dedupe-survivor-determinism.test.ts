@@ -74,8 +74,7 @@ function permutationsOf3(): number[][] {
 // Duplicate probe pair: the same sentence, B with a double space before "this".
 // Dedup removes only text that matches apart from spacing; a swapped word is a
 // changed value and both copies stay (tests/core/sleep-keeps-both-versions.test.ts).
-const CONTENT_A =
-  'The quarterly finance report shows revenue grew steadily across all four regions this year';
+const CONTENT_A = 'The quarterly finance report shows revenue grew steadily across all four regions this year';
 const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
 // Three mutual duplicates for the permutation test: one base sentence (B), with an
@@ -148,7 +147,7 @@ describe('dedupe survivor determinism', () => {
     const s1 = makeRoot('dedupe-det-4a');
     const s2 = makeRoot('dedupe-det-4b');
     // Order 1: low-retrieval entry ingested first.
-    const low1 =await remember(ctxFor(s1), { content: CONTENT_A });
+    const low1 = await remember(ctxFor(s1), { content: CONTENT_A });
     const high1 = await remember(ctxFor(s1), { content: CONTENT_B });
     setStrength(s1, low1.id, 1.0);
     setStrength(s1, high1.id, 1.0);
@@ -237,17 +236,24 @@ describe('dedupe survivor determinism', () => {
     const now = new Date();
     const bases: string[] = [];
 
-    for (const order of [[contentAlpha, contentOmega], [contentOmega, contentAlpha]]) {
+    for (const order of [
+      [contentAlpha, contentOmega],
+      [contentOmega, contentAlpha],
+    ]) {
       const home = makeRoot('dedupe-det-7');
       for (const content of order) {
-        writeEntry(home, { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), created: now.toISOString() });
+        writeEntry(home, {
+          ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }),
+          created: now.toISOString(),
+        });
       }
 
       const result = await consolidate(home, { now });
       expect(result.merged).toBe(2);
 
       const semantics = loadAllEntries(home, 'default').filter(
-        (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
+        (e) =>
+          e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
       );
       expect(semantics.length).toBe(1);
       // Content shape: '[Consolidated from 2 related memories, newest first]\n\n- <base>\n- <other>'.
@@ -305,7 +311,9 @@ describe('dedupe survivor determinism', () => {
   }
 
   it('9. twins differing only in tags keep the copy with the most tags in both ingest orders', () => {
-    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) => createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags }));
+    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) =>
+      createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags }),
+    );
     const forward = survivorAfterDedupe(twins).survivor;
     const reversed = survivorAfterDedupe([...twins].reverse()).survivor;
     expect([...forward.tags].sort()).toEqual(['d', 'e']);
@@ -313,7 +321,9 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('10. twins differing only in source keep the lowest source in both ingest orders', () => {
-    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) => createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source }));
+    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) =>
+      createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source }),
+    );
     expect(survivorAfterDedupe(twins).survivor.source).toBe('src-a');
     expect(survivorAfterDedupe([...twins].reverse()).survivor.source).toBe('src-a');
   });
@@ -321,7 +331,10 @@ describe('dedupe survivor determinism', () => {
   it('11. episodic/semantic twins keep the semantic copy in both ingest orders (was the episodic one via the mem_/sem_ id prefix)', () => {
     const episodic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
-    for (const order of [[episodic, semantic], [semantic, episodic]]) {
+    for (const order of [
+      [episodic, semantic],
+      [semantic, episodic],
+    ]) {
       const { survivor, pairs } = survivorAfterDedupe(order);
       expect(survivor.layer).toBe(Layer.Semantic);
       expect(pairs).toHaveLength(1);
@@ -333,22 +346,34 @@ describe('dedupe survivor determinism', () => {
   // Cases 12-13 (codex round 1): the layer rank made these two lifecycle
   // states deterministic LOSERS, so dedupe must not consider them at all.
   it('12. a raw (append-only) episodic twin is not a dedupe candidate, so sleep no longer aborts on the delete trigger', () => {
-    const raw = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, kind: 'raw' });
+    const raw = createMemory(TWIN_TEXT, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+      kind: 'raw',
+    });
     const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
-    for (const order of [[raw, semantic], [semantic, raw]]) {
+    for (const order of [
+      [raw, semantic],
+      [semantic, raw],
+    ]) {
       const home = makeRoot('dedupe-det-raw');
       for (const entry of order) writeEntry(home, entry);
       const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
       expect(result.removed).toBe(0);
       expect(result.pairs).toHaveLength(0);
-      const ids = loadAllEntries(home, 'default').map((e) => e.id).sort();
+      const ids = loadAllEntries(home, 'default')
+        .map((e) => e.id)
+        .sort();
       expect(ids).toEqual([raw.id, semantic.id].sort());
     }
   });
 
   it('13. a superseded semantic twin never outranks the current episodic re-ingest', () => {
     const home = makeRoot('dedupe-det-superseded');
-    const successor = createMemory('unrelated successor text that replaced the old semantic row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
+    const successor = createMemory('unrelated successor text that replaced the old semantic row', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+    });
     const stale = {
       ...createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic }),
       superseded_by: successor.id,
@@ -359,15 +384,20 @@ describe('dedupe survivor determinism', () => {
     const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
     expect(result.removed).toBe(0);
     expect(result.pairs).toHaveLength(0);
-    const ids = loadAllEntries(home, 'default').map((e) => e.id).sort();
+    const ids = loadAllEntries(home, 'default')
+      .map((e) => e.id)
+      .sort();
     expect(ids).toEqual([successor.id, stale.id, current.id].sort());
   });
 
   it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: created desc -> content asc)', async () => {
     // Distinct texts, one word swapped each: the merge writes each distinct text once, so the spacing-only VARIANT_* would make one bullet.
-    const textA = 'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
-    const textB = 'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
-    const textC = 'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
+    const textA =
+      'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textB =
+      'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textC =
+      'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
 
     const now = new Date();
     const variants = [
@@ -380,15 +410,25 @@ describe('dedupe survivor determinism', () => {
 
     for (const perm of permutationsOf3()) {
       const home = makeRoot('dedupe-det-14');
-      for (const idx of perm) { // one shared `created`, so the ingest order cannot reach the primary key
-        writeEntry(home, { ...createMemory(variants[idx].content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tags: variants[idx].tags }), created: now.toISOString() });
+      for (const idx of perm) {
+        // one shared `created`, so the ingest order cannot reach the primary key
+        writeEntry(home, {
+          ...createMemory(variants[idx].content, {
+            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+            layer: Layer.Episodic,
+            tags: variants[idx].tags,
+          }),
+          created: now.toISOString(),
+        });
       }
 
       const result = await consolidate(home, { now });
       expect(result.merged).toBe(3);
 
       const semantics = loadAllEntries(home, 'default').filter(
-        (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories, newest first]'),
+        (e) =>
+          e.layer === Layer.Semantic &&
+          e.content.startsWith('[Consolidated pattern from 3 related memories, newest first]'),
       );
       expect(semantics.length).toBe(1);
       expect(semantics[0].content.split('\n\n')[1]).toBe(expectedBlock);

@@ -27,7 +27,7 @@ const MAX_ROWS_READ = 13_000;
 const MAX_STATEMENTS = 80;
 
 function vector(seed: number): number[] {
-  let x = seed * 2654435761 % 4294967296;
+  let x = (seed * 2654435761) % 4294967296;
   return Array.from({ length: DIM }, () => {
     x = (x * 1664525 + 1013904223) % 4294967296;
     return x / 4294967296 - 0.5;
@@ -45,12 +45,21 @@ describe('hybrid recall at 10k rows', () => {
   });
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
-    searchBothHybrid('deploy pipeline', ...sharingStores(store, global), { budget: 4000, tenantId: 'default', recallScope: {}, scope: null });
+    searchBothHybrid('deploy pipeline', ...sharingStores(store, global), {
+      budget: 4000,
+      tenantId: 'default',
+      recallScope: {},
+      scope: null,
+    });
   const recallOnce = (): ReturnType<typeof searchBothHybrid> => recall(home);
 
   function seed(store: string, rows: number): void {
     const entries = Array.from({ length: rows }, (_, i) =>
-      createMemory(`note ${i} about ${i % 50 === 0 ? 'deploy pipeline' : 'topic'} ${i % 97}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+      createMemory(`note ${i} about ${i % 50 === 0 ? 'deploy pipeline' : 'topic'} ${i % 97}`, {
+        tenantId: 'default',
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
+    );
     batchWriteAndDelete(store, entries, []);
     saveEmbeddingIndex(store, Object.fromEntries(entries.map((e, i) => [e.id, vector(i + 1)])));
   }
@@ -60,10 +69,14 @@ describe('hybrid recall at 10k rows', () => {
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-    for (const store of [home, fewer]) saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
+    for (const store of [home, fewer]) {
+      saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
+    }
     const queryVector = vector(7);
-    vi.stubGlobal('fetch', vi.fn(async () =>
-      new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })),
+    );
   }, 65_000);
 
   // Each case scans every stored 384-dim vector, which a shared CI runner takes seconds over.
@@ -73,7 +86,9 @@ describe('hybrid recall at 10k rows', () => {
     const msAtRows = performance.now() - t0;
     t0 = performance.now();
     const atFewer = await recordStatementsAsync(() => recall(fewer));
-    console.log(`hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`);
+    console.log(
+      `hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`,
+    );
     // The 20 rows that name the query plus the 50 nearest vectors, none of them shared, all inside the budget.
     expect(atFewer.result).toHaveLength(70);
     // The smaller recall ran its vector scan too, so the two counts compare like with like.

@@ -47,7 +47,8 @@ function safeRmSync(p: string): void {
 
 // case 1's payload-less run takes the "no session_id" branch, which
 // session-end-snapshot-close.test.ts's own CLOSE_STEP regex never matches.
-const SESSION_END_DONE = /closed \d+ active snapshot\(s\) for session |snapshot close failed: |skip: no session_id in SessionEnd payload/;
+const SESSION_END_DONE =
+  /closed \d+ active snapshot\(s\) for session |snapshot close failed: |skip: no session_id in SessionEnd payload/;
 function sessionEndDoneLogged(logFile: string): boolean {
   return fs.existsSync(logFile) && SESSION_END_DONE.test(fs.readFileSync(logFile, 'utf8'));
 }
@@ -88,8 +89,12 @@ function spawnBounded(
 
     let stdout = '';
     let stderr = '';
-    child.stdout?.on('data', (c: Buffer) => { stdout += c.toString('utf8'); });
-    child.stderr?.on('data', (c: Buffer) => { stderr += c.toString('utf8'); });
+    child.stdout?.on('data', (c: Buffer) => {
+      stdout += c.toString('utf8');
+    });
+    child.stderr?.on('data', (c: Buffer) => {
+      stderr += c.toString('utf8');
+    });
 
     // This guard (not vitest's) is what ends a red-phase hang: it names
     // the stuck command instead of a generic "test timed out".
@@ -113,7 +118,9 @@ function spawnBounded(
     if (stdin.mode === 'dribble') {
       // EPIPE once the child exits is expected, not a test failure.
       child.stdin!.on('error', () => {});
-      dribble = setInterval(() => { child.stdin?.write(stdin.text, () => {}); }, stdin.everyMs);
+      dribble = setInterval(() => {
+        child.stdin?.write(stdin.text, () => {});
+      }, stdin.everyMs);
     }
 
     if (stdin.mode === 'write') {
@@ -136,7 +143,10 @@ function seedPreCompactPayload(dir: string, sessionId: string) {
     transcriptPath,
     transcriptJsonl([
       { type: 'user', message: { role: 'user', content: `Investigate the ${sessionId} regression.` } },
-      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: `Fixed the ${sessionId} regression.` }] } },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: `Fixed the ${sessionId} regression.` }] },
+      },
     ]),
   );
   const payloadText = JSON.stringify({
@@ -196,7 +206,11 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
       // Let the detached worker finish before afterEach removes dir.
-      await waitFor(() => sessionEndDoneLogged(logFile), { what: 'the session-end worker finishing', timeoutMs: 25_000, intervalMs: 50 });
+      await waitFor(() => sessionEndDoneLogged(logFile), {
+        what: 'the session-end worker finishing',
+        timeoutMs: 25_000,
+        intervalMs: 50,
+      });
     });
 
     it('capture --last-session', async () => {
@@ -227,23 +241,18 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
 
   it('case 4: payload delivered after a 100ms delay, default window, still parses', async () => {
     const { payloadText } = seedPreCompactPayload(dir, 'sess-case4');
-    const result = await spawnBounded(
-      ['pre-compact'],
-      dir,
-      env,
-      { mode: 'write', text: payloadText, end: true, delayMs: 100 },
-    );
+    const result = await spawnBounded(['pre-compact'], dir, env, {
+      mode: 'write',
+      text: payloadText,
+      end: true,
+      delayMs: 100,
+    });
     expect(result.status).toBe(0);
     expectRowFor(dir, 'sess-case4');
   });
 
   it('case 5: garbage HIPPO_STDIN_WAIT_MS falls back to the 1000ms default, never zero wait', async () => {
-    const result = await spawnBounded(
-      ['context'],
-      dir,
-      { ...env, HIPPO_STDIN_WAIT_MS: 'abc' },
-      { mode: 'idle' },
-    );
+    const result = await spawnBounded(['context'], dir, { ...env, HIPPO_STDIN_WAIT_MS: 'abc' }, { mode: 'idle' });
     expect(result.status).toBe(0);
     expect(result.signal).toBeNull();
     expect(result.elapsedMs).toBeGreaterThanOrEqual(900);
@@ -288,8 +297,20 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     fs.writeFileSync(
       path.join(decoyDir, 'decoy.jsonl'),
       transcriptJsonl([
-        { type: 'user', message: { role: 'user', content: 'we decided to use RabbitMQ for the decoy session, this must never leak into session A.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }] } },
+        {
+          type: 'user',
+          message: {
+            role: 'user',
+            content: 'we decided to use RabbitMQ for the decoy session, this must never leak into session A.',
+          },
+        },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }],
+          },
+        },
       ]),
     );
 
@@ -354,8 +375,17 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     fs.writeFileSync(
       path.join(decoyDir, 'decoy.jsonl'),
       transcriptJsonl([
-        { type: 'user', message: { role: 'user', content: 'DECOY SESSION: this belongs to another project entirely.' } },
-        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }] } },
+        {
+          type: 'user',
+          message: { role: 'user', content: 'DECOY SESSION: this belongs to another project entirely.' },
+        },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }],
+          },
+        },
       ]),
     );
   }
@@ -393,12 +423,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('## Restored after compaction');
 
-    result = await spawnBounded(
-      ['compact-resume'],
-      dir,
-      { ...env, HIPPO_STDIN_WAIT_MS: '200' },
-      { mode: 'idle' },
-    );
+    result = await spawnBounded(['compact-resume'], dir, { ...env, HIPPO_STDIN_WAIT_MS: '200' }, { mode: 'idle' });
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain('## Restored after compaction');
     expect(result.stdout.trim()).toBe('');

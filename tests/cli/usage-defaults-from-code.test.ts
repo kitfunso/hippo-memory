@@ -11,7 +11,9 @@ const help = (verb: keyof typeof COMMANDS): string => (COMMANDS[verb].usage ?? [
 
 describe('help text defaults', () => {
   it('prints the embedding weight and MMR lambda the search uses', () => {
-    expect(help('eval')).toContain(`--embedding-weight <f> Override cosine weight (default: ${DEFAULT_EMBEDDING_WEIGHT})`);
+    expect(help('eval')).toContain(
+      `--embedding-weight <f> Override cosine weight (default: ${DEFAULT_EMBEDDING_WEIGHT})`,
+    );
     expect(help('recall')).toContain(`MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA},`);
     expect(help('explain')).toContain(`MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA},`);
   });

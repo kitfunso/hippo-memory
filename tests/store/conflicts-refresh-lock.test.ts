@@ -39,7 +39,9 @@ function bulkStore(n: number): string {
   const db = openHippoDb(root);
   try {
     // SAFETY: pragma_table_info yields one row per column with its name.
-    const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>).map((c) => c.name);
+    const columns = (
+      db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>
+    ).map((c) => c.name);
     db.exec(`
       WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < ${n - 1})
       INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || k.i, ${columns.join(', ')} FROM memories, k
@@ -54,13 +56,20 @@ function refsOf(root: string, id: string): string | null {
   const db = openHippoDb(root);
   try {
     // SAFETY: SELECT of one nullable TEXT column.
-    return (db.prepare(`SELECT conflicts_with_json AS refs FROM memories WHERE id = ?`).get(id) as { refs: string | null }).refs;
+    return (
+      db.prepare(`SELECT conflicts_with_json AS refs FROM memories WHERE id = ?`).get(id) as { refs: string | null }
+    ).refs;
   } finally {
     closeHippoDb(db);
   }
 }
 
-const pair = (a: number, b: number) => ({ memory_a_id: `mem_bulk_${a}`, memory_b_id: `mem_bulk_${b}`, reason: 'opposite values', score: 0.9 });
+const pair = (a: number, b: number) => ({
+  memory_a_id: `mem_bulk_${a}`,
+  memory_b_id: `mem_bulk_${b}`,
+  reason: 'opposite values',
+  score: 0.9,
+});
 
 describe('conflict refresh', () => {
   it('touches only the conflicting rows under the write lock, however large the store', () => {
@@ -74,8 +83,14 @@ describe('conflict refresh', () => {
     const { run, get, all, iterate } = StatementSync.prototype;
     vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       exec.call(this, sql);
-      if (sql === 'BEGIN IMMEDIATE') { locked = true; lockSeen = true; }
-      if (sql === 'COMMIT') { locked = false; commits++; }
+      if (sql === 'BEGIN IMMEDIATE') {
+        locked = true;
+        lockSeen = true;
+      }
+      if (sql === 'COMMIT') {
+        locked = false;
+        commits++;
+      }
     });
     vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
       if (locked) touchedUnderLock++;
@@ -90,14 +105,21 @@ describe('conflict refresh', () => {
       if (locked) touchedUnderLock += rows.length;
       return rows;
     });
-    vi.spyOn(StatementSync.prototype, 'iterate').mockImplementation(function* (this: StatementProto, ...params: unknown[]) {
+    vi.spyOn(StatementSync.prototype, 'iterate').mockImplementation(function* (
+      this: StatementProto,
+      ...params: unknown[]
+    ) {
       for (const row of iterate.apply(this, params)) {
         if (locked) touchedUnderLock++;
         yield row;
       }
     });
 
-    replaceDetectedConflicts(root, Array.from({ length: 10 }, (_, i) => pair(2 * i + 1, 2 * i + 2)), NOW);
+    replaceDetectedConflicts(
+      root,
+      Array.from({ length: 10 }, (_, i) => pair(2 * i + 1, 2 * i + 2)),
+      NOW,
+    );
     vi.restoreAllMocks();
 
     expect(commits).toBe(1);

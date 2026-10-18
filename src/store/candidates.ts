@@ -30,8 +30,7 @@ const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 /** idx_memories_pinned (migration v51) serves it. */
 const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
 /** idx_memories_created_drift (migration v51) serves it. */
-const AMBIENT_DRIFT_SQL =
-  `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
+const AMBIENT_DRIFT_SQL = `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
 
 type RunSql = (where: string, params: Array<string | number>) => MemoryEntry[];
 
@@ -137,9 +136,9 @@ export function loadAmbientCandidatesAt(
   const needed = Math.trunc(recentNeeded);
   // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
   const run: RunSql = (where, params) =>
-    (db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`,
-    ).all(...params) as MemoryRow[]).map(rowToEntry);
+    (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`).all(...params) as MemoryRow[]).map(
+      rowToEntry,
+    );
 
   const byId = new Map<string, MemoryEntry>();
   for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
@@ -248,7 +247,8 @@ export function loadContextCandidatesAt(
   // Stops one row past the cap, so a large tenant is not walked to be counted.
   // SAFETY: the count row has the one column named.
   const matched = (
-    db.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
       .get(...params, cap + 1) as { n: number }
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
@@ -296,9 +296,7 @@ export function loadTextsHoldingWordsAt(
     const rows = db
       .prepare(
         `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ` +
-        `${admit.sql} AND (${chunk
-          .map(() => 'instr(content, ?) ' + '> 0')
-          .join(' OR ')})`,
+          `${admit.sql} AND (${chunk.map(() => 'instr(content, ?) ' + '> 0').join(' OR ')})`,
       )
       .all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{
       content: string;
@@ -316,9 +314,9 @@ export function loadTextsHoldingWordsAt(
  * it. */
 export function newestEntriesAt(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
   // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db.prepare(
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
-  ).all(tenantId, limit) as MemoryRow[];
+  const rows = db
+    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`)
+    .all(tenantId, limit) as MemoryRow[];
   return rows.reverse().map(rowToEntry);
 }
 
@@ -348,9 +346,9 @@ export function schemaFitAt(db: DatabaseSyncLike, tenantId: string, content: str
     // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out;
     // a stored per-tenant tag and token tally is the upgrade.
     // SAFETY: the SELECT names exactly the one column read.
-    const texts = db
-      .prepare(`SELECT content FROM (${newest})`)
-      .iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{ content: string }>;
+    const texts = db.prepare(`SELECT content FROM (${newest})`).iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{
+      content: string;
+    }>;
     return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
   });
 }
@@ -363,7 +361,7 @@ export function tallySourcesAt(db: DatabaseSyncLike, tenantId?: string): SourceT
   return db
     .prepare(
       `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
-      `char(31) || id) AS first
+        `char(31) || id) AS first
      FROM memories ${where} GROUP BY COALESCE(source, 'cli')`,
     )
     .all(...(tenantId !== undefined ? [tenantId] : [])) as SourceTally[];
@@ -454,8 +452,16 @@ type StatusColumn =
 type StatusRow = Omit<Pick<MemoryRow, StatusColumn>, 'layer'> & { layer: Layer };
 // What calculateStrength and confidenceFacets read, plus the layer: no text and no JSON column.
 const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
-  'layer', 'confidence', 'pinned', 'created', 'last_retrieved', 'half_life_days', 'retrieval_count',
-  'emotional_valence', 'outcome_positive', 'outcome_negative',
+  'layer',
+  'confidence',
+  'pinned',
+  'created',
+  'last_retrieved',
+  'half_life_days',
+  'retrieval_count',
+  'emotional_valence',
+  'outcome_positive',
+  'outcome_negative',
 ];
 
 // Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its counts would
@@ -502,15 +508,16 @@ export function statusCountsAt(db: DatabaseSyncLike, now: Date, atRiskBelow: num
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
     // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
-    const rows = db.prepare(
-      `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
-    ).iterate() as Iterable<StatusRow>;
+    const rows = db
+      .prepare(`SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`)
+      .iterate() as Iterable<StatusRow>;
     const tallies = tallyStatusRows(rows, now, atRiskBelow);
     // SAFETY: one row whose columns are the two aliases named below.
-    const counts = db.prepare(`SELECT
+    const counts = db
+      .prepare(`SELECT
       (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
-      (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
-    ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
+      (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`)
+      .get() as Record<'openConflicts' | 'embedded', number | bigint>;
     return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
   });
 }

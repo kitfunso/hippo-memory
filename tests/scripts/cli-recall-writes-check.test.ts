@@ -4,15 +4,24 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { findCliRecallWrites, findCliStoreWrites, namedOnLines, STORE_WRITER_EXCEPTIONS } from '../../scripts/check-cli-recall-writes.mjs';
+import {
+  findCliRecallWrites,
+  findCliStoreWrites,
+  namedOnLines,
+  STORE_WRITER_EXCEPTIONS,
+} from '../../scripts/check-cli-recall-writes.mjs';
 
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-cli-recall-writes.mjs');
 const SRC = join(import.meta.dirname, '..', '..', 'src');
 
 describe('check-cli-recall-writes: memory writers and the store opener', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cli-store-writes-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cli-store-writes-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   function file(name: string, body: string): void {
     const p = join(dir, name);
@@ -21,7 +30,10 @@ describe('check-cli-recall-writes: memory writers and the store opener', () => {
   }
 
   it('flags each writer a CLI file names, imports included, and skips comments and other folders', () => {
-    file('cli/watch.ts', "import { writeEntry } from '../store/entry-writes.js';\n// deleteEntry in a comment\nwriteEntry(root, entry);\n");
+    file(
+      'cli/watch.ts',
+      "import { writeEntry } from '../store/entry-writes.js';\n// deleteEntry in a comment\nwriteEntry(root, entry);\n",
+    );
     file('cli/batch.ts', 'batchWriteAndDelete(root, [], []);\ndeleteEntryCore(db, id);\ndeleteEntry(root, id);\n');
     file('api/refine.ts', "import { writeEntry } from '../store/entry-writes.js';\n");
     expect(findCliStoreWrites(dir)).toEqual([
@@ -50,7 +62,8 @@ describe('check-cli-recall-writes: memory writers and the store opener', () => {
   });
 
   it('exits 1 naming the file and line, and 0 once the import is gone', () => {
-    const run = (): { status: number | null; stdout: string; stderr: string } => spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf-8' });
+    const run = (): { status: number | null; stdout: string; stderr: string } =>
+      spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf-8' });
     file('cli/watch.ts', "import { writeEntry } from '../store/entry-writes.js';\n");
     const failed = run();
     expect(failed.status).toBe(1);

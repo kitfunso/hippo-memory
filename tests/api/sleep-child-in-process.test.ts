@@ -49,7 +49,13 @@ describe('sleep child', () => {
   it('runs the sleep job on the real store, replies with its result, and exits 0 after the reply', async () => {
     const ctx = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'the child sleeps this row', kind: 'distilled' });
-    const job: SleepJob = { kind: 'sleep', hippoRoot: home, tenantId: 'default', actor: ctx.actor, opts: { dryRun: true } };
+    const job: SleepJob = {
+      kind: 'sleep',
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: ctx.actor,
+      opts: { dryRun: true },
+    };
 
     fire(listeners, 'message', job);
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });

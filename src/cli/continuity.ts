@@ -104,7 +104,6 @@ export async function handleSnapshot({ hippoRoot, tenantId, args, flags }: Comma
   fail('Usage: hippo snapshot <save|show|clear>');
 }
 
-
 /** The flags every `hippo session` subcommand reads up front. */
 interface SessionArgs {
   readonly sessionId: string;
@@ -270,10 +269,11 @@ async function sessionResume(hippoRoot: string, tenantId: string, sessionId: str
 
 /** A repeatable flag as a list: absent is empty, one value is a singleton. */
 function flagList(value: string | boolean | string[] | undefined): string[] {
-  return Array.isArray(value) ? value : (isStringFlag(value) ? [value] : []);
+  return Array.isArray(value) ? value : isStringFlag(value) ? [value] : [];
 }
 
-const HANDOFF_CREATE_USAGE = 'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] ' +
+const HANDOFF_CREATE_USAGE =
+  'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] ' +
   '[--task <id>] [--artifact <path>...] ' +
   '[--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] ' +
   '[--tests <pass|fail|unknown>]';
@@ -289,7 +289,8 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     fail(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
   }
 
-  const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') ||
+  const sessionId =
+    (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') ||
     `fallback-${Date.now()}-${process.pid}`;
   const nextAction = stringFlagOrExit(flags, 'next') || undefined;
   const taskId = stringFlagOrExit(flags, 'task') || undefined;
@@ -429,16 +430,18 @@ async function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags)
   const { snapshot, events } = await continuityLatest(cliApiContext(hippoRoot, tenantId), { limit: 5 });
 
   if (asJson) {
-    console.log(JSON.stringify({
-      snapshot: snapshot ?? null,
-      events: events.map((ev) => ({
-        id: ev.id,
-        session_id: ev.session_id,
-        event_type: ev.event_type,
-        content: ev.content,
-        created_at: ev.created_at,
-      })),
-    }));
+    console.log(
+      JSON.stringify({
+        snapshot: snapshot ?? null,
+        events: events.map((ev) => ({
+          id: ev.id,
+          session_id: ev.session_id,
+          event_type: ev.event_type,
+          content: ev.content,
+          created_at: ev.created_at,
+        })),
+      }),
+    );
     return;
   }
 

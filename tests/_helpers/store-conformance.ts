@@ -35,11 +35,28 @@ export function seedTwoTenants(): TwoTenantFixture {
       appendAuditEvent(db, { tenantId, actor: 'cli', op: 'auth_create', targetId: minted.keyId, metadata: { role } });
       return minted;
     };
-    const m = { adminA: mint(TENANT_A, 'admin'), memberB: mint(TENANT_B, 'member'), memberA: mint(TENANT_A, 'member'), revokedA: mint(TENANT_A, 'member') };
+    const m = {
+      adminA: mint(TENANT_A, 'admin'),
+      memberB: mint(TENANT_B, 'member'),
+      memberA: mint(TENANT_A, 'member'),
+      revokedA: mint(TENANT_A, 'member'),
+    };
     revokeApiKey(db, m.revokedA.keyId, FIXTURE_REVOKED_AT);
-    for (let i = 0; i < 7; i++) appendAuditEvent(db, { tenantId: i % 2 === 0 ? TENANT_A : TENANT_B, actor: 'cli', op: 'remember', targetId: `mem_${i}` });
+    for (let i = 0; i < 7; i++) {
+      appendAuditEvent(db, {
+        tenantId: i % 2 === 0 ? TENANT_A : TENANT_B,
+        actor: 'cli',
+        op: 'remember',
+        targetId: `mem_${i}`,
+      });
+    }
     db.prepare('DELETE FROM audit_log WHERE id = (SELECT MAX(id) FROM audit_log)').run();
-    const field = (f: 'keyId' | 'plaintext') => ({ adminA: m.adminA[f], memberA: m.memberA[f], revokedA: m.revokedA[f], memberB: m.memberB[f] });
+    const field = (f: 'keyId' | 'plaintext') => ({
+      adminA: m.adminA[f],
+      memberA: m.memberA[f],
+      revokedA: m.revokedA[f],
+      memberB: m.memberB[f],
+    });
     return { dir, keys: field('keyId'), tokens: field('plaintext') };
   } finally {
     closeHippoDb(db);
@@ -84,7 +101,10 @@ function auditRowsAt(root: string): AuditEvent[] {
 }
 
 async function runSide<G extends RequiredGroup, R>(
-  side: StoreSide, group: G, calls: readonly GroupCall<G, R>[], guard: <T>(fn: () => T) => T,
+  side: StoreSide,
+  group: G,
+  calls: readonly GroupCall<G, R>[],
+  guard: <T>(fn: () => T) => T,
 ): Promise<SideResult<R>> {
   const methods = side.store[group];
   const outcomes: Outcome<R>[] = [];
@@ -95,14 +115,22 @@ async function runSide<G extends RequiredGroup, R>(
 
 /** The other side's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
 export async function onBothStores<G extends RequiredGroup, R>(
-  fixture: TwoTenantFixture, group: G, makeOther: (root: string) => StoreSide, calls: readonly GroupCall<G, R>[],
+  fixture: TwoTenantFixture,
+  group: G,
+  makeOther: (root: string) => StoreSide,
+  calls: readonly GroupCall<G, R>[],
 ): Promise<{ readonly sqlite: SideResult<R>; readonly other: SideResult<R> }> {
   const home = mkdtempSync(join(tmpdir(), 'hippo-conformance-'));
   try {
     const roots = { sqlite: join(home, 'sqlite'), other: join(home, 'other') };
     cpSync(fixture.dir, roots.sqlite, { recursive: true });
     cpSync(fixture.dir, roots.other, { recursive: true });
-    const sqlite = await runSide({ store: sqliteStore(roots.sqlite), auditRows: () => auditRowsAt(roots.sqlite) }, group, calls, (fn) => fn());
+    const sqlite = await runSide(
+      { store: sqliteStore(roots.sqlite), auditRows: () => auditRowsAt(roots.sqlite) },
+      group,
+      calls,
+      (fn) => fn(),
+    );
     const otherSide = makeOther(roots.other);
     const other = await runSide(otherSide, group, calls, (fn) => withSqliteBlocked(otherSide.store.kind, fn));
     return { sqlite, other };

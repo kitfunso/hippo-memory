@@ -22,7 +22,11 @@ import { consolidate } from '../../src/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
-  deleteEntry, loadLastRecall, loadActiveTaskSnapshot, clearActiveTaskSnapshot, listSessionEvents,
+  deleteEntry,
+  loadLastRecall,
+  loadActiveTaskSnapshot,
+  clearActiveTaskSnapshot,
+  listSessionEvents,
 } from '../_helpers/root-forms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,10 +85,11 @@ describe('store initialization', () => {
       },
     ]);
 
-    expect(loadAllEntries(tmpDir, 'default').map((entry) => entry.id).sort()).toEqual([
-      'mem_legacy_alpha',
-      'mem_legacy_beta',
-    ]);
+    expect(
+      loadAllEntries(tmpDir, 'default')
+        .map((entry) => entry.id)
+        .sort(),
+    ).toEqual(['mem_legacy_alpha', 'mem_legacy_beta']);
   });
 
   it('fails safe on a corrupt SQLite file and preserves legacy markdown source', () => {
@@ -250,7 +255,9 @@ describe('SQLite-backed search candidates', () => {
       if (hadFts) {
         // SAFETY: the query selects a single COUNT(*) AS count aggregate, so the row
         // (if any) is shaped { count: number }.
-        const row = reopened.prepare('SELECT COUNT(*) AS count FROM memories_fts WHERE id = ?').get(entry.id) as { count?: number } | undefined;
+        const row = reopened.prepare('SELECT COUNT(*) AS count FROM memories_fts WHERE id = ?').get(entry.id) as
+          | { count?: number }
+          | undefined;
         expect(Number(row?.count ?? 0)).toBe(1);
       }
     } finally {
@@ -262,11 +269,7 @@ describe('SQLite-backed search candidates', () => {
 describe('loadAllEntries', () => {
   it('returns all stored entries', () => {
     initStore(tmpDir);
-    const entries = [
-      createMemory('first'),
-      createMemory('second'),
-      createMemory('third'),
-    ];
+    const entries = [createMemory('first'), createMemory('second'), createMemory('third')];
     for (const e of entries) writeEntry(tmpDir, e);
 
     const all = loadAllEntries(tmpDir, 'default');
@@ -349,7 +352,9 @@ describe('active task snapshots', () => {
     try {
       // SAFETY: the query selects only the status column from task_snapshots, a TEXT
       // column, for a single row by primary key.
-      const row = db.prepare('SELECT status FROM task_snapshots WHERE id = ?').get(first.id) as { status?: string } | undefined;
+      const row = db.prepare('SELECT status FROM task_snapshots WHERE id = ?').get(first.id) as
+        | { status?: string }
+        | undefined;
       expect(row?.status).toBe('superseded');
     } finally {
       closeHippoDb(db);

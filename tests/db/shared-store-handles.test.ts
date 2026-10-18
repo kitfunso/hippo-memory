@@ -43,10 +43,12 @@ describe('withSharedStoreHandles', () => {
 
   it('closes the shared handles when the scope throws', async () => {
     let held: ReturnType<typeof openHippoDb> | undefined;
-    await expect(withSharedStoreHandles(() => {
-      held = openHippoDb(root);
-      throw new Error('hook failed');
-    })).rejects.toThrow('hook failed');
+    await expect(
+      withSharedStoreHandles(() => {
+        held = openHippoDb(root);
+        throw new Error('hook failed');
+      }),
+    ).rejects.toThrow('hook failed');
     expect(held?.isOpen).toBe(false);
   });
 

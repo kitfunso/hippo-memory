@@ -15,11 +15,24 @@ const STORE_OPEN = 'PRAGMA journal_mode = WAL';
 
 let root: string;
 
-beforeEach(() => { root = makeRoot('ledger-turn'); });
-afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+beforeEach(() => {
+  root = makeRoot('ledger-turn');
+});
+afterEach(() => {
+  fs.rmSync(root, { recursive: true, force: true });
+});
 
 function use(over: Partial<TokenUse> = {}): TokenUse {
-  return { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 1, tokens: 40, hash: HASH, ...over };
+  return {
+    tenantId: 'default',
+    sessionId: 's1',
+    surface: 'hook',
+    event: 'inject',
+    items: 1,
+    tokens: 40,
+    hash: HASH,
+    ...over,
+  };
 }
 
 function onDb<T>(fn: (db: DatabaseSyncLike) => T): T {
@@ -33,7 +46,9 @@ function onDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 function ledgerSurfaces(): string[] {
   // SAFETY: the SELECT names exactly this one TEXT column.
-  return onDb((db) => db.prepare('SELECT surface FROM token_ledger ORDER BY id').all() as Array<{ surface: string }>).map((r) => r.surface);
+  return onDb(
+    (db) => db.prepare('SELECT surface FROM token_ledger ORDER BY id').all() as Array<{ surface: string }>,
+  ).map((r) => r.surface);
 }
 
 function deliveryCount(): number {
@@ -42,28 +57,37 @@ function deliveryCount(): number {
 
 function recorder(): DeliveryRecorder {
   return createDeliveryRecorder({
-    ledger: sqliteSyncStore(root).localFiles.ledger, storeHash: HASH, writeStore: 'local', tenantId: 'default',
+    ledger: sqliteSyncStore(root).localFiles.ledger,
+    storeHash: HASH,
+    writeStore: 'local',
+    tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's1', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit' }),
   });
 }
 
 /** Makes every insert on `surface` fail, so one row of a turn can fail while the others land. */
 function failRowsOn(surface: string): void {
-  onDb((db) => db.exec(
-    `CREATE TRIGGER ledger_turn_boom BEFORE INSERT ON token_ledger WHEN NEW.surface = '${surface}' BEGIN SELECT RAISE(ABORT, 'row boom'); END`,
-  ));
+  onDb((db) =>
+    db.exec(
+      `CREATE TRIGGER ledger_turn_boom BEFORE INSERT ON token_ledger WHEN NEW.surface = '${surface}' BEGIN SELECT RAISE(ABORT, 'row boom'); END`,
+    ),
+  );
 }
 
 describe('Ledger.recordTurn', () => {
   it('books the rows in order and then the delivery event, on one store open', () => {
     const rec = recorder();
-    const log = recordStatements(() => sqliteSyncStore(root).localFiles.ledger.recordTurn({
-      uses: [use(), use({ surface: 'hook_recall' })],
-      delivery: (write) => rec.flush(write),
-    }));
+    const log = recordStatements(() =>
+      sqliteSyncStore(root).localFiles.ledger.recordTurn({
+        uses: [use(), use({ surface: 'hook_recall' })],
+        delivery: (write) => rec.flush(write),
+      }),
+    );
     expect(countMatching(log.statements, STORE_OPEN)).toBe(1);
     const lastTokenRow = log.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
-    expect(log.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events'))).toBeGreaterThan(lastTokenRow);
+    expect(log.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events'))).toBeGreaterThan(
+      lastTokenRow,
+    );
     expect(ledgerSurfaces()).toEqual(['hook', 'hook_recall']);
     expect(deliveryCount()).toBe(1);
   });
@@ -71,10 +95,12 @@ describe('Ledger.recordTurn', () => {
   it('without onRowError the first failed row throws: no later row and no delivery event', () => {
     failRowsOn('hook');
     const rec = recorder();
-    expect(() => sqliteSyncStore(root).localFiles.ledger.recordTurn({
-      uses: [use(), use({ surface: 'hook_recall' })],
-      delivery: (write) => rec.flush(write),
-    })).toThrow('row boom');
+    expect(() =>
+      sqliteSyncStore(root).localFiles.ledger.recordTurn({
+        uses: [use(), use({ surface: 'hook_recall' })],
+        delivery: (write) => rec.flush(write),
+      }),
+    ).toThrow('row boom');
     expect(ledgerSurfaces()).toEqual([]);
     expect(deliveryCount()).toBe(0);
   });
@@ -85,7 +111,9 @@ describe('Ledger.recordTurn', () => {
     const failed: string[] = [];
     sqliteSyncStore(root).localFiles.ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
-      onRowError: (error) => { failed.push(String(error)); },
+      onRowError: (error) => {
+        failed.push(String(error));
+      },
       delivery: (write) => rec.flush(write),
     });
     expect(failed).toHaveLength(1);
@@ -98,7 +126,10 @@ describe('Ledger.recordTurn', () => {
 describe('Ledger.lastSent', () => {
   it('reads the last injected hash and the skips since it, and null for a session with no rows', () => {
     sqliteSyncStore(root).localFiles.ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
-    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'hook')).toEqual({ hash: HASH, skipsSince: 1 });
+    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'hook')).toEqual({
+      hash: HASH,
+      skipsSince: 1,
+    });
     expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'context')).toBeNull();
     expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 'other', 'hook')).toBeNull();
     expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', undefined, 'hook')).toBeNull();

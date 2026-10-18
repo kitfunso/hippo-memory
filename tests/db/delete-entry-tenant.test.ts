@@ -24,14 +24,18 @@ afterEach(() => {
 });
 
 // SAFETY: COUNT(*) AS n always returns one row with a numeric n.
-const held = (): number => Number((db.prepare('SELECT COUNT(*) AS n FROM memories WHERE id = ?').get(entry.id) as { n: number }).n);
+const held = (): number =>
+  Number((db.prepare('SELECT COUNT(*) AS n FROM memories WHERE id = ?').get(entry.id) as { n: number }).n);
 
 it("leaves another tenant's row and answers as missing", () => {
   expect(deleteEntryCore(db, entry.id, 'tenant-b', { actor: 'test' })).toBeNull();
   expect(held()).toBe(1);
 });
 
-it("removes the row for its own tenant", () => {
-  expect(deleteEntryCore(db, entry.id, 'tenant-a', { actor: 'test' })).toEqual({ tenantId: 'tenant-a', dagParentId: null });
+it('removes the row for its own tenant', () => {
+  expect(deleteEntryCore(db, entry.id, 'tenant-a', { actor: 'test' })).toEqual({
+    tenantId: 'tenant-a',
+    dagParentId: null,
+  });
   expect(held()).toBe(0);
 });

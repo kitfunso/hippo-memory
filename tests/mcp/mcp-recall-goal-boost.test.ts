@@ -26,11 +26,7 @@ type HippoRecallToolArgs = {
   session_id?: string;
 };
 
-function callTool(
-  name: string,
-  args: HippoRecallToolArgs,
-  ctx: McpContext,
-) {
+function callTool(name: string, args: HippoRecallToolArgs, ctx: McpContext) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -46,8 +42,7 @@ function extractText(res: McpResponse | null): string {
   // SAFETY: hippo_recall's MCP tool result envelope always carries
   // result.content per src/mcp/server.ts; McpResponse.result is typed
   // unknown at the transport layer since it varies per tool.
-  return (res as { result?: { content: Array<{ text: string }> } } | null)?.result
-    ?.content?.[0]?.text ?? '';
+  return (res as { result?: { content: Array<{ text: string }> } } | null)?.result?.content?.[0]?.text ?? '';
 }
 
 /** Query a single row from the hippo SQLite handle. */
@@ -70,18 +65,22 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
+    const ctx: McpContext = {
+      hippoRoot: home,
+      tenantId,
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });
     pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const res = await callTool(
-      'hippo_recall',
-      { query: 'auth', budget: 2000, session_id: sessionId },
-      ctx,
-    );
+    const res = await callTool('hippo_recall', { query: 'auth', budget: 2000, session_id: sessionId }, ctx);
     const text = extractText(res);
     expect(text).toContain('auth bug fix details');
     // Side effect proves the boost ran on the MCP physics/hybrid path: the
@@ -101,7 +100,15 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   });
 
   it('without session_id, no boost runs and goal_recall_log stays empty', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home), config: loadConfig(home) };
+    const ctx: McpContext = {
+      hippoRoot: home,
+      tenantId,
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      store: sqliteStore(home),
+      config: loadConfig(home),
+    };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],

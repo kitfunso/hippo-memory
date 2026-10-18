@@ -57,7 +57,10 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean) {
  * An error the server answered with, not one the transport raised, so the transport classifier can skip it by class.
  */
 export class HttpResponseError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
     super(message);
     this.name = 'HttpResponseError';
   }
@@ -81,7 +84,10 @@ async function throwForStatus(res: Response): Promise<never> {
 
 /** A 2xx reply that is not the JSON object the route promises: another process may now own the pidfile's port. */
 export class MalformedReplyError extends Error {
-  constructor(readonly route: string, detail: string) {
+  constructor(
+    readonly route: string,
+    detail: string,
+  ) {
     super(`the hippo server's reply to ${route} was not the expected JSON object (${detail})`);
     this.name = 'MalformedReplyError';
   }
@@ -143,8 +149,11 @@ export async function promote(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<{ ok: true; sourceId: string; globalId: string }>(res, 'POST /v1/memories/:id/promote',
-    (b) => isJsonString(b.sourceId) && isJsonString(b.globalId));
+  return readReply<{ ok: true; sourceId: string; globalId: string }>(
+    res,
+    'POST /v1/memories/:id/promote',
+    (b) => isJsonString(b.sourceId) && isJsonString(b.globalId),
+  );
 }
 
 export async function archiveRaw(

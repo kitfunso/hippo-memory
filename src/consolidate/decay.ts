@@ -2,7 +2,12 @@ import { MemoryEntry, calculateStrength } from '../core/memory.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { chunked } from '../util/chunked.js';
 import {
-  mvCandidate, rankCandidates, rescueSet, validateWeights, type MvCandidate, type MvRankInfo,
+  mvCandidate,
+  rankCandidates,
+  rescueSet,
+  validateWeights,
+  type MvCandidate,
+  type MvRankInfo,
 } from './memory-value.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 import { plural } from '../util/format.js';
@@ -77,13 +82,11 @@ export function decayPass(run: SleepRun): DecayOutcome {
 // A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be
 // rescued, so name those entries in one warning rather than leave it a silent NaN detail.
 function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string, MvRankInfo>): void {
-  const nonFiniteIds = [...rankById.entries()]
-    .filter(([, info]) => !Number.isFinite(info.score))
-    .map(([id]) => id);
+  const nonFiniteIds = [...rankById.entries()].filter(([, info]) => !Number.isFinite(info.score)).map(([id]) => id);
   if (nonFiniteIds.length > 0) {
     result.details.push(
       `  ⚠️ memory-value: skipped ${plural(nonFiniteIds.length, 'entry', 'entries')} ` +
-      `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
+        `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
     );
   }
 }
@@ -116,9 +119,7 @@ function reportRescue(result: ConsolidationResult, id: string, strength: number,
   const rankNote = rank
     ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
     : ' - rescued';
-  result.details.push(
-    `  🛟 ${id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`,
-  );
+  result.details.push(`  🛟 ${id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`);
 }
 
 function decayWithMemoryValue(run: SleepRun): DecayOutcome {
@@ -133,7 +134,11 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
   let rescuedIds = new Set<string>();
   if (condemnedIds.size > 0) {
     // Ranks only the rows a rescue or the warning reads, so ranking a tenant holds no row's text but a tie's.
-    rankById = rankCandidates(candidates, (id) => condemnedIds.has(id), (ids) => run.rows.pagesOf(ids));
+    rankById = rankCandidates(
+      candidates,
+      (id) => condemnedIds.has(id),
+      (ids) => run.rows.pagesOf(ids),
+    );
     // The precomputed ranks are all rescueSet reads, so it is handed no rows.
     rescuedIds = rescueSet([], condemnedIds, run.now, { precomputedRanks: rankById });
     reportNonFiniteScores(run.result, rankById);

@@ -111,9 +111,10 @@ function writeInPlace(target: string, text: string): void {
     fs.writeFileSync(target, text, 'utf8');
   } catch (err) {
     if (!(err instanceof Error)) throw err;
-    const reason = errnoCode(err) === 'EBUSY'
-      ? 'is in use by another program, so hippo could not replace it; close that program and run the command again'
-      : `could not be replaced (${errnoCode(err) || err.message})`;
+    const reason =
+      errnoCode(err) === 'EBUSY'
+        ? 'is in use by another program, so hippo could not replace it; close that program and run the command again'
+        : `could not be replaced (${errnoCode(err) || err.message})`;
     throw new Error(`${target} ${reason}`, { cause: err });
   }
 }

@@ -83,7 +83,10 @@ async function countWork(run) {
   return work;
 }
 
-const WORDS = 'cache index query build deploy test lint merge rebase docker kafka redis postgres auth token schema migration release hook retry queue worker cron backup restore metric alert trace log shard'.split(' ');
+const WORDS =
+  'cache index query build deploy test lint merge rebase docker kafka redis postgres auth token schema migration release hook retry queue worker cron backup restore metric alert trace log shard'.split(
+    ' ',
+  );
 const DAY_MS = 86400000;
 
 // One transaction on one handle: writeEntry's per-row commit and markdown mirror would make seeding the slow part.
@@ -123,16 +126,32 @@ fs.cpSync(localRoot, copyRoot, { recursive: true });
 const localStore = sqliteStore(localRoot);
 const reach = contextReach(sqliteReach(localRoot, localStore), loadConfig);
 const config = loadConfig(localRoot);
-const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing'), store: localStore, reach, config };
+const ctx = {
+  hippoRoot: localRoot,
+  tenantId: 'default',
+  actor: adminActor('ci:timing'),
+  store: localStore,
+  reach,
+  config,
+};
 const mcpCtx = {
-  hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true, store: localStore, reach, config,
+  hippoRoot: localRoot,
+  tenantId: 'default',
+  actor: 'ci:timing',
+  role: 'admin',
+  hostAdmin: true,
+  store: localStore,
+  reach,
+  config,
 };
 // A transport runs each tool call inside its host's request scope (the server per request, stdio per frame).
-const tool = (name, args = {}) => async () => {
-  const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
-  const res = await runSqliteRequest(() => handleMcpRequest(call, mcpCtx), 'server');
-  if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
-};
+const tool =
+  (name, args = {}) =>
+  async () => {
+    const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
+    const res = await runSqliteRequest(() => handleMcpRequest(call, mcpCtx), 'server');
+    if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
+  };
 
 // With no global store a context query searches the local store alone, a separate load path; reach is probed afresh.
 const withoutGlobal = (run) => async () => {
@@ -158,7 +177,9 @@ function mintKey(root) {
 const keyId = mintKey(localRoot);
 // Every authenticated request starts with this read.
 const keyLookup = async () => {
-  if ((await served.findApiKey(keyId)) === null) throw new Error('the served store did not find the key the script minted');
+  if ((await served.findApiKey(keyId)) === null) {
+    throw new Error('the served store did not find the key the script minted');
+  }
 };
 
 // The request benchmarks/a1/p99-recall.ts times, through a real server and socket. serve() answers it from store worker threads, where this thread
@@ -169,28 +190,52 @@ const inProcessServer = await serve({ hippoRoot: copyRoot, port: 0, store: inPro
 const httpRecall = (url, limit) => async () => {
   const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`);
   const body = await res.json();
-  if (!res.ok || body.results.length === 0) throw new Error(`GET /v1/memories failed: ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
+  if (!res.ok || body.results.length === 0) {
+    throw new Error(`GET /v1/memories failed: ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
+  }
 };
 const httpContext = (url) => async () => {
   const res = await fetch(`${url}/v1/context?q=${encodeURIComponent('kafka redis')}`);
   if (!res.ok) throw new Error(`GET /v1/context failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 };
-const httpTool = (url, name, args = {}) => async () => {
-  const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
-  const res = await fetch(`${url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call) });
-  const body = await res.json();
-  if (!res.ok || body.error || body.result?.isError) throw new Error(`POST /mcp ${name} failed: ${JSON.stringify(body).slice(0, 200)}`);
-};
+const httpTool =
+  (url, name, args = {}) =>
+  async () => {
+    const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
+    const res = await fetch(`${url}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(call),
+    });
+    const body = await res.json();
+    if (!res.ok || body.error || body.result?.isError) {
+      throw new Error(`POST /mcp ${name} failed: ${JSON.stringify(body).slice(0, 200)}`);
+    }
+  };
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
   ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
   ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
-  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [42, 141, 5]],
-  ['getContext, local query', withoutGlobal((c) => getContext(c, { q: 'kafka redis', currentProject: 'proj' })), [325, 395, 10]],
-  ['ambient tallies, 2 stores', () => {
-    for (const root of [localRoot, globalRoot]) loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
-  }, [19, 6, 2]],
+  [
+    'getContext, pinned only',
+    () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }),
+    [42, 141, 5],
+  ],
+  [
+    'getContext, local query',
+    withoutGlobal((c) => getContext(c, { q: 'kafka redis', currentProject: 'proj' })),
+    [325, 395, 10],
+  ],
+  [
+    'ambient tallies, 2 stores',
+    () => {
+      for (const root of [localRoot, globalRoot]) {
+        loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
+      }
+    },
+    [19, 6, 2],
+  ],
   ['mcp hippo_context', tool('hippo_context'), [345, 5370, 2]],
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [411, 1495, 1]],
   ['mcp hippo_status', tool('hippo_status'), [13, 7, 1]],
@@ -212,8 +257,13 @@ const cases = [
 
 let overworked = false;
 let uncounted = false;
-const summary = ['| request | median ms (not gated) | statements | rows read | store opens |', '| --- | ---: | ---: | ---: | ---: |'];
-console.log(`request-path work, ${MEMORIES} memories in each of the local and global stores; the time is the median of ${RUNS} and fails nothing`);
+const summary = [
+  '| request | median ms (not gated) | statements | rows read | store opens |',
+  '| --- | ---: | ---: | ---: | ---: |',
+];
+console.log(
+  `request-path work, ${MEMORIES} memories in each of the local and global stores; the time is the median of ${RUNS} and fails nothing`,
+);
 try {
   for (const [label, run, [maxStatements, maxRows, maxOpens]] of cases) {
     const ms = [];
@@ -224,12 +274,18 @@ try {
     }
     const median = ms.sort((a, b) => a - b)[Math.floor(RUNS / 2)];
     const work = await countWork(run);
-    const overWork = MEMORIES === CEILING_MEMORIES && (work.statements > maxStatements || work.rows > maxRows || work.opens > maxOpens);
+    const overWork =
+      MEMORIES === CEILING_MEMORIES &&
+      (work.statements > maxStatements || work.rows > maxRows || work.opens > maxOpens);
     overworked ||= overWork;
     // A request that moves to a worker thread, or an open whose pragma text changes, counts nothing here, and the ceiling would pass it unread.
     uncounted ||= (maxStatements > 0 && work.statements === 0) || (maxOpens > 0 && work.opens === 0);
-    console.log(`${label.padEnd(28)} ${median.toFixed(1).padStart(8)} ms  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows, ${String(work.opens).padStart(2)} of ${maxOpens} opens${overWork ? '  OVER CEILING' : ''}`);
-    summary.push(`| ${label} | ${median.toFixed(1)} | ${work.statements} of ${maxStatements} | ${work.rows} of ${maxRows} | ${work.opens} of ${maxOpens} |`);
+    console.log(
+      `${label.padEnd(28)} ${median.toFixed(1).padStart(8)} ms  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows, ${String(work.opens).padStart(2)} of ${maxOpens} opens${overWork ? '  OVER CEILING' : ''}`,
+    );
+    summary.push(
+      `| ${label} | ${median.toFixed(1)} | ${work.statements} of ${maxStatements} | ${work.rows} of ${maxRows} | ${work.opens} of ${maxOpens} |`,
+    );
   }
 } finally {
   // The threads hold the store's files until they exit, and Windows cannot remove a folder with an open file.
@@ -240,7 +296,20 @@ try {
   process.chdir(os.tmpdir());
   fs.rmSync(tmp, { recursive: true, force: true });
 }
-if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Request-path work at ${MEMORIES} memories\n\n${summary.join('\n')}\n\n`);
-if (overworked) console.error('request-path work: a request ran more statements, read more rows or opened more stores than its ceiling; find the new query before raising a ceiling');
-if (uncounted) console.error('request-path work: a request with ceilings ran no statement or opened no store on this thread; count its work where it now runs');
+if (process.env.GITHUB_STEP_SUMMARY) {
+  fs.appendFileSync(
+    process.env.GITHUB_STEP_SUMMARY,
+    `### Request-path work at ${MEMORIES} memories\n\n${summary.join('\n')}\n\n`,
+  );
+}
+if (overworked) {
+  console.error(
+    'request-path work: a request ran more statements, read more rows or opened more stores than its ceiling; find the new query before raising a ceiling',
+  );
+}
+if (uncounted) {
+  console.error(
+    'request-path work: a request with ceilings ran no statement or opened no store on this thread; count its work where it now runs',
+  );
+}
 if (overworked || uncounted) process.exit(1);

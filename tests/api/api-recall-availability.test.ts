@@ -28,7 +28,11 @@ afterEach(() => {
 });
 
 function safeRmSync(p: string): void {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 }
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
@@ -73,8 +77,14 @@ function seedFiringFixture(root: string): void {
 
 describe('api.recall availabilityHint', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('j2-api'); vi.stubEnv('HIPPO_AVAILABILITY', undefined); });
-  afterEach(() => { safeRmSync(root); vi.stubEnv('HIPPO_AVAILABILITY', undefined); });
+  beforeEach(() => {
+    root = makeRoot('j2-api');
+    vi.stubEnv('HIPPO_AVAILABILITY', undefined);
+  });
+  afterEach(() => {
+    safeRmSync(root);
+    vi.stubEnv('HIPPO_AVAILABILITY', undefined);
+  });
 
   it('fires and emits exactly one audit row on a recency-biased recall', async () => {
     seedFiringFixture(root);
@@ -97,7 +107,11 @@ describe('api.recall availabilityHint', () => {
 
   it('opts.suppressAvailabilityHint suppresses hint + audit (MCP double-emit guard)', async () => {
     seedFiringFixture(root);
-    const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 }, hints: { suppressAvailabilityHint: true } });
+    const result = await retrieve(ctxFor(root), {
+      query: QUERY,
+      window: { limit: 4 },
+      hints: { suppressAvailabilityHint: true },
+    });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
   });

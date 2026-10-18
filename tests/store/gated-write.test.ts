@@ -20,7 +20,12 @@ beforeEach(() => {
 afterEach(() => removeScratch(s));
 
 function entryFor(text: string, tags: string[] = ['captured']): MemoryEntry {
-  return createMemory(text, { layer: Layer.Episodic, tags, source: 'test', baseHalfLifeDays: loadConfig(s.hippoRoot).defaultHalfLifeDays });
+  return createMemory(text, {
+    layer: Layer.Episodic,
+    tags,
+    source: 'test',
+    baseHalfLifeDays: loadConfig(s.hippoRoot).defaultHalfLifeDays,
+  });
 }
 
 function reject(text: string): void {
@@ -55,7 +60,10 @@ describe('the shared gated write', () => {
   });
 
   it('keeps an origin the caller already set', () => {
-    const entry = { ...entryFor('The billing service uses pnpm, so npm install is never run there.'), origin_project: 'elsewhere' };
+    const entry = {
+      ...entryFor('The billing service uses pnpm, so npm install is never run there.'),
+      origin_project: 'elsewhere',
+    };
     expect(gatedWrite(db, s.hippoRoot, entry)).toBe('written');
     expect(readEntry(s.hippoRoot, entry.id)?.origin_project).toBe('elsewhere');
   });
@@ -101,8 +109,12 @@ describe('the shared gated write', () => {
   it('carries on after a rejected row inside one transaction', () => {
     reject('The old staging password rotation runs every Friday at noon by hand.');
     db.exec('BEGIN IMMEDIATE');
-    expect(gatedWrite(db, s.hippoRoot, entryFor('The old staging password rotation runs every Friday at noon by hand.'))).toBe('skipped:rejected');
-    expect(gatedWrite(db, s.hippoRoot, entryFor('The search service cache must be flushed after every deploy.'))).toBe('written');
+    expect(
+      gatedWrite(db, s.hippoRoot, entryFor('The old staging password rotation runs every Friday at noon by hand.')),
+    ).toBe('skipped:rejected');
+    expect(gatedWrite(db, s.hippoRoot, entryFor('The search service cache must be flushed after every deploy.'))).toBe(
+      'written',
+    );
     db.exec('COMMIT');
     expect(loadAllEntries(s.hippoRoot, 'default')).toHaveLength(1);
   });
@@ -141,7 +153,9 @@ describe('capture on the shared gated write', () => {
     const first = capture(text);
     expect(first.status).toBe(0);
     expect(first.stdout).toContain('Captured 2 items (0 skipped as duplicates, 1 rejected)');
-    const contents = loadAllEntries(s.hippoRoot, 'default').map((r) => r.content).sort();
+    const contents = loadAllEntries(s.hippoRoot, 'default')
+      .map((r) => r.content)
+      .sort();
     expect(contents).toEqual([items[0]!.content, items[2]!.content].sort());
     expect(fs.readdirSync(path.join(s.hippoRoot, 'episodic'))).toHaveLength(2);
 

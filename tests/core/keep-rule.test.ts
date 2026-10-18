@@ -6,7 +6,11 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/core/agent-memory-tools.js';
 import {
-  COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
+  COMPACTION_MEMORY_TAG,
+  COMPACTION_SOURCE_PREFIX,
+  KEEP_PAIRS,
+  canAutoDelete,
+  type MemoryEntry,
 } from '../../src/core/memory.js';
 import { AUTO_DELETABLE } from '../../src/store/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -26,7 +30,8 @@ import { deleteEntry, listMemoryConflicts } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/open.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
+  createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 const DAY = 86_400_000;
 const TAG = AGENT_MEMORY_TOOLS[0].tag;
@@ -43,10 +48,12 @@ function newRoot(configJson?: string): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' }));
+const ctxFor = (hippoRoot: string): FullContext =>
+  apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' });
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
-const okFetcher = () => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));
+const okFetcher = () =>
+  vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -65,13 +72,23 @@ const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string;
   { label: 'tag ending a longer name', tags: [`not-${TAG}`], source: KEPT_SOURCE, kept: false },
   { label: 'tag in another case', tags: [TAG.toUpperCase()], source: KEPT_SOURCE, kept: false },
   { label: 'tag after a quote inside another tag', tags: [`x"${TAG}`], source: KEPT_SOURCE, kept: false },
-  { label: 'prefix with a capital first letter', tags: [TAG], source: `${PREFIX[0].toUpperCase()}${PREFIX.slice(1)}session-one`, kept: false },
+  {
+    label: 'prefix with a capital first letter',
+    tags: [TAG],
+    source: `${PREFIX[0].toUpperCase()}${PREFIX.slice(1)}session-one`,
+    kept: false,
+  },
   { label: 'prefix in upper case', tags: [TAG], source: `${PREFIX.toUpperCase()}session-one`, kept: false },
   { label: 'prefix not at the start', tags: [TAG], source: `x-${KEPT_SOURCE}`, kept: false },
   { label: 'prefix without its colon', tags: [TAG], source: `${PREFIX.slice(0, -1)}-session-one`, kept: false },
 ];
 
-interface TableRow { id: string; pinned: boolean; kind: 'distilled' | 'raw'; deletable: boolean }
+interface TableRow {
+  id: string;
+  pinned: boolean;
+  kind: 'distilled' | 'raw';
+  deletable: boolean;
+}
 
 async function seedTable(root: string): Promise<TableRow[]> {
   const rows: TableRow[] = [];
@@ -80,7 +97,13 @@ async function seedTable(root: string): Promise<TableRow[]> {
     for (const c of KEEP_CASES) {
       for (const pinned of [false, true]) {
         for (const kind of ['distilled', 'raw'] as const) {
-          const entry = createMemory7(`table row ${rows.length}: ${c.label}`, { tags: c.tags, source: c.source, pinned, kind, ...RAW_FIELDS });
+          const entry = createMemory7(`table row ${rows.length}: ${c.label}`, {
+            tags: c.tags,
+            source: c.source,
+            pinned,
+            kind,
+            ...RAW_FIELDS,
+          });
           writeEntry(root, entry);
           rows.push({ id: entry.id, pinned, kind, deletable: !pinned && kind !== 'raw' && !c.kept });
         }
@@ -94,7 +117,13 @@ function sqlDeletableIds(root: string): string[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: rows' shape matches the single id column named in the SELECT.
-    return (db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE.sql}`).all(...AUTO_DELETABLE.params) as { id: string }[]).map((r) => r.id).sort();
+    return (
+      db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE.sql}`).all(...AUTO_DELETABLE.params) as {
+        id: string;
+      }[]
+    )
+      .map((r) => r.id)
+      .sort();
   } finally {
     closeHippoDb(db);
   }
@@ -106,7 +135,9 @@ describe('the keep pairs', () => {
   });
 
   it('each kept tag, and the compaction tag, is a no-merge tag', () => {
-    for (const tag of [...KEEP_PAIRS.map((p) => p.tag), COMPACTION_MEMORY_TAG]) expect(NO_MERGE_TAGS.has(tag), tag).toBe(true);
+    for (const tag of [...KEEP_PAIRS.map((p) => p.tag), COMPACTION_MEMORY_TAG]) {
+      expect(NO_MERGE_TAGS.has(tag), tag).toBe(true);
+    }
   });
 
   it('the SQL matches the prefix by length and never with LIKE, which ignores case', () => {
@@ -123,16 +154,26 @@ describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x so
     const byId = new Map(loadAllEntries(root, 'default').map((e) => [e.id, e]));
 
     expect(table).toHaveLength(KEEP_CASES.length * 4);
-    for (const row of table) expect(canAutoDelete(byId.get(row.id)!), JSON.stringify(byId.get(row.id))).toBe(row.deletable);
+    for (const row of table) {
+      expect(canAutoDelete(byId.get(row.id)!), JSON.stringify(byId.get(row.id))).toBe(row.deletable);
+    }
   });
 
   it('the SQL selects exactly the rows canAutoDelete allows', async () => {
     const root = newRoot();
     const table = await seedTable(root);
-    const fromFunction = loadAllEntries(root, 'default').filter(canAutoDelete).map((e) => e.id).sort();
+    const fromFunction = loadAllEntries(root, 'default')
+      .filter(canAutoDelete)
+      .map((e) => e.id)
+      .sort();
 
     expect(sqlDeletableIds(root)).toEqual(fromFunction);
-    expect(sqlDeletableIds(root)).toEqual(table.filter((r) => r.deletable).map((r) => r.id).sort());
+    expect(sqlDeletableIds(root)).toEqual(
+      table
+        .filter((r) => r.deletable)
+        .map((r) => r.id)
+        .sort(),
+    );
     // One unpinned distilled row for each of the 11 cases that are not kept.
     expect(fromFunction).toHaveLength(11);
     expect(fromFunction.length).toBeLessThan(table.length);
@@ -191,7 +232,12 @@ describe('the store refuses an automatic removal of a kept row', () => {
     const plain = createMemory7('the staging cluster restarts on sundays');
     writeEntry(root, kept);
     writeEntry(root, plain);
-    const move = { entry: readEntry(root, kept.id)!, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
+    const move = {
+      entry: readEntry(root, kept.id)!,
+      strength: 0.01,
+      reason: 'decay' as const,
+      dormantAt: new Date().toISOString(),
+    };
 
     expect(batchWriteAndDelete(root, [], [kept.id, plain.id], { dormant: [move] })).toEqual([plain.id]);
     expect(readEntry(root, kept.id)).not.toBeNull();
@@ -215,14 +261,18 @@ describe('sleep with decay forced', () => {
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(readEntry(root, merged.id)).toBeNull();
     expect(readEntry(root, plain.id)).toBeNull();
-    expect((await listDormant(ctxFor(root))).map((m) => m.id).sort()).toEqual(name === 'dormant on' ?[merged.id, plain.id].sort() : []);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id).sort()).toEqual(
+      name === 'dormant on' ? [merged.id, plain.id].sort() : [],
+    );
   });
 
   it('with the learned memory-value rescue on, the kept row still stays active and never goes dormant', async () => {
     const root = newRoot(JSON.stringify({ replay: { count: 0 }, memoryValue: { enabled: true } }));
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
-    for (let i = 0; i < 12; i++) writeEntry(root, createMemory7(`faded observation number ${i} about module ${i} internals`));
+    for (let i = 0; i < 12; i++) {
+      writeEntry(root, createMemory7(`faded observation number ${i} about module ${i} internals`));
+    }
 
     await consolidate(root, { now: sixtyDaysOn() });
 
@@ -243,7 +293,8 @@ describe('sleep with decay forced', () => {
 });
 
 describe('a memory saved from a compaction fades like any other', () => {
-  const compactionRow = (content: string): MemoryEntry => createMemory7(content, { tags: [COMPACTION_MEMORY_TAG], source: `${COMPACTION_SOURCE_PREFIX}session-one` });
+  const compactionRow = (content: string): MemoryEntry =>
+    createMemory7(content, { tags: [COMPACTION_MEMORY_TAG], source: `${COMPACTION_SOURCE_PREFIX}session-one` });
 
   it('is auto-deletable in both the function and the SQL', () => {
     const root = newRoot();
@@ -359,7 +410,9 @@ describe('kept rows are not merged and not sent to extraction', () => {
     const root = newRoot();
     seedThree(root, keptRow);
     vi.stubEnv('ANTHROPIC_API_KEY', FAKE_KEY);
-    const fetcher = vi.fn<typeof fetch>(async () => { throw new Error('a kept row reached the LLM'); });
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      throw new Error('a kept row reached the LLM');
+    });
 
     const result = await consolidate(root, { now: new Date(), fetcher });
 
@@ -372,8 +425,17 @@ describe('kept rows are not merged and not sent to extraction', () => {
   it('conflict detection still sees a kept row', async () => {
     const root = newRoot();
     vi.stubEnv('ANTHROPIC_API_KEY', '');
-    writeEntry(root, createMemory7('The feature flag is enabled for production users', { tags: [TAG, 'feature-flag', 'prod'], source: KEPT_SOURCE }));
-    writeEntry(root, createMemory7('The feature flag is disabled for production users', { tags: ['feature-flag', 'prod'] }));
+    writeEntry(
+      root,
+      createMemory7('The feature flag is enabled for production users', {
+        tags: [TAG, 'feature-flag', 'prod'],
+        source: KEPT_SOURCE,
+      }),
+    );
+    writeEntry(
+      root,
+      createMemory7('The feature flag is disabled for production users', { tags: ['feature-flag', 'prod'] }),
+    );
 
     await consolidate(root, { now: new Date() });
 

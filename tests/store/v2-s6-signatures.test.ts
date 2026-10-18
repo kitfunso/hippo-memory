@@ -23,7 +23,11 @@ describe('loadRecallEntries', () => {
     writeEntry(root, createMemory('quokka habitat survey notes', { tenantId: 'default' }));
     writeEntry(root, createMemory('quokka diet notes', { tenantId: 'other' }));
 
-    const byOptions = loadRecallEntries(root, 'quokka', { tenantId: 'default', explicitScopeMode: 'additive', includeSuperseded: false });
+    const byOptions = loadRecallEntries(root, 'quokka', {
+      tenantId: 'default',
+      explicitScopeMode: 'additive',
+      includeSuperseded: false,
+    });
     const positional = loadRecallSearchEntries(root, 'quokka', undefined, 'default', undefined, 'additive', false);
 
     expect(byOptions.map((e) => e.id)).toEqual(positional.map((e) => e.id));
@@ -51,7 +55,11 @@ describe('writeEntry options', () => {
 
 describe('confidenceFacets', () => {
   it('reads only the three confidence fields', () => {
-    const inputs: ConfidenceInputs = { pinned: false, confidence: 'observed', last_retrieved: new Date().toISOString() };
+    const inputs: ConfidenceInputs = {
+      pinned: false,
+      confidence: 'observed',
+      last_retrieved: new Date().toISOString(),
+    };
     expect(confidenceFacets(inputs)).toEqual({ tier: 'observed', agedOut: false });
   });
 });

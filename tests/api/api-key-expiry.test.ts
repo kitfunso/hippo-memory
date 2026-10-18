@@ -12,7 +12,13 @@ import {
   verifyApiKeyCached,
   _readApiKeyVerifyStatsForTests,
 } from '../../src/store/auth.js';
-import { adminActor, authCreateSelf, authListRows, type Actor, type AuthCreateSelfResult } from '../../src/api/index.js';
+import {
+  adminActor,
+  authCreateSelf,
+  authListRows,
+  type Actor,
+  type AuthCreateSelfResult,
+} from '../../src/api/index.js';
 import { handleAuth } from '../../src/cli/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/store/index.js';
@@ -44,7 +50,9 @@ function meta(db: DatabaseSyncLike, key: string): string | undefined {
 }
 
 function mint(expiresAt?: string): { keyId: string; plaintext: string } {
-  return withDb((db) => createApiKey(db, { tenantId: 'default', label: 'expiry', role: 'member', ownerSubject: 'alice', expiresAt }));
+  return withDb((db) =>
+    createApiKey(db, { tenantId: 'default', label: 'expiry', role: 'member', ownerSubject: 'alice', expiresAt }),
+  );
 }
 
 function selfMint(): Promise<AuthCreateSelfResult> {
@@ -68,10 +76,14 @@ describe('schema v53', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: pragma_table_info rows carry a TEXT `name` column.
-      const cols = (db.prepare(`SELECT name FROM pragma_table_info('api_keys')`).all() as Array<{ name: string }>).map((c) => c.name);
+      const cols = (db.prepare(`SELECT name FROM pragma_table_info('api_keys')`).all() as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
       expect(cols).toEqual(expect.arrayContaining(['owner_subject', 'expires_at']));
       // SAFETY: one TEXT `sql` column.
-      const idx = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_api_keys_live_owner'`).get() as { sql: string };
+      const idx = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_api_keys_live_owner'`).get() as {
+        sql: string;
+      };
       expect(idx.sql).toMatch(/\(tenant_id, owner_subject\) WHERE revoked_at IS NULL/);
     });
   });
@@ -91,7 +103,10 @@ describe('schema v53', () => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect(meta(db, 'min_compatible_binary')).toBe('1.24.0');
       // SAFETY: the SELECT names exactly these two nullable TEXT columns.
-      const row = db.prepare(`SELECT owner_subject, expires_at FROM api_keys WHERE key_id = ?`).get(legacy.keyId) as { owner_subject: string | null; expires_at: string | null };
+      const row = db.prepare(`SELECT owner_subject, expires_at FROM api_keys WHERE key_id = ?`).get(legacy.keyId) as {
+        owner_subject: string | null;
+        expires_at: string | null;
+      };
       expect(row).toEqual({ owner_subject: null, expires_at: null });
       expect(validateApiKey(db, legacy.plaintext).valid).toBe(true);
     });
@@ -114,7 +129,16 @@ describe('the binary floor for expiring keys', () => {
   it('a store with no expiring key keeps its old floor, even after a key that never expires', () => {
     withDb((db) => {
       const { keyId, keyHash } = mintApiKey();
-      insertApiKey(db, { keyId, keyHash, tenantId: 'default', label: 'admin', role: 'admin', createdAt: new Date().toISOString(), ownerSubject: null, expiresAt: null });
+      insertApiKey(db, {
+        keyId,
+        keyHash,
+        tenantId: 'default',
+        label: 'admin',
+        role: 'admin',
+        createdAt: new Date().toISOString(),
+        ownerSubject: null,
+        expiresAt: null,
+      });
     });
     expect(floor()).toBe('1.24.0');
   });
@@ -128,7 +152,11 @@ describe('the binary floor for expiring keys', () => {
   });
 
   it('a self-mint that fails leaves the floor where it was', async () => {
-    withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
+    withDb((db) =>
+      db.exec(
+        `CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
+      ),
+    );
     await expect(selfMint()).rejects.toThrow(/audit table unwritable/);
     expect(floor()).toBe('1.24.0');
   });
@@ -199,7 +227,16 @@ describe('key lists', () => {
     const live = mint(liveExpiry).keyId;
     const plain = withDb((db) => {
       const { keyId, keyHash } = mintApiKey();
-      insertApiKey(db, { keyId, keyHash, tenantId: 'default', label: 'plain', role: 'admin', createdAt: new Date().toISOString(), ownerSubject: null, expiresAt: null });
+      insertApiKey(db, {
+        keyId,
+        keyHash,
+        tenantId: 'default',
+        label: 'plain',
+        role: 'admin',
+        createdAt: new Date().toISOString(),
+        ownerSubject: null,
+        expiresAt: null,
+      });
       return keyId;
     });
     // Minted last, so it sits first in a newest-first page.
@@ -211,7 +248,11 @@ describe('key lists', () => {
     const keys = threeKeys();
     const ctx = apiCtx(home, 'default', adminActor('cli'));
     expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
-    expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
+    expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([
+      keys.expired,
+      keys.plain,
+      keys.live,
+    ]);
     const [first] = await authListRows(ctx, { active: true, limit: 1 });
     expect(first?.key.keyId).toBe(keys.plain);
     const byId = new Map((await authListRows(ctx, { active: true })).map((r) => [r.key.keyId, r.key]));
@@ -221,11 +262,19 @@ describe('key lists', () => {
 
   it('hippo auth list prints each expiry and leaves out expired keys unless --all', async () => {
     const keys = threeKeys();
-    const active = await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: {} }));
+    const active = await runInProcess(() =>
+      handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: {} }),
+    );
     expect(active.stdout).toContain('created  expires  revoked');
     expect(active.stdout).toContain(keys.liveExpiry);
     expect(active.stdout).not.toContain(keys.expired);
-    expect((await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: { all: true } }))).stdout).toContain(keys.expired);
+    expect(
+      (
+        await runInProcess(() =>
+          handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: { all: true } }),
+        )
+      ).stdout,
+    ).toContain(keys.expired);
   });
 });
 
@@ -240,7 +289,11 @@ describe('expired keys over MCP and the stream', () => {
     handle = await serve({ hippoRoot: home, port: 0 });
     const key = mint(new Date(Date.now() - 1000).toISOString());
     const headers = { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
-    const rpc = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body: '{"jsonrpc":"2.0","method":"tools/list","id":1}' });
+    const rpc = await fetch(`${handle.url}/mcp`, {
+      method: 'POST',
+      headers,
+      body: '{"jsonrpc":"2.0","method":"tools/list","id":1}',
+    });
     expect(rpc.status).toBe(401);
     const stream = await fetch(`${handle.url}/mcp/stream`, { headers: { ...headers, accept: 'text/event-stream' } });
     expect(stream.status).toBe(401);
@@ -257,7 +310,11 @@ describe('expired keys over MCP and the stream', () => {
     });
     expect(res.status).toBe(200);
     // Expire the key only once the stream is open, so a slow runner cannot reach the open after a wall-clock expiry.
-    withDb((db) => db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run(new Date(Date.now() - 1000).toISOString(), key.keyId));
+    withDb((db) =>
+      db
+        .prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`)
+        .run(new Date(Date.now() - 1000).toISOString(), key.keyId),
+    );
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';

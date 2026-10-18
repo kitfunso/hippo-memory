@@ -11,7 +11,18 @@ import { serializeEntry } from '../../src/core/markdown.js';
 import { HALF_LIFE_BASE_META_KEY } from '../../src/store/open.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
-import { cleanups, execOn, get, holdWriteLock, newRoot, onDb, post, removeLater, start, undoAll } from '../_helpers/store-worker-server.js';
+import {
+  cleanups,
+  execOn,
+  get,
+  holdWriteLock,
+  newRoot,
+  onDb,
+  post,
+  removeLater,
+  start,
+  undoAll,
+} from '../_helpers/store-worker-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

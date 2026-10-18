@@ -45,9 +45,7 @@ export function isSlackEventEnvelope(x: JsonValue): x is JsonValue & SlackEventE
   return isJsonObject(event) && isJsonString(event.type);
 }
 
-export function isSlackMessageEvent(
-  x: JsonValue | SlackEventEnvelope['event'],
-): x is SlackMessageEvent {
+export function isSlackMessageEvent(x: JsonValue | SlackEventEnvelope['event']): x is SlackMessageEvent {
   if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
   const o = x;
   return o.type === 'message' && isJsonString(o.channel) && isJsonString(o.ts);

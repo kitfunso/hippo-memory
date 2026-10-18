@@ -19,7 +19,9 @@ function ambientSql(root: string): AmbientSql {
   const { statements } = recordStatements(() => loadAmbientCandidates(root, 'default', 1, () => true));
   const pinned = statements.find((sql) => sql.includes('pinned = 1'));
   const drift = statements.find((sql) => sql.includes('length(created)'));
-  if (pinned === undefined || drift === undefined) throw new Error('loadAmbientCandidates did not prepare the pinned and drift statements');
+  if (pinned === undefined || drift === undefined) {
+    throw new Error('loadAmbientCandidates did not prepare the pinned and drift statements');
+  }
   return { pinned, drift };
 }
 
@@ -31,13 +33,20 @@ function plan(db: DatabaseSyncLike, sql: string): string {
 
 function indexNames(db: DatabaseSyncLike): string[] {
   // SAFETY: one `name` TEXT column.
-  return (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'`).all() as Array<{ name: string }>).map((r) => r.name);
+  return (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'`).all() as Array<{
+      name: string;
+    }>
+  ).map((r) => r.name);
 }
 
 function seedStore() {
   const { root } = makeStore('pinned-plan');
   for (let i = 0; i < 30; i++) {
-    writeEntry(root, { ...createMemory(`row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: i % 10 === 0 });
+    writeEntry(root, {
+      ...createMemory(`row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      pinned: i % 10 === 0,
+    });
   }
   return root;
 }
@@ -62,7 +71,9 @@ describe('ambient pinned query plan', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: one `id` TEXT column.
-      const seeded = (db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{ id: string }>).map((r) => r.id);
+      const seeded = (
+        db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{ id: string }>
+      ).map((r) => r.id);
       const created = ['2021-03-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z', '2021-02-01T00:00:00.000Z'];
       seeded.forEach((id, i) => db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(created[i], id));
       const pins = loadAmbientCandidates(root, 'default', 0, () => true).entries;
@@ -91,7 +102,9 @@ describe('ambient pinned query plan', () => {
       expect(first).toContain('idx_memories_pinned');
       expect(first).toContain('idx_memories_created_drift');
       // SAFETY: meta.value is TEXT; one row by primary key.
-      expect((db.prepare(`SELECT value FROM meta WHERE key='schema_version'`).get() as { value: string }).value).toBe(LATEST_SCHEMA_VERSION_STR);
+      expect((db.prepare(`SELECT value FROM meta WHERE key='schema_version'`).get() as { value: string }).value).toBe(
+        LATEST_SCHEMA_VERSION_STR,
+      );
     } finally {
       closeHippoDb(db);
     }

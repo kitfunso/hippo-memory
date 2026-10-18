@@ -23,7 +23,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';

@@ -9,7 +9,13 @@ import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryCompactionsStore } from '../_helpers/in-memory-compactions-store.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  onBothStores,
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
 
 const SEEDED = '2026-03-01T11:58:00.000Z';
 const NOW = '2026-03-01T12:00:00.000Z';
@@ -25,13 +31,23 @@ let fixture: TwoTenantFixture;
 let heldId = '';
 
 const request = (over: Partial<CallerItems> = {}): CallerItems => ({
-  sessionId: 'sA', trigger: 'auto', requestId: 'req-1', project: 'acme/app', owner: 'alice', origins: ['acme/app'],
-  baseHalfLifeDays: 30, items: [], ...over,
+  sessionId: 'sA',
+  trigger: 'auto',
+  requestId: 'req-1',
+  project: 'acme/app',
+  owner: 'alice',
+  origins: ['acme/app'],
+  baseHalfLifeDays: 30,
+  items: [],
+  ...over,
 });
 
 function seed(dir: string): void {
   const row = (content: string, over: Parameters<typeof createMemory>[1], origin: string): string => {
-    const entry = { ...createMemory(content, { tenantId: TENANT_A, sourceSessionId: 'sOld', ...over }), origin_project: origin };
+    const entry = {
+      ...createMemory(content, { tenantId: TENANT_A, sourceSessionId: 'sOld', ...over }),
+      origin_project: origin,
+    };
     writeEntry(dir, entry, { actor: 'cli' });
     return entry.id;
   };
@@ -42,14 +58,24 @@ function seed(dir: string): void {
   try {
     const at = new Date().toISOString();
     insertRejectedValue(db, {
-      tenantId: TENANT_A, digest: rejectionDigest(REJECTED), reason: 'wrong', rejectedBy: 'cli', rejectedAt: at,
+      tenantId: TENANT_A,
+      digest: rejectionDigest(REJECTED),
+      reason: 'wrong',
+      rejectedBy: 'cli',
+      rejectedAt: at,
       normalizedChars: normalizeValueForRejection(REJECTED).length,
     });
   } finally {
     closeHippoDb(db);
   }
   const { compactions } = sqliteSyncStore(dir);
-  compactions.start(TENANT_A, { sessionId: 'sA', originProject: 'acme/app', trigger: 'auto', cwd: null, transcriptPath: null });
+  compactions.start(TENANT_A, {
+    sessionId: 'sA',
+    originProject: 'acme/app',
+    trigger: 'auto',
+    cwd: null,
+    transcriptPath: null,
+  });
   compactions.saveCallerItems(TENANT_A, request({ sessionId: 'sD', requestId: 'req-done', items: [FROZEN] }));
   compactions.saveCallerItems(TENANT_B, request({ sessionId: 'sB', requestId: 'req-b', items: [HELD] }));
 }
@@ -86,10 +112,25 @@ describe('Compactions', () => {
     let started = '';
     const items = [
       'The release script must run from the repo root because it reads the env file by a relative path',
-      FRESH, `${FRESH}!`, PRIVATE, REJECTED, 'ok', 'the token is [REDACTED] for now', 'x'.repeat(501),
+      FRESH,
+      `${FRESH}!`,
+      PRIVATE,
+      REJECTED,
+      'ok',
+      'the token is [REDACTED] for now',
+      'x'.repeat(501),
     ];
     const sides = await onBothStores<'compactions', Value>(fixture, 'compactions', inMemoryCompactionsStore, [
-      async (g) => { started = await g.start(TENANT_A, { sessionId: 'sP', originProject: 'acme/app', trigger: null, cwd: null, transcriptPath: null }); return started; },
+      async (g) => {
+        started = await g.start(TENANT_A, {
+          sessionId: 'sP',
+          originProject: 'acme/app',
+          trigger: null,
+          cwd: null,
+          transcriptPath: null,
+        });
+        return started;
+      },
       (g) => g.markSnapshotSaved(TENANT_A, started),
       (g) => g.markSnapshotSaved(TENANT_B, started),
       (g) => g.saveCallerItems(TENANT_A, request({ items })),
@@ -97,17 +138,25 @@ describe('Compactions', () => {
       (g) => g.saveCallerItems(TENANT_A, request({ sessionId: 'sX' })),
       (g) => g.saveCallerItems(TENANT_A, request({ sessionId: 'sD', requestId: 'req-done' })),
       (g) => g.saveCallerItems(TENANT_A, request({ sessionId: 'sB2', requestId: 'req-b', items: [HELD] })),
-      async (_g, store) => (await store.entriesByIds([heldId], TENANT_A)).map(({ retrieval_count, last_retrieved }) => ({ retrieval_count, last_retrieved })),
+      async (_g, store) =>
+        (await store.entriesByIds([heldId], TENANT_A)).map(({ retrieval_count, last_retrieved }) => ({
+          retrieval_count,
+          last_retrieved,
+        })),
     ]);
     expect(sameIds(sides.other)).toEqual(sameIds(sides.sqlite));
     const outcomes = sides.sqlite.outcomes;
-    expect(outcomes[3]).toEqual({ value: {
-      written: 2,
-      notes: [
-        'skipped 1 item(s) as secret', 'item too long: 1 kept in the record only',
-        'skipped 2 item(s) the store already holds', 'skipped 2 item(s) the write gate refused',
-      ],
-    } });
+    expect(outcomes[3]).toEqual({
+      value: {
+        written: 2,
+        notes: [
+          'skipped 1 item(s) as secret',
+          'item too long: 1 kept in the record only',
+          'skipped 2 item(s) the store already holds',
+          'skipped 2 item(s) the write gate refused',
+        ],
+      },
+    });
     expect(outcomes[4]).toEqual({ value: { written: 2, notes: [] } });
     expect(outcomes[5]).toEqual({ error: 'ConflictError: request id belongs to another session' });
     expect(outcomes[6]).toEqual({ value: { written: 1, notes: [] } });

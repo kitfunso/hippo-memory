@@ -86,16 +86,18 @@ export function listProjects(store: ProjectTagReads): ProjectSummary[] {
     const key = duplicateKey(e.content);
     if (isImport(e)) holders.set(key, (holders.get(key) ?? new Set<string | null>()).add(origin));
   }
-  return [...byOrigin].map(([origin, rows]) => {
-    const imports = rows.filter(isImport);
-    return {
-      origin,
-      live: rows.length,
-      imported: imports.length,
-      newest: rows.reduce((max, e) => (e.created > max ? e.created : max), ''),
-      copiesElsewhere: imports.filter((e) => (holders.get(duplicateKey(e.content))?.size ?? 0) > 1).length,
-    };
-  }).sort((a, b) => b.newest.localeCompare(a.newest));
+  return [...byOrigin]
+    .map(([origin, rows]) => {
+      const imports = rows.filter(isImport);
+      return {
+        origin,
+        live: rows.length,
+        imported: imports.length,
+        newest: rows.reduce((max, e) => (e.created > max ? e.created : max), ''),
+        copiesElsewhere: imports.filter((e) => (holders.get(duplicateKey(e.content))?.size ?? 0) > 1).length,
+      };
+    })
+    .sort((a, b) => b.newest.localeCompare(a.newest));
 }
 
 /** Refuses user-global and unknown: they are not projects, and folding them would leak or hide every row. */
@@ -256,9 +258,10 @@ function ownLegacyFold(store: ProjectTagReads, hippoRoot: string): ProjectFold[]
   if (isSharedStore(hippoRoot)) return [];
   const { name, legacyName } = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   if (legacyName === '' || legacyName === name) return [];
-  const held = store.holdsOrigin('memories', legacyName)
-    || store.holdsOrigin('compactions', legacyName)
-    || store.dormant().some((s) => s.entry.origin_project === legacyName);
+  const held =
+    store.holdsOrigin('memories', legacyName) ||
+    store.holdsOrigin('compactions', legacyName) ||
+    store.dormant().some((s) => s.entry.origin_project === legacyName);
   return held ? [{ from: legacyName, into: name }] : [];
 }
 

@@ -163,15 +163,9 @@ function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean)
 }
 
 function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['deduped']> {
-  const semDups = dedupResult.pairs.filter(
-    (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
-  ).length;
-  const epiDups = dedupResult.pairs.filter(
-    (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
-  ).length;
-  const crossDups = dedupResult.pairs.filter(
-    (p) => p.keptLayer !== p.removedLayer,
-  ).length;
+  const semDups = dedupResult.pairs.filter((p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic').length;
+  const epiDups = dedupResult.pairs.filter((p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic').length;
+  const crossDups = dedupResult.pairs.filter((p) => p.keptLayer !== p.removedLayer).length;
   return {
     removed: dedupResult.removed,
     semDups,
@@ -201,18 +195,19 @@ interface QualityAuditOptions {
 
 /** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared
  * state beyond the issues found. */
-async function runQualityAudit(
-  ctx: Context,
-  phases: SleepPhases,
-  options: QualityAuditOptions,
-): Promise<number> {
+async function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): Promise<number> {
   const { dryRun, consolidateResult, dedupResult, result, backing, pages } = options;
   // The pages follow consolidation and dedup, so only a dry run still holds the rows they would remove.
   const wouldGo = dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : [];
   const planned = new Set(wouldGo);
   const issues: AuditIssue[] = [];
   for (const page of pages()) {
-    issues.push(...phases.auditMemories(page.filter((e) => !planned.has(e.id)), backing).issues);
+    issues.push(
+      ...phases.auditMemories(
+        page.filter((e) => !planned.has(e.id)),
+        backing,
+      ).issues,
+    );
   }
   if (issues.length === 0) return 0;
   const errors = issues.filter((i) => i.severity === 'error');
@@ -259,7 +254,13 @@ function summarizeAmbient(
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = evalNow();
   const tallies = tallyAmbientEntries([], now);
-  for (const page of pages()) foldAmbientRows(tallies, page.filter((e) => !e.superseded_by), now);
+  for (const page of pages()) {
+    foldAmbientRows(
+      tallies,
+      page.filter((e) => !e.superseded_by),
+      now,
+    );
+  }
   if (tallies.total === 0) return 0;
   result.ambient = phases.computeAmbientState(tallies);
   return result.ambient.totalMemories;
@@ -290,10 +291,7 @@ async function drainGraphQueue(
       result.graph = rebuilt;
     }
   } catch (graphErr) {
-    result.details = [
-      ...(result.details ?? []),
-      `graph: drain phase failed (skipped): ${errorMessage(graphErr)}`,
-    ];
+    result.details = [...(result.details ?? []), `graph: drain phase failed (skipped): ${errorMessage(graphErr)}`];
   }
 }
 
@@ -371,12 +369,14 @@ async function emitSleepAudit(
     // committed next, so a unit that fails every night can be found.
     const nextUnitIds = ctx.local.consolidation.failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
-    await ctx.store.appendAuditEvents([{
-      tenantId: '__host__',
-      actor: ctx.actor.subject,
-      op: 'consolidate',
-      metadata: { ...sleepAuditMetadata },
-    }]);
+    await ctx.store.appendAuditEvents([
+      {
+        tenantId: '__host__',
+        actor: ctx.actor.subject,
+        op: 'consolidate',
+        metadata: { ...sleepAuditMetadata },
+      },
+    ]);
   } catch (auditErr) {
     // Logged, never thrown: a second failure must not mask the original phaseError.
     ctx.local.consolidation.reportAuditFailure('consolidate', String(auditErr));

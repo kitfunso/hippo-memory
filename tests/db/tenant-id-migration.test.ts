@@ -22,7 +22,10 @@ describe('schema migration v16: tenant_id columns', () => {
       for (const tbl of ['memories', 'working_memory', 'consolidation_runs', 'task_snapshots', 'memory_conflicts']) {
         // SAFETY: PRAGMA table_info always returns rows with a "name" column per SQLite's fixed schema.
         const cols = db.prepare(`PRAGMA table_info(${tbl})`).all() as Array<{ name: string }>;
-        expect(cols.some((c) => c.name === 'tenant_id'), `${tbl}.tenant_id missing`).toBe(true);
+        expect(
+          cols.some((c) => c.name === 'tenant_id'),
+          `${tbl}.tenant_id missing`,
+        ).toBe(true);
       }
     } finally {
       closeHippoDb(db);
@@ -66,10 +69,15 @@ describe('schema migration v16: api_keys and audit_log tables', () => {
     const home = makeRoot('a5');
     const db = openHippoDb(home);
     try {
-      db.prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`)
-        .run('hk_abc', 'hash1', 'default', new Date().toISOString());
+      db.prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`).run(
+        'hk_abc',
+        'hash1',
+        'default',
+        new Date().toISOString(),
+      );
       expect(() =>
-        db.prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`)
+        db
+          .prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`)
           .run('hk_abc', 'hash2', 'default', new Date().toISOString()),
       ).toThrow(/UNIQUE/i);
     } finally {

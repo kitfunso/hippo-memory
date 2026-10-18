@@ -37,8 +37,8 @@ function makeWorkspaceWithRaw(rawId: string, kind = 'raw'): string {
   try {
     db.prepare(
       `INSERT INTO memories (${RAW_COLS}) VALUES ` +
-      `(?, '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', 'neutral', ` +
-      `0.5, 'connector', '[]', 0, 'observed', 'connector raw content', ?)`,
+        `(?, '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', 'neutral', ` +
+        `0.5, 'connector', '[]', 0, 'observed', 'connector raw content', ?)`,
     ).run(rawId, kind);
   } finally {
     closeHippoDb(db);

@@ -29,16 +29,30 @@ interface Wire {
 
 const KEY = 'k-wire-test';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const SKIPPED_HEADERS = new Set(['host', 'connection', 'accept-encoding', 'accept-language', 'sec-fetch-mode', 'user-agent', 'accept']);
+const SKIPPED_HEADERS = new Set([
+  'host',
+  'connection',
+  'accept-encoding',
+  'accept-language',
+  'sec-fetch-mode',
+  'user-agent',
+  'accept',
+]);
 
 function replyFor(mode: Mode, okText: string): { status: number; body: string } | null {
   switch (mode) {
-    case 'ok': return { status: 200, body: JSON.stringify({ content: [{ type: 'text', text: okText }] }) };
-    case 'http400': return { status: 400, body: '{"error":"bad"}' };
-    case 'http500': return { status: 500, body: '{"error":"down"}' };
-    case 'badjson': return { status: 200, body: 'not json' };
-    case 'empty': return { status: 200, body: JSON.stringify({ content: [] }) };
-    default: return null;
+    case 'ok':
+      return { status: 200, body: JSON.stringify({ content: [{ type: 'text', text: okText }] }) };
+    case 'http400':
+      return { status: 400, body: '{"error":"bad"}' };
+    case 'http500':
+      return { status: 500, body: '{"error":"down"}' };
+    case 'badjson':
+      return { status: 200, body: 'not json' };
+    case 'empty':
+      return { status: 200, body: JSON.stringify({ content: [] }) };
+    default:
+      return null;
   }
 }
 
@@ -51,7 +65,12 @@ async function startWire(mode: Mode, okText: string): Promise<Wire> {
     req.on('end', () => {
       const headers: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.headers)) if (!SKIPPED_HEADERS.has(k)) headers[k] = String(v);
-      requests.push({ method: req.method ?? '', path: req.url ?? '', headers, body: Buffer.concat(chunks).toString('utf8') });
+      requests.push({
+        method: req.method ?? '',
+        path: req.url ?? '',
+        headers,
+        body: Buffer.concat(chunks).toString('utf8'),
+      });
       if (reply === null) return; // 'hang' never answers
       res.writeHead(reply.status, { 'content-type': 'application/json' });
       res.end(reply.body);
@@ -107,7 +126,8 @@ const callers: CallerSpec[] = [
     maxTokens: 1200,
     bodySha256: '8a3cca2b99fff9e38016c7e231d5c51515f0a2a1f059ecb4e188e838a3bbfcff',
     contentLength: '806',
-    run: (fetcher, messages) => extractFacts('Alice likes tea', { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
+    run: (fetcher, messages) =>
+      extractFacts('Alice likes tea', { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
     expected: {
       ok: { result: [FACT], messages: [], requests: 1 },
       http400: { result: [], messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
@@ -124,7 +144,8 @@ const callers: CallerSpec[] = [
     maxTokens: 400,
     bodySha256: 'b68db51097ea54c1525e168b4b0bbcd6676799af9a254cacda0da32f68b83f28',
     contentLength: '529',
-    run: (fetcher, messages) => generateDagSummary('tea', ['Alice likes tea'], { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
+    run: (fetcher, messages) =>
+      generateDagSummary('tea', ['Alice likes tea'], { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
     expected: {
       ok: { result: DAG_TEXT, messages: [], requests: 1 },
       http400: { result: null, messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
@@ -144,11 +165,27 @@ const callers: CallerSpec[] = [
     run: (fetcher) => refineSemanticMemory('merged tea notes', [], { apiKey: KEY, fetcher }),
     expected: {
       ok: { result: REFINE_TEXT, messages: [], requests: 1 },
-      http400: { result: null, messages: ['[hippo] warn: refine: API answered HTTP 400: {"error":"bad"}'], requests: 1 },
-      http500: { result: null, messages: ['[hippo] warn: refine: API answered HTTP 500: {"error":"down"}'], requests: 3 },
-      badjson: { result: null, messages: [new RegExp(`^\\[hippo\\] warn: refine: unreadable response: ${NOT_JSON.source}`)], requests: 1 },
+      http400: {
+        result: null,
+        messages: ['[hippo] warn: refine: API answered HTTP 400: {"error":"bad"}'],
+        requests: 1,
+      },
+      http500: {
+        result: null,
+        messages: ['[hippo] warn: refine: API answered HTTP 500: {"error":"down"}'],
+        requests: 3,
+      },
+      badjson: {
+        result: null,
+        messages: [new RegExp(`^\\[hippo\\] warn: refine: unreadable response: ${NOT_JSON.source}`)],
+        requests: 1,
+      },
       empty: { result: null, messages: ['[hippo] warn: refine: response held no text'], requests: 1 },
-      hang: { result: null, messages: [new RegExp(`^\\[hippo\\] warn: refine: request failed: .*${TIMEOUT_MESSAGE.source}`)], requests: 1 },
+      hang: {
+        result: null,
+        messages: [new RegExp(`^\\[hippo\\] warn: refine: request failed: .*${TIMEOUT_MESSAGE.source}`)],
+        requests: 1,
+      },
       refused: { result: null, messages: ['[hippo] warn: refine: request failed: fetch failed'], requests: 0 },
     },
   },
@@ -160,11 +197,18 @@ let stderr: MockInstance<typeof process.stderr.write>;
 beforeAll(() => {
   vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '300');
 });
-beforeEach(() => { stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true); });
-afterEach(() => { stderr.mockRestore(); });
+beforeEach(() => {
+  stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+});
+afterEach(() => {
+  stderr.mockRestore();
+});
 
 function warnLines(): string[] {
-  return stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('warn: refine')).map((l) => l.replace(/ ts=\S+.*$/s, '').trimEnd());
+  return stderr.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('warn: refine'))
+    .map((l) => l.replace(/ ts=\S+.*$/s, '').trimEnd());
 }
 
 describe.each(callers)('$name over a real local server', (spec) => {

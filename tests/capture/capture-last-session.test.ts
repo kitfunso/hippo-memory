@@ -140,7 +140,11 @@ describe('summariseTranscript', () => {
   it('drops promptSource: system lines but keeps queued ones', () => {
     const jsonl = transcriptJsonl([
       { type: 'user', message: { role: 'user', content: 'please fix the login bug' }, promptSource: 'queued' },
-      { type: 'user', message: { role: 'user', content: 'Task notification: session idle timeout reached' }, promptSource: 'system' },
+      {
+        type: 'user',
+        message: { role: 'user', content: 'Task notification: session idle timeout reached' },
+        promptSource: 'system',
+      },
     ]);
 
     const summary = summariseTranscript(jsonl);
@@ -160,7 +164,10 @@ describe('summariseTranscript', () => {
           ],
         },
       },
-      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] },
+      },
     ]);
 
     const summary = summariseTranscript(jsonl);
@@ -234,8 +241,12 @@ describe('resolveLastSessionTranscript', () => {
     const real = path.join(proj, 'real.jsonl');
     fs.writeFileSync(real, '{}');
     // A dangling link lists fine and then fails stat with ENOENT, as a file deleted between the two calls does.
-    if (!trySymlink(path.join(tmp.dir, 'gone.jsonl'), path.join(proj, 'gone.jsonl'))
-      || !trySymlink(path.join(tmp.dir, 'gone-dir'), path.join(projects, 'gone-dir'), 'dir')) return ctx.skip();
+    if (
+      !trySymlink(path.join(tmp.dir, 'gone.jsonl'), path.join(proj, 'gone.jsonl')) ||
+      !trySymlink(path.join(tmp.dir, 'gone-dir'), path.join(projects, 'gone-dir'), 'dir')
+    ) {
+      return ctx.skip();
+    }
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(real);
   });
 
@@ -286,7 +297,9 @@ describe('resolveLastSessionTranscript', () => {
     plantOtherProjectTranscript();
     const gone = JSON.stringify({ session_id: 'abc', transcript_path: path.join(tmp.dir, 'gone.jsonl') });
     expect(resolveLastSessionTranscript(undefined, gone, { mayScan: true })).toBeNull();
-    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), { mayScan: true })).toBeNull();
+    expect(
+      resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), { mayScan: true }),
+    ).toBeNull();
     expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
 
@@ -351,7 +364,13 @@ describe('session workers never capture a transcript they were not handed', () =
 
   it('the Codex worker skips capture when no Codex transcript is found', async () => {
     const codexHome = path.join(tmp.dir, '.codex');
-    const log = await runWorker(['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl')]);
+    const log = await runWorker([
+      '__codex-session-end-worker',
+      '--codex-home',
+      codexHome,
+      '--history-path',
+      path.join(codexHome, 'history.jsonl'),
+    ]);
     expect(log).toContain('skip capture: no Codex transcript for this session');
     expect(log).not.toContain('capturing session');
   });
@@ -386,18 +405,14 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     // Init a hippo store in the tmp cwd so capture doesn't bail out
     // on `No .hippo directory found`.
     const binPath = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
-    const init = spawnSync(
-      process.execPath,
-      [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'],
-      {
-        cwd: tmp.dir,
-        // HIPPO_HOME isolates the global store. `hippo init` registers the
-        // workspace into <globalRoot>/workspaces.json; without this it writes
-        // the developer's real ~/.hippo registry.
-        env: { ...process.env, HIPPO_HOME: tmp.dir },
-        stdio: 'ignore',
-      },
-    );
+    const init = spawnSync(process.execPath, [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: tmp.dir,
+      // HIPPO_HOME isolates the global store. `hippo init` registers the
+      // workspace into <globalRoot>/workspaces.json; without this it writes
+      // the developer's real ~/.hippo registry.
+      env: { ...process.env, HIPPO_HOME: tmp.dir },
+      stdio: 'ignore',
+    });
     expect(init.status).toBe(0);
 
     // Spawn the actual CLI so we exercise the same code path the hook runs.
@@ -405,16 +420,7 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     // the tee wrapper captures stdout.
     const result = spawnSync(
       process.execPath,
-      [
-        binPath,
-        'capture',
-        '--last-session',
-        '--transcript',
-        transcript,
-        '--log-file',
-        logFile,
-        '--dry-run',
-      ],
+      [binPath, 'capture', '--last-session', '--transcript', transcript, '--log-file', logFile, '--dry-run'],
       {
         cwd: tmp.dir,
         env: { ...process.env, HIPPO_HOME: tmp.dir },
@@ -426,8 +432,8 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     expect(result.status).toBe(0);
 
     const contents = fs.readFileSync(logFile, 'utf8');
-    expect(contents).toContain('[hippo] sleep complete');   // preserved
-    expect(contents).toContain('capturing session...');      // banner appended
-    expect(contents).toContain('[hippo] capture complete');  // completion marker
+    expect(contents).toContain('[hippo] sleep complete'); // preserved
+    expect(contents).toContain('capturing session...'); // banner appended
+    expect(contents).toContain('[hippo] capture complete'); // completion marker
   });
 });

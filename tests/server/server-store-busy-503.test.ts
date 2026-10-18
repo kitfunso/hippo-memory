@@ -45,11 +45,13 @@ describe('server under a held write lock', () => {
     const warn = vi.spyOn(log, 'warn');
     const error = vi.spyOn(log, 'error');
     holder.exec('BEGIN IMMEDIATE');
-    const { result: busy, statements } = await recordStatementsAsync(() => fetch(`${handle.url}/v1/memories`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: 'written while another process holds the lock' }),
-    }));
+    const { result: busy, statements } = await recordStatementsAsync(() =>
+      fetch(`${handle.url}/v1/memories`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content: 'written while another process holds the lock' }),
+      }),
+    );
     holder.exec('ROLLBACK');
 
     expect(busy.status).toBe(503);
@@ -72,8 +74,17 @@ describe('server under a held write lock', () => {
   it("opens a store worker's connection with the wait its executor passed and tries a write behind the lock once", async () => {
     const { port1, port2 } = new MessageChannel();
     const replied = new Promise<Reply>((resolve) => port2.once('message', resolve));
-    const entry = createMemory('sent to the job loop while another process holds the lock', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'default' });
-    const job: Job = { id: 1, op: 'entryWrites.writeEntry', args: [{ entry, actor: 'test' }], requestId: undefined, walPages: 100 };
+    const entry = createMemory('sent to the job loop while another process holds the lock', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: 'default',
+    });
+    const job: Job = {
+      id: 1,
+      op: 'entryWrites.writeEntry',
+      args: [{ entry, actor: 'test' }],
+      requestId: undefined,
+      walPages: 100,
+    };
     holder.exec('BEGIN IMMEDIATE');
     // The worker's own job loop, run on this thread so its statements can be read; 7 is a wait no default has.
     const { result: reply, statements } = await recordStatementsAsync(() => {

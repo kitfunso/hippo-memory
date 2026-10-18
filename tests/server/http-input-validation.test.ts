@@ -66,71 +66,305 @@ describe('HTTP input validation', () => {
   const bad: Array<[string, string, string, Body | undefined, RegExp]> = [
     ['memory kind', 'POST', '/v1/memories', { content: 'a fact', kind: 'opinion' }, /invalid kind: opinion/],
     ['memory scope type', 'POST', '/v1/memories', { content: 'a fact', scope: 123 }, /scope must be a string/],
-    ['memory tags type', 'POST', '/v1/memories', { content: 'a fact', tags: ['a', 1] }, /tags must be an array of strings/],
+    [
+      'memory tags type',
+      'POST',
+      '/v1/memories',
+      { content: 'a fact', tags: ['a', 1] },
+      /tags must be an array of strings/,
+    ],
     ['outcome ids type', 'POST', '/v1/outcome', { good: true, ids: 'mem_1' }, /ids must be an array/],
     ['sleep no_share type', 'POST', '/v1/sleep', { no_share: 'yes' }, /no_share must be a boolean/],
     ['key label type', 'POST', '/v1/auth/keys', { label: 7 }, /label must be a string/],
     ['key role', 'POST', '/v1/auth/keys', { role: 'owner' }, /role must be 'admin' or 'member'/],
     ['prediction classTag', 'POST', '/v1/predictions', { claim: 'c', classTag: '' }, /classTag is required/],
-    ['prediction estimate', 'POST', '/v1/predictions', { claim: 'c', classTag: 't', estimate: 'ten' }, /estimate must be a finite number/],
+    [
+      'prediction estimate',
+      'POST',
+      '/v1/predictions',
+      { claim: 'c', classTag: 't', estimate: 'ten' },
+      /estimate must be a finite number/,
+    ],
     ['prediction unit', 'POST', '/v1/predictions', { claim: 'c', classTag: 't', unit: 3 }, /unit must be a string/],
-    ['prediction targetDate', 'POST', '/v1/predictions', { claim: 'c', classTag: 't', targetDate: 20260101 }, /targetDate must be an ISO date string/],
-    ['prediction close actual', 'POST', '/v1/predictions/1/close', { state: 'closed', actual: 'n/a' }, /actual must be a finite number/],
-    ['prediction close note type', 'POST', '/v1/predictions/1/close', { state: 'closed', note: 1 }, /note must be a string/],
-    ['prediction close note cap', 'POST', '/v1/predictions/1/close', { state: 'closed', note: long(2048) }, /note exceeds 2048/],
+    [
+      'prediction targetDate',
+      'POST',
+      '/v1/predictions',
+      { claim: 'c', classTag: 't', targetDate: 20260101 },
+      /targetDate must be an ISO date string/,
+    ],
+    [
+      'prediction close actual',
+      'POST',
+      '/v1/predictions/1/close',
+      { state: 'closed', actual: 'n/a' },
+      /actual must be a finite number/,
+    ],
+    [
+      'prediction close note type',
+      'POST',
+      '/v1/predictions/1/close',
+      { state: 'closed', note: 1 },
+      /note must be a string/,
+    ],
+    [
+      'prediction close note cap',
+      'POST',
+      '/v1/predictions/1/close',
+      { state: 'closed', note: long(2048) },
+      /note exceeds 2048/,
+    ],
     ['decision context type', 'POST', '/v1/decisions', { text: 't', context: 1 }, /context must be a string/],
     ['decision context cap', 'POST', '/v1/decisions', { text: 't', context: long(4096) }, /context exceeds 4096/],
-    ['decision supersedes id', 'POST', '/v1/decisions', { text: 't', supersedesDecisionId: -2 }, /supersedesDecisionId must be a positive integer/],
+    [
+      'decision supersedes id',
+      'POST',
+      '/v1/decisions',
+      { text: 't', supersedesDecisionId: -2 },
+      /supersedesDecisionId must be a positive integer/,
+    ],
     ['decision supersede text cap', 'POST', '/v1/decisions/1/supersede', { text: long(4096) }, /text exceeds 4096/],
-    ['decision supersede context type', 'POST', '/v1/decisions/1/supersede', { text: 't', context: 1 }, /context must be a string/],
-    ['decision supersede context cap', 'POST', '/v1/decisions/1/supersede', { text: 't', context: long(4096) }, /context exceeds 4096/],
+    [
+      'decision supersede context type',
+      'POST',
+      '/v1/decisions/1/supersede',
+      { text: 't', context: 1 },
+      /context must be a string/,
+    ],
+    [
+      'decision supersede context cap',
+      'POST',
+      '/v1/decisions/1/supersede',
+      { text: 't', context: long(4096) },
+      /context exceeds 4096/,
+    ],
     ['incident context type', 'POST', '/v1/incidents', { text: 't', context: 1 }, /context must be a string/],
     ['incident context cap', 'POST', '/v1/incidents', { text: 't', context: long(4096) }, /context exceeds 4096/],
-    ['incident linked type', 'POST', '/v1/incidents', { text: 't', linkedMemoryIds: 'mem_1' }, /must be an array of memory ids/],
-    ['incident linked cap', 'POST', '/v1/incidents', { text: 't', linkedMemoryIds: Array.from({ length: 257 }, (_, i) => `m${i}`) }, /exceeds 256-item cap/],
-    ['incident linked entry', 'POST', '/v1/incidents', { text: 't', linkedMemoryIds: [''] }, /each linkedMemoryIds entry/],
-    ['incident resolution cap', 'POST', '/v1/incidents/1/resolve', { resolutionText: long(4096) }, /resolutionText exceeds 4096/],
+    [
+      'incident linked type',
+      'POST',
+      '/v1/incidents',
+      { text: 't', linkedMemoryIds: 'mem_1' },
+      /must be an array of memory ids/,
+    ],
+    [
+      'incident linked cap',
+      'POST',
+      '/v1/incidents',
+      { text: 't', linkedMemoryIds: Array.from({ length: 257 }, (_, i) => `m${i}`) },
+      /exceeds 256-item cap/,
+    ],
+    [
+      'incident linked entry',
+      'POST',
+      '/v1/incidents',
+      { text: 't', linkedMemoryIds: [''] },
+      /each linkedMemoryIds entry/,
+    ],
+    [
+      'incident resolution cap',
+      'POST',
+      '/v1/incidents/1/resolve',
+      { resolutionText: long(4096) },
+      /resolutionText exceeds 4096/,
+    ],
     ['process name cap', 'POST', '/v1/processes', { processName: long(4096) }, /processName exceeds 4096/],
-    ['process steps type', 'POST', '/v1/processes', { processName: 'p', steps: 'tag' }, /steps must be an array of strings/],
+    [
+      'process steps type',
+      'POST',
+      '/v1/processes',
+      { processName: 'p', steps: 'tag' },
+      /steps must be an array of strings/,
+    ],
     ['process step type', 'POST', '/v1/processes', { processName: 'p', steps: [1] }, /each step must be a string/],
     ['process step empty', 'POST', '/v1/processes', { processName: 'p', steps: ['  '] }, /a step is empty/],
-    ['process step cap', 'POST', '/v1/processes', { processName: 'p', steps: [long(2000)] }, /a step exceeds the 2000-character cap/],
-    ['process description type', 'POST', '/v1/processes', { processName: 'p', description: 1 }, /description must be a string/],
-    ['process description cap', 'POST', '/v1/processes', { processName: 'p', description: long(4096) }, /description exceeds 4096/],
-    ['process supersede change type', 'POST', '/v1/processes/1/supersede', { steps: ['a'], changeSummary: 1 }, /changeSummary must be a string/],
-    ['process supersede change cap', 'POST', '/v1/processes/1/supersede', { steps: ['a'], changeSummary: long(4096) }, /changeSummary exceeds 4096/],
-    ['process supersede description type', 'POST', '/v1/processes/1/supersede', { steps: ['a'], description: 1 }, /description must be a string/],
-    ['process supersede description cap', 'POST', '/v1/processes/1/supersede', { steps: ['a'], description: long(4096) }, /description exceeds 4096/],
+    [
+      'process step cap',
+      'POST',
+      '/v1/processes',
+      { processName: 'p', steps: [long(2000)] },
+      /a step exceeds the 2000-character cap/,
+    ],
+    [
+      'process description type',
+      'POST',
+      '/v1/processes',
+      { processName: 'p', description: 1 },
+      /description must be a string/,
+    ],
+    [
+      'process description cap',
+      'POST',
+      '/v1/processes',
+      { processName: 'p', description: long(4096) },
+      /description exceeds 4096/,
+    ],
+    [
+      'process supersede change type',
+      'POST',
+      '/v1/processes/1/supersede',
+      { steps: ['a'], changeSummary: 1 },
+      /changeSummary must be a string/,
+    ],
+    [
+      'process supersede change cap',
+      'POST',
+      '/v1/processes/1/supersede',
+      { steps: ['a'], changeSummary: long(4096) },
+      /changeSummary exceeds 4096/,
+    ],
+    [
+      'process supersede description type',
+      'POST',
+      '/v1/processes/1/supersede',
+      { steps: ['a'], description: 1 },
+      /description must be a string/,
+    ],
+    [
+      'process supersede description cap',
+      'POST',
+      '/v1/processes/1/supersede',
+      { steps: ['a'], description: long(4096) },
+      /description exceeds 4096/,
+    ],
     ['policy name cap', 'POST', '/v1/policies', { policyName: long(4096), policyText: 't' }, /policyName exceeds 4096/],
     ['policy text', 'POST', '/v1/policies', { policyName: 'p' }, /policyText is required/],
-    ['policy validFrom type', 'POST', '/v1/policies', { policyName: 'p', policyText: 't', validFrom: 1 }, /validFrom must be a string/],
-    ['policy validTo cap', 'POST', '/v1/policies', { policyName: 'p', policyText: 't', validTo: long(64) }, /validTo exceeds 64-character cap/],
-    ['policy supersede text cap', 'POST', '/v1/policies/1/supersede', { policyText: long(4096) }, /policyText exceeds 4096/],
-    ['policy supersede change type', 'POST', '/v1/policies/1/supersede', { policyText: 't', changeSummary: 1 }, /changeSummary must be a string/],
-    ['policy supersede change cap', 'POST', '/v1/policies/1/supersede', { policyText: 't', changeSummary: long(4096) }, /changeSummary exceeds 4096/],
+    [
+      'policy validFrom type',
+      'POST',
+      '/v1/policies',
+      { policyName: 'p', policyText: 't', validFrom: 1 },
+      /validFrom must be a string/,
+    ],
+    [
+      'policy validTo cap',
+      'POST',
+      '/v1/policies',
+      { policyName: 'p', policyText: 't', validTo: long(64) },
+      /validTo exceeds 64-character cap/,
+    ],
+    [
+      'policy supersede text cap',
+      'POST',
+      '/v1/policies/1/supersede',
+      { policyText: long(4096) },
+      /policyText exceeds 4096/,
+    ],
+    [
+      'policy supersede change type',
+      'POST',
+      '/v1/policies/1/supersede',
+      { policyText: 't', changeSummary: 1 },
+      /changeSummary must be a string/,
+    ],
+    [
+      'policy supersede change cap',
+      'POST',
+      '/v1/policies/1/supersede',
+      { policyText: 't', changeSummary: long(4096) },
+      /changeSummary exceeds 4096/,
+    ],
     ['skill name cap', 'POST', '/v1/skills', { skillName: long(256), instructions: 'i' }, /skillName exceeds 256/],
     ['skill instructions', 'POST', '/v1/skills', { skillName: 's' }, /instructions are required/],
-    ['skill trigger type', 'POST', '/v1/skills', { skillName: 's', instructions: 'i', trigger: 1 }, /trigger must be a string/],
-    ['skill trigger cap', 'POST', '/v1/skills', { skillName: 's', instructions: 'i', trigger: long(1024) }, /trigger exceeds 1024/],
-    ['skill supersede instructions cap', 'POST', '/v1/skills/1/supersede', { instructions: long(8192) }, /instructions exceed 8192/],
-    ['skill supersede trigger type', 'POST', '/v1/skills/1/supersede', { instructions: 'i', trigger: 1 }, /trigger must be a string/],
-    ['skill supersede trigger cap', 'POST', '/v1/skills/1/supersede', { instructions: 'i', trigger: long(1024) }, /trigger exceeds 1024/],
-    ['skill supersede change type', 'POST', '/v1/skills/1/supersede', { instructions: 'i', changeSummary: 1 }, /changeSummary must be a string/],
-    ['skill supersede change cap', 'POST', '/v1/skills/1/supersede', { instructions: 'i', changeSummary: long(4096) }, /changeSummary exceeds 4096/],
+    [
+      'skill trigger type',
+      'POST',
+      '/v1/skills',
+      { skillName: 's', instructions: 'i', trigger: 1 },
+      /trigger must be a string/,
+    ],
+    [
+      'skill trigger cap',
+      'POST',
+      '/v1/skills',
+      { skillName: 's', instructions: 'i', trigger: long(1024) },
+      /trigger exceeds 1024/,
+    ],
+    [
+      'skill supersede instructions cap',
+      'POST',
+      '/v1/skills/1/supersede',
+      { instructions: long(8192) },
+      /instructions exceed 8192/,
+    ],
+    [
+      'skill supersede trigger type',
+      'POST',
+      '/v1/skills/1/supersede',
+      { instructions: 'i', trigger: 1 },
+      /trigger must be a string/,
+    ],
+    [
+      'skill supersede trigger cap',
+      'POST',
+      '/v1/skills/1/supersede',
+      { instructions: 'i', trigger: long(1024) },
+      /trigger exceeds 1024/,
+    ],
+    [
+      'skill supersede change type',
+      'POST',
+      '/v1/skills/1/supersede',
+      { instructions: 'i', changeSummary: 1 },
+      /changeSummary must be a string/,
+    ],
+    [
+      'skill supersede change cap',
+      'POST',
+      '/v1/skills/1/supersede',
+      { instructions: 'i', changeSummary: long(4096) },
+      /changeSummary exceeds 4096/,
+    ],
     ['brief repo cap', 'POST', '/v1/project-briefs', { repo: long(256), summary: 's' }, /repo exceeds 256/],
     ['brief summary', 'POST', '/v1/project-briefs', { repo: 'r' }, /summary is required/],
     ['brief refresh repo cap', 'POST', '/v1/project-briefs/refresh', { repo: long(256) }, /repo exceeds 256/],
-    ['brief supersede summary cap', 'POST', '/v1/project-briefs/1/supersede', { summary: long(8192) }, /summary exceeds 8192/],
-    ['brief supersede change type', 'POST', '/v1/project-briefs/1/supersede', { summary: 's', changeSummary: 1 }, /changeSummary must be a string/],
-    ['brief supersede change cap', 'POST', '/v1/project-briefs/1/supersede', { summary: 's', changeSummary: long(4096) }, /changeSummary exceeds 4096/],
+    [
+      'brief supersede summary cap',
+      'POST',
+      '/v1/project-briefs/1/supersede',
+      { summary: long(8192) },
+      /summary exceeds 8192/,
+    ],
+    [
+      'brief supersede change type',
+      'POST',
+      '/v1/project-briefs/1/supersede',
+      { summary: 's', changeSummary: 1 },
+      /changeSummary must be a string/,
+    ],
+    [
+      'brief supersede change cap',
+      'POST',
+      '/v1/project-briefs/1/supersede',
+      { summary: 's', changeSummary: long(4096) },
+      /changeSummary exceeds 4096/,
+    ],
     ['note customer cap', 'POST', '/v1/customer-notes', { customer: long(256), note: 'n' }, /customer exceeds 256/],
     ['note text', 'POST', '/v1/customer-notes', { customer: 'c' }, /note is required/],
     ['note supersede text cap', 'POST', '/v1/customer-notes/1/supersede', { note: long(8192) }, /note exceeds 8192/],
-    ['note supersede change type', 'POST', '/v1/customer-notes/1/supersede', { note: 'n', changeSummary: 1 }, /changeSummary must be a string/],
-    ['note supersede change cap', 'POST', '/v1/customer-notes/1/supersede', { note: 'n', changeSummary: long(4096) }, /changeSummary exceeds 4096/],
+    [
+      'note supersede change type',
+      'POST',
+      '/v1/customer-notes/1/supersede',
+      { note: 'n', changeSummary: 1 },
+      /changeSummary must be a string/,
+    ],
+    [
+      'note supersede change cap',
+      'POST',
+      '/v1/customer-notes/1/supersede',
+      { note: 'n', changeSummary: long(4096) },
+      /changeSummary exceeds 4096/,
+    ],
     ['graph entity cap', 'GET', `/v1/graph?entity=${long(512)}`, undefined, /entity exceeds the 512-character cap/],
     ['context scope cap', 'GET', `/v1/context?scope=${long(256)}`, undefined, /scope exceeds 256-character cap/],
-    ['context include_recent', 'GET', '/v1/context?include_recent=-1', undefined, /include_recent must be a non-negative number/],
+    [
+      'context include_recent',
+      'GET',
+      '/v1/context?include_recent=-1',
+      undefined,
+      /include_recent must be a non-negative number/,
+    ],
     ['quarantine status', 'GET', '/v1/quarantine?status=maybe', undefined, /status must be one of: pending/],
     ['prediction list closed needs class', 'GET', '/v1/predictions?status=closed', undefined, /requires class param/],
     ['prediction stats class cap', 'GET', `/v1/predictions/stats?class=${long(256)}`, undefined, /class exceeds 256/],
@@ -143,23 +377,42 @@ describe('HTTP input validation', () => {
   });
 
   it('none of the rejected writes reached the store', async () => {
-    const counts = await Promise.all([
-      ['/v1/decisions?status=all', 'decisions'], ['/v1/incidents?status=all', 'incidents'], ['/v1/processes?status=all', 'processes'],
-      ['/v1/policies?status=all', 'policies'], ['/v1/skills?status=all', 'skills'], ['/v1/project-briefs?status=all', 'briefs'],
-      ['/v1/customer-notes?status=all', 'notes'], ['/v1/predictions?status=all', 'predictions'],
-    ].map(async ([path, key]) => {
-      const r = await call('GET', path);
-      expect(r.status).toBe(200);
-      const rows = r.json[key];
-      return [key, Array.isArray(rows) ? rows.length : -1];
-    }));
-    expect(Object.fromEntries(counts)).toEqual({ decisions: 1, incidents: 0, processes: 1, policies: 1, skills: 1, briefs: 1, notes: 1, predictions: 1 });
+    const counts = await Promise.all(
+      [
+        ['/v1/decisions?status=all', 'decisions'],
+        ['/v1/incidents?status=all', 'incidents'],
+        ['/v1/processes?status=all', 'processes'],
+        ['/v1/policies?status=all', 'policies'],
+        ['/v1/skills?status=all', 'skills'],
+        ['/v1/project-briefs?status=all', 'briefs'],
+        ['/v1/customer-notes?status=all', 'notes'],
+        ['/v1/predictions?status=all', 'predictions'],
+      ].map(async ([path, key]) => {
+        const r = await call('GET', path);
+        expect(r.status).toBe(200);
+        const rows = r.json[key];
+        return [key, Array.isArray(rows) ? rows.length : -1];
+      }),
+    );
+    expect(Object.fromEntries(counts)).toEqual({
+      decisions: 1,
+      incidents: 0,
+      processes: 1,
+      policies: 1,
+      skills: 1,
+      briefs: 1,
+      notes: 1,
+      predictions: 1,
+    });
   });
 
   it('supersede of a row that does not exist is a 404 on every versioned kind', async () => {
     const cases: Array<[string, Body]> = [
-      ['processes', { steps: ['a'] }], ['policies', { policyText: 't' }], ['skills', { instructions: 'i' }],
-      ['project-briefs', { summary: 's' }], ['customer-notes', { note: 'n' }],
+      ['processes', { steps: ['a'] }],
+      ['policies', { policyText: 't' }],
+      ['skills', { instructions: 'i' }],
+      ['project-briefs', { summary: 's' }],
+      ['customer-notes', { note: 'n' }],
     ];
     for (const [kind, body] of cases) {
       const r = await call('POST', `/v1/${kind}/99999/supersede`, body);
@@ -181,16 +434,26 @@ describe('HTTP input validation', () => {
     const d = await call('POST', `/v1/decisions/${ids.decision}/supersede`, { text: 'use postgres', context: 'scale' });
     expect(d.status).toBe(201);
     expect(d.json.decision).toMatchObject({ context: 'scale' });
-    const p = await call('POST', `/v1/processes/${ids.process}/supersede`, { steps: ['tag', 'sign', 'publish'], description: 'signed now' });
+    const p = await call('POST', `/v1/processes/${ids.process}/supersede`, {
+      steps: ['tag', 'sign', 'publish'],
+      description: 'signed now',
+    });
     expect(p.status).toBe(200);
     expect(p.json.process).toMatchObject({ description: 'signed now', steps: ['tag', 'sign', 'publish'] });
-    const s = await call('POST', `/v1/skills/${ids.skill}/supersede`, { instructions: 'halve it', trigger: 'flaky test' });
+    const s = await call('POST', `/v1/skills/${ids.skill}/supersede`, {
+      instructions: 'halve it',
+      trigger: 'flaky test',
+    });
     expect(s.status).toBe(200);
     expect(s.json.skill).toMatchObject({ trigger: 'flaky test' });
   });
 
   it('closed predictions are listed by class once one is closed', async () => {
-    const close = await call('POST', `/v1/predictions/${ids.prediction}/close`, { state: 'closed', actual: 3, note: 'slipped' });
+    const close = await call('POST', `/v1/predictions/${ids.prediction}/close`, {
+      state: 'closed',
+      actual: 3,
+      note: 'slipped',
+    });
     expect(close.status).toBe(200);
     const r = await call('GET', '/v1/predictions?status=closed&class=release');
     expect(r.status).toBe(200);
@@ -218,10 +481,13 @@ describe('HTTP input validation', () => {
 
   it('a request target the URL parser rejects is a 400, not a 500', async () => {
     const status = await new Promise<number | undefined>((resolve, reject) => {
-      const req = request({ host: '127.0.0.1', port: Number(new URL(handle.url).port), path: '//[', method: 'GET' }, (res) => {
-        res.resume();
-        resolve(res.statusCode);
-      });
+      const req = request(
+        { host: '127.0.0.1', port: Number(new URL(handle.url).port), path: '//[', method: 'GET' },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        },
+      );
       req.on('error', reject);
       req.end();
     });

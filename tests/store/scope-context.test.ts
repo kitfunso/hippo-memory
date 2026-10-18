@@ -52,8 +52,14 @@ describe('scope-aware context injection', () => {
     writeEntry(hippoDir, unscoped);
 
     const out = await runHippo([
-      'context', '--pinned-only', '--scope', 'plan-eng-review',
-      '--format', 'json', '--budget', '2000',
+      'context',
+      '--pinned-only',
+      '--scope',
+      'plan-eng-review',
+      '--format',
+      'json',
+      '--budget',
+      '2000',
     ]);
     const parsed = JSON.parse(out);
     expect(parsed.memories.length).toBeGreaterThanOrEqual(2);
@@ -82,10 +88,7 @@ describe('scope-aware context injection', () => {
     writeEntry(hippoDir, scoped);
     writeEntry(hippoDir, unscoped);
 
-    const out = await runHippo([
-      'context', '--pinned-only', '--scope', 'qa',
-      '--format', 'json', '--budget', '2000',
-    ]);
+    const out = await runHippo(['context', '--pinned-only', '--scope', 'qa', '--format', 'json', '--budget', '2000']);
     const parsed = JSON.parse(out);
     expect(parsed.memories.length).toBeGreaterThanOrEqual(2);
 

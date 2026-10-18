@@ -53,7 +53,16 @@ describe('cross-ingest determinism', () => {
 
     async function ingestSimExtractUnder(root: string) {
       vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', root);
-      const rowsByQuestion: Record<string, Array<{ memory_id: string; sessionIndex: number; turnIdx: number; gold: number; features: Record<string, number> }>> = {};
+      const rowsByQuestion: Record<
+        string,
+        Array<{
+          memory_id: string;
+          sessionIndex: number;
+          turnIdx: number;
+          gold: number;
+          features: Record<string, number>;
+        }>
+      > = {};
       for (const q of QUESTIONS) {
         ingestQuestion(q);
         // SAFETY: ingestQuestion (ingest.mjs) always writes a meta.json with
@@ -78,7 +87,9 @@ describe('cross-ingest determinism', () => {
       const runB = await ingestSimExtractUnder(rootB);
 
       // SAFETY: evaluateAll returns summary.train as scorer -> budget -> { meanRetention } (evaluate.mjs); the inferred type is {}.
-      const trainOf = (r: { evalResult: { summary: unknown } }) => (r.evalResult.summary as { train: Record<string, Record<number, { meanRetention: number } | undefined>> }).train;
+      const trainOf = (r: { evalResult: { summary: unknown } }) =>
+        (r.evalResult.summary as { train: Record<string, Record<number, { meanRetention: number } | undefined>> })
+          .train;
 
       // (1) retention identical for EVERY scorer x budget (not just recency) —
       // this is the property the previous memory_id-primary tie-break broke.

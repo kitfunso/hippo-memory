@@ -42,12 +42,30 @@ import { ingestQuestion } from '../../benchmarks/memory-value/ingest.mjs';
 import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../../benchmarks/memory-value/evaluate.mjs';
-import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../../benchmarks/memory-value/common.mjs';
+import {
+  questionDir,
+  metaPathFor,
+  featuresPathFor,
+  goldPathFor,
+  readJsonl,
+  readJson,
+  computeGold,
+  scratchRootDir,
+  sanitizeQuestionId,
+  safeRemoveScratchDir,
+} from '../../benchmarks/memory-value/common.mjs';
 import { computeSchemaFit } from '../../dist/core/memory.js';
 
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
+import {
+  clearAblationEnv,
+  QUESTIONS,
+  QUESTION_C,
+  cleanupScratch,
+  runPipeline,
+  TEST_SIM_ROUNDS,
+} from './memory-value-fixtures.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -319,8 +337,8 @@ describe('--skip-simulate variance-gate exemption', () => {
       extractQuestion(q.question_id, meta.tEval);
     }
     try {
-      const storesRows = QUESTIONS.map(
-        (q) => jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id)),
+      const storesRows = QUESTIONS.map((q) =>
+        jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id)),
       );
       const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
 
@@ -337,7 +355,9 @@ describe('--skip-simulate variance-gate exemption', () => {
 
       const defaultGate = evaluateVarianceGate(varying, dead); // minVarying defaults to 6
       expect(defaultGate.passed).toBe(false);
-      const skipSimulateGate = evaluateVarianceGate(varying, dead, { minVarying: CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE });
+      const skipSimulateGate = evaluateVarianceGate(varying, dead, {
+        minVarying: CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE,
+      });
       expect(CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE).toBe(3);
       expect(skipSimulateGate.passed).toBe(true);
     } finally {
@@ -414,8 +434,8 @@ describe('variance gate (pure logic, no I/O)', () => {
     for (const q of QUESTIONS) {
       await runPipeline(q);
     }
-    const storesRows = QUESTIONS.map(
-      (q) => jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id)),
+    const storesRows = QUESTIONS.map((q) =>
+      jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id)),
     );
     const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
     const gate = evaluateVarianceGate(varying, dead);

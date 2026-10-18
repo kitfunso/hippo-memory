@@ -34,11 +34,7 @@ describe('llmReranker', () => {
       ),
     );
 
-    const inputs = [
-      asResult('alpha content', 1.0),
-      asResult('beta content', 0.9),
-      asResult('gamma content', 0.8),
-    ];
+    const inputs = [asResult('alpha content', 1.0), asResult('beta content', 0.9), asResult('gamma content', 0.8)];
     const out = await llmReranker('test query', inputs);
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -49,10 +45,10 @@ describe('llmReranker', () => {
 
   it('falls back to input ordering when the model returns malformed output', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ choices: [{ message: { content: 'not a permutation' } }] }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+      new Response(JSON.stringify({ choices: [{ message: { content: 'not a permutation' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
     );
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     const out = await llmReranker('q', inputs);
@@ -101,7 +97,9 @@ describe('llmReranker', () => {
 
     expect(first.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
     expect(second.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
-    const warnings = stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('llm reranker unavailable'));
+    const warnings = stderr.mock.calls
+      .map((c) => String(c[0]))
+      .filter((line) => line.includes('llm reranker unavailable'));
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('HTTP 400');
   });
@@ -109,9 +107,12 @@ describe('llmReranker', () => {
   it('names the timeout in its warning', async () => {
     vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', '5');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
-    }));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+    );
     await createLlmReranker()('q', [asResult('alpha', 1.0)]);
     vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('no answer within 5 ms');
@@ -230,12 +231,17 @@ describe('llmReranker reply size cap', () => {
       req.resume();
       res.writeHead(200, { 'content-type': 'application/json' });
       const chunk = Buffer.alloc(64 * 1024, 0x20);
-      res.on('close', () => { closedEarly = true; });
+      res.on('close', () => {
+        closedEarly = true;
+      });
       // Streams up to 200 MiB, so a reader with no cap would sit here buffering until the end.
       const pump = (): void => {
         while (sent < 200 * 1024 * 1024 && !closedEarly) {
           sent += chunk.length;
-          if (!res.write(chunk)) { res.once('drain', pump); return; }
+          if (!res.write(chunk)) {
+            res.once('drain', pump);
+            return;
+          }
         }
         res.end();
       };

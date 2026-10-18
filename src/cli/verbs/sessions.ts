@@ -6,7 +6,8 @@ import { type VerbSpec, verb } from '../verb-row.js';
 export const SESSION_VERBS = {
   snapshot: verb(() => import('../continuity.js'), 'handleSnapshot', {
     flags: { switches: ['json'], values: ['id', 'next-step', 'session', 'source', 'status', 'summary', 'task'] },
-    usage: [`
+    usage: [
+      `
   snapshot <sub>           Persist or inspect the current active task
     snapshot save          Save active task state
       --task <task>
@@ -17,7 +18,8 @@ export const SESSION_VERBS = {
     snapshot show          Show the active task snapshot
       --json               Output as JSON
     snapshot clear         Clear the active task snapshot
-      --status <status>    Mark final status (default: cleared)`],
+      --status <status>    Mark final status (default: cleared)`,
+    ],
   }),
   session: verb(() => import('../continuity.js'), 'handleSession', {
     flags: {
@@ -25,7 +27,8 @@ export const SESSION_VERBS = {
       values: ['content', 'id', 'outcome', 'session', 'source', 'summary', 'task', 'type'],
       numbers: ['limit'],
     },
-    usage: [`
+    usage: [
+      `
   session <sub>            Append or inspect short-term session history
     session log            Append a structured session event
       --id <session-id>
@@ -42,7 +45,8 @@ export const SESSION_VERBS = {
       --id <session-id>   Filter by session
       --json               Output as JSON
     session resume         Re-inject latest handoff as context output
-      --id <session-id>   Filter by session`],
+      --id <session-id>   Filter by session`,
+    ],
   }),
   handoff: verb(() => import('../continuity.js'), 'handleHandoff', {
     flags: {
@@ -50,7 +54,8 @@ export const SESSION_VERBS = {
       values: ['card-id', 'id', 'next', 'outcome', 'session', 'summary', 'target-runtime', 'task', 'tests'],
       lists: ['artifact', 'constraint'],
     },
-    usage: [`
+    usage: [
+      `
   handoff <sub>            Manage session handoffs for continuity
     handoff create         Create a new session handoff
       --summary <text>     Handoff summary (required)
@@ -66,17 +71,31 @@ export const SESSION_VERBS = {
     handoff latest         Show the most recent handoff
       --session <id>       Filter by session
       --json               Output as JSON
-    handoff show <id>      Show a specific handoff by ID`],
+    handoff show <id>      Show a specific handoff by ID`,
+    ],
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
     // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not read.
     flags: {
       switches: ['json'],
-      values: ['author', 'body', 'budget', 'contract', 'outcome', 'reason', 'repo', 'run', 'runtime', 'session',
-        'status', 'title'],
+      values: [
+        'author',
+        'body',
+        'budget',
+        'contract',
+        'outcome',
+        'reason',
+        'repo',
+        'run',
+        'runtime',
+        'session',
+        'status',
+        'title',
+      ],
       lists: ['depends-on'],
     },
-    usage: [`
+    usage: [
+      `
   card <sub>                Manage claimable work-queue cards
     card create             Create a new card
       --title <text>        Card title (required)
@@ -104,76 +123,97 @@ export const SESSION_VERBS = {
     card reclaim              Return every running card whose lease has expired to ready
     card comment <id>         Add a comment to a card
       --body <text>          Comment body (required)
-      --author <name>       Comment author (default: cli)`],
+      --author <name>       Comment author (default: cli)`,
+    ],
   }),
   current: verb(() => import('../continuity.js'), 'handleCurrent', {
     flags: { switches: ['json'] },
-    usage: [`
+    usage: [
+      `
   current <sub>            Show compact current state for agent injection
     current show           Active task + recent session events (default)
-      --json               Output as JSON`],
+      --json               Output as JSON`,
+    ],
   }),
   forget: verb(() => import('../curate.js'), 'handleForget', {
     destructive: true,
     scoped: true,
     flags: { switches: ['archive', 'dry-run'], values: ['reason'] },
-    usage: [`
+    usage: [
+      `
   forget <id>              Force remove a memory
     --archive              Archive a raw (append-only) memory instead of deleting
-    --reason "<why>"       Reason recorded on the archive (required with --archive)`],
+    --reason "<why>"       Reason recorded on the archive (required with --archive)`,
+    ],
   }),
   inspect: verb(() => import('../status.js'), 'handleInspect', {
     flags: {},
-    usage: [`
-  inspect <id>             Show full memory detail`],
+    usage: [
+      `
+  inspect <id>             Show full memory detail`,
+    ],
   }),
   embed: verb(() => import('../maintenance.js'), 'handleEmbed', {
     flags: { switches: ['global', 'reset-physics', 'status'] },
-    usage: [`
+    usage: [
+      `
   embed                    Embed all memories for semantic search
-    --status               Show embedding coverage`],
+    --status               Show embedding coverage`,
+    ],
   }),
   watch: verb(() => import('../transfer.js'), 'handleWatch', {
     flags: { values: ['shell'] },
-    usage: [`
+    usage: [
+      `
   watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)
-    --shell "<line>"       Run one command line through the shell instead`],
+    --shell "<line>"       Run one command line through the shell instead`,
+    ],
   }),
   learn: verb(() => import('../transfer.js'), 'handleLearn', {
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
-    usage: [`
+    usage: [
+      `
   learn                    Learn lessons from repository history
     --git                  Scan recent git commits for lessons
     --days <n>             Scan this many days back (default: 7)
-    --repos <paths>        Comma-separated repo paths to scan`],
+    --repos <paths>        Comma-separated repo paths to scan`,
+    ],
   }),
   promote: verb(() => import('../transfer.js'), 'handlePromote', {
     scoped: true,
     flags: {},
-    usage: [`
-  promote <id>             Copy a local memory to the global store`],
+    usage: [
+      `
+  promote <id>             Copy a local memory to the global store`,
+    ],
   }),
   share: verb(() => import('../transfer.js'), 'handleShare', {
     dryRun: { form: '--auto', honoured: (args, flags) => args[0] === '--auto' || boolFlag(flags, 'auto') },
     flags: { switches: ['auto', 'dry-run', 'force'], numbers: ['min-score'] },
-    usage: [`
+    usage: [
+      `
   share <id>               Share a memory with attribution + transfer scoring
     --force                Share even if transfer score is low
     --auto                 Auto-share all high-transfer-score memories
     --dry-run              Preview what would be shared
-    --min-score <n>        Minimum transfer score (default: 0.6)`],
+    --min-score <n>        Minimum transfer score (default: 0.6)`,
+    ],
   }),
   peers: verb(() => import('../transfer.js'), 'handlePeers', {
     flags: { switches: ['all-tenants'] },
-    usage: [`
-  peers                    List projects contributing to global store`],
+    usage: [
+      `
+  peers                    List projects contributing to global store`,
+    ],
   }),
   sync: verb(() => import('../transfer.js'), 'handleSync', {
     scoped: true,
     flags: { switches: ['cross-project'] },
-    usage: [`
-  sync                     Pull global memories into local project`],
+    usage: [
+      `
+  sync                     Pull global memories into local project`,
+    ],
   }),
   import: verb(() => import('../transfer.js'), 'handleImport', {
     flags: {
@@ -181,7 +221,8 @@ export const SESSION_VERBS = {
       values: ['chatgpt', 'claude', 'cursor', 'file', 'markdown', 'name', 'scope', 'vault'],
       lists: ['tag'],
     },
-    usage: [`
+    usage: [
+      `
   import                   Import memories from other AI tools
     --chatgpt <path>       Import from ChatGPT memory export (JSON or txt)
     --claude <path>        Import from CLAUDE.md or Claude memory.json
@@ -198,18 +239,22 @@ export const SESSION_VERBS = {
                              picks the tools; "none" or [] turns the import off
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
-    --tag <tag>            Add extra tag (repeatable)`],
+    --tag <tag>            Add extra tag (repeatable)`,
+    ],
   }),
   export: verb(() => import('../transfer.js'), 'handleExport', {
     flags: { values: ['format'] },
-    usage: [`
+    usage: [
+      `
   export [file]            Export all memories (default: stdout)
-    --format <fmt>         Output format: json (default) or markdown`],
+    --format <fmt>         Output format: json (default) or markdown`,
+    ],
   }),
   capture: verb(() => import('../session-hooks.js'), 'handleCapture', {
     repairsCodexWrapper: true,
     flags: { switches: ['dry-run', 'global', 'last-session', 'stdin'], values: ['file', 'log-file', 'transcript'] },
-    usage: [`
+    usage: [
+      `
   capture                  Extract memories from conversation text
     --stdin                Read from piped input
     --file <path>          Read from a file
@@ -218,11 +263,13 @@ export const SESSION_VERBS = {
     --transcript <path>    Explicit transcript path (implies --last-session)
     --log-file <path>      Tee output to a log file (paired with 'hippo last-sleep')
     --dry-run              Preview without writing
-    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)`],
+    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)`,
+    ],
   }),
   setup: verb(() => import('../setup.js'), 'handleSetup', {
     flags: { switches: ['all', 'dry-run', 'no-learn', 'no-schedule'] },
-    usage: [`
+    usage: [
+      `
   setup                    One-shot: detect installed AI tools and install their hooks:
                            claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default), opencode a plugin, codex 2 hooks in
@@ -234,14 +281,17 @@ export const SESSION_VERBS = {
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
-    --no-learn             Skip the agent memory import`],
+    --no-learn             Skip the agent memory import`,
+    ],
   }),
   'last-sleep': verb(() => import('../last-sleep.js'), 'handleLastSleep', {
     flags: { switches: ['keep'], values: ['path'] },
-    usage: [`
+    usage: [
+      `
   last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
-    --keep                 Print without clearing`],
+    --keep                 Print without clearing`,
+    ],
   }),
   'session-end': verb(() => import('../session-hooks.js'), 'handleSessionEnd', {
     // Its sleep step reads --dry-run, but the capture after it writes for real.
@@ -250,7 +300,8 @@ export const SESSION_VERBS = {
       switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
       values: ['format', 'log-file', 'runtime', 'session-id', 'transcript'],
     },
-    usage: [`
+    usage: [
+      `
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
@@ -260,7 +311,8 @@ export const SESSION_VERBS = {
                            ~/.hippo/logs/copilot-sleep.log
     --turn                 VS Code Stop hook, after each reply: capture only the new turns, sleep
                            only at the auto-sleep threshold, and keep the session's snapshot; does
-                           nothing for any other payload`],
+                           nothing for any other payload`,
+    ],
   }),
   '__session-end-worker': verb(() => import('../session-hooks.js'), 'handleSessionEndWorker', {
     dryRun: false,
@@ -271,36 +323,45 @@ export const SESSION_VERBS = {
   }),
   'pre-compact': verb(() => import('../session-hooks.js'), 'handlePreCompact', {
     flags: { values: ['format', 'log-file', 'runtime'] },
-    usage: [`
+    usage: [
+      `
   pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
                            ask the summariser to end with a "Memories for hippo" list
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
     --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and save
-                           the snapshot only (Copilot has no PostCompact hook to close a record)`],
+                           the snapshot only (Copilot has no PostCompact hook to close a record)`,
+    ],
   }),
   'compact-resume': verb(() => import('../session-hooks.js'), 'handleCompactResume', {
     flags: {},
-    usage: [`
-  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`],
+    usage: [
+      `
+  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`,
+    ],
   }),
   'post-compact': verb(() => import('../session-hooks.js'), 'handlePostCompact', {
     flags: { values: ['log-file'] },
-    usage: [`
+    usage: [
+      `
   post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
                            the next hippo sleep) and print one line saying how many
-    --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`],
+    --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`,
+    ],
   }),
   'codex-run': verb(() => import('../session-hooks.js'), 'handleCodexRun', {
     flags: {},
-    usage: [`
-  codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper`],
+    usage: [
+      `
+  codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper`,
+    ],
   }),
   '__codex-session-end-worker': verb(() => import('../session-hooks.js'), 'handleCodexSessionEndWorker', {
     flags: { values: ['codex-home', 'history-path', 'log-file', 'start-offset', 'started-at'] },
   }),
   hook: verb(() => import('../setup.js'), 'handleHook', {
     flags: {},
-    usage: [`
+    usage: [
+      `
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
@@ -311,6 +372,7 @@ export const SESSION_VERBS = {
                            hooks/hippo.json, the "hippo" MCP server and an instructions
                            block under $COPILOT_HOME (~/.copilot by default); all but
                            claude-code and copilot also patch an existing AGENTS.md
-    hook uninstall <target> Remove hook; for copilot, only what hippo wrote`],
+    hook uninstall <target> Remove hook; for copilot, only what hippo wrote`,
+    ],
   }),
 } satisfies Record<string, VerbSpec>;
