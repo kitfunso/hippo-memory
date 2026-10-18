@@ -6,12 +6,12 @@ import * as fs from 'fs';
 import type { AddressInfo } from 'net';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { adminActor, type Context } from '../api/index.js';
+import { getMemory } from '../api/memories/memories.js';
+import { cardDetail, cardList } from '../api/objects/cards.js';
 import { cliStore } from '../cli/api-context.js';
 import { evalNow } from '../core/ablation.js';
 import { loadConfig } from '../core/config.js';
-import { readEntry } from '../store/entry-reads.js';
-import { listCards } from '../store/cards.js';
-import { loadCardDetail } from '../store/card-detail.js';
+import type { HippoStore, StoreGroups } from '../store/port.js';
 import { envTenant } from '../util/env.js';
 import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -25,6 +25,7 @@ import {
 import {
   ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
 } from './dashboard-params.js';
+import type { MemoryDetail } from './dashboard-types.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { installSignalHandlers } from '../util/crash-handlers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
@@ -127,7 +128,7 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
 
 /** What every request shares; built once in openDashboardRoot. */
 interface DashboardRoot {
-  readonly hippoRoot: string;
+  readonly store: HippoStore & StoreGroups;
   /** A fresh api Context on the server's one store, so a config edit shows on the next request. */
   readonly context: () => Context;
   readonly snapshots: SnapshotService;
@@ -148,8 +149,18 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
   return true;
 }
 
-function handleRead(ctx: RouteContext, segments: string[]): boolean {
-  const { hippoRoot, snapshots, req, res, url } = ctx;
+/** The drawer's detail of a live memory, or null when the tenant holds no live row with that id. */
+async function memoryDetail(ctx: RouteContext, id: string, fresh: boolean): Promise<MemoryDetail | null> {
+  const context = ctx.context();
+  const entry = await getMemory(context, id);
+  if (entry === null || !isLiveMemory(entry)) return null;
+  const snapshotId = ctx.snapshots.get(context.tenantId, fresh).id;
+  const embedded = ctx.snapshots.isEmbedded(entry.id);
+  return buildMemoryDetail(ctx.store, context.tenantId, entry, { snapshotId, nowMs: ctx.now(), embedded });
+}
+
+async function handleRead(ctx: RouteContext, segments: string[]): Promise<boolean> {
+  const { snapshots, req, res, url } = ctx;
   const tenantId = envTenant();
   // A cross-site <img src=...?fresh=1> must not force a full rebuild.
   const fresh = url.searchParams.get('fresh') === '1' && !isCrossSite(req);
@@ -166,21 +177,17 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
     return sendOrNotFound(res, buildProjectDetail(snapshots.get(tenantId, fresh), a));
   }
   if (head === 'memory' && a !== undefined && segments.length === 3) {
-    const entry = readEntry(hippoRoot, parseMemoryId(a), tenantId);
-    if (entry === null || !isLiveMemory(entry)) return sendOrNotFound(res, null);
-    const snapshotId = snapshots.get(tenantId, fresh).id;
-    const embedded = snapshots.isEmbedded(entry.id);
-    return sendOrNotFound(res, buildMemoryDetail(hippoRoot, tenantId, entry, { snapshotId, nowMs: ctx.now(), embedded }));
+    return sendOrNotFound(res, await memoryDetail(ctx, parseMemoryId(a), fresh));
   }
   if (head === 'search' && segments.length === 2) {
     return sendOrNotFound(res, buildSearch(snapshots.get(tenantId, fresh), parseSearchText(url.searchParams)));
   }
   if (head === 'cards' && segments.length === 2) {
-    return sendOrNotFound(res, { cards: listCards(hippoRoot, tenantId) });
+    return sendOrNotFound(res, { cards: await cardList(ctx.context()) });
   }
   if (head === 'cards' && a !== undefined && segments.length === 3) {
     // The Board has always answered 404, not 400, for an id that does not fit the pattern.
-    return sendOrNotFound(res, CARD_ID.test(a) ? loadCardDetail(hippoRoot, tenantId, a) ?? null : null);
+    return sendOrNotFound(res, CARD_ID.test(a) ? await cardDetail(ctx.context(), a) : null);
   }
   return false;
 }
@@ -199,7 +206,7 @@ function matchAction(segments: string[]): ((ctx: Context, body: ActionBody) => P
 async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolean> {
   const action = matchAction(segments);
   if (action === null) return false;
-  const { req, res, hippoRoot, snapshots } = ctx;
+  const { req, res, store, snapshots } = ctx;
   if (isCrossSite(req)) {
     forbidden(res);
     return true;
@@ -217,7 +224,8 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
   if (result.entry) {
     // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.
     const embedded = snapshots.isEmbedded(result.entry.id);
-    const detail = buildMemoryDetail(hippoRoot, tenantId, result.entry, { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded });
+    const options = { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded };
+    const detail = await buildMemoryDetail(store, tenantId, result.entry, options);
     jsonResponse(res, detail, result.status);
   } else {
     jsonResponse(res, result.body, result.status);
@@ -429,9 +437,9 @@ interface DashboardOptions {
 function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): DashboardRoot {
   const store = cliStore(hippoRoot);
   const now = opts.now ?? ((): number => evalNow().getTime());
-  const snapshots = createSnapshotService(hippoRoot, now, opts.cacheClock);
+  const snapshots = createSnapshotService(store.localFiles.dashboard, now, opts.cacheClock);
   return {
-    hippoRoot,
+    store,
     now,
     snapshots,
     context: () => ({
@@ -468,7 +476,7 @@ export function serveDashboard(
       // A malformed % sequence throws URIError here; the caller answers 400.
       const segments = url.pathname.split('/').filter((s) => s !== '').map((s) => decodeURIComponent(s));
       const ctx: RouteContext = { ...root, req, res, url };
-      const handled = req.method === 'GET' ? handleRead(ctx, segments)
+      const handled = req.method === 'GET' ? await handleRead(ctx, segments)
         : req.method === 'POST' ? await handlePost(ctx, segments)
         : false;
       if (!handled) notFoundJson(res);

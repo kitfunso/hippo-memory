@@ -1,11 +1,13 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { loadOpenConflictsOf } from '../store/conflicts.js';
+import type { HippoStore, StoreGroups } from '../store/port.js';
+import type { ConflictPair, DashboardText } from '../store/port/dashboard-reads.js';
 import {
   BANDS, DAY_MS, LAYERS, isLiveMemory, memoryFacts, projectIdentity,
   type Chip, type Fact, type FilteredSet, type ProjectAgg, type Snapshot,
 } from './dashboard-snapshot.js';
+import { chunked } from '../util/chunked.js';
 import { pct, round1 } from '../util/format.js';
 import type { MemoryQuery, SortDir, SortKey } from './dashboard-params.js';
 import type {
@@ -166,16 +168,23 @@ function numericSort(sort: SortKey): ((f: Fact) => number) | null {
   }
 }
 
-function comparator(facts: Fact[], sort: SortKey, dir: SortDir): (a: number, b: number) => number {
+/** Each member's head in lower case, keyed by fact index; the content sort orders on the head the list shows. */
+function lowerHeads(facts: Fact[], members: Int32Array): (i: number) => string {
+  const lower = new Map<number, string>();
+  for (const i of members) lower.set(i, facts[i].head.toLowerCase());
+  return (i) => lower.get(i) ?? '';
+}
+
+function comparator(facts: Fact[], members: Int32Array, sort: SortKey, dir: SortDir): (a: number, b: number) => number {
   const sign = dir === 'asc' ? 1 : -1;
   const tie = (a: number, b: number): number => (facts[a].id < facts[b].id ? -1 : facts[a].id > facts[b].id ? 1 : 0);
   const num = numericSort(sort);
   if (num) return (a, b) => (num(facts[a]) - num(facts[b])) * sign || tie(a, b);
   // Content and scope compare precomputed strings with `<`; localeCompare per pair is far slower at 50k rows.
-  const text = sort === 'content' ? (f: Fact) => f.lower : (f: Fact) => f.scope ?? '';
+  const text = sort === 'content' ? lowerHeads(facts, members) : (i: number) => facts[i].scope ?? '';
   return (a, b) => {
-    const x = text(facts[a]);
-    const y = text(facts[b]);
+    const x = text(a);
+    const y = text(b);
     return (x < y ? -sign : x > y ? sign : 0) || tie(a, b);
   };
 }
@@ -184,7 +193,7 @@ function sortedMembers(snap: Snapshot, project: ProjectAgg, sort: SortKey, dir: 
   const key = `${project.summary.key}|${sort}|${dir}`;
   const hit = snap.memo.sorted.get(key);
   if (hit) return hit;
-  const sorted = Int32Array.from(project.members).sort(comparator(snap.facts, sort, dir));
+  const sorted = Int32Array.from(project.members).sort(comparator(snap.facts, project.members, sort, dir));
   snap.memo.sorted.set(key, sorted);
   return sorted;
 }
@@ -193,10 +202,31 @@ function bucket(value: number): 0 | 1 | 2 {
   return value >= 0.5 ? 0 : value >= 0.2 ? 1 : 2;
 }
 
+function holdsText(row: DashboardText, needle: string): boolean {
+  return row.content.toLowerCase().includes(needle)
+    || (row.tags.length > 0 && row.tags.join('\n').toLowerCase().includes(needle));
+}
+
+/** A 1 at each fact whose whole text or tags hold `needle`, from one paged read of the tenant's text per needle. */
+function textMatches(snap: Snapshot, needle: string): Uint8Array {
+  const hit = snap.memo.text.get(needle);
+  if (hit) return hit;
+  const mask = new Uint8Array(snap.facts.length);
+  snap.scanText((page) => {
+    for (const row of page) {
+      const i = snap.indexOf.get(row.id);
+      if (i !== undefined && holdsText(row, needle)) mask[i] = 1;
+    }
+  });
+  snap.memo.text.set(needle, mask);
+  return mask;
+}
+
 function filterMembers(snap: Snapshot, sorted: Int32Array, query: MemoryQuery): FilteredSet {
   const layerOn = [false, false, false, false];
   for (const l of query.layers) layerOn[l] = true;
   const { brush, q } = query;
+  const matches = q === null ? null : textMatches(snap, q);
   const kept = new Int32Array(sorted.length);
   let n = 0;
   const counts: ChipCounts = { all: 0, risk: 0, pinned: 0, conflict: 0 };
@@ -205,7 +235,7 @@ function filterMembers(snap: Snapshot, sorted: Int32Array, query: MemoryQuery): 
     const f = snap.facts[i];
     if (!layerOn[f.layer]) continue;
     if (f.ageDays < brush.amin || f.ageDays > brush.amax || f.strength < brush.smin || f.strength > brush.smax) continue;
-    if (q !== null && !f.lower.includes(q) && !f.tagsLower.includes(q)) continue;
+    if (matches !== null && matches[i] === 0) continue;
     kept[n++] = i;
     decay.now[bucket(f.strength)]++;
     decay.in7d[bucket(f.strength7d)]++;
@@ -278,13 +308,13 @@ export function buildMemoryPage(snap: Snapshot, key: string, query: MemoryQuery)
 export function buildSearch(snap: Snapshot, text: string): SearchResult {
   const needle = text.toLowerCase();
   const perProject = Array.from({ length: snap.projects.length }, () => 0);
+  const matches = textMatches(snap, needle);
   let total = 0;
-  for (const f of snap.facts) {
-    if (f.lower.includes(needle) || f.tagsLower.includes(needle)) {
-      perProject[f.project]++;
-      total++;
-    }
-  }
+  snap.facts.forEach((f, i) => {
+    if (matches[i] === 0) return;
+    perProject[f.project]++;
+    total++;
+  });
   const hits: Record<string, number> = {};
   snap.projects.forEach((p, i) => {
     if (perProject[i] > 0) hits[p.summary.key] = perProject[i];
@@ -297,20 +327,31 @@ export function buildSearch(snap: Snapshot, text: string): SearchResult {
   return { snapshotId: snap.id, q: text, total, hits, nameMatches };
 }
 
-function openConflictsOf(hippoRoot: string, tenantId: string, entry: MemoryEntry, nowMs: number): MemoryConflictDetail[] {
+/** The store the detail reads: its rows by id, and the dashboard's conflict read. */
+export type DetailStore = Pick<HippoStore, 'entriesByIds'> & Pick<StoreGroups, 'localFiles'>;
+
+async function openConflictsOf(
+  store: DetailStore,
+  tenantId: string,
+  entry: MemoryEntry,
+  nowMs: number,
+): Promise<MemoryConflictDetail[]> {
+  const conflicts = store.localFiles.dashboard.openConflictsOf(tenantId, entry.id).map((row) => row.conflict);
+  const otherId = (c: ConflictPair): string => (c.memory_a_id === entry.id ? c.memory_b_id : c.memory_a_id);
+  const others = new Map<string, MemoryEntry>();
+  for (const ids of chunked([...new Set(conflicts.map(otherId))])) {
+    for (const other of await store.entriesByIds(ids, tenantId)) others.set(other.id, other);
+  }
   const out: MemoryConflictDetail[] = [];
-  for (const { conflict: c, other } of loadOpenConflictsOf(hippoRoot, tenantId, entry.id)) {
-    if (!isLiveMemory(other)) continue;
+  for (const c of conflicts) {
+    const other = others.get(otherId(c));
+    if (!other || !isLiveMemory(other)) continue;
+    const strength = round3(calculateStrength(other, new Date(nowMs)));
     out.push({
       id: c.id,
       reason: c.reason,
       score: c.score,
-      other: {
-        id: other.id,
-        content: other.content,
-        strength: round3(calculateStrength(other, new Date(nowMs))),
-        retrievals: other.retrieval_count,
-      },
+      other: { id: other.id, content: other.content, strength, retrievals: other.retrieval_count },
     });
   }
   return out;
@@ -323,7 +364,12 @@ export interface MemoryDetailOptions {
 }
 
 /** Full detail read fresh from the store, never from the snapshot, so the drawer is current inside the coalescing window. */
-export function buildMemoryDetail(hippoRoot: string, tenantId: string, entry: MemoryEntry, options: MemoryDetailOptions): MemoryDetail {
+export async function buildMemoryDetail(
+  store: DetailStore,
+  tenantId: string,
+  entry: MemoryEntry,
+  options: MemoryDetailOptions,
+): Promise<MemoryDetail> {
   const { snapshotId, nowMs, embedded } = options;
   const f = memoryFacts(entry, nowMs);
   const project = projectIdentity(entry.origin_project);
@@ -354,6 +400,6 @@ export function buildMemoryDetail(hippoRoot: string, tenantId: string, entry: Me
     tenant: entry.tenant_id,
     kind: entry.kind,
     embedded,
-    conflicts: openConflictsOf(hippoRoot, tenantId, entry, nowMs),
+    conflicts: await openConflictsOf(store, tenantId, entry, nowMs),
   };
 }

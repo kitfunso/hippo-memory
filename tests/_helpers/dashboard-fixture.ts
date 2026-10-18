@@ -13,6 +13,9 @@ import { upsertVectors } from '../../src/db/vector-store.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/dashboard/dashboard.js';
+import { createSnapshotService, type SnapshotService } from '../../src/dashboard/dashboard-snapshot.js';
+import type { DashboardRow } from '../../src/store/port/dashboard-reads.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
 export const DAY = 86_400_000;
@@ -72,6 +75,16 @@ export function embed(hippoRoot: string, ids: readonly string[]): void {
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** A snapshot cache over the store under `hippoRoot`, as the dashboard builds it; `close` releases its reader. */
+export function snapshotsOf(hippoRoot: string, now: () => number, cacheClock?: () => number): SnapshotService {
+  return createSnapshotService(sqliteSyncStore(hippoRoot).localFiles.dashboard, now, cacheClock);
+}
+
+/** A whole entry as the snapshot's scan hands it over: the full text as the head. */
+export function asDashboardRow(entry: MemoryEntry, embedded = false): DashboardRow {
+  return { ...entry, head: entry.content, embedded };
 }
 
 /** The access token every fixture dashboard starts with; `call` sends it as the session cookie. */

@@ -14,7 +14,6 @@ import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/cor
 import { lastRecalledIds } from '../../src/mcp/session-state.js';
 import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
@@ -24,7 +23,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex, replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

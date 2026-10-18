@@ -1,18 +1,16 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import type { MemoryEntry } from '../core/memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { type MemoryConflict, type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
+import { type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
-import { onHandle, openStore, type StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { placeholders } from '../util/sql.js';
-import type { KeysetClause, KeysetPosition } from '../util/keyset.js';
-import { MAX_LIST_LIMIT } from '../util/limits.js';
+import type { KeysetClause } from '../util/keyset.js';
 import type { DetectedConflict } from './port/consolidation.js';
 import type {
   ConflictListQuery, ConflictMember, ConflictResolution, ConflictRow, ConflictRowPage,
@@ -108,25 +106,7 @@ export function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictI
   return row ? toConflictRow(row) : null;
 }
 
-/** Every conflict with `status` (tenant null: every tenant's), read a page at a time. */
-function everyConflictRowAt(db: DatabaseSyncLike, tenantId: string | null, status: string): ConflictRow[] {
-  const out: ConflictRow[] = [];
-  let after: KeysetPosition | undefined;
-  do {
-    const page = conflictPageAt(db, { tenantId, status, limit: MAX_LIST_LIMIT, after });
-    out.push(...page.rows);
-    after = page.next ?? undefined;
-  } while (after);
-  return out;
-}
-
-/** Every conflict with `status` under `hippoRoot`, for the callers that still read the store by folder. */
-export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
-  const rows = onHandle(hippoRoot, (db) => everyConflictRowAt(db, tenantId ?? null, status), openStore);
-  return rows.map((r) => r.conflict);
-}
-
-// listMemoryConflicts' tenanted open set: both members in the tenant.
+// The tenanted open set: both members in the tenant.
 const OPEN_IN_TENANT = `FROM memory_conflicts mc
   JOIN memories ma ON ma.id = mc.memory_a_id
   JOIN memories mb ON mb.id = mc.memory_b_id
@@ -139,32 +119,17 @@ export function countOpenConflictsAt(db: DatabaseSyncLike, tenantId: string): nu
   return Number(row.n);
 }
 
-/** One open conflict of a memory, with the row on its other side. */
-export interface OpenConflictOf {
-  conflict: MemoryConflict;
-  other: MemoryEntry;
-}
-
-/** A tenant's open conflicts naming `memoryId`, in listMemoryConflicts'
- * order, each with its other member read in one batch. */
-export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryId: string): OpenConflictOf[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: selects CONFLICT_COLS_MC, MemoryConflictRow's columns.
-    const rows = db.prepare(
-      `SELECT ${CONFLICT_COLS_MC}
-       ${OPEN_IN_TENANT} AND (mc.memory_a_id = ? OR mc.memory_b_id = ?)
-       ORDER BY mc.updated_at DESC, mc.id DESC`,
-    ).all(tenantId, tenantId, memoryId, memoryId) as MemoryConflictRow[];
-    const conflicts = rows.map(rowToMemoryConflict);
-    const otherId = (c: MemoryConflict): string => (c.memory_a_id === memoryId ? c.memory_b_id : c.memory_a_id);
-    const others = selectEntriesByIds(db, conflicts.map(otherId), tenantId);
-    const out: OpenConflictOf[] = [];
-    for (const conflict of conflicts) {
-      const other = others.get(otherId(conflict));
-      if (other) out.push({ conflict, other });
-    }
-    return out;
-  }, openStore);
+/** The tenant's open conflicts naming `memoryId`, newest change first, each with both members' columns. */
+export function openConflictsNamingAt(db: DatabaseSyncLike, tenantId: string, memoryId: string): ConflictRow[] {
+  const select = conflictSelect(tenantId, [
+    { sql: `mc.status = 'open'`, params: [] },
+    { sql: '(mc.memory_a_id = ? OR mc.memory_b_id = ?)', params: [memoryId, memoryId] },
+  ]);
+  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
+  const rows = db
+    .prepare(`${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC`)
+    .all(...select.params) as ConflictJoinRow[];
+  return rows.map(toConflictRow);
 }
 
 type SameTenant = (a: string, b: string) => boolean;

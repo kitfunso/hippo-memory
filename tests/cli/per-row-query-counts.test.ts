@@ -26,17 +26,18 @@ import { importEntries } from '../../src/importers/core.js';
 import { importVault } from '../../src/importers/vault.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { buildDag } from '../../src/consolidate/dag.js';
 import { buildMemoryDetail } from '../../src/dashboard/dashboard-queries.js';
-import { createSnapshotService } from '../../src/dashboard/dashboard-snapshot.js';
+import { snapshotsOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
-import { loadEntriesByIds, replaceDetectedConflicts, resolveConflictKeeping } from '../_helpers/root-forms.js';
+import {
+  listMemoryConflicts, loadEntriesByIds, replaceDetectedConflicts, resolveConflictKeeping,
+} from '../_helpers/root-forms.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -524,8 +525,9 @@ describe('buildDag', () => {
 });
 
 describe('buildMemoryDetail', () => {
-  it('reads the conflicts naming a memory and their other sides in a fixed number of queries', () => {
-    const work = SIZES.map((n) => {
+  it('reads the conflicts naming a memory and their other sides in a fixed number of queries', async () => {
+    const work: number[][] = [];
+    for (const n of SIZES) {
       const root = freshRoot('qc-detail');
       const [subject, ...others] = rows(n + 1, 'detail');
       seed(ctxFor(root), [subject, ...others]);
@@ -533,11 +535,13 @@ describe('buildMemoryDetail', () => {
         ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
         { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
       ]);
-      const { result, statements } = recordStatements(() => buildMemoryDetail(root, 'default', subject, { snapshotId: 1, nowMs: Date.now(), embedded: false }));
+      const options = { snapshotId: 1, nowMs: Date.now(), embedded: false };
+      const store = sqliteStore(root);
+      const { result, statements } = await recordStatementsAsync(() => buildMemoryDetail(store, 'default', subject, options));
       expect(result.conflicts.map((c) => c.other.id).sort()).toEqual(others.map((e) => e.id).sort());
       expect(result.conflicts.every((c) => c.reason === 'names the subject')).toBe(true);
-      return [countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)];
-    });
+      work.push([countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)]);
+    }
     expect(work[1]).toEqual(work[0]);
   });
 });
@@ -548,7 +552,7 @@ describe('the dashboard snapshot build', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-dash-build');
       seed(ctxFor(root), [...rows(4, 'live'), ...rows(n, 'archived', { kind: 'archived' }), ...rows(n, 'replaced', { kind: 'superseded' })]);
-      const service = createSnapshotService(root, () => Date.now());
+      const service = snapshotsOf(root, () => Date.now());
       try {
         const { result, statements, rowsRead } = recordStatements(() => service.get('default'));
         expect(result.facts).toHaveLength(4);

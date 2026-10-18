@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { updateStats } from '../../src/store/index-and-stats.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
