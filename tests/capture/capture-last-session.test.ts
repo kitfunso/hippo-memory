@@ -1,10 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { spawnSync } from 'child_process';
 import { summariseTranscript, resolveLastSessionTranscript } from '../../src/capture/transcript.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -387,7 +385,7 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     tmp.cleanup();
   });
 
-  it('tees banner + completion message to the log file and appends (does not truncate)', () => {
+  it('tees banner + completion message to the log file and appends (does not truncate)', async () => {
     const transcript = path.join(tmp.dir, 't.jsonl');
     fs.writeFileSync(
       transcript,
@@ -404,29 +402,15 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
 
     // Init a hippo store in the tmp cwd so capture doesn't bail out
     // on `No .hippo directory found`.
-    const binPath = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
-    const init = spawnSync(process.execPath, [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-      cwd: tmp.dir,
-      // HIPPO_HOME isolates the global store. `hippo init` registers the
-      // workspace into <globalRoot>/workspaces.json; without this it writes
-      // the developer's real ~/.hippo registry.
-      env: { ...process.env, HIPPO_HOME: tmp.dir },
-      stdio: 'ignore',
-    });
+    // HIPPO_HOME isolates the global store: `hippo init` registers the workspace into <globalRoot>/workspaces.json.
+    const env = { ...process.env, HIPPO_HOME: tmp.dir };
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
     expect(init.status).toBe(0);
 
-    // Spawn the actual CLI so we exercise the same code path the hook runs.
-    // Use --dry-run so no hippo store writes are needed; we only care that
-    // the tee wrapper captures stdout.
-    const result = spawnSync(
-      process.execPath,
-      [binPath, 'capture', '--last-session', '--transcript', transcript, '--log-file', logFile, '--dry-run'],
-      {
-        cwd: tmp.dir,
-        env: { ...process.env, HIPPO_HOME: tmp.dir },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        encoding: 'utf8',
-      },
+    // --dry-run so no hippo store writes are needed; we only care that the tee wrapper captures stdout.
+    const result = await runCliAs(
+      ['capture', '--last-session', '--transcript', transcript, '--log-file', logFile, '--dry-run'],
+      { cwd: tmp.dir, env },
     );
 
     expect(result.status).toBe(0);

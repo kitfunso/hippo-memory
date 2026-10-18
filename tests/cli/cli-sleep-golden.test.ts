@@ -2,15 +2,14 @@
 // sleep verb out of cli.ts, or any later refactor of it, that changes a byte fails here.
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
 
-const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 'HIPPO_HOME'];
 
@@ -136,7 +135,7 @@ interface RunOutput {
   log?: string;
 }
 
-function run(c: Case): RunOutput {
+async function run(c: Case): Promise<RunOutput> {
   // Real path: the CLI prints resolved paths, and macOS spells the temp root through the /var symlink.
   const home = realpathSync.native(makeRoot('sleep-golden', { init: false }));
   if (!c.uninitialised) cpSync(template, join(home, '.hippo'), { recursive: true });
@@ -154,7 +153,7 @@ function run(c: Case): RunOutput {
   });
   const logPath = join(home, 'logs', 'sleep.log');
   const args = c.logFile ? [...c.args, '--log-file', logPath] : c.args;
-  const res = spawnSync('node', [CLI, ...args], { cwd: home, env, encoding: 'utf-8' });
+  const res = await runCliAs(args, { cwd: home, env });
   const out: RunOutput = {
     status: res.status,
     stdout: normalize(res.stdout, home),
@@ -168,9 +167,9 @@ describe('cli sleep golden output', () => {
   beforeAll(() => {
     template = makeStore('sleep-golden-template').root;
     seedLocal(template);
-  });
+  }, 30_000); // Seeds a real store, and a runner's disk sets how long that takes.
 
-  it.each(CASES)('$name', (c) => {
-    expect(run(c)).toMatchSnapshot();
+  it.each(CASES)('$name', async (c) => {
+    expect(await run(c)).toMatchSnapshot();
   });
 });

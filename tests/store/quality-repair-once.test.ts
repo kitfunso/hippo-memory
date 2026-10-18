@@ -86,6 +86,7 @@ describe('repairQualityOnce', () => {
     expect(flag(root)).toBe('1');
   });
 
+  // The failed repair waits out the 5 s lock wait on the held write lock, which is the default test limit.
   it('leaves the store unmarked when the repair fails, so the next run tries again', () => {
     const bad = seed(root, CUT);
     const holder = new DatabaseSync(join(root, 'hippo.db'));
@@ -98,7 +99,7 @@ describe('repairQualityOnce', () => {
     }
     expect(flag(root)).toBe('');
     expect(repairQualityOnce({ hippoRoot: root }, 'default')?.appliedIds).toEqual([bad.id]);
-  });
+  }, 30_000);
 
   it('leaves a store whose schema it cannot repair unmarked', () => {
     const bad = seed(root, CUT);
