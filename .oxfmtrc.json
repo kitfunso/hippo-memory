@@ -1,0 +1,25 @@
+{
+  "printWidth": 120,
+  "singleQuote": true,
+  "semi": true,
+  "trailingComma": "all",
+  "arrowParens": "always",
+  "ignorePatterns": [
+    "scripts/token-eval/**",
+    "tests/token-eval-*",
+    "scripts/e1-lifecycle/**",
+    "scripts/z1-latency.mjs",
+    "scripts/z1-replay.mjs",
+    "scripts/z1c-eval.mjs",
+    "scripts/z0-capture-eval.mjs",
+    "scripts/z6-supersession-eval.mjs",
+    "scripts/z6-supersession/**",
+    "scripts/z7-sidechain-*",
+    "scripts/z7b-sidechain-*",
+    "scripts/z10-reconstruct.mjs",
+    "scripts/ledger-overhead.mjs",
+    "scripts/diff_orderings.mjs",
+    "scripts/hook-latency.mjs",
+    "tests/fixtures/**"
+  ]
+}
