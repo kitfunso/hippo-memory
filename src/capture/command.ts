@@ -28,7 +28,7 @@ export interface CaptureOptions {
   /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via
    *  `hippo last-sleep`.
    *  Appends, because `hippo sleep` writes the same file first. */
-  logFile?: string;
+  logFile?: string | null;
   dryRun: boolean;
   global: boolean;
   /** The caller's tenant: the dedup read counts only its memories, except under `global`, which counts every

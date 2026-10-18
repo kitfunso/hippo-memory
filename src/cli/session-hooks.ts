@@ -357,7 +357,7 @@ function captureEndedSession(
   store: string,
   { tenantId, flags, transcriptPath, turns, originProject }: EndedCapture,
 ): boolean {
-  const logFile = stringFlag(flags, 'log-file');
+  const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
     cmdCapture(captureTarget(store), {
       source: 'last-session',
@@ -371,7 +371,7 @@ function captureEndedSession(
     });
     return true;
   } catch (err) {
-    reportSessionEndFailure(logFile ?? null, 'session-end: capture', err);
+    reportSessionEndFailure(logFile, 'session-end: capture', err);
     return false;
   }
 }
@@ -499,11 +499,11 @@ function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void
 }
 
 export async function cmdCodexSessionEndWorker(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  const logFile = stringFlag(flags, 'log-file');
+  const logFile = stringFlag(flags, 'log-file') ?? null;
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
   if (!isInitialized(store)) {
-    appendSessionEndCloseLog(logFile ?? null, 'skip: no hippo store for this folder or globally', { startFresh: true });
+    appendSessionEndCloseLog(logFile, 'skip: no hippo store for this folder or globally', { startFresh: true });
     return;
   }
 
@@ -515,17 +515,17 @@ export function handleCodexSessionEndWorker({ hippoRoot, tenantId, flags }: Comm
   return cmdCodexSessionEndWorker(hippoRoot, tenantId, flags);
 }
 
-async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFile: string | undefined): Promise<void> {
+async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFile: string | null): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, logFile ? { 'log-file': logFile } : {});
     } catch (err) {
-      reportSessionEndFailure(logFile ?? null, 'codex session-end: sleep', err);
+      reportSessionEndFailure(logFile, 'codex session-end: sleep', err);
     }
   } else {
-    appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
-    logSessionEndImport(logFile ?? null, tenantId, undefined);
+    appendSessionEndCloseLog(logFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
+    logSessionEndImport(logFile, tenantId, undefined);
   }
 }
 
@@ -534,7 +534,7 @@ function captureCodexTranscript(
   tenantId: string,
   store: string,
   flags: CliFlags,
-  logFile: string | undefined,
+  logFile: string | null,
 ): void {
   try {
     const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
@@ -550,11 +550,11 @@ function captureCodexTranscript(
       }) ?? undefined;
     // No Codex transcript must not fall through to the scan of Claude Code projects.
     if (!transcriptPath) {
-      appendSessionEndCloseLog(logFile ?? null, 'skip capture: no Codex transcript for this session');
+      appendSessionEndCloseLog(logFile, 'skip capture: no Codex transcript for this session');
       return;
     }
 
-    const digestLog = (message: string): void => appendSessionEndCloseLog(logFile ?? null, message);
+    const digestLog = (message: string): void => appendSessionEndCloseLog(logFile, message);
     const scan = readSessionScan(transcriptPath, digestLog);
     const captureOpts: CaptureOptions = {
       source: 'last-session',
@@ -569,14 +569,14 @@ function captureCodexTranscript(
     try {
       cmdCapture(captureTarget(store), captureOpts);
     } catch (err) {
-      reportSessionEndFailure(logFile ?? null, 'codex session-end: capture', err);
+      reportSessionEndFailure(logFile, 'codex session-end: capture', err);
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
     const digestKey = path.basename(transcriptPath, '.jsonl');
     const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
     recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, digestOpts);
   } catch (err) {
-    reportSessionEndFailure(logFile ?? null, 'codex session-end: transcript scan or digest', err);
+    reportSessionEndFailure(logFile, 'codex session-end: transcript scan or digest', err);
   }
 }
 
