@@ -1,0 +1,418 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MCP read tools golden > hippo_context, hippo_assemble and hippo_drill 1`] = `
+[
+  "## Active Task Snapshot
+- Task: ship the eu cluster
+- Status: active
+- Updated: <ts>
+
+### Summary
+cutover planned
+
+### Next step
+run the canary
+
+## Session Handoff
+- Summary: handoff after the canary
+- Next action: promote it
+
+## Recent Session Trail
+- [note] canary passed
+
+Found 15 memories:
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] (strength=1.00)
+raw capture of the deploy window from the golden session
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+unrelated note about lunch options near the office
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+",
+  "Session golden-session — 1 items, 45 tokens (raw=1, summarized=0, evicted=0)
+  [tail] <ts> mem_x_raw - raw capture of the deploy window from the golden session",
+  "Summary mem_x_summary — 0 descendants
+  rollout summary for the nightly batch move
+
+Children (2/2):
+  [L1] mem_x_child1 - deploy batch child one moved the cron
+  [L1] mem_x_child2 - deploy batch child two moved the queue",
+]
+`;
+
+exports[`MCP read tools golden > hippo_recall: a plain query, then hippo_outcome on the ids it showed 1`] = `
+[
+  "Found 16 memories:
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy batch child two moved the queue
+
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+deploy batch child one moved the cron
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] (strength=1.00)
+raw capture of the deploy window from the golden session
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+",
+  "Applied positive outcome to 16 memories",
+]
+`;
+
+exports[`MCP read tools golden > hippo_recall: a tight budget with continuity and a fresh tail prints the Cutoff block 1`] = `
+[
+  "## Cutoff
+Showing 9 of 16 candidates; 7 not shown (rank, budget or limit); 1 fresh-tail added.
+
+---
+
+Found 9 memories:
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+
+## Fresh tail / substituted summaries
+- [tail] mem_x_raw: raw capture of the deploy window from the golden session
+
+## Continuity
+
+### Active Task Snapshot
+- Task: ship the eu cluster
+- Summary: cutover planned
+- Next: run the canary
+
+### Session Handoff
+- Summary: handoff after the canary
+- Next action: promote it
+
+### Recent Session Trail
+- [note] canary passed",
+  "## Planning fallacy hint
+Class: deploy-duration
+Last 1 estimate in class deploy-duration averaged 1.67x actual (MAE 2.00).
+(detected: "will take 3 days")
+
+---
+
+Found 19 memories:
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+raw capture of the deploy window from the golden session
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy batch child two moved the queue
+
+[verified] (strength=1.00)
+deploy batch child one moved the cron
+
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+unrelated note about lunch options near the office
+
+[verified] (strength=1.00)
+café opening hours for the team lunch
+
+[verified] tags: dag-summary (strength=1.00)
+rollout summary for the nightly batch move
+",
+]
+`;
+
+exports[`MCP read tools golden > hippo_recall: repeats in one session raise the anchoring hint 1`] = `
+[
+  "Found 16 memories:
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy batch child two moved the queue
+
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+deploy batch child one moved the cron
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] (strength=1.00)
+raw capture of the deploy window from the golden session
+",
+  "## Anchoring hint
+Same query phrasing as a recent recall returned the same top result (mem_p_goal); you may be re-asking the same question.
+[anchored_on: mem_p_goal]
+
+---
+
+Found 16 memories:
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy batch child two moved the queue
+
+[verified] (strength=1.00)
+deploy batch child one moved the cron
+
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] (strength=1.00)
+raw capture of the deploy window from the golden session
+",
+  "Found 16 memories:
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy batch child two moved the queue
+
+[verified] (strength=1.00)
+deploy batch child one moved the cron
+
+[observed] tags: prediction, deploy-duration (strength=1.00)
+rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+raw capture of the deploy window from the golden session
+",
+]
+`;
