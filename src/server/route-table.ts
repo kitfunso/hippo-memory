@@ -2,7 +2,7 @@ import type { Context } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import type { StoreGroup, HippoStore } from '../store/index.js';
-import { loadConfig, type HippoConfig } from '../core/config.js';
+import type { HippoConfig } from '../core/config.js';
 import { HttpError, JSON_HEADERS, sendJson, type WebhookRequest } from '../util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
@@ -94,7 +94,7 @@ function webhook(
   handle: (r: WebhookRequest, store: HippoStore, config: HippoConfig) => Promise<void>,
 ): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
-    await handle({ req, res, opts }, opts.store, loadConfig(opts.hippoRoot));
+    await handle({ req, res, opts }, opts.store, opts.configAt(opts.hippoRoot));
   };
 }
 

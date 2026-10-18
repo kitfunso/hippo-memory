@@ -6,7 +6,7 @@ import { embedMemory } from '../search/embed-memories.js';
 import type { FolderFiles, LocalFiles, Sync } from '../store/port.js';
 import type { Rejections } from '../store/port/rejections.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { loadConfig } from '../core/config.js';
+import type { HippoConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
@@ -41,6 +41,7 @@ export interface CaptureOptions {
 /** The folder a capture writes to, the global one under `global`, and its store, which the CLI root builds. */
 export interface CaptureTarget {
   readonly root: string;
+  readonly config: HippoConfig;
   readonly store: { readonly localFiles: LocalFiles; readonly rejections: Sync<Rejections> };
 }
 
@@ -126,7 +127,7 @@ function cmdCaptureCore(
 }
 
 function captureFromCli(
-  { root, store }: CaptureTarget,
+  { root, store, config }: CaptureTarget,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -136,8 +137,9 @@ function captureFromCli(
     originProject: options.originProject,
     lean: false,
   };
-  if (!options.dryRun) return captureExtractedItems({ root, files: store.localFiles }, writeOpts, extracted, keys);
-  return previewCapture(store.rejections, writeOpts, extracted, keys, loadConfig(root).defaultHalfLifeDays);
+  const into = { root, files: store.localFiles, config };
+  if (!options.dryRun) return captureExtractedItems(into, writeOpts, extracted, keys);
+  return previewCapture(store.rejections, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
@@ -237,14 +239,18 @@ export interface CaptureWriteOptions {
   readonly lean: boolean;
 }
 
+/** A folder's files with the config its root loaded for this capture. */
+export interface ConfiguredFiles extends FolderFiles {
+  readonly config: HippoConfig;
+}
+
 export function captureExtractedItems(
-  { root, files }: FolderFiles,
+  { root, files, config }: ConfiguredFiles,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
 ): CaptureTally {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
-  const config = loadConfig(root);
   const baseHalfLifeDays = config.defaultHalfLifeDays;
   const items = extracted.map((item) => ({
     content: item.content,

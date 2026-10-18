@@ -7,7 +7,7 @@ import type { FolderFiles } from '../../src/store/port.js';
 import type { Diagnostics } from '../../src/store/port/diagnostics.js';
 
 export function captureTarget(root: string): CaptureTarget {
-  return { root, store: cliSyncStore(root) };
+  return { root, store: cliSyncStore(root), config: loadConfig(root) };
 }
 
 export function diagnosticsAt(root: string): Diagnostics {

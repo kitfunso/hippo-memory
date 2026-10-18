@@ -2,7 +2,7 @@
 import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../api/index.js';
-import { isSharedStore } from '../core/config.js';
+import { sharedStoreOf } from '../api/types.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
 import { errorFields, log } from '../util/log.js';
@@ -51,8 +51,8 @@ function decodeHeaderPiece(raw: string, header: string): string {
 
 /** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any
  * other store ignores both. */
-export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string): CallerProject | undefined {
-  if (!isSharedStore(hippoRoot)) return undefined;
+export function callerProjectFromHeaders(req: IncomingMessage, shared: boolean): CallerProject | undefined {
+  if (!shared) return undefined;
   const names = req.headersDistinct['x-hippo-project'];
   const aliasHeaders = req.headersDistinct['x-hippo-project-aliases'];
   if (names === undefined) {
@@ -107,7 +107,7 @@ export async function handleMcpPost(
   // else executeTool walks from cwd and reads HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
   const ctx = await buildContextWithAuth(req, opts);
   noteAccess(req, { tenant: ctx.tenantId });
-  const project = callerProjectFromHeaders(req, ctx.hippoRoot);
+  const project = callerProjectFromHeaders(req, sharedStoreOf(ctx));
   const raw = await readBody(req);
   let mcpReq: JsonValue;
   try {

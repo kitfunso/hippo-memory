@@ -4,7 +4,9 @@ import * as path from 'path';
 import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig } from '../../src/core/config.js';
+import {
+  configReader, loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig,
+} from '../../src/core/config.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { log } from '../../src/util/log.js';
 
@@ -236,7 +238,7 @@ describe('config.sharedStore', () => {
   });
 });
 
-describe('config.json is parsed once per file version', () => {
+describe('config.json is parsed once per file version, per reader', () => {
   let tmp: string;
   let file: string;
   beforeEach(() => {
@@ -263,49 +265,86 @@ describe('config.json is parsed once per file version', () => {
     }
   }
 
-  it('loadConfig reads an unchanged file once, however often it is asked', () => {
+  /** Writes `budget` at a fixed mtime, so two budgets of one length leave the same stamp. */
+  function writeAtFixedStamp(budget: number): void {
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget } }));
+    fs.utimesSync(file, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'));
+  }
+
+  it('a reader parses an unchanged file once, however often it is asked', () => {
     fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 200 } }));
+    const read = configReader();
     const budgets: number[] = [];
     const reads = configReads(() => {
-      for (let i = 0; i < 5; i++) budgets.push(loadConfig(tmp).pinnedInject.budget);
+      for (let i = 0; i < 5; i++) budgets.push(read(tmp).pinnedInject.budget);
     });
     expect(budgets).toEqual([200, 200, 200, 200, 200]);
     expect(reads).toBe(1);
   });
 
-  it('loadConfig shows an edit on the next call, even one of the same length', () => {
+  it('loadConfig holds no parse: each call reads the file', () => {
     fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 200 } }));
-    expect(loadConfig(tmp).pinnedInject.budget).toBe(200);
-    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 4321 } }));
-    expect(loadConfig(tmp).pinnedInject.budget).toBe(4321);
-    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 300 } }));
-    fs.utimesSync(file, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'));
-    expect(loadConfig(tmp).pinnedInject.budget).toBe(300);
-    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 301 } }));
-    fs.utimesSync(file, new Date('2020-01-01T00:00:05Z'), new Date('2020-01-01T00:00:05Z'));
-    expect(loadConfig(tmp).pinnedInject.budget).toBe(301);
+    expect(configReads(() => {
+      for (let i = 0; i < 3; i++) loadConfig(tmp);
+    })).toBe(3);
   });
 
-  it('loadConfig reads no file while it is missing, then picks it up once created, and drops it once removed', () => {
+  it('two roots in one process keep their own parses, so neither answers from the other', () => {
+    writeAtFixedStamp(200);
+    const server = configReader();
+    expect(server(tmp).pinnedInject.budget).toBe(200);
+    writeAtFixedStamp(300);
+    const cli = configReader();
+    expect(cli(tmp).pinnedInject.budget).toBe(300);
+    // The first root's parse is its own: the stamp it keyed on is unchanged, and the second root's read never reached it.
+    expect(server(tmp).pinnedInject.budget).toBe(200);
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-cache-other-'));
+    try {
+      fs.writeFileSync(path.join(other, 'config.json'), JSON.stringify({ pinnedInject: { budget: 9 } }));
+      expect(configReader()(other).pinnedInject.budget).toBe(9);
+      expect(cli(tmp).pinnedInject.budget).toBe(300);
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  it('a reader shows an edit on the next call, even one of the same length', () => {
+    const read = configReader();
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 200 } }));
+    expect(read(tmp).pinnedInject.budget).toBe(200);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 4321 } }));
+    expect(read(tmp).pinnedInject.budget).toBe(4321);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 300 } }));
+    fs.utimesSync(file, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'));
+    expect(read(tmp).pinnedInject.budget).toBe(300);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 301 } }));
+    fs.utimesSync(file, new Date('2020-01-01T00:00:05Z'), new Date('2020-01-01T00:00:05Z'));
+    expect(read(tmp).pinnedInject.budget).toBe(301);
+  });
+
+  it('a reader reads no file while it is missing, then picks it up once created, and drops it once removed', () => {
+    const read = configReader();
     const reads = configReads(() => {
-      expect(loadConfig(tmp).pinnedInject.budget).toBe(1500);
-      expect(loadConfig(tmp).pinnedInject.budget).toBe(1500);
+      expect(read(tmp).pinnedInject.budget).toBe(1500);
+      expect(read(tmp).pinnedInject.budget).toBe(1500);
     });
     expect(reads).toBe(0);
     fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 77 } }));
-    expect(loadConfig(tmp).pinnedInject.budget).toBe(77);
+    expect(read(tmp).pinnedInject.budget).toBe(77);
     fs.rmSync(file);
-    expect(loadConfig(tmp).pinnedInject.budget).toBe(1500);
+    expect(read(tmp).pinnedInject.budget).toBe(1500);
   });
 
-  it('loadConfig hands each caller its own object, so a caller that sets a field changes no later answer', () => {
+  it('both hand each caller its own object, so a caller that sets a field changes no later answer', () => {
     fs.writeFileSync(file, JSON.stringify({ sharedStore: true }));
-    const first = loadConfig(tmp);
-    first.sharedStore = false;
-    expect(loadConfig(tmp).sharedStore).toBe(true);
-    const defaults = loadConfig(path.join(tmp, 'absent'));
-    defaults.sharedStore = true;
-    expect(loadConfig(path.join(tmp, 'absent')).sharedStore).toBe(false);
+    for (const load of [loadConfig, configReader()]) {
+      const first = load(tmp);
+      first.sharedStore = false;
+      expect(load(tmp).sharedStore).toBe(true);
+      const defaults = load(path.join(tmp, 'absent'));
+      defaults.sharedStore = true;
+      expect(load(path.join(tmp, 'absent')).sharedStore).toBe(false);
+    }
   });
 
   it('isSharedStore reads an unchanged not-shared file once, and sees the edit that shares it', () => {

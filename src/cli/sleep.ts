@@ -2,12 +2,11 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadConfig } from '../core/config.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../api/index.js';
-import { cliApiContext, cliLocalFiles, cliSyncOptions } from './api-context.js';
+import { cliConfig, cliApiContext, cliLocalFiles, cliSyncOptions } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
@@ -81,7 +80,7 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
       "previews those).",
     );
   } else if (learn) {
-    const config = loadConfig(hippoRoot);
+    const config = cliConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
       const { added } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);

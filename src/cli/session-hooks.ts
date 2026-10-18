@@ -33,7 +33,6 @@ import {
   type CaptureInput,
   type HookRuntime,
 } from '../core/capture-contract.js';
-import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/sleep/auto-sleep.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
@@ -47,7 +46,7 @@ import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import {
-  cliApiContext, cliHookRequest, cliLedgerReach, cliStore, cliSyncOptions, cliSyncStore,
+  cliApiContext, cliHookRequest, cliLedgerReach, cliStore, cliSyncOptions, cliSyncStore, cliConfig,
 } from './api-context.js';
 import {
   type CliFlags,
@@ -71,7 +70,7 @@ import {
 import type { JsonValue } from '../util/json.js';
 import { CliExit, fail } from './exit.js';
 
-const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root) });
+const captureTarget = (root: string): CaptureTarget => ({ root, store: cliSyncStore(root), config: cliConfig(root) });
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
@@ -360,7 +359,7 @@ async function sleepIfDue(
   const prefix = `turn close, session ${sessionId}`;
   try {
     const { enabled, count, threshold, due } =
-      await autoSleepDue(cliStore(hippoRoot), tenantId, loadConfig(hippoRoot).autoSleep);
+      await autoSleepDue(cliStore(hippoRoot), tenantId, cliConfig(hippoRoot).autoSleep);
     if (!due) {
       const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
       appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });

@@ -5,7 +5,8 @@ import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { _resetSharedStoreCacheForTests, markSharedStore } from '../../src/core/config.js';
+import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
+import { shareRoot } from '../_helpers/share-root.js';
 import { lastRecalledIds } from '../../src/mcp/session-state.js';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
@@ -49,8 +50,8 @@ async function runServed(makeStore?: (root: string) => HippoStore) {
     const root = join(home, 'store');
     cpSync(fixture.dir, root, { recursive: true });
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    // serve() marks another store's root shared, so the hippo.db pass is shared too to compare like with like.
-    markSharedStore(root);
+    // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
+    shareRoot(root);
     const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });
     const replies: Reply[] = [];

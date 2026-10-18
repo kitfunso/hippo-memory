@@ -2,13 +2,12 @@
 
 import { confidenceFacets } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
-import { loadConfig } from '../core/config.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { detectScope } from '../core/active-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { cliRecallOrigin, scopeHiddenCount } from '../api/recall/rows.js';
-import { cliApiContext, cliLocalFiles, cliSecondStore } from './api-context.js';
+import { cliConfig, cliApiContext, cliLocalFiles, cliSecondStore } from './api-context.js';
 import type { LocalFiles } from '../store/port.js';
 import type { RankRecallResult } from '../api/recall/pipeline.js';
 import { printedTokens } from '../api/context-render.js';
@@ -71,7 +70,7 @@ async function cmdExplain(
   const explainGlobalOn = origin.globalOn;
   noteScopeHidden(ctx, explainGlobalOn ? cliLocalFiles(globalRoot) : undefined, query, explicitScope || undefined);
 
-  const config = loadConfig(hippoRoot);
+  const config = cliConfig(hippoRoot);
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const cost = (r: SearchResult): number =>

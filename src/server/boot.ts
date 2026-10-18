@@ -1,13 +1,13 @@
 import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps, validateFlags } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { hasGroup, type HippoStore } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../store/busy.js';
 import {
   createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder,
 } from '../store/sqlite/held-connection.js';
 import { globalStoresFor, workerSqliteStore } from '../store/sqlite/worker-store.js';
-import { markSharedStore } from '../core/config.js';
+import { configReader } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { MINUTE_MS } from '../util/time.js';
@@ -428,8 +428,6 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
   const streamSlots = new Map<string, number>();
 
   const served = servedOptsFor(opts, routes, publicJsonBodies, limiters);
-  // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
-  if (!hasGroup(served.store, 'localFiles')) markSharedStore(opts.hippoRoot);
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
@@ -487,6 +485,7 @@ function servedOptsFor(
     publicJsonBodies,
     store,
     globalStores: globalStoresFor(store),
+    configAt: configReader(),
     offLoop: offLoopFor(store),
     callerLimiter,
     failedAuthLimiter,
