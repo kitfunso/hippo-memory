@@ -1,17 +1,19 @@
-// The local-to-global copy behind `promote`, sync like the rest of LocalFiles so its audit row commits with the copy.
+// The tenant lookup and global write behind `promote`, sync like the rest of LocalFiles so its audit row commits with
+// the copy.
 
 import type { MemoryEntry } from '../../core/memory.js';
 
-export interface PromoteOptions {
-  actor?: string;
-  tenantId?: string;
+/** How a promoted copy is written: the actor its `remember` row names and the local row it copies. */
+export interface PromotedCopy {
+  readonly actor?: string;
+  readonly sourceId: string;
   /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
-  auditAs?: { tenantId: string; actor: string };
+  readonly auditAs?: { readonly tenantId: string; readonly actor: string };
 }
 
 export interface Promotion {
   /** The tenant and scope of the local memory, or undefined when no row has the id. */
   reach(id: string): { tenantId: string; scope: string | null } | undefined;
-  /** Copies the local memory into the global store as a new `g_` row; the caller embeds the copy. */
-  copyToGlobal(id: string, opts: PromoteOptions): MemoryEntry;
+  /** Writes `copy` into this store, the global one; the caller has already vetted, labelled and embeds it. */
+  writeCopy(copy: MemoryEntry, opts: PromotedCopy): void;
 }

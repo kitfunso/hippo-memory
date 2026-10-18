@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry, type WriteEntryOptions } from '../../src/store/entry-writes.js';
 import { writeEntryThenFail } from '../_helpers/failing-write.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
-import type { PromoteOptions } from '../../src/store/port/promotion.js';
+import type { PromotedCopy } from '../../src/store/port/promotion.js';
 import { confidenceFacets, type ConfidenceInputs } from '../../src/core/memory.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -39,7 +39,7 @@ describe('loadRecallEntries', () => {
 describe('writeEntry options', () => {
   it('keep the db handle out of the published type', () => {
     expectTypeOf<WriteEntryOptions>().not.toHaveProperty('afterWrite');
-    expectTypeOf<PromoteOptions>().not.toHaveProperty('afterWrite');
+    expectTypeOf<PromotedCopy>().not.toHaveProperty('afterWrite');
   });
 
   it('a failure after the INSERT rolls the row back', () => {

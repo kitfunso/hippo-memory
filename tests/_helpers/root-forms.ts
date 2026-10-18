@@ -9,7 +9,8 @@ import type { FailedAuditEvent } from '../../src/store/audit.js';
 import { githubEventRecordAt, markGitHubEventSeenAt } from '../../src/store/connectors/github.js';
 import type { GitHubEventLogEntry } from '../../src/store/connectors/github.js';
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/connectors/slack.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { promote } from '../../src/api/memories/promote.js';
+import { apiCtx } from './api-ctx.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
@@ -708,10 +709,12 @@ export function loadSearchEntries(hippoRoot: string, query: string, limit?: numb
   return onHandle(hippoRoot, (db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore);
 }
 
-export function copyToGlobal(
-  hippoRoot: string,
-  id: string,
-  opts: Parameters<ReturnType<typeof sqliteSyncStore>['localFiles']['promotion']['copyToGlobal']>[1] = {},
-): MemoryEntry {
-  return sqliteSyncStore(hippoRoot).localFiles.promotion.copyToGlobal(id, opts);
+/** Promotes `id` through the api, vetoes included, into the global store under HIPPO_HOME and returns the copy;
+ * `owner` lets the caller reach its own personal rows. */
+export function copyToGlobal(hippoRoot: string, id: string, opts: { tenantId?: string; owner?: string } = {}): MemoryEntry {
+  const ctx = apiCtx(hippoRoot, opts.tenantId ?? 'default', { subject: CLI_ACTOR, role: 'admin', owner: opts.owner });
+  const { globalId } = promote(ctx, id);
+  const copy = ctx.reach?.globalTarget?.store.localFiles.learning.readEntry(globalId);
+  if (!copy) throw new Error(`the promoted copy ${globalId} is not in the global store`);
+  return copy;
 }
