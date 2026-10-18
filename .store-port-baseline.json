@@ -16,6 +16,7 @@
   "portImportsFromSql": 0,
   "buildsOutsideRoots": 0,
   "groupChecksInApi": 0,
+  "portFunctionParams": 24,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts"
   ],

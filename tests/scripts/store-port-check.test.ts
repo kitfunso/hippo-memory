@@ -31,6 +31,7 @@ type Counts = {
   carrierFilesList: string[];
   storeFilesWithoutSql?: number;
   storeFilesWithoutSqlList?: string[];
+  portFunctionParams?: number;
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -510,6 +511,43 @@ describe('check-store-port.mjs', () => {
       expect(l.groupChecksInApi).toBe('3');
       expect(l['src/api/a.ts:1']).toBe('groupChecksInApi');
       expect(l['src/cli/c.ts:1']).toBeUndefined();
+    });
+  });
+
+  it('portFunctionParams counts a port method parameter that holds a function, through an alias, a union member, a property and an import', () => {
+    const files = {
+      'src/store/port.ts': [
+        "import type { Fate } from './port/fate.js';",
+        'export type Protect = (id: string) => string | undefined;',
+        'export interface Plain { readonly id: string; readonly at: Date }',
+        'export interface Group {',
+        '  visit(each: (row: Plain) => void): void;',
+        '  repair(tenantId: string, protect: Protect): void;',
+        '  resolve(fate: Fate): void;',
+        '  read(rows: readonly Plain[], opts: { readonly limit: number }): Promise<Plain[]>;',
+        '  run<T>(work: T): T;',
+        '}',
+      ].join('\n'),
+      'src/store/port/fate.ts': "export type Fate = { readonly kind: 'weaken' } | { readonly kind: 'reject'; readonly inReach: (scope: string) => boolean };\n",
+      'src/store/port-groups.ts': 'export interface Later { readonly every: { readonly on: { tick(): void } } }\nexport interface G { start(later: Later): void }\n',
+      'src/api/a.ts': 'export interface NotPort { visit(each: () => void): void }\n',
+    };
+    withFixture(files, null, ({ run }) => {
+      const l = list(run);
+      expect(l.portFunctionParams).toBe('4');
+      expect(l['src/store/port.ts:5 Group.visit(each)']).toBe('portFunctionParams');
+      expect(l['src/store/port.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
+      expect(l['src/store/port.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
+      expect(l['src/store/port-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
+    });
+  });
+
+  it('portFunctionParams fails once a function parameter is added above the baseline', () => {
+    const files = { 'src/store/port.ts': 'export interface Group { visit(each: () => void): void }\n' };
+    withFixture(files, { portFunctionParams: 0 }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('portFunctionParams: 0 -> 1');
     });
   });
 
