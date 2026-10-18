@@ -82,7 +82,14 @@ const ancestorHits = (ctx, run, t) => ancestorFiles(ctx, run, `${t.id}.ancestor.
 function stageTask(ctx, run, step) {
   const { t } = step;
   const work = run.dirs.work;
-  const prepare = () => ({ commit: checkoutBase(run.cached, work, run.s.id, t, run.arm), setup: t.setup ? sh(t.setup, work, childEnv(run.env)) : null });
+  const once = () => ({ commit: checkoutBase(run.cached, work, run.s.id, t, run.arm), setup: t.setup ? sh(t.setup, work, childEnv(run.env)) : null });
+  // A tool's own race can fail a setup that is fine (pnpm 12.3.4 on Windows, os error 183), so a failed one runs once more from a fresh checkout.
+  const prepare = () => {
+    const first = once();
+    if (!first.setup || first.setup.status === 0) return first;
+    writeLog(run, `${t.id}.setup-try1.txt`, `${first.setup.stdout}\n${first.setup.stderr}`);
+    return once();
+  };
   const { commit, setup } = prepare();
   if (setup && setup.status !== 0) return { commit, setup, failed: true };
   // Setup's own writes are part of the baseline, so they are never counted as the agent's and never carried.
