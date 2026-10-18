@@ -14,7 +14,7 @@ export type { FailureSummary } from '../store/failure-log.js';
 export { classifyOriginProject } from '../core/project-identity.js';
 
 export { RecallContractError, adminActor, ownerOrSubject, requireHostAdmin } from './types.js';
-export type { Actor, Context, StoreContext } from './types.js';
+export type { Actor, Context } from './types.js';
 export { remember } from './memories/remember.js';
 export type { RememberLocal, RememberOptions, RememberResult } from './memories/remember.js';
 export { extractRememberedFacts, rememberLocally } from './memories/remember-local.js';
@@ -59,6 +59,7 @@ export type {
 export { outcome, outcomeForLastRecall } from './memories/outcome.js';
 export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
 export { forget, reject, rejectOnHost, unreject } from './memories/forget.js';
+export { pinMemory } from './memories/pin.js';
 export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
 export {
   everyConflict,

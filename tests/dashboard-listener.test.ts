@@ -7,7 +7,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { serve } from '../src/server.js';
 import { removeScratch, scratch, type Scratch } from './_helpers/compaction-hooks.js';
-import { startDashboard } from './_helpers/dashboard-fixture.js';
+import { sessionCookie, startDashboard } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { ownStderr } from './_helpers/own-stderr.js';
@@ -133,7 +133,7 @@ describe('hippo dashboard listener', () => {
     const [, port, urlFile] = await watched.printed(/Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/);
     const token = /\?token=(\S+)/.exec(readFileSync(urlFile!.trim(), 'utf8'))?.[1];
     // The snapshot store opens its connection on the first read, and the reply's kept-alive socket is one the stop has to close.
-    const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: `hippo_dashboard_${port}=${token}` } });
+    const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: sessionCookie(Number(port), token ?? '') } });
     expect(overview.status, await overview.text()).toBe(200);
 
     deliverStop(child);

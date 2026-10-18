@@ -144,12 +144,12 @@ function cliStoreProblems(srcDir) {
   ];
 }
 
-const SQLITE_FROM = ['api/', 'connectors/', 'mcp/'];
+const SQLITE_FROM = ['api/', 'connectors/', 'dashboard/', 'mcp/'];
 const SQLITE_DIR = 'store/sqlite/';
 // Each runtime import that may stay, as src-relative paths with why.
 const SQLITE_PINNED = [];
 
-/** Runtime imports from src/api, src/connectors or src/mcp into src/store/sqlite, one per (file, target), as src-relative paths. */
+/** Runtime imports from src/api, src/connectors, src/dashboard or src/mcp into src/store/sqlite, one per (file, target), as src-relative paths. */
 function findSqliteReaches(srcDir) {
   const root = resolve(srcDir);
   const rel = (p) => relative(root, p).replace(/\\/g, '/');
@@ -240,7 +240,7 @@ if (cliProblems.length > 0 && !args.includes('--list')) {
 
 const sqliteProblems = sqliteReachProblems('src');
 if (sqliteProblems.length > 0 && !args.includes('--list')) {
-  console.error('The api, connectors or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:');
+  console.error('The api, connectors, dashboard or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:');
   for (const p of sqliteProblems) console.error(`  ${p}`);
   process.exit(1);
 }

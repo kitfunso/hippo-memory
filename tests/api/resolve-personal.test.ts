@@ -2,17 +2,16 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, type Actor } from '../../src/api/index.js';
+import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { readEntry } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -139,12 +138,13 @@ describe('resolving conflicts next to personal rows', () => {
 
   it('the dashboard resolve answers a pair holding a personal row as it answers a missing conflict, open or resolved', async () => {
     const { personalId, teamId, conflictId } = await personalPair();
-    const missing = resolveOpenConflict(root, 'default', conflictId + 1000, { keep: teamId });
+    const dashboard = ctxFor(adminActor('dashboard'));
+    const missing = await resolveOpenConflict(dashboard, conflictId + 1000, { keep: teamId });
     expect(missing.status).toBe(404);
-    expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);
+    expect(await resolveOpenConflict(dashboard, conflictId, { keep: teamId })).toEqual(missing);
     expect(listMemoryConflicts(root, 'open', 'default').map((c) => c.id)).toEqual([conflictId]);
 
     await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: personalId });
-    expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);
+    expect(await resolveOpenConflict(dashboard, conflictId, { keep: teamId })).toEqual(missing);
   });
 });

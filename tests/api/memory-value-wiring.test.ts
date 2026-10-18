@@ -18,7 +18,6 @@ import { consolidate } from '../../src/index.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../../src/core/config.js';
@@ -37,7 +36,7 @@ import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/consolid
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
 import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, loadSessionDecayContext } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, loadSessionDecayContext, listMemoryConflicts } from '../_helpers/root-forms.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */

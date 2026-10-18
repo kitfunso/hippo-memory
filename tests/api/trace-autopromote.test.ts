@@ -3,7 +3,7 @@ import { consolidate } from '../../src/index.js';
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { appendSessionEvent } from '../../src/store/sessions.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -31,9 +31,13 @@ export interface RawArchive extends EntryRemoval {
   readonly reason: string;
 }
 
-/** The memory-row writes behind remember, outcome, supersede, archive and forget. Each writes its audit rows in the
- * write's own transaction, a child row's change marks its level 2 or 3 summary parent dirty (one summary_marked_dirty
- * row on the flip), and the schema's rules hold. */
+export interface PinWrite extends EntryRemoval {
+  readonly pinned: boolean;
+}
+
+/** The memory-row writes behind remember, outcome, pin, supersede, archive and forget. Each writes its audit rows in
+ * the write's own transaction, a child row's change marks its level 2 or 3 summary parent dirty (one
+ * summary_marked_dirty row on the flip), and the schema's rules hold. */
 export interface EntryWrites {
   /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's tenant; an id held by
    * another tenant rejects with ConflictError. Content from a tenant that tombstoned it rejects with RejectedValueError
@@ -43,6 +47,8 @@ export interface EntryWrites {
    * outcome row ({good}); other ids skipped. Each read holds the row lock to commit (SELECT ... FOR UPDATE), so a
    * concurrent supersede is not undone. Resolves to the ids applied, repeats kept. */
   applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
+  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); out of reach rejects as forget does. */
+  setPinned(pin: PinWrite): Promise<MemoryEntry>;
   /** Sets the old row's superseded_by if it is within reach and not yet superseded (both checked in the transaction),
    * else rejects NotFoundError or ConflictError. Then writes the successor as writeEntry does and one supersede row
    * ({newId}), all or nothing. */

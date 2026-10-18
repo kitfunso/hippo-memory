@@ -1,13 +1,10 @@
-// The four dashboard writes, each a thin call into an existing store or api function; the router owns HTTP and the cache.
+// The four dashboard writes, each the api call the CLI makes; the router owns HTTP and the cache.
 
 import * as api from '../api/index.js';
-import { NotFoundError } from '../core/api-errors.js';
+import { getMemory } from '../api/memories/memories.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
-import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
-import { readEntry } from '../store/entry-reads.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { sqliteStore } from '../store/sqlite/store.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from './dashboard-snapshot.js';
 import type { ForgetResult, ResolveResult } from './dashboard-types.js';
@@ -22,55 +19,43 @@ export interface ActionResult {
   entry?: MemoryEntry;
 }
 
-const ACTOR = 'dashboard';
-
 function notFound(): ActionResult {
   return { status: 404, body: { error: 'Not found' }, changed: false };
 }
 
-function liveEntry(hippoRoot: string, tenantId: string, id: string): MemoryEntry | null {
-  const entry = readEntry(hippoRoot, id, tenantId);
+async function liveEntry(ctx: api.Context, id: string): Promise<MemoryEntry | null> {
+  const entry = await getMemory(ctx, id);
   return entry !== null && isLiveMemory(entry) ? entry : null;
 }
 
-/** Sets `pinned`; the audit row says `remember` with actor `dashboard`, the same op the old star toggle wrote. */
-export function pinMemory(hippoRoot: string, tenantId: string, rawId: string, body: ActionBody): ActionResult {
+/** Sets `pinned`, audited as a pin by the Context's actor. */
+export async function pinMemory(ctx: api.Context, rawId: string, body: ActionBody): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   const { pinned } = body;
   if (pinned === undefined) throw new ParamError('pinned must be true or false');
-  const entry = liveEntry(hippoRoot, tenantId, id);
-  if (entry === null) return notFound();
-  const next = { ...entry, pinned };
-  writeEntry(hippoRoot, next, { actor: ACTOR });
-  return { status: 200, body: null, changed: true, entry: next };
+  if ((await liveEntry(ctx, id)) === null) return notFound();
+  try {
+    return { status: 200, body: null, changed: true, entry: await api.pinMemory(ctx, id, pinned) };
+  } catch (err) {
+    if (err instanceof NotFoundError) return notFound();
+    throw err;
+  }
 }
 
 /** Marks a memory wrong, the same signal as `hippo outcome --bad`. */
-export async function markWrong(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
+export async function markWrong(ctx: api.Context, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
-  if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.StoreContext = {
-    hippoRoot,
-    tenantId,
-    actor: api.adminActor(ACTOR),
-    store: sqliteStore(hippoRoot),
-  };
-  // outcome() answers `applied: 0` for a missing or other-tenant id instead of throwing.
+  if ((await liveEntry(ctx, id)) === null) return notFound();
+  // outcome() answers `applied: 0` for a missing or out-of-reach id instead of throwing.
   if ((await api.outcome(ctx, [id], false)).applied === 0) return notFound();
-  const entry = readEntry(hippoRoot, id, tenantId);
+  const entry = await getMemory(ctx, id);
   return entry === null ? notFound() : { status: 200, body: null, changed: true, entry };
 }
 
 /** Deletes a memory like `hippo forget`; a raw receipt is append-only and answers 409 with the archive hint. */
-export async function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
+export async function forgetMemory(ctx: api.Context, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
-  if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.StoreContext = {
-    hippoRoot,
-    tenantId,
-    actor: api.adminActor(ACTOR),
-    store: sqliteStore(hippoRoot),
-  };
+  if ((await liveEntry(ctx, id)) === null) return notFound();
   try {
     const done: ForgetResult = await api.forget(ctx, id);
     return { status: 200, body: done, changed: true };
@@ -84,25 +69,22 @@ export async function forgetMemory(hippoRoot: string, tenantId: string, rawId: s
   }
 }
 
-/** Keeps one side of an open conflict and weakens the other; every refusal maps to its own status. */
-export function resolveOpenConflict(hippoRoot: string, tenantId: string, conflictId: number, body: ActionBody): ActionResult {
+/** Keeps one side of an open conflict and weakens the other; the api's refusals keep their old statuses and texts. */
+export async function resolveOpenConflict(ctx: api.Context, conflictId: number, body: ActionBody): Promise<ActionResult> {
   const { keep } = body;
   if (keep === undefined) throw new ParamError('keep must be a memory id');
   parseMemoryId(keep);
-  // The dashboard acts as an unowned admin, so a pair holding a personal row reads as missing, open or resolved.
-  const conflict = listTouchableConflicts(hippoRoot, '*', tenantId, api.adminActor(ACTOR)).find((c) => c.id === conflictId);
-  if (!conflict) return notFound();
-  const already = (): ActionResult => ({ status: 409, body: { error: 'This conflict is already resolved' }, changed: false });
-  if (conflict.status !== 'open') return already();
-  if (keep !== conflict.memory_a_id && keep !== conflict.memory_b_id) {
-    throw new ParamError('keep must be one of the two memories in the conflict');
+  try {
+    const { loserId } = await api.resolveMemoryConflict(ctx, conflictId, { keepId: keep });
+    const result: ResolveResult = { ok: true, conflictId, keptId: keep, weakenedId: loserId };
+    return { status: 200, body: result, changed: true };
+  } catch (err) {
+    // The dashboard acts as an unowned admin, so a pair holding a personal row reads as missing.
+    if (err instanceof NotFoundError) return notFound();
+    if (err instanceof ConflictError) {
+      return { status: 409, body: { error: 'This conflict is already resolved' }, changed: false };
+    }
+    if (err instanceof BadRequestError) throw new ParamError('keep must be one of the two memories in the conflict');
+    throw err;
   }
-  if (liveEntry(hippoRoot, tenantId, conflict.memory_a_id) === null || liveEntry(hippoRoot, tenantId, conflict.memory_b_id) === null) {
-    return notFound();
-  }
-  const resolved = resolveConflict(hippoRoot, { conflictId, keepId: keep, tenantId }, { rejectedBy: ACTOR });
-  // Both guards passed above, so null here is a race with another resolver.
-  if (resolved === null) return already();
-  const result: ResolveResult = { ok: true, conflictId, keptId: keep, weakenedId: resolved.loserId };
-  return { status: 200, body: result, changed: true };
 }

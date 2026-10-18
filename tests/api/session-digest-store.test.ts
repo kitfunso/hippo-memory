@@ -11,7 +11,7 @@ import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../_helpers/root-forms.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import {
   recordSessionDigest,
