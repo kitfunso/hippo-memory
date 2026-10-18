@@ -43,7 +43,9 @@ describe('one server per store', () => {
     await expect(boot()).rejects.toThrow(/already running on port/);
     await first.stop();
     handles.length = 0;
-    await expect(boot()).resolves.toBeDefined();
+    const second = await boot();
+    expect(second.port).toBeGreaterThan(0);
+    expect(JSON.parse(readFileSync(join(root, 'server.pid'), 'utf8')).url).toBe(second.url);
   });
 
   it('removes a pidfile left by a dead process and boots', async () => {
@@ -70,7 +72,8 @@ describe('one server per store', () => {
       await blocker.stop();
       rmSync(otherRoot, { recursive: true, force: true });
     }
-    await expect(boot()).resolves.toBeDefined();
+    const handle = await boot();
+    expect(JSON.parse(readFileSync(join(root, 'server.pid'), 'utf8')).port).toBe(handle.port);
   });
 
   it("keeps a live process's claim that has no port yet, for detectServer and for a second claim", async () => {

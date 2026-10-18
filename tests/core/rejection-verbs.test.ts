@@ -268,7 +268,11 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    await expect(api.resolveMemoryConflict(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toBeDefined();
+    await expect(api.resolveMemoryConflict(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toEqual({
+      conflictId,
+      keptId: a.id,
+      loserId: rawLoser.id,
+    });
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -346,7 +350,7 @@ describe('resolveConflict rejection wiring', () => {
         rejectLoser: true,
         reason: 'raw loser rejected via GDPR-adjacent path',
       }),
-    ).resolves.toBeDefined();
+    ).resolves.toEqual({ conflictId, keptId: a.id, loserId: rawLoser.id });
 
     // Archived, not hard-deleted: the row is gone from `memories` but a
     // raw_archive row exists (append-only trigger respected).
