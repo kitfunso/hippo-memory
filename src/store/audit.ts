@@ -10,6 +10,7 @@ import type { AuditOp } from './port/audit-ops.js';
 import type { QueryAuditOptions } from './port/audit-log.js';
 import type { AuditPrune } from './port/audit-maintenance.js';
 import type { ListAuditAfterOpts } from './port/key-audit.js';
+import { cachedStatement } from './statement-cache.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
 // replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
@@ -35,17 +36,33 @@ export function auditQueryFields(query: string): AuditQueryFields {
   };
 }
 
+const INSERT_AUDIT_ROW_SQL =
+  `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`;
+
 export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
-  db.prepare(
-    `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(
-    new Date().toISOString(),
+  cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(new Date().toISOString(), ...auditRowValues(opts));
+}
+
+// Every column is text, so one JSON array binds any number of rows and the statement's text never changes.
+const INSERT_AUDIT_ROWS_SQL =
+  `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) ` +
+  `SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ` +
+  `json_extract(value, '$[3]'), json_extract(value, '$[4]') FROM json_each(?) ORDER BY key`;
+
+/** appendAuditEvent for many rows in one statement, ids in `events` order; a failure writes none of them. */
+export function appendAuditEventsAt(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): void {
+  if (events.length === 0) return;
+  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(new Date().toISOString(), JSON.stringify(events.map(auditRowValues)));
+}
+
+function auditRowValues(opts: AppendAuditOpts): [string, string, string, string | null, string] {
+  return [
     opts.tenantId,
     opts.actor,
     opts.op,
     opts.targetId ?? null,
     JSON.stringify(opts.metadata ?? {}, bigintSafeReplacer),
-  );
+  ];
 }
 
 let auditWriteFailures = 0;

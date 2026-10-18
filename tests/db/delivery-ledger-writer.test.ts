@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
+  deliveryPruneSchedule,
   readDeliveryEvents,
   writeDeliveryEventOnHandle,
   writeDeliveryEventVia,
@@ -18,6 +19,7 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../sr
 import { runWithRequestId } from '../../src/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import type { Ledger } from '../../src/store/port/ledger.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
@@ -258,6 +260,21 @@ describe('writeDeliveryEventOnHandle', () => {
     expect(count('delivery_candidates')).toBe(2);
   });
 
+  it('writes 3,000 candidates in two statements, not one a row, each row as given', () => {
+    const base = event().candidates[0]!;
+    const candidates = Array.from({ length: 3000 }, (_, i) => ({
+      ...base, memoryId: `m${i}`, rank: i + 1, score: i / 7, tokens: i,
+    }));
+    const { result, statements } = recordStatements(() => writeDeliveryEventOnHandle(db, event({ candidates })));
+    expect(countMatching(statements, 'INSERT INTO delivery_candidates')).toBe(2);
+    const rows = db.prepare(
+      'SELECT memory_id, cand_rank, score, tokens FROM delivery_candidates WHERE event_id = ? ORDER BY cand_rank',
+    ).all(result);
+    expect(rows).toEqual(candidates.map((c) => ({
+      memory_id: c.memoryId, cand_rank: c.rank, score: c.score, tokens: c.tokens,
+    })));
+  });
+
   it('rolls back and returns null with one stderr line when a write fails', () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE delivery_candidates');
@@ -276,15 +293,49 @@ describe('writeDeliveryEventOnHandle', () => {
   });
 });
 
+describe('the delivery ledger prune', () => {
+  const prunes = (log: StatementLog<number | null>): number =>
+    countMatching(log.statements, /^DELETE FROM delivery_events/);
+  const writeVia = (ledger: Ledger, promptHash: string, ms: number) =>
+    recordStatements(() => ledger.writeDeliveryEvent(event({ promptHash, ts: at(ms) })));
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("runs at most once a minute per store, and again once the store's minute has passed", () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.parse('2026-09-01T00:00:00.000Z'));
+    const { ledger } = sqliteSyncStore(root).localFiles;
+    expect([writeVia(ledger, 'p1', 0), writeVia(ledger, 'p2', 30_000)].map(prunes)).toEqual([1, 0]);
+    vi.setSystemTime(Date.parse('2026-09-01T00:00:59.000Z'));
+    expect(prunes(writeVia(ledger, 'p3', 59_000))).toBe(0);
+    vi.setSystemTime(Date.parse('2026-09-01T00:01:01.000Z'));
+    expect(prunes(writeVia(ledger, 'p4', 61_000))).toBe(1);
+    expect(prunes(writeVia(sqliteSyncStore(root).localFiles.ledger, 'another store', 62_000))).toBe(1);
+    expect(count('delivery_events')).toBe(5);
+  });
+
+  it('leaves the next write due when the write that would have pruned fails', () => {
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const prune = deliveryPruneSchedule();
+    db.exec(`CREATE TRIGGER refuse BEFORE INSERT ON delivery_candidates BEGIN SELECT RAISE(ABORT, 'refused'); END`);
+    expect(writeDeliveryEventOnHandle(db, event(), prune)).toBeNull();
+    db.exec('DROP TRIGGER refuse');
+    expect(prunes(recordStatements(() => writeDeliveryEventOnHandle(db, event({ ts: at(1000) }), prune)))).toBe(1);
+  });
+});
+
 describe('writeDeliveryEventAtRoot under a held write lock', () => {
   it('drops the row fast, then numbers the next written turn after the last recorded one', () => {
-    expect(writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p1' }))).not.toBeNull();
+    const prune = deliveryPruneSchedule();
+    expect(writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p1' }), prune)).not.toBeNull();
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const holder = openHippoDb(root);
     holder.exec('BEGIN IMMEDIATE');
     let dropped: StatementLog<number | null>;
     try {
-      dropped = recordStatements(() => writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p2', ts: at(5000) })));
+      dropped = recordStatements(() => writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p2', ts: at(5000) }), prune));
     } finally {
       holder.exec('COMMIT');
       closeHippoDb(holder);
@@ -293,7 +344,7 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     expectOneShortWait(dropped.statements);
     expect(err).toHaveBeenCalledTimes(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: /);
-    const next = writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p3', ts: at(10_000) }));
+    const next = writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p3', ts: at(10_000) }), prune);
     expect(next).not.toBeNull();
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.turn_seq)).toEqual([1, 2]);
   });
