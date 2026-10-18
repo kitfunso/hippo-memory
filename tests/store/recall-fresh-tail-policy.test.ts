@@ -61,9 +61,9 @@ describe('fresh-tail policy', () => {
 
   it('back-compat: env unset, freshTailCount > 0, no sessionId → tenant-wide rows, no throw', async () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
-    await expect(retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } })).resolves.toBeDefined();
     const r = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } });
-    // At least one row should be tagged isFreshTail under tenant-wide policy.
+    // Tenant-wide policy: the three raw rows come back, and at least one is tagged isFreshTail.
+    expect(r.results).toHaveLength(3);
     expect(r.results.some((it) => it.isFreshTail === true)).toBe(true);
   });
 

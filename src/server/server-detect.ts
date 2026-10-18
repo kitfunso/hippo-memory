@@ -10,6 +10,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { isObjectLike } from '../core/capture-contract.js';
 import { envHealthProbeMs } from '../util/env.js';
 import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 
@@ -143,6 +144,11 @@ function isConnectionRefused<E>(err: E): boolean {
   );
 }
 
+/** False for a /health body that is not an object (JSON null, a scalar) or reports another started_at. */
+function reportsStartedAt<T>(body: T, startedAt: string): boolean {
+  return isObjectLike(body) && 'started_at' in body && body.started_at === startedAt;
+}
+
 /**
  * True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any definitive mismatch and
  * throws ServerUnresponsiveError on a
@@ -163,8 +169,7 @@ async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promis
       removePidfile(hippoRoot);
       return false;
     }
-    const body: { started_at?: unknown } = JSON.parse(raw);
-    if (body.started_at !== info.started_at) {
+    if (!reportsStartedAt(JSON.parse(raw), info.started_at)) {
       removePidfile(hippoRoot);
       return false;
     }
@@ -187,6 +192,21 @@ async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promis
   }
 }
 
+/** JSON null, an array or a scalar parses cleanly but is no pidfile, so the shape is checked, not just the syntax. */
+function isServerInfo<T>(value: T): value is T & ServerInfo {
+  return (
+    isObjectLike(value) &&
+    'pid' in value &&
+    typeof value.pid === 'number' &&
+    'port' in value &&
+    typeof value.port === 'number' &&
+    'url' in value &&
+    typeof value.url === 'string' &&
+    'started_at' in value &&
+    typeof value.started_at === 'string'
+  );
+}
+
 /**
  * Returns the pidfile's ServerInfo if a live hippo server answers on the recorded url, else null (best-effort unlinking
  * of missing/stale/malformed pidfiles).
@@ -199,7 +219,9 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
 
   let info: ServerInfo;
   try {
-    info = JSON.parse(readFileSync(path, 'utf8'));
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    if (!isServerInfo(parsed)) throw new TypeError('it is not a JSON object with a pid, port, url and started_at');
+    info = parsed;
   } catch (err) {
     log.warn(`server pidfile ${path} is unreadable (${errorMessage(err)}); removing it`, errorFields(err));
     removePidfile(hippoRoot);
@@ -293,15 +315,15 @@ export function writePidfile(hippoRoot: string, opts: { port: number; url: strin
 }
 
 /**
- * Best-effort pidfile removal, silent on any error so shutdown paths can call it. Identity-blind: a shutdown that must
- * not clobber a newer server's pidfile
- * uses removePidfileIfOwned. */
+ * Best-effort pidfile removal that never throws, so shutdown paths can call it. Identity-blind: a shutdown that must
+ * not clobber a newer server's pidfile uses removePidfileIfOwned. */
 function removePidfile(hippoRoot: string): void {
   const path = join(hippoRoot, PIDFILE);
   try {
     unlinkSync(path);
-  } catch {
-    /* already gone or undeletable; the next detectServer probe re-checks */
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return;
+    log.warn(`server pidfile ${path} could not be removed (${errorCode(err) || errorMessage(err)})`, errorFields(err));
   }
 }
 

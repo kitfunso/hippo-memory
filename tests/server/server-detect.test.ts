@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -11,6 +11,7 @@ import {
   ServerUnresponsiveError,
 } from '../../src/server/server-detect.js';
 import { serve } from '../../src/server.js';
+import { boundPort } from '../_helpers/listen.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
 // api.ts / store.ts convention. serve() and detectServer take it as-is.
@@ -148,6 +149,65 @@ describe('server-detect', () => {
       expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('kept: the /health probe failed');
     } finally {
       vi.unstubAllGlobals();
+      warn.mockRestore();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['JSON null', 'null'],
+    ['a JSON array', '[]'],
+    ['a JSON number', '42'],
+    ['an object without a port', JSON.stringify({ pid: process.pid, url: 'http://127.0.0.1:1', started_at: 'x' })],
+  ])('treats a pidfile holding %s as no server, warns and unlinks it', async (_name, text) => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      writeFileSync(pidfile, text);
+      expect(await detectServer(home)).toBeNull();
+      expect(existsSync(pidfile)).toBe(false);
+      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('is unreadable');
+    } finally {
+      warn.mockRestore();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('unlinks the pidfile when /health answers with JSON null, a body no hippo server sends', async () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    const stub: Server = createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('null');
+    });
+    try {
+      stub.listen(0, '127.0.0.1');
+      const port = await boundPort(stub);
+      writeFileSync(
+        pidfile,
+        JSON.stringify({ schema: 1, pid: process.pid, port, url: `http://127.0.0.1:${port}`, started_at: 'x' }),
+      );
+      expect(await detectServer(home)).toBeNull();
+      expect(existsSync(pidfile)).toBe(false);
+    } finally {
+      stub.closeAllConnections?.();
+      await new Promise<void>((resolve) => stub.close(() => resolve()));
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('logs the error code when a stale pidfile cannot be removed, instead of dropping it', async () => {
+    const home = makeRoot();
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      // A directory in the pidfile's place cannot be read as JSON and cannot be unlinked either.
+      mkdirSync(join(home, 'server.pid'));
+      expect(await detectServer(home)).toBeNull();
+      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toMatch(
+        /could not be removed \((EISDIR|EPERM|EACCES)\)/,
+      );
+    } finally {
       warn.mockRestore();
       rmSync(home, { recursive: true, force: true });
     }

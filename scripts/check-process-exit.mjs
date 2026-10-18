@@ -20,7 +20,7 @@ export const ALLOWED = {
     count: 3,
     reason: 'child-process event callbacks of the Codex wrapper, where a throw has no caller',
   },
-  'cli/shared.ts': { count: 2, reason: OTHER_PR },
+  'cli/shared.ts': { count: 1, reason: OTHER_PR },
   'capture/compact.ts': { count: 1, reason: OTHER_PR },
 };
 

@@ -45,9 +45,10 @@ async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<strin
   }
 }
 
+// Seeds three real template stores, and a runner's disk sets how long that takes.
 beforeAll(async () => {
   templates = await seedTemplates(seedPortBranches);
-});
+}, 30_000);
 
 afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });
