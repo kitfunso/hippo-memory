@@ -78,13 +78,13 @@ function statusUntilServerCloses(
   });
 }
 
+/** Slack headers of a request sent now, with a digest only a guess could match; they pass the checks made before the body. */
+const slackHeaders = (): string =>
+  `X-Slack-Signature: v0=${'0'.repeat(64)}\r\nX-Slack-Request-Timestamp: ${Math.floor(Date.now() / 1000)}\r\n`;
+
 const WEBHOOKS = [
-  [
-    '/v1/connectors/slack/events',
-    'SLACK_SIGNING_SECRET',
-    'X-Slack-Signature: v0=00\r\nX-Slack-Request-Timestamp: 1\r\n',
-  ],
-  ['/v1/connectors/github/events', 'GITHUB_WEBHOOK_SECRET', `X-Hub-Signature-256: sha256=${'0'.repeat(64)}\r\n`],
+  ['/v1/connectors/slack/events', 'SLACK_SIGNING_SECRET', slackHeaders],
+  ['/v1/connectors/github/events', 'GITHUB_WEBHOOK_SECRET', () => `X-Hub-Signature-256: sha256=${'0'.repeat(64)}\r\n`],
 ] as const;
 
 describe('no route reads an unauthenticated body beyond a stated cap and deadline', () => {
@@ -149,13 +149,35 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
       await handle.stop();
       handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
       vi.stubEnv(secretEnv, undefined);
-      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders)).toBe('HTTP/1.1 404 Not Found');
+      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 404 Not Found');
       // Test-only signing material, not a real secret.
       vi.stubEnv(secretEnv, 'test-only-webhook-signing-material');
       expect(await statusUntilServerCloses(handle.port, path, '')).toBe('HTTP/1.1 401 Unauthorized');
-      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders)).toBe('HTTP/1.1 408 Request Timeout');
+      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 408 Request Timeout');
     },
   );
+
+  it('POST /v1/connectors/slack/events answers 401 to a stale timestamp or a signature that is no v0= digest, without waiting for the body', async () => {
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+    vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
+    const now = Math.floor(Date.now() / 1000);
+    const digest = '0'.repeat(64);
+    const refused = [
+      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: 1\r\n`,
+      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: ${now - 6 * 60}\r\n`,
+      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: ${now + 6 * 60}\r\n`,
+      `X-Slack-Signature: v0=${digest}\r\nX-Slack-Request-Timestamp: soon\r\n`,
+      `X-Slack-Signature: v0=00\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
+      `X-Slack-Signature: v1=${digest}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
+      `X-Slack-Signature: v0=${'g'.repeat(64)}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
+    ];
+    for (const headers of refused) {
+      expect(await statusUntilServerCloses(handle.port, '/v1/connectors/slack/events', headers), headers).toBe(
+        'HTTP/1.1 401 Unauthorized',
+      );
+    }
+  });
 
   it('POST /v1/connectors/github/events answers 401 to a signature header that is no SHA-256 digest, without waiting for the body', async () => {
     await handle.stop();

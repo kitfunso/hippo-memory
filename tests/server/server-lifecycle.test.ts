@@ -216,7 +216,11 @@ describe('server lifecycle', () => {
       // The cap lives in readBody, shared by every route: the generic /v1 route reads a body
       // before any key check, and a webhook route reads one once a secret and a signature header are there.
       vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
-      const signed = { 'x-slack-signature': 'v0=00', 'x-slack-request-timestamp': '1' };
+      // Well formed, as the checks made before the body demand: a v0= digest and a timestamp inside the skew window.
+      const signed = {
+        'x-slack-signature': `v0=${'0'.repeat(64)}`,
+        'x-slack-request-timestamp': String(Math.floor(Date.now() / 1000)),
+      };
       for (const [path, headers] of [
         ['/v1/memories', {}],
         ['/v1/connectors/slack/events', signed],
