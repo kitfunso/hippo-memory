@@ -245,8 +245,8 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
   };
 }
 
-/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieve` ranks and records,
- * then the block prints. */
+/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieveWithCliCore` ranks and
+ * records, then the block prints. */
 async function cmdRecall(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -254,10 +254,10 @@ async function cmdRecall(hippoRoot: string, tenantId: string, query: string, fla
   const priced = priceRecallEntries(ctx, query, o);
   const { globalRoot } = o.setting;
   const slot: PresentedSlot = {};
-  await api.retrieve(ctx, {
-    query,
-    boost: { goalTag: o.goalTag, sessionId: o.sessionId },
-    cliCore: {
+  await api.retrieveWithCliCore(
+    ctx,
+    { query, boost: { goalTag: o.goalTag, sessionId: o.sessionId } },
+    {
       rank: rankOptions(query, flags, o, priced),
       // The global store is a second source for this surface alone, and never when it is the store being searched.
       sources: globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
@@ -269,7 +269,7 @@ async function cmdRecall(hippoRoot: string, tenantId: string, query: string, fla
         return slot.presented.shown;
       },
     },
-  });
+  );
   // A late flag is rejected where the ranking halted, after the notes its earlier stages printed.
   o.late.error?.fail();
   if (!slot.presented) throw new Error('recall ranked but presented nothing');
@@ -502,7 +502,7 @@ function fitRecallBlock(
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = continuity;
   const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
 
-  // The baserate hint depends on the query alone, so `retrieve` evaluates it and this only prices the line.
+  // The baserate hint depends on the query alone, so `retrieveWithCliCore` evaluates it and this only prices the line.
   const planText = planningLine(planning);
   const planTokens = planText === null ? 0 : printedTokens(`${planText}\n`);
   const showPlan = planText !== null && planTokens <= left;
@@ -538,7 +538,7 @@ function fitRecallBlock(
 
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
-/** The presenter `retrieve` calls once ranking ends: fits and
+/** The presenter `retrieveWithCliCore` calls once ranking ends: fits and
  * renders the block, and names the rows and hint rows to record. */
 async function presentRecall(
   ctx: api.Context,

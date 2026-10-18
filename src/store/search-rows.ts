@@ -231,8 +231,7 @@ export function loadRecallEntriesAt(
   return loadRecallSearchEntriesFromDb(db, query, options);
 }
 
-/** Positional root form of `loadRecallEntriesAt`, kept internal because the frozen q3b-ranker-floor benchmark imports
- * it from dist. */
+/** Positional root form of `loadRecallEntriesAt`; the frozen q3b-ranker-floor benchmark imports it from dist. */
 export function loadRecallSearchEntries(
   hippoRoot: string,
   query: string,

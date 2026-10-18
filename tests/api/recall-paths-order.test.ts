@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { adminActor, type RecallResult } from '../../src/api/index.js';
-import { retrieve } from '../../src/api/recall/recall.js';
+import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
+import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { RECALL_RECORDING } from '../../src/api/recall/finish.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
@@ -164,18 +165,21 @@ describe('retrieve paths: order and writes', () => {
     });
   });
 
-  it('showRanked returns the band, audits the shown list after it, and strengthens only the shown ids', async () => {
+  it('retrieveRanking returns the band, audits the shown list after it, and strengthens only the shown ids', async () => {
     let ranked: string[] = [];
-    const result = await retrieve(ctx(), {
-      query: CLAIM,
-      window: { limit: 3 },
-      filter: { keepHeldCopies: true },
-      hints: { suppressAvailabilityHint: true },
-      showRanked: (ranking) => {
+    const result = await retrieveRanking(
+      ctx(),
+      {
+        query: CLAIM,
+        window: { limit: 3 },
+        filter: { keepHeldCopies: true },
+        hints: { suppressAvailabilityHint: true },
+      },
+      (ranking) => {
         ranked = ranking.ranked.map((r) => r.entry.id);
         return { ids: ranked.slice(0, 2), audit: [CALLER_ROW] };
       },
-    });
+    );
     expect(ranked).toEqual(WIDE_RANKED);
     expect(idsOf(result)).toEqual(WIDE_BAND_IDS);
     expect(written()).toEqual({
@@ -192,14 +196,15 @@ describe('retrieve paths: order and writes', () => {
 
   it('the CLI core returns what it showed, audits the caller rows before the recall, and marks the last recall', async () => {
     const caller = ctx();
-    const result = await retrieve(caller, {
-      query: CLAIM,
-      cliCore: {
+    const result = await retrieveWithCliCore(
+      caller,
+      { query: CLAIM },
+      {
         ...cliCore(),
         show: (ranking) => ({ results: ranking.results.slice(0, 2), audit: [CALLER_ROW], tokens: 7 }),
         lastRecall: caller.store.lastRecall,
       },
-    });
+    );
     expect(idsOf(result)).toEqual(CORE_IDS);
     expect(written()).toEqual({
       audit: [
@@ -215,15 +220,16 @@ describe('retrieve paths: order and writes', () => {
 
   it('the CLI core under inspect returns the ranking and writes nothing', async () => {
     let inspected: string[] = [];
-    const result = await retrieve(ctx(), {
-      query: CLAIM,
-      cliCore: {
+    const result = await retrieveWithCliCore(
+      ctx(),
+      { query: CLAIM },
+      {
         ...cliCore(),
         inspect: (ranking) => {
           inspected = ranking.results.map((r) => r.entry.id);
         },
       },
-    });
+    );
     expect(inspected).toEqual(INSPECT_IDS);
     expect(idsOf(result)).toEqual(INSPECT_IDS);
     expect(written()).toEqual({ audit: [], strengthened: [], traces: [], lastRetrievalIds: [] });

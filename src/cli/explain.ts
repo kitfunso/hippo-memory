@@ -74,9 +74,10 @@ async function cmdExplain(hippoRoot: string, tenantId: string, query: string, fl
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};
-  await api.retrieve(ctx, {
-    query,
-    cliCore: {
+  await api.retrieveWithCliCore(
+    ctx,
+    { query },
+    {
       rank: {
         budget: entryBudget,
         cost,
@@ -92,7 +93,7 @@ async function cmdExplain(hippoRoot: string, tenantId: string, query: string, fl
         slot.rank = ranking;
       },
     },
-  });
+  );
   const rank = slot.rank;
   if (!rank) throw new Error('explain ranked but inspected nothing');
   printExplainResults(rank, engine.usePhysics, query, asJson);

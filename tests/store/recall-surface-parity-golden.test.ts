@@ -12,7 +12,7 @@ import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../../src/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../../src/entry/testing.js';
-import { retrieve, RecallContractError, type RecallResult } from '../../src/api/index.js';
+import { retrieveRanking, RecallContractError, type RecallResult } from '../../src/api/index.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { _resetSharedStoreCacheForTests, loadConfig } from '../../src/core/config.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
@@ -325,22 +325,25 @@ describe('recall surface parity goldens', () => {
     expect(got).toMatchSnapshot();
   });
 
-  // D6: under showRanked the boost runs on the ranked list and again on the window band's position scores.
+  // D6: under retrieveRanking the boost runs on the ranked list and again on the window band's position scores.
   it('mcp path applies the goal boost twice', async () => {
     const got = await onFreshStore('local', async (s) => {
       let rankedScore = 0;
-      const result = await retrieve(apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }), {
-        query: 'deploy',
-        window: { limit: 50 },
-        mode: 'physics',
-        boost: { sessionId: SESSION },
-        filter: { keepHeldCopies: true },
-        hints: { suppressAvailabilityHint: true },
-        showRanked: ({ ranked }) => {
+      const result = await retrieveRanking(
+        apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }),
+        {
+          query: 'deploy',
+          window: { limit: 50 },
+          mode: 'physics',
+          boost: { sessionId: SESSION },
+          filter: { keepHeldCopies: true },
+          hints: { suppressAvailabilityHint: true },
+        },
+        ({ ranked }) => {
           rankedScore = ranked.find((r) => r.entry.id === 'mem_p_goal')?.score ?? 0;
           return { ids: ranked.map((r) => r.entry.id), audit: [] };
         },
-      });
+      );
       const idx = result.results.findIndex((r) => r.id === 'mem_p_goal');
       return {
         rankedScore,

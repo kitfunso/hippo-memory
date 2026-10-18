@@ -615,7 +615,7 @@ if (strays.length > 0) {
   console.error('A surface records a recall itself:');
   for (const hit of strays) console.error(`  ${hit}`);
   console.error(
-    'Pass `recordAs` to retrieve() instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.',
+    'Pass `recordAs` to retrieve() (or call retrieveWithCliCore()) instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.',
   );
   process.exit(1);
 }

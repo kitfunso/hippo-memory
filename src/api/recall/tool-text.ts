@@ -85,7 +85,7 @@ export interface RenderedRecall {
   list: SearchResult[];
 }
 
-// api.retrieve hands the ranking to a callback, so the render it produces comes back through this slot.
+// api.retrieveRanking hands the ranking to a callback, so the render it produces comes back through this slot.
 export interface RenderSlot {
   rendered?: RenderedRecall;
 }
@@ -148,7 +148,7 @@ export function tailSection(rows: RecallResultItem[]): string {
   return '\n' + lines.join('\n');
 }
 
-// The hint depends on the query alone, so api.retrieve's copy is the one shown; JSON.stringify fences the phrase.
+// The hint depends on the query alone, so the ranker's copy is the one shown; JSON.stringify fences the phrase.
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;

@@ -1,10 +1,11 @@
-// Ids and order from each ranker retrieve() names (the SQL band, the MCP wide list, the CLI core) over one seeded store,
+// Ids and order from each recall ranker (the SQL band, the MCP wide list, the CLI core) over one seeded store,
 // pinned so a change to how any of them picks its search engine cannot move a ranking.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { retrieve } from '../../src/api/recall/recall.js';
+import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
+import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { adminActor, type RecallOptions } from '../../src/api/index.js';
 import type { RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { loadConfig } from '../../src/core/config.js';
@@ -63,7 +64,7 @@ function seedVectors(root: string, url: string): void {
   );
 }
 
-type BandCase = readonly [string, Omit<RecallOptions, 'cliCore' | 'showRanked'>];
+type BandCase = readonly [string, RecallOptions];
 interface CoreSetup {
   rank?: Partial<RankRecallOptions>;
   physics?: boolean;
@@ -183,15 +184,18 @@ describe('recall ranker goldens', () => {
   it.each(WIDE)('MCP wide ranker: %s', async (_name, opts) => {
     const got = await onStore(async (s) => {
       let ranked: string[] = [];
-      const result = await retrieve(ctxOf(s), {
-        ...opts,
-        filter: { ...opts.filter, keepHeldCopies: true },
-        hints: { ...opts.hints, suppressAvailabilityHint: true },
-        showRanked: (ranking) => {
+      const result = await retrieveRanking(
+        ctxOf(s),
+        {
+          ...opts,
+          filter: { ...opts.filter, keepHeldCopies: true },
+          hints: { ...opts.hints, suppressAvailabilityHint: true },
+        },
+        (ranking) => {
           ranked = ranking.ranked.map((r) => r.entry.id);
           return { ids: ranked.slice(0, 10), audit: [] };
         },
-      });
+      );
       return { ranked: ranked.map(stable), band: result.results.map((r) => stable(r.id)) };
     });
     expect(got).toMatchSnapshot();
@@ -201,10 +205,10 @@ describe('recall ranker goldens', () => {
     const got = await onStore(async (s) => {
       let ranked: string[] = [];
       const ctx = ctxOf(s);
-      await retrieve(ctx, {
-        query,
-        boost: { sessionId: c.sessionId },
-        cliCore: {
+      await retrieveWithCliCore(
+        ctx,
+        { query, boost: { sessionId: c.sessionId } },
+        {
           rank: rankOpts(s, c),
           sources: c.global
             ? { root: s.globalRoot, store: sqliteStore(s.globalRoot), config: loadConfig(s.globalRoot) }
@@ -215,7 +219,7 @@ describe('recall ranker goldens', () => {
           },
           lastRecall: ctx.store.lastRecall,
         },
-      });
+      );
       return ranked;
     });
     expect(got).toMatchSnapshot();
