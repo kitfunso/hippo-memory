@@ -103,6 +103,19 @@ describe('Z0 sizing', () => {
     expect(spreadComponents(reference(rand, 1, 3, 2, [0.02, 0.03, 0.09]), 0.8)).toMatchObject({ repos: 1, families: 3, units: 6 });
   });
 
+  it('bounds the family and sequence spreads near the stated level on a calibration-sized table', () => {
+    // Two development repositories barely estimate these, so a bound that clamps to the zero estimate overstates power.
+    const rand = seededRandom(12);
+    const covered = { family: 0, sequence: 0 };
+    for (let i = 0; i < 2000; i++) {
+      const c = spreadComponents(reference(rand, 2, 3, 2, [0.03, 0.03, 0.14]), 0.8)!;
+      if (c.upper.family >= 0.03) covered.family++;
+      if (c.upper.sequence >= 0.03) covered.sequence++;
+    }
+    expect(covered.family / 2000).toBeGreaterThan(0.7);
+    expect(covered.sequence / 2000).toBeGreaterThan(0.7);
+  });
+
   it('finds the exact one-sided upper bound of a binomial share', () => {
     expect(clopperPearsonUpper(0, 22, 0.8)).toBeCloseTo(1 - 0.2 ** (1 / 22), 9);
     expect(clopperPearsonUpper(22, 22, 0.8)).toBe(1);

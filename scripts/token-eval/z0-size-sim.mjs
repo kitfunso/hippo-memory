@@ -75,7 +75,8 @@ export function spreadComponents(units, bound) {
   if (pooled === null) return null;
   const { F, Q, E, dfF, dfQ, dfE, sBar, kBar } = pooled;
   const at = pointSpreads(pooled);
-  const upper = pointSpreads({ F: upperOf(F, dfF, bound), Q: upperOf(Q, dfQ, bound), E: upperOf(E, dfE, bound), sBar, kBar });
+  // Each spread widens its own mean square only: raising E too subtracts more and pulls the family and sequence bounds to 0.
+  const upper = { ...pointSpreads({ F: upperOf(F, dfF, bound), Q: upperOf(Q, dfQ, bound), E, sBar, kBar }), noise: upperOf(E, dfE, bound) };
   return {
     repos: pooled.repos.length, families: sum(pooled.repos.map((r) => r.k)), units: units.length,
     ...at, upper, df: { family: dfF, sequence: dfQ, noise: dfE }, sBar, kBar,
