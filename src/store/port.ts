@@ -176,6 +176,9 @@ export type OptionalGroup = 'localFiles' | 'vectorViews' | 'readiness' | 'lastRe
 
 export type StoreGroup = 'base' | keyof StoreGroups;
 
+/** True when the store sets `group`; for an optional group the store is narrowed to one that does. */
+export function hasGroup<G extends OptionalGroup>(store: HippoStore, group: G): store is StoreWith<G>;
+export function hasGroup(store: HippoStore, group: StoreGroup): boolean;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
   return group === 'base' || store[group] !== undefined;
 }
