@@ -27,6 +27,7 @@ export type {
 } from './memories/remember-local.js';
 export type {
   CliCoreInspection,
+  CliCoreQuery,
   CliCoreRanker,
   CliCoreRecall,
   ContinuityBlock,
@@ -39,11 +40,13 @@ export type {
   RecallSuppressionSummary,
   RecallTraceOptions,
   RecallWindowOptions,
+  ShowRanking,
   ShownCliCore,
   ShownRanking,
   StoreRanking,
 } from './recall/types.js';
-export { retrieve } from './recall/recall.js';
+export { retrieve, retrieveRanking } from './recall/recall.js';
+export { retrieveWithCliCore } from './recall/request.js';
 export { DEFAULT_ASSEMBLE_BUDGET, assemble } from './assemble.js';
 export type { AssembleCost, AssembleOptions, AssembleResult, AssembledContextItem } from './assemble.js';
 export { drillDown } from './objects/drill-down.js';

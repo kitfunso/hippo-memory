@@ -227,7 +227,7 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
-  /** Recall candidates in `loadRecallSearchEntries` order: FTS, then LIKE, then every row in scope. */
+  /** Recall candidates in `loadRecallEntriesAt` order: FTS, then LIKE, then every row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
   /** The rows among the first 500 ids, a tenant narrowing them, ordered by created, then content, then id, all
    * ascending, as `loadEntriesByIds` does; the input order is ignored. */

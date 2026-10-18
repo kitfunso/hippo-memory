@@ -10,7 +10,7 @@ import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from '../types.js';
 import { callerOf, hashQueryText, noteRecall, sessionRing, shownRecallRows, type RingBuffer } from './finish.js';
 import { lastRecalledIds } from './last-recalled.js';
-import { retrieve } from './recall.js';
+import { retrieveRanking } from './recall.js';
 import {
   availabilityPool,
   cutoffClauses,
@@ -31,9 +31,9 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './tool-text.js';
-import type { RecallOptions, RecallSuppressionSummary } from './types.js';
+import type { RecallSuppressionSummary, ShowRanking } from './types.js';
 
-/** Builds the showRanked callback that renders the list the tool
+/** Builds the presenter that renders the list the tool
  * shows, parks the render in `out` and hands back its hint rows. */
 interface RecallPresenterOptions {
   readonly includeContinuity: boolean;
@@ -101,7 +101,7 @@ function fitToolRecall(
   );
 }
 
-function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOptions['showRanked']> {
+function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
   const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and
@@ -171,14 +171,17 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   const who = callerOf(ctx);
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
-  await retrieve(ctx, {
-    ...opts,
-    window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
-    mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
-    filter: { ...opts.filter, keepHeldCopies: true, project },
-    // The hint is computed below over the list the tool shows; the window band's copy would emit its audit row twice.
-    hints: { suppressAvailabilityHint: true },
-    showRanked: recallPresenter(budget, {
+  await retrieveRanking(
+    ctx,
+    {
+      ...opts,
+      window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
+      mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
+      filter: { ...opts.filter, keepHeldCopies: true, project },
+      // The hint is computed below over the list the tool shows; the window's copy would emit its audit row twice.
+      hints: { suppressAvailabilityHint: true },
+    },
+    recallPresenter(budget, {
       includeContinuity,
       anchorRing,
       queryHash,
@@ -186,9 +189,9 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       hintRows: ({ list, anchoring, availability }) =>
         shownRecallRows(who, { query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability }),
     }),
-  });
+  );
   const { rendered } = out;
-  if (!rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
+  if (!rendered) throw new Error('hippo_recall: api.retrieveRanking returned without calling its presenter');
   lastRecalledIds.set(
     clientKey,
     rendered.list.map((r) => r.entry.id),

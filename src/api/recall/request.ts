@@ -1,5 +1,5 @@
 // The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the same messages.
-// retrieveWithCliCore, the CLI ranking core, ranks through retrieve() and records the list the caller shows once.
+// retrieveWithCliCore is the CLI ranking core's entry: it ranks with rankRecall, then records the list shown once.
 import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
 import type { SearchResult } from '../../core/search-types.js';
 import {
@@ -29,6 +29,7 @@ import type {
   CliCoreRecall,
   RecallBoostOptions,
   RecallFilterOptions,
+  CliCoreQuery,
   RecallOptions,
   RecallResult,
   RecallWindowOptions,
@@ -202,11 +203,13 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   return { q, budget, limit, pinnedOnly, scope, includeRecent, crossProject };
 }
 
+/** The CLI ranker: ranks with rankRecall over its own candidate pool, then records what `core.show` prints. */
 export async function retrieveWithCliCore(
   ctx: Context,
-  opts: RecallOptions,
+  opts: CliCoreQuery,
   core: CliCoreRanker,
 ): Promise<RecallResult> {
+  // A CliCoreQuery carries no scope, so the scope preflight of the other rankers has nothing to check here.
   // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const store = ctx.store;
@@ -276,7 +279,7 @@ interface ShownRanking {
 async function recordShown(
   ctx: Context,
   store: HippoStore,
-  opts: RecallOptions,
+  opts: CliCoreQuery,
   core: CliCoreRecall,
   done: ShownRanking,
 ): Promise<void> {
@@ -346,7 +349,7 @@ async function idsNotHeld(store: HippoStore, ids: readonly string[], tenantId: s
 // An empty list is traced too, so a coverage gap still reaches the training corpus.
 function traceOf(
   ctx: Context,
-  opts: RecallOptions,
+  opts: CliCoreQuery,
   core: CliCoreRecall,
   shown: readonly SearchResult[],
 ): RecallTraceInput {

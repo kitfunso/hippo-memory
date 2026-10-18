@@ -80,7 +80,7 @@ export interface RecallTraceOptions {
   explain?: boolean;
   /** Skip the recall_traces row, for callers that trace their OWN different result set, so the training corpus gets no
    *  trace mislabeled 'api'.
-   *  Under `showRanked` it also drops the 'mcp' trace of the shown list. HTTP and direct SDK callers leave it unset. */
+   *  Under `retrieveRanking` it also drops the 'mcp' trace of the shown list. HTTP and SDK callers leave it unset. */
   suppressRecallTrace?: boolean;
   // Rows this recall writes first in its one write, so a failed recall writes none; `recordAs` fills it.
   leadingAudit?: readonly AppendAuditOpts[];
@@ -98,13 +98,15 @@ export interface RecallOptions {
   boost?: RecallBoostOptions;
   hints?: RecallHintOptions;
   trace?: RecallTraceOptions;
-  /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces
-   * (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
-  showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
-  /** Named ranker: `retrieve` ranks with the CLI ranking core. Unset, it ranks the SQL BM25 band, or the wide hybrid
-   * list under `showRanked`. */
-  cliCore?: CliCoreRanker;
 }
+
+/** MCP recall's presenter: `retrieveRanking` hands it the whole-store ranking and strengthens and traces (pipeline
+ * 'mcp') just the ids it returns; `results` stays the top window of that ranking. */
+export type ShowRanking = (ranking: StoreRanking, result: RecallResult) => ShownRanking;
+
+/** The part of RecallOptions the CLI ranking core reads. It has no scope, so `retrieveWithCliCore` needs no scope
+ * preflight. */
+export type CliCoreQuery = Pick<RecallOptions, 'query' | 'boost'>;
 
 interface CliCoreRanking {
   rank: Omit<RankRecallOptions, 'query' | 'boost'>;
@@ -115,7 +117,7 @@ interface CliCoreRanking {
 }
 
 /** A recall the caller prints. `show` runs once ranking ends,
- * unless it halted; `retrieve` then records the list it returns. */
+ * unless it halted; `retrieveWithCliCore` then records the list it returns. */
 export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
   hostSessionId?: string;
@@ -129,8 +131,7 @@ export interface CliCoreInspection extends CliCoreRanking {
   inspect: (ranking: RankRecallResult) => void;
 }
 
-/** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on
- * hippo.db. Of the other RecallOptions it reads `query` and `boost`. */
+/** The CLI ranking core (`rankRecall`), run by `retrieveWithCliCore`: host admin only, on hippo.db. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
 /** `results`: the rows the caller shows, best first; `audit`: its hint rows, written
