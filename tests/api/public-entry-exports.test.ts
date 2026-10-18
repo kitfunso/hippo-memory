@@ -112,6 +112,7 @@ describe('package entry re-exports sleep', () => {
 const EVAL_KIT = [
   'ambientSecretAdmit',
   'buildIndexFromDb',
+  'embedMemory',
   'initStore',
   'loadAllEntries',
   'loadEmbeddingIndex',
@@ -270,6 +271,7 @@ describe('published runtime exports', () => {
         "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests
       ambientSecretAdmit
       buildIndexFromDb
+      embedMemory
       initStore
       loadAllEntries loadEmbeddingIndex loadVectorCandidateEntriesAt
       recordTokenUse resolveTenantId

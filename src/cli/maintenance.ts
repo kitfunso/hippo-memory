@@ -160,9 +160,8 @@ export async function handleEmbed(
     return;
   }
   const after = embedCoverage(ctx);
-  console.log(`Done. ${count} new embeddings created. ${after.vectorIds.length}/${after.memoryIds.length} total.`);
-  const embeddedAfter = new Set(after.vectorIds);
-  const unembedded = after.memoryIds.filter((id) => !embeddedAfter.has(id)).length;
+  console.log(`Done. ${count} new embeddings created. ${after.vectors}/${after.memories} total.`);
+  const unembedded = after.memories - after.embedded;
   if (unembedded > 0) {
     printError(
       `${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`,
@@ -177,18 +176,15 @@ function resetPhysics(ctx: CliContext): void {
 }
 
 function printEmbedStatus(ctx: CliContext): void {
-  const { memoryIds, vectorIds } = embedCoverage(ctx);
-  const activeIds = new Set(memoryIds);
-  const activeEmbedded = vectorIds.filter((id) => activeIds.has(id)).length;
-  const orphaned = vectorIds.length - activeEmbedded;
-  console.log(`Embedding status: ${activeEmbedded}/${memoryIds.length} memories embedded`);
+  const { memories, vectors, embedded } = embedCoverage(ctx);
+  console.log(`Embedding status: ${embedded}/${memories} memories embedded`);
+  const orphaned = vectors - embedded;
   if (orphaned > 0) {
     console.log(`  ${orphaned} orphaned embeddings (run \`hippo embed\` to prune)`);
   }
-  const embedded = new Set(vectorIds);
-  const missing = memoryIds.filter((id) => !embedded.has(id));
-  if (missing.length > 0) {
-    console.log(`  ${missing.length} memories need embedding (run \`hippo embed\` to embed them)`);
+  const missing = memories - embedded;
+  if (missing > 0) {
+    console.log(`  ${missing} memories need embedding (run \`hippo embed\` to embed them)`);
   }
 }
 

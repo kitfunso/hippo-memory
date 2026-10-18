@@ -13,6 +13,7 @@ export { ambientSecretAdmit } from '../core/read-admission.js';
 export { initStore } from '../store/sqlite/handles.js';
 export { loadAllEntries, loadEmbeddingIndex, writeEntry } from '../store/sqlite/folder-forms.js';
 export type { WriteEntryOptions } from '../store/sqlite/entry-writes.js';
+export { embedMemory } from './folder-search.js';
 // Benchmarks and token evals seed and read hippo.db on a handle they open themselves.
 export { resolveTenantId } from '../server/host-tenant.js';
 export { upsertEntryRow } from '../store/sqlite/entry-row.js';

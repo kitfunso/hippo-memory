@@ -25,6 +25,7 @@ import type {
   VectorWrites,
 } from '../store/port.js';
 import type { EntryCursor } from '../store/port/consolidation.js';
+import type { VectorRebuild } from '../store/port/embedding-index.js';
 import { chunked } from '../util/chunked.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -32,8 +33,8 @@ import { MINUTE_MS } from '../util/time.js';
 import { ALL_TENANTS } from '../util/tenant.js';
 
 const STORE_PAGE = 64;
-// Ids with no vector read per page, so a large backlog is never listed whole.
-const PENDING_PAGE = 1000;
+// Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
+const ID_PAGE = 1000;
 
 /** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is skipped. */
 function* entryPages(index: EmbeddingIndex, ids: readonly string[]): Generator<MemoryEntry[]> {
@@ -44,35 +45,43 @@ function* entryPages(index: EmbeddingIndex, ids: readonly string[]): Generator<M
   }
 }
 
-async function rebuildEmbeddingIndex(
-  index: EmbeddingIndex,
-  ids: readonly string[],
-  provider: EmbeddingProvider,
-): Promise<Record<string, number[]>> {
-  const rebuilt: Record<string, number[]> = {};
-  for (const entries of entryPages(index, ids)) {
-    // On a hard transport/auth failure provider.embed throws, so the caller aborts WITHOUT saving
-    // a partial index (atomic reindex: the old index + stored identity are preserved).
-    const vectors = await provider.embed(
-      entries.map((e) => embeddingInputText(e)),
-      'passage',
-    );
-    for (let i = 0; i < entries.length; i++) {
-      const vec = vectors[i];
-      if (vec && vec.length > 0) {
-        rebuilt[entries[i].id] = vec;
-      } else {
-        noteSkippedEmbedding(entries[i].id);
-      }
-    }
-  }
-
-  return rebuilt;
+/** Each of `entries` the provider embedded, with its vector; an empty row is named and left for the next run. */
+function embeddedRows(entries: readonly MemoryEntry[], vectors: readonly number[][]): Array<[string, number[]]> {
+  const rows: Array<[string, number[]]> = [];
+  entries.forEach((entry, i) => {
+    const vec = vectors[i];
+    if (vec && vec.length > 0) rows.push([entry.id, vec]);
+    else noteSkippedEmbedding(entry.id);
+  });
+  return rows;
 }
 
-function resetPhysicsFromIndex(index: EmbeddingIndex, ids: readonly string[], rebuilt: Record<string, number[]>): void {
+/** Embeds every memory onto `rebuild`, a page of ids and then a page of rows at a time; answers how many it staged. */
+async function stageEmbeddingIndex(
+  index: EmbeddingIndex,
+  rebuild: VectorRebuild,
+  provider: EmbeddingProvider,
+): Promise<number> {
+  let staged = 0;
+  let after: EntryCursor | undefined;
+  do {
+    const page = index.entryIdsPage({ limit: ID_PAGE, after });
+    for (const entries of entryPages(index, page.ids)) {
+      // A hard transport or auth failure throws here, before the commit, so the old index and identity stay.
+      const vectors = await provider.embed(
+        entries.map((e) => embeddingInputText(e)),
+        'passage',
+      );
+      staged += rebuild.stage(embeddedRows(entries, vectors));
+    }
+    after = page.next ?? undefined;
+  } while (after);
+  return staged;
+}
+
+function resetPhysicsFromIndex(index: EmbeddingIndex): void {
   try {
-    index.resetParticles(ids, rebuilt);
+    index.resetParticles();
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
     log.warn(`physics reset after reindex failed: ${errorMessage(err)}`, errorFields(err));
@@ -401,20 +410,21 @@ async function embedMemoryLocked(
   }
 }
 
-// Every page is embedded before one transaction replaces the index, and
-// the identity is saved only after that: a provider failure or a crash
-// at any earlier point leaves the old identity, so
-// embeddingModelRequiresReindex has the next run rebuild from the start.
+// Every page is staged apart from the live index, then one transaction swaps the vectors and the identity in: a
+// provider failure or a crash before it leaves the old pair, so the next run rebuilds from the start.
 async function rebuildIndexForProvider(index: EmbeddingIndex, provider: EmbeddingProvider): Promise<number> {
-  const identity = provider.id;
   // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be
   // a larger architecture change.
-  const ids = index.entryIds();
-  const rebuiltIndex = await rebuildEmbeddingIndex(index, ids, provider);
-  index.replaceVectors(rebuiltIndex, embeddingIndexIdentity(identity));
-  index.saveModel(identity);
-  resetPhysicsFromIndex(index, ids, rebuiltIndex);
-  return Object.keys(rebuiltIndex).length;
+  const rebuild = index.beginRebuild();
+  let staged: number;
+  try {
+    staged = await stageEmbeddingIndex(index, rebuild, provider);
+    rebuild.commit(embeddingIndexIdentity(provider.id));
+  } finally {
+    rebuild.close();
+  }
+  resetPhysicsFromIndex(index);
+  return staged;
 }
 
 function initializePhysicsIfMissing(index: EmbeddingIndex, entry: MemoryEntry, vector: number[]): void {
@@ -466,13 +476,7 @@ async function backfillPending(
       backfillError = err;
       break;
     }
-    const rows: Array<[string, number[]]> = [];
-    for (let j = 0; j < chunk.length; j++) {
-      const vec = vectors[j];
-      if (vec && vec.length > 0) rows.push([chunk[j].id, vec]);
-      else noteSkippedEmbedding(chunk[j].id);
-    }
-    count += index.saveVectors(rows, model);
+    count += index.saveVectors(embeddedRows(chunk, vectors), model);
   }
   return { count, backfillError };
 }
@@ -486,7 +490,7 @@ async function backfillAllPending(
   let count = 0;
   let after: EntryCursor | undefined;
   do {
-    const page = index.pendingIds({ limit: PENDING_PAGE, after });
+    const page = index.pendingIds({ limit: ID_PAGE, after });
     const done = await backfillPending(index, provider, page.ids, model);
     count += done.count;
     if (done.backfillError) return { count, backfillError: done.backfillError };

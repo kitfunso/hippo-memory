@@ -72,7 +72,8 @@ class ContainerRun {
   run(): ContainerOutcome {
     this.adoptLegacy();
     for (const old of this.w.legacyPrefixes) this.adoptPrefix(old);
-    const live = this.tx.liveBySourcePrefix(this.s.tenantId, this.w.prefix);
+    // The plan diffs the whole container, so its rows are held; the store still reads them a page at a time.
+    const live = [...this.tx.liveBySourcePrefix(this.s.tenantId, this.w.prefix)];
     for (const row of [...live, ...[...this.w.replace.values()].flat()]) this.rows.set(row.id, row);
     const refusals = this.refusals();
     const liveRows = live.map((row) => this.liveRow(row));
@@ -135,10 +136,7 @@ class ContainerRun {
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }
     this.tally.renamed += moved;
-    if (
-      moved === 0 &&
-      (this.w.container.items.length === 0 || this.tx.liveBySourcePrefix(this.s.tenantId, this.w.prefix).length > 0)
-    ) {
+    if (moved === 0 && (this.w.container.items.length === 0 || this.holdsLive(this.w.prefix))) {
       return;
     }
     for (const snap of this.tx.dormantBySourcePrefix(this.s.tenantId, old)) {
@@ -298,6 +296,11 @@ class ContainerRun {
       this.tally.setAside++;
       this.purge.push(result.id);
     }
+  }
+
+  /** True when a live row sits under `prefix`; the walk stops at the first page that holds one. */
+  private holdsLive(prefix: string): boolean {
+    return this.tx.liveBySourcePrefix(this.s.tenantId, prefix)[Symbol.iterator]().next().done !== true;
   }
 
   private row(id: string): MemoryEntry {

@@ -12,7 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { finishRecallAt } from '../../src/store/sqlite/last-recall.js';
-import { flushStatsMirrors } from '../../src/store/sqlite/mirrors.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
   pushGoal,
@@ -174,7 +174,7 @@ describe('updateStats', () => {
     const root = freshRoot('hp-stats-file');
     for (const i of [3, 1, 2]) appendConsolidationRun(root, run(i));
     updateStats(root, { recalled: 1 });
-    flushStatsMirrors(root);
+    flushHeldMirrors(root);
     // SAFETY: writeStatsMirror serializes a LegacyStats, whose counters and runs carry these fields.
     const stats = JSON.parse(fs.readFileSync(path.join(root, 'stats.json'), 'utf8')) as StatsFile;
     expect(stats.total_recalled).toBe(1);

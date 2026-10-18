@@ -1,4 +1,5 @@
-// A small mirror batch probes its own files; a large one lists each layer folder once. Both leave the same files.
+// A mirror batch lists a layer folder only when it writes into it and enough of its entries would probe it; every other
+// folder is probed per file. Either way the batch leaves the same files.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,6 +8,8 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { layerDir, writeMarkdownMirror, writeMarkdownMirrors } from '../../src/store/sqlite/mirrors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+
+const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 
 let root: string;
 beforeEach(() => {
@@ -17,7 +20,7 @@ afterEach(() => {
   syncBuiltinESMExports();
 });
 
-/** `count` entries, the first of which already has a mirror in another layer from an earlier write. */
+/** `count` episodic entries, the first of which already has a mirror in the semantic folder from an earlier write. */
 function batch(count: number): MemoryEntry[] {
   const entries = Array.from({ length: count }, (_, i) =>
     createMemory(`mirror batch row ${i}`, { layer: Layer.Episodic }),
@@ -26,12 +29,13 @@ function batch(count: number): MemoryEntry[] {
   return entries;
 }
 
-function listingsDuring(fn: () => void): number {
+/** The layer folders `fn` lists, in call order. */
+function listedDuring(fn: () => void): Layer[] {
   const readdir = vi.spyOn(fs, 'readdirSync');
   syncBuiltinESMExports();
   fn();
-  const layers = new Set([Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace].map((l) => layerDir(root, l)));
-  return readdir.mock.calls.filter(([dir]) => layers.has(path.resolve(String(dir)))).length;
+  const byDir = new Map(LAYERS.map((layer) => [layerDir(root, layer), layer]));
+  return readdir.mock.calls.flatMap(([dir]) => byDir.get(path.resolve(String(dir))) ?? []);
 }
 
 function expectMirrored(entries: readonly MemoryEntry[]): void {
@@ -44,19 +48,31 @@ function expectMirrored(entries: readonly MemoryEntry[]): void {
 describe('writeMarkdownMirrors', () => {
   it('lists no layer folder for a small batch, and still moves a mirror that changed layer', () => {
     const entries = batch(3);
-    expect(listingsDuring(() => writeMarkdownMirrors(root, entries))).toBe(0);
+    expect(listedDuring(() => writeMarkdownMirrors(root, entries))).toEqual([]);
     expectMirrored(entries);
   });
 
-  it('lists the layer folders for a large batch, with the same files as a result', () => {
+  it('lists no folder for a large batch in one layer, whose own files are replaced in place', () => {
     const entries = batch(64);
-    expect(listingsDuring(() => writeMarkdownMirrors(root, entries))).toBeGreaterThan(0);
+    expect(listedDuring(() => writeMarkdownMirrors(root, entries))).toEqual([]);
     expectMirrored(entries);
   });
 
-  it('lists the layer folders for a stream, whose size it cannot know first', () => {
-    const entries = batch(2);
-    expect(listingsDuring(() => writeMarkdownMirrors(root, entries.values()))).toBeGreaterThan(0);
+  it('lists only a folder the batch writes into that 64 entries of other layers would probe', () => {
+    const entries = [...batch(64), createMemory('mirror batch semantic row', { layer: Layer.Semantic })];
+    expect(listedDuring(() => writeMarkdownMirrors(root, entries))).toEqual([Layer.Semantic]);
     expectMirrored(entries);
+  });
+
+  it('lists every layer folder for a stream, whose size it cannot know first', () => {
+    const entries = batch(2);
+    const folders = LAYERS.filter((layer) => fs.existsSync(layerDir(root, layer)));
+    expect(listedDuring(() => writeMarkdownMirrors(root, entries.values()))).toEqual(folders);
+    expectMirrored(entries);
+  });
+
+  it('returns the ids whose file it wrote', () => {
+    const entries = batch(2);
+    expect(writeMarkdownMirrors(root, entries)).toEqual(entries.map((entry) => entry.id));
   });
 });

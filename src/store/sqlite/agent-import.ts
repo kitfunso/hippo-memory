@@ -37,13 +37,23 @@ import { initStore, onHandle, openBareHandle, openStore } from './handles.js';
 import { projectTagReads } from './project-tags.js';
 import { findRejectedValue } from './rejection.js';
 import { rejectionDigest } from '../../core/rejection-digest.js';
+import type { MemoryEntry } from '../../core/memory.js';
+import { READ_PAGE_ROWS, rowsInPages } from '../../util/pages.js';
 import { setAsideRow } from './set-aside.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import type { AgentImport, ContainerTx, ImportTarget } from '../port/agent-import.js';
+import type { EntryCursor } from '../port/consolidation.js';
+
+/** The tenant's live rows under `prefix`, one bounded statement per page, read as the caller walks them. */
+function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): Generator<MemoryEntry> {
+  return rowsInPages((after?: EntryCursor) =>
+    selectLiveEntriesBySourcePrefix(db, tenantId, prefix, { limit: READ_PAGE_ROWS, after }),
+  );
+}
 
 function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {
   return {
-    liveBySourcePrefix: (tenantId, prefix) => selectLiveEntriesBySourcePrefix(db, tenantId, prefix),
+    liveBySourcePrefix: (tenantId, prefix) => liveUnder(db, tenantId, prefix),
     dormantBySourcePrefix: (tenantId, prefix) => dormantSnapshotsBySourcePrefix(db, tenantId, prefix),
     readDormant: (tenantId, id) => readDormantSnapshot(db, tenantId, id),
     deleteDormant: (tenantId, id) => {
@@ -68,7 +78,7 @@ function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, clos
   return {
     root,
     tenantId,
-    liveBySourcePrefix: (prefix) => selectLiveEntriesBySourcePrefix(db, tenantId, prefix),
+    liveBySourcePrefix: (prefix) => [...liveUnder(db, tenantId, prefix)],
     rowsHoldingOutsideSourcePrefix: (text, prefix, origins) =>
       selectRowsHoldingOutsideSourcePrefixAt(db, tenantId, text, prefix, origins),
     projectTagReads: () => projectTagReads(db, tenantId),

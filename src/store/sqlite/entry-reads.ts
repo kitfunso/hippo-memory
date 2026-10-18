@@ -10,7 +10,7 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../util/tenant
 import { placeholders } from '../../util/sql.js';
 import { duplicateKey, longestWord } from '../../util/same-text.js';
 import { tenantAnd } from './tenant.js';
-import type { EntryCursor, EntryPage } from '../port/consolidation.js';
+import type { EntryCursor, EntryIdPage, EntryPage } from '../port/consolidation.js';
 import type { RawRefRow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
@@ -206,13 +206,21 @@ export function loadAllEntriesAt(db: DatabaseSyncLike, tenantId: string): Memory
   return selectAllRows(db, tenantId).map(rowToEntry);
 }
 
-/** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of
- * holding them all. */
-export function loadAllEntryIdsAt(db: DatabaseSyncLike): string[] {
-  // SAFETY: the SELECT names exactly the one column read.
-  return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map(
-    (row) => row.id,
-  );
+/** Up to `page.limit` of the tenant's memory ids in loadAllEntries' order, after `page.after`. Two short columns per
+ * row: no index orders memories by created then id across tenants, so each page sorts the ids again. */
+export function loadEntryIdsPageAt(
+  db: DatabaseSyncLike,
+  tenantId: TenantId,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryIdPage {
+  const tenant = tenantAnd(tenantId);
+  const after = afterCursor(page.after);
+  // SAFETY: rows' shape matches the two columns named in the SELECT.
+  const rows = cachedStatement(
+    db,
+    `SELECT id, created FROM memories WHERE 1${tenant.sql}${after.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(...tenant.args, ...after.args, page.limit + 1) as Array<{ id: string; created: string }>;
+  return { ids: rows.slice(0, page.limit).map((row) => row.id), next: cursorAfter(rows, page.limit) };
 }
 
 /** How many memory rows the store holds across every tenant. */
@@ -419,32 +427,44 @@ export function selectTenantTextsPage(
   return { texts: rows.slice(0, page.limit), next: cursorAfter(rows, page.limit) };
 }
 
-/** Live rows whose source starts with `prefix`, in loadAllEntries' order, on the caller's
- * handle; LIKE folds case, so the prefix is checked again exactly. */
-export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
+/** A page of the live rows whose source starts with `prefix`, in loadAllEntries' order, on the caller's handle; LIKE
+ * folds case, so the prefix is checked again exactly and a page may hold fewer than `limit`. */
+export function selectLiveEntriesBySourcePrefix(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  prefix: string,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryPage {
+  const after = afterCursor(page.after);
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db
-    .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ` +
-        `AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\' ORDER BY created ASC, id ASC`,
-    )
-    .all(tenantId, `${escapeLike(prefix)}%`) as MemoryRow[];
-  return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ` +
+      `AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'${after.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(tenantId, `${escapeLike(prefix)}%`, ...after.args, page.limit + 1) as MemoryRow[];
+  const { entries, next } = pageOf(rows.map(rowToEntry), page.limit);
+  return { entries: entries.filter((entry) => entry.source.startsWith(prefix)), next };
 }
 
-/** A tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
-export function selectEntriesFromOriginAt(db: DatabaseSyncLike, tenantId: string, rows: OriginRows): MemoryEntry[] {
+/** A page of a tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
+export function selectEntriesFromOriginAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  rows: OriginRows,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryPage {
   const live = rows.live ? ` AND COALESCE(superseded_by, '') = ''` : '';
   const { sourcePrefix } = rows;
   const prefix = sourcePrefix === undefined ? '' : ' AND substr(source, 1, ?) = ?';
   const prefixArgs = sourcePrefix === undefined ? [] : [sourcePrefix.length, sourcePrefix];
+  const after = afterCursor(page.after);
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const found = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-      `WHERE tenant_id = ? AND origin_project = ?${live}${prefix} ORDER BY created ASC, id ASC`,
-  ).all(tenantId, rows.origin, ...prefixArgs) as MemoryRow[];
-  return found.map(rowToEntry);
+      `WHERE tenant_id = ? AND origin_project = ?${live}${prefix}${after.sql} ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(tenantId, rows.origin, ...prefixArgs, ...after.args, page.limit + 1) as MemoryRow[];
+  return pageOf(found.map(rowToEntry), page.limit);
 }
 
 /** Each project name's live rows in one grouped read, in the order its first row comes in loadAllEntries' order. */

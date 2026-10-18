@@ -205,26 +205,24 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-/** Below this many entries a batch probes each entry's own files: a layer folder can hold every mirror in the store. */
+/** A folder the batch writes into is listed once when this many of its entries sit in other layers and would each
+ * probe it: a layer folder can hold every mirror in the store. */
 const LISTING_MIN_BATCH = 64;
 
-type LayerListing = ReadonlyArray<{ dir: string; names: ReadonlySet<string> }>;
+/** The names in each listed layer folder; a layer with no listing is probed file by file. */
+type LayerListing = ReadonlyMap<Layer, ReadonlySet<string>>;
 
-/** writeMarkdownMirror for many entries: a large batch or a stream lists each layer folder once, so no file is probed
- * one by one; a small batch probes only its own files. A file that fails is warned about and the rest still land. */
-export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<MemoryEntry>): void {
+/** writeMarkdownMirror for many entries; returns the ids whose file it wrote. A file that fails is warned about and the
+ * rest still land. */
+export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<MemoryEntry>): string[] {
+  const written: string[] = [];
   mirrorBestEffort('markdown mirrors', () => {
-    const listed: LayerListing | null =
-      Array.isArray(entries) && entries.length < LISTING_MIN_BATCH
-        ? null
-        : MIRROR_LAYERS.map((layer) => {
-            const dir = layerDir(hippoRoot, layer);
-            return { dir, names: new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []) };
-          });
+    const listed = listedLayers(hippoRoot, entries);
     const made = new Set<string>();
     for (const entry of entries) {
       try {
         writeListedMirror(hippoRoot, entry, listed, made);
+        written.push(entry.id);
       } catch (err) {
         log.warnThenSample(
           'markdown-mirror',
@@ -234,19 +232,35 @@ export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<Memory
       }
     }
   });
+  return written;
 }
 
-/** writeMarkdownMirror against a listing taken before the batch, or against each file when there is none; `made`
- * holds the folders already made. */
-function writeListedMirror(
-  hippoRoot: string,
-  entry: MemoryEntry,
-  listed: LayerListing | null,
-  made: Set<string>,
-): void {
+/** A stream of every row lists all four folders; a batch lists only folders it writes into that enough of its entries
+ * would probe for a copy left in another layer. */
+function listedLayers(hippoRoot: string, entries: Iterable<MemoryEntry>): LayerListing {
+  let layers: readonly Layer[] = MIRROR_LAYERS;
+  if (Array.isArray(entries)) {
+    const inLayer = new Map<Layer, number>();
+    for (const entry of entries) inLayer.set(entry.layer, (inLayer.get(entry.layer) ?? 0) + 1);
+    layers = [...inLayer].filter(([, n]) => entries.length - n >= LISTING_MIN_BATCH).map(([layer]) => layer);
+  }
+  return new Map(
+    layers.map((layer) => {
+      const dir = layerDir(hippoRoot, layer);
+      return [layer, new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : [])];
+    }),
+  );
+}
+
+/** writeMarkdownMirror against `listed`: a copy in another layer's folder goes, found in its listing or by a probe, and
+ * the entry's own file is replaced in place, so no crash leaves it missing; `made` holds the folders already made. */
+function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerListing, made: Set<string>): void {
   const name = `${entry.id}.md`;
-  if (listed === null) removeEntryMirrors(hippoRoot, entry.id);
-  else for (const { dir, names } of listed) if (names.has(name)) fs.rmSync(path.join(dir, name), { force: true });
+  for (const layer of MIRROR_LAYERS) {
+    if (layer === entry.layer) continue;
+    const file = path.join(layerDir(hippoRoot, layer), name);
+    if (listed.get(layer)?.has(name) ?? fs.existsSync(file)) fs.rmSync(file, { force: true });
+  }
   const dir = layerDir(hippoRoot, entry.layer);
   if (!made.has(dir)) fs.mkdirSync(dir, MIRROR_FOLDER);
   made.add(dir);
@@ -393,16 +407,17 @@ export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   );
 }
 
-const STATS_MIRROR_INTERVAL_MS = 1000;
+const HELD_MIRROR_INTERVAL_MS = 1000;
 
-interface StatsMirrorState {
+/** One root's held mirror writes, the latest of each kind, run together when its timer fires. */
+interface HeldMirrors {
   lastWrite: number;
-  pending?: LegacyStats;
+  readonly writes: Map<string, () => void>;
   timer?: NodeJS.Timeout;
 }
 
-const statsMirrors = new Map<string, StatsMirrorState>();
-let statsExitHookInstalled = false;
+const heldMirrors = new Map<string, HeldMirrors>();
+let exitHookInstalled = false;
 
 function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   // A root removed before its deferred write has nothing left to mirror.
@@ -412,49 +427,64 @@ function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   );
 }
 
+function heldFor(hippoRoot: string): HeldMirrors {
+  const key = path.resolve(hippoRoot);
+  dropIdleMirrors();
+  const state = heldMirrors.get(key) ?? { lastWrite: 0, writes: new Map() };
+  heldMirrors.set(key, state);
+  return state;
+}
+
+/** Makes `write` the next `what` write of the root, run within an interval of the root's last mirror write. */
+function hold(hippoRoot: string, state: HeldMirrors, what: string, write: () => void): void {
+  state.writes.set(what, write);
+  if (state.timer !== undefined) return;
+  if (!exitHookInstalled) {
+    process.on('exit', () => flushHeldMirrors());
+    exitHookInstalled = true;
+  }
+  const wait = Math.max(0, state.lastWrite + HELD_MIRROR_INTERVAL_MS - Date.now());
+  state.timer = setTimeout(() => flushHeldMirrors(hippoRoot), wait);
+  state.timer.unref();
+}
+
 /** Mirror `stats` to stats.json at once, or hold it and write the latest within a second of the last write; the
  * database counters are always current. */
 export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
-  const key = path.resolve(hippoRoot);
-  dropIdleStatsMirrors();
-  const state = statsMirrors.get(key) ?? { lastWrite: 0 };
-  statsMirrors.set(key, state);
-  const wait = state.lastWrite + STATS_MIRROR_INTERVAL_MS - Date.now();
-  if (wait <= 0) {
+  const state = heldFor(hippoRoot);
+  // Behind a pending timer it waits its turn, so an older held copy never lands after it.
+  if (state.timer === undefined && state.lastWrite + HELD_MIRROR_INTERVAL_MS <= Date.now()) {
     state.lastWrite = Date.now();
     putStatsMirror(hippoRoot, stats);
     return;
   }
-  state.pending = stats;
-  if (state.timer !== undefined) return;
-  if (!statsExitHookInstalled) {
-    process.on('exit', () => flushStatsMirrors());
-    statsExitHookInstalled = true;
-  }
-  state.timer = setTimeout(() => flushStatsMirrors(key), wait);
-  state.timer.unref();
+  hold(hippoRoot, state, 'stats.json', () => putStatsMirror(hippoRoot, stats));
+}
+
+/** Runs `write` once the current job is done, off the writer's path, as the root's next `what` mirror write; a later
+ * call before it runs replaces it. */
+export function deferMirrorWrite(hippoRoot: string, what: string, write: () => void): void {
+  hold(hippoRoot, heldFor(hippoRoot), what, write);
 }
 
 // A root idle for a full interval needs no throttle state, so the map holds only recently written roots.
-function dropIdleStatsMirrors(): void {
+function dropIdleMirrors(): void {
   const now = Date.now();
-  for (const [root, state] of statsMirrors) {
-    if (state.timer === undefined && state.pending === undefined && now - state.lastWrite >= STATS_MIRROR_INTERVAL_MS) {
-      statsMirrors.delete(root);
+  for (const [root, state] of heldMirrors) {
+    if (state.timer === undefined && state.writes.size === 0 && now - state.lastWrite >= HELD_MIRROR_INTERVAL_MS) {
+      heldMirrors.delete(root);
     }
   }
 }
 
-/** Write any held stats.json now, for one root or all; store close and process exit call it. */
-export function flushStatsMirrors(hippoRoot?: string): void {
+/** Runs any held mirror write now, for one root or all; store close, worker stop and process exit call it. */
+export function flushHeldMirrors(hippoRoot?: string): void {
   const key = hippoRoot === undefined ? undefined : path.resolve(hippoRoot);
-  for (const [root, state] of statsMirrors) {
+  for (const [root, state] of heldMirrors) {
     if (key !== undefined && root !== key) continue;
     if (state.timer !== undefined) clearTimeout(state.timer);
-    state.timer = undefined;
-    const stats = state.pending;
-    statsMirrors.delete(root);
-    if (stats !== undefined) putStatsMirror(root, stats);
+    heldMirrors.delete(root);
+    for (const [what, write] of state.writes) mirrorBestEffort(what, write);
   }
 }
 

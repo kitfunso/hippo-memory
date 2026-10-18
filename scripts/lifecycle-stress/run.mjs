@@ -43,10 +43,10 @@ import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/core/memory.js';
 import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
-import { embedMemory } from '../../dist/search/embed-memories.js';
+import { embedMemory } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
-import { consolidate } from '../../dist/consolidate/sleep.js';
+import { consolidate } from '../../dist/index.js';
 import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';

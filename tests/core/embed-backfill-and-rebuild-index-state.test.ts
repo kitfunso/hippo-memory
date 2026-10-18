@@ -13,13 +13,15 @@ import { embeddingIndexIdentity, embeddingInputText } from '../../src/embeddings
 import { embedAll, embedMemory } from '../../src/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
-import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+import { cliLocalFiles } from '../../src/cli/api-context.js';
+import { loadConfig } from '../../src/core/config.js';
+import type { EmbeddingIndex } from '../../src/store/port.js';
+import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadEveryTenantEntries,
-  loadAllEntryIds,
   resetStoredParticles,
   writeEntry,
   loadEmbeddingIndex,
@@ -32,6 +34,8 @@ const TENANTS = ['tenant-a', 'tenant-b'];
 const ROWS = 300;
 const HASHED_ID = 'openai:hashed-16';
 const PAGE = 64;
+// The one read that hands stored vectors to JavaScript; a whole-index read has no id list and returns every vector.
+const VECTOR_READ = 'SELECT memory_id, vector FROM memory_vectors';
 
 let home: string;
 let embeddings: HashedEmbeddings;
@@ -262,6 +266,33 @@ describe('a model identity change on hippo.db', () => {
     expect(indexOn(root)).toEqual(before);
     expect(before.model).toBe(embeddingIndexIdentity('fake-old'));
   });
+
+  it('stages the rebuild one page of vectors at a time, and the live index changes only at the commit', async () => {
+    const root = copyOf(indexedOld);
+    const before = indexOn(root);
+    const index = cliLocalFiles(root).embeddingIndex;
+    const staged: number[] = [];
+    const liveWhileStaging: IndexState[] = [];
+    const watched: EmbeddingIndex = {
+      ...index,
+      beginRebuild: () => {
+        const rebuild = index.beginRebuild();
+        return {
+          ...rebuild,
+          stage: (rows) => {
+            liveWhileStaging.push(indexOn(root));
+            staged.push(rows.length);
+            return rebuild.stage(rows);
+          },
+        };
+      },
+    };
+    const target = { hippoRoot: root, embeddingIndex: watched, embeddings: loadConfig(root).embeddings };
+    expect(await embedAll(target, undefined, fake('fake-new'))).toBe(ROWS);
+    expect(staged).toEqual([PAGE, PAGE, PAGE, PAGE, ROWS - 4 * PAGE]);
+    expect(liveWhileStaging).toEqual(staged.map(() => before));
+    expect(indexOn(root)).toEqual(rebuiltState(root, 'fake-new', (e) => fakeVector('fake-new', e)));
+  });
 });
 
 /** The most full memory rows one statement of a run can hand back: the length of its id list, or the whole store when it has none. */
@@ -300,18 +331,21 @@ describe('rows held while embedding hippo.db', () => {
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
     expect(peakFullRowsRead(log.statements, fullReads)).toBe(PAGE);
+    expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
   });
 
-  it("resets particles from ids for both tenants' embedded rows, reading the rows at most 64 at a time", () => {
+  it("resets particles for both tenants' embedded rows, reading the rows and vectors at most 64 at a time", () => {
     const root = copyOf(partly);
-    const ids = loadAllEntryIds(root);
-    const index = loadEmbeddingIndex(root);
-    const log = recordStatements(() => resetStoredParticles(root, ids, index));
+    const embedded = Object.keys(loadEmbeddingIndex(root)).sort();
+    const log = recordStatements(() => resetStoredParticles(root));
     const { particles } = indexOn(root);
     const tenantOf = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e.tenant_id]));
-    expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
-    expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
+    expect([log.result, particles.length]).toEqual([180, 180]);
+    expect(particles.map((p) => p.memoryId)).toEqual(embedded);
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
-    expect(peakFullRowsRead(log.statements, 5)).toBe(PAGE);
+    // Only the embedded rows of each 64-id slice are read, so no slice reads a full page of rows here.
+    expect(peakFullRowsRead(log.statements, 5)).toBeLessThanOrEqual(PAGE);
+    expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
+    expect(peakRowsRead(log.reads, VECTOR_READ)).toBeGreaterThan(0);
   });
 });

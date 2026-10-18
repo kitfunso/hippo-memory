@@ -10,8 +10,8 @@ import type { RejectedValueRow } from './rejections.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
-  /** Every memory id of every tenant, by created then id. */
-  entryIds(): string[];
+  /** Up to `page.limit` memory ids of every tenant, by created then id, after `page.after`. */
+  entryIdsPage(page: { readonly limit: number; readonly after?: EntryCursor }): EntryIdPage;
   /** The rows for `ids` by id; an id deleted since it was listed is absent. */
   entriesByIds(ids: readonly string[]): Map<string, MemoryEntry>;
   /** The ids of every memory a typed object row names; sleep never retires one. */
@@ -141,6 +141,12 @@ export interface EntryPage {
   entries: MemoryEntry[];
   /** The cursor that reads the page after this one, or null when this was the last. */
   next: EntryCursor | null;
+}
+
+/** EntryPage with only each row's id. */
+export interface EntryIdPage {
+  readonly ids: string[];
+  readonly next: EntryCursor | null;
 }
 
 /** Session decay context: the data needed for session-based and adaptive decay. */

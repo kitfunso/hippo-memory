@@ -43,7 +43,7 @@ const { createMemory } = await distImport('core/memory.js');
 const { initStore, loadAllEntries } = await distImport('entry/testing.js');
 const { batchWriteAndDelete } = await distImport('store/sqlite/folder-forms.js');
 const { hybridSearch } = await distImport('index.js');
-const { embedMemory } = await distImport('store/embeddings/index.js');
+const { embedMemory } = await distImport('entry/testing.js');
 const { isEmbeddingAvailable } = await distImport('embeddings/local.js');
 
 const ARM = arg('arm', 'hippo');
