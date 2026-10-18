@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../../src/db/index.js';
-import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
+import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import type { JsonValue } from '../../src/util/json.js';

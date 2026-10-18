@@ -1,12 +1,18 @@
 // The memory-quality audit rules: pure functions of a row, so any store can be audited by them.
 import { canAutoDelete, isKeptForGood, type MemoryEntry } from './memory.js';
 import {
+  assessAutomaticMemory,
   automaticDefect,
+  BUNDLE_HEADER,
   hasNoSpecificity,
+  isAutomaticEntry,
+  isCertainReason,
   isFragment,
   isReleaseCommitNoise,
   substantiveWordCount,
+  type AutomaticMemoryDefect,
 } from './memory-quality.js';
+import { heldTexts } from '../util/same-text.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -122,4 +128,58 @@ export function repairKeeps(
   if (protection.trusted && isKeptForGood(entry)) return 'trusted imported note';
   if (protection.objectBacked && backsObject) return 'backs an object';
   return undefined;
+}
+
+/** A defect quality repair acts on: a certain one sets the row aside, any other asks a person to review it. */
+export interface RepairDefect {
+  readonly reason: string;
+  readonly disposition: 'set-aside' | 'review';
+}
+
+/** The rows quality repair judges: a superseded or archived row is already out of recall. */
+export function isRepairCandidate(entry: MemoryEntry): boolean {
+  return !entry.superseded_by && entry.kind !== 'archived';
+}
+
+function structured(entry: MemoryEntry): boolean {
+  return entry.trace_outcome !== null || entry.tags.includes('session-digest') || entry.source === 'auto-promote';
+}
+
+/** A parent that is gone says nothing about who wrote it, so it counts as a person's. */
+function fromAutomaticParents(entry: MemoryEntry, parents: ReadonlyMap<string, MemoryEntry>): boolean {
+  return (
+    entry.parents.length > 0 &&
+    entry.parents.every((id) => {
+      const parent = parents.get(id);
+      return parent !== undefined && isAutomaticEntry(parent);
+    })
+  );
+}
+
+/** The defect quality repair finds in `entry`, or null; `parents` holds whichever of its parents the store still has,
+ * live or dormant. */
+export function repairDefect(entry: MemoryEntry, parents: ReadonlyMap<string, MemoryEntry>): RepairDefect | null {
+  if (structured(entry) || !isAutomaticEntry(entry)) return null;
+  // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
+  if (!BUNDLE_HEADER.test(entry.content)) {
+    const { reason } = assessAutomaticMemory(entry.content);
+    return reason === null ? null : { reason, disposition: isCertainReason(reason) ? 'set-aside' : 'review' };
+  }
+  const texts = heldTexts({ ...entry, source: 'consolidation' });
+  if (texts.length === 0) return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
+  const reasons = texts
+    .map((text) => assessAutomaticMemory(text).reason)
+    .filter((reason): reason is AutomaticMemoryDefect => reason !== null);
+  if (reasons.length === 0) return null;
+  const certain =
+    reasons.length === texts.length && reasons.every(isCertainReason) && fromAutomaticParents(entry, parents);
+  return {
+    reason: `derived constituents: ${[...new Set(reasons)].join('; ')}`,
+    disposition: certain ? 'set-aside' : 'review',
+  };
+}
+
+/** The defect a store too old to repair can only report: an automatic row's text alone, for a person to review. */
+export function previewDefect(row: Parameters<typeof isAutomaticEntry>[0]): AutomaticMemoryDefect | null {
+  return isAutomaticEntry(row) ? assessAutomaticMemory(row.content).reason : null;
 }

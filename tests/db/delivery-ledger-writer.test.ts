@@ -3,10 +3,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   deliveryPruneSchedule,
-  readDeliveryEvents,
   writeDeliveryEventOnHandle,
   writeDeliveryEventVia,
 } from '../../src/store/recall-trace.js';
+import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import { handlesOf } from '../../src/store/open.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';

@@ -12,7 +12,7 @@ import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { storedTextKeys } from '../../src/util/same-text.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadContextCandidates, loadEntryTextKeys } from '../_helpers/root-forms.js';
+import { loadContextCandidates, loadEntryTextKeys, loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 let root: string;
 
@@ -43,23 +43,30 @@ async function seed(count: number, tenantId = 'default'): Promise<string[]> {
   return ids;
 }
 
-describe('loadEntryTextKeys', () => {
-  it('holds the same text keys as the whole-row read, for one tenant or all', async () => {
+describe('loadEntryTextKeysPageAt', () => {
+  it('pages the same text keys, in the same order, as the whole-row read, for one tenant or all', async () => {
     await seed(5);
     await seed(3, 'acme');
-    const all = storedTextKeys(loadAllEntries(root, 'default'));
-    expect(storedTextKeys(loadEntryTextKeys(root))).toEqual(all);
+    const all = loadAllEntries(root, 'default');
+    expect(loadEntryTextKeys(root, undefined, 2).map((k) => k.id)).toEqual(
+      loadEveryTenantEntries(root).map((e) => e.id),
+    );
+    expect(storedTextKeys(loadEntryTextKeys(root, 'default', 2))).toEqual(storedTextKeys(all));
     const acme = storedTextKeys(loadAllEntries(root, 'acme'));
-    expect(storedTextKeys(loadEntryTextKeys(root, 'acme'))).toEqual(acme);
+    expect(storedTextKeys(loadEntryTextKeys(root, 'acme', 2))).toEqual(acme);
     expect(acme.size).toBe(3);
   });
 
-  it('reads four columns, not whole rows', async () => {
-    await seed(2);
-    const { statements } = recordStatements(() => loadEntryTextKeys(root, 'default'));
-    const select = statements.find((sql) => sql.startsWith('SELECT id, tenant_id'))!;
-    expect(select).toContain('SELECT id, tenant_id, content, source FROM memories');
-    expect(select).not.toContain('tags_json');
+  it('reads the key columns a bounded page at a time, not whole rows', async () => {
+    await seed(5);
+    const { statements } = recordStatements(() => loadEntryTextKeys(root, 'default', 2));
+    const selects = statements.filter((sql) => sql.startsWith('SELECT id, tenant_id'));
+    expect(selects).toHaveLength(3);
+    for (const select of selects) {
+      expect(select).toContain('SELECT id, tenant_id, content, source, created FROM memories');
+      expect(select).toMatch(/LIMIT \?$/);
+      expect(select).not.toContain('tags_json');
+    }
   });
 });
 
@@ -149,7 +156,7 @@ describe('rejections.apply', () => {
     expect(result.removedIds).toEqual([target.id]);
     expect(readEntry(root, target.id)).toBeNull();
     expect(loadAllEntries(root, 'default')).toHaveLength(5);
-    expect(countMatching(statements, 'SELECT id, content, source, scope FROM memories')).toBe(1);
+    expect(countMatching(statements, /^SELECT id, content, source, scope, created FROM memories .*LIMIT \?$/)).toBe(1);
     expect(
       countMatching(statements, /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/),
     ).toBe(0);

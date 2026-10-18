@@ -1,11 +1,5 @@
 import { confirmedOutcomeTimesAt } from '../audit.js';
-import {
-  loadAllEntriesAt,
-  loadCurrentEntriesFromOriginsAt,
-  loadEntriesMentioningAt,
-  loadEveryTenantEntriesAt,
-  readEntryAt,
-} from '../entry-reads.js';
+import { loadCurrentEntriesFromOriginsAt, loadEntriesMentioningAt, readEntryAt } from '../entry-reads.js';
 import { addTagToEntriesAt, writeEntriesTogetherAt, writeEntryAt } from '../entry-writes.js';
 import type { Learning } from '../port/learning.js';
 import { type OnHandle, openStore } from '../open.js';
@@ -13,10 +7,6 @@ import { type OnHandle, openStore } from '../open.js';
 /** The learn passes' store work on its hippo.db, each call on its own short-lived handle. */
 export function sqliteLearning(on: OnHandle): Learning {
   return {
-    allEntries: (tenantId) =>
-      tenantId === undefined
-        ? on((db) => loadEveryTenantEntriesAt(db), openStore)
-        : on((db) => loadAllEntriesAt(db, tenantId), openStore),
     entriesMentioning: (tokens, tag, tenantId, page) =>
       on((db) => loadEntriesMentioningAt(db, tokens, tag, tenantId, page), openStore),
     readEntry: (id, tenantId) => on((db) => readEntryAt(db, id, tenantId), openStore),

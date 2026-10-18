@@ -104,8 +104,8 @@ export function writeEntriesSkippingRejectedAt(
   return written.length;
 }
 
-/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
- * on one open store and committed alone; an id the tenant does not hold is skipped. */
+/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, all in one transaction; an id the tenant does
+ * not hold is skipped. */
 export function addTagToEntriesAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -114,11 +114,11 @@ export function addTagToEntriesAt(
   tag: string,
 ): void {
   const live = selectEntriesByIds(db, ids, tenantId);
-  for (const id of new Set(ids)) {
+  const tagged = [...new Set(ids)].flatMap((id) => {
     const entry = live.get(id);
-    if (!entry || entry.tags.includes(tag)) continue;
-    writeEntryAt(db, files, { ...entry, tags: [...entry.tags, tag] });
-  }
+    return !entry || entry.tags.includes(tag) ? [] : [{ ...entry, tags: [...entry.tags, tag] }];
+  });
+  if (tagged.length > 0) writeEntriesTogetherAt(db, files, tagged);
 }
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone.

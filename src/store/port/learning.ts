@@ -4,8 +4,6 @@ import type { EntryCursor, EntryPage } from './consolidation.js';
 
 /** What auto-learn, extraction and invalidation read and write on hippo.db. */
 export interface Learning {
-  /** Every memory of `tenantId`, or of every tenant when it is undefined. */
-  allEntries(tenantId?: string): MemoryEntry[];
   /** A page of the memories whose content shares a token with `tokens`, plus those carrying exactly `tag`, by created
    * then id; read `next` until it is null for all of them. */
   entriesMentioning(
@@ -21,6 +19,7 @@ export interface Learning {
   writeEntry(entry: MemoryEntry): void;
   /** Writes the rows in one transaction and returns how many. */
   writeEntriesTogether(entries: readonly MemoryEntry[]): number;
+  /** Adds `tag` to each of the tenant's rows `ids` names that lacks it, in one transaction. */
   addTagToEntries(tenantId: string, ids: readonly string[], tag: string): void;
   /** When each memory was last confirmed by a good outcome, by id. */
   confirmedOutcomeTimes(tenantId: string): Map<string, string>;

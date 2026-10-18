@@ -11,7 +11,9 @@ import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
 import { log } from '../util/log.js';
+import type { EntryTextKey } from '../store/port/sharing.js';
 import { logEmbedAllFailure } from './search-both.js';
+import { eachTextKey } from './text-keys.js';
 
 /**
  * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and
@@ -40,15 +42,18 @@ function copyMissingRows(into: ConfiguredFolder, global: FolderStore, includeCro
   const local = into.store.localFiles;
   const from = global.store.localFiles;
   // Host-wide read: the global union is copied into a tenant-scoped local store, and each copy keeps its own tenant.
-  const localKeys = local.sharing.textKeys();
-  const localIds = new Set(localKeys.map((k) => k.id));
-  const localText = new Set(localKeys.map(textKey));
+  const localIds = new Set<string>();
+  const localText = new Set<string>();
+  for (const k of eachTextKey(local.sharing, undefined)) {
+    localIds.add(k.id);
+    localText.add(textKey(k));
+  }
   // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
-  const candidates = from.sharing
-    .textKeys()
-    .filter(
-      (k) => !localIds.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !localText.has(textKey(k)),
-    );
+  const candidates: EntryTextKey[] = [];
+  for (const k of eachTextKey(from.sharing, undefined)) {
+    if (localIds.has(k.id) || k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) || localText.has(textKey(k))) continue;
+    candidates.push(k);
+  }
   if (candidates.length === 0) return 0;
   const byId = new Map(
     chunked(candidates.map((k) => k.id))
