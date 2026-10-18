@@ -1,13 +1,23 @@
-// A summary's descendants read as a page: every level is counted, and only the rows the caller shows are read whole.
-import type { DatabaseSyncLike } from '../db/index.js';
-import type { MemoryEntry } from '../core/memory.js';
-import { selectEntriesByIds, TENANT_IS } from './sqlite/entry-reads.js';
-import { chunked } from '../util/chunked.js';
-import type { DescendantOrigin, SummaryDescendants } from './port.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './sqlite/rows.js';
-import { placeholders } from '../util/sql.js';
+// hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a summary's descendants a page
+// at a time.
+import type { DatabaseSyncLike } from '../../db/index.js';
+import type { MemoryEntry } from '../../core/memory.js';
+import {
+  selectEntriesByIds,
+  TENANT_IS,
+  countSessionRawMemoriesAt,
+  loadSessionRawMemoriesAt,
+  selectChildrenByParent,
+} from './entry-reads.js';
+import { chunked } from '../../util/chunked.js';
+import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk, Sync } from '../port.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
+import { placeholders } from '../../util/sql.js';
+import { descendantAdmits } from '../../core/read-admission.js';
+import type { OnHandle } from './open.js';
+import { openStore } from './handles.js';
 
-export interface PagedWalk {
+interface PagedWalk {
   readonly tenantId: string;
   readonly summary: MemoryEntry;
   readonly depth: number;
@@ -37,7 +47,7 @@ const marks = (ids: readonly string[]): string => placeholders(ids.length);
 
 /** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full
  * count in `sizes`. */
-export function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
+function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
   const sizes: number[] = [];
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([walk.summary.id]);
@@ -171,4 +181,47 @@ function childrenInOrder(
     }
   }
   return parents.flatMap((id) => byParent.get(id) ?? []);
+}
+
+export function sqliteDagReads(on: OnHandle): Sync<DagReads> {
+  return {
+    sessionRawEntries: ({ tenantId, sessionId, cap, origins }) =>
+      on((db) => loadSessionRawMemoriesAt(db, sessionId, tenantId, cap, origins), openStore),
+    sessionRawCount: ({ tenantId, sessionId, scope, ownScope, origins }) =>
+      on((db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins), openStore),
+    summaryWithDescendants: (tenantId, id, walk) =>
+      on((db) => summaryWithDescendantsAt(db, tenantId, id, walk), openStore),
+  };
+}
+
+// dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or walked in a loop.
+function summaryWithDescendantsAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  { depth, admit, minSummaryLevel, page }: DescendantWalk,
+): SummaryDescendants | null {
+  const summary = selectEntriesByIds(db, [id], tenantId).get(id);
+  if (!summary) return null;
+  const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
+  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dag_level ?? 0) >= minSummaryLevel);
+  if (page) return pagedDescendants(db, { tenantId, summary, depth, rows: page.rows, admit: readable }, walked);
+  const levels: MemoryEntry[][] = [];
+  const seen = new Set<string>([id]);
+  let parents = walked ? [id] : [];
+  for (let level = 0; level < depth && parents.length > 0; level++) {
+    const childrenOf = selectChildrenByParent(db, parents, tenantId);
+    const admitted: MemoryEntry[] = [];
+    for (const parentId of parents) {
+      for (const child of childrenOf.get(parentId) ?? []) {
+        if (seen.has(child.id) || !readable(child)) continue;
+        seen.add(child.id);
+        admitted.push(child);
+      }
+    }
+    if (admitted.length === 0) break;
+    levels.push(admitted);
+    parents = admitted.map((row) => row.id);
+  }
+  return { summary, levels };
 }

@@ -21,7 +21,7 @@ import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/
 import { NO_MERGE_TAGS } from '../../src/sharing/share.js';
 import { forget, dormantList, sleep, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,

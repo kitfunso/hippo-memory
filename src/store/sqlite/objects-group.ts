@@ -7,7 +7,7 @@ import { chunked } from '../../util/chunked.js';
 import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../core/memory.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProjectIn, upsertEntryRow } from './entry-row.js';
-import { auditEntryWrite, writeEntryMirrorsIn } from './entry-writes.js';
+import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
 import { markGraphDirtyAt } from './graph-queue.js';
 import { removeGraphEntitiesForObjectAt } from './graph-writes.js';
 import {
@@ -32,7 +32,6 @@ import type {
   ObjectSave,
   PoliciesInForceQuery,
 } from '../port.js';
-import { auditingRefusal } from './entry-writes-group.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../util/sql.js';
 import type { JsonObject } from '../port/types.js';

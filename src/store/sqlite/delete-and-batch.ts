@@ -6,7 +6,7 @@ import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../db/ind
 import { checkRejectionGuard } from './rejection.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { insertDormantRow } from './dormant.js';
+import { insertDormantRow } from './dormant-rows.js';
 import { log } from '../../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';

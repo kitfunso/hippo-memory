@@ -1,5 +1,5 @@
-// The rows `hippo projects` and sleep's tag repair read and write, bound to one hippo.db handle and tenant,
-// so the merge and repair rules in src/sharing/project-merge.ts decide without holding the handle.
+// hippo.db's ProjectTags group: the rows `hippo projects` and sleep's tag repair read and write on one handle, so the
+// merge and repair rules in src/sharing/project-merge.ts decide without holding it.
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
 import { calculateStrength } from '../../core/memory.js';
@@ -11,7 +11,12 @@ import {
   holdsOrigin,
   restampCompactionOrigin,
 } from './compaction-rows.js';
-import { dormantSnapshotsByIds, dormantSnapshotsFromOrigin, insertDormantRow, replaceDormantEntry } from './dormant.js';
+import {
+  dormantSnapshotsByIds,
+  dormantSnapshotsFromOrigin,
+  insertDormantRow,
+  replaceDormantEntry,
+} from './dormant-rows.js';
 import {
   selectEntriesByIds,
   selectEntriesFromOriginAt,
@@ -25,7 +30,7 @@ import {
   writeEntryMirrors,
 } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
-import type { StoreFiles } from './open.js';
+import type { StoreFiles, OnHandle } from './open.js';
 import { setAsideRow } from './set-aside.js';
 import type {
   ProjectTagReads,
@@ -33,6 +38,7 @@ import type {
   ProjectTagStore,
   ProjectTagWrites,
   TagRewrite,
+  ProjectTags,
 } from '../port/project-tags.js';
 
 const TX_LABEL = 'merge_projects';
@@ -91,12 +97,18 @@ function rewriteOn<T>(
 }
 
 /** The tag store on a handle the caller opened and closes, with the folder its rewrites back up and re-mirror. */
-export function projectTagStoreOn(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope): ProjectTagStore {
+function projectTagStoreOn(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope): ProjectTagStore {
   return {
     ...projectTagReads(db, scope.tenantId),
     hippoRoot: files.hippoRoot,
     rewrite: (opts, body) => rewriteOn(db, files, scope, opts, body),
     repairedOnce: () => getMeta(db, AUTO_REPAIR_META_KEY) === '1',
     markRepairedOnce: () => setMeta(db, AUTO_REPAIR_META_KEY, '1'),
+  };
+}
+
+export function sqliteProjectTags(on: OnHandle): ProjectTags {
+  return {
+    on: (scope, fn) => on((db, files) => fn(projectTagStoreOn(db, files, scope))),
   };
 }

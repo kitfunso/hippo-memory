@@ -31,7 +31,7 @@ import { recordSessionDigest } from '../../src/capture/session-digest.js';
 import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import {
   listMemoryConflicts,
   loadEntriesByIds,

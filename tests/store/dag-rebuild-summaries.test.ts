@@ -17,7 +17,7 @@ import { configReader } from '../../src/core/config.js';
 import { envRuntimeSettings } from '../../src/util/env.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/core/rejection-digest.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';

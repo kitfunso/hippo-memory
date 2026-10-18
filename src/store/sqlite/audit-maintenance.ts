@@ -1,21 +1,32 @@
-import { appendAuditEvent } from './sqlite/audit.js';
-import { withBackup } from '../db/backup.js';
-import { withTrialScope, withWriteScope } from '../db/busy.js';
-import type { DatabaseSyncLike } from '../db/sqlite.js';
-import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
-import { tableColumns } from '../db/tables.js';
-import { assertBinaryCompatible } from '../db/migrate.js';
-import { dormantSnapshotsByIds, insertDormantRow } from './sqlite/dormant.js';
-import { calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../core/memory-audit.js';
-import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './sqlite/delete-and-batch.js';
-import { loadEntriesPageAt, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './sqlite/entry-reads.js';
-import { ftsRowExists } from './sqlite/entry-row.js';
-import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './sqlite/rows.js';
-import { purgeMirrorBestEffort } from './sqlite/mirrors.js';
-import type { StoreFiles } from './sqlite/open.js';
-import type { EntryCursor } from './port/consolidation.js';
-import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from './port/audit-maintenance.js';
+// hippo.db's AuditMaintenance group: the quality audit and repair, object-backed ids, automatic deletes and the audit
+// prune.
+import { appendAuditEvent, pruneAuditRowsAt } from './audit.js';
+import { withBackup } from '../../db/backup.js';
+import { withTrialScope, withWriteScope } from '../../db/busy.js';
+import type { DatabaseSyncLike } from '../../db/sqlite.js';
+import { getMeta, pragmaUserVersion, setMeta } from '../../db/meta.js';
+import { tableColumns } from '../../db/tables.js';
+import { assertBinaryCompatible } from '../../db/migrate.js';
+import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
+import { calculateStrength, type MemoryEntry } from '../../core/memory.js';
+import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../core/memory-audit.js';
+import {
+  deleteEntryCore,
+  MEMORY_BACKED_TABLES,
+  memoriesBackingObjectsOn,
+  deleteEntriesAutomaticallyAt,
+  memoriesBackingObjectsAt,
+} from './delete-and-batch.js';
+import { loadEntriesPageAt, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './entry-reads.js';
+import { ftsRowExists } from './entry-row.js';
+import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
+import { purgeMirrorBestEffort } from './mirrors.js';
+import type { StoreFiles, Handles } from './open.js';
+import type { EntryCursor } from '../port/consolidation.js';
+import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit-maintenance.js';
+import { openStore } from './handles.js';
+import type { AuditMaintenance, Sync } from '../port.js';
+import { withUnmigratedDb } from '../../db/open.js';
 
 const PLAN_PAGE_ROWS = 500;
 
@@ -228,7 +239,7 @@ function repairOn(db: DatabaseSyncLike, root: string, run: RepairRun): QualityRe
 
 /** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage.
  * `db` is opened without running migrations, read-only for a preview. */
-export function repairAutomaticMemoriesAt(
+function repairAutomaticMemoriesAt(
   db: DatabaseSyncLike,
   { hippoRoot: root }: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
@@ -240,7 +251,7 @@ const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
  * null once done. `db` is opened writable without running migrations. */
-export function repairQualityOnceAt(
+function repairQualityOnceAt(
   db: DatabaseSyncLike,
   { hippoRoot: root }: StoreFiles,
   tenantId: string,
@@ -252,4 +263,20 @@ export function repairQualityOnceAt(
   // An unsupported schema changed nothing, so the next run tries again once a migration has run.
   if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
   return result;
+}
+
+export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMaintenance> {
+  return {
+    objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
+    deleteAutomatically: (removals, actor) =>
+      removals.length === 0 ? [] : on((db, own) => deleteEntriesAutomaticallyAt(db, own, removals, actor), openStore),
+    pruneAuditRows: (prune) => on((db) => pruneAuditRowsAt(db, prune)),
+    // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
+    repairQuality: (tenantId, apply, protect) =>
+      withUnmigratedDb(files.hippoRoot, !apply, (db) =>
+        repairAutomaticMemoriesAt(db, files, { tenantId, apply, protect }),
+      ),
+    repairQualityOnce: (tenantId, protect) =>
+      withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnceAt(db, files, tenantId, protect)),
+  };
 }

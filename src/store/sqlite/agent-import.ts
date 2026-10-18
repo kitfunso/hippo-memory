@@ -16,7 +16,7 @@ import {
   dormantSnapshotsBySourcePrefix,
   readDormantSnapshot,
   replaceDormantEntry,
-} from './dormant.js';
+} from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
 import { entryIdTakenAt, selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from './entry-reads.js';
 import {

@@ -7,7 +7,7 @@ import { mergedSuccessor } from '../../src/core/merged-row.js';
 import { isPersonalScope } from '../../src/core/recall-scope.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant.js';
+import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { rejectionDigest } from '../../src/core/rejection-digest.js';

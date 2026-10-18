@@ -1,28 +1,30 @@
-// Reject, unreject and list rejected values, each on one handle of its own.
-// A file apart from rejection.ts: store/open.ts imports that one, so an open there would be an import cycle.
-
-import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import type { MemoryEntry } from '../core/memory.js';
-import { heldTexts } from '../util/same-text.js';
-import { audit } from './sqlite/audit-event.js';
-import { deleteEntryCore } from './sqlite/delete-and-batch.js';
+// hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its own.
+// A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be an import cycle.
+import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import type { MemoryEntry } from '../../core/memory.js';
+import { heldTexts } from '../../util/same-text.js';
+import { audit } from './audit-event.js';
+import { deleteEntryCore } from './delete-and-batch.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
   dormantTextsByIds,
   dormantTextsPage,
   replaceDormantEntry,
-} from './sqlite/dormant.js';
-import { entryRejectRowAt, selectEntriesByIds, selectTenantTextsPage } from './sqlite/entry-reads.js';
-import { stampOriginProject } from './sqlite/entry-row.js';
-import { writeEntryDbOnly, writeEntryMirrors } from './sqlite/entry-writes.js';
-import { purgeMirrorBestEffort } from './sqlite/mirrors.js';
-import type { StoreFiles } from './sqlite/open.js';
-import { archiveRawMemory, markMirrorCleaned } from './sqlite/raw-archive.js';
-import { deleteRejectedValue, insertRejectedValue, listRejectedValues } from './sqlite/rejection.js';
-import { normalizeValueForRejection, rejectionDigest } from '../core/rejection-digest.js';
-import type { EntryCursor } from './port/consolidation.js';
-import type { AppliedRejection, HoldsValue, LiftedRejection, Rejection } from './port/rejections.js';
+} from './dormant-rows.js';
+import { entryRejectRowAt, selectEntriesByIds, selectTenantTextsPage } from './entry-reads.js';
+import { stampOriginProject } from './entry-row.js';
+import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
+import { purgeMirrorBestEffort } from './mirrors.js';
+import type { StoreFiles, OnHandle } from './open.js';
+import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
+import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../core/rejection-digest.js';
+import type { EntryCursor } from '../port/consolidation.js';
+import type { AppliedRejection, HoldsValue, LiftedRejection, Rejection, Rejections } from '../port/rejections.js';
+import { RejectedValueError } from '../../core/api-errors.js';
+import { openStore } from './handles.js';
+import type { Sync } from '../port.js';
 
 /** Rows a rejection reads per page while it looks for the rows that hold its text. */
 const HOLDER_PAGE_ROWS = 500;
@@ -197,7 +199,7 @@ function removeHolders(
 /** Commits the rejected-value row first, so every later write refuses the text; walks the tenant's rows a page at a
  * time with no lock held; then removes each holder in reach (live or dormant, whole or merged) in one short write
  * scope. A failure past the first commit leaves the text refused and its holders kept; rejecting again removes them. */
-export function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, rejection: Rejection): AppliedRejection {
+function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, rejection: Rejection): AppliedRejection {
   const { hippoRoot } = files;
   const { tenantId, actor, reason, memoryId } = rejection;
   const content = rejection.textOf(memoryId === undefined ? undefined : entryRejectRowAt(db, memoryId));
@@ -235,12 +237,7 @@ export function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, reject
 
 /** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes its unreject_value audit
  * row. No match, or more than one, writes nothing. */
-export function liftRejectionAt(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  digestPrefix: string,
-  actor: string,
-): LiftedRejection {
+function liftRejectionAt(db: DatabaseSyncLike, tenantId: string, digestPrefix: string, actor: string): LiftedRejection {
   const matches = listRejectedValues(db, tenantId).filter((r) => r.digest.startsWith(digestPrefix));
   const target = matches[0];
   if (target === undefined) return { status: 'not_found' };
@@ -254,4 +251,24 @@ export function liftRejectionAt(
     metadata: { digest: target.digest, reason: target.reason },
   });
   return { status: 'ok', digest: target.digest, reason: target.reason };
+}
+
+export function sqliteRejections(on: OnHandle): Sync<Rejections> {
+  return {
+    apply: (rejection) => on((db, files) => applyRejectionAt(db, files, rejection), openStore),
+    lift: (tenantId, digestPrefix, actor) => on((db) => liftRejectionAt(db, tenantId, digestPrefix, actor), openStore),
+    list: (tenantId) => on((db) => listRejectedValues(db, tenantId), openStore),
+    refusedAmong: (checks) =>
+      on((db) =>
+        checks.map(({ tenantId, entryId, content }) => {
+          try {
+            checkRejectionGuard(db, tenantId, entryId, content);
+            return false;
+          } catch (err) {
+            if (err instanceof RejectedValueError) return true;
+            throw err;
+          }
+        }),
+      ),
+  };
 }

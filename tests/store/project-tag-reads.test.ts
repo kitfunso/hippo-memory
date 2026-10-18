@@ -3,9 +3,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { projectTagStoreOn } from '../../src/store/sqlite/project-tags.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { ProjectTagStore } from '../../src/store/port/project-tags.js';
 import { listProjects, mergeProjects, planProjectRepair } from '../../src/sharing/project-merge.js';
 import { mergedText } from '../../src/util/same-text.js';
@@ -34,7 +34,7 @@ function withDb<R>(fn: (db: DatabaseSyncLike) => R): R {
 }
 
 const withStore = <R>(fn: (store: ProjectTagStore) => R): R =>
-  withDb((db) => fn(projectTagStoreOn(db, { hippoRoot: root }, { tenantId: T, actor: 'test' })));
+  sqliteSyncStore(root).localFiles.projectTags.on({ tenantId: T, actor: 'test' }, fn);
 
 const memory = (content: string, origin: string | null, i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { layer: Layer.Semantic }),

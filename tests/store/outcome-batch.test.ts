@@ -18,7 +18,7 @@ import { ownScopeTouches } from '../../src/core/recall-scope.js';
 import { writeEntriesTogetherAt, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
-import { applyOutcomeAt, auditingRefusal } from '../../src/store/sqlite/entry-writes-group.js';
+import { applyOutcomeAt, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
 import type { OutcomeWrite } from '../../src/store/port/entry-writes.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 

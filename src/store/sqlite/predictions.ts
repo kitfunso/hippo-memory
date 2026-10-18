@@ -7,7 +7,7 @@ import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
 import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { type StoreFiles } from './open.js';
-import { writeEntryRowAt } from './entry-writes-group.js';
+import { writeEntryRowAt } from './entry-writes.js';
 import { assertTenantId } from '../../core/tenant-id.js';
 import { appendAuditEvent } from './audit.js';
 import { keysetAfter, type KeysetPosition } from '../../util/keyset.js';

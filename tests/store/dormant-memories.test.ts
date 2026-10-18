@@ -26,7 +26,7 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { consolidate } from '../../src/index.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { loadConfig } from '../../src/core/config.js';
 import {
   createMemory,

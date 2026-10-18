@@ -29,7 +29,7 @@ import {
   memoriesBackingObjectsAt,
 } from '../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../src/store/port/dormant.js';
-import { loadDormantMemoriesAt } from '../../src/store/sqlite/dormant.js';
+import { EVERY_SCOPE, listDormantRows } from '../../src/store/sqlite/dormant-rows.js';
 import {
   countSessionRawMemoriesAt,
   loadAllEntryIdsAt,
@@ -70,11 +70,9 @@ import {
 } from '../../src/store/sqlite/index-and-stats.js';
 import { waitingOpener } from '../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
-import { withUnmigratedDb } from '../../src/db/open.js';
 import type { RepairProtection } from '../../src/core/memory-audit.js';
 import { writePromotedEntryAt } from '../../src/store/sqlite/entry-writes.js';
 import { updateStatsAt } from '../../src/store/sqlite/index-and-stats.js';
-import { repairAutomaticMemoriesAt, repairQualityOnceAt } from '../../src/store/quality-repair.js';
 import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
 import type { StoreFiles } from '../../src/store/sqlite/open.js';
 
@@ -115,13 +113,6 @@ import type { ApiKeyListItem, ListApiKeysOpts } from '../../src/store/port/key-w
 import { findPromotableSessionsAt, listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
 import { loadActiveTaskSnapshotAt } from '../../src/store/sqlite/task-snapshots.js';
 import { freshActiveSnapshot } from '../../src/core/session-snapshot.js';
-import {
-  applyRebuildResultAt,
-  loadAllDirtySummariesAt,
-  loadAllL2SummariesAt,
-  loadChildrenOfSummariesAt,
-  loadChildrenOfSummaryAt,
-} from '../../src/store/summaries.js';
 import type { ApiCall } from '../../src/core/transcript-calls.js';
 import { recordRereadsAt } from '../../src/store/sqlite/token-ledger.js';
 import {
@@ -341,7 +332,7 @@ export function loadDormantMemories(
   opts: ListDormantOpts = {},
   admit?: SqlFragment,
 ): DormantMemory[] {
-  return onHandle(hippoRoot, (db) => loadDormantMemoriesAt(db, tenantId, opts, admit));
+  return onHandle(hippoRoot, (db) => listDormantRows(db, tenantId, opts, admit ?? EVERY_SCOPE));
 }
 
 export function loadEntriesByIds(hippoRoot: string, ids: readonly string[], tenantId?: string): MemoryEntry[] {
@@ -604,19 +595,19 @@ export function findPromotableSessions(
 }
 
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadAllL2SummariesAt(db), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.unprofiledTopicSummaries();
 }
 
 export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadAllDirtySummariesAt(db, limit), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function loadChildrenOfSummary(hippoRoot: string, summaryId: string, tenantId: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadChildrenOfSummaryAt(db, summaryId, tenantId), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.childrenOfSummary(summaryId, tenantId);
 }
 
 export function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return onHandle(hippoRoot, (db) => applyRebuildResultAt(db, summary, patch), openStore);
+  return sqliteSyncStore(hippoRoot).localFiles.consolidation.applyRebuild(summary, patch);
 }
 
 export function recordRereads(
@@ -775,13 +766,6 @@ export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Ma
   return onHandle(hippoRoot, (db) => loadStoredVectorsAt(db, ids));
 }
 
-export function loadChildrenOfSummaries(
-  hippoRoot: string,
-  summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
-): Map<string, MemoryEntry[]> {
-  return onHandle(hippoRoot, (db) => loadChildrenOfSummariesAt(db, summaries), openStore);
-}
-
 /** Keys of every tenant under `hippoRoot` unless `opts.tenantId` names one. */
 export function listApiKeys(hippoRoot: string, opts: ListApiKeysOpts): ApiKeyListItem[] {
   return onHandle(hippoRoot, (db) => listApiKeyRows(db, opts).map((r) => r.key));
@@ -822,7 +806,11 @@ export function repairAutomaticMemories(
   files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): QualityRepairResult {
-  return withUnmigratedDb(files.hippoRoot, !opts.apply, (db) => repairAutomaticMemoriesAt(db, files, opts));
+  return sqliteSyncStore(files.hippoRoot).auditMaintenance.repairQuality(
+    opts.tenantId,
+    opts.apply ?? false,
+    opts.protect,
+  );
 }
 
 export function repairQualityOnce(
@@ -830,5 +818,5 @@ export function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
-  return withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnceAt(db, files, tenantId, protect));
+  return sqliteSyncStore(files.hippoRoot).auditMaintenance.repairQualityOnce(tenantId, protect);
 }

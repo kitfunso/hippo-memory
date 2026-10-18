@@ -8,8 +8,7 @@ import { openStore } from './handles.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites, Sync } from '../port.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProjectIn } from './entry-row.js';
-import { writeEntryMirrorsIn } from './entry-writes.js';
-import { archiveRawAt, writeInOwnTenant } from './entry-writes-group.js';
+import { writeEntryMirrorsIn, archiveRawAt, writeInOwnTenant } from './entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever sees it. */
 class EventAlreadyLogged extends Error {}

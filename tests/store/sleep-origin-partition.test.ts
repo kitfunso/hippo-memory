@@ -10,7 +10,7 @@ import { detectConflicts } from '../../src/consolidate/conflicts.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../../src/consolidate/dag.js';
 import { storeExtractedFacts } from '../../src/learn/extract.js';
-import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
+import { sqliteConsolidation } from '../../src/store/sqlite/consolidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

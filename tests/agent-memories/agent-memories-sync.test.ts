@@ -8,7 +8,7 @@ import { consolidate } from '../../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/agent-memories/sync.js';
 import type { Machine } from '../../src/util/agent-homes.js';
 import type { ImportReport } from '../../src/agent-memories/report.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';

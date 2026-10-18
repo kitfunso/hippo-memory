@@ -3,7 +3,7 @@
 import { appendAuditEvent } from './audit.js';
 import { SYNC_ACTOR } from '../../core/agent-memory-tools.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { insertDormantRow } from './dormant.js';
+import { insertDormantRow } from './dormant-rows.js';
 import { calculateStrength, type MemoryEntry } from '../../core/memory.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
 import type { SetAsideResult, SetAsideWhy } from '../port/project-tags.js';

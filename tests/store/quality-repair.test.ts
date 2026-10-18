@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { STORE_BUSY_MESSAGE } from '../../src/store/port.js';
-import { readDormantSnapshot } from '../../src/store/sqlite/dormant.js';
+import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { findRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/core/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

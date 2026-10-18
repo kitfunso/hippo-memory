@@ -1,3 +1,4 @@
+// hippo.db's Conflicts group: listing and resolving the memory_conflicts rows.
 import { DEFAULT_TENANT_ID } from '../../util/env.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
@@ -9,7 +10,7 @@ import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../util/chunked.js';
 import { ownScopeTouches } from '../../core/recall-scope.js';
-import type { StoreFiles } from './open.js';
+import type { StoreFiles, OnHandle } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { placeholders } from '../../util/sql.js';
 import type { KeysetClause } from '../../util/keyset.js';
@@ -21,6 +22,9 @@ import type {
   ConflictRow,
   ConflictRowPage,
 } from '../port/conflicts.js';
+import { openStore } from './handles.js';
+import type { Conflicts } from '../port-groups.js';
+import type { Sync } from '../port.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -106,7 +110,7 @@ export function conflictPageAt(
 }
 
 /** Conflict `conflictId`, any status, when both its members are in `tenantId`. */
-export function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
+function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
   const select = conflictSelect(tenantId, [{ sql: 'mc.id = ?', params: [conflictId] }]);
   // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
   const row = db.prepare(select.sql).get(...select.params) as ConflictJoinRow | undefined;
@@ -153,7 +157,7 @@ export function replaceDetectedConflictsAt(
 
 /** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read
  * before the refresh takes the write lock. */
-export interface ConflictRefreshReads {
+interface ConflictRefreshReads {
   sameTenant: SameTenant;
   storedRefs: ReadonlyMap<string, string | null>;
 }
@@ -339,7 +343,7 @@ function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: Confl
 
 /** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one `conflict_resolve` audit row;
  * false when another resolver got there first or a side moved since the api read it. */
-export function resolveConflictAt(
+function resolveConflictAt(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -587,4 +591,12 @@ export function resolvedConflictsAt(
     memory_a_id: string;
     memory_b_id: string;
   }[];
+}
+
+export function sqliteConflicts(on: OnHandle): Sync<Conflicts> {
+  return {
+    list: (query) => on((db) => conflictPageAt(db, query), openStore),
+    get: (tenantId, conflictId) => on((db) => conflictByIdAt(db, tenantId, conflictId), openStore),
+    resolve: (tenantId, resolution) => on((db, files) => resolveConflictAt(db, files, tenantId, resolution), openStore),
+  };
 }

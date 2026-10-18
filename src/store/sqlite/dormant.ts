@@ -1,288 +1,28 @@
-/** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;
- * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
- * goes, so every reader of `memories` stops seeing it, as if deleted. Not the raw archive (`raw_archive`,
- * `archiveRawMemory`), which keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
+// hippo.db's Dormant group: the memories sleep set aside, listed, restored or forgotten for good.
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
-import { type StoreFiles } from './open.js';
+import type { StoreFiles, OnHandle } from './open.js';
 import type { MemoryEntry } from '../../core/memory.js';
-import type { SqlFragment } from './rule-sql.js';
+import { type SqlFragment, touchableScopeSql } from './rule-sql.js';
 import type { WriteBudget } from '../../util/write-budget.js';
 import { RejectedValueError } from '../../core/api-errors.js';
-import { chunked } from '../../util/chunked.js';
-import { escapeLike } from '../../util/escape.js';
-import { placeholders } from '../../util/sql.js';
-import { warnDamagedColumn } from '../../util/stored-json.js';
 import { DAY_MS } from '../../util/time.js';
 import { appendAuditEvent } from './audit.js';
 import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTakenAt } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
-import { cachedStatement } from './statement-cache.js';
 import type { DormantSnapshot } from '../port/agent-import.js';
-import type { DormantMove } from '../port/consolidation.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../port/dormant.js';
+import { updateStatsUnlessBusyAt } from './index-and-stats.js';
+import type { Dormant } from '../port-groups.js';
+import type { Sync } from '../port.js';
+import { openStore } from './handles.js';
+import { deleteDormantRow, EVERY_SCOPE, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
 
-interface DormantRow {
-  tenant_id: string;
-  id: string;
-  content: string;
-  entry_json: string;
-  reason: string;
-  strength: number;
-  dormant_at: string;
-}
-
-const DEFAULT_DORMANT_LIMIT = 20;
-
-/** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories` row in the same
- * transaction. */
-export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void {
-  db.prepare(`
-    INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(tenant_id, id) DO UPDATE SET
-      content = excluded.content,
-      entry_json = excluded.entry_json,
-      reason = excluded.reason,
-      strength = excluded.strength,
-      dormant_at = excluded.dormant_at
-  `).run(
-    move.entry.tenant_id,
-    move.entry.id,
-    move.entry.content,
-    JSON.stringify(move.entry),
-    move.reason,
-    move.strength,
-    move.dormantAt,
-  );
-}
-
-/** What entry_json may hold: 2.0 snapshots, or 1.x ones with `tenantId` and a 0|1 `summary_dirty`. */
-type StoredSnapshot = Omit<MemoryEntry, 'tenant_id' | 'summary_dirty'> & {
-  tenant_id?: string;
-  tenantId?: string;
-  summary_dirty?: boolean | 0 | 1;
-};
-
-function toCurrentEntry({ tenantId, summary_dirty, tenant_id, ...rest }: StoredSnapshot): MemoryEntry {
-  return {
-    ...rest,
-    tenant_id: tenant_id ?? tenantId ?? '',
-    summary_dirty: summary_dirty === true || summary_dirty === 1,
-  };
-}
-
-/** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or
- * truncated). */
-function parseSnapshot(row: DormantRow): MemoryEntry | null {
-  try {
-    // SAFETY: entry_json is only written by insertDormantRow from a MemoryEntry;
-    // the id / tenant / content checks below reject a row edited out of shape.
-    // SAFETY: entry_json came from JSON.stringify of a MemoryEntry (2.0) or a 1.x one; the checks below reject a row
-    // edited out of shape.
-    const entry = toCurrentEntry(JSON.parse(row.entry_json) as StoredSnapshot);
-    if (entry.id !== row.id || entry.tenant_id !== row.tenant_id || entry.content !== row.content) {
-      warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
-      return null;
-    }
-    return entry;
-  } catch {
-    // A row that will not parse is out of shape, so it is not restorable.
-    warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'not valid JSON');
-    return null;
-  }
-}
-
-function rowToDormantMemory(row: DormantRow): DormantMemory {
-  const entry = parseSnapshot(row);
-  return {
-    id: row.id,
-    tenantId: row.tenant_id,
-    content: row.content,
-    tags: entry && Array.isArray(entry.tags) ? entry.tags.map(String) : [],
-    strength: row.strength,
-    reason: row.reason,
-    dormantAt: row.dormant_at,
-  };
-}
-
-// The snapshot's scope as a `scope` column, so recall-scope's SQL fragments read it as they read memories.scope.
-const DORMANT_WITH_SCOPE =
-  `(SELECT *, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END ` +
-  `AS scope FROM dormant_memories)`;
-const EVERY_SCOPE: SqlFragment = { sql: '1', params: [] };
-
-/** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by search terms. */
-function listDormantRows(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  opts: ListDormantOpts = {},
-  admit: SqlFragment = EVERY_SCOPE,
-): DormantMemory[] {
-  const terms = (opts.query ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter((t) => t.length > 0);
-  const limit =
-    opts.limit !== undefined && Number.isFinite(opts.limit) && opts.limit >= 1
-      ? Math.floor(opts.limit)
-      : DEFAULT_DORMANT_LIMIT;
-  const termClauses = terms.map(() => ` AND content LIKE ? ESCAPE '\\'`).join('');
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
-  const rows = db
-    .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-       FROM ${DORMANT_WITH_SCOPE}
-      WHERE tenant_id = ? AND ${admit.sql}${termClauses}
-      ORDER BY dormant_at DESC, id ASC
-      LIMIT ?`,
-    )
-    .all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
-  return rows.map(rowToDormantMemory);
-}
-
-/** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */
-export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: string): DormantSnapshot | null {
-  // SAFETY: row's shape matches the seven columns named in the SELECT.
-  const row = db
-    .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-       FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
-    )
-    .get(tenantId, id) as DormantRow | undefined;
-  return row ? toSnapshot(row) : null;
-}
-
-/** Readable snapshots whose entry's source starts with `prefix`; a malformed snapshot is passed over, not an error. */
-export function dormantSnapshotsBySourcePrefix(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  prefix: string,
-): DormantSnapshot[] {
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
-  const rows = db
-    .prepare(
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-       FROM dormant_memories
-      WHERE tenant_id = ?
-        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END LIKE ? ESCAPE '\\'`,
-    )
-    .all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
-  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
-}
-
-/** Readable snapshots of a tenant whose entry carries project name `origin`. */
-export function dormantSnapshotsFromOrigin(db: DatabaseSyncLike, tenantId: string, origin: string): DormantSnapshot[] {
-  // SAFETY: rows' shape matches the seven columns named in the SELECT.
-  const rows = cachedStatement(
-    db,
-    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-       FROM dormant_memories
-      WHERE tenant_id = ?
-        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.origin_project') END = ?`,
-  ).all(tenantId, origin) as DormantRow[];
-  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => s.entry.origin_project === origin);
-}
-
-function toSnapshot(row: DormantRow): DormantSnapshot | null {
-  const entry = parseSnapshot(row);
-  return entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;
-}
-
-/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went dormant. */
-export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: string, entry: MemoryEntry): void {
-  db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`).run(
-    entry.id,
-    entry.content,
-    JSON.stringify(entry),
-    tenantId,
-    id,
-  );
-}
-
-/** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot readable or not). */
-function hasDormantRow(db: DatabaseSyncLike, tenantId: string, id: string, admit: SqlFragment = EVERY_SCOPE): boolean {
-  return (
-    db
-      .prepare(`SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`)
-      .get(tenantId, id, ...admit.params) !== undefined
-  );
-}
-
-/** Delete a tenant's dormant memory. Returns false when there was none. */
-export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: string): boolean {
-  const result = db.prepare(`DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ?`).run(tenantId, id);
-  return Number(result.changes ?? 0) > 0;
-}
-
-/** The columns a text match reads from one dormant memory; source and scope are null when its snapshot will not
- * parse. */
-export interface DormantText {
-  readonly id: string;
-  readonly content: string;
-  readonly source: string | null;
-  readonly scope: string | null;
-}
-
-const DORMANT_TEXT_COLUMNS =
-  `id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END AS source, ` +
-  `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope`;
-
-/** Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match
- * reads. */
-export function dormantTextsPage(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  page: { readonly limit: number; readonly afterId: string },
-): DormantText[] {
-  // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
-  return cachedStatement(
-    db,
-    `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`,
-  ).all(tenantId, page.afterId, page.limit) as DormantText[];
-}
-
-/** The text columns of a tenant's dormant memories with these ids, one query per chunk. */
-export function dormantTextsByIds(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  ids: readonly string[],
-): Map<string, DormantText> {
-  const byId = new Map<string, DormantText>();
-  for (const chunk of chunked([...new Set(ids)])) {
-    // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
-    const rows = cachedStatement(
-      db,
-      `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories ` +
-        `WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as DormantText[];
-    for (const row of rows) byId.set(row.id, row);
-  }
-  return byId;
-}
-
-/** A tenant's dormant snapshots with these ids that still read back, one query per chunk. */
-export function dormantSnapshotsByIds(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  ids: readonly string[],
-): Map<string, DormantSnapshot> {
-  const byId = new Map<string, DormantSnapshot>();
-  for (const chunk of chunked([...new Set(ids)])) {
-    // SAFETY: rows' shape matches the seven columns named in the SELECT.
-    const rows = cachedStatement(
-      db,
-      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-         FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-    ).all(tenantId, ...chunk) as DormantRow[];
-    for (const row of rows) {
-      const snapshot = toSnapshot(row);
-      if (snapshot) byId.set(row.id, snapshot);
-    }
-  }
-  return byId;
-}
+/** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;
+ * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
+ * goes, so every reader of `memories` stops seeing it, as if deleted. Not the raw archive (`raw_archive`,
+ * `archiveRawMemory`), which keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
 
 interface DormantKey {
   readonly tenantId: string;
@@ -335,7 +75,7 @@ export async function expireDormantBeforeAt(
 }
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, read on a handle of its own. */
-export function loadDormantMemoriesAt(
+function loadDormantMemoriesAt(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: ListDormantOpts = {},
@@ -345,7 +85,7 @@ export function loadDormantMemoriesAt(
 }
 
 /** Whether a tenant holds a dormant memory with this id whose scope `admit` passes, read on a handle of its own. */
-export function holdsDormantMemoryAt(
+function holdsDormantMemoryAt(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
@@ -356,7 +96,7 @@ export function holdsDormantMemoryAt(
 
 /** One restore as the store applies it. The two functions are the caller's policy over plain rows; neither is handed
  * the handle. */
-export interface DormantRestore {
+interface DormantRestore {
   readonly tenantId: string;
   readonly id: string;
   /** Who restores, for the audit rows. */
@@ -405,7 +145,7 @@ function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: D
 
 /** Brings one dormant memory back on a single handle: the live row, the dormant delete and the audit row commit
  * together, then its mirrors are written. */
-export function restoreDormantMemoryAt(
+function restoreDormantMemoryAt(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   restore: DormantRestore,
@@ -423,7 +163,7 @@ export function restoreDormantMemoryAt(
 }
 
 /** One permanent delete of a dormant memory. */
-export interface DormantForget {
+interface DormantForget {
   readonly tenantId: string;
   readonly id: string;
   /** Who forgets, for the audit row. */
@@ -434,10 +174,29 @@ export interface DormantForget {
 
 /** Deletes a tenant's dormant memory for good and writes its `forget` audit row, on a single handle; false when it
  * holds none `admit` passes. */
-export function forgetDormantMemoryAt(db: DatabaseSyncLike, forget: DormantForget): boolean {
+function forgetDormantMemoryAt(db: DatabaseSyncLike, forget: DormantForget): boolean {
   const { tenantId, id, actor, admit } = forget;
   if (!hasDormantRow(db, tenantId, id, admit) || !deleteDormantRow(db, tenantId, id)) return false;
   // Best-effort, like every other forget audit row: the delete stands.
   audit(db, 'forget', { tenantId, actor, targetId: id, metadata: { dormant: true } });
   return true;
+}
+
+export function sqliteDormant(on: OnHandle): Sync<Dormant> {
+  return {
+    list: (tenantId, ownScope, opts) =>
+      on((db) => loadDormantMemoriesAt(db, tenantId, opts, touchableScopeSql('', ownScope))),
+    holds: (tenantId, ownScope, id) =>
+      on((db) => holdsDormantMemoryAt(db, tenantId, id, touchableScopeSql('', ownScope))),
+    restore: (tenantId, request) => on((db, files) => restoreDormantMemoryAt(db, files, { ...request, tenantId })),
+    forget(tenantId, ownScope, id, actor) {
+      const admit = touchableScopeSql('', ownScope);
+      return on((db, files) => {
+        if (!forgetDormantMemoryAt(db, { tenantId, id, actor, admit })) return false;
+        // Counted like every other permanent removal (forget, archiveRaw).
+        updateStatsUnlessBusyAt(db, files, { forgotten: 1 }, `removed ${id}`);
+        return true;
+      }, openStore);
+    },
+  };
 }
