@@ -8,13 +8,8 @@ import {
   writeDeliveryEventVia,
 } from '../../src/store/recall-trace.js';
 import { handlesOf } from '../../src/store/open.js';
-import {
-  createDeliveryRecorder,
-  DELIVERY_LEDGER_VERSION,
-  type DeliveryEventInput,
-  type DeliveryRejectReason,
-  type DeliveryStage,
-} from '../../src/store/delivery-recorder.js';
+import { createDeliveryRecorder, DELIVERY_LEDGER_VERSION } from '../../src/store/delivery-recorder.js';
+import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../../src/store/port/delivery.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { runWithRequestId } from '../../src/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from '../_helpers/count-statements.js';

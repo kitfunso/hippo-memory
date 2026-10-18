@@ -487,21 +487,37 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('portImportsFromSql counts a port import of a file that runs SQL, and not one of a pure file', () => {
+  it('portImportsFromSql counts a port file import of a store file outside the port or a db file that runs SQL, and nothing else', () => {
     const files = {
       'src/store/port.ts':
         "import type { A } from './sql.js';\nimport type { B } from './pure.js';\nexport type { C } from './port/g.js';\n",
-      'src/store/port/g.ts': "import type { A } from '../sql.js';\nexport type C = A;\n",
+      'src/store/port/g.ts':
+        "import type { A } from '../sql.js';\nimport type { E } from './h.js';\nimport type { F } from '../../db/pure.js';\nimport type { G } from '../../db/sql.js';\nexport type C = A;\n",
+      'src/store/port/h.ts': 'export type E = 1;\n',
+      'src/store/port-groups.ts': "import type { B } from './pure.js';\nimport type { C } from './port/g.js';\n",
       'src/store/sql.ts': "export type A = 1;\nexport const f = (db: any) => db.prepare('SELECT 1');\n",
       'src/store/pure.ts': 'export type B = 2;\n',
+      'src/db/pure.ts': 'export type F = 3;\n',
+      'src/db/sql.ts': "export type G = 4;\nexport const g = (db: any) => db.exec('SELECT 1');\n",
     };
     withFixture(files, null, ({ run }) => {
-      expect(list(run)).toMatchObject({
-        portImportsFromSql: '2',
+      const l = list(run);
+      expect(l).toMatchObject({
+        portImportsFromSql: '5',
         'src/store/port.ts:1': 'portImportsFromSql',
+        'src/store/port.ts:2': 'portImportsFromSql',
         'src/store/port/g.ts:1': 'portImportsFromSql',
+        'src/store/port/g.ts:4': 'portImportsFromSql',
+        'src/store/port-groups.ts:1': 'portImportsFromSql',
       });
-      expect(list(run)['src/store/port.ts:2']).toBeUndefined();
+      for (const quiet of [
+        'src/store/port.ts:3',
+        'src/store/port/g.ts:2',
+        'src/store/port/g.ts:3',
+        'src/store/port-groups.ts:2',
+      ]) {
+        expect(l[quiet]).toBeUndefined();
+      }
     });
   });
 
@@ -564,6 +580,23 @@ describe('check-store-port.mjs', () => {
       expect(l['src/store/port.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
       expect(l['src/store/port.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
       expect(l['src/store/port-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
+    });
+  });
+
+  it('portFunctionParams leaves out a type the store only receives, whose function the taking method already counts', () => {
+    const files = {
+      'src/store/port.ts': [
+        'export interface Source { read(sink: (row: string) => void): void }',
+        'export interface Group { take(source: Source): void; open(): Promise<Opened> }',
+        'export interface Opened { each(visit: () => void): void }',
+        'export interface HippoStore { readonly group: Group }',
+      ].join('\n'),
+    };
+    withFixture(files, null, ({ run }) => {
+      const l = list(run);
+      expect(l.portFunctionParams).toBe('2');
+      expect(l['src/store/port.ts:2 Group.take(source.read)']).toBe('portFunctionParams');
+      expect(l['src/store/port.ts:3 Opened.each(visit)']).toBe('portFunctionParams');
     });
   });
 

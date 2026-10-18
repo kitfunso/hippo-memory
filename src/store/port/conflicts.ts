@@ -1,6 +1,5 @@
 // The Conflicts group's types: a conflict read with both members' columns, and the keyset page that carries them.
 import type { KeysetPosition } from '../../util/keyset.js';
-import type { MemoryConflict } from '../rows.js';
 
 /** The columns of one member that the api's reach, liveness and project rules read. */
 export interface ConflictMember {
@@ -55,4 +54,15 @@ export interface ConflictResolution {
   readonly actor: string;
   /** Kept on the tombstone and a raw loser's archive row. */
   readonly reason: string;
+}
+
+export interface MemoryConflict {
+  id: number;
+  memory_a_id: string;
+  memory_b_id: string;
+  reason: string;
+  score: number;
+  status: string;
+  detected_at: string;
+  updated_at: string;
 }

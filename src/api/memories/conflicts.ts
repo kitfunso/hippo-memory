@@ -6,7 +6,7 @@ import {
   passesScopeFilterForRecall,
   personalScopeOf,
 } from '../../core/recall-scope.js';
-import type { MemoryConflict } from '../../store/rows.js';
+import type { MemoryConflict } from '../../store/port/conflicts.js';
 import type { ConflictMember, ConflictRow, ConflictSide, LoserFate } from '../../store/port/conflicts.js';
 import { classifyOriginProject } from '../../core/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';

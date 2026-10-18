@@ -39,3 +39,15 @@ export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' |
 
 /** Which routine check skipped a failure; the log keeps it so declines can be told apart from empty searches. */
 export type RoutineRule = 'declined' | 'os-permission' | 'no-match' | 'search-tool' | 'quiet-exit';
+
+/** Failure log totals over a window, for {@link summarizeFailures}. Counts only: a rate needs a holdout arm. */
+export interface FailureSummary {
+  /** ISO start of the window (inclusive). */
+  since: string;
+  outcomes: Record<FailureOutcome, number>;
+  total: number;
+  /** Rated failures from sessions with an id: the failures a repeat is counted among. */
+  rated: number;
+  repeats: number;
+  sessions: number;
+}

@@ -2,7 +2,7 @@
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
-import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
 import { markRetrieved, type MemoryEntry } from '../core/memory.js';

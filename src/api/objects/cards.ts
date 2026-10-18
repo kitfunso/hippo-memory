@@ -2,7 +2,7 @@
 
 import type { Card, CardComment, CardRun, CardStatus } from '../../core/card.js';
 import type { HandoffOutcome } from '../../core/handoff.js';
-import type { CardDetail } from '../../store/card-detail.js';
+import type { CardDetail } from '../../store/port/cards.js';
 import type { CardCreate } from '../../store/index.js';
 import type { Context } from '../types.js';
 

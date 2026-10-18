@@ -7,15 +7,11 @@ import { openHippoDb, getMeta, CONSOLIDATION_RUNS_KEPT } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import {
-  type TaskSnapshot,
-  type SessionEvent,
-  type MemoryConflict,
   type HippoIndex,
   type IndexEntry,
   parseJsonArray,
   INDEX_VERSION,
   parseLastTraceId,
-  type LegacyStats,
   type ConsolidationRunRow,
   MEMORY_SELECT_COLUMNS,
   type MemoryRow,
@@ -23,6 +19,9 @@ import {
   type MemoryConflictRow,
   rowToMemoryConflict,
 } from './rows.js';
+import type { LegacyStats } from './port/reports.js';
+import type { MemoryConflict } from './port/conflicts.js';
+import type { TaskSnapshot, SessionEvent } from './port/sessions.js';
 import { serializeEntry } from '../core/markdown.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import type { StoreFiles } from './open.js';

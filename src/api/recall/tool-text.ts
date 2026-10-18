@@ -2,7 +2,7 @@
 
 import { truncateWithEllipsis } from '../../util/ellipsize.js';
 import type { SearchResult } from '../../core/search-types.js';
-import type { SessionEvent, TaskSnapshot } from '../../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
 import { confidenceLabel } from '../../core/memory.js';
 import type { ContextCost } from '../context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from './types.js';

@@ -5,7 +5,7 @@
 import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
 import type { ProjectRef } from '../core/project-identity.js';
-import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
+import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
 import type { LocalFiles } from '../store/port.js';
 import { readApiCalls, type TranscriptCalls } from '../store/token-ledger.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';

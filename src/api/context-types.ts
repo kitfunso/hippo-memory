@@ -1,6 +1,6 @@
 // Option and result shapes for getContext.
 
-import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
+import type { TaskSnapshot, SessionEvent } from '../store/port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { DeliveryObserver } from '../store/delivery-recorder.js';

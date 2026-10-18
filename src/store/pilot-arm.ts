@@ -6,8 +6,7 @@ import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike 
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
 import { recordTokenUse } from './token-ledger.js';
-
-export type PilotArm = 'hippo' | 'holdout';
+import type { PilotArm } from './port/ledger.js';
 
 /** Deterministic split: the same session and rate always land in the same arm. */
 export function hashArm(sessionId: string, rateBp: number): PilotArm {

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir, isInitialized } from './core/project-identity.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import type { StoreHealth } from './store/diagnostics.js';
+import type { StoreHealth } from './store/port/diagnostics.js';
 import type { Diagnostics } from './store/port/diagnostics.js';
 import { loadConfig } from './core/config.js';
 import { getCurrentSchemaVersion, IncompatibleBinaryError } from './db/index.js';

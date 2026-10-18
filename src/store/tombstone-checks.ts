@@ -3,20 +3,7 @@ import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { findRejectedValue } from './rejection.js';
 import { errorMessage } from '../util/log.js';
-import type { AppendAuditOpts } from './port/types.js';
-import type { RejectedValueRow } from './port/rejections.js';
-
-/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
- * once. */
-export interface TombstoneChecks {
-  /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
-  find(tenantId: string, digest: string): RejectedValueRow | null;
-  /** One audit row on the same handle; nothing under dryRun. */
-  audit(event: AppendAuditOpts): void;
-  /** `audit`, with a failed write logged and counted instead of thrown, for a refusal that stands without its row. */
-  auditOrCount(event: AppendAuditOpts): void;
-  close(): void;
-}
+import type { TombstoneChecks } from './port/consolidation.js';
 
 // Lazy so a sleep that checks nothing never opens the store; make it IMMEDIATELY before the try whose
 // finally closes it, so a throw in any phase cannot leak the handle.

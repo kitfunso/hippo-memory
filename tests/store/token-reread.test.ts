@@ -18,11 +18,8 @@ import {
   readApiCalls,
   recordTokenUse,
   shouldSkipUnchanged,
-  type ApiCall,
-  type TokenEvent,
-  type TokenSummary,
-  type TokenSurface,
 } from '../../src/store/token-ledger.js';
+import type { ApiCall, TokenEvent, TokenSummary, TokenSurface } from '../../src/store/port/token-ledger.js';
 import { isSubagentPayload } from '../../src/util/hook-payload.js';
 import { estimateTokens } from '../../src/util/token-text.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';

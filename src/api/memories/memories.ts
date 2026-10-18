@@ -1,6 +1,6 @@
 // Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every tenant's.
 import type { MemoryEntry } from '../../core/memory.js';
-import type { StrengthTallies } from '../../store/candidates.js';
+import type { StrengthTallies } from '../../store/port/reports.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import { canTouchScope } from '../../core/recall-scope.js';
 import type { HippoStore } from '../../store/port.js';

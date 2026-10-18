@@ -114,12 +114,60 @@ function functionInDeclared(file, iface, seen) {
   return null;
 }
 
+const STORE_ROOT = 'src/store/port.ts';
+
+/** The interfaces and aliases the store hands out, as `file#name`: HippoStore and every type its members and return types
+ * reach, parameters left out. A type only ever passed in is implemented by the caller, and the method that takes it
+ * already counts its function. Null when the root is not declared (a fixture without it scans every port type). */
+function storeImplemented() {
+  if (!existsSync(STORE_ROOT) || !typeTable(STORE_ROOT).decls.has('HippoStore')) return null;
+  const seen = new Set();
+  const walkMembers = (file, members) => {
+    for (const m of members) walkType(file, m.type);
+  };
+  const walkType = (file, node) => {
+    if (!node) return;
+    if (ts.isFunctionTypeNode(node) || ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) {
+      return walkType(file, node.type);
+    }
+    if (ts.isArrayTypeNode(node)) return walkType(file, node.elementType);
+    if (ts.isTypeLiteralNode(node)) return walkMembers(file, node.members);
+    if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node))
+      return node.types.forEach((n) => walkType(file, n));
+    if (ts.isTupleTypeNode(node)) return node.elements.forEach((n) => walkType(file, n));
+    if (!ts.isTypeReferenceNode(node)) return;
+    (node.typeArguments ?? []).forEach((n) => walkType(file, n));
+    if (ts.isIdentifier(node.typeName)) walkName(file, node.typeName.text);
+  };
+  const walkName = (file, name) => {
+    for (const decl of declarationsOf(file, name)) {
+      const key = `${decl.file}#${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (ts.isTypeAliasDeclaration(decl.node)) walkType(decl.file, decl.node.type);
+      else {
+        walkMembers(decl.file, decl.node.members);
+        for (const clause of decl.node.heritageClauses ?? []) {
+          for (const base of clause.types) {
+            (base.typeArguments ?? []).forEach((n) => walkType(decl.file, n));
+            if (ts.isIdentifier(base.expression)) walkName(decl.file, base.expression.text);
+          }
+        }
+      }
+    }
+  };
+  walkName(STORE_ROOT, 'HippoStore');
+  return seen;
+}
+
 /** `file:line Owner.method(param.path)` for each parameter of a method on a port interface or object alias whose type holds a function. */
 export function portFunctionParams(file) {
   if (!declaresPort(file)) return [];
   const { sf, decls } = typeTable(file);
+  const implemented = storeImplemented();
   const hits = [];
   for (const [owner, nodes] of decls) {
+    if (implemented && !implemented.has(`${file}#${owner}`)) continue;
     for (const node of nodes) {
       const members = ts.isInterfaceDeclaration(node)
         ? node.members

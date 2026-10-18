@@ -4,8 +4,8 @@ import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { LocalFiles } from './port/local-files.js';
 import type { SessionAndAdminGroups } from './port-groups.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { TokenUse } from './token-ledger.js';
-import type { SessionEvent, TaskSnapshot } from './rows.js';
+import type { TokenUse } from './port/token-ledger.js';
+import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import type { AuditMaintenance } from './port/audit-maintenance.js';
 import type { LessonWrites } from './port/lesson-writes.js';
@@ -218,7 +218,7 @@ export interface StoreReach {
   readonly globalTarget?: FolderStore; // where share, promote and sync write; set on hippo.db, maybe not created yet
 }
 
-export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './busy.js';
+export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './port/busy.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
  * await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */

@@ -4,11 +4,8 @@ import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { normalizeHookPayload } from '../../src/cli/stdin.js';
 import { hookPayloadSessionId } from '../../src/util/hook-payload.js';
-import {
-  createDeliveryRecorder,
-  type DeliveryEventInput,
-  type DeliveryRuntime,
-} from '../../src/store/delivery-recorder.js';
+import { createDeliveryRecorder } from '../../src/store/delivery-recorder.js';
+import type { DeliveryEventInput, DeliveryRuntime } from '../../src/store/port/delivery.js';
 import { readClaudeCodePreCompact } from '../../src/core/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../../src/capture/failure-reading.js';
 import type { JsonValue } from '../../src/util/json.js';

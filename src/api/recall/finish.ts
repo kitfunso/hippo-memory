@@ -3,7 +3,7 @@
 import { isRecallBoostAblated } from '../../core/ablation.js';
 import { auditQueryFields } from '../../store/audit.js';
 import type { HippoStore, RecallWrites } from '../../store/index.js';
-import type { TokenSurface } from '../../store/token-ledger.js';
+import type { TokenSurface } from '../../store/port/token-ledger.js';
 import { envAnchoringOff, envAvailabilityOff } from '../../util/env.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';

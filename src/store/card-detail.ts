@@ -1,6 +1,4 @@
-import type { Card, CardComment, CardRun } from '../core/card.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
-import type { SessionHandoff } from '../core/handoff.js';
 import {
   loadCardCommentsAt,
   loadCardDepsAt,
@@ -9,15 +7,7 @@ import {
   loadLatestHandoffForCardAt,
 } from './cards.js';
 import { assertTenantId } from '../core/tenant-id.js';
-
-/** A card plus everything `hippo card show` prints about it. */
-export interface CardDetail {
-  card: Card;
-  deps: ReturnType<typeof loadCardDepsAt>;
-  runs: CardRun[];
-  comments: CardComment[];
-  handoff: SessionHandoff | null;
-}
+import type { CardDetail } from './port/cards.js';
 
 /** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card), the five
  * reads on one snapshot. */

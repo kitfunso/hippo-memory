@@ -8,8 +8,7 @@ import { auditRejectionRefusal } from './audit-event.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly } from './entry-writes.js';
 import { CLI_ACTOR } from '../core/actor.js';
-
-export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
+import type { GatedWriteResult } from './port/agent-import.js';
 
 /** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait
  * on that lock); the caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that

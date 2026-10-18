@@ -2,8 +2,9 @@
 import { randomUUID } from 'node:crypto';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { placeholders } from '../util/sql.js';
-import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, PolicyType, GetActiveGoalsOpts } from './port/types.js';
+import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from './port/types.js';
 import type { GoalRecallLogRow } from './port/recall-writes.js';
+import type { CompleteGoalOpts, PushGoalOpts } from './port/goals.js';
 
 export interface GoalRow {
   id: string;
@@ -36,22 +37,6 @@ export function rowToGoal(row: GoalRow): Goal {
     createdAt: row.created_at,
     completedAt: row.completed_at ?? undefined,
     outcomeScore: row.outcome_score ?? undefined,
-  };
-}
-
-export interface PushGoalOpts {
-  sessionId: string;
-  tenantId: string;
-  goalName: string;
-  level?: number;
-  parentGoalId?: string;
-  successCondition?: string;
-  policy?: {
-    policyType: PolicyType;
-    weightSchemaFit?: number;
-    weightRecency?: number;
-    weightOutcome?: number;
-    errorPriority?: number;
   };
 }
 
@@ -281,14 +266,6 @@ const POSITIVE_OUTCOME_THRESHOLD = 0.7;
 const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
 const STRENGTH_BOOST = 1.1;
 const STRENGTH_DECAY = 0.85;
-
-export interface CompleteGoalOpts {
-  outcomeScore?: number;
-  /** When true, skip the strength-multiplier propagation (default false); status still goes to 'completed' and
-   * `outcome_score` is still recorded. The idempotency guard returns early on a second `completeGoal` call before this
-   * flag is read. */
-  noPropagate?: boolean;
-}
 
 export function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: CompleteGoalOpts): void {
   const completedAt = new Date().toISOString();

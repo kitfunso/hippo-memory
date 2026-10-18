@@ -6,17 +6,12 @@ import { originInSql } from '../core/project-identity.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../util/version.js';
-import {
-  type TaskSnapshot,
-  type TaskSnapshotRow,
-  rowToTaskSnapshot,
-  type SessionEvent,
-  type SessionEventRow,
-  rowToSessionEvent,
-} from './rows.js';
+import { type TaskSnapshotRow, rowToTaskSnapshot, type SessionEventRow, rowToSessionEvent } from './rows.js';
+import type { TaskSnapshot, SessionEvent } from './port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
-import type { ContinuityKey, JsonObject } from './port/types.js';
+import type { ContinuityKey } from './port/types.js';
+import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 
 export interface ContinuityFilter {
   readonly sql: string;
@@ -50,15 +45,6 @@ function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: Continuity
     );
   }
 }
-
-export type SnapshotInput = {
-  task: string;
-  summary: string;
-  next_step: string;
-  source?: string;
-  session_id?: string | null;
-  scope?: string | null;
-};
 
 function insertSnapshot(
   db: DatabaseSyncLike,
@@ -266,16 +252,6 @@ export function closeTaskSnapshotsForSessionAt(
     )
     .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
   return Number(result.changes ?? 0);
-}
-
-export interface SessionEventInput {
-  session_id: string;
-  event_type: string;
-  content: string;
-  task?: string | null;
-  source?: string;
-  scope?: string | null;
-  metadata?: JsonObject;
 }
 
 function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {

@@ -1,42 +1,14 @@
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import type { MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './conflicts.js';
 import { iterateEveryTenantEntriesAt, objectMemoryRowsAt } from './entry-reads.js';
 import { setHalfLivesAt } from './entry-writes.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './open.js';
+import type { HalfLifeMove, HalfLifeRows } from './port/consolidation.js';
 
 /** The base every store used before the base was recorded. */
 const LEGACY_HALF_LIFE_BASE = 7;
-
-/** What a move is planned from. The object and conflict rows are read only while the typed move is pending. */
-export interface HalfLifeRows {
-  /** The base the store's memories are on. */
-  from: number;
-  /** True until the store has moved its object memories off their old flat half-life. */
-  typedPending: boolean;
-  /** Every row once, by created then id, through one cursor: the plan keeps only what a move needs. */
-  rows: Iterable<MemoryEntry>;
-  objectRows: ReturnType<typeof objectMemoryRowsAt>;
-  conflictAudits: ReturnType<typeof conflictResolveAuditsAt>;
-  resolvedConflicts: ReturnType<typeof resolvedConflictsAt>;
-}
-
-/** One memory's half-life before and after a move. */
-export interface HalfLifeChange {
-  id: string;
-  tenantId: string;
-  halfLifeDays: number;
-  oldHalfLifeDays: number;
-}
-
-/** The changes of one move, and the bases their audit rows name. */
-export interface HalfLifeMove {
-  from: number;
-  to: number;
-  entries: readonly HalfLifeChange[];
-}
 
 function readBase(db: DatabaseSyncLike): number {
   const raw = Number(getMeta(db, HALF_LIFE_BASE_META_KEY, String(LEGACY_HALF_LIFE_BASE)));

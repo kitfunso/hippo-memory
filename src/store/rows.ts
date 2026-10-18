@@ -10,6 +10,8 @@ import {
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonObject } from '../util/json.js';
 import { warnDamagedColumn, type StoredJsonSite } from '../util/stored-json.js';
+import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
+import type { MemoryConflict } from './port/conflicts.js';
 
 export interface IndexEntry {
   id: string;
@@ -120,42 +122,6 @@ export interface SessionEventRow {
   source: string;
   scope: string | null;
   metadata_json: string;
-  created_at: string;
-}
-
-export interface TaskSnapshot {
-  id: number;
-  task: string;
-  summary: string;
-  next_step: string;
-  status: string;
-  source: string;
-  session_id: string | null;
-  scope: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MemoryConflict {
-  id: number;
-  memory_a_id: string;
-  memory_b_id: string;
-  reason: string;
-  score: number;
-  status: string;
-  detected_at: string;
-  updated_at: string;
-}
-
-export interface SessionEvent {
-  id: number;
-  session_id: string;
-  task: string | null;
-  event_type: string;
-  content: string;
-  source: string;
-  scope: string | null;
-  metadata: Record<string, JsonValue>;
   created_at: string;
 }
 
@@ -405,14 +371,4 @@ export function rowToSessionEvent(row: SessionEventRow): SessionEvent {
     metadata: parseJsonObject(row.metadata_json, { table: 'session_events', id: row.id, column: 'metadata_json' }),
     created_at: row.created_at,
   };
-}
-
-/** Named field set for the legacy `stats.json` mirror — the only fields any
- * caller reads (see loadLegacyStatsFile's callers below). */
-export interface LegacyStats {
-  [key: string]: JsonValue;
-  total_remembered: JsonValue;
-  total_recalled: JsonValue;
-  total_forgotten: JsonValue;
-  consolidation_runs: JsonValue;
 }

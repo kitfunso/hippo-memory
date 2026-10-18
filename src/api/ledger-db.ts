@@ -1,8 +1,9 @@
 // The store the token ledger writes to for a caller; context, recall and the session hooks share it.
-import { noteLedgerRowSkipped, type LedgerTurn } from '../store/ledger-turn.js';
+import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
+import type { LedgerTurn } from '../store/port/ledger.js';
 import type { HippoConfig } from '../core/config.js';
 import type { FolderFiles, Ledger } from '../store/port.js';
-import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
+import type { LastSent, TokenSurface, TokenUse } from '../store/port/token-ledger.js';
 import type { Context, GlobalInReach } from './types.js';
 
 /** A hippo.db a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */

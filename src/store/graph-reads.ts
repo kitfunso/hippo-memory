@@ -5,20 +5,15 @@ import { withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import {
-  type EntityType,
   GRAPH_ENTITY_TYPES,
-  type Entity,
-  type Relation,
   type EntityRow,
   type RelationRow,
-  type StoredEntity,
-  type StoredGraph,
-  type StoredRelation,
   rowToEntity,
   rowToRelation,
   ENTITY_COLS,
   RELATION_COLS,
 } from './graph-rows.js';
+import type { EntityType, Entity, Relation, StoredEntity, StoredGraph, StoredRelation } from './port/graph-reads.js';
 import { placeholders } from '../util/sql.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
