@@ -182,16 +182,24 @@ describe('connector webhooks', () => {
     await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect(
       (
-        await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) }, row.id, {
-          signingSecret: SIGNING,
-        })
+        await replayDlqEntry(
+          { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
+          row.id,
+          {
+            signingSecret: SIGNING,
+          },
+        )
       ).status,
     ).toBe('sig_missing');
     expect(
       (
-        await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) }, row.id, {
-          force: true,
-        })
+        await replayDlqEntry(
+          { tenantId: 'default', hippoRoot: root, store: sqliteStore(root), config: loadConfig(root) },
+          row.id,
+          {
+            force: true,
+          },
+        )
       ).ok,
     ).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
@@ -227,7 +235,7 @@ describe('connector webhooks', () => {
 });
 
 describe('importers', () => {
-  const opts = (): ImportOptions => ({ hippoRoot: root, dryRun: false });
+  const opts = (): ImportOptions => ({ tenantId: 'default', hippoRoot: root, dryRun: false });
   const write = (name: string, content: string): string => {
     const p = path.join(srcDir, name);
     fs.writeFileSync(p, content, 'utf8');
@@ -256,7 +264,7 @@ describe('importers', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-vault-'));
     try {
       fs.writeFileSync(path.join(vault, 'ops.md'), `${line}\n`, 'utf8');
-      const result = await importVault(vault, { hippoRoot: root, name: 'notes' });
+      const result = await importVault(vault, { tenantId: 'default', hippoRoot: root, name: 'notes' });
       expect(result.imported).toBe(1);
       expect(result.redacted).toBe(1);
       expect(result.entries[0].content).not.toContain(GHP);

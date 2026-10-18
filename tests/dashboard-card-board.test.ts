@@ -9,7 +9,7 @@ import { connect } from 'node:net';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
-import { resolveTenantId } from '../src/store/sqlite/tenant.js';
+import { resolveTenantId } from '../src/server/host-tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
 import { sessionCookie } from './_helpers/dashboard-fixture.js';
 import { runCliOut } from './_helpers/run-cli-as.js';
@@ -102,7 +102,7 @@ describe('dashboard entry', () => {
   beforeEach(async () => {
     ({ base: home, root: hippoRoot } = makeStore('dash-entry'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: 'default' });
     port = await listenAndGetPort(server);
   });
 
@@ -247,19 +247,26 @@ describe('card routes', () => {
     showPJson = await runCliOut(['card', 'show', P, '--json'], { cwd, env: cliEnv });
     showCJson = await runCliOut(['card', 'show', C, '--json'], { cwd, env: cliEnv });
 
-    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
+    server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId: tenant });
     port = await listenAndGetPort(server);
   }, 30_000);
-
-  afterEach(() => {
-    vi.stubEnv('HIPPO_TENANT', undefined);
-  });
 
   afterAll(async () => {
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
   const host = () => `127.0.0.1:${port}`;
+
+  // A dashboard serves the one tenant its CLI root resolved, so each tenant here gets its own server.
+  async function onTenant(tenantId: string, use: (at: number, atHost: string) => Promise<void>): Promise<void> {
+    const other = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN, { tenantId });
+    try {
+      const at = await listenAndGetPort(other);
+      await use(at, `127.0.0.1:${at}`);
+    } finally {
+      await new Promise<void>((resolve, reject) => other.close((err) => (err ? reject(err) : resolve())));
+    }
+  }
 
   it('R1: GET /api/cards matches the CLI list --json and holds exactly P, C and Q', async () => {
     const res = await dashboardRequest(port, '/api/cards', host());
@@ -310,20 +317,21 @@ describe('card routes', () => {
     expect(showPost.status).toBe(404);
   });
 
-  it('R5: HIPPO_TENANT scopes /api/cards and /api/cards/:id to the resolved tenant', async () => {
-    vi.stubEnv('HIPPO_TENANT', 'tenant_b');
-    const listB = await dashboardRequest(port, '/api/cards', host());
-    const idsB = JSON.parse(listB.body).cards.map((card: { id: string }) => card.id);
-    expect(idsB).not.toContain(T);
-    const showB = await dashboardRequest(port, `/api/cards/${T}`, host());
-    expect(showB.status).toBe(404);
-
-    vi.stubEnv('HIPPO_TENANT', 'tenant_a');
-    const listA = await dashboardRequest(port, '/api/cards', host());
-    const idsA = JSON.parse(listA.body).cards.map((card: { id: string }) => card.id);
-    expect(idsA).toEqual([T]);
-    const showA = await dashboardRequest(port, `/api/cards/${T}`, host());
-    expect(showA.status).toBe(200);
+  it('R5: the resolved tenant scopes /api/cards and /api/cards/:id', async () => {
+    await onTenant('tenant_b', async (at, atHost) => {
+      const listB = await dashboardRequest(at, '/api/cards', atHost);
+      const idsB = JSON.parse(listB.body).cards.map((card: { id: string }) => card.id);
+      expect(idsB).not.toContain(T);
+      const showB = await dashboardRequest(at, `/api/cards/${T}`, atHost);
+      expect(showB.status).toBe(404);
+    });
+    await onTenant('tenant_a', async (at, atHost) => {
+      const listA = await dashboardRequest(at, '/api/cards', atHost);
+      const idsA = JSON.parse(listA.body).cards.map((card: { id: string }) => card.id);
+      expect(idsA).toEqual([T]);
+      const showA = await dashboardRequest(at, `/api/cards/${T}`, atHost);
+      expect(showA.status).toBe(200);
+    });
   });
 
   it('R6: card routes carry no access-control-allow-origin header', async () => {
@@ -335,12 +343,12 @@ describe('card routes', () => {
 
   it('R7: a broken tenant answers 500 and the server keeps serving', async () => {
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    vi.stubEnv('HIPPO_TENANT', 'sess_x');
-    const broken = await dashboardRequest(port, '/api/cards', host());
-    expect(broken.status).toBe(500);
-    expect(broken.body).toBe('{"error":"Internal error"}');
-
-    vi.stubEnv('HIPPO_TENANT', undefined);
+    await onTenant('sess_x', async (at, atHost) => {
+      const broken = await dashboardRequest(at, '/api/cards', atHost);
+      expect(broken.status).toBe(500);
+      expect(broken.body).toBe('{"error":"Internal error"}');
+      expect((await dashboardRequest(at, '/api/cards', atHost)).status).toBe(500);
+    });
     const after = await dashboardRequest(port, '/api/cards', host());
     expect(after.status).toBe(200);
     errorSpy.mockRestore();

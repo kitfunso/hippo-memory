@@ -10,9 +10,10 @@ import type { CompactionHooks } from '../port/compaction-hooks.js';
 
 export function sqliteCompactionHooks(on: OnHandle): CompactionHooks {
   return {
-    start: (start, log) => recordCompactionStart(on, start, log),
+    start: (tenantId, start, log) => recordCompactionStart(on, tenantId, start, log),
     markSnapshotSaved: (tenantId, recordId, log) => recordSnapshotSaved(on, tenantId, recordId, log),
-    save: (meta, text, at, log, baseHalfLifeDays) => saveCompactionAt(on, meta, text, at, log, baseHalfLifeDays),
-    replay: (sources, log, opts) => replayStoredCompactions(on, sources, log, opts),
+    save: (tenantId, meta, text, at, log, baseHalfLifeDays) =>
+      saveCompactionAt(on, { tenantId, meta, text, at, log, baseHalfLifeDays }),
+    replay: (tenantId, sources, log, opts) => replayStoredCompactions(on, tenantId, sources, log, opts),
   };
 }

@@ -30,7 +30,7 @@ let tmpDir: string;
 let tmpFiles: string[] = [];
 
 function makeOpts(overrides: Partial<ImportOptions> = {}): ImportOptions {
-  return { hippoRoot: tmpDir, dryRun: false, ...overrides };
+  return { hippoRoot: tmpDir, dryRun: false, tenantId: 'default', ...overrides };
 }
 
 function writeTmp(name: string, content: string): string {
@@ -393,6 +393,7 @@ describe('--global: writes to global store', () => {
     );
 
     importChatGPT(file, {
+      tenantId: 'default',
       hippoRoot: tmpDir,
       global: true,
       dryRun: false,
@@ -493,7 +494,7 @@ describe('importEntries', () => {
       ['tiny', LONG, 'Always run the migration dry-run first.', 'Always run the migration dry-run first.'],
       'test-source',
       ['imported'],
-      { hippoRoot: tmpDir, extraTags: ['extra', 'imported'] },
+      { tenantId: 'default', hippoRoot: tmpDir, extraTags: ['extra', 'imported'] },
     );
     expect(result).toMatchObject({ total: 3, imported: 2, skipped: 2, rejected: 0, redacted: 0 });
     expect(result.entries.map((e) => e.content.length)).toEqual([1000, 39]);
@@ -503,7 +504,11 @@ describe('importEntries', () => {
 
   it('dry run writes nothing and does not dedup within the batch', () => {
     const chunk = 'Prefer small pull requests over large ones.';
-    const result = importEntries([chunk, chunk], 'test-source', [], { hippoRoot: tmpDir, dryRun: true });
+    const result = importEntries([chunk, chunk], 'test-source', [], {
+      tenantId: 'default',
+      hippoRoot: tmpDir,
+      dryRun: true,
+    });
     expect(result).toMatchObject({ total: 2, imported: 2, skipped: 0, rejected: 0 });
     expect(loadAllEntries(tmpDir, 'default')).toEqual([]);
   });

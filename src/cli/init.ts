@@ -89,7 +89,7 @@ async function learnScannedRepo(
     added = result.added;
     lowInfo = result.lowInfo;
   }
-  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, cliSyncOptions(repoHippo, machine)));
+  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, cliSyncOptions(repoHippo, tenantId, machine)));
   return { added, lowInfo };
 }
 
@@ -159,7 +159,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
   if (learn) {
-    mergeReports(agentImport, importUserMemories(globalRoot, cliSyncOptions(globalRoot, machine)));
+    mergeReports(agentImport, importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, machine)));
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
@@ -170,7 +170,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-function initGlobalOnly(flags: CliFlags): void {
+function initGlobalOnly(tenantId: string, flags: CliFlags): void {
   const globalRoot = getGlobalRoot();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
@@ -179,7 +179,7 @@ function initGlobalOnly(flags: CliFlags): void {
     console.log('Initialized global Hippo store at', globalRoot);
   }
   if (!flags['no-learn']) {
-    printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, currentMachine())));
+    printAgentImport(importUserMemories(globalRoot, cliSyncOptions(globalRoot, tenantId, currentMachine())));
   }
 }
 
@@ -204,7 +204,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   }
 
   if (flags['global']) {
-    initGlobalOnly(flags);
+    initGlobalOnly(tenantId, flags);
     return;
   }
 
@@ -235,7 +235,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (!alreadyExists && learn && !flags['global']) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (learn) printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, currentMachine())));
+  if (learn) printAgentImport(importForStore(hippoRoot, cliSyncOptions(hippoRoot, tenantId, currentMachine())));
 }
 
 /**

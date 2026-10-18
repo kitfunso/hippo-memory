@@ -1,7 +1,7 @@
 // Write path: remember stores one memory after secret vetting and, for untrusted content, the instruction check.
 
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../store/port.js';
-import { detectInstruction } from '../instruction-detect.js';
+import { detectInstruction, INSTRUCTION_LIKE_TAG } from '../instruction-detect.js';
 import { quarantineScopeFor } from '../../trust/quarantine.js';
 import {
   createMemory,
@@ -116,6 +116,8 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   const requestedScope = rememberScope(ctx, opts);
   const vetted = vetSecrets(opts.content);
   const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
+  const flagged = memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
+  const tags = flagged ? [...(opts.tags ?? []), INSTRUCTION_LIKE_TAG] : opts.tags;
   const local = opts.local ?? {};
   const created = createMemory(vetted.content, {
     layer: local.layer,
@@ -129,7 +131,7 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
     scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
     owner: opts.owner ?? null,
     artifactRef: opts.artifactRef ?? null,
-    tags: opts.tags,
+    tags,
     tenantId: ctx.tenantId,
     baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
   });
@@ -139,6 +141,11 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   const origin = opts.personal ? '' : opts.project?.name;
   const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
   return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
+}
+
+/** A member key's write outside its personal scope reaches the other members' prompts, as connector text does. */
+function memberShares(ctx: Context, opts: RememberOptions): boolean {
+  return ctx.actor.role === 'member' && !opts.personal && !opts.untrusted;
 }
 
 function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken']>): MemoryEntry {

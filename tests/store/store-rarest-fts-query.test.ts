@@ -7,6 +7,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 let root: string;
 
@@ -40,7 +41,7 @@ describe('pickRarestFtsQuery', () => {
     try {
       const query = pickRarestFtsQuery(db, ['journal_mode', 'busy_timeout', 'never_seen'], 8);
       expect(query.split(' ').sort()).toEqual(['busy_timeout', 'journal_mode']);
-      expect(loadRecallSearchEntriesFromDb(db, query, { limit: 10 })).toHaveLength(1);
+      expect(loadRecallSearchEntriesFromDb(db, query, { tenantId: ALL_TENANTS, limit: 10 })).toHaveLength(1);
     } finally {
       closeHippoDb(db);
     }
@@ -78,7 +79,7 @@ describe('loadRecallSearchEntriesFromDb', () => {
       root,
       'postgres migration rollback',
       10,
-      undefined,
+      ALL_TENANTS,
       undefined,
       'exact',
       true,
@@ -87,7 +88,11 @@ describe('loadRecallSearchEntriesFromDb', () => {
     const db = openHippoDb(root);
     let viaDb;
     try {
-      viaDb = loadRecallSearchEntriesFromDb(db, 'postgres migration rollback', { limit: 10, includeSuperseded: true });
+      viaDb = loadRecallSearchEntriesFromDb(db, 'postgres migration rollback', {
+        tenantId: ALL_TENANTS,
+        limit: 10,
+        includeSuperseded: true,
+      });
     } finally {
       closeHippoDb(db);
     }

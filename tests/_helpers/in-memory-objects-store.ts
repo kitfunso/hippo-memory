@@ -7,6 +7,7 @@ import type { Objects } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryObjectsStore extends StoreSide {
   readonly store: HippoStore & { readonly objects: Objects };
@@ -338,7 +339,7 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
       const found = [...mirrors.values()].filter(
-        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenant_id === tenantId),
       );
       return structuredClone(
         found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),

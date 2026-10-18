@@ -20,6 +20,7 @@ import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -107,7 +108,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = await shareMemory(...sharingStores(localRoot), entry.id, { force: true });
+    const shared = await shareMemory(...sharingStores(localRoot), entry.id, { tenantId: 'default', force: true });
     expect(shared).not.toBeNull();
     expect(shared!.id).toMatch(/^g_/);
 
@@ -121,7 +122,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
+    const shared = autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
     expect(shared.length).toBe(1);
 
     const index = loadEmbeddingIndex(globalRoot);
@@ -189,7 +190,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = autoShare(...sharingStores(localRoot), { minScore: 0 });
+    const shared = autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
     expect(shared.length).toBe(1);
 
     await embedAll(localIndex(globalRoot));

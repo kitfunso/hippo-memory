@@ -13,6 +13,7 @@ import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type Resu
 import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
 import { evalNow } from '../core/ablation.js';
 import { duplicateKey } from '../util/same-text.js';
+import type { TenantId } from '../util/tenant.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
@@ -27,8 +28,6 @@ export interface SearchOptions {
   budget?: number;
   now?: Date;
   minResults?: number;
-  /** Tenant scope for both stores. Undefined = no filter (legacy single-tenant). */
-  tenantId?: string;
 }
 
 export interface HybridSearchOptions extends SearchOptions {
@@ -68,13 +67,16 @@ export interface HybridSearchOptions extends SearchOptions {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
+/** `HybridSearchOptions` with the tenant both stores are read as; the eval harness reads every tenant's. */
+export type BothStoresSearch = HybridSearchOptions & { readonly tenantId: TenantId };
+
 /** Hybrid search across both local and global stores, using embeddings when available.
  *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
   local: ConfiguredFolder,
   global: ConfiguredFolder,
-  options: HybridSearchOptions = {},
+  options: BothStoresSearch,
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
@@ -109,7 +111,7 @@ export async function searchBothHybrid(
   const globalEntries = loadEntries(global).filter(admit);
 
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
-  const vectorCandidates = {
+  const vectorCandidates: HybridVectorCandidates = {
     tenantId,
     scope: recallScope
       ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope)

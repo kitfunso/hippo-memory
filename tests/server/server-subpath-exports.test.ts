@@ -65,6 +65,7 @@ const SERVER_TYPES = [
   'WorkingState',
 ];
 const STORE_KIT_VALUES = [
+  'ALL_TENANTS',
   'ambientRefusal',
   'bufferToFloat32',
   'decodeVector',
@@ -161,6 +162,7 @@ const STORE_KIT_TYPES = [
   'StrengthenOptions',
   'SupersedeWrite',
   'TaskSnapshot',
+  'TenantId',
   'TokenUse',
   'VectorBackfillQuery',
   'VectorCandidateSpec',

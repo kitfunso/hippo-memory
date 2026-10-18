@@ -64,7 +64,13 @@ function seed(): void {
 }
 
 const sync = (dryRun: boolean): ImportReport =>
-  importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine, dryRun });
+  importForStore(w.local, {
+    configAt: loadConfig,
+    tenantId: 'default',
+    agentImport: sqliteAgentImport,
+    machine: w.machine,
+    dryRun,
+  });
 
 describe('agent memory sync duplicate check', () => {
   it.each([true, false])('skips exactly the texts another path holds, index in sync: %s', (inSync) => {

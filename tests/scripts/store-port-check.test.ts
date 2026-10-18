@@ -671,6 +671,39 @@ describe('check-store-port.mjs', () => {
     });
   });
 
+  it('fails and names each store tenant a caller can leave out, as a parameter or an argument property, and passes the rest', () => {
+    const port = [
+      "import type { Opts } from './port/opts.js';",
+      'export interface Group {',
+      '  page(tenantId?: string): void;',
+      '  list(query: Opts): void;',
+      '  named(tenantId: string | typeof ALL): void;',
+      '}',
+    ].join('\n');
+    const files = {
+      'src/store/port.ts': port,
+      'src/store/port/opts.ts':
+        'export type Opts = Base & { limit: number };\ninterface Base { tenant: string | null }\n',
+      'src/store/sqlite/reads.ts': [
+        "export function read(db: any, tenantId: string | undefined) { return db.prepare('SELECT 1').get(); }",
+        "export function rows(db: any, { tenantId = 'x' }: { tenantId: string }) { return db.prepare('SELECT 2').get(); }",
+        "export function ok(db: any, tenantId: string, row: { tenant_id?: string }) { return db.prepare('SELECT 3').get(); }",
+      ].join('\n'),
+      'src/api/loose.ts': 'export function f(tenantId?: string) {}\n',
+    };
+    withFixture(files, null, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/store/port.ts:3 page(tenantId: tenantId)');
+      expect(r.stderr).toContain('src/store/port.ts:4 list(query: Base.tenant)');
+      expect(r.stderr).toContain('src/store/sqlite/reads.ts:1 read(tenantId: tenantId)');
+      expect(r.stderr).toContain('src/store/sqlite/reads.ts:2 rows(');
+      expect(r.stderr).not.toContain(' named(');
+      expect(r.stderr).not.toContain(' ok(');
+      expect(r.stderr).not.toContain('src/api/loose.ts');
+    });
+  });
+
   it('passes on the real repo', () => {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: REPO, encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);

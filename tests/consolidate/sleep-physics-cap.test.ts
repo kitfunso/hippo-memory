@@ -60,6 +60,7 @@ function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   for (const e of entries) survivors.keep(e.id, e.strength);
   return {
     learning,
+    tenantId: 'default',
     store,
     now: new Date('2026-01-03T00:00:00.000Z'),
     dryRun: false,

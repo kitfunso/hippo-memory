@@ -9,6 +9,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -67,19 +68,19 @@ describe('share and promote refuse personal rows', () => {
   });
 
   it('share refuses a personal row with a 400 and the exact text; a team row still shares', async () => {
-    const err = await refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id));
+    const err = await refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id, { tenantId: 'default' }));
     expect(err.status).toBe(400);
     expect(err.message).toBe(
       `Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`,
     );
-    expect((await shareMemory(...sharingStores(hippoRoot), team.id))?.content).toBe(TEAM);
+    expect((await shareMemory(...sharingStores(hippoRoot), team.id, { tenantId: 'default' }))?.content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
 
   it('autoShare skips the personal row and shares the team row in the same run', () => {
     expect(transferScore(mine)).toBeGreaterThanOrEqual(0.6);
     expect(transferScore(team)).toBeGreaterThanOrEqual(0.6);
-    expect(autoShare(...sharingStores(hippoRoot)).map((e) => e.content)).toEqual([TEAM]);
+    expect(autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS }).map((e) => e.content)).toEqual([TEAM]);
     expect(globalContents()).toEqual([TEAM]);
   });
 });

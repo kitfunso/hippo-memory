@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';

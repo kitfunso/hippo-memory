@@ -170,6 +170,7 @@ describe('buildSupportBundle', () => {
     const s = seed();
     const bundle = buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
       version: 'test',
@@ -236,6 +237,7 @@ describe('buildSupportBundle', () => {
     initStore(aliasGlobal);
     const bundle = buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
       version: 'test',
@@ -262,6 +264,7 @@ describe('buildSupportBundle', () => {
     let bundle: JsonObject;
     bundle = buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
       version: 'test',
@@ -292,6 +295,7 @@ describe('buildSupportBundle', () => {
 
     const bundle = buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd,
       home,
       version: 'test',
@@ -314,6 +318,7 @@ describe('buildSupportBundle', () => {
     const s = seed();
     const bundle = buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
       version: 'test',
@@ -368,6 +373,7 @@ describe('buildSupportBundle', () => {
 
       const bundle = buildSupportBundle({
         diagnosticsAt,
+        tenantId: 'default',
         cwd: s.cwd,
         home: s.home,
         version: 'test',
@@ -409,6 +415,7 @@ describe('buildSupportBundle', () => {
         writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: input }));
         const bundle = buildSupportBundle({
           diagnosticsAt,
+          tenantId: 'default',
           cwd: s.cwd,
           home,
           version: 'test',
@@ -446,6 +453,7 @@ describe('buildSupportBundle', () => {
       JSON.stringify(
         buildSupportBundle({
           diagnosticsAt,
+          tenantId: 'default',
           cwd: s.cwd,
           home: s.home,
           version: 'test',
@@ -471,6 +479,7 @@ describe('buildSupportBundle', () => {
     const before = sha256(join(s.hippoRoot, 'hippo.db'));
     buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd: s.cwd,
       home: s.home,
       version: 'test',
@@ -491,6 +500,7 @@ describe('buildSupportBundle', () => {
       JSON.stringify(
         buildSupportBundle({
           diagnosticsAt,
+          tenantId: 'default',
           cwd: s.cwd,
           home: s.home,
           version: 'test',
@@ -510,6 +520,7 @@ describe('buildSupportBundle', () => {
 
     const bundle = buildSupportBundle({
       diagnosticsAt,
+      tenantId: 'default',
       cwd,
       home,
       version: 'test',
@@ -523,7 +534,15 @@ describe('buildSupportBundle', () => {
     mkdirSync(join(cwd, '.hippo'));
     const bare = JSON.parse(
       JSON.stringify(
-        buildSupportBundle({ diagnosticsAt, cwd, home, version: 'test', includeLogs: false, now: new Date() }),
+        buildSupportBundle({
+          diagnosticsAt,
+          tenantId: 'default',
+          cwd,
+          home,
+          version: 'test',
+          includeLogs: false,
+          now: new Date(),
+        }),
       ),
     );
     expect(bare.stores).toHaveLength(1);
@@ -539,7 +558,15 @@ describe('buildSupportBundle', () => {
 
     const parsed = JSON.parse(
       JSON.stringify(
-        buildSupportBundle({ diagnosticsAt, cwd, home, version: 'test', includeLogs: false, now: new Date() }),
+        buildSupportBundle({
+          diagnosticsAt,
+          tenantId: 'default',
+          cwd,
+          home,
+          version: 'test',
+          includeLogs: false,
+          now: new Date(),
+        }),
       ),
     );
     expect(parsed.stores).toEqual([

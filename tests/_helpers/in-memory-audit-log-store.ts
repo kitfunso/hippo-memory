@@ -7,6 +7,7 @@ import { withSqliteAllowed } from '../../src/db/open.js';
 import type { AuditLog } from '../../src/store/port.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryAuditLogStore extends StoreSide {
   readonly store: HippoStore & { readonly auditLog: AuditLog };
@@ -16,7 +17,7 @@ function copyRows(hippoRoot: string): AuditEvent[] {
   return withSqliteAllowed(() => {
     const db = openHippoDb(hippoRoot);
     try {
-      return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+      return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
     } finally {
       closeHippoDb(db);
     }

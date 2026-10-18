@@ -36,6 +36,7 @@ describe('store worker stop after a failed reply', () => {
       const job: Job = {
         id: 7,
         op: 'entryWrites.writeEntry',
+        allTenants: [],
         args: [
           {
             entry: createMemory('a write whose reply cannot be posted', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),

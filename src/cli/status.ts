@@ -337,16 +337,16 @@ export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandCo
   }
 }
 
-export function handleDoctor({ flags }: CommandContext): void {
+export function handleDoctor({ tenantId, flags }: CommandContext): void {
   const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
   // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version: string };
-  const report = runDoctor({ version: pkg.version, diagnosticsAt });
+  const report = runDoctor({ version: pkg.version, tenantId, diagnosticsAt });
   console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
 
-export function handleSupportBundle({ flags }: CommandContext): void {
+export function handleSupportBundle({ tenantId, flags }: CommandContext): void {
   const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     fail('--out requires a file path.');
@@ -358,6 +358,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     cwd: process.cwd(),
     home,
     version: PACKAGE_VERSION,
+    tenantId,
     includeLogs,
     now,
     diagnosticsAt,

@@ -46,19 +46,19 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
-/** What entry_json may hold: 2.0 snapshots, or 1.x ones with `tenantId` and a 0|1 `summary_dirty`. */
+/** What entry_json may hold: a 2.0 snapshot, whose tenant is `tenant_id`, or a 1.x one, whose tenant is `tenantId`;
+ * a 1.x `summary_dirty` is 0|1. */
 type StoredSnapshot = Omit<MemoryEntry, 'tenant_id' | 'summary_dirty'> & {
-  tenant_id?: string;
-  tenantId?: string;
   summary_dirty?: boolean | 0 | 1;
-};
+} & ({ tenant_id: string } | { tenantId: string });
 
-function toCurrentEntry({ tenantId, summary_dirty, tenant_id, ...rest }: StoredSnapshot): MemoryEntry {
-  return {
-    ...rest,
-    tenant_id: tenant_id ?? tenantId ?? '',
-    summary_dirty: summary_dirty === true || summary_dirty === 1,
-  };
+function toCurrentEntry(snapshot: StoredSnapshot): MemoryEntry {
+  if ('tenant_id' in snapshot) {
+    const { summary_dirty, ...rest } = snapshot;
+    return { ...rest, summary_dirty: summary_dirty === true || summary_dirty === 1 };
+  }
+  const { tenantId, summary_dirty, ...rest } = snapshot;
+  return { ...rest, tenant_id: tenantId, summary_dirty: summary_dirty === true || summary_dirty === 1 };
 }
 
 /** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or

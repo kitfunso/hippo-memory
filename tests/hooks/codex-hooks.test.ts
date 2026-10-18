@@ -533,7 +533,8 @@ describe('hippo doctor and Codex', () => {
   it('says nothing without Codex, warns with the fix before the hooks are in, and passes with the trust reminder after', () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
-      const report = () => runDoctor({ diagnosticsAt, cwd: fake.home, home: fake.home, version: 'test' });
+      const report = () =>
+        runDoctor({ diagnosticsAt, tenantId: 'default', cwd: fake.home, home: fake.home, version: 'test' });
       expect(report().checks.find((c) => c.id === 'codex')).toBeUndefined();
       fs.mkdirSync(path.join(fake.home, '.codex'));
       const before = report();
@@ -558,7 +559,13 @@ describe('hippo doctor and Codex', () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
       writeFile(path.join(fake.home, '.codex', 'hooks.json'), text);
-      const report = runDoctor({ diagnosticsAt, cwd: fake.home, home: fake.home, version: 'test' });
+      const report = runDoctor({
+        diagnosticsAt,
+        tenantId: 'default',
+        cwd: fake.home,
+        home: fake.home,
+        version: 'test',
+      });
       expect(report.checks.find((c) => c.id === 'codex')).toMatchObject({
         status: 'warn',
         detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it",

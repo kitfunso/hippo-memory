@@ -23,6 +23,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { listApiKeys, loadAllPredictions } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -207,7 +208,9 @@ describe('no paging params: the body a small store got before cursors existed', 
   );
 
   it('/v1/auth/keys returns the same bare array, with no next-page header', async () => {
-    const expected = json(listApiKeys(home, { active: true }).filter((k) => k.tenantId === 'default'));
+    const expected = json(
+      listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).filter((k) => k.tenantId === 'default'),
+    );
     const page = await getPage(ROUTES[0]!);
     expect(page.status).toBe(200);
     expect(page.body).toEqual(expected);

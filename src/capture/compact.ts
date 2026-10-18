@@ -6,7 +6,6 @@ import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompact
 import type { LocalFiles, Sync } from '../store/port.js';
 import type { Sessions } from '../store/port-groups.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
-import { resolveTenantId } from '../store/index.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import {
   readClaudeCodePostCompact,
@@ -88,9 +87,9 @@ export interface CompactionStore {
   readonly sessions: Sync<Sessions>;
 }
 
-function snapshotJustSaved(sessions: Sync<Sessions>, sessionId: string | null): boolean {
+function snapshotJustSaved(sessions: Sync<Sessions>, tenantId: string, sessionId: string | null): boolean {
   if (sessionId === null || sessionId === '') return false;
-  const active = sessions.loadSnapshot(resolveTenantId({}), null);
+  const active = sessions.loadSnapshot(tenantId, null);
   return (
     active?.session_id === sessionId &&
     active.source === 'pre-compact' &&
@@ -122,7 +121,7 @@ function runPreCompact(hippoRoot: string, store: CompactionStore, options: PreCo
     appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
     return;
   }
-  if (runtime === 'copilot' && snapshotJustSaved(store.sessions, sessionId)) {
+  if (runtime === 'copilot' && snapshotJustSaved(store.sessions, options.tenantId, sessionId)) {
     appendPreCompactLog(
       logFile,
       `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`,
@@ -140,7 +139,7 @@ function runPreCompact(hippoRoot: string, store: CompactionStore, options: PreCo
   const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
   if (!derived) return;
 
-  saveDerivedSnapshot(store, logFile, sessionId, recordId, derived);
+  saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
 }
 
 /** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
@@ -159,6 +158,7 @@ function markCompactionBoundary(
   let printed: string | null = null;
   if (closable && sessionId !== null && sessionId !== '') {
     recordId = local.compactionHooks.start(
+      options.tenantId,
       { sessionId, trigger: input.trigger, cwd: input.cwd, transcriptPath: input.transcriptPath },
       (message) => appendPreCompactLog(logFile, message),
     );
@@ -206,13 +206,11 @@ function resolvePreCompactTranscript(
 
 function saveDerivedSnapshot(
   { localFiles: local, sessions }: CompactionStore,
+  tenantId: string,
   logFile: string,
-  sessionId: string | null,
-  recordId: string | null,
+  { sessionId, recordId }: { sessionId: string | null; recordId: string | null },
   derived: WorkingState,
 ): void {
-  const tenantId = resolveTenantId({});
-
   let existing: TaskSnapshot | null = null;
   try {
     existing = sessions.loadSnapshot(tenantId, null);
@@ -245,6 +243,8 @@ function saveDerivedSnapshot(
 }
 
 export interface PreCompactOptions {
+  /** The tenant the CLI root resolved. */
+  tenantId: string;
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
@@ -272,6 +272,8 @@ export async function cmdPreCompact(
 }
 
 export interface PostCompactOptions {
+  /** The tenant the CLI root resolved. */
+  tenantId: string;
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
@@ -293,7 +295,7 @@ export function cmdPostCompact(hippoRoot: string, store: CompactionStore, option
       return null;
     }
     const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
-    const local = { root: hippoRoot, files: store.localFiles };
+    const local = { root: hippoRoot, files: store.localFiles, tenantId: options.tenantId };
     let line: string | null = null;
     let storeBusy = false;
     if (receipt.status !== 'received') {

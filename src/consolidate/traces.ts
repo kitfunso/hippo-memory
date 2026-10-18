@@ -4,7 +4,6 @@ import { rejectionDigest } from '../core/rejection-digest.js';
 import type { SessionEvent } from '../store/port/sessions.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
-import { envTenant } from '../util/env.js';
 import { commonDerivationScope } from '../core/recall-scope.js';
 import { log } from '../util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
@@ -21,9 +20,8 @@ export function promoteSessionTraces(run: SleepRun): void {
   let tracesSkippedRejected = 0;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
   const sinceMs = run.now.getTime() - windowDays * DAY_MS;
-  // Auto-trace runs single-tenant (the env-resolved tenant); consolidating
-  // every tenant needs a per-tenant loop layered on top of this.
-  const consolidationTenant = envTenant();
+  // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant loop on top of this.
+  const consolidationTenant = run.tenantId;
   const promotable = run.store.promotableSessions(consolidationTenant, sinceMs);
 
   for (const session of promotable) {

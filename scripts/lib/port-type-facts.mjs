@@ -48,7 +48,7 @@ function typeTable(file) {
 }
 
 /** The declarations `name` resolves to from `file`, following imports and re-exports into src; [] for a lib or generic name. */
-function declarationsOf(file, name, hops = 0) {
+export function declarationsOf(file, name, hops = 0) {
   const { decls, links } = typeTable(file);
   if (decls.has(name)) return decls.get(name).map((node) => ({ file, node }));
   const link = links.get(name);

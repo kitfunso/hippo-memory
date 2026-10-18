@@ -52,9 +52,10 @@ export interface ImportTarget {
 export interface AgentImport {
   /** Creates the store at `root` with its folders. */
   create(root: string): void;
-  open(root: string, opts: { busyWaitMs?: number }): ImportTarget;
+  /** `root`'s store, read and written as `tenantId`. */
+  open(root: string, tenantId: string, opts: { busyWaitMs?: number }): ImportTarget;
   /** An empty store in a scratch folder a dry run plans against. */
-  openStandIn(): ImportTarget;
+  openStandIn(tenantId: string): ImportTarget;
   /** True when `err` means another writer held the store past its wait. */
   isBusy<E>(err: E): boolean;
 }

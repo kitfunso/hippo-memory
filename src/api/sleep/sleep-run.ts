@@ -13,6 +13,7 @@ import type { Consolidation, LocalFiles, StoreWith } from '../../store/port.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import type { EntryCursor } from '../../store/port/consolidation.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row, or shrink the
@@ -97,7 +98,7 @@ async function runSleepPhases(
 
   // Phase 1: Consolidation.
   const { local } = ctx;
-  const consolidateResult = await phases.consolidate(local, { dryRun, config: ctx.config });
+  const consolidateResult = await phases.consolidate(local, { dryRun, config: ctx.config, tenantId: ctx.tenantId });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
@@ -229,6 +230,7 @@ function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResul
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
   const shared = phases.autoShare({ root: ctx.hippoRoot, store: ctx.store }, target, {
+    tenantId: ALL_TENANTS,
     minScore: AUTO_SHARE_MIN_SCORE,
     stats: autoShareStats,
   });

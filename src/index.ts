@@ -12,6 +12,7 @@ import { sqliteStore } from './store/sqlite/store.js';
 import { hasGroup, requireGroup, type HippoStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './consolidate/sleep.js';
 import { loadConfig } from './core/config.js';
+import { DEFAULT_TENANT_ID } from './util/tenant.js';
 import { StoreNotPortedError } from './util/sqlite-blocked.js';
 import type { ConsolidationResult } from './consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
@@ -78,7 +79,8 @@ export async function consolidate(
 ): Promise<ConsolidationResult> {
   const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
   const config = options.config ?? loadConfig(root);
-  return runConsolidation(requireGroup(store, 'localFiles'), { ...options, config });
+  const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
+  return runConsolidation(requireGroup(store, 'localFiles'), { ...options, config, tenantId });
 }
 function isFolder(target: string | HippoStore): target is string {
   return typeof target === 'string';

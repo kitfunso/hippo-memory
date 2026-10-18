@@ -3,6 +3,7 @@ import type { PhysicsParticle } from '../../core/physics.js';
 import type { RecallScopeFilter } from '../../core/recall-scope.js';
 import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
 import type { OriginFilter } from './types.js';
+import type { TenantId } from '../../util/tenant.js';
 
 export type { EmbeddingIndexState, RecallScopeFilter };
 
@@ -22,7 +23,7 @@ export interface VectorReads {
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical
  * load. */
 export interface VectorCandidateSpec {
-  tenantId?: string;
+  tenantId: TenantId;
   scope?: RecallScopeFilter;
   includeSuperseded: boolean;
   /** How many nearest rows to add; default 50. */

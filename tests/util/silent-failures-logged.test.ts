@@ -170,7 +170,14 @@ describe('capture log append', () => {
       process.stdout.write(`${line}
 `),
     );
-    cmdCapture(captureTarget(root), { source: 'file', filePath: blank, dryRun: true, global: false, logFile });
+    cmdCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'file',
+      filePath: blank,
+      dryRun: true,
+      global: false,
+      logFile,
+    });
     expect(logged().filter((l) => l.includes('is no longer writable'))).toHaveLength(1);
   });
 });

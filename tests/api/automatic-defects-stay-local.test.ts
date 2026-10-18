@@ -10,6 +10,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -38,7 +39,9 @@ describe('automatic rows with a certain defect stay local', () => {
     const typed = createMemory(DEFECT, { tags: ['error'], layer: Layer.Episodic });
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
-    expect(autoShare(...sharingStores(root), { dryRun: true }).map((entry) => entry.id)).toEqual([typed.id]);
+    expect(autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, dryRun: true }).map((entry) => entry.id)).toEqual(
+      [typed.id],
+    );
   });
 
   it('the DAG pass summarises sound extracted facts and leaves a defective one out', async () => {

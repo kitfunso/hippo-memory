@@ -45,7 +45,6 @@ import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../../core/ablation.js';
 import { updateStatsAt } from './index-and-stats.js';
 import { type OnHandle, waitingOpener } from './open.js';
-import { resolveTenantId } from './tenant.js';
 import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../../util/log.js';
 import type { CompactionStart } from '../port/compactions.js';
 import type {
@@ -209,13 +208,14 @@ function markSummarized(db: DatabaseSyncLike, tenantId: string, id: string, opti
 /** Best effort, never throws: a compaction must not fail because its record could not be written. */
 export function recordCompactionStart(
   on: OnHandle,
+  tenantId: string,
   start: Omit<CompactionStart, 'originProject'>,
   log: Log,
 ): string | null {
   try {
     return on(
       (db, files) =>
-        startCompaction(db, resolveTenantId({}), {
+        startCompaction(db, tenantId, {
           ...start,
           originProject: compactionOrigin(files.hippoRoot, start.cwd),
         }),
@@ -498,34 +498,19 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
  * independent. Never throws. */
 export function saveCompactionAt(
   on: OnHandle,
-  meta: Omit<CompactionStart, 'originProject'>,
-  text: CompactionText,
-  at: Date,
-  log: Log,
-  baseHalfLifeDays: number,
+  save: Omit<SaveStep, 'db' | 'hippoRoot' | 'result'>,
 ): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   let opened = false;
   try {
     on((db, files) => {
       opened = true;
-      const tenantId = resolveTenantId({});
-      const step: SaveStep = {
-        db,
-        hippoRoot: files.hippoRoot,
-        tenantId,
-        meta,
-        text,
-        at,
-        result,
-        log,
-        baseHalfLifeDays,
-      };
+      const step: SaveStep = { ...save, db, hippoRoot: files.hippoRoot, result };
       itemsStep(step, recordStep(step));
     }, waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
     if (isSqliteBusy(err) || !opened) return { result, spoolReason: errorMessage(err) };
-    reportCompactionFailure(log, 'items step', errorMessage(err));
+    reportCompactionFailure(save.log, 'items step', errorMessage(err));
   }
   return { result, spoolReason: null };
 }
@@ -654,33 +639,33 @@ function replayOpen(run: ReplayRun): number {
 
 /** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the
  * transcript can fill. Returns how many compactions it saved. */
-function replayCompactions(
-  db: DatabaseSyncLike,
-  hippoRoot: string,
-  sources: ReplaySources,
-  log: Log,
-  deadline: number,
-  baseHalfLifeDays: number,
-): number {
-  const run: ReplayRun = {
-    db,
-    hippoRoot,
-    tenantId: resolveTenantId({}),
-    now: Date.now(),
-    sources,
-    log,
-    deadline,
-    baseHalfLifeDays,
-  };
+function replayCompactions(run: ReplayRun): number {
   return replayStalled(run) + replaySpool(run) + replayOpen(run);
 }
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */
-export function replayStoredCompactions(on: OnHandle, sources: ReplaySources, log: Log, opts: ReplayOptions): number {
+export function replayStoredCompactions(
+  on: OnHandle,
+  tenantId: string,
+  sources: ReplaySources,
+  log: Log,
+  opts: ReplayOptions,
+): number {
   try {
     const deadline = opts.deadline ?? Number.POSITIVE_INFINITY;
+    const { baseHalfLifeDays } = opts;
     return on(
-      (db, files) => replayCompactions(db, files.hippoRoot, sources, log, deadline, opts.baseHalfLifeDays),
+      (db, files) =>
+        replayCompactions({
+          db,
+          hippoRoot: files.hippoRoot,
+          tenantId,
+          now: Date.now(),
+          sources,
+          log,
+          deadline,
+          baseHalfLifeDays,
+        }),
       waitingOpener(opts.busyWaitMs),
     );
   } catch (err) {

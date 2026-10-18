@@ -7,6 +7,7 @@ import { sqliteStore } from '../../src/store/index.js';
 import type { ConnectorEvent, ConnectorWrites } from '../../src/store/port.js';
 import { inMemoryEntryWritesStore, type InMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';
 import type { StoreSide } from './store-conformance.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 /** One event log row; the delivery id and event name are GitHub's and null for Slack. */
 export interface LoggedEvent {
@@ -70,7 +71,8 @@ const recordsAt = (hippoRoot: string): HeldRecord[] => rowsOf<HeldRecord>(hippoR
 export function sqliteConnectorSide(hippoRoot: string): ConnectorSide {
   return {
     store: sqliteStore(hippoRoot),
-    auditRows: () => onDb(hippoRoot, (db) => listAuditEventsAfter(db, { afterId: 0, limit: 10_000 })),
+    auditRows: () =>
+      onDb(hippoRoot, (db) => listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 })),
     events: () => eventsAt(hippoRoot),
     records: () => recordsAt(hippoRoot),
   };

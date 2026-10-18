@@ -47,5 +47,3 @@ export type { FailureLog } from './port/failure-log.js';
 export type { CallerItemsSaved, Compactions } from './port/compactions.js';
 export { hasGroup, requireGroup, type OptionalGroup } from './port.js';
 export { sqliteStore } from './sqlite/store.js';
-// The surfaces run as the host's tenant unless a key names another.
-export { resolveTenantId } from './sqlite/tenant.js';

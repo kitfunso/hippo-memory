@@ -11,11 +11,11 @@ import { fail } from './exit.js';
 import { cliStdioHost } from './api-context.js';
 import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
-export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = numberFlag(flags, 'port') ?? DEFAULT_DASHBOARD_PORT;
   const { serveDashboard } = await import('../dashboard/dashboard.js');
-  serveDashboard(hippoRoot, port, undefined, { handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() });
+  serveDashboard(hippoRoot, port, undefined, { tenantId, handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() });
   // A later throw ends in one log line and exit 1, as it does for serve and mcp; a busy port is reported by the
   // dashboard itself.
   installCrashHandlers('dashboard');

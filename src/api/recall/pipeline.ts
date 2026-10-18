@@ -315,7 +315,6 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
         minResults,
         scope,
         runtime: ctx.config.runtime,
-        tenantId: ctx.tenantId,
         includeSuperseded,
         asOf,
       },

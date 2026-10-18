@@ -13,6 +13,7 @@ import type {
   VectorRowWrite,
   VectorWriteResult,
 } from '../../src/entry/store-kit.js';
+import { ALL_TENANTS } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import {
@@ -149,7 +150,7 @@ it("starts from the seeded index: the model, three vectors and mem_1's particle"
 
 describe('VectorWrites.entriesWithoutVector', () => {
   it("lists every tenant's memories with no vector under the model, archived ones too, by id", async () => {
-    const side = await conforms([missing({ model: MODEL, limit: 10 })]);
+    const side = await conforms([missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 10 })]);
     expect(idsOf(side.outcomes[0])).toEqual(['mem_2', 'mem_3', 'mem_5', 'mem_6']);
     expect(side.audit).toEqual(baseline.audit);
   });
@@ -165,23 +166,23 @@ describe('VectorWrites.entriesWithoutVector', () => {
 
   it('pages after an id, and the pages join up', async () => {
     const side = await conforms([
-      missing({ model: MODEL, limit: 2 }),
-      missing({ model: MODEL, limit: 2, afterId: 'mem_3' }),
-      missing({ model: MODEL, limit: 2, afterId: 'mem_6' }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 2 }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 2, afterId: 'mem_3' }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 2, afterId: 'mem_6' }),
     ]);
     expect(side.outcomes.map(idsOf)).toEqual([['mem_2', 'mem_3'], ['mem_5', 'mem_6'], []]);
   });
 
   it("counts a vector under another model as missing, so a model change lists every memory but the other model's", async () => {
-    const side = await conforms([missing({ model: OLD, limit: 10 })]);
+    const side = await conforms([missing({ tenantId: ALL_TENANTS, model: OLD, limit: 10 })]);
     expect(idsOf(side.outcomes[0])).toEqual(['mem_1', 'mem_2', 'mem_4', 'mem_5', 'mem_6']);
   });
 
   it('clamps the limit and refuses a non-integer with the same RangeError', async () => {
     const side = await conforms([
-      missing({ model: MODEL, limit: 0 }),
-      missing({ model: MODEL, limit: 10_000 }),
-      missing({ model: MODEL, limit: 2.5 }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 0 }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 10_000 }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 2.5 }),
     ]);
     expect(side.outcomes.slice(0, 2).map(idsOf)).toEqual([['mem_2'], ['mem_2', 'mem_3', 'mem_5', 'mem_6']]);
     expect(side.outcomes[2]).toEqual({ error: 'RangeError: limit must be an integer' });
@@ -198,7 +199,7 @@ describe('VectorWrites.writeVectors', () => {
         { memoryId: 'mem_5', vector: [] },
         { memoryId: 'mem_3', vector: [Number.NaN, 0, 0] },
       ]),
-      missing({ model: MODEL, limit: 10 }),
+      missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 10 }),
       stored,
       write(TENANT_B, MODEL, [{ memoryId: 'mem_2', vector: [0, 1, 1] }]),
     ]);
@@ -263,7 +264,7 @@ describe('VectorWrites.writeVectors', () => {
       indexState,
       stored,
       particles,
-      missing({ model: NEW, limit: 10 }),
+      missing({ tenantId: ALL_TENANTS, model: NEW, limit: 10 }),
     ]);
     expect(side.outcomes.slice(0, 4)).toEqual([{ value: { written: 0, modelMismatch: true } }, ...baseline.outcomes]);
     expect(side.outcomes.slice(4, 8)).toEqual([

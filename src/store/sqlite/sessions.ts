@@ -10,7 +10,6 @@ import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import type { ContinuityKey, JsonObject } from '../port/types.js';
 import { warnDamagedColumn } from '../../util/stored-json.js';
-import { resolveTenantId } from './tenant.js';
 import {
   loadHandoffByIdAt,
   loadLatestHandoffAt,
@@ -18,7 +17,7 @@ import {
   stampHandoffOutcomeAt,
   writeSessionEndHandoffAt,
 } from './handoffs.js';
-import type { Sessions } from '../port-groups.js';
+import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from '../port-groups.js';
 import type { Sync } from '../port.js';
 import { openStore } from './handles.js';
 import {
@@ -349,22 +348,8 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
  * oldest created_at). Returns the new row ID. */
-function wmPushAt(
-  db: DatabaseSyncLike,
-  opts: {
-    scope: string;
-    content: string;
-    importance?: number;
-    sessionId?: string;
-    taskId?: string;
-    metadata?: JsonObject;
-    tenantId?: string;
-  },
-): number {
+function wmPushAt(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = new Date().toISOString();
-  const importance = opts.importance ?? 0;
-  const tenantId = opts.tenantId ?? resolveTenantId({});
-
   return withWriteScope(db, 'wm_push', () => {
     const result = db
       .prepare(
@@ -375,12 +360,12 @@ function wmPushAt(
     `,
       )
       .run(
-        opts.scope,
-        opts.sessionId ?? null,
-        opts.taskId ?? null,
-        importance,
-        opts.content,
-        JSON.stringify(opts.metadata ?? {}),
+        item.scope,
+        item.sessionId ?? null,
+        item.taskId ?? null,
+        item.importance ?? 0,
+        item.content,
+        JSON.stringify(item.metadata ?? {}),
         now,
         now,
         tenantId,
@@ -388,7 +373,7 @@ function wmPushAt(
 
     const id = Number(result.lastInsertRowid ?? 0);
 
-    evictOverCapacity(db, opts.scope, tenantId);
+    evictOverCapacity(db, item.scope, tenantId);
 
     return id;
   });
@@ -418,70 +403,48 @@ function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string
   }
 }
 
+/** The WHERE clause and arguments that narrow working memory to one tenant and, when set, a scope and a session. */
+function wmWhere(tenantId: string, filter: WorkingMemoryFilter) {
+  const clauses = ['tenant_id = ?'];
+  const params = [tenantId];
+  if (filter.scope) {
+    clauses.push('scope = ?');
+    params.push(filter.scope);
+  }
+  if (filter.sessionId) {
+    clauses.push('session_id = ?');
+    params.push(filter.sessionId);
+  }
+  return { sql: `WHERE ${clauses.join(' AND ')}`, params };
+}
+
 /** Read working memory entries, sorted by importance DESC. */
 function wmReadAt(
   db: DatabaseSyncLike,
-  opts?: {
-    scope?: string;
-    sessionId?: string;
-    limit?: number;
-    tenantId?: string;
-  },
+  tenantId: string,
+  filter: WorkingMemoryFilter & { readonly limit?: number },
 ): WorkingMemoryItem[] {
-  const clauses: string[] = ['tenant_id = ?'];
-  const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
-
-  if (opts?.scope) {
-    clauses.push('scope = ?');
-    params.push(opts.scope);
-  }
-  if (opts?.sessionId) {
-    clauses.push('session_id = ?');
-    params.push(opts.sessionId);
-  }
-
-  const limit = Math.max(1, Math.trunc(opts?.limit ?? WM_MAX_ENTRIES));
-  params.push(limit);
-
-  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const where = wmWhere(tenantId, filter);
+  const limit = Math.max(1, Math.trunc(filter.limit ?? WM_MAX_ENTRIES));
   // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the
   // same names, from the working_memory table this module owns.
   const rows = db
     .prepare(`
     SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
     FROM working_memory
-    ${where}
+    ${where.sql}
     ORDER BY importance DESC, created_at DESC
     LIMIT ?
   `)
-    .all(...params) as WorkingMemoryRow[];
+    .all(...where.params, limit) as WorkingMemoryRow[];
 
   return rows.map(rowToItem);
 }
 
 /** Clear (delete) working memory entries. Returns the count deleted. */
-function wmClearAt(
-  db: DatabaseSyncLike,
-  opts?: {
-    scope?: string;
-    sessionId?: string;
-    tenantId?: string;
-  },
-): number {
-  const clauses: string[] = ['tenant_id = ?'];
-  const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
-
-  if (opts?.scope) {
-    clauses.push('scope = ?');
-    params.push(opts.scope);
-  }
-  if (opts?.sessionId) {
-    clauses.push('session_id = ?');
-    params.push(opts.sessionId);
-  }
-
-  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-  const result = db.prepare(`DELETE FROM working_memory ${where}`).run(...params);
+function wmClearAt(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
+  const where = wmWhere(tenantId, filter);
+  const result = db.prepare(`DELETE FROM working_memory ${where.sql}`).run(...where.params);
   return Number(result.changes ?? 0);
 }
 
@@ -509,9 +472,9 @@ export function sqliteSessions(on: OnHandle): Sync<Sessions> {
       on((db) => stampHandoffOutcomeAt(db, tenantId, sessionId, outcome), openStore),
     writeSessionEndHandoff: (tenantId, request) =>
       on((db, files) => writeSessionEndHandoffAt(db, files, { ...request, tenantId }), openStore),
-    pushWorkingMemory: (tenantId, item) => on((db) => wmPushAt(db, { ...item, tenantId }), openStore),
-    readWorkingMemory: (tenantId, filter) => on((db) => wmReadAt(db, { ...filter, tenantId }), openStore),
-    clearWorkingMemory: (tenantId, filter) => on((db) => wmClearAt(db, { ...filter, tenantId }), openStore),
+    pushWorkingMemory: (tenantId, item) => on((db) => wmPushAt(db, tenantId, item), openStore),
+    readWorkingMemory: (tenantId, filter) => on((db) => wmReadAt(db, tenantId, filter), openStore),
+    clearWorkingMemory: (tenantId, filter) => on((db) => wmClearAt(db, tenantId, filter), openStore),
     bindSessionOwner: (tenantId, sessionId, owner, retentionMs) =>
       on((db) => sessionOwnerOrBindAt(db, { tenantId, sessionId, owner, retentionMs })),
   };

@@ -73,6 +73,7 @@ describe('no stored text holds an email address', () => {
 
   it('in capture from a transcript', () => {
     cmdCapture(captureTarget(hippoRoot), {
+      tenantId: 'default',
       source: 'last-session',
       transcriptPath: transcript(),
       dryRun: false,

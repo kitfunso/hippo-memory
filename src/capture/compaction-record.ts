@@ -12,7 +12,6 @@ import type {
 } from '../store/port/compaction-hooks.js';
 import type { FolderFiles } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
-import { resolveTenantId } from '../store/index.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
@@ -24,6 +23,11 @@ export const PRE_COMPACT_INSTRUCTION =
   'should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an ' +
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
+
+/** A store folder and the tenant a compaction hook writes as, which the CLI root resolved. */
+export interface CompactionFolder extends FolderFiles {
+  readonly tenantId: string;
+}
 
 const SUMMARY_MAX_CHARS = 256 * 1024;
 const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
@@ -66,7 +70,7 @@ export interface PostCompactPayload {
 }
 
 function spoolSummary(
-  hippoRoot: string,
+  { root, tenantId }: CompactionFolder,
   payload: PostCompactPayload,
   text: CompactionText,
   at: Date,
@@ -75,7 +79,7 @@ function spoolSummary(
   log: Log,
 ): void {
   try {
-    spool(hippoRoot, resolveTenantId({}), payload, text, at);
+    spool(root, tenantId, payload, text, at);
     result.deferred = true;
     log(`store busy, summary spooled: ${reason}`);
   } catch (spoolErr) {
@@ -85,11 +89,8 @@ function spoolSummary(
 
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
  * defers. Never throws. */
-export function saveCompaction(
-  { root, files }: FolderFiles,
-  payload: PostCompactPayload,
-  log: Log,
-): CompactionSaveResult {
+export function saveCompaction(folder: CompactionFolder, payload: PostCompactPayload, log: Log): CompactionSaveResult {
+  const { root, files, tenantId } = folder;
   if (payload.compactSummary === null) {
     log('skip: payload has no compact_summary');
     return { written: null, deferred: false, snapshotSaved: false };
@@ -99,8 +100,8 @@ export function saveCompaction(
   if (!found) log('no memories section');
 
   const { defaultHalfLifeDays } = loadConfig(root);
-  const { result, spoolReason } = files.compactionHooks.save(payload, text, at, log, defaultHalfLifeDays);
-  if (spoolReason !== null) spoolSummary(root, payload, text, at, spoolReason, result, log);
+  const { result, spoolReason } = files.compactionHooks.save(tenantId, payload, text, at, log, defaultHalfLifeDays);
+  if (spoolReason !== null) spoolSummary(folder, payload, text, at, spoolReason, result, log);
   return result;
 }
 
@@ -165,11 +166,11 @@ function replaySources(hippoRoot: string, log: Log): ReplaySources {
 
 /** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left, never throws. */
 export function replayCompactions(
-  { root, files }: FolderFiles,
+  { root, files, tenantId }: CompactionFolder,
   log: Log,
   opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
 ): number {
-  return files.compactionHooks.replay(replaySources(root, log), log, {
+  return files.compactionHooks.replay(tenantId, replaySources(root, log), log, {
     ...opts,
     baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
   });

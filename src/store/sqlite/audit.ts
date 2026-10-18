@@ -8,6 +8,7 @@ import type { AuditOp } from '../../core/audit-ops.js';
 import type { QueryAuditOptions } from '../port/audit-log.js';
 import type { AuditPrune } from '../port/audit-maintenance.js';
 import type { ListAuditAfterOpts } from '../port/key-audit.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { cachedStatement } from './statement-cache.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
@@ -86,7 +87,7 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
   }
   const where: string[] = ['id > ?'];
   const params: unknown[] = [opts.afterId];
-  if (opts.tenantId !== undefined) {
+  if (opts.tenantId !== ALL_TENANTS) {
     where.push('+tenant_id = ?');
     params.push(opts.tenantId);
   }

@@ -14,6 +14,7 @@ import type { DagReads, SessionRawQuery } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryDagReadsStore extends StoreSide {
   readonly store: HippoStore & { readonly dagReads: DagReads };
@@ -96,7 +97,7 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
     withSqliteAllowed(() => {
       const db = openHippoDb(hippoRoot);
       try {
-        return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+        return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
       } finally {
         closeHippoDb(db);
       }

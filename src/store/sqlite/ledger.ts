@@ -19,12 +19,12 @@ import {
 } from './recall-trace.js';
 import type { LedgerTurn, Ledger } from '../port/ledger.js';
 import type { OnHandle } from './open.js';
+import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
 // `items`; readers outside this repo depend on these rows, so their shape is fixed.
-/** The session's first stored arm, or null; never writes. Without `tenantId` any tenant's row counts, since on one
- * machine a session has one arm. */
-function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId?: string): PilotArm | null {
+/** The session's first stored arm, or null; never writes. */
+function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId: TenantId): PilotArm | null {
   const row = firstPilotArmHash(db, sessionId, tenantId);
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
@@ -40,7 +40,8 @@ function ensurePilotArm(
   opts: { ownTenantOnly?: boolean; now?: string } = {},
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
-  const readTenant = opts.ownTenantOnly ? tenantId : undefined;
+  // On one machine a session has one arm, so any tenant's row counts unless the caller holds only its own.
+  const readTenant = opts.ownTenantOnly ? tenantId : ALL_TENANTS;
   try {
     // A stored row is the common case after the first prompt, so it must not take the write lock.
     const existing = readPilotArm(db, sessionId, readTenant);
@@ -131,7 +132,7 @@ function pilotArmAt(
   const { ownTenantOnly } = opts;
   return opts.write
     ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
-    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : undefined) ?? hashArm(sessionId, rateBp));
+    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ?? hashArm(sessionId, rateBp));
 }
 
 /** Each call runs on the request's handle or a short-lived one. The delivery write takes the opener, since it is

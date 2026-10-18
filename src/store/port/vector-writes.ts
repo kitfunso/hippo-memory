@@ -1,5 +1,6 @@
 import type { PhysicsParticle } from '../../core/physics.js';
 import type { MemoryEntry } from '../../core/memory.js';
+import type { TenantId } from '../../util/tenant.js';
 
 /** One memory's vector, computed by the caller's embedding provider. */
 export interface VectorRowWrite {
@@ -32,8 +33,8 @@ export interface VectorBackfillQuery {
   readonly afterId?: string;
   /** Clamped to 1..500; a non-integer rejects with RangeError `limit must be an integer`. */
   readonly limit: number;
-  /** Every tenant when unset, since the backfill covers the whole store. */
-  readonly tenantId?: string;
+  /** ALL_TENANTS for the backfill, which covers the whole store. */
+  readonly tenantId: TenantId;
 }
 
 /** The writes behind embed on write and the backfill: core computes each vector,

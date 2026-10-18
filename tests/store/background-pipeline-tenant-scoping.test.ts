@@ -5,7 +5,7 @@
  * host-wide back-compat parity. Real DB per the project convention; multi-
  * tenant fixtures constructed via createMemory({ tenantId }).
  */
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
@@ -22,6 +22,7 @@ import { embedAll } from '../../src/search/embed-memories.js';
 import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -206,12 +207,12 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // ASSERTION 3 (cross-tenant invariant): tenant-b unchanged.
     expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
 
-    // ASSERTION 4 (host-wide negative control): a second capture without
-    // tenantId on the same content would skip-as-duplicate (host-wide dedup
-    // sees both tenant-a's and tenant-b's entries).
+    // ASSERTION 4 (negative control): a second capture of the same content as
+    // tenant-a skips it as a duplicate of tenant-a's own row.
     const fixturePath2 = join(tmpDir, 'capture-fixture2.txt');
     fs.writeFileSync(fixturePath2, fixtureText, 'utf8');
     cmdCapture(captureTarget(hippoRoot), {
+      tenantId: 'tenant-a',
       source: 'file',
       filePath: fixturePath2,
       dryRun: false,
@@ -247,9 +248,14 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // ASSERTION 3 (cross-tenant invariant): tenant-b unchanged.
     expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
 
-    // ASSERTION 4 (host-wide negative control): a host-wide import (no
-    // tenantId) of the same content would skip-as-duplicate.
-    const result2 = importEntries([content], 'import:test', ['imported'], { hippoRoot, dryRun: false, global: false });
+    // ASSERTION 4 (negative control): a second import of the same content as
+    // tenant-a skips it as a duplicate of tenant-a's own row.
+    const result2 = importEntries([content], 'import:test', ['imported'], {
+      tenantId: 'tenant-a',
+      hippoRoot,
+      dryRun: false,
+      global: false,
+    });
     expect(result2.imported).toBe(0);
     expect(loadEveryTenantEntries(hippoRoot).length).toBe(2); // tenant-a:1, tenant-b:1
   });
@@ -282,17 +288,8 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     ({ root: hippoRoot } = makeStore('l9-pos'));
   });
 
-  it('case 8: invalidateMatching(...) without tenantId weakens all tenants (host-wide)', () => {
-    seedFor(hippoRoot, 'tenant-a', 'REST API uses Bearer tokens', { tags: ['api'] });
-    seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
-
-    // No tenantId arg → host-wide behaviour (current/pre-1.12.1)
-    const result = invalidateMatching(syncStore(hippoRoot).localFiles.learning, {
-      from: 'REST',
-      to: 'GraphQL',
-      type: 'migration',
-    });
-    expect(result.invalidated).toBe(2);
+  it('case 8: invalidateMatching takes a required tenant, so no caller weakens every tenant by leaving it out', () => {
+    expectTypeOf(invalidateMatching).parameter(2).toEqualTypeOf<string>();
   });
 
   it('case 9: refineStore({}) without tenantId scans all tenants consolidated entries', async () => {
@@ -396,7 +393,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     writeEntry(hippoRoot, b);
 
     // Both tenants' shared entries surface as peers (host-wide aggregation)
-    const peers = await listPeers(folderStore(hippoRoot));
+    const peers = await listPeers(folderStore(hippoRoot), ALL_TENANTS);
     const peerNames = peers.map((p) => p.project);
     expect(peerNames).toContain('project-foo');
     expect(peerNames).toContain('project-bar');

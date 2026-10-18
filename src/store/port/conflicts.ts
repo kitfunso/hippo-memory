@@ -1,5 +1,6 @@
 // The Conflicts group's types: a conflict read with both members' columns, and the keyset page that carries them.
 import type { KeysetPosition } from '../../util/keyset.js';
+import type { TenantId } from '../../util/tenant.js';
 
 /** The columns of one member that the api's reach, liveness and project rules read. */
 export interface ConflictMember {
@@ -17,8 +18,8 @@ export interface ConflictRow {
 }
 
 export interface ConflictListQuery {
-  /** null reads every tenant: host admin, which the api checks. */
-  readonly tenantId: string | null;
+  /** ALL_TENANTS is host admin, which the api checks. */
+  readonly tenantId: TenantId;
   /** '*' reads every status. */
   readonly status: string;
   readonly limit: number;

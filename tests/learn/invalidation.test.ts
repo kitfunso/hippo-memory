@@ -60,11 +60,15 @@ describe('invalidateMatching', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'REST',
-      to: 'GraphQL',
-      type: 'migration',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'REST',
+        to: 'GraphQL',
+        type: 'migration',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(1);
     const updated = readEntry(hippoRoot, mem.id);
@@ -79,11 +83,15 @@ describe('invalidateMatching', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'REST',
-      to: 'GraphQL',
-      type: 'migration',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'REST',
+        to: 'GraphQL',
+        type: 'migration',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(0);
     const updated = readEntry(hippoRoot, mem.id);
@@ -97,11 +105,15 @@ describe('invalidateMatching', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'REST',
-      to: 'GraphQL',
-      type: 'migration',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'REST',
+        to: 'GraphQL',
+        type: 'migration',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(0);
   });
@@ -123,11 +135,15 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     });
     writeEntry(hippoRoot, bystander);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'hippo salience gate experiment',
-      to: null,
-      type: 'removal',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'hippo salience gate experiment',
+        to: null,
+        type: 'removal',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(0);
     expect(result.targets).not.toContain(bystander.id);
@@ -143,11 +159,15 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     });
     writeEntry(hippoRoot, sibling);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'hippo salience gate experiment',
-      to: null,
-      type: 'removal',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'hippo salience gate experiment',
+        to: null,
+        type: 'removal',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(0);
     expect(readEntry(hippoRoot, sibling.id)!.tags).not.toContain('invalidated');
@@ -159,11 +179,15 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'hippo-roadmap',
-      to: null,
-      type: 'deprecation',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'hippo-roadmap',
+        to: null,
+        type: 'deprecation',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(1);
     expect(readEntry(hippoRoot, mem.id)!.confidence).toBe('stale');
@@ -175,11 +199,15 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'REST API',
-      to: 'GraphQL',
-      type: 'migration',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'REST API',
+        to: 'GraphQL',
+        type: 'migration',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(1);
   });
@@ -193,7 +221,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     const result = invalidateMatching(
       sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: 'REST API', to: 'GraphQL', type: 'migration' },
-      undefined,
+      'default',
       { dryRun: true },
     );
 
@@ -221,7 +249,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     const result = invalidateMatching(
       sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: `id:${targetMem.id}`, to: 'manual correction', type: 'migration' },
-      undefined,
+      'default',
       { onlyId: targetMem.id },
     );
 
@@ -238,7 +266,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     const result = invalidateMatching(
       sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: 'id:mem_doesnotexist0000', to: null, type: 'removal' },
-      undefined,
+      'default',
       { onlyId: 'mem_doesnotexist0000' },
     );
 
@@ -253,7 +281,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     const result = invalidateMatching(
       sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: `id:${mem.id}`, to: null, type: 'removal' },
-      undefined,
+      'default',
       { onlyId: mem.id },
     );
 
@@ -266,11 +294,15 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     const mem = createMemory('REST API canonical contract', { tags: ['api'], pinned: true });
     writeEntry(hippoRoot, mem);
 
-    const result = invalidateMatching(sqliteSyncStore(hippoRoot).localFiles.learning, {
-      from: 'REST API',
-      to: 'GraphQL',
-      type: 'migration',
-    });
+    const result = invalidateMatching(
+      sqliteSyncStore(hippoRoot).localFiles.learning,
+      {
+        from: 'REST API',
+        to: 'GraphQL',
+        type: 'migration',
+      },
+      'default',
+    );
 
     expect(result.invalidated).toBe(0);
     expect(result.skippedPinned).toEqual([mem.id]);
@@ -293,7 +325,7 @@ describe('invalidateMatching dryRun + onlyId composition', () => {
     const result = invalidateMatching(
       sqliteSyncStore(hippoRoot).localFiles.learning,
       { from: `id:${mem.id}`, to: null, type: 'removal' },
-      undefined,
+      'default',
       { dryRun: true, onlyId: mem.id },
     );
 

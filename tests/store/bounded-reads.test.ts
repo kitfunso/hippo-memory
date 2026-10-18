@@ -27,14 +27,14 @@ describe('rows that may mention a target', () => {
     seeded(root, 11);
     const db = openHippoDb(root);
     try {
-      const all = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', undefined, { limit: 100 });
+      const all = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', 'default', { limit: 100 });
       expect(all.entries).toHaveLength(11);
       expect(all.next).toBeNull();
       const ids: string[] = [];
       let after;
       let pages = 0;
       do {
-        const page = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', undefined, { limit: 4, after });
+        const page = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
         ids.push(...page.entries.map((e) => e.id));
         after = page.next ?? undefined;
         pages++;
@@ -54,7 +54,7 @@ describe('the FTS check on a read', () => {
     const db = openHippoDb(root);
     try {
       const { statements } = recordStatements(() =>
-        loadEntriesMentioningAt(db, ['quuxlib'], 'ops', undefined, { limit: 100 }),
+        loadEntriesMentioningAt(db, ['quuxlib'], 'ops', 'default', { limit: 100 }),
       );
       expect(countMatching(statements, /COUNT\(\*\)/i)).toBe(0);
     } finally {

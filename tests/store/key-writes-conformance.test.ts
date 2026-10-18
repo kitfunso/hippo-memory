@@ -21,6 +21,7 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const EXPIRES = '2026-04-01T12:00:05.000Z';
@@ -71,7 +72,7 @@ const createSelf =
   (key: NewApiKey & { ownerSubject: string; expiresAt: string }, perSubject: number): Call =>
   (g) =>
     g.createSelfApiKey({ key, actor: OWNER, metadata: SELF_META, perSubject });
-type ListQuery = Omit<KeyListQuery, 'tenantId'> & { tenantId?: string | null };
+type ListQuery = Omit<KeyListQuery, 'tenantId'> & { tenantId?: TenantId };
 const list =
   (query: ListQuery): Call =>
   (g) =>
@@ -320,10 +321,10 @@ describe('KeyWrites.listApiKeys', () => {
     expect(valueOf(side, 4)).toHaveLength(7);
   });
 
-  it("lists every tenant's keys, newest first, for a null tenant", async () => {
+  it("lists every tenant's keys, newest first, for ALL_TENANTS", async () => {
     const side = await conforms([
-      listIds({ tenantId: null, active: false }),
-      listIds({ tenantId: null, active: true }),
+      listIds({ tenantId: ALL_TENANTS, active: false }),
+      listIds({ tenantId: ALL_TENANTS, active: true }),
     ]);
     const { adminA, memberB } = fixture.keys;
     expect(valueOf(side, 0)).toHaveLength(9);

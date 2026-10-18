@@ -23,6 +23,7 @@ import {
 } from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/store/port/audit-log.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
@@ -106,7 +107,7 @@ function seedAuditRows(dir: string): void {
       role: 'admin',
       expiresAt: '2999-01-01T00:00:00.000Z',
     }).plaintext;
-    fixtureAudit = listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+    fixtureAudit = listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
   } finally {
     vi.useRealTimers();
     closeHippoDb(db);

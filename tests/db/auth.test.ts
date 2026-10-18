@@ -3,6 +3,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, validateApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { listApiKeys } from '../_helpers/root-forms.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 describe('auth', () => {
   it('createApiKey returns plaintext exactly once and stores hash', () => {
@@ -56,9 +57,9 @@ describe('auth', () => {
       const a = createApiKey(db, { tenantId: 'default', label: 'a' });
       const b = createApiKey(db, { tenantId: 'default', label: 'b' });
       revokeApiKey(db, b.keyId);
-      const active = listApiKeys(home, { active: true });
+      const active = listApiKeys(home, { tenantId: ALL_TENANTS, active: true });
       expect(active.map((k) => k.keyId)).toEqual([a.keyId]);
-      const all = listApiKeys(home, { active: false });
+      const all = listApiKeys(home, { tenantId: ALL_TENANTS, active: false });
       expect(all.length).toBe(2);
     } finally {
       closeHippoDb(db);

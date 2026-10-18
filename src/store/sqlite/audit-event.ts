@@ -1,6 +1,5 @@
 import { errorMessage } from '../../util/log.js';
 import { openHippoDb } from '../../db/index.js';
-import { resolveTenantId } from './tenant.js';
 import { appendAuditEvent } from './audit.js';
 import { reportAuditWriteFailure } from '../../core/audit-report.js';
 import { RejectedValueError } from '../../core/api-errors.js';
@@ -12,16 +11,16 @@ export interface AuditOptions {
   readonly targetId?: string;
   readonly metadata?: Record<string, JsonValue>;
   readonly actor?: string;
-  readonly tenantId?: string;
+  readonly tenantId: string;
 }
 
 /** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth,
  * and a failed audit write shows up as missing rows. */
-export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions = {}): void {
+export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions): void {
   const { targetId, metadata, actor = CLI_ACTOR, tenantId } = options;
   try {
     appendAuditEvent(db, {
-      tenantId: tenantId ?? resolveTenantId({}),
+      tenantId,
       actor,
       op,
       targetId,

@@ -148,14 +148,14 @@ describe('logged fallbacks', () => {
   it('warns with the path and parse error when a ChatGPT .json file is not JSON, then reads plain text', () => {
     const file = path.join(root, 'memories.json');
     fs.writeFileSync(file, '{ not json at all', 'utf8');
-    importChatGPT(file, { hippoRoot: root, dryRun: true });
+    importChatGPT(file, { tenantId: 'default', hippoRoot: root, dryRun: true });
     expect(stderr).toContain(`warn: import: ${file} is not valid JSON`);
   });
 
   it('warns the same way for a Claude .json file, then reads markdown', () => {
     const file = path.join(root, 'claude.json');
     fs.writeFileSync(file, '[1, 2,', 'utf8');
-    importClaude(file, { hippoRoot: root, dryRun: true });
+    importClaude(file, { tenantId: 'default', hippoRoot: root, dryRun: true });
     expect(stderr).toContain(`warn: import: ${file} is not valid JSON`);
   });
 

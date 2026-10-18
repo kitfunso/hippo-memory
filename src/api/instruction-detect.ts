@@ -3,6 +3,9 @@
  * as secret-detect.ts; leaf module, no store/api/shared imports.
  */
 
+/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as untrusted. */
+export const INSTRUCTION_LIKE_TAG = 'instruction-like';
+
 export interface InstructionDetection {
   flagged: boolean;
   reason: string | null;

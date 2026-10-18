@@ -14,6 +14,7 @@ import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
 import type { QuarantineRow } from '../../src/store/port/quarantine.js';
 import { writeEntry } from './root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export interface InMemoryQuarantineStore extends StoreSide {
   readonly store: HippoStore & { readonly quarantine: Quarantine };
@@ -59,6 +60,7 @@ function copyRows(hippoRoot: string): {
         memories: selectEntriesByIds(
           db,
           ids.map((r) => r.id),
+          ALL_TENANTS,
         ),
         records,
       };
@@ -137,7 +139,7 @@ export function inMemoryQuarantineStore(hippoRoot: string): InMemoryQuarantineSt
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
       const found = [...memories.values()].filter(
-        (e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId),
+        (e) => wanted.has(e.id) && (tenantId === ALL_TENANTS || e.tenant_id === tenantId),
       );
       return structuredClone(
         found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)),

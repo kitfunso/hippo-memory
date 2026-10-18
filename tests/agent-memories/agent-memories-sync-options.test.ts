@@ -54,7 +54,13 @@ afterEach(() => closeWorld(w));
 
 const withEnv = (env: Machine['env']): Machine => ({ ...w.machine, env });
 const sync = (extra: Partial<SyncOptions> = {}): ImportReport =>
-  importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine, ...extra });
+  importForStore(w.local, {
+    configAt: loadConfig,
+    tenantId: 'default',
+    agentImport: sqliteAgentImport,
+    machine: w.machine,
+    ...extra,
+  });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
 describe('agent memory sync: options, time and reporting', () => {
@@ -68,6 +74,7 @@ describe('agent memory sync: options, time and reporting', () => {
         tally(
           importForStore(w.local, {
             configAt: loadConfig,
+            tenantId: 'default',
             agentImport: sqliteAgentImport,
             machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: off }),
           }),
@@ -77,6 +84,7 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(tally(sync()).imported).toBe(0);
     const report = importForStore(w.local, {
       configAt: loadConfig,
+      tenantId: 'default',
       agentImport: sqliteAgentImport,
       machine: withEnv({ HIPPO_AGENT_MEMORY_TOOLS: 'claude-code, codex,nosuchtool' }),
     });
@@ -95,8 +103,14 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(tally(sync()).imported).toBe(0);
     expect(isInitialized(w.global)).toBe(false);
     expect(
-      tally(importForStore(w.global, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine }))
-        .imported,
+      tally(
+        importForStore(w.global, {
+          configAt: loadConfig,
+          tenantId: 'default',
+          agentImport: sqliteAgentImport,
+          machine: w.machine,
+        }),
+      ).imported,
     ).toBe(1);
     expect(liveTexts(w.global)).toEqual([USER_NOTE]);
   });
@@ -152,7 +166,12 @@ describe('agent memory sync: options, time and reporting', () => {
     const alt = join(w.home, 'alt-claude');
     const altMachine = withEnv({ CLAUDE_CONFIG_DIR: alt });
     note(join(alt, 'projects', claudeFolderName(w.project), 'memory'), 'alt.md', B);
-    importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: altMachine });
+    importForStore(w.local, {
+      configAt: loadConfig,
+      tenantId: 'default',
+      agentImport: sqliteAgentImport,
+      machine: altMachine,
+    });
     note(dir, 'deploy.md', A);
     sync();
 
@@ -160,6 +179,7 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(
       importForStore(w.local, {
         configAt: loadConfig,
+        tenantId: 'default',
         agentImport: sqliteAgentImport,
         machine: altMachine,
         dryRun: true,

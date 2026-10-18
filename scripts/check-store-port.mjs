@@ -13,12 +13,14 @@
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any but FOLDER_FORM_EXCEPTIONS fails outright.
 // A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/core.
+// A src/store function or port method whose tenant, or an argument's tenant property, is optional, defaulted or admits undefined or null fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, posix, sep } from 'node:path';
 import ts from 'typescript';
 import { lineOf, parse, portFunctionParams, resolveSpec } from './lib/port-type-facts.mjs';
+import { looseTenants } from './lib/loose-tenants.mjs';
 
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
@@ -700,6 +702,13 @@ if (strays.length > 0) {
   console.error(
     'Pass `recordAs` to retrieve() (or call retrieveWithCliCore()) instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.',
   );
+  process.exit(1);
+}
+
+const loose = existsSync('src/store') ? tsFiles('src/store').flatMap(looseTenants) : [];
+if (loose.length > 0) {
+  console.error(`A store function or port method can be called without its tenant:\n  ${loose.join('\n  ')}`);
+  console.error('Take `tenantId: string`, or `TenantId` when a real caller passes ALL_TENANTS (src/util/tenant.ts).');
   process.exit(1);
 }
 

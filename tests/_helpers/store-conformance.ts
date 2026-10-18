@@ -9,6 +9,7 @@ import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index
 import { sqliteStore, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';
@@ -94,7 +95,7 @@ export interface SideResult<R> {
 function auditRowsAt(root: string): AuditEvent[] {
   const db = openHippoDb(root);
   try {
-    return listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
+    return listAuditEventsAfter(db, { tenantId: ALL_TENANTS, afterId: 0, limit: 10_000 });
   } finally {
     closeHippoDb(db);
   }

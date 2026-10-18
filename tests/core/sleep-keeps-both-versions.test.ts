@@ -36,6 +36,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -693,6 +694,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
       totalTally(
         importProjectMemories(root, {
           configAt: loadConfig,
+          tenantId: 'default',
           agentImport: sqliteAgentImport,
           machine: { home, env: {}, platform: process.platform },
         }),
@@ -704,7 +706,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
   it('import', () => {
     const root = newRoot();
     write(root, OLD);
-    const result = importEntries([NEW, OLD.replace(' ', '  ')], 'test', [], { hippoRoot: root });
+    const result = importEntries([NEW, OLD.replace(' ', '  ')], 'test', [], { tenantId: 'default', hippoRoot: root });
     expect([result.imported, result.skipped]).toEqual([1, 1]);
   });
 
@@ -717,7 +719,13 @@ describe('a new value is never skipped as a copy of an old one', () => {
     writeFileSync(file, `${note}\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), {
+      tenantId: 'default',
+      source: 'file',
+      filePath: file,
+      dryRun: false,
+      global: false,
+    });
 
     expect(texts(root)).toContain(item.content);
   });
@@ -730,7 +738,9 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_NEW);
     write(root, LONG_OLD.replace(' ', '  '));
 
-    expect(autoShare(...sharingStores(root), { minScore: 0, dryRun: true }).map((e) => e.content)).toEqual([LONG_NEW]);
+    expect(
+      autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true }).map((e) => e.content),
+    ).toEqual([LONG_NEW]);
   });
 
   it('search across the local and global stores', async () => {
@@ -741,9 +751,11 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_NEW);
     const contents = (rs: { entry: MemoryEntry }[]): string[] => rs.map((r) => r.entry.content).sort();
 
-    expect(contents(await searchBothHybrid('dev server port', ...sharingStores(root, getGlobalRoot())))).toEqual(
-      [LONG_NEW, LONG_OLD].sort(),
-    );
+    expect(
+      contents(
+        await searchBothHybrid('dev server port', ...sharingStores(root, getGlobalRoot()), { tenantId: ALL_TENANTS }),
+      ),
+    ).toEqual([LONG_NEW, LONG_OLD].sort());
   });
 
   it('the salience gate', () => {

@@ -3,6 +3,7 @@
 import type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
+import type { TenantId } from '../util/tenant.js';
 import type { CardDetail } from './port/cards.js';
 import type { StatusCounts, StrengthTallies } from './port/reports.js';
 import type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from './port/dormant.js';
@@ -164,11 +165,8 @@ export interface Reports {
   failures(tenantId: string, sinceIso: string): Promise<FailureSummary>;
   /** Strength tallies and the open-conflict count, read on one snapshot. */
   memoryStatus(tenantId: string, now: Date, atRiskBelow: number): Promise<StrengthTallies & { openConflicts: number }>;
-  /** `tenantId` null pages every tenant (host admin; the api checks). */
-  entriesPage(
-    tenantId: string | null,
-    page: { readonly limit: number; readonly after?: EntryCursor },
-  ): Promise<EntryPage>;
+  /** ALL_TENANTS pages every tenant (host admin; the api checks). */
+  entriesPage(tenantId: TenantId, page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
   /** Every row in the store, no tenant: host admin. */
   countEntries(): Promise<number>;
   /** The store's lifetime counters and its recent sleep runs: host admin. */

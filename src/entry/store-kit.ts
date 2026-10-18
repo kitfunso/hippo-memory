@@ -131,6 +131,8 @@ export type { PhysicsParticle } from '../core/physics.js';
 // An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root in the options.
 export { physicsSearch } from './folder-search.js';
 export { StoreBusyError } from '../store/port.js';
+// A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it from a missed tenant.
+export { ALL_TENANTS, type TenantId } from '../util/tenant.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its
 // rule,
 // so both stores keep the same bytes and return the same ids in the same order.

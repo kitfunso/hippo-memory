@@ -64,6 +64,8 @@ export function syncFtsIndex(store: Consolidation, dryRun: boolean, result: Cons
  * transaction.
  */
 export interface SleepRun {
+  /** The caller's tenant, whose completed sessions become traces. */
+  tenantId: string;
   learning: Learning;
   store: Consolidation;
   now: Date;

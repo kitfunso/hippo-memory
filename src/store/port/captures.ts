@@ -2,6 +2,7 @@
 // handed to the caller's embed callback.
 import type { HeldText } from './types.js';
 import type { MemoryEntry } from '../../core/memory.js';
+import type { TenantId } from '../../util/tenant.js';
 
 export interface Captures {
   /** Each item through the write gate, one outcome per item in order; `keys` holds the texts already stored and gains
@@ -9,9 +10,9 @@ export interface Captures {
   write(items: readonly CaptureItem[], keys: Set<string>, opts: CaptureWriteOptions): CapturedOutcome[];
   /** The rows holding any of `words`, for the dedup before a write; a row equal to a text apart from spacing holds its
    * every word. `project` keeps rows carrying one of those names plus user-global rows, `everyScope` lifts the
-   * team-visible filter for a reader that sees the whole store, and no `tenantId` reads every tenant. */
+   * team-visible filter for a reader that sees the whole store. */
   textsHolding(
-    tenantId: string | undefined,
+    tenantId: TenantId,
     words: readonly string[],
     opts?: { readonly project?: readonly string[]; readonly everyScope?: boolean },
   ): HeldText[];

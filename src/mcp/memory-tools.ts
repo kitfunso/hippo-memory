@@ -1,7 +1,7 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
 import { hasGroup } from '../store/index.js';
-import { resolveTenantId } from '../store/index.js';
+import { envTenant } from '../util/env.js';
 import { startAutoSleepIfDue } from '../api/sleep/auto-sleep.js';
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../api/index.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
@@ -25,7 +25,7 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId, 
   // Auto-sleep runs on hippo.db, so another store skips it.
   const allowed = hasGroup(store, 'localFiles') && ctx.autoSleep !== false;
   const run = ctx.autoSleepRunner;
-  const gate = { hippoRoot, tenantId, hostTenantId: resolveTenantId({}), config: config.autoSleep, allowed };
+  const gate = { hippoRoot, tenantId, hostTenantId: envTenant(), config: config.autoSleep, allowed };
   if (run !== undefined) await startAutoSleepIfDue(store, gate, run);
 
   const tagStr = result.tags.join(', ') || 'none';

@@ -39,7 +39,6 @@ import { findRejectedValue } from './rejection.js';
 import { rejectionDigest } from '../../core/rejection-digest.js';
 import { setAsideRow } from './set-aside.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { resolveTenantId } from './tenant.js';
 import type { AgentImport, ContainerTx, ImportTarget } from '../port/agent-import.js';
 
 function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {
@@ -65,8 +64,7 @@ function containerTx(db: DatabaseSyncLike, root: string): ContainerTx {
   };
 }
 
-function importTarget(db: DatabaseSyncLike, root: string, close: () => void): ImportTarget {
-  const tenantId = resolveTenantId({});
+function importTarget(db: DatabaseSyncLike, root: string, tenantId: string, close: () => void): ImportTarget {
   return {
     root,
     tenantId,
@@ -88,15 +86,15 @@ function importTarget(db: DatabaseSyncLike, root: string, close: () => void): Im
 
 export const sqliteAgentImport: AgentImport = {
   create: (root) => initStore(root),
-  open: (root, opts) => {
+  open: (root, tenantId, opts) => {
     const db = openBareHandle(root, { busyWaitMs: opts.busyWaitMs });
-    return importTarget(db, root, () => closeHippoDb(db));
+    return importTarget(db, root, tenantId, () => closeHippoDb(db));
   },
-  openStandIn: () => {
+  openStandIn: (tenantId) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
     // Its folder is deleted at close, so a request scope must not keep the file open past that.
     const db = outsideRequestStores(() => openBareHandle(root));
-    return importTarget(db, root, () => {
+    return importTarget(db, root, tenantId, () => {
       closeHippoDb(db);
       fs.rmSync(root, { recursive: true, force: true });
     });

@@ -458,7 +458,7 @@ describe('invalidation during git learning', () => {
     expect(target!.to).toBe('vite');
 
     // Invalidate matching memories
-    const result = invalidateMatching(sqliteSyncStore(tmpDir).localFiles.learning, target!);
+    const result = invalidateMatching(sqliteSyncStore(tmpDir).localFiles.learning, target!, 'default');
     expect(result.invalidated).toBe(1);
 
     // Verify the old memory was weakened

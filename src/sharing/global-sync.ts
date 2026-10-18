@@ -6,6 +6,7 @@ import * as path from 'path';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../core/agent-memory-tools.js';
 import type { FolderStore } from '../store/port.js';
 import { chunked } from '../util/chunked.js';
+import { ALL_TENANTS } from '../util/tenant.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
@@ -41,7 +42,7 @@ const textKey = (e: { tenant_id: string; content: string }): string => `${e.tena
  * asks the local store about its own ids and texts only. */
 function missingRows(local: Sharing, from: Sharing): EntryTextKey[] {
   const missing: EntryTextKey[] = [];
-  for (const page of textKeyPages(from, undefined)) {
+  for (const page of textKeyPages(from, ALL_TENANTS)) {
     const taken = new Set(local.takenIds(page.map((k) => k.id)));
     // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
     const open = page.filter((k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX));
@@ -49,7 +50,7 @@ function missingRows(local: Sharing, from: Sharing): EntryTextKey[] {
     const held = new Set(
       local
         .textKeysHolding(
-          undefined,
+          ALL_TENANTS,
           open.map((k) => k.content),
         )
         .map(textKey),

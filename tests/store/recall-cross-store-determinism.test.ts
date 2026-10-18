@@ -28,6 +28,7 @@ import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise
@@ -155,11 +156,13 @@ describe('recall cross-store determinism', () => {
     const emptyGlobalB = path.join(os.tmpdir(), 'hippo-tiebreak-no-such-global-b-x');
 
     const resultsA = await searchBothHybrid(QUERY, ...sharingStores(storeA, emptyGlobalA), {
+      tenantId: ALL_TENANTS,
       budget: 100_000,
       now: NOW,
       localBump: 1.0, // remove the local-bias multiplier so this mirrors the plain hybridSearch case
     });
     const resultsB = await searchBothHybrid(QUERY, ...sharingStores(storeB, emptyGlobalB), {
+      tenantId: ALL_TENANTS,
       budget: 100_000,
       now: NOW,
       localBump: 1.0,

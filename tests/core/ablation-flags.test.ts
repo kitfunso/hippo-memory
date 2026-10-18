@@ -31,6 +31,7 @@ import {
 } from '../../src/core/ablation.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -475,10 +476,7 @@ describe('HIPPO_FAKE_NOW', () => {
     const results = await searchBothHybrid(
       'wrapper clock consistency check',
       ...sharingStores(tmp, path.join(tmp, 'no-global')),
-      {
-        budget: 10000,
-        explain: true,
-      },
+      { tenantId: ALL_TENANTS, budget: 10000, explain: true },
     );
     expect(results).toHaveLength(1);
     expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);

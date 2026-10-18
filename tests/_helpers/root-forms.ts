@@ -13,7 +13,7 @@ import {
 import { markSlackEventSeenAt, slackEventRecordAt } from '../../src/store/sqlite/connectors/slack.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { resolveTenantId } from '../../src/store/sqlite/tenant.js';
+import { resolveTenantId } from '../../src/server/host-tenant.js';
 import { apiCtx } from './api-ctx.js';
 import type { WriteBudget } from '../../src/util/write-budget.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
@@ -40,6 +40,7 @@ import {
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
   iterateEveryTenantEntriesAt,
+  readEntryAt,
 } from '../../src/store/sqlite/entry-reads.js';
 import { writeEntriesTogetherAt, writePromotedEntryAt } from '../../src/store/sqlite/entry-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/port/goals.js';
@@ -84,7 +85,6 @@ export {
   loadEntities,
   loadRelations,
   loadTenantEntries as loadAllEntries,
-  readEntry,
   saveActiveTaskSnapshot,
   saveSessionHandoff,
   strengthenRetrieved,
@@ -147,6 +147,7 @@ import type { Prediction, PredictionClose } from '../../src/store/port/predictio
 import type { ClosureState } from '../../src/core/prediction.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vector-reads.js';
 import type { StoredVectorSummary } from '../../src/store/port/embedding-index.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 export function loadAmbientCandidates(
   hippoRoot: string,
@@ -174,7 +175,7 @@ export function loadContextCandidates(
 
 export function loadTextsHoldingWords(
   hippoRoot: string,
-  tenantId: string | undefined,
+  tenantId: TenantId = ALL_TENANTS,
   words: readonly string[],
   project?: readonly string[],
   admit?: SqlFragment,
@@ -182,7 +183,7 @@ export function loadTextsHoldingWords(
   return onHandle(hippoRoot, (db) => loadTextsHoldingWordsAt(db, tenantId, words, project, admit), openStore);
 }
 
-export function tallySources(hippoRoot: string, tenantId?: string): SourceTally[] {
+export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS): SourceTally[] {
   return onHandle(hippoRoot, (db) => tallySourcesAt(db, tenantId), openStore);
 }
 
@@ -264,12 +265,16 @@ export function replaceDetectedConflicts(
 }
 
 /** Every conflict with `status` (no tenant: every tenant's), read through the store port a page at a time. */
-export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
+export function listMemoryConflicts(
+  hippoRoot: string,
+  status: string = 'open',
+  tenantId: TenantId = ALL_TENANTS,
+): MemoryConflict[] {
   const { conflicts } = sqliteSyncStore(hippoRoot);
   const out: MemoryConflict[] = [];
   let after: KeysetPosition | undefined;
   do {
-    const page = conflicts.list({ tenantId: tenantId ?? null, status, limit: MAX_LIST_LIMIT, after });
+    const page = conflicts.list({ tenantId, status, limit: MAX_LIST_LIMIT, after });
     out.push(...page.rows.map((row) => row.conflict));
     after = page.next ?? undefined;
   } while (after);
@@ -326,14 +331,18 @@ export function loadDormantMemories(
   return onHandle(hippoRoot, (db) => listDormantRows(db, tenantId, opts, admit ?? EVERY_SCOPE));
 }
 
-export function loadEntriesByIds(hippoRoot: string, ids: readonly string[], tenantId?: string): MemoryEntry[] {
+export function loadEntriesByIds(
+  hippoRoot: string,
+  ids: readonly string[],
+  tenantId: TenantId = ALL_TENANTS,
+): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => loadEntriesByIdsAt(db, ids, tenantId), openStore);
 }
 
 export function loadSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
-  tenantId?: string,
+  tenantId: TenantId = ALL_TENANTS,
   cap?: number,
   origins?: readonly string[],
 ): MemoryEntry[] {
@@ -343,7 +352,7 @@ export function loadSessionRawMemories(
 export function countSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
-  tenantId?: string,
+  tenantId: TenantId = ALL_TENANTS,
   scope?: string,
   ownScope?: string,
   origins?: readonly string[],
@@ -358,11 +367,16 @@ export function countSessionRawMemories(
 export function loadFreshRawMemories(
   hippoRoot: string,
   count: number,
-  tenantId?: string,
+  tenantId: TenantId = ALL_TENANTS,
   sessionId?: string,
   origins?: readonly string[],
 ): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => loadFreshRawMemoriesAt(db, count, tenantId, sessionId, origins), openStore);
+}
+
+/** The row with `id` in `tenantId`, or in any tenant when a test leaves it out. */
+export function readEntry(hippoRoot: string, id: string, tenantId: TenantId = ALL_TENANTS): MemoryEntry | null {
+  return onHandle(hippoRoot, (db) => readEntryAt(db, id, tenantId), openStore);
 }
 
 export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
@@ -374,7 +388,7 @@ export function loadAllEntryIds(hippoRoot: string): string[] {
 }
 
 /** Every page of loadEntryTextKeysPageAt, `pageRows` at a time. */
-export function loadEntryTextKeys(hippoRoot: string, tenantId?: string, pageRows = 500): EntryTextKey[] {
+export function loadEntryTextKeys(hippoRoot: string, tenantId: TenantId = ALL_TENANTS, pageRows = 500): EntryTextKey[] {
   return onHandle(
     hippoRoot,
     (db) => {
@@ -548,9 +562,13 @@ export function loadOpenPredictions(
 export function loadRecallEntries(
   hippoRoot: string,
   query: string,
-  options: RecallSearchEntriesOptions = {},
+  options: Partial<RecallSearchEntriesOptions> = {},
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadRecallEntriesAt(db, query, options), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => loadRecallEntriesAt(db, query, { ...options, tenantId: options.tenantId ?? ALL_TENANTS }),
+    openStore,
+  );
 }
 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
@@ -768,7 +786,12 @@ export function listApiKeys(hippoRoot: string, opts: ListApiKeysOpts): ApiKeyLis
   return onHandle(hippoRoot, (db) => listApiKeyRows(db, opts).map((r) => r.key));
 }
 
-export function loadSearchEntries(hippoRoot: string, query: string, limit?: number, tenantId?: string): MemoryEntry[] {
+export function loadSearchEntries(
+  hippoRoot: string,
+  query: string,
+  limit?: number,
+  tenantId: TenantId = ALL_TENANTS,
+): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore);
 }
 
@@ -781,7 +804,7 @@ export async function copyToGlobal(
 ): Promise<MemoryEntry> {
   const ctx = apiCtx(hippoRoot, opts.tenantId ?? 'default', { subject: CLI_ACTOR, role: 'admin', owner: opts.owner });
   const { globalId } = await promote(ctx, id);
-  const copy = ctx.reach?.globalTarget?.store.localFiles.learning.readEntry(globalId);
+  const copy = ctx.reach?.globalTarget?.store.localFiles.learning.readEntry(globalId, ctx.tenantId);
   if (!copy) throw new Error(`the promoted copy ${globalId} is not in the global store`);
   return copy;
 }

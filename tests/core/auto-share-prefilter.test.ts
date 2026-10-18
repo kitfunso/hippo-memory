@@ -13,6 +13,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -139,21 +140,21 @@ const PICKED: ReadonlyArray<[number, string[]]> = [
 describe('autoShare prefilter', () => {
   it('picks the same rows, in store order, with the same skip count, on both sides of the neutral score', () => {
     const ids = seedSignalRows();
-    for (const tenantId of ['default', undefined]) {
+    for (const tenantId of ['default', ALL_TENANTS] as const) {
       for (const [minScore, labels] of PICKED) {
         const wanted = new Set(labels.map((l) => ids.get(l)!));
-        if (tenantId === undefined && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
+        if (tenantId === ALL_TENANTS && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
         const stats: AutoShareStats = { secretSkipped: 0 };
         const picked = autoShare(...sharingStores(root), { minScore, dryRun: true, tenantId, stats });
-        const inOrder = (tenantId === undefined ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)).filter(
-          (e) => wanted.has(e.id),
-        );
+        const inOrder = (
+          tenantId === ALL_TENANTS ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)
+        ).filter((e) => wanted.has(e.id));
         expect(
           picked.map((e) => e.id),
-          `minScore ${minScore} tenant ${tenantId}`,
+          `minScore ${minScore} tenant ${String(tenantId)}`,
         ).toEqual(inOrder.map((e) => e.id));
         expect(picked).toEqual(inOrder);
-        expect(stats.neverAutoShareSkipped).toBe(tenantId === undefined ? 4 : 3);
+        expect(stats.neverAutoShareSkipped).toBe(tenantId === ALL_TENANTS ? 4 : 3);
       }
     }
   });
@@ -161,7 +162,7 @@ describe('autoShare prefilter', () => {
   it('reads only the rows that can clear a score above neutral', () => {
     for (let i = 0; i < 60; i++) put(`plain ${i}`);
     const errorId = put('error', {}, ['error']);
-    for (const tenantId of ['default', undefined]) {
+    for (const tenantId of ['default', ALL_TENANTS] as const) {
       const { result, statements, rowsRead } = recordStatements(() =>
         autoShare(...sharingStores(root), { dryRun: true, tenantId }),
       );

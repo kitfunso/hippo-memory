@@ -34,6 +34,7 @@ entry/session-text.d.ts: parseCompactionItems re-export
 entry/session-text.d.ts: scrubForSharing re-export
 entry/session-text.d.ts: sessionTail re-export
 entry/session-text.d.ts: transcriptWorkingState re-export
+entry/store-kit.d.ts: ALL_TENANTS re-export
 entry/store-kit.d.ts: ActiveGoals re-export
 entry/store-kit.d.ts: AmbientAdmission re-export
 entry/store-kit.d.ts: AmbientCandidateRequest re-export
@@ -159,6 +160,7 @@ entry/store-kit.d.ts: StrengthTallies re-export
 entry/store-kit.d.ts: StrengthenOptions re-export
 entry/store-kit.d.ts: SupersedeWrite re-export
 entry/store-kit.d.ts: TaskSnapshot re-export
+entry/store-kit.d.ts: TenantId re-export
 entry/store-kit.d.ts: TokenSummary re-export
 entry/store-kit.d.ts: TokenUse re-export
 entry/store-kit.d.ts: VectorBackfillQuery re-export

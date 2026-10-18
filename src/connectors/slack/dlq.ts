@@ -1,7 +1,7 @@
 import { adminActor, type Context } from '../../api/index.js';
 import { replayParked, type ConnectorDlq, type Reingest, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
-import { resolveTenantForSlackTeam } from './tenant-routing.js';
+import { resolveTenantForSlackTeam, type SlackFallback } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
@@ -37,7 +37,7 @@ export interface ReplayDlqOptions {
 /** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
  * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
 export async function replayDlqEntry(
-  ctx: Pick<Context, 'hippoRoot' | 'store' | 'config'>,
+  ctx: Pick<Context, 'hippoRoot' | 'tenantId' | 'store' | 'config'>,
   id: number,
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
@@ -47,7 +47,8 @@ export async function replayDlqEntry(
       refuseSignature: (row) => refuseSignature(row, opts),
       isEnvelope: isSlackEventEnvelope,
       notEnvelope: 'not an event_callback envelope',
-      reingest: (_row, envelope) => reingest(ctx, envelope, opts.allowUnknownTeamFallback === true),
+      reingest: (_row, envelope) =>
+        reingest(ctx, envelope, { hostTenant: ctx.tenantId, allowUnknown: opts.allowUnknownTeamFallback === true }),
     },
     ctx.store,
     id,
@@ -83,9 +84,9 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 async function reingest(
   { hippoRoot, store, config }: Pick<Context, 'hippoRoot' | 'store' | 'config'>,
   envelope: JsonValue & SlackEventEnvelope,
-  allowUnknownTeamFallback: boolean,
+  fallback: SlackFallback,
 ): Promise<Reingest> {
-  const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id, allowUnknownTeamFallback);
+  const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id, fallback);
   if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
   const inner = envelope.event;
   if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };

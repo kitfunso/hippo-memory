@@ -1,4 +1,5 @@
 // The built-in store's sharing reads and writes: the existing functions, bound to this store.
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { tallySourcesAt } from './candidates.js';
 import {
   loadEntriesByIdsAt,
@@ -22,7 +23,7 @@ export function sqliteSharing(on: OnHandle): Sharing {
     textKeysPage: (tenantId, page) => on((db) => loadEntryTextKeysPageAt(db, tenantId, page), openStore),
     textKeysHolding: (tenantId, texts) => on((db) => selectTextKeysHoldingAt(db, tenantId, texts), openStore),
     takenIds: (ids) => on((db) => selectTakenIdsAt(db, ids), openStore),
-    entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids), openStore),
+    entriesByIds: (ids) => on((db) => loadEntriesByIdsAt(db, ids, ALL_TENANTS), openStore),
     writeSkippingRejected: (fill) => on((db, files) => writeEntriesSkippingRejectedAt(db, files, fill), openStore),
     sourceTallies: async (tenantId) => on((db) => tallySourcesAt(db, tenantId), openStore),
     searchEntries: (query, limit, tenantId) => on((db) => loadSearchEntriesAt(db, query, limit, tenantId), openStore),

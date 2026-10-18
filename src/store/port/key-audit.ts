@@ -1,4 +1,5 @@
 import type { AuditEvent } from './types.js';
+import type { TenantId } from '../../util/tenant.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;
@@ -25,6 +26,6 @@ export interface ListAuditAfterOpts {
   afterId: number;
   /** Clamped to 1..10000; default 1000. */
   limit?: number;
-  /** Omit for every tenant (deployment-wide export). */
-  tenantId?: string;
+  /** ALL_TENANTS for a deployment-wide export. */
+  tenantId: TenantId;
 }

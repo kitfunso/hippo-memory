@@ -15,6 +15,8 @@ import { placeholders } from '../../util/sql.js';
 import type { OriginFilter } from '../port/types.js';
 import type { RecallSearchEntriesOptions } from '../port/sharing.js';
 import type { VectorCandidateSpec } from '../port/vector-reads.js';
+import { ALL_TENANTS, type TenantId } from '../../util/tenant.js';
+import { tenantAnd } from './tenant.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is
  * its JS twin. */
@@ -64,7 +66,7 @@ function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
-  tenantId: string | undefined,
+  tenantId: TenantId,
   options: SearchRowsOptions = {},
 ): MemoryRow[] {
   const { scopeFilter, includeSuperseded = true, originProjects } = options;
@@ -90,23 +92,23 @@ function loadSearchRows(
 }
 
 function searchPredicates(
-  tenantId: string | undefined,
+  tenantId: TenantId,
   scopeFilter: RecallScopeFilter | undefined,
   includeSuperseded: boolean,
   originProjects: OriginFilter | undefined,
 ): SearchPredicates {
-  // tenantId undefined = no tenant filter (legacy callers / cross-deployment helpers); set = strict isolation via the
-  // composite idx_memories_tenant_created.
-  const tenantPredicate = tenantId !== undefined ? ` AND m.tenant_id = ?` : '';
-  const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
-  const tenantParams = tenantId !== undefined ? [tenantId] : [];
+  // One tenant reads through the composite idx_memories_tenant_created.
+  const one = tenantId !== ALL_TENANTS;
+  const tenantPredicate = tenantAnd(tenantId, 'm.tenant_id = ?').sql;
+  const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
+  const tenantParams = tenantAnd(tenantId).args;
 
   // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only
   // guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
-  // Tenant-only path: with no tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and '
-  // WHERE' by caller context.
-  const archivedClauseTenantOnly = tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
+  // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and
+  // ' WHERE' by caller context.
+  const archivedClauseTenantOnly = one ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
   const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects);
   const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProjects);
@@ -203,13 +205,12 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
   ).all(...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...params, limit) as MemoryRow[];
 }
 
-/** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. With `tenantId` every
- * SELECT filters by it; omitted = no filter. */
+/** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. */
 export function loadSearchEntriesAt(
   db: DatabaseSyncLike,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId?: string,
+  tenantId: TenantId,
 ): MemoryEntry[] {
   return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
 }
@@ -220,7 +221,7 @@ export function loadSearchEntriesAt(
 export function loadRecallEntriesAt(
   db: DatabaseSyncLike,
   query: string,
-  options: RecallSearchEntriesOptions = {},
+  options: RecallSearchEntriesOptions,
 ): MemoryEntry[] {
   return loadRecallSearchEntriesFromDb(db, query, options);
 }
@@ -230,7 +231,7 @@ export function loadRecallEntriesAt(
 export function loadRecallSearchEntriesFromDb(
   db: DatabaseSyncLike,
   query: string,
-  options: RecallSearchEntriesOptions = {},
+  options: RecallSearchEntriesOptions,
 ): MemoryEntry[] {
   const {
     limit = DEFAULT_SEARCH_CANDIDATE_LIMIT,
@@ -253,14 +254,14 @@ export async function loadVectorCandidateEntriesAt(
   index?: VectorIndex,
 ): Promise<MemoryEntry[]> {
   const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
-  const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
+  const tenant = tenantAnd(spec.tenantId, 'm.tenant_id = ?');
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
-  const params = [...(spec.tenantId !== undefined ? [spec.tenantId] : []), ...scope.params];
+  const params = [...tenant.args, ...scope.params];
   const matches = await topVectorMatches(
     db,
     queryVector,
     spec.limit ?? 50,
-    `${tenant} AND m.kind != 'archived'${scope.sql}${current}`,
+    `${tenant.sql} AND m.kind != 'archived'${scope.sql}${current}`,
     params,
     index,
   );

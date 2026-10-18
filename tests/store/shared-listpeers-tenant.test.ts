@@ -3,7 +3,7 @@
  *
  * Pre-D4: listPeers aggregated all entries in the global store regardless
  * of tenant_id. Post-D4: optional tenantId param filters to that tenant
- * before aggregation. Undefined keeps host-wide behaviour for back-compat.
+ * before aggregation; ALL_TENANTS is the host-wide view.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -13,6 +13,7 @@ import { Layer } from '../../src/core/memory.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 function makeSharedEntry(opts: { id: string; project: string; tenantId: string }): MemoryEntry {
   return {
@@ -64,8 +65,8 @@ describe('listPeers tenant scoping', () => {
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_c2', project: 'projectC', tenantId: 'globex' }));
   });
 
-  it('no tenantId arg: returns host-wide peers (back-compat)', async () => {
-    const peers = await listPeers(folderStore(globalRoot));
+  it('ALL_TENANTS: returns host-wide peers', async () => {
+    const peers = await listPeers(folderStore(globalRoot), ALL_TENANTS);
     const map = new Map(peers.map((p) => [p.project, p.count]));
     expect(map.get('projectA')).toBe(2);
     expect(map.get('projectB')).toBe(1);
@@ -92,11 +93,5 @@ describe('listPeers tenant scoping', () => {
   it('tenantId=unknown-tenant: returns empty array', async () => {
     const peers = await listPeers(folderStore(globalRoot), 'never-existed');
     expect(peers).toEqual([]);
-  });
-
-  it('tenantId=undefined explicit: equivalent to omitting the arg', async () => {
-    const a = await listPeers(folderStore(globalRoot));
-    const b = await listPeers(folderStore(globalRoot), undefined);
-    expect(b).toEqual(a);
   });
 });

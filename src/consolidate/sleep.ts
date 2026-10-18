@@ -30,12 +30,14 @@ export type ConsolidateOptions = {
   budget?: WriteBudget;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
   config?: HippoConfig;
+  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the default tenant. */
+  tenantId?: string;
 };
 
 /** A full consolidation pass whose store work goes through `local.consolidation`. */
 export async function runConsolidation(
   local: LocalFiles,
-  options: ConsolidateOptions & { config: HippoConfig; pageRows?: number },
+  options: ConsolidateOptions & { config: HippoConfig; tenantId: string; pageRows?: number },
 ): Promise<ConsolidationResult> {
   const { learning, consolidation: store } = local;
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
@@ -55,6 +57,7 @@ export async function runConsolidation(
   const decayOpts = sessionDecayOptions(store, config);
 
   const run: SleepRun = {
+    tenantId: options.tenantId,
     learning,
     store,
     now,

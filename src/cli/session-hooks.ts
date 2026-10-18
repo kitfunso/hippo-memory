@@ -313,7 +313,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     transcriptPath,
     log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
     sleep: () => sleepFolderStore(hippoRoot, tenantId, flags, logFile),
-    importAgentNotes: () => logSessionEndImport(logFile, transcriptPath),
+    importAgentNotes: () => logSessionEndImport(logFile, tenantId, transcriptPath),
     readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),
     cursor: {
       after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
@@ -522,7 +522,7 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
     }
   } else {
     appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
-    logSessionEndImport(logFile ?? null, undefined);
+    logSessionEndImport(logFile ?? null, tenantId, undefined);
   }
 }
 
@@ -593,6 +593,7 @@ export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandCo
     });
     resetHookInjection(root, tenantId, stdinText, null);
     await cmdPreCompact(storeRoot, cliSyncStore(storeRoot), {
+      tenantId,
       stdinText,
       stdinTimedOut,
       logFile: stringFlag(flags, 'log-file'),
@@ -605,7 +606,7 @@ export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandCo
   });
 }
 
-export async function handlePostCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handlePostCompact({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code
   // shows this hook's stdout as-is. Always exits 0.
   const { text, timedOut } = await readHookStdin();
@@ -613,12 +614,13 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
   const store = hookStoreRoot(hippoRoot);
   const line = await cliHookRequest(() =>
     cmdPostCompact(store, cliSyncStore(store), {
+      tenantId,
       stdinText: text,
       stdinTimedOut: timedOut,
       logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
       // Passed in, since src/capture/ importing the sync would close an import cycle.
       afterSave: (transcriptPath, cwd, log) => {
-        const sync = cliSyncOptions(store, currentMachine(), { busyWaitMs: COMPACTION_DB_WAIT_MS });
+        const sync = cliSyncOptions(store, tenantId, currentMachine(), { busyWaitMs: COMPACTION_DB_WAIT_MS });
         const report = importSessionFolder(store, transcriptPath, cwd, sync);
         const summary = summaryLine(report);
         if (summary !== null) log(summary);

@@ -49,7 +49,12 @@ beforeEach(() => {
 afterEach(() => closeWorld(w));
 
 const sync = (): ImportReport =>
-  importForStore(w.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: w.machine });
+  importForStore(w.local, {
+    configAt: loadConfig,
+    tenantId: 'default',
+    agentImport: sqliteAgentImport,
+    machine: w.machine,
+  });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 const only = (): MemoryEntry => {
   const rows = liveRows(w.local);

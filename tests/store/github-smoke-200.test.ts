@@ -20,7 +20,7 @@ import { ingestEvent, type IngestEvent } from '../../src/connectors/github/inges
 import type { IngestResult } from '../../src/connectors/ingest.js';
 import { handleCommentDeleted } from '../../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../../src/connectors/github/signature.js';
-import { resolveTenantForGitHub } from '../../src/connectors/github/tenant-routing.js';
+import { resolveTenantForGitHub, type GitHubFallback } from '../../src/connectors/github/tenant-routing.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -32,6 +32,10 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { envTenant } from '../../src/util/env.js';
+
+// The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
+const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -376,7 +380,7 @@ describe('GitHub connector — 200-event smoke test', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      const resolved = await resolveTenantForGitHub(sqliteStore(root), { installationId: 'unknown-99' });
+      const resolved = await resolveTenantForGitHub(sqliteStore(root), { installationId: 'unknown-99' }, fallback());
       expect(resolved).toBeNull();
     } finally {
       closeHippoDb(db);

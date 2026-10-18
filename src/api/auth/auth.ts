@@ -7,6 +7,7 @@ import type { KeysetPosition } from '../../util/keyset.js';
 import type { KeyMint, SelfKeyMint, HippoStore } from '../../store/port.js';
 import type { ApiKeyOwner } from '../../store/port/types.js';
 import { DAY_MS } from '../../util/time.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
 import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../store/port/key-writes.js';
 import type { ApiKeyRecord } from '../../store/port/types.js';
@@ -176,7 +177,7 @@ export async function authListRows(ctx: Context, opts: KeyListOptions): Promise<
  * `active` is false; the host's own view, so the host admin only. */
 export async function authListAllTenants(ctx: Context, active: boolean): Promise<ApiKeyListItem[]> {
   requireHostAdmin(ctx, "Listing every tenant's keys");
-  const rows = await ctx.store.keyWrites.listApiKeys({ active, tenantId: null });
+  const rows = await ctx.store.keyWrites.listApiKeys({ active, tenantId: ALL_TENANTS });
   return rows.map((row) => row.key);
 }
 

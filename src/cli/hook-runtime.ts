@@ -24,9 +24,14 @@ import type { CliFlags } from './flag-values.js';
 /**
  * A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here.
  */
-export function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
+export function logSessionEndImport(
+  logFile: string | null,
+  tenantId: string,
+  transcriptPath: string | undefined,
+): void {
   try {
-    const report = importAtSessionEnd(process.cwd(), transcriptPath, cliSyncOptions(getGlobalRoot(), currentMachine()));
+    const sync = cliSyncOptions(getGlobalRoot(), tenantId, currentMachine());
+    const report = importAtSessionEnd(process.cwd(), transcriptPath, sync);
     const line = summaryLine(report);
     if (line !== null) appendSessionEndCloseLog(logFile, line);
     for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);

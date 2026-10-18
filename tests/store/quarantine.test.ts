@@ -19,6 +19,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { copyToGlobal, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -211,7 +212,9 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   });
 
   it('shareMemory refuses a quarantined row even with force', async () => {
-    await expect(shareMemory(...sharingStores(home), id, { force: true })).rejects.toThrow(/quarantine/i);
+    await expect(shareMemory(...sharingStores(home), id, { tenantId: 'default', force: true })).rejects.toThrow(
+      /quarantine/i,
+    );
   });
 
   it('copyToGlobal refuses a quarantined row', async () => {
@@ -229,8 +232,10 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   it('autoShare never offers a quarantined row, so sleep cannot abort on it', () => {
     const globalHome = makeRoot('quarantine-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalHome);
-    expect(autoShare(...sharingStores(home), { minScore: 0, dryRun: true }).map((e) => e.id)).not.toContain(id);
-    expect(() => autoShare(...sharingStores(home), { minScore: 0 })).not.toThrow();
+    expect(
+      autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true }).map((e) => e.id),
+    ).not.toContain(id);
+    expect(() => autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0 })).not.toThrow();
   });
 });
 

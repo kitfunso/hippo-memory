@@ -28,9 +28,6 @@ export const ENV_READERS = [
   [/^util\/agent-homes\.ts$/, 'machine locations: home folders and HIPPO_HOME'],
 ];
 
-// Lane L2a moves the tenant default and HIPPO_TENANT out of util/env.ts and deletes this set.
-export const TENANT_NAMES = new Set(['DEFAULT_TENANT_ID', 'envTenant']);
-
 /**
  * Returns the 1-based line numbers in a source text that touch process.env.
  * @param {string} text
@@ -67,13 +64,13 @@ export function findEnvReads(srcDir, allowed = ALLOWED) {
     .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 }
 
-/** The lines of `file` (a path under src) that import util/env.ts for more than the tenant names. */
-export function envImportLines(file, text, tenantNames = TENANT_NAMES) {
+/** The lines of `file` (a path under src) that import util/env.ts, envTenant included: the roots resolve the tenant. */
+export function envImportLines(file, text) {
   if (!text.includes('env')) return [];
   const isEnv = (spec) =>
     spec.startsWith('.') && posix.normalize(posix.join(posix.dirname(file), spec)).replace(/\.js$/, '') === 'util/env';
   return readFacts(text, file, ['imports', 'dynamic'])
-    .imports.filter((i) => isEnv(i.spec) && !i.names.every((n) => tenantNames.has(n)))
+    .imports.filter((i) => isEnv(i.spec))
     .map((i) => i.line);
 }
 

@@ -4,6 +4,7 @@ import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { LocalFiles } from './port/local-files.js';
 import type { SessionAndAdminGroups } from './port-groups.js';
 import type { MemoryEntry } from '../core/memory.js';
+import type { TenantId } from '../util/tenant.js';
 import type { TokenUse } from './port/token-ledger.js';
 import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
 import type { SessionHandoff } from '../core/handoff.js';
@@ -222,17 +223,17 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
   /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
-  /** The rows among the first 500 ids, a tenant narrowing them, ordered by created, then content, then id, all
-   * ascending; the input order is ignored. */
-  entriesByIds(ids: readonly string[], tenantId?: string): Promise<MemoryEntry[]>;
+  /** The rows of `tenantId` among the first 500 ids, ordered by created, then content, then id, all ascending; the
+   * input order is ignored. */
+  entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
-  /** The first `count` (at most 200) unsuperseded raw rows a tenant, a non-empty session
-   * id and non-null `origins` (those projects and user-global rows) must narrow, by
-   * created descending, then content and id ascending. */
+  /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session id and non-null
+   * `origins` (those projects and user-global rows) must narrow, by created descending, then content and id
+   * ascending. */
   freshRawEntries(
     count: number,
-    tenantId: string | undefined,
+    tenantId: string,
     sessionId: string | undefined,
     origins: readonly string[] | null,
   ): Promise<MemoryEntry[]>;

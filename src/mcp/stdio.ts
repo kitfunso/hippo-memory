@@ -1,7 +1,7 @@
 // Stdio transport: newline-delimited JSON-RPC frames in on stdin, replies out on stdout.
 
 import { exitAfterFlush, installCrashHandlers } from '../util/crash-handlers.js';
-import { envRequestDeadlineMs } from '../util/env.js';
+import { envRequestDeadlineMs, envTenant } from '../util/env.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { requestDeadlineMs } from '../util/request-scope.js';
 import { MAX_BODY_BYTES } from '../util/http-util.js';
@@ -14,7 +14,6 @@ import {
   type McpRequest,
   type McpResponse,
 } from './protocol.js';
-import { resolveTenantId } from '../store/index.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
@@ -150,7 +149,7 @@ function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): string {
 function handleFrame(req: McpRequest, host: McpHost): Promise<McpResponse | null> {
   return host.runRequest(() => {
     if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
-    const tenantId = resolveTenantId({});
+    const tenantId = envTenant();
     const root = findHippoRoot() ?? createGlobalStoreOnFirstRun(host, tenantId);
     return handleMcpRequest(req, host.contextFor(root, tenantId));
   });

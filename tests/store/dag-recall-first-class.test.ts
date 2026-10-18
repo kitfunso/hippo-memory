@@ -25,6 +25,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/util/env.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -293,7 +294,10 @@ describe('first-class DAG recall (scoring layer)', () => {
     // Empty global root (no global path; the function tolerates missing dir)
     const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-e4-global-empty-'));
     try {
-      const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), { explain: true });
+      const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), {
+        tenantId: ALL_TENANTS,
+        explain: true,
+      });
       const sResult = findResult(results, summary.id);
       const br = sResult?.breakdown;
       expect(br?.summaryDeboost).toBeCloseTo(0.85);

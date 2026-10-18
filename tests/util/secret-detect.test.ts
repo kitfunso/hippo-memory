@@ -22,6 +22,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initStore } from '../../src/store/sqlite/handles.js';
+import { ALL_TENANTS } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -228,7 +229,9 @@ describe('producer + sync vetoes (real stores)', () => {
   it('shareMemory refuses a secret row even with force', async () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
-    await expect(shareMemory(...sharingStores(projA), row.id, { force: true })).rejects.toThrow(/secret/i);
+    await expect(shareMemory(...sharingStores(projA), row.id, { tenantId: 'default', force: true })).rejects.toThrow(
+      /secret/i,
+    );
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
@@ -236,7 +239,7 @@ describe('producer + sync vetoes (real stores)', () => {
     // error tag + pin push transferScore over the 0.6 bar for both rows.
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
-    const shared = autoShare(...sharingStores(projA), { minScore: 0.6 });
+    const shared = autoShare(...sharingStores(projA), { tenantId: ALL_TENANTS, minScore: 0.6 });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
@@ -247,7 +250,7 @@ describe('producer + sync vetoes (real stores)', () => {
     // it must NOT increment the counter.
     writeEntry(projA, createMemory('low transfer secret sk_vendor_cafebabe999888 note'));
     const stats = { secretSkipped: 0 };
-    const shared = autoShare(...sharingStores(projA), { minScore: 0.6, stats });
+    const shared = autoShare(...sharingStores(projA), { tenantId: ALL_TENANTS, minScore: 0.6, stats });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
     expect(stats.secretSkipped).toBe(1);
   });
@@ -255,7 +258,12 @@ describe('producer + sync vetoes (real stores)', () => {
   it('autoShare fills stats identically under dryRun', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const stats = { secretSkipped: 0 };
-    const candidates = autoShare(...sharingStores(projA), { minScore: 0.6, dryRun: true, stats });
+    const candidates = autoShare(...sharingStores(projA), {
+      tenantId: ALL_TENANTS,
+      minScore: 0.6,
+      dryRun: true,
+      stats,
+    });
     expect(candidates).toHaveLength(0);
     expect(stats.secretSkipped).toBe(1);
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
@@ -276,7 +284,7 @@ describe('producer + sync vetoes (real stores)', () => {
   it('shareMemory stamps the canonical origin on the global copy', async () => {
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
-    const globalCopy = await shareMemory(...sharingStores(projA), row.id, { force: true });
+    const globalCopy = await shareMemory(...sharingStores(projA), row.id, { tenantId: 'default', force: true });
     expect(globalCopy?.origin_project).toBe('proj-a');
     expect(globalCopy?.source).toMatch(/^shared:proj-a:/);
   });

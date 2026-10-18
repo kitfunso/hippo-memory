@@ -21,6 +21,7 @@ import { diagnosticsAt, folderFiles } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -55,7 +56,7 @@ function ensurePilotArm(
   return ledger.pilotArm(tenantId, sessionId, rateBp, { write: true, ...opts });
 }
 
-const readPilotArm = (handle: DatabaseSyncLike, sessionId: string, tenantId?: string): string | null =>
+const readPilotArm = (handle: DatabaseSyncLike, sessionId: string, tenantId: TenantId = ALL_TENANTS): string | null =>
   firstPilotArmHash(handle, sessionId, tenantId)?.block_hash ?? null;
 // SAFETY: a single COUNT(*) aggregate aliased `n`.
 const armCount = (): number =>
@@ -295,7 +296,9 @@ describe('ledger readers skip arm rows', () => {
 describe('doctor', () => {
   const pilotCheck = () => {
     vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-    return runDoctor({ diagnosticsAt, cwd: tmp, home: tmp, version: 'test' }).checks.find((c) => c.id === 'pilot');
+    return runDoctor({ diagnosticsAt, tenantId: 'default', cwd: tmp, home: tmp, version: 'test' }).checks.find(
+      (c) => c.id === 'pilot',
+    );
   };
 
   it('reports the pilot only when the rate is above 0', () => {

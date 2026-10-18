@@ -5,8 +5,10 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { sqliteSyncStore, sqliteStore } from '../../src/store/sqlite/store.js';
+import type { ConflictListQuery } from '../../src/store/port/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
+import { ALL_TENANTS, type TenantId } from '../../src/util/tenant.js';
 
 const T = 'default';
 const roots: string[] = [];
@@ -96,11 +98,11 @@ describe('conflicts group', () => {
     replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 }]);
     const sync = sqliteSyncStore(r).conflicts;
     const served = sqliteStore(r).conflicts;
-    const query = (tenantId: string | null) => ({ tenantId, status: 'open', limit: 10 });
+    const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
     const [open] = sync.list(query(T)).rows;
     expect(open?.a).not.toBeNull();
     expect(open?.b).not.toBeNull();
-    expect((await served.list(query(null))).rows).toHaveLength(1);
+    expect((await served.list(query(ALL_TENANTS))).rows).toHaveLength(1);
     expect((await served.list(query('other'))).rows).toHaveLength(0);
     expect((await served.get(T, open!.conflict.id))?.conflict.id).toBe(open!.conflict.id);
     expect(await served.get('other', open!.conflict.id)).toBeNull();
@@ -170,7 +172,7 @@ describe('reports group', () => {
     const first = await served.entriesPage(T, { limit: 1 });
     expect(first.entries).toHaveLength(1);
     expect(first.next).not.toBeNull();
-    expect((await served.entriesPage(null, { limit: 10 })).entries).toHaveLength(2);
+    expect((await served.entriesPage(ALL_TENANTS, { limit: 10 })).entries).toHaveLength(2);
     expect(await served.countEntries()).toBe(2);
     expect((await served.tokenUse(T, '2020-01-01T00:00:00.000Z')).totalTokens).toBe(0);
     expect(await served.failures(T, '2020-01-01T00:00:00.000Z')).toBeDefined();

@@ -2,6 +2,8 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { TokenSurface } from '../port/token-ledger.js';
 import { placeholders } from '../../util/sql.js';
+import type { TenantId } from '../../util/tenant.js';
+import { tenantAnd } from './tenant.js';
 
 export interface TokenRowInput {
   ts: string;
@@ -170,18 +172,18 @@ export function deleteRereadRows(db: DatabaseSyncLike, tenantId: string, session
   );
 }
 
-/** The first stored pilot arm hash for a session, optionally of one tenant. */
+/** The first stored pilot arm hash for a session in `tenantId`. */
 export function firstPilotArmHash(
   db: DatabaseSyncLike,
   sessionId: string,
-  tenantId?: string,
+  tenantId: TenantId,
 ): { block_hash: string | null } | undefined {
-  const params = tenantId === undefined ? [sessionId] : [sessionId, tenantId];
+  const tenant = tenantAnd(tenantId);
   // SAFETY: the SELECT names exactly this one column.
   return db
     .prepare(
-      `SELECT block_hash FROM token_ledger WHERE session_id = ?${tenantId === undefined ? '' : ' AND tenant_id = ?'}
+      `SELECT block_hash FROM token_ledger WHERE session_id = ?${tenant.sql}
      AND surface = 'pilot' AND event = 'arm' ORDER BY id LIMIT 1`,
     )
-    .get(...params) as { block_hash: string | null } | undefined;
+    .get(sessionId, ...tenant.args) as { block_hash: string | null } | undefined;
 }

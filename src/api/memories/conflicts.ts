@@ -13,6 +13,7 @@ import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../../util/limits.js';
 import type { KeysetPosition } from '../../util/keyset.js';
+import { ALL_TENANTS } from '../../util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
 import type { TenantReach } from './memories.js';
 
@@ -166,7 +167,7 @@ export async function conflictList(
 ): Promise<ConflictPage> {
   requireHostAdmin(ctx, 'Listing conflicts past the scope check');
   const page = await ctx.store.conflicts.list({
-    tenantId: reach.everyTenant ? null : ctx.tenantId,
+    tenantId: reach.everyTenant ? ALL_TENANTS : ctx.tenantId,
     status,
     limit: pageLimit(opts.limit),
     after: opts.after,
