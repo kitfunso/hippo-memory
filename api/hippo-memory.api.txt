@@ -120,6 +120,7 @@ entry/store-kit.d.ts: OTHER_STORE_MARKER re-export
 entry/store-kit.d.ts: OptionalGroup re-export
 entry/store-kit.d.ts: OriginFilter re-export
 entry/store-kit.d.ts: OutcomeWrite re-export
+entry/store-kit.d.ts: PROTECTED_ROWS re-export
 entry/store-kit.d.ts: PhysicsParticle re-export
 entry/store-kit.d.ts: PlanningFallacyEvidence re-export
 entry/store-kit.d.ts: PredictionBaserate re-export
@@ -138,6 +139,7 @@ entry/store-kit.d.ts: Rejection re-export
 entry/store-kit.d.ts: RejectionCheck re-export
 entry/store-kit.d.ts: RejectionSource re-export
 entry/store-kit.d.ts: Rejections re-export
+entry/store-kit.d.ts: RepairProtection re-export
 entry/store-kit.d.ts: Reports re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
@@ -188,6 +190,7 @@ entry/store-kit.d.ts: physicsSearch re-export
 entry/store-kit.d.ts: rankVectorRows re-export
 entry/store-kit.d.ts: rarestFtsQuery re-export
 entry/store-kit.d.ts: rejectionDigest re-export
+entry/store-kit.d.ts: repairKeeps re-export
 entry/store-kit.d.ts: replacesIndex re-export
 entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: sqliteStore re-export
