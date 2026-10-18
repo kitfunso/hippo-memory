@@ -3,8 +3,10 @@
 // import cycle.
 
 import type { DatabaseSyncLike } from '../db/index.js';
-import { summarizeTokenUse, type TokenSummary } from './token-ledger.js';
-import { summarizeFailures, type FailureSummary } from './failure-log.js';
+import { summarizeTokenUse } from './token-ledger.js';
+import type { TokenSummary } from './port/token-ledger.js';
+import { summarizeFailures } from './failure-log.js';
+import type { FailureSummary } from './port/failure-log.js';
 
 /** One tenant's token ledger totals since `sinceIso`. */
 export function tokenUseSummaryAt(db: DatabaseSyncLike, tenantId: string, sinceIso: string): TokenSummary {

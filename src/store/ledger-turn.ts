@@ -1,10 +1,12 @@
 // One hook or context turn's token-ledger work on one hippo.db handle, and the rule for a row that did not land.
 import { isSqliteBusy, noteStoreBusy, type DatabaseSyncLike } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import type { DeliveryEventInput } from './delivery-recorder.js';
-import { recordTokenUse, type TokenUse } from './token-ledger.js';
-import { ensurePilotArm, hashArm, readPilotArm, type PilotArm } from './pilot-arm.js';
+import { recordTokenUse } from './token-ledger.js';
+import { ensurePilotArm, readPilotArm } from './pilot-arm.js';
+import { hashArm } from '../core/pilot-arm.js';
+import type { PilotArm } from '../core/pilot-arm.js';
 import { type DeliveryPruneSchedule, writeDeliveryEventOnHandle } from './recall-trace.js';
+import type { LedgerTurn } from './port/ledger.js';
 
 // SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no database.
 const SQLITE_CORRUPT = 11;
@@ -34,19 +36,6 @@ export function noteLedgerRowSkipped<E>(error: E): void {
   const message = `token ledger row skipped: ${errorMessage(error)}`;
   if (skip === 'absent') log.debug(message);
   else log.warnThenDebug('token-ledger-row', message, errorFields(error));
-}
-
-/** Stores one delivery event and returns its id, or null when the write failed. */
-export type DeliveryWrite = (input: DeliveryEventInput) => number | null;
-
-/** The token rows of one turn and the delivery event that follows them. */
-export interface LedgerTurn {
-  readonly uses: readonly TokenUse[];
-  /** Makes each row its own attempt: a failed one is reported here and the rest still run. Without it the first failure
-   * throws. */
-  readonly onRowError?: <E>(error: E) => void;
-  /** Runs after the rows with a writer on their connection, so the delivery event costs no second open. */
-  readonly delivery?: (write: DeliveryWrite) => void;
 }
 
 /** Books a turn's token rows, then its delivery event, on `db`. */

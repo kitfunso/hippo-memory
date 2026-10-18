@@ -1,19 +1,11 @@
 // Pilot arm: one token_ledger row per session names its arm, `hippo` or `holdout`, so a pilot can compare them.
 // `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is
 // fixed.
-import { createHash } from 'node:crypto';
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
 import { recordTokenUse } from './token-ledger.js';
-
-export type PilotArm = 'hippo' | 'holdout';
-
-/** Deterministic split: the same session and rate always land in the same arm. */
-export function hashArm(sessionId: string, rateBp: number): PilotArm {
-  const bucket = parseInt(createHash('sha256').update(sessionId).digest('hex').slice(0, 8), 16) % 10000;
-  return bucket < rateBp ? 'holdout' : 'hippo';
-}
+import { hashArm, type PilotArm } from '../core/pilot-arm.js';
 
 /** The session's first stored arm, or null; never writes. Without `tenantId` any tenant's row counts, since on one
  * machine a session has one arm. */

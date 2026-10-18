@@ -24,7 +24,7 @@ import {
   deriveGraph,
   loadGraphSources,
 } from '../../src/graph/extract.js';
-import type { EntityType } from '../../src/store/graph-rows.js';
+import type { EntityType } from '../../src/store/port/graph-reads.js';
 import { readGraphDelta } from '../../src/graph/delta.js';
 import { WRITE_BUDGET } from '../../src/util/write-budget.js';
 import { sleep, adminActor } from '../../src/api/index.js';

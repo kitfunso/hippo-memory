@@ -1,13 +1,7 @@
 // The graph's entity, relation and queue rows as hippo.db holds them, and the types every reader and writer of them
 // shares.
-
-export type EntityType = 'person' | 'project' | 'customer' | 'system' | 'policy' | 'decision';
-export type RelationType = 'owns' | 'supersedes' | 'depends-on' | 'blocked-by' | 'references';
-/** The consolidated source kinds the graph is permitted to index (never 'raw'). */
-export type SourceKind = 'distilled' | 'superseded';
-/** The authoritative first-class object types a graph row may be anchored to (the object
- *  provenance path, alongside the memory path). Maps to source_object_type. */
-export type SourceObjectType = 'decision' | 'policy' | 'customer' | 'project';
+import type { Entity, EntityType, Relation, RelationType, SourceKind, SourceObjectType } from './port/graph-reads.js';
+import type { DesiredEntity, DesiredRelation, SourceObjectRef } from './port/graph-rebuild.js';
 
 export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'person',
@@ -17,13 +11,6 @@ export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'policy',
   'decision',
 ]);
-
-/** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune
- * (memory_id may go NULL) and is re-validated by the rebuild, not a hard FK. */
-export interface SourceObjectRef {
-  type: SourceObjectType;
-  id: number;
-}
 
 export const GRAPH_RELATION_TYPES: ReadonlySet<RelationType> = new Set<RelationType>([
   'owns',
@@ -39,36 +26,6 @@ export const VALID_QUEUE_STATES: ReadonlySet<GraphQueueStatus> = new Set<GraphQu
   'processed',
   'skipped',
 ]);
-
-export interface Entity {
-  id: number;
-  tenantId: string;
-  entityType: EntityType;
-  name: string;
-  /** The consolidated source memory this entity came from; NULL once the mirror is forgotten/pruned (ON DELETE SET
-   * NULL), then provenance is source_object. */
-  memoryId: string | null;
-  sourceKind: SourceKind;
-  /** The authoritative object this entity is anchored to (object-provenance path).
-   *  Set for object-sourced entities; absent for memory-only (prose/NLP) entities. */
-  sourceObjectType?: SourceObjectType;
-  sourceObjectId?: number;
-  createdAt: string;
-}
-
-export interface Relation {
-  id: number;
-  tenantId: string;
-  fromEntityId: number;
-  toEntityId: number;
-  relType: RelationType;
-  /** NULL once the mirror is forgotten/pruned; the relation survives via source_object. */
-  memoryId: string | null;
-  sourceKind: SourceKind;
-  sourceObjectType?: SourceObjectType;
-  sourceObjectId?: number;
-  createdAt: string;
-}
 
 export interface EntityRow {
   id: number;
@@ -196,63 +153,7 @@ export interface InsertRelationOptions {
   sourceObject?: SourceObjectRef;
 }
 
-/** The entity columns a rebuild diffs against. */
-export interface StoredEntity {
-  id: number;
-  entity_type: string;
-  name: string;
-  memory_id: string | null;
-  source_kind: string;
-  source_object_type: string | null;
-  source_object_id: number | null;
-}
-
-/** The relation columns a rebuild diffs against. */
-export interface StoredRelation {
-  id: number;
-  from_entity_id: number;
-  to_entity_id: number;
-  rel_type: string;
-  memory_id: string | null;
-  source_kind: string;
-  source_object_type: string | null;
-  source_object_id: number | null;
-}
-
-/** One tenant's stored graph as a rebuild reads it, with the kind of each memory the desired rows name. */
-export interface StoredGraph {
-  readonly kinds: ReadonlyMap<string, string>;
-  readonly entities: readonly StoredEntity[];
-  readonly relations: readonly StoredRelation[];
-}
-
-/** What names an object-derived entity across rebuilds; v38 has no UNIQUE on it, so the diff keeps one row per key. */
-export interface NaturalKey {
-  readonly entityType: EntityType;
-  readonly sourceObject: SourceObjectRef;
-}
-
-export interface DesiredEntity extends NaturalKey {
-  readonly name: string;
-  readonly memoryId: string | null;
-}
-
-export interface DesiredRelation {
-  readonly from: NaturalKey;
-  readonly to: NaturalKey;
-  readonly relType: RelationType;
-  readonly memoryId: string | null;
-  readonly sourceObject: SourceObjectRef;
-}
-
 export interface DesiredGraph {
   readonly entities: readonly DesiredEntity[];
   readonly relations: readonly DesiredRelation[];
 }
-
-export type GraphOp =
-  | { readonly op: 'deleteEntity'; readonly id: number }
-  | { readonly op: 'updateEntity'; readonly id: number; readonly entity: DesiredEntity }
-  | { readonly op: 'insertEntity'; readonly entity: DesiredEntity }
-  | { readonly op: 'deleteRelation'; readonly id: number }
-  | { readonly op: 'insertRelation'; readonly relation: DesiredRelation };

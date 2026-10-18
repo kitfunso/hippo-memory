@@ -39,7 +39,7 @@ import {
   deleteEntriesOneByOneAt,
   memoriesBackingObjectsAt,
 } from '../../src/store/delete-and-batch.js';
-import type { DormantMemory, ListDormantOpts } from '../../src/store/dormant.js';
+import type { DormantMemory, ListDormantOpts } from '../../src/store/port/dormant.js';
 import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
 import {
   countSessionRawMemoriesAt,
@@ -51,7 +51,7 @@ import {
   loadSessionRawMemoriesAt,
 } from '../../src/store/entry-reads.js';
 import { writeEntriesTogetherAt } from '../../src/store/entry-writes.js';
-import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/goals.js';
+import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/port/goals.js';
 import {
   activeGoalsWithPoliciesAt,
   completeGoalAt,
@@ -70,8 +70,8 @@ import {
   loadNeighborRelationsAt,
   loadRelationsAmongAt,
 } from '../../src/store/graph-reads.js';
-import type { Entity, Relation } from '../../src/store/graph-rows.js';
-import type { HandoffFilter, SessionEndHandoffRequest } from '../../src/store/handoffs.js';
+import type { Entity, Relation } from '../../src/store/port/graph-reads.js';
+import type { HandoffFilter, SessionEndHandoffRequest } from '../../src/store/port/sessions.js';
 import {
   loadHandoffByIdAt,
   loadLatestHandoffAt,
@@ -95,7 +95,9 @@ import {
   loadPredictionByIdAt,
   loadPredictionsByClassAt,
 } from '../../src/store/predictions.js';
-import type { HippoIndex, MemoryConflict, SessionEvent, TaskSnapshot } from '../../src/store/rows.js';
+import type { HippoIndex } from '../../src/store/rows.js';
+import type { MemoryConflict } from '../../src/store/port/conflicts.js';
+import type { SessionEvent, TaskSnapshot } from '../../src/store/port/sessions.js';
 import type { SqlFragment } from '../../src/store/rule-sql.js';
 import { loadRecallEntriesAt, loadSearchEntriesAt, loadVectorCandidateEntriesAt } from '../../src/store/search-rows.js';
 import { listApiKeyRows } from '../../src/store/auth.js';
@@ -104,10 +106,10 @@ import {
   clearActiveTaskSnapshotAt,
   closeTaskSnapshotsForSessionAt,
   findPromotableSessionsAt,
-  freshActiveSnapshot,
   listSessionEventsAt,
   loadActiveTaskSnapshotAt,
 } from '../../src/store/sessions.js';
+import { freshActiveSnapshot } from '../../src/core/session-snapshot.js';
 import {
   applyRebuildResultAt,
   loadAllDirtySummariesAt,
@@ -115,7 +117,7 @@ import {
   loadChildrenOfSummariesAt,
   loadChildrenOfSummaryAt,
 } from '../../src/store/summaries.js';
-import type { ApiCall } from '../../src/store/token-ledger.js';
+import type { ApiCall } from '../../src/core/transcript-calls.js';
 import { recordRereadsAt } from '../../src/store/token-ledger.js';
 import {
   loadStoredParticlesAt,
@@ -126,7 +128,7 @@ import {
   seedStoredParticleAt,
   storedVectorSummaryAt,
 } from '../../src/store/vector-index.js';
-import type { WorkingMemoryItem } from '../../src/store/working-memory.js';
+import type { WorkingMemoryItem } from '../../src/store/port/sessions.js';
 import { wmClearAt, wmPushAt, wmReadAt } from '../../src/store/working-memory.js';
 import type { KeysetPosition } from '../../src/util/keyset.js';
 import { MAX_LIST_LIMIT } from '../../src/util/limits.js';

@@ -1,5 +1,6 @@
 // Leaf module so entry-writes.ts and raw-archive.ts can both mark a parent summary dirty without importing each other.
-import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { appendAuditEvent } from './audit.js';
+import { reportAuditWriteFailure } from '../core/audit-report.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { DAG_LEVEL } from '../core/memory.js';
 import type { AppendAuditOpts } from './port/types.js';

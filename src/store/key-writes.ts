@@ -6,6 +6,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { KeyMint, SelfKeyMint } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from './port/types.js';
+import type { ScopeGrantChange } from './port/key-grants.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {
@@ -39,16 +40,6 @@ export function createSelfKeyAt(db: DatabaseSyncLike, mint: SelfKeyMint): string
     appendAuditEvent(db, createAuditOf(mint));
     return replaced;
   });
-}
-
-/** One grant or ungrant on a key of `tenantId`, and the actor of its audit row; the api has already refused an open or
- * personal scope. */
-export interface ScopeGrantChange {
-  readonly tenantId: string;
-  readonly keyId: string;
-  readonly scope: string;
-  readonly op: 'auth_grant' | 'auth_ungrant';
-  readonly actor: string;
 }
 
 /** The change and its audit row commit together, so a failed audit write leaves the grants as they were. */

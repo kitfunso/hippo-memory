@@ -1,10 +1,10 @@
 // Read path: one typed entry per recall ranker (retrieve, retrieveRanking; the CLI core is in request.ts).
 
 import { envRequireSessionScopedFreshTail } from '../../util/env.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../core/search-types.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import { boostByGoals } from '../../search/goal-boost.js';
-import type { RecallSearchArgs, RecallWrites } from '../../store/index.js';
+import type { RecallSearchArgs, RecallWrites } from '../../store/port.js';
 import { searchByEngine } from '../../search/engine.js';
 import { vectorSourceOf } from '../../search/hybrid.js';
 import type { HybridVectorCandidates } from '../../search/vector.js';

@@ -12,7 +12,7 @@ import type {
   DeliveryEventInput,
   DeliveryRejectReason,
   DeliveryStage,
-} from '../../src/store/delivery-recorder.js';
+} from '../../src/core/delivery.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import type { JsonValue } from '../../src/util/json.js';

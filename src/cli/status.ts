@@ -24,7 +24,7 @@ import {
   storedParticles,
   vectorSummary,
 } from '../api/status.js';
-import type { StatusCounts } from '../store/candidates.js';
+import type { StatusCounts } from '../store/port/reports.js';
 import type { Diagnostics } from '../store/port/diagnostics.js';
 import { cliConfig, cliApiContext, cliLocalFiles, type CliContext } from './api-context.js';
 

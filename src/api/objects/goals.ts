@@ -1,6 +1,6 @@
 // The per-session goal stack that recall boosts: push, list, complete, suspend and resume.
 
-import type { CompleteGoalOpts, PushGoalOpts } from '../../store/goals.js';
+import type { CompleteGoalOpts, PushGoalOpts } from '../../store/port/goals.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import type { Goal } from '../../store/port/types.js';
 

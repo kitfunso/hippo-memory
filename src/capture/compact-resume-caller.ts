@@ -10,7 +10,7 @@ import { bookTokenUse, ledgerReachOf } from '../api/ledger-db.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { Sessions } from '../store/port-groups.js';
-import type { SessionEvent } from '../store/rows.js';
+import type { SessionEvent } from '../store/port/sessions.js';
 import { estimateTokens } from '../util/token-text.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';

@@ -123,3 +123,11 @@ export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'
 
 /** One project name, or every name a project's rows carry. */
 export type OriginFilter = string | readonly string[];
+
+/** The api_keys fields a tenant, revocation, rank or self-service ownership check reads. */
+export interface ApiKeyOwner {
+  tenantId: string;
+  revokedAt: string | null;
+  role: string;
+  ownerSubject: string | null;
+}

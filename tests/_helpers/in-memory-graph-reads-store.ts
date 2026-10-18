@@ -13,13 +13,10 @@ import {
   RELATION_COLS,
   rowToEntity,
   rowToRelation,
-  type Entity,
   type EntityRow,
-  type EntityType,
-  type Relation,
   type RelationRow,
-  type StoredGraph,
 } from '../../src/store/graph-rows.js';
+import type { Entity, EntityType, Relation, StoredGraph } from '../../src/store/port/graph-reads.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';

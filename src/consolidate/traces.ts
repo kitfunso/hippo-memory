@@ -1,7 +1,7 @@
 import { isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../core/memory.js';
 import { rejectionDigest } from '../core/rejection-digest.js';
-import type { SessionEvent } from '../store/rows.js';
+import type { SessionEvent } from '../store/port/sessions.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { envTenant } from '../util/env.js';

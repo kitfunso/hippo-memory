@@ -6,11 +6,7 @@ import type { DatabaseSyncLike } from '../db/index.js';
 import { insertDormantRow } from './dormant.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
-
-export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
-export type SetAsideResult =
-  | { readonly kind: 'untagged'; readonly entry: MemoryEntry }
-  | { readonly kind: 'dormant'; readonly id: string };
+import type { SetAsideResult, SetAsideWhy } from './port/project-tags.js';
 
 /** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other goes dormant,
  * restorable. */

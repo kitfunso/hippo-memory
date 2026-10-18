@@ -1,4 +1,4 @@
-import { HOUR_MS } from '../util/time.js';
+import { freshActiveSnapshot } from '../core/session-snapshot.js';
 import { isSharedStore } from '../core/config.js';
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
@@ -6,17 +6,12 @@ import { originInSql } from '../core/project-identity.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../util/version.js';
-import {
-  type TaskSnapshot,
-  type TaskSnapshotRow,
-  rowToTaskSnapshot,
-  type SessionEvent,
-  type SessionEventRow,
-  rowToSessionEvent,
-} from './rows.js';
+import { type TaskSnapshotRow, rowToTaskSnapshot, type SessionEventRow, rowToSessionEvent } from './rows.js';
+import type { TaskSnapshot, SessionEvent } from './port/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
-import type { ContinuityKey, JsonObject } from './port/types.js';
+import type { ContinuityKey } from './port/types.js';
+import type { SessionEventInput, SnapshotInput } from './port/sessions.js';
 
 export interface ContinuityFilter {
   readonly sql: string;
@@ -50,15 +45,6 @@ function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: Continuity
     );
   }
 }
-
-export type SnapshotInput = {
-  task: string;
-  summary: string;
-  next_step: string;
-  source?: string;
-  session_id?: string | null;
-  scope?: string | null;
-};
 
 function insertSnapshot(
   db: DatabaseSyncLike,
@@ -171,17 +157,6 @@ export function loadActiveTaskSnapshotAt(
   return loaded;
 }
 
-/** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still
- * offers continuity on Monday; override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env
- * knob. */
-export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * HOUR_MS;
-
-/** A usable session id: non-null, non-empty string; named so the owner-match rule in `loadFreshActiveTaskSnapshot`
- * states its contract once. */
-function isNonEmptySessionId(value: string | null | undefined): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
  * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
@@ -193,25 +168,6 @@ export function loadFreshActiveTaskSnapshotAt(
   key?: ContinuityKey,
 ): TaskSnapshot | null {
   return freshActiveSnapshot(loadActiveTaskSnapshotAt(db, files, tenantId, key), opts);
-}
-
-/** `loadFreshActiveTaskSnapshot`'s owner-match-or-age rule, for a snapshot a store read. */
-export function freshActiveSnapshot(
-  snapshot: TaskSnapshot | null,
-  opts: { maxAgeMs?: number; sessionId?: string | null } = {},
-): TaskSnapshot | null {
-  if (!snapshot) return null;
-
-  const callerSessionId = opts.sessionId;
-  const isOwnerMatch =
-    isNonEmptySessionId(callerSessionId) &&
-    isNonEmptySessionId(snapshot.session_id) &&
-    callerSessionId === snapshot.session_id;
-  if (isOwnerMatch) return snapshot;
-
-  const maxAgeMs = opts.maxAgeMs ?? SNAPSHOT_AMBIENT_MAX_AGE_MS;
-  const ageMs = Date.now() - Date.parse(snapshot.updated_at);
-  return ageMs <= maxAgeMs ? snapshot : null;
 }
 
 export function clearActiveTaskSnapshotAt(
@@ -266,16 +222,6 @@ export function closeTaskSnapshotsForSessionAt(
     )
     .run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
   return Number(result.changes ?? 0);
-}
-
-export interface SessionEventInput {
-  session_id: string;
-  event_type: string;
-  content: string;
-  task?: string | null;
-  source?: string;
-  scope?: string | null;
-  metadata?: JsonObject;
 }
 
 function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {

@@ -12,7 +12,7 @@ import { mulberry32 } from './lib/prng.mjs';
 const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', 'dist');
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
 const { textOverlap } = await distImport('util/tokenize.js');
-const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('store/token-ledger.js')]);
+const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('core/skip-unchanged.js')]);
 const { isWorthSurfacing } = await distImport('core/memory-quality.js');
 const { ambientSecretAdmit } = await distImport('api/index.js');
 const { resolveProjectIdentity, classifyOriginProject } = await distImport('core/project-identity.js');

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ScopeActor } from '../../src/core/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../../src/store/port.js';
-import type { Entity, Relation, StoredGraph } from '../../src/store/graph-rows.js';
+import type { Entity, Relation, StoredGraph } from '../../src/store/port/graph-reads.js';
 import {
   BULK_TENANT,
   HELD_SCOPE,

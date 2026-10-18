@@ -1,8 +1,9 @@
 // The store the token ledger writes to for a caller; context, recall and the session hooks share it.
-import { noteLedgerRowSkipped, type LedgerTurn } from '../store/ledger-turn.js';
+import type { LedgerTurn } from '../store/port/ledger.js';
 import type { HippoConfig } from '../core/config.js';
 import type { FolderFiles, Ledger } from '../store/port.js';
-import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
+import type { TokenSurface, TokenUse } from '../store/port/token-ledger.js';
+import type { LastSent } from '../core/skip-unchanged.js';
 import type { Context, GlobalInReach } from './types.js';
 
 /** A hippo.db a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
@@ -41,7 +42,7 @@ export function onLedger<T>(reach: LedgerReach, call: (ledger: Ledger) => T): T 
   try {
     return call(home.files.ledger);
   } catch (error) {
-    noteLedgerRowSkipped(error);
+    home.files.ledger.noteSkipped(error);
     return undefined;
   }
 }
@@ -54,6 +55,11 @@ export function bookTokenUse(use: TokenUse, reach: LedgerReach): void {
 /** Books a turn's rows and then its delivery event on one connection of ledgerFiles' store, best-effort. */
 export function bookLedgerTurn(turn: LedgerTurn, reach: LedgerReach): void {
   onLedger(reach, (ledger) => ledger.recordTurn(turn));
+}
+
+/** bookLedgerTurn where each row is its own attempt: a row that fails is noted and the rest still land. */
+export function bookLedgerTurnPerRow(turn: Omit<LedgerTurn, 'onRowError'>, reach: LedgerReach): void {
+  onLedger(reach, (ledger) => ledger.recordTurn({ ...turn, onRowError: (error) => ledger.noteSkipped(error) }));
 }
 
 /** What the session last sent on `surface` in ledgerFiles' store; undefined with no ledger or a failed read. */
