@@ -17,8 +17,7 @@ import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { writeEntry, writeEntryDbOnly } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
+import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
   CLEARED_ENV,
@@ -33,6 +32,8 @@ import {
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { inMemoryVectorStore } from '../_helpers/in-memory-vector-store.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

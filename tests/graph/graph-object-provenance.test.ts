@@ -12,19 +12,17 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { extractGraph } from '../../src/graph/extract.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import { loadEntities } from '../../src/store/graph-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
-import { deleteEntry } from '../_helpers/root-forms.js';
+import { deleteEntry, writeEntry, loadEntities } from '../_helpers/root-forms.js';
 
 const T = 'default';
 

@@ -13,14 +13,12 @@
  * Real SQLite throughout, no mocks.
  */
 import { describe, it, expect } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { RawAppendOnlyError } from '../../src/core/raw-append-only.js';
 import { consolidate } from '../../src/index.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry } from '../_helpers/root-forms.js';
+import { deleteEntry, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>

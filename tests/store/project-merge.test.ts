@@ -3,16 +3,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listDormantSnapshots } from '../../src/store/dormant.js';
+import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { projectNameList, projectNameMerge, projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

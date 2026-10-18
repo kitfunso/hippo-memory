@@ -15,8 +15,7 @@ const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'core/memory.js')));
-const { initStore } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'open.js')));
-const { writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'entry-writes.js')));
+const { initStore, writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'entry', 'testing.js')));
 
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',

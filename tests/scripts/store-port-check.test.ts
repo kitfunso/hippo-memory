@@ -608,6 +608,47 @@ describe('check-store-port.mjs', () => {
     });
   });
 
+  const EXCEPTION =
+    'export function loadRecallSearchEntries(hippoRoot: string) {\n  return onHandle(hippoRoot, () => []);\n}\n';
+
+  it('folderFormsAboveAdapter fails on an exported src/store function that opens hippo.db from a folder, through a helper or a default too', () => {
+    const files = {
+      'src/store/search-rows.ts': EXCEPTION,
+      'src/store/reads.ts': [
+        "import { openStore as open } from './sqlite/handles.js';",
+        'const viaHelper = (root: string) => open(root);',
+        'export function readAll(hippoRoot: string) { return viaHelper(hippoRoot); }',
+        'export const byDefault = (hippoRoot: string, o = openHippoDb) => o(hippoRoot);',
+        'export function typed(db: ReturnType<typeof openHippoDb>, hippoRoot: string) { return [db, hippoRoot]; }',
+        'export function noFolder(busyWaitMs: number, o = openHippoDb) { return (r: string) => o(r, busyWaitMs); }',
+        'function notExported(hippoRoot: string) { return openHippoDb(hippoRoot); }',
+      ].join('\n'),
+      'src/store/sqlite/folder-forms.ts':
+        'export const writeEntry = (hippoRoot: string) => onHandle(hippoRoot, () => 1);\n',
+    };
+    withFixture(files, null, ({ run }) => {
+      const l = list(run);
+      const sites = Object.entries(l).filter(([, v]) => v === 'folderFormsAboveAdapter');
+      expect(sites.map(([k]) => k).sort()).toEqual([
+        'src/store/reads.ts:3 readAll',
+        'src/store/reads.ts:4 byDefault',
+        'src/store/search-rows.ts:1 loadRecallSearchEntries',
+      ]);
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('Folder forms above src/store/sqlite: 3, at most 1 allowed');
+      expect(r.stderr).toContain('src/store/reads.ts:3 readAll');
+      expect(r.stderr).not.toContain('loadRecallSearchEntries');
+    });
+  });
+
+  it('folderFormsAboveAdapter passes when the named exception is the only folder form', () => {
+    withFixture({ 'src/store/search-rows.ts': EXCEPTION }, null, ({ run }) => {
+      const r = run();
+      expect(r.status, r.stderr).toBe(0);
+    });
+  });
+
   it('passes on the real repo', () => {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: REPO, encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);

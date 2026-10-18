@@ -12,10 +12,10 @@ import { savePolicy } from '../../src/objects/policies.js';
 import { saveProcess } from '../../src/objects/processes.js';
 import { saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { saveSkill } from '../../src/objects/skills.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/open.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { readEntry } from '../_helpers/root-forms.js';
 
 const FROZEN = new Date('2026-03-01T12:00:00.000Z');
 const TENANT = 'acme';

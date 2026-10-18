@@ -3,7 +3,8 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { githubEventMemoryAt, markGitHubEventSeenAt } from '../connectors/github.js';
 import { markSlackEventSeenAt, slackEventMemoryAt } from '../connectors/slack.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites, Sync } from '../port.js';
 import { recordQuarantine } from '../quarantine.js';
 import { stampOriginProjectIn } from '../entry-row.js';

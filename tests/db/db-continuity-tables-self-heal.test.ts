@@ -1,13 +1,12 @@
 // Continuity-tables self-heal (2026-08-15 incident): a store stamped past a
 // table's migration but missing it crashed every prompt; ensureContinuityTables fixes it.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 
 const CONTINUITY_TABLES = [
   'task_snapshots',

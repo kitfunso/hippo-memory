@@ -10,7 +10,6 @@ import type {
   RejectedValueRow,
   Rejection,
 } from '../../src/entry/store-kit.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryRejectionsStore } from '../_helpers/in-memory-rejections-store.js';
 import {
@@ -22,6 +21,7 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'api_key:caller';

@@ -17,8 +17,6 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
@@ -26,6 +24,8 @@ import { handleExplain } from '../../src/cli/explain.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const CLEAN = 'clean deploykey fact for everyone';
 const PRIV_SLACK = 'private slack deploykey fact';

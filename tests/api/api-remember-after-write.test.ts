@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { remember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 /** Makes every insert into the Slack event log fail, as a real constraint would. */
 function breakEventLog(root: string): void {

@@ -9,12 +9,12 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { ingestEvent, type IngestEvent } from '../../src/connectors/github/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/connectors/github/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',

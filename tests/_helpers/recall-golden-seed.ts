@@ -4,17 +4,21 @@ import { vi } from 'vitest';
 import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
-import { pushGoal, closePrediction } from './root-forms.js';
+import {
+  pushGoal,
+  closePrediction,
+  writeEntry,
+  appendSessionEvent,
+  saveActiveTaskSnapshot,
+  saveSessionHandoff,
+} from './root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';

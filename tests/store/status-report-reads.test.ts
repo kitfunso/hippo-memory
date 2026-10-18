@@ -1,7 +1,5 @@
 // The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
@@ -10,6 +8,7 @@ import type { MemoryEntry } from '../../src/core/memory.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 let root: string;
 

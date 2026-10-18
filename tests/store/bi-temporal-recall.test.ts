@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { markRetrieved } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 
 async function hippo(home: string, globalHome: string, ...args: string[]): Promise<string> {

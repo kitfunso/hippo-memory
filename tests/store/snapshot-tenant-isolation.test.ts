@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { initStore } from '../../src/store/open.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadActiveTaskSnapshot, clearActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { loadActiveTaskSnapshot, clearActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string;
 beforeEach(() => {

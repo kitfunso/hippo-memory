@@ -5,12 +5,10 @@ import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../..
 import { handleResolve } from '../../src/cli/curate.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
 
 const TENANT = 'default';

@@ -10,7 +10,6 @@ import { _resetSessionRecallHistoryMcpForTests } from '../../src/mcp/server.js';
 import { lastRecalledIds } from '../../src/api/recall/last-recalled.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import type { RecallResult } from '../../src/api/index.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import {
   CLEARED_ENV,
   FAKE_NOW,
@@ -27,6 +26,7 @@ import {
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

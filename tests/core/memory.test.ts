@@ -12,7 +12,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>

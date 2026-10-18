@@ -9,16 +9,22 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, withWriteScope } from '../../src/db/index.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { insertEntityRow, insertRelationRow, updateEntityRow } from '../../src/store/graph-writes.js';
-import { loadEntities, loadRelations } from '../../src/store/graph-reads.js';
 import { MAX_ENTITY_NAME_LEN } from '../../src/core/entity-name.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
-import { deleteEntry, markPendingProcessedUpTo, markGraphDirty, loadEntitiesByIds } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  markPendingProcessedUpTo,
+  markGraphDirty,
+  loadEntitiesByIds,
+  writeEntry,
+  loadEntities,
+  loadRelations,
+} from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
   try {

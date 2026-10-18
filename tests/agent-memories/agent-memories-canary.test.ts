@@ -7,9 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { sanitizeCwd } from '../../src/agent-memories/qwen-code.js';
 import { AGENT_MEMORY_TOOLS } from '../../src/core/agent-memory-tools.js';
-import { initStore } from '../../src/store/open.js';
 import { isInitialized } from '../../src/core/project-identity.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import {
   closeWorld,
   codexSummary,
@@ -22,6 +20,8 @@ import {
   projectNotes,
   type World,
 } from '../_helpers/agent-memories-world.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;

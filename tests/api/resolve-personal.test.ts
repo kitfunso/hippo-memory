@@ -7,11 +7,10 @@ import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
 
 const A_TEXT = 'always run the deploy script with --dry-run first';

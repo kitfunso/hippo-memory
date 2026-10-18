@@ -2,7 +2,6 @@
  * evicted past WM_MAX_ENTRIES per scope. */
 
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
-import { openStore } from './open.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { resolveTenantId } from './tenant.js';
 import type { JsonObject } from './port/types.js';
@@ -92,7 +91,7 @@ export function wmPushAt(
   });
 }
 
-function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tenantId: string): void {
+function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string): void {
   // Evict if over capacity for this scope.
   // SAFETY: `COUNT(*) AS cnt` always returns exactly one row { cnt }, so `.get()` never yields undefined.
   const countRow = db

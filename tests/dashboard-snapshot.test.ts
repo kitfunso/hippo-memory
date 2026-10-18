@@ -6,7 +6,6 @@ import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { buildSnapshot } from '../src/dashboard/dashboard-snapshot.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { storedVectorIds } from '../src/db/vector-store.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import {
   asDashboardRow,
@@ -19,7 +18,12 @@ import {
   type TmpStore,
 } from './_helpers/dashboard-fixture.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
-import { listMemoryConflicts, replaceDetectedConflicts, resolveConflictKeeping } from './_helpers/root-forms.js';
+import {
+  listMemoryConflicts,
+  replaceDetectedConflicts,
+  resolveConflictKeeping,
+  loadAllEntries,
+} from './_helpers/root-forms.js';
 
 let store: TmpStore;
 

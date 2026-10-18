@@ -17,7 +17,6 @@ import { saveDecision, closeDecision } from '../../src/objects/decisions.js';
 import { savePolicy } from '../../src/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../../src/objects/project-briefs.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
-import { loadEntities, loadRelations } from '../../src/store/graph-reads.js';
 import {
   extractGraph as realExtractGraph,
   extractGraphChunked,
@@ -34,7 +33,13 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadPendingExtractionTenants, markGraphDirty } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  loadPendingExtractionTenants,
+  markGraphDirty,
+  loadEntities,
+  loadRelations,
+} from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -6,7 +6,7 @@ import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { loadConfig } from '../../src/core/config.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

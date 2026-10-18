@@ -4,8 +4,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore, handlesOf } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../../src/store/search-rows.js';
 import { createMemory, type CreateMemoryOptions } from '../../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
@@ -18,7 +16,8 @@ import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
+import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

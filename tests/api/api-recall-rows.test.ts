@@ -3,10 +3,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import type { SearchResult } from '../../src/core/search-types.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -23,6 +19,8 @@ import {
   type CliRecallSetting,
 } from '../../src/api/recall/rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let home: string;
 let hippoRoot: string;

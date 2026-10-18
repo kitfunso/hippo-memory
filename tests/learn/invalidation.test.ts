@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractInvalidationTarget, invalidateMatching } from '../../src/learn/invalidation.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 describe('extractInvalidationTarget', () => {
   it('extracts "from" target in "migrate X to Y"', () => {

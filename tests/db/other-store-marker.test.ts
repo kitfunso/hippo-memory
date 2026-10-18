@@ -13,13 +13,13 @@ import {
   withSharedStoreHandles,
   withSqliteAllowed,
 } from '../../src/db/index.js';
-import { repairAutomaticMemories } from '../../src/store/quality-repair.js';
 import { PROTECTED_ROWS as repairProtection } from '../../src/core/memory-audit.js';
 import * as serverEntry from '../../src/server.js';
 import * as storeKit from '../../src/entry/store-kit.js';
-import { initStore } from '../../src/store/open.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import { repairAutomaticMemories } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let root: string;
 let marker: string;

@@ -13,7 +13,6 @@ import type {
   VectorRowWrite,
   VectorWriteResult,
 } from '../../src/entry/store-kit.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import {
@@ -25,6 +24,7 @@ import {
   type SideResult,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const MODEL = embeddingIndexIdentity('test:vec-3');
 const OLD = embeddingIndexIdentity('test:old-3');

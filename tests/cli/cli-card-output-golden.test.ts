@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
 import { handleCard } from '../../src/cli/card.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let root = '';
 

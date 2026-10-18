@@ -35,7 +35,7 @@ export interface DescendantAdmission {
 }
 
 /** The secret half of the ambient policy alone: a flagged row is admitted only inside its owning project. */
-function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
+export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.origin_project;
   if (origin === undefined || origin === null || origin === '') return false;

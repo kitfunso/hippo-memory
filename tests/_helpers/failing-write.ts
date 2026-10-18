@@ -1,8 +1,8 @@
 // Writes `entry` through the promote path with a trigger that aborts the promote audit row, so a failure after the INSERT
 // reaches the production entry's SAVEPOINT the way a real audit failure would.
-import { writePromotedEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
+import { writePromotedEntry } from './root-forms.js';
 
 export function writeEntryThenFail(hippoRoot: string, entry: MemoryEntry): void {
   const db = openHippoDb(hippoRoot);

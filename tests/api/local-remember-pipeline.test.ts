@@ -11,14 +11,12 @@ import {
   type LocalRememberOutcome,
 } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { RejectedValueError } from '../../src/core/api-errors.js';
-import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadAllEntries, readEntry, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const TEXT = 'the billing service retries a failed charge three times';
 const SALIENCE_ON = { salience: { enabled: true } };

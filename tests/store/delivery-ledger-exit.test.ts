@@ -1,6 +1,5 @@
 // Exit fixtures: the built hook writes the ledger rows, and scripts/z10-reconstruct.mjs must name the class each construction implies.
 import { describe, it, expect, afterEach } from 'vitest';
-import { initStore } from '../../src/store/open.js';
 import {
   PIN,
   PROMPT_HOOK,
@@ -27,6 +26,7 @@ import {
   type TurnSpec,
   type Verdict,
 } from '../_helpers/host-transcript.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const PROMPT = 'how should the postgres migration rollback plan work';
 const P1 = 'first question about deploys';

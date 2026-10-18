@@ -3,9 +3,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { openStore } from '../../src/store/open.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
 import { runDoctor } from '../../src/doctor.js';
@@ -23,6 +21,8 @@ import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

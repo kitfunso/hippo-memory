@@ -10,7 +10,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { parkInDlq } from '../../src/connectors/dlq.js';
 import { githubDlq } from '../../src/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/cli/github.js';
@@ -18,6 +17,7 @@ import type { JsonValue } from '../../src/util/json.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
   return runCliAs(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...extraEnv } });

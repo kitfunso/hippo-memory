@@ -6,9 +6,6 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { sleep, supersede } from '../../src/api/index.js';
@@ -19,8 +16,15 @@ import { sleepResultLines } from '../../src/cli/sleep-render.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, deleteEntry, loadAllDirtySummaries } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import {
+  loadEveryTenantEntries,
+  deleteEntry,
+  loadAllDirtySummaries,
+  writeEntry,
+  readEntry,
+  batchWriteAndDelete,
+} from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>

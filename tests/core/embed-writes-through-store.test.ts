@@ -13,13 +13,13 @@ import { loadConfig } from '../../src/core/config.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { inMemoryVectorWritesStore } from '../_helpers/in-memory-vector-writes-store.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { localIndex } from '../_helpers/cli-stores.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';

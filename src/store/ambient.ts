@@ -1,7 +1,6 @@
 import type { DatabaseSyncLike } from '../db/index.js';
 import { strengthSql } from './rule-sql.js';
 import { SECRET_TAGS } from '../util/secret-detect.js';
-import { onHandle, openStore } from './open.js';
 import { originInSql } from '../core/project-identity.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../core/ambient.js';
@@ -88,8 +87,4 @@ export function loadAmbientTalliesAt(
     maxDagLevel: Number(row.maxDagLevel),
     tagCounts,
   };
-}
-
-export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => loadAmbientTalliesAt(db, tenantId, filter), openStore);
 }

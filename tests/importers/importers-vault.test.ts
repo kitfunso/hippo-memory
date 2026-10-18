@@ -22,12 +22,12 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { importVault } from '../../src/entry/importers.js';
 import { type ImportOptions } from '../../src/importers/core.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test

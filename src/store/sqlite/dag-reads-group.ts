@@ -9,7 +9,8 @@ import {
   selectChildrenByParent,
   selectEntriesByIds,
 } from '../entry-reads.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 import type { DagReads, DescendantOrigin, DescendantWalk, SummaryDescendants, Sync } from '../port.js';
 
 export function sqliteDagReads(on: OnHandle): Sync<DagReads> {

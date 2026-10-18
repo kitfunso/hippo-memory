@@ -19,12 +19,12 @@ import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { sleep as packageSleep } from '../../src/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -18,10 +18,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { search } from '../../src/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 // ---------------------------------------------------------------------------
 // Load trap definitions

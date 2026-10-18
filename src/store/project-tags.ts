@@ -11,8 +11,13 @@ import {
   holdsOrigin,
   restampCompactionOrigin,
 } from './compactions.js';
-import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './dormant.js';
-import { selectAllEntries, selectEntriesByIds, selectLiveEntriesBySourcePrefix } from './entry-reads.js';
+import { dormantSnapshotsByIds, dormantSnapshotsFromOrigin, insertDormantRow, replaceDormantEntry } from './dormant.js';
+import {
+  selectEntriesByIds,
+  selectEntriesFromOriginAt,
+  selectLiveEntriesBySourcePrefix,
+  selectOriginTalliesAt,
+} from './entry-reads.js';
 import {
   deleteEntryRowInTx,
   restampOriginProjectAt,
@@ -36,10 +41,12 @@ const AUTO_REPAIR_META_KEY = 'project_repair_auto';
 /** Reads on a handle the caller opened and closes, for doctor's read-only check and the note sync. */
 export function projectTagReads(db: DatabaseSyncLike, tenantId: string): ProjectTagReads {
   return {
-    entries: () => selectAllEntries(db, tenantId),
+    originTallies: (sourcePrefix) => selectOriginTalliesAt(db, tenantId, sourcePrefix),
+    entriesFromOrigin: (rows) => selectEntriesFromOriginAt(db, tenantId, rows),
     liveEntriesBySourcePrefix: (prefix) => selectLiveEntriesBySourcePrefix(db, tenantId, prefix),
     entriesByIds: (ids) => selectEntriesByIds(db, ids, tenantId),
-    dormant: () => listDormantSnapshots(db, tenantId),
+    dormantFromOrigin: (origin) => dormantSnapshotsFromOrigin(db, tenantId, origin),
+    dormantByIds: (ids) => dormantSnapshotsByIds(db, tenantId, ids),
     auditEvents: (op) => queryAuditEvents(db, { tenantId, op, limit: MAX_AUDIT_LIMIT }),
     compactionTranscripts: () => compactionTranscripts(db, tenantId),
     compactionOriginsWithCwd: () => compactionOriginsWithCwd(db, tenantId),

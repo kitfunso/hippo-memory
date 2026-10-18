@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion } from '../../src/db/index.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { dumpSchema } from '../_helpers/schema-dump.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
 // Frozen copy of migration v1's DDL: the oldest store shape a user can still have on disk.
 const V1_DDL = `

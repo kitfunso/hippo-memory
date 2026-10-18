@@ -5,9 +5,6 @@ import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
-import { initStore } from '../../src/store/open.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -26,7 +23,11 @@ import {
   loadLatestHandoff,
   stampHandoffOutcome,
   writeSessionEndHandoff,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
 } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 interface ColumnInfo {
   name: string;

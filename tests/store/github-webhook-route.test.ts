@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

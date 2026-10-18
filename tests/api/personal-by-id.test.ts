@@ -9,11 +9,11 @@ import { mapApiError } from '../../src/api/error-reply.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, generateId, type MemoryKind } from '../../src/core/memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
 import { listRejectionsForTenant, rejectValue } from '../../src/trust/reject-flow.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
+import { readEntry } from '../_helpers/root-forms.js';
 
 let root: string;
 let globalRoot: string;

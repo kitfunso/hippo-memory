@@ -3,8 +3,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { adminActor, learn, MCP_LEARN } from '../../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
 import type { JsonValue } from '../../src/util/json.js';
@@ -15,6 +13,8 @@ import { _resetProjectIdentityCacheForTests } from '../../src/core/project-ident
 import { serve, type ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

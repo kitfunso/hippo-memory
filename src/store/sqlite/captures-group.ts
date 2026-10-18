@@ -1,7 +1,8 @@
 // hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up the mirror folders.
 import { writeCapturedItemsAt } from '../capture-write.js';
 import { EVERY_SCOPE, loadTextsHoldingWordsAt } from '../candidates.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 import type { Captures } from '../port/captures.js';
 
 export function sqliteCaptures(on: OnHandle): Captures {

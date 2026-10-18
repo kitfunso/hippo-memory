@@ -7,8 +7,6 @@
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { refineStore } from '../../src/cli/refine-llm.js';
@@ -23,7 +21,7 @@ import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
 import { embedAll } from '../../src/search/embed-memories.js';
 import { folderStore, sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

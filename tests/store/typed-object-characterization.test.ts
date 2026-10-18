@@ -10,10 +10,10 @@ import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { SourceObjectType } from '../../src/store/port/graph-reads.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { initStore } from '../../src/store/open.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 type Body = { [key: string]: JsonValue };
 

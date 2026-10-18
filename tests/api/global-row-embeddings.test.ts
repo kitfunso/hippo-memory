@@ -6,11 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { promote } from '../../src/api/memories/promote.js';
 import { shareMemory, autoShare } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { embedAll } from '../../src/search/embed-memories.js';
-import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import { isEmbeddingAvailable } from '../../src/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -21,6 +18,8 @@ import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's

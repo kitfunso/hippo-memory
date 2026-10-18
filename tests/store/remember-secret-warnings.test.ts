@@ -5,7 +5,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { remember } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
@@ -13,6 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

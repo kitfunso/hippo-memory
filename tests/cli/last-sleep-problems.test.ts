@@ -3,8 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { cmdLastSleep, sleepProblems } from '../../src/cli/last-sleep.js';
-import { initStore } from '../../src/store/open.js';
 import { initProject, oneLine, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let s: Scratch;
 let logFile: string;

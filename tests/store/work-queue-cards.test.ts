@@ -5,8 +5,6 @@ import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
-import { initStore } from '../../src/store/open.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -32,7 +30,9 @@ import {
   reviewCard,
   completeCard,
   addCardComment,
+  saveSessionHandoff,
 } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 

@@ -4,8 +4,6 @@
 
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { conflictResolve } from '../../src/api/index.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/core/api-errors.js';
@@ -13,7 +11,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>

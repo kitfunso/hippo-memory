@@ -303,7 +303,8 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const sessionId = stringFlag(flags, 'session-id') ?? null;
   const logLine = (line: string): void => appendSessionEndCloseLog(logFile, line);
-  return runSessionEnd<SessionTurn, SessionScan>(cliApiContext(hippoRoot, tenantId), {
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  return runSessionEnd<SessionTurn, SessionScan>(ctx, {
     mode,
     sessionId,
     transcriptPath,
@@ -318,7 +319,8 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     currentProject: () => resolveProjectIdentity(process.cwd()),
     capture: (into, turns, originProject) =>
       captureEndedSession(into.hippoRoot, { tenantId, flags, transcriptPath, turns, originProject }),
-    digest: (scan, key, log) => recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, { key, tenantId, log }),
+    digest: (scan, key, log) =>
+      recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, { key, tenantId, log, config: ctx.config }),
     workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
   });
@@ -565,7 +567,8 @@ function captureCodexTranscript(
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
     const digestKey = path.basename(transcriptPath, '.jsonl');
-    recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, { key: digestKey, tenantId, log: digestLog });
+    const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
+    recordSessionDigest(hippoRoot, cliSyncStore(hippoRoot), scan, digestOpts);
   } catch (err) {
     reportSessionEndFailure(logFile ?? null, 'codex session-end: transcript scan or digest', err);
   }

@@ -11,7 +11,6 @@ import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src
 import { embeddingIndexIdentity } from '../../src/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore } from '../../src/store/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
@@ -30,7 +29,7 @@ import { CLEARED_ENV, statsMirror } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEntriesByIds } from '../_helpers/root-forms.js';
+import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
 import { contextReach } from '../../src/api/types.js';
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;

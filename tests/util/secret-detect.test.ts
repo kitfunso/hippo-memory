@@ -9,9 +9,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { detectSecret, redactSecretsStrict } from '../../src/util/secret-detect.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
@@ -23,7 +20,8 @@ import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/sc
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { copyToGlobal } from '../_helpers/root-forms.js';
+import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -6,7 +6,7 @@ import * as path from 'path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { loadConfig } from '../../src/core/config.js';
-import { handlesOf } from '../../src/store/open.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

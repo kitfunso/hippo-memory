@@ -1,11 +1,11 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { assemble } from '../../src/api/index.js';
 import { seededRandom } from '../../src/eval/eval-stats.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 /**
  * F4 — byte compare canonical UTC ISO timestamps instead of localeCompare.

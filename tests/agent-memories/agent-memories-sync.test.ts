@@ -17,8 +17,7 @@ import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
 import { removeEntryMirrors } from '../../src/store/mirrors.js';
-import { deleteEntryRowInTx, writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
+import { deleteEntryRowInTx } from '../../src/store/entry-writes.js';
 import {
   agentRows,
   auditCount,
@@ -39,6 +38,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';

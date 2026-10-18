@@ -7,7 +7,6 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -28,6 +27,7 @@ import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { loadConfig } from '../../dist/core/config.js';
 import { embedAll, folderIndex } from '../../dist/search/embed-memories.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
-import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
+import { loadEmbeddingIndex } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { rankWith, SHOWN_ROWS } from './arms.ts';
 import { buildMicroStore } from './micro-store.ts';

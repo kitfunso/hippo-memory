@@ -21,7 +21,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../../src/predictions/planning-fallacy.js';
@@ -29,7 +28,7 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { closePrediction } from '../_helpers/root-forms.js';
+import { closePrediction, writeEntry } from '../_helpers/root-forms.js';
 
 function safeRmSync(p: string): void {
   try {

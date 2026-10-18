@@ -7,12 +7,9 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
-import { openStore, handlesOf } from '../../src/store/open.js';
-import { writeEntry, strengthenRetrieved } from '../../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
 import { adminActor } from '../../src/api/types.js';
 import { learn, CLI_LEARN } from '../../src/api/sleep/learn.js';
 import { handleRemember, handleTrace } from '../../src/cli/remember.js';
@@ -40,8 +37,13 @@ import {
   loadEntriesByIds,
   replaceDetectedConflicts,
   resolveConflictKeeping,
+  writeEntry,
+  strengthenRetrieved,
+  readEntry,
+  loadAllEntries,
 } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
+import { openStore, handlesOf } from '../../src/store/sqlite/handles.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -768,6 +770,7 @@ describe('recordSessionDigest', () => {
         recordSessionDigest(root, syncStore(root), scan, {
           key: 's1',
           tenantId: 'default',
+          config: loadConfig(root),
           log: (line) => log.push(line),
         }),
       );

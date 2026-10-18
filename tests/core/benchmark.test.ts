@@ -13,12 +13,11 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createMemory, calculateStrength, applyOutcome, type MemoryEntry } from '../../src/core/memory.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { search } from '../../src/search/bm25-search.js';
 import { markRetrieved } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>

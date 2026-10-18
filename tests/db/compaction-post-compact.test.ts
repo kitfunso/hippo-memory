@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { classifyOriginProject } from '../../src/core/project-identity.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { initStore } from '../../src/store/open.js';
 import {
   compactionMemories,
   compactionRows,
@@ -20,6 +19,7 @@ import {
 } from '../_helpers/compaction-hooks.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let s: Scratch;
 let logFile: string;

@@ -8,9 +8,9 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { gatedWrite } from '../../src/store/gated-write.js';
 import { createMemory, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
-import { openStore, initStore } from '../../src/store/open.js';
-import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
+import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
+import { openStore, initStore } from '../../src/store/sqlite/handles.js';
 
 let s: Scratch;
 

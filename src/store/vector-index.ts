@@ -1,7 +1,7 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
 // write of the three.
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle, type OnHandle } from './open.js';
+import type { OnHandle } from './open.js';
 import {
   embeddingIndexIdentity,
   indexedModel,
@@ -88,10 +88,6 @@ export function embeddingModelRequiresReindex(on: OnHandle, model: string, index
  * `loadStoredVectors`. */
 export function loadEmbeddingIndexAt(db: DatabaseSyncLike): Record<string, number[]> {
   return Object.fromEntries(loadVectors(db));
-}
-
-export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  return onHandle(hippoRoot, (db) => loadEmbeddingIndexAt(db));
 }
 
 /** Every stored vector id and the float count of the first row, with no vector decoded. */

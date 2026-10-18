@@ -8,7 +8,6 @@ import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/store/tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
@@ -22,6 +21,7 @@ import {
   reviewCard,
   completeCard,
   heartbeatCard,
+  saveSessionHandoff,
 } from './_helpers/root-forms.js';
 
 afterAll(() => {

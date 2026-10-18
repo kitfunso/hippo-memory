@@ -48,7 +48,7 @@ import {
   loadEntryTextKeysPageAt,
   loadFreshRawMemoriesAt,
   loadSessionRawMemoriesAt,
-  selectAllEntries,
+  iterateEveryTenantEntriesAt,
 } from '../../src/store/entry-reads.js';
 import { writeEntriesTogetherAt } from '../../src/store/entry-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts } from '../../src/store/port/goals.js';
@@ -85,7 +85,30 @@ import {
   saveIndexAt,
   updateStatsUnlessBusyAt,
 } from '../../src/store/index-and-stats.js';
-import { handlesOf, onHandle, openStore, waitingOpener } from '../../src/store/open.js';
+import { waitingOpener } from '../../src/store/open.js';
+import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { withUnmigratedDb } from '../../src/db/open.js';
+import type { RepairProtection } from '../../src/core/memory-audit.js';
+import { writePromotedEntryAt } from '../../src/store/entry-writes.js';
+import { updateStatsAt } from '../../src/store/index-and-stats.js';
+import { repairAutomaticMemoriesAt, repairQualityOnceAt } from '../../src/store/quality-repair.js';
+import type { QualityRepairResult } from '../../src/store/port/audit-maintenance.js';
+import type { StoreFiles } from '../../src/store/open.js';
+
+export {
+  appendSessionEvent,
+  batchWriteAndDelete,
+  loadAmbientTallies,
+  loadEmbeddingIndex,
+  loadEntities,
+  loadRelations,
+  loadTenantEntries as loadAllEntries,
+  readEntry,
+  saveActiveTaskSnapshot,
+  saveSessionHandoff,
+  strengthenRetrieved,
+  writeEntry,
+} from '../../src/store/sqlite/folder-forms.js';
 import type { ClosePredictionOptions, ListPredictionsOptions } from '../../src/store/predictions.js';
 import {
   closePredictionAt,
@@ -380,7 +403,7 @@ export function loadFreshRawMemories(
 }
 
 export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => selectAllEntries(db), openStore);
+  return onHandle(hippoRoot, (db) => [...iterateEveryTenantEntriesAt(db)], openStore);
 }
 
 export function loadAllEntryIds(hippoRoot: string): string[] {
@@ -795,4 +818,32 @@ export async function copyToGlobal(
   const copy = ctx.reach?.globalTarget?.store.localFiles.learning.readEntry(globalId);
   if (!copy) throw new Error(`the promoted copy ${globalId} is not in the global store`);
   return copy;
+}
+
+export function writePromotedEntry(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  opts: Parameters<typeof writePromotedEntryAt>[3],
+): void {
+  onHandle(hippoRoot, (db) => writePromotedEntryAt(db, { hippoRoot }, entry, opts), openStore);
+}
+
+export function updateStats(hippoRoot: string, delta: Parameters<typeof updateStatsAt>[2]): void {
+  onHandle(hippoRoot, (db) => updateStatsAt(db, { hippoRoot }, delta), openStore);
+}
+
+/** Opens the store unmigrated, read-only for a preview, as the store's own quality repair does. */
+export function repairAutomaticMemories(
+  files: StoreFiles,
+  opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
+): QualityRepairResult {
+  return withUnmigratedDb(files.hippoRoot, !opts.apply, (db) => repairAutomaticMemoriesAt(db, files, opts));
+}
+
+export function repairQualityOnce(
+  files: StoreFiles,
+  tenantId: string,
+  protect: RepairProtection,
+): QualityRepairResult | null {
+  return withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnceAt(db, files, tenantId, protect));
 }

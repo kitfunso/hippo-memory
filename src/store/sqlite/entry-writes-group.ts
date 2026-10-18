@@ -23,7 +23,8 @@ import {
   type WriteEntryInternalOptions,
 } from '../entry-writes.js';
 import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
-import { type OnHandle, openStore, type StoreFiles } from '../open.js';
+import type { OnHandle, StoreFiles } from '../open.js';
+import { openStore } from './handles.js';
 import { purgeMirrorBestEffortIn, removeEntryMirrorsIn, writeMarkdownMirrors } from '../mirrors.js';
 import { replaceFtsRows, stampOriginProjectIn, updateMemoryRows } from '../entry-row.js';
 import { selectMemoryReach } from '../tenant-lookup.js';

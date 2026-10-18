@@ -2,10 +2,9 @@ import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } fr
 import { refineSemanticMemory, refineStore } from '../../src/cli/refine-llm.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import * as fs from 'fs';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 function tmpStore(): string {
   const dir = makeRoot('refine');

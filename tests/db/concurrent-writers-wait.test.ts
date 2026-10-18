@@ -93,7 +93,7 @@ describe('two hippo processes writing to one store at once', () => {
       workers = Array.from({ length: WORKERS }, (_, i) =>
         startWorker([
           distUrl('core/memory.js'),
-          distUrl('store/entry-writes.js'),
+          distUrl('entry/testing.js'),
           root,
           getHippoDbPath(root),
           String(i),

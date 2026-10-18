@@ -13,8 +13,6 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { MEMORY_BACKED_TABLES } from '../../src/store/delete-and-batch.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { saveDecision } from '../../src/objects/decisions.js';
@@ -46,6 +44,7 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };

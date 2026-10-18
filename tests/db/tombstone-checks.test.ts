@@ -7,8 +7,8 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
 import { lazyTombstoneChecks } from '../../src/store/tombstone-checks.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/open.js';
 import type { AppendAuditOpts } from '../../src/store/port/types.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 const roots: string[] = [];
 const DIGEST = rejectionDigest('the staging password is hunter2');

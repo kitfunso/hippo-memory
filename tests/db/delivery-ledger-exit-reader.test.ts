@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { initStore } from '../../src/store/open.js';
 import { writeDeliveryEventOnHandle } from '../../src/store/recall-trace.js';
 import type {
   DeliveryCandidateInput,
@@ -25,6 +24,7 @@ import { trySymlink } from '../_helpers/symlink.js';
 import { parseTranscript } from '../../scripts/z10/transcript.mjs';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const SCRIPT = path.resolve(__dirname, '..', '..', 'scripts', 'z10-reconstruct.mjs');
 const STAGES: DeliveryStage[] = ['load', 'eligible', 'gate', 'budget', 'limit', 'final'];

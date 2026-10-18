@@ -6,13 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { consolidate } from '../../src/index.js';
 import { remember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];

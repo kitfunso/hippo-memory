@@ -20,9 +20,6 @@ import { createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import {
   agentRows,
   closeWorld,
@@ -44,6 +41,8 @@ import {
 import { loadConfig } from '../../src/core/config.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';

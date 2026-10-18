@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { handleRecall } from '../../src/cli/recall.js';
 import { resolveTenantId } from '../../src/store/tenant.js';
 import { resetSessionRings, sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
 const Q = [

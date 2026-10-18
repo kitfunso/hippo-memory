@@ -15,12 +15,9 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embedMemory } from '../../src/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../../src/embeddings/local.js';
-import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { physicsSearch } from '../../src/entry/folder-search.js';
 import { consolidate } from '../../src/index.js';
@@ -29,6 +26,7 @@ import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { injectStream } from '../../scripts/lifecycle-stress/inject.mjs';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);

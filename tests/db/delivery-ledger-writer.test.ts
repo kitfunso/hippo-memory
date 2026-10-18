@@ -7,7 +7,6 @@ import {
   writeDeliveryEventVia,
 } from '../../src/store/recall-trace.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
-import { handlesOf } from '../../src/store/open.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/core/delivery.js';
 import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../../src/core/delivery.js';
@@ -17,6 +16,7 @@ import { countMatching, recordStatements, type StatementLog } from '../_helpers/
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { Ledger } from '../../src/store/port/ledger.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
 const MAX_LEDGER_WAIT_MS = 100;

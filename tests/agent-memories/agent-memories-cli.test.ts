@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { deriveOriginProject, isInitialized } from '../../src/core/project-identity.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const HIPPO_BIN = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const dirs: string[] = [];

@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

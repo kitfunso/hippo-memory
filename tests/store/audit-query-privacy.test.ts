@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { auditQueryFields } from '../../src/core/audit-report.js';
 import { contextGet, retrieve, remember } from '../../src/api/index.js';
@@ -13,6 +12,7 @@ import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/core/config.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

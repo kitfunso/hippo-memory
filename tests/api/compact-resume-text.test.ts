@@ -7,13 +7,13 @@ import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { transcriptWorkingState } from '../../src/capture/working-state.js';
 import { preCompactForCaller } from '../../src/server.js';
-import { initStore } from '../../src/store/open.js';
 import type { TaskSnapshot } from '../../src/store/port/sessions.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
 import { truncateCodePointSafe } from '../../src/util/transcript-tail.js';
 import { resolveTenantId } from '../../src/store/tenant.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/core/config.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let s: Scratch;
 

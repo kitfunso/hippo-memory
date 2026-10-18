@@ -10,7 +10,8 @@ import {
   writePredictionAt,
 } from '../predictions.js';
 import type { Predictions, Sync } from '../port.js';
-import { type OnHandle, openStore } from '../open.js';
+import type { OnHandle } from '../open.js';
+import { openStore } from './handles.js';
 
 export function sqlitePredictions(on: OnHandle): Sync<Predictions> {
   return {

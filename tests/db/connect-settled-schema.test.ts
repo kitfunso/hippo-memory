@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, isFtsInSync, getMeta, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getCurrentSchemaVersion, repairFtsDrift } from '../../src/db/migrate.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 // SAFETY: node:sqlite has no bundled types; the spy only needs prepare's SQL argument.
 const { DatabaseSync: NodeSqlite } = createRequire(import.meta.url)('node:sqlite') as {

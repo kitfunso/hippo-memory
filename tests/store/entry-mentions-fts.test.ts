@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getMeta, setMeta } from '../../src/db/meta.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const CONTENTS = [
   'Use the café cache for sessions',

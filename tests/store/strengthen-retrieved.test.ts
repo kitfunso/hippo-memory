@@ -3,9 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry, strengthenRetrieved } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 
 const roots: string[] = [];
 

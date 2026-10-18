@@ -2,7 +2,8 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { readEntryAt } from '../entry-reads.js';
-import { type OnHandle, openStore, type StoreFiles } from '../open.js';
+import type { OnHandle, StoreFiles } from '../open.js';
+import { openStore } from './handles.js';
 import type { Quarantine, Sync } from '../port.js';
 import { approveQuarantinedAt, listQuarantinedAt, rejectQuarantinedAt } from '../quarantine.js';
 import { writeEntryMirrorsIn } from '../entry-writes.js';

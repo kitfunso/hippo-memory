@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
-import { initStore } from '../../src/store/open.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 interface KindRow {
   readonly cmd: string;

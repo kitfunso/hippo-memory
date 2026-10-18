@@ -3,10 +3,10 @@
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { rowsOf, seeded } from './recall-golden-seed.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
+import { writeEntry } from './root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 /** Every row's time is set against this, so a test pins the clock here. */
 export const CONTEXT_NOW = '2026-03-10T12:00:00.000Z';

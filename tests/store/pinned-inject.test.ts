@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -157,7 +157,7 @@ describe('hippo context --pinned-only', () => {
     await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
 
     // Reload from disk and verify retrieval_count is still 0
-    const { loadAllEntries } = await import('../../src/store/entry-reads.js');
+    const { loadAllEntries } = await import('../_helpers/root-forms.js');
     const reloaded = loadAllEntries(hippoDir, 'default');
     const target = reloaded.find((e) => e.id === pinned.id);
     expect(target).toBeDefined();

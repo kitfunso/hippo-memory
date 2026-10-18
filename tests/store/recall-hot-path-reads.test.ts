@@ -4,7 +4,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
@@ -12,8 +11,6 @@ import { loadConfig } from '../../src/core/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
-import { updateStats } from '../../src/store/index-and-stats.js';
-import { handlesOf } from '../../src/store/open.js';
 import { finishRecallAt } from '../../src/store/sqlite/last-recall-group.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -22,7 +19,10 @@ import {
   activeGoalsWithPolicies,
   appendConsolidationRun,
   loadAmbientCandidates,
+  writeEntry,
+  updateStats,
 } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 const roots: string[] = [];
 

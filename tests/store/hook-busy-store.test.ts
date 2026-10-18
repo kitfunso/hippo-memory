@@ -4,8 +4,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync, type ChildProcess } from 'node:child_process';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory } from '../../src/core/memory.js';
 import {
   closeHippoDb,
@@ -17,6 +15,8 @@ import {
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 

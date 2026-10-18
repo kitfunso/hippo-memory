@@ -3,9 +3,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { mergedText } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -16,6 +13,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

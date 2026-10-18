@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import {
   openHippoDb,
@@ -16,7 +14,6 @@ import {
 import { embeddingInputText } from '../../src/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { embedAll } from '../../src/search/embed-memories.js';
-import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import {
   decodeVector,
@@ -29,8 +26,14 @@ import {
 } from '../../src/db/vector-store.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, saveEmbeddingIndex } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/open.js';
+import {
+  deleteEntry,
+  saveEmbeddingIndex,
+  writeEntry,
+  batchWriteAndDelete,
+  loadEmbeddingIndex,
+} from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 let root: string;
 

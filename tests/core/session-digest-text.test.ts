@@ -2,13 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadConfig } from '../../src/core/config.js';
 import { isContentWorthStoring } from '../../src/core/memory-quality.js';
 import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
 import { digestSentences, recordSessionDigest, type DigestEdit } from '../../src/capture/session-digest.js';
-import { initStore } from '../../src/store/open.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { syncStore } from '../_helpers/cli-stores.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 // The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
@@ -47,6 +48,7 @@ function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[]
     {
       key: 's1',
       tenantId: 'default',
+      config: loadConfig(hippoRoot),
       log: (line) => log.push(line),
     },
   );

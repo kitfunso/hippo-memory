@@ -6,10 +6,10 @@ import { failuresBySession } from '../../src/store/failure-log.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import type { Captures } from '../../src/store/port.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { duplicateKey } from '../../src/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 let root: string;
 

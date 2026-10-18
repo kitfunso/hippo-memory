@@ -6,11 +6,8 @@ import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { runCli } from '../../src/cli.js';
-import { initStore } from '../../src/store/open.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -28,7 +25,8 @@ import {
   writeCopilotSessionLog,
   type CopilotScratch,
 } from '../_helpers/copilot-hooks.js';
-import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { loadActiveTaskSnapshot, loadAllEntries, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
   hippoRun(args, { cwd, env, input });

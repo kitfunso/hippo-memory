@@ -8,8 +8,6 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { archiveRawMemory } from '../../src/store/raw-archive.js';
@@ -18,7 +16,7 @@ import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadAllDirtySummaries } from '../_helpers/root-forms.js';
+import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
 
 function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });

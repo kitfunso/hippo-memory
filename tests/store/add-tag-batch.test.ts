@@ -1,12 +1,12 @@
 // Tagging a batch commits once, however many rows it tags, and tags the same rows the per-row writes did.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readEntry } from '../../src/store/entry-reads.js';
 import { writeEntryDbOnly } from '../../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { readEntry } from '../_helpers/root-forms.js';
 
 const TAG = 'churn-stale';
 let root: string;

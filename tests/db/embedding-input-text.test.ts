@@ -20,7 +20,7 @@ import { embeddingInputText, embeddingIndexIdentity } from '../../src/embeddings
 import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/open.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 describe('embeddingInputText', () => {
   it('excludes tags starting with path: but keeps other tags', () => {

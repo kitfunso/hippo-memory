@@ -5,12 +5,10 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../sr
 import { autoShare, shareMemory, transferScore } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { BadRequestError } from '../../src/core/api-errors.js';
-import { initStore } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { copyToGlobal } from '../_helpers/root-forms.js';
+import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

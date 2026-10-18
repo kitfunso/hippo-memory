@@ -3,13 +3,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/auth.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const CLI = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 

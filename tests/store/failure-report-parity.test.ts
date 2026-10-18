@@ -1,13 +1,13 @@
 // A failure read with no store must hash like the local failure log, or repeat counts split between a laptop and its server.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureToolFailure } from '../../src/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureHash, failureReport, lessonFromFailure } from '../../src/capture/failure-reading.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 interface LogRow {
   tool: string | null;

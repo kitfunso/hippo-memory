@@ -7,11 +7,10 @@ import { join } from 'node:path';
 import { handleRecall } from '../../src/cli/recall.js';
 import { forget } from '../../src/api/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { closePrediction } from '../_helpers/root-forms.js';
+import { closePrediction, loadAllEntries } from '../_helpers/root-forms.js';
 
 const QUERY = 'the migration effort will take 3 days';
 const DETECTED = '[detected: "will take 3 days"]';

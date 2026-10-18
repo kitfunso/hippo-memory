@@ -5,11 +5,11 @@ import { tallyAmbientEntries } from '../../src/core/ambient.js';
 import { DEFAULT_HALF_LIFE_DAYS, createMemory, type MemoryEntry } from '../../src/core/memory.js';
 import { loadEntriesMentioningAt } from '../../src/store/entry-reads.js';
 import { loadAmbientTalliesAt } from '../../src/store/ambient.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { pendingVectorIdsAt, pruneOrphanVectorsAt } from '../../src/store/vector-index.js';
 import { saveStoredVectorsAt } from '../../src/store/vector-index.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 function seeded(root: string, n: number, extra: (i: number) => Partial<MemoryEntry> = () => ({})): MemoryEntry[] {
   const rows = Array.from({ length: n }, (_, i) => ({

@@ -1,22 +1,13 @@
-// hippo.db's side of the dashboard reads: a tenant's live rows a page at a time, with only the columns the lists
-// show, SQL counts of the rows left out, and the commit signal on one held read-only connection.
-import * as fs from 'fs';
-import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db/index.js';
+// hippo.db's side of the dashboard reads, on the caller's handle: a tenant's live rows a page at a time, with only the
+// columns the lists show, and SQL counts of the rows left out.
+import type { DatabaseSyncLike } from '../db/index.js';
 import { withReadSnapshot } from '../db/busy.js';
-import { pragmaDataVersion } from '../db/meta.js';
 import { tableExists } from '../db/tables.js';
 import type { Layer, MemoryKind } from '../core/memory.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import { MAX_LIST_LIMIT } from '../util/limits.js';
-import { conflictPageAt, openConflictsNamingAt } from './conflicts.js';
-import { openStore, type Handles } from './open.js';
-import type {
-  DashboardReads,
-  DashboardRow,
-  DashboardScan,
-  DashboardText,
-  ExcludedCounts,
-} from './port/dashboard-reads.js';
+import { conflictPageAt } from './conflicts.js';
+import type { DashboardRow, DashboardScan, DashboardText, ExcludedCounts } from './port/dashboard-reads.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
 
@@ -132,7 +123,7 @@ function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
   return excluded;
 }
 
-function scanAt(db: DatabaseSyncLike, tenantId: string, visit: DashboardScan): ExcludedCounts {
+export function scanAt(db: DatabaseSyncLike, tenantId: string, visit: DashboardScan): ExcludedCounts {
   return withReadSnapshot(db, () => {
     eachLivePage<LiveRow>(db, tenantId, LIVE_COLUMNS, (page) => visit.rows(page.map(toDashboardRow)));
     eachOpenConflictPage(db, tenantId, visit.conflicts);
@@ -140,38 +131,15 @@ function scanAt(db: DatabaseSyncLike, tenantId: string, visit: DashboardScan): E
   });
 }
 
-/** Scans run on a fresh writable open, which runs any pending migration and legacy embeddings.json import first; the
- * commit signal and point reads use one read-only connection, opened on the first call that finds a database. */
-export function sqliteDashboardReads({ on, files }: Handles): DashboardReads {
-  let held: DatabaseSyncLike | null = null;
-  const reader = (): DatabaseSyncLike | null => {
-    if (held === null && fs.existsSync(getHippoDbPath(files.hippoRoot))) held = openHippoDbReadOnly(files.hippoRoot);
-    return held;
-  };
-  return {
-    commitCount() {
-      const db = reader();
-      return db === null ? null : pragmaDataVersion(db);
-    },
-    scan: (tenantId, visit) => on((db) => scanAt(db, tenantId, visit), openStore),
-    scanText(tenantId, visit) {
-      on(
-        (db) =>
-          withReadSnapshot(db, () => {
-            eachLivePage<TextRow>(db, tenantId, TEXT_COLUMNS, (page) => visit(page.map(toDashboardText)));
-          }),
-        openStore,
-      );
-    },
-    openConflictsOf: (tenantId, memoryId) => on((db) => openConflictsNamingAt(db, tenantId, memoryId), openStore),
-    hasVector(id) {
-      const db = reader();
-      if (db === null || !tableExists(db, 'memory_vectors')) return false;
-      return db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
-    },
-    close() {
-      if (held !== null) closeHippoDb(held);
-      held = null;
-    },
-  };
+/** A tenant's live rows' texts a page at a time, inside one read snapshot. */
+export function scanTextAt(db: DatabaseSyncLike, tenantId: string, visit: (page: DashboardText[]) => void): void {
+  withReadSnapshot(db, () => {
+    eachLivePage<TextRow>(db, tenantId, TEXT_COLUMNS, (page) => visit(page.map(toDashboardText)));
+  });
+}
+
+/** Whether `id` has a stored vector; false on a store that has never held one. */
+export function hasVectorAt(db: DatabaseSyncLike, id: string): boolean {
+  if (!tableExists(db, 'memory_vectors')) return false;
+  return db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
 }

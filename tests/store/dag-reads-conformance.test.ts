@@ -10,7 +10,6 @@ import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import type { AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import type { DescendantWalk, SessionRawCount, SessionRawWindow, SummaryDescendants } from '../../src/store/port.js';
 import { inMemoryDagReadsStore } from '../_helpers/in-memory-dag-reads-store.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
@@ -22,6 +21,7 @@ import {
   type GroupCall,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';

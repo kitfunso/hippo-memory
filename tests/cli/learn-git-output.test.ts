@@ -6,10 +6,9 @@ import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { handleLearn } from '../../src/cli/transfer.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 const SUBJECTS = [
   'docs: explain the release checklist',

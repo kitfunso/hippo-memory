@@ -14,12 +14,11 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { DormantMemory } from '../../src/store/port/dormant.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { initStore } from '../../src/store/open.js';
 import { isInitialized } from '../../src/core/project-identity.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { apiCtx } from './api-ctx.js';
-import { loadDormantMemories } from './root-forms.js';
+import { loadDormantMemories, loadAllEntries } from './root-forms.js';
 import type { AuditOp } from '../../src/core/audit-ops.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 export interface World {
   readonly dir: string;

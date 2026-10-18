@@ -16,7 +16,6 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
@@ -31,6 +30,7 @@ import {
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 // The module's own summary and headline caps, pinned here so a change to either shows up as a test edit.
 const MAX_BRIEF_SUMMARY_LEN = 8192;

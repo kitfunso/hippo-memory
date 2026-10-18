@@ -11,12 +11,12 @@ import {
   type MemoryEntry,
 } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { initStore } from '../../src/store/open.js';
 import { ownStderr } from './own-stderr.js';
 import { runInProcess } from './run-in-process.js';
 import { runCliAs } from './run-cli-as.js';
 import { hippoRunAsync } from './spawn-hippo.js';
+import { writeEntry } from './root-forms.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session, a server, a clock or a home for the child, so the developer's shell cannot change a row.

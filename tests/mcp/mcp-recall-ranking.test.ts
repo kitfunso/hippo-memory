@@ -4,8 +4,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore, handlesOf } from '../../src/store/open.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/core/memory.js';
 import {
   handleMcpRequest,
@@ -13,7 +11,6 @@ import {
   type McpContext,
   type McpResponse,
 } from '../../src/mcp/server.js';
-import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { saveStoredEmbeddingModel } from '../../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
@@ -21,7 +18,14 @@ import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { pushGoal, saveEmbeddingIndex } from '../_helpers/root-forms.js';
+import {
+  pushGoal,
+  saveEmbeddingIndex,
+  writeEntry,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+} from '../_helpers/root-forms.js';
+import { initStore, handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

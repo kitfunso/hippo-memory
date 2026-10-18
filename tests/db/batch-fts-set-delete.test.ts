@@ -2,15 +2,13 @@
 // and never indexes an id twice, even when the index refuses the delete.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { DatabaseSync } from '../../src/db/sqlite.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { readEntry } from '../../src/store/entry-reads.js';
-import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { getHippoDbPath, withSharedStoreHandles } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
 
 const FTS_WRITE = /(?:INSERT INTO|DELETE FROM) memories_fts\b/;
 const FTS_DELETE = /DELETE FROM memories_fts\b/;

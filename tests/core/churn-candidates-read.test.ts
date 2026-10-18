@@ -3,14 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { detectChurnStale } from '../../src/learn/invalidation.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 /** loadAllEntries' statement: every full row of one tenant. */
 const TENANT_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`;

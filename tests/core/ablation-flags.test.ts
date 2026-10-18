@@ -470,7 +470,7 @@ describe('HIPPO_FAKE_NOW', () => {
     m.half_life_days = 7;
     const tmp = makeRoot('abl');
     // Local-only store via the wrapper (global root nonexistent path).
-    const { writeEntry } = await import('../../src/store/entry-writes.js');
+    const { writeEntry } = await import('../_helpers/root-forms.js');
     writeEntry(tmp, m);
     const results = await searchBothHybrid(
       'wrapper clock consistency check',

@@ -5,10 +5,10 @@ import { afterAll, beforeAll, describe, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { adminActor, reject } from '../../src/api/index.js';
-import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import { query, Store, type ExtraState } from '../_helpers/cli-parity-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const TEXT = 'the billing service retries a failed charge three times';
 const REJECTED = 'the billing service retries a failed charge nine times';

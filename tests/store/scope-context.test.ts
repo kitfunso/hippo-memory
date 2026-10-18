@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'path';
-import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 
 let tmpDir: string;
 let hippoDir: string;

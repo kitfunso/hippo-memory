@@ -11,12 +11,11 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { sleep, adminActor } from '../../src/api/index.js';
-import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
+import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
 // Same secret shape tests/util/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.
