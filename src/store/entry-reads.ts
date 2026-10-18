@@ -415,9 +415,10 @@ export function loadEntriesPageAt(
   // One extra row says whether another page follows without a count.
   params.push(page.limit + 1);
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db
-    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`)
-    .all(...params) as MemoryRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`,
+  ).all(...params) as MemoryRow[];
   return pageOf(rows.map(rowToEntry), page.limit);
 }
 
@@ -529,7 +530,8 @@ export function selectPreviewRowsPage(
 ): Array<PreviewRow & { row_id: number }> {
   const tenant = columns.has('tenant_id') ? ' AND tenant_id = ?' : '';
   const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
-  const statement = db.prepare(
+  const statement = cachedStatement(
+    db,
     `SELECT rowid AS row_id, id, content, ${column('source', "''")}, ` +
       `${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ` +
       `${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories ` +

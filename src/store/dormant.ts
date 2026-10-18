@@ -18,6 +18,7 @@ import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTakenAt } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
+import { cachedStatement } from './statement-cache.js';
 import type { DormantSnapshot } from './port/agent-import.js';
 import type { DormantMove } from './port/consolidation.js';
 
@@ -254,9 +255,10 @@ export function dormantTextsPage(
   page: { readonly limit: number; readonly afterId: string },
 ): DormantText[] {
   // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
-  return db
-    .prepare(`SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`)
-    .all(tenantId, page.afterId, page.limit) as DormantText[];
+  return cachedStatement(
+    db,
+    `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`,
+  ).all(tenantId, page.afterId, page.limit) as DormantText[];
 }
 
 /** The text columns of a tenant's dormant memories with these ids, one query per chunk. */
@@ -268,11 +270,10 @@ export function dormantTextsByIds(
   const byId = new Map<string, DormantText>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: rows' shape matches the four columns DORMANT_TEXT_COLUMNS names.
-    const rows = db
-      .prepare(
-        `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-      )
-      .all(tenantId, ...chunk) as DormantText[];
+    const rows = cachedStatement(
+      db,
+      `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
+    ).all(tenantId, ...chunk) as DormantText[];
     for (const row of rows) byId.set(row.id, row);
   }
   return byId;
@@ -287,12 +288,11 @@ export function dormantSnapshotsByIds(
   const byId = new Map<string, DormantSnapshot>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: rows' shape matches the seven columns named in the SELECT.
-    const rows = db
-      .prepare(
-        `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+    const rows = cachedStatement(
+      db,
+      `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
          FROM dormant_memories WHERE tenant_id = ? AND id IN (${placeholders(chunk.length)})`,
-      )
-      .all(tenantId, ...chunk) as DormantRow[];
+    ).all(tenantId, ...chunk) as DormantRow[];
     for (const row of rows) {
       const snapshot = toSnapshot(row);
       if (snapshot) byId.set(row.id, snapshot);
