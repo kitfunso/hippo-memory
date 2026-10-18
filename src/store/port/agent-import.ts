@@ -33,7 +33,10 @@ export interface ImportTarget {
   /** The tenant the import writes as. */
   readonly tenantId: string;
   liveBySourcePrefix(prefix: string): MemoryEntry[];
-  rowsOutsideSourcePrefix(
+  /** Live rows outside `prefix` that may hold `text` word for word, spacing aside; `origins` (global store only) keeps
+   * user-global rows and those projects. A superset the caller checks again. */
+  rowsHoldingOutsideSourcePrefix(
+    text: string,
     prefix: string,
     origins: readonly string[] | null,
   ): Array<{ id: string; content: string; source: string }>;

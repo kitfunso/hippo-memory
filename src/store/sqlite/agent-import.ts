@@ -18,7 +18,11 @@ import {
   replaceDormantEntry,
 } from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
-import { entryIdTakenAt, selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from './entry-reads.js';
+import {
+  entryIdTakenAt,
+  selectLiveEntriesBySourcePrefix,
+  selectRowsHoldingOutsideSourcePrefixAt,
+} from './entry-reads.js';
 import {
   renameEntrySourceAndOriginAt,
   renameEntrySourceAt,
@@ -67,7 +71,8 @@ function importTarget(db: DatabaseSyncLike, root: string, close: () => void): Im
     root,
     tenantId,
     liveBySourcePrefix: (prefix) => selectLiveEntriesBySourcePrefix(db, tenantId, prefix),
-    rowsOutsideSourcePrefix: (prefix, origins) => selectRowsOutsideSourcePrefixAt(db, tenantId, prefix, origins),
+    rowsHoldingOutsideSourcePrefix: (text, prefix, origins) =>
+      selectRowsHoldingOutsideSourcePrefixAt(db, tenantId, text, prefix, origins),
     projectTagReads: () => projectTagReads(db, tenantId),
     inContainer: (scope, dryRun, work) => {
       const run = () => work(containerTx(db, root));

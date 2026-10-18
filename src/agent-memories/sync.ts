@@ -454,16 +454,14 @@ function duplicateCheck(
   origins: readonly string[],
   adopted: ReadonlySet<string>,
 ): (text: string) => boolean {
-  let keys: Set<string> | null = null;
+  const visible = store.global ? origins : null;
+  // Only the rows holding the text's words can hold the text, so the store is asked for those alone.
   return (text) => {
-    keys ??= otherPathKeys(store, origins, adopted);
-    return keys.has(duplicateKey(text));
+    const key = duplicateKey(text);
+    return store.target
+      .rowsHoldingOutsideSourcePrefix(text, AGENT_MEMORY_SOURCE_PREFIX, visible)
+      .some((r) => !adopted.has(r.id) && heldTextKeys(r).includes(key));
   };
-}
-
-function otherPathKeys(store: OpenStore, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
-  const rows = store.target.rowsOutsideSourcePrefix(AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
-  return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 
 /**

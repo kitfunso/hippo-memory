@@ -653,23 +653,29 @@ export function objectMemoryRowsAt(db: DatabaseSyncLike): Array<{ memory_id: str
   return out;
 }
 
-/** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them
- * to user-global rows and those projects. */
-export function selectRowsOutsideSourcePrefixAt(
+/** Live rows of a tenant whose source does not start with `sourcePrefix` that may hold `text` word for word, spacing
+ * aside: the index's phrase hits, else the rows holding its longest word. `origins` (global store only) limits them to
+ * user-global rows and those projects. A superset: the caller checks each again. */
+export function selectRowsHoldingOutsideSourcePrefixAt(
   db: DatabaseSyncLike,
   tenantId: string,
+  text: string,
   sourcePrefix: string,
   origins: readonly string[] | null,
 ): Array<{ id: string; content: string; source: string }> {
+  const phrase = isFtsAvailable(db) && isFtsInSync(db) ? holdingPhrase(text) : null;
+  const where = phrase === null ? 'instr(content, ?) > 0 AND tenant_id = ?' : `${IN_PHRASE_HITS} AND ${TENANT_IS}`;
   const visible = origins !== null ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
-  const params = origins !== null ? [tenantId, sourcePrefix, ...origins] : [tenantId, sourcePrefix];
   // SAFETY: the SELECT names the three columns of the row type.
-  return db
-    .prepare(
-      `SELECT id, content, source FROM memories
-      WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${sourcePrefix.length}) != ?${visible}`,
-    )
-    .all(...params) as Array<{ id: string; content: string; source: string }>;
+  return cachedStatement(
+    db,
+    `SELECT id, content, source FROM memories WHERE ${where} AND superseded_by IS NULL ` +
+      `AND substr(source, 1, ?) != ?${visible}`,
+  ).all(phrase ?? longestWord(text), tenantId, sourcePrefix.length, sourcePrefix, ...(origins ?? [])) as Array<{
+    id: string;
+    content: string;
+    source: string;
+  }>;
 }
 
 /** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
