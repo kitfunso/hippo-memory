@@ -19,13 +19,8 @@ import {
   stampOriginProjectIn,
   updateMemoryRows,
 } from './entry-row.js';
-import {
-  mirrorBestEffort,
-  writeMarkdownMirror,
-  purgeMirrorBestEffortIn,
-  removeEntryMirrorsIn,
-  writeMarkdownMirrors,
-} from './mirrors.js';
+import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeEntryMirrorsIn } from './mirrors.js';
+import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { StoreFiles, OnHandle } from './open.js';
 import { CLI_ACTOR } from '../../core/actor.js';
 import type { RenameSourceOptions } from '../port/agent-import.js';
@@ -399,8 +394,7 @@ export function applyOutcomeAt(
   outcome: OutcomeWrite,
   traceId?: number,
 ): string[] {
-  const { applied, rows } = applyOutcomeOn(db, outcome);
-  const memoryIds = applied.map((entry) => entry.id);
+  const memoryIds = applyOutcomeOn(db, outcome).map((entry) => entry.id);
   if (traceId !== undefined && memoryIds.length > 0) {
     recordTraceOutcome(db, {
       traceId,
@@ -409,7 +403,7 @@ export function applyOutcomeAt(
       memoryIds,
     });
   }
-  writeMarkdownMirrors(files.hippoRoot, rows);
+  if (memoryIds.length > 0) deferDueMirrors(files.hippoRoot);
   return memoryIds;
 }
 
@@ -474,16 +468,10 @@ export function writeInOwnTenant(
   );
 }
 
-/** What an outcome wrote: one entry per applied id with repeats, as callers count them, and each row's final state. */
-interface AppliedOutcome {
-  readonly applied: readonly MemoryEntry[];
-  readonly rows: readonly MemoryEntry[];
-}
-
-/** The read, the row rewrites and the audit rows share one BEGIN IMMEDIATE transaction, hippo.db's form of the port's
- * row lock, each a set statement whatever the id count; the caller writes the mirrors after. An outcome never changes
- * content, so the rejected-value guard has nothing to check. */
-function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): AppliedOutcome {
+/** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction, hippo.db's form of the
+ * port's row lock, each a set statement whatever the id count. Returns one entry per applied id with repeats, as
+ * callers count them. An outcome never changes content, so the rejected-value guard has nothing to check. */
+function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): readonly MemoryEntry[] {
   return withWriteScope(db, 'apply_outcome', () => {
     const read = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
     const latest = new Map<string, MemoryEntry>();
@@ -509,7 +497,11 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): AppliedOut
     const parents = [...new Set(rows.flatMap((row) => (row.dag_parent_id ? [row.dag_parent_id] : [])))];
     const flipped = markSummariesDirtyInTx(db, parents, outcome.tenantId);
     appendAuditEventsAt(db, outcomeAuditRows(applied, flipped, outcome));
-    return { applied, rows };
+    markMirrorsDue(
+      db,
+      rows.map((row) => row.id),
+    );
+    return applied;
   });
 }
 

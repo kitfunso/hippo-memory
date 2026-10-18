@@ -9,7 +9,7 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
-import { flushStatsMirrors } from '../../src/store/sqlite/mirrors.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import {
   pushGoal,
   closePrediction,
@@ -343,7 +343,7 @@ export function rowsOf(root: string) {
 
 /** The stats.json mirror the SQLite store rewrites after each counter bump, or null before the first. */
 export function statsMirror(root: string): string | null {
-  flushStatsMirrors(root);
+  flushHeldMirrors(root);
   const file = join(root, 'stats.json');
   return existsSync(file) ? readFileSync(file, 'utf8') : null;
 }

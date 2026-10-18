@@ -5,6 +5,7 @@ import { reproveStoreSchema } from '../../db/connect.js';
 import { openHippoDbWithFacts } from '../../db/open.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
+import { recoverDueMirrors } from './due-mirrors.js';
 import { bootstrapLegacyStore, type Handles, recordHalfLifeBaseForNewStore, type StoreFiles } from './open.js';
 
 export function initStore(hippoRoot: string): void {
@@ -21,6 +22,7 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   if (currentRequestStores()?.setupDoneFor === hippoRoot) return db;
   try {
     ensureMirrorDirectories(hippoRoot);
+    recoverDueMirrors(hippoRoot, db);
     // Both steps act only on a store with no memory row, which the open's own probe has just ruled out.
     if (facts?.hasMemories) return db;
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);

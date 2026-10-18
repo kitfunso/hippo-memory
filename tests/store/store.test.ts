@@ -11,7 +11,7 @@ import {
   saveActiveTaskSnapshot,
   appendSessionEvent,
 } from '../_helpers/root-forms.js';
-import { flushStatsMirrors } from '../../src/store/sqlite/mirrors.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import {
   openHippoDb,
@@ -186,7 +186,7 @@ describe('stats tracking', () => {
     initStore(tmpDir);
     updateStats(tmpDir, { recalled: 1 });
     updateStats(tmpDir, { recalled: 1 });
-    flushStatsMirrors(tmpDir);
+    flushHeldMirrors(tmpDir);
     updateStats(tmpDir, { recalled: 1 });
     // SAFETY: stats.json holds the LegacyStats mirror, which always carries total_recalled.
     const file = JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8')) as { total_recalled: number };
@@ -211,7 +211,7 @@ describe('stats tracking', () => {
     expect(stats.total_remembered).toBe(2);
     expect(stats.total_recalled).toBe(1);
     expect(stats.total_forgotten).toBe(1);
-    flushStatsMirrors(tmpDir);
+    flushHeldMirrors(tmpDir);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8'))).toEqual(stats);
   });
 });

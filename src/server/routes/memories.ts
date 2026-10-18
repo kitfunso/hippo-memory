@@ -136,9 +136,8 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     if (idsRaw.some((id) => id.length > MAX_ID_LEN)) {
       throw new HttpError(400, `each ids entry exceeds ${MAX_ID_LEN}-character cap`);
     }
-    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite. Auth runs
-    // first, so only a caller with a key
-    // reaches it.
+    // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the count, and writes
+    // the mirrors after its job. Auth runs first, so only a caller with a key reaches it.
     if (idsRaw.length > 1000) {
       throw new HttpError(400, 'ids exceeds 1000-id cap');
     }
