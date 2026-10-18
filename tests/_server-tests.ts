@@ -62,6 +62,7 @@ export const SERVER_TESTS: readonly string[] = [
   'server/request-log-route-template.test.ts',
   'server/route-table-gates.test.ts',
   'server/serve-auto-sleep-option.test.ts',
+  'server/serve-localhost-lookup.test.ts',
   'server/serve-nonloopback-auth.test.ts',
   'server/server-addon-routes.test.ts',
   'server/server-audit-route-consolidate.test.ts',
